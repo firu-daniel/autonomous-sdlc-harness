@@ -1,0 +1,9 @@
+### 1. `SearchPanelRecentLabel` label uses the wrong type-scale token
+
+> **Self-contained per-finding file** for the `feat/recent_searches_panel` user-review fix-plan index (`${CLAUDE_PLUGIN_ROOT}/samples/sample_user_review_fix_plan.md`). The implementer reads only this file to apply the fix — everything needed (location, problem, exact fix) lives here. The committer flips this finding's checkbox in the index's `## Phase 2 Readiness — Ordered Fix List`, never here. The `**File:**` line is a plain repo-relative path in this shipped sample; in a real fix plan it is a link into the working tree, and its path sits under one of the adopting repository's `layers[].path` values (here the example layer path `src/presentation`). Parity sentences below apply **only when `phases.parity` is `true`** in `harness.config.json`; `<parity_vocabulary>` is that file's `parity.referenceName`.
+
+**File:** `src/presentation/search/components/SearchPanelRecentLabel.tsx:21`
+
+The user cited `SearchPanel.tsx:142` and called the value "hardcoded 14px"; verifying that line showed the recent-searches label is actually rendered by the extracted `<SearchPanelRecentLabel />` subcomponent (which Task 2's "components stay small" rule pulled out into its own file). The label there uses `fontSize: typeScale.body` — not hardcoded, but still one token off the caption-step label the `<parity_vocabulary>` implementation renders. The visual difference is one step, so this is a polish item rather than a Must Fix, and the location the user gave is not where the fix lands.
+
+**Fix:** change `fontSize: typeScale.body` to `fontSize: typeScale.caption` in `SearchPanelRecentLabel.tsx:21`, then visually compare against the `<parity_vocabulary>` screenshot referenced in Task 2 of the task plan.

@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "projectName": "notes-app",
+  "defaultBranch": "main",
+  "protectedBranches": [
+    "main"
+  ],
+  "stateDir": "sdlc-harness/",
+  "appDir": ".",
+  "scriptsDir": "scripts",
+  "githooksDir": "githooks",
+  "agentModel": "opus",
+  "pushEnvPath": ".claude/push-notify.env",
+  "detection": {
+    "preset": "layered-clean-arch",
+    "signal": "layered-clean-arch:layer-directories",
+    "evidence": "src/data, src/domain, src/presentation",
+    "commandFamily": "npm",
+    "review": {
+      "verdict": "considered-no-change",
+      "rationale": "Re-read the tracked file list and each layers[] path on this pass: src/data, src/domain, src/presentation and test each exist and hold that layer own sources, and the only tracked source outside them — src/main.ts, tools/dev-server.mjs, index.html, styles.css, tsconfig.json, package.json — falls under the general row path \".\"; no directory is uncovered and no row is misscoped, so nothing was proposed.",
+      "at": "2026-09-07"
+    }
+  },
+  "layers": [
+    {
+      "name": "data",
+      "path": "src/data",
+      "conventions": ".claude/context/data-layer.md"
+    },
+    {
+      "name": "domain",
+      "path": "src/domain",
+      "conventions": ".claude/context/domain.md"
+    },
+    {
+      "name": "presentation",
+      "path": "src/presentation",
+      "conventions": ".claude/context/presentation.md"
+    },
+    {
+      "name": "tests",
+      "path": "test",
+      "conventions": ".claude/context/tests.md"
+    },
+    {
+      "name": "general",
+      "path": ".",
+      "conventions": ".claude/context/conventions.md"
+    }
+  ],
+  "commands": {
+    "typecheck": "bash scripts/typecheck.sh",
+    "test": "bash scripts/test.sh",
+    "build": "npm run build",
+    "devServer": "bash scripts/start-dev-server.sh",
+    "depInstall": "npm ci"
+  },
+  "phases": {
+    "qa": true,
+    "docs": false,
+    "parity": false
+  },
+  "qa": {
+    "driver": "web-playwright",
+    "portSeed": 3001,
+    "credentialsPath": ".claude/qa-accounts.env"
+  }
+}

@@ -1,0 +1,16 @@
+# Written by `autonomous-sdlc-harness init`, and yours from there on: edit it freely, a
+# re-run keeps your copy.
+#
+# Line-ending normalisation only. Everything else a repository puts in this file - diff
+# drivers, merge strategies, linguist hints, filters - is a project decision the harness
+# has no opinion about, so it starts empty and you add to it.
+
+# Store every text file with LF whatever the contributing machine writes it with.
+* text=auto
+
+# ...and check the executable assets out with LF on every platform. A script is run by
+# the interpreter named on its `#!` line, and a CR at the end of that line is read as
+# part of the interpreter's name: a CRLF checkout fails with "bad interpreter" or
+# "no such file or directory", neither of which mentions a line ending.
+*.sh text eol=lf
+githooks/* text eol=lf

@@ -1,0 +1,13 @@
+{
+  "enabledPlugins": {
+    "autonomous-sdlc-harness@autonomous-sdlc-harness": true
+  },
+  "extraKnownMarketplaces": {
+    "autonomous-sdlc-harness": {
+      "source": {
+        "source": "github",
+        "repo": "firu-daniel/autonomous-sdlc-harness"
+      }
+    }
+  }
+}

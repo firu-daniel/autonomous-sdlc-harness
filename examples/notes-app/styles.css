@@ -1,0 +1,160 @@
+/*
+ * styles.css — the page's only stylesheet. Plain CSS, system fonts, nothing fetched over the
+ * network.
+ *
+ * It sits at the project root beside `index.html` rather than under `src/` because `tsc`
+ * compiles `.ts` and copies nothing else, and this project has no bundler: a stylesheet under
+ * `src/` would never reach `dist/` and would 404 under `npm run dev`. The dev server's static
+ * root is this directory, so `./styles.css` and `./dist/main.js` both resolve from here.
+ */
+
+:root {
+  --gap: 0.75rem;
+  --line: #d5d5d5;
+  --muted: #666;
+  --danger: #a3221d;
+}
+
+body {
+  margin: 0;
+  background: #fafafa;
+  color: #1c1c1c;
+  font-family: system-ui, sans-serif;
+  line-height: 1.45;
+}
+
+.app {
+  margin: 0 auto;
+  max-width: 40rem;
+  padding: var(--gap);
+}
+
+.app__heading {
+  font-size: 1.5rem;
+  margin: 0 0 var(--gap);
+}
+
+.composer {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  padding: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.composer__title,
+.composer__body,
+.note__edit-title,
+.note__edit-body {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.4rem;
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.composer__submit,
+.note__control,
+.filters__control {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #fff;
+  padding: 0.35rem 0.75rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.composer__submit {
+  align-self: flex-start;
+}
+
+.composer__submit[data-qa-status='saving'] {
+  color: var(--muted);
+  cursor: progress;
+}
+
+.composer__error,
+.note__error {
+  margin: 0;
+  min-height: 1.2rem;
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.filters {
+  display: flex;
+  gap: 0.5rem;
+  margin: var(--gap) 0;
+}
+
+.filters__control[data-qa-status='selected'] {
+  background: #1c1c1c;
+  border-color: #1c1c1c;
+  color: #fff;
+}
+
+.notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.note {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  padding: var(--gap);
+}
+
+.note--archived {
+  background: #f0f0f0;
+  color: var(--muted);
+}
+
+/* The ink is body's own #1c1c1c, written as a literal like the other two uses of it in this
+   file, so a pinned row introduces no colour and needs no new :root token. */
+.note--pinned {
+  border-left: 0.25rem solid #1c1c1c;
+}
+
+.note__title {
+  font-size: 1rem;
+  margin: 0 0 0.25rem;
+}
+
+.note__body {
+  margin: 0 0 0.5rem;
+  white-space: pre-wrap;
+}
+
+.note__edited {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: 0 0 0.5rem;
+}
+
+/* Hidden here rather than omitted by the view: never-edited is a real state of a note, and an
+   element removed from the DOM has no state left for a test to read. */
+.note__edited[data-qa-status='never-edited'] {
+  display: none;
+}
+
+.note__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.notes__empty {
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  padding: var(--gap);
+  color: var(--muted);
+  text-align: center;
+}

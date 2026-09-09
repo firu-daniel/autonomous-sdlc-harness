@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  User LaunchAgent for the autonomous run watcher of {{projectName}}.
+
+  Rendered by `autonomous-sdlc-harness daemon install`, which writes it to
+  ~/Library/LaunchAgents/{{label}}.plist and loads it with `launchctl bootstrap gui/<uid>`.
+  It is a per-user agent and never a system daemon: it runs as the account that installed it, and
+  so has that account's keychain and agent-runner credentials, which is exactly what an unattended
+  run needs and what a system daemon would not have. Its PATH is not that account's — launchd
+  starts an agent from launchd's own environment and never from a login shell — so the unit
+  renders one in below.
+
+  Every value below is substituted at install time. This file carries no account name, no home
+  directory and no checkout path of its own, so the same template serves every adopter.
+
+  No comment in this file may contain a double hyphen, substituted values included: XML 1.0 §2.5
+  forbids one, and `cli/test/daemon.test.mjs` fails if one appears in a rendered unit.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>{{label}}</string>
+
+  <!-- The interpreter is named rather than left to the script's own shebang: an agent is
+       started with no shell, and naming it keeps the unit working for a watcher whose
+       executable bit did not survive a checkout. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>{{watcherPath}}</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>{{repoRoot}}</string>
+
+  <!-- The PATH the agent runs on. Without this key that is launchd's own
+       /usr/bin:/bin:/usr/sbin:/sbin, and a toolchain installed anywhere else — Homebrew, nvm,
+       ~/.local/bin — is not found: the watcher's package manager and its agent CLI both resolve
+       through PATH. `daemon install` renders the PATH of the shell that ran it; if that shell had
+       none, no key is rendered at all, because a PATH of "" is worse than launchd's four
+       directories. Re-run `daemon install` with the force flag when the toolchain moves. -->
+{{environment}}
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Restarted whenever it exits: a watcher that died between dispatches looks exactly like
+       one with nothing to do, and the run queue drains silently. -->
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- The watcher's own output, beside the per-run logs in the run-artifact tree. launchd
+       creates these files but not the directory above them, which `init` has already made. -->
+  <key>StandardOutPath</key>
+  <string>{{stateDirAbs}}/autonomous_logs/watcher.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>{{stateDirAbs}}/autonomous_logs/watcher.err.log</string>
+</dict>
+</plist>

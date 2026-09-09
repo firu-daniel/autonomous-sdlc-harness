@@ -1,0 +1,25 @@
+{
+  "_comment": "Browser wiring for the interactive test phase, written by `autonomous-sdlc-harness init` and merged rather than overwritten on a re-run: a server you add here survives, and one of these two is re-added only if it is missing. THE TWO SERVERS ARE SEPARATE BROWSER INSTANCES - each launches and drives its own browser, so a page one of them has navigated or signed in is not visible to the other, and a test that needs both drives each of them into the state it needs. BOTH RUN --isolated because each package otherwise defaults to one fixed persistent profile directory: a second instance started against a profile already in use refuses to launch, which is a failure that surfaces only when two runs overlap. THE VERSIONS ARE PINNED DELIBERATELY - a browser-automation server's tool names and flags change between releases, and an unpinned fetch would change what the phase can do without any edit here. Raise a pin as its own change, and re-check the tool names allow-listed in the generated permission profile when you do. NEITHER PACKAGE IS INSTALLED BY init - the `npx -y` above fetches each pinned spec from the registry the first time the interactive-test phase runs, so a machine that is offline, behind a proxy, or on a mirror that does not carry those exact versions fails at that first dispatch rather than at setup; `npx autonomous-sdlc-harness doctor --check-registry` answers it beforehand.",
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@0.0.75",
+        "--isolated"
+      ],
+      "env": {}
+    },
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@1.1.1",
+        "--isolated"
+      ],
+      "env": {}
+    }
+  }
+}

@@ -1,0 +1,21 @@
+# Review plan meta-review — iteration 1
+
+## Must Fix
+
+1. **The verification step guarding the history rewrite cites a command that cannot produce the numbers it states** — refers to review finding #2. Offending file: `sdlc-harness/code_reviews/feat_note_updated_at_code_review/finding_2.md`.
+
+   The last sub-step of the fix tells the implementer to confirm, *after replaying eight commits onto an amended base*, "with `git diff main...HEAD --stat` that the reviewed diff is unchanged — 8 files, 211 insertions and 8 deletions, byte-identical to before the rewrite." That command is unfiltered and on this branch reports `25 files changed, 1099 insertions(+), 8 deletions(-)`: the run-artifact tree under `sdlc-harness/` is committed on the branch and is inside `main...HEAD`. The `8 files, 211 insertions` figures are the **exclusion-filtered** diff — the same numbers the index's own Context paragraph reports while stating "17 run-artifact files excluded from the reviewed diff". The finding therefore contradicts the index it belongs to, and it does so in the one step that exists to prove a destructive `git rebase --onto` replayed cleanly: an implementer following it literally sees a mismatch, has no way to tell a correct replay from a corrupted one, and either stops or waves the rewrite through on a check that never worked.
+
+   The same paragraph carries a second git-state claim that does not hold: "`25be2c2` is `HEAD~8`; it is the sixth **code** commit back, the two above it being `chore:` artifact commits." `HEAD~8` and "sixth code commit back" are both correct, but **three** `chore:` commits sit above it, not two (`c08c6de`, `55992cf`, `9bb8166`) — 5 code + 3 chore is what makes it `HEAD~8` at all, so the sentence contradicts its own preceding clause. The instruction to re-derive the number limits the damage but does not make the statement true.
+
+   **Fix:** in `finding_2.md` only, edit the fix section's last sub-step so the command and the expected output agree — either give the command the exclusion pathspec the review itself reviewed under (`git diff main...HEAD --stat -- ':(top,exclude)sdlc-harness/*feat_note_updated_at*' ':(top,exclude)sdlc-harness/docs_catalog/reviews/*'`, expecting 8 files / 211 insertions / 8 deletions) or keep the bare command and state that the invariant is that the stat output is byte-identical to whatever it printed immediately before the rewrite, re-derived at fix time rather than written here. In the same paragraph, change "the two above it being `chore:` artifact commits" to three, or drop the count and keep only the `git rev-list --count` re-derivation instruction. Do not touch the index, the readiness entry, or `finding_1.md` — the finding's grade, its position in the readiness list and its phase-`D` gate are all correct.
+
+## Should Fix
+
+_None._
+
+## Nice to Have
+
+1. **The index promises a question no reader of the index can find** — refers to the index, `sdlc-harness/code_reviews/feat_note_updated_at_code_review.md`, last sentence of the Context paragraph: "One item that needs a decision nobody in this loop owns is recorded in the reviewer's return as a question rather than filed as a finding." Filing it as a question rather than a finding is correct and required (`branch-reviewer.md`, `## Findings format`), and no readiness entry or finding file was created for it, so nothing is broken. But the reviewer's return is ephemeral while this index is committed: a reader of the committed artifact learns only that an unresolved decision exists, never what it is or who owes it. **Fix:** either name the decision and its owner in the same clause, or drop the sentence and leave the `## Questions` section in the return to carry it alone.
+
+2. **Finding 1's anchor line sits two lines short of the insertion point it describes** — `finding_1.md`, the `**Where:**` line cites `test/notesService.test.mjs:334`, which is inside the closing `assert.ok(…)` of `test('archiving a note that has never been edited leaves it keyless in storage', …)`; the prose anchor ("immediately after" that case, "before the `// The long-ago stamp again…` comment") resolves to line 336. The prose is unambiguous and the fix is implementable as written, so this costs nothing today. **Fix:** point the link at line 336 in `finding_1.md`, or leave it — the prose anchor is the load-bearing half.

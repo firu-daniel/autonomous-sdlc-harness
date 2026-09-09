@@ -1,0 +1,335 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "harness.config.json",
+  "description": "Repo-scoped configuration for the autonomous SDLC harness. This file lives at the root of the repository that adopts the harness and is committed, so every contributor and every headless run reads the same values. Machine-local values belong in the plugin's user configuration instead.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "defaultBranch", "stateDir", "layers", "commands"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional pointer to this schema, so an editor can offer completion and inline validation. Declared here because unknown top-level keys are rejected. It is editor metadata rather than a setting: its value is a URI or a path resolved relative to this file's own location, not a repo-relative path."
+    },
+    "version": {
+      "const": 1,
+      "description": "Version of this configuration file format. A future release that changes the key set raises this number and ships a migration, so a config written today can be recognized and upgraded rather than silently misread. An **added optional key with no default** does not raise it: nothing in an older file is then misread, while raising the number would make every file already written against the current one fail validation outright, since the only version this release accepts is the one it declares."
+    },
+    "projectName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short identifier for the adopting project. Used as the stem of generated background-service labels and of worktree directory names. When omitted, the name of the repository directory is used."
+    },
+    "defaultBranch": {
+      "type": "string",
+      "minLength": 1,
+      "default": "main",
+      "description": "The branch new work branches off and merges back into. Used to compute a branch's diff base and to decide whether a checkout is on the integration line."
+    },
+    "protectedBranches": {
+      "type": "array",
+      "uniqueItems": true,
+      "default": ["main"],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Branches an automated run may never commit or push to directly. Entries may be glob patterns, so a whole release namespace is one entry. Not the whole protected set: the effective set is this list unioned with `defaultBranch`, so the branch work merges back into is protected whatever this list says, and an empty list means exactly that one branch."
+    },
+    "forge": {
+      "type": "string",
+      "enum": ["github", "gitlab", "none"],
+      "description": "Which code-hosting platform's pull-request and remote conventions the flow uses. 'none' means no forge integration at all: work stays on branches and no pull request is opened. Deliberately has no default, because nothing reads this key in this release: an absent value must read as 'not yet decided' rather than as a silent assumption of one platform, and a default here would oblige the configuration model's defaults to carry a value no generator writes."
+    },
+    "stateDir": {
+      "type": "string",
+      "minLength": 1,
+      "default": "sdlc-harness/",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9._/-]*/?$",
+      "not": { "pattern": "(^|/)\\." },
+      "description": "Repo-relative directory every run artifact is written into. MUST NOT be a dot-directory, and no path segment of it may begin with a dot: the run-artifact tree has to be writable by an unattended run, and a dot-path is where a host reserves directories an unattended run may not write to. Do not 'fix' this to a dot-name.",
+      "$comment": "The `not` clause states the dot prohibition on its own line so a later edit to `pattern` cannot silently drop it, and it covers every segment rather than only the first character: `(^|/)\\.` rejects a leading dot and any `/.`-prefixed segment, so `../` and `/.hidden/` are refused too. Without it, `pattern` alone admits `sdlc/../.claude`, which resolves to a dot-directory at runtime."
+    },
+    "appDir": {
+      "type": "string",
+      "minLength": 1,
+      "default": ".",
+      "description": "Repo-relative directory of the project the harness operates on, for a repository that nests its application inside a larger tree. It anchors where the application lives; it is not a working directory — commands are run from the repository root and the paths in this file are written relative to it, except where a key's own description says otherwise. Leave at the default when the application is the repository root."
+    },
+    "scriptsDir": {
+      "type": "string",
+      "minLength": 1,
+      "default": "scripts",
+      "description": "Repo-relative directory the generated wrapper scripts are written to. These wrappers are what an automated run is permitted to execute, so the location has to be stable and committed."
+    },
+    "githooksDir": {
+      "type": "string",
+      "minLength": 1,
+      "default": "githooks",
+      "description": "Repo-relative directory holding the committed git hooks. Adoption points the repository's hooks path at this directory so the hooks travel with the checkout rather than living only in one contributor's local git directory."
+    },
+    "agentModel": {
+      "type": "string",
+      "minLength": 1,
+      "default": "opus",
+      "description": "Model identifier the outer loop passes to a headless run. Set this to trade run cost against capability for the whole project in one place."
+    },
+    "agentEffort": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "xhigh", "max"],
+      "description": "Reasoning-effort level the outer loop passes to a headless run, alongside the model and on the same launch line. Deliberately has no default, and for a different reason than 'forge': an absent value is a resolved state rather than an undecided one — no effort flag is put on the launch line at all, so the runtime applies its own per-model default. Set it to pin the level for the whole project in one place. The value set mirrors the levels the launch flag accepts; a runtime that gains a level needs this enum widened before the new one can be configured."
+    },
+    "pushEnvPath": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Repo-relative path to the file holding the unattended runner's push-notification settings, which the outer loop sources before it starts a run. Keep that file out of version control; only its location is configured here.",
+      "$comment": "Counterpart to qa.credentialsPath: both name a gitignored file by a path that is the same for everyone who clones, so the path is repo-scoped configuration while the contents never leave the machine."
+    },
+    "clientEnvPrefix": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Prefix a build tool requires on an environment variable before it will expose that variable to a client-side bundle. Reviewers use it to tell an intentionally public value from a secret that must never be inlined. Set to null when the stack has no such rule."
+    },
+    "detection": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What stack detection concluded about this repository's layout, and what a later review decided about that conclusion. Recorded so an adopted repository says which layout was detected and on what evidence, instead of leaving a fallback profile indistinguishable from a deliberately chosen one. It sits directly above the 'layers' profile it explains.",
+      "$comment": "Optional, with no `default` and **no `required` array inside it or inside `review`** — deliberately. It is an added optional key with no default, which by `version`'s own description does not raise the format version: nothing in an older file is misread by its absence. And a repository whose config predates this key must still be able to take `config set detection.review '<json>'` without first hand-writing a `preset` and a `signal` no run recorded, so no sub-key may be required. `harness.config.json` is exempt from `--force`, so a plain `init` re-run keeps the record already in the file; `init --reset-config` is what rebuilds it.",
+      "properties": {
+        "preset": {
+          "type": "string",
+          "enum": ["monorepo", "layered-clean-arch", "python-package", "api-service", "flutter", "android-gradle", "jvm", "dotnet", "apple-native", "rust-cargo", "ruby-bundler", "php-composer", "cmake-cpp", "flat"],
+          "description": "The layer preset detection selected, from the presets listed here in signal-table order. A preset is a layer profile rather than a build tool, which is why 'jvm' is one name for both Maven and Gradle JVM projects: they share the src/main/<java|kotlin> source root and differ only in the runner, so a second preset would buy a second name and the same profile. 'dotnet' is one name for a .NET backend and a .NET frontend on that same argument: they share the build tool, the *.sln / *.csproj manifests and the src/ source root, and what would distinguish them is the optional-phase set, which comes from 'init' flags rather than from the preset — so a split name would carry no behaviour. 'apple-native' is one name for iOS and macOS, and for a SwiftPM package and an Xcode project alike, on that same argument: nothing a file-existence test can ask separates the platforms, so a per-platform name would buy the same profile twice, and which of 'swift' and 'xcodebuild' answers is the command family's question. 'rust-cargo' names its build tool instead, because in Rust the manifest, the toolchain and the source root are one set: 'Cargo.toml', 'cargo' and 'src/', with no second runner for the name to stay neutral about. 'ruby-bundler' names its dependency tool on that same argument — 'Gemfile' is the only manifest and 'bundle' the only resolver — and its profile is a source root ('app/' or 'lib/', whichever exists) beside the 'tests' row every preset takes where its toolchain's conventional test root exists — RSpec's 'spec/', else 'test/' — rather than a Rails layer list, since naming a Rails application's app/ sub-directories as layers would decide its architecture. A Rails-shaped repository does not reach this preset: it matches 'api-service:route-directory' on its app/controllers and gains the Bundler commands through the command family instead. A repository whose root package.json declares a script the npm commands are derived from does not reach it either: a React Native tree's root Gemfile pins CocoaPods and fastlane rather than declaring a Ruby stack, so the row declines it and it keeps its npm lines. 'php-composer' names its dependency tool for that same reason — 'composer.json' is the only manifest and 'composer' the only resolver — and its profile is a source root (Laravel's 'app/' or PSR-4's 'src/', whichever exists) beside a 'tests' row on PHPUnit's 'tests/'. A Laravel-shaped repository does not reach it either: it matches 'api-service:route-directory' on its routes/ and gains the Composer commands through the family. 'cmake-cpp' names the build system for 'rust-cargo's reason inverted: C++ has no single toolchain to name — compiler, test runner and dependency source all vary — and CMakeLists.txt is the one file the ecosystem agrees on. Its profile is the 'src/' source root where one exists, 'include/' as a second source row on the same single-module document where that directory exists — a target's public headers are the API half of that same module, so they are source rather than tests — and a 'tests' row on 'tests/' or 'test/'. Every row of every preset's profile is dropped where its directory is absent, and 'cli.md' section 4 states the rule once for all of them. Its detection row is the last before the fallback, because a CMakeLists.txt is the manifest most likely to describe a sub-component of a repository whose own stack is something else — a native extension in a Python distribution, a node-gyp addon, a Rust FFI shim. Row order settles the Python and Rust cases; the Node one is settled by a guard on the row, since Node has no detection row of its own — a repository whose root package.json declares a script the npm commands are derived from is declined by the CMake row and keeps its npm lines. Written by 'init' on the run that generates this file; read by 'doctor', whose 'layer-profile' check grades a fallback profile nobody has reviewed."
+        },
+        "signal": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the detection-table row that matched, as 'cli.md' section 4 lists them, or 'forced' when '--preset' bypassed the table. Written by 'init'; read by 'doctor'."
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The repo-relative path or manifest key the matched row decided on. Absent under '--preset', where no row was evaluated and there is nothing to record. Written by 'init'; read by 'doctor'."
+        },
+        "commandFamily": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Which command family derived the 'commands.*' lines on the run that wrote this file, by the ids 'cli.md' section 4 lists in COMMAND_FAMILIES order. Recorded because the family is selected independently of 'preset' and so cannot be read back off it. Deliberately carries no 'enum', unlike 'preset' above: the value records which family answered rather than routing anything, and no consumer in this release reads it, so an id retired by a later release must not make an otherwise valid config unloadable. Written only where that family derived at least one of 'commands.typecheck' / 'commands.test', so it is absent exactly where the two required commands hold placeholders - whether because no family answered or because the one that answered derived neither key. Written by 'init'; read by a human."
+        },
+        "review": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The verdict a layer-profile review reached on the detected profile, so a decline leaves a trace rather than nothing. Written by the '/harness-analyze' command's 'layers' target through 'config set detection.review', never by 'init'; read by 'doctor', whose 'layer-profile' check this record is what clears.",
+          "properties": {
+            "verdict": {
+              "type": "string",
+              "enum": ["applied", "considered-no-change", "proposed-and-refused"],
+              "description": "What the review decided: 'applied' — a revised layer profile was written; 'considered-no-change' — the target examined the profile and declined to propose a revision; 'proposed-and-refused' — a revision was proposed and the operator refused it. Written by '/harness-analyze'; read by 'doctor'."
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "description": "One line saying why that verdict was reached, so a later reader has the reasoning and not only the outcome. Written by '/harness-analyze'; read by a human."
+            },
+            "at": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The date the review was recorded, as an ISO 'YYYY-MM-DD' string. Deliberately a plain non-empty string with no 'format' keyword: nothing in this release parses it, and it is here for a reader judging whether the verdict predates the tree it describes."
+            }
+          }
+        }
+      }
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "contains": {
+        "type": "object",
+        "properties": {
+          "path": { "const": "." }
+        },
+        "required": ["path"]
+      },
+      "description": "The architectural layers of the codebase. One implementer and one reviewer are dispatched per layer, each receiving that layer's name, 'path' and 'conventions' as arguments rather than existing as a separate agent per layer, and a task is assigned to exactly one layer, so this list is what decides who does a given piece of work. At least one row must have 'path' set to \".\" — the layer unmatched work is assigned to.",
+      "$comment": "The `contains` clause states a requirement of the flow rather than a claim about the adopter's tree: work that matches no layer's `path` exists on every run — the flow's own artifacts under `stateDir`, `harness.config.json`, the scripts and githooks directories, CI files — so somewhere to route it is never optional. Without the row the orchestrator escalates a configuration gap mid-run, which is the most expensive moment to discover a one-line config mistake, and the schema cannot distinguish 'the layers genuinely tile the tree' from 'the row was forgotten'. The cost is one row every `init` preset already emits. `contains` asserts at least one such row and never exactly one: this schema is draft-07, which has no `maxContains`, so an upper bound is not expressible here, and a second catch-all row is degenerate — two candidates for the same work — rather than dangerous, so it is deliberately not rejected. The constraint is on `path`, not on the name `general`: any layer may carry it.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "path", "conventions"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "Identifier for the layer, used in task assignments and as the routing tag a task is matched to, which is also how the layer appears in a run's dispatch labels. Lower-case letters, digits and hyphens; must start with a letter."
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Repo-relative directory the layer's source lives in. Compared against the repo-relative paths of a change's files to check that the change landed inside the layer it was assigned to."
+          },
+          "conventions": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Repo-relative path to the document holding this layer's rules. Its content is loaded before the layer's implementer or reviewer starts work, so it is the place to state anything that layer must obey."
+          }
+        }
+      }
+    },
+    "commands": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["typecheck", "test"],
+      "description": "The shell commands the harness runs to verify a change. Only the two verification commands are required: a package with no development server or no separate build step is still a valid configuration. A repository with no type check at all keeps the required key and answers it with the sentinel \"<none>\", which is a third meaning of commands.typecheck rather than a relaxation of the requirement.",
+      "properties": {
+        "typecheck": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Static-analysis command that must exit zero before a change is considered complete, or exactly \"<none>\" to state that this repository has no type check. The sentinel is an answer rather than an unfilled key: no wrapper script is written for it and no permission entry is implied. Spell it exactly; it is recognised on this key only, and a near miss such as \"none\" is stored and run as a command line."
+        },
+        "test": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Automated-test command that must exit zero before a change is considered complete."
+        },
+        "build": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Production build command. Omit when the project has no separate build step."
+        },
+        "devServer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Command that starts a local development server. Omit when nothing is served; required in practice only when the interactive test phase is enabled."
+        },
+        "depInstall": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Command that installs dependencies into a fresh checkout. Used to prepare an isolated working copy before any other command runs there."
+        }
+      }
+    },
+    "phases": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Which optional phases of the delivery flow run. Every phase defaults to off, so an adopter opts in to each one deliberately rather than discovering it mid-run.",
+      "properties": {
+        "qa": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run the interactive test phase, which drives the running application and reports observed behaviour. Reads the 'qa' section."
+        },
+        "docs": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run the documentation phase, which updates the maintained reference documents after a change lands. Reads the 'docs' section."
+        },
+        "parity": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run the parity phase, which checks a change against a second implementation treated as the source of truth. Off by default because most projects have no such reference. Reads the 'parity' section."
+        }
+      }
+    },
+    "qa": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Settings for the interactive test phase. Read only when that phase is enabled.",
+      "properties": {
+        "driver": {
+          "type": "string",
+          "enum": ["web-playwright", "mobile-maestro", "mobile-mcp"],
+          "default": "web-playwright",
+          "description": "Which variant of the interactive test agent the phase runs, and so how that agent reaches the application: a browser it drives directly, or a mobile app it drives through a device runner. Read only when 'phases.qa' is true. The default drives a browser, so a project whose application is a mobile app must set this. 'mobile-maestro' and 'mobile-mcp' are declared but not implemented in this release: setting either makes every interactive-test dispatch return a blocker rather than run a test."
+        },
+        "portSeed": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535,
+          "default": 3001,
+          "description": "Port the phase starts its own instance of the application on. Keep it distinct from the port a human uses day to day so an automated session cannot disturb one in progress."
+        },
+        "credentialsPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repo-relative path to the file holding the test-account credentials. Keep that file out of version control; only its location is configured here."
+        },
+        "authProvider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Which sign-in route the phase uses to reach an authenticated screen, when the application offers more than one."
+        }
+      }
+    },
+    "docs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Settings for the documentation phase. Read only when that phase is enabled.",
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repo-relative directory holding the maintained reference documents the phase keeps in step with the code."
+        }
+      }
+    },
+    "parity": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Settings for the parity phase. Read only when that phase is enabled.",
+      "properties": {
+        "referenceName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable name of the implementation treated as the source of truth, as it should appear in a review finding."
+        },
+        "referenceImplPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Absolute or repo-relative path to a checkout of that reference implementation, so a reviewer can cite the exact source it compared against."
+        },
+        "toolchainCommands": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Commands belonging to the reference implementation's toolchain, such as its own static analysis. Listed separately because they may be unavailable in an isolated working copy, in which case the phase reports them as deferred rather than failing."
+        }
+      }
+    },
+    "deploy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The deploy command the generated wrapper runs, and what that command deploys to.",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the hosting provider the deploy command talks to. Recorded in this committed file so a reader knows what that command deploys to; nothing in this release reads it, and the generated wrapper carries no trace of it."
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Which environment or site of that provider the deploy command deploys to. Recorded here for a reader and carried into the agent prompts that need the deploy identifier; the generated wrapper carries no trace of it either."
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The deploy command itself. Keep any account or environment identifier it needs out of this string when it is a secret."
+        }
+      }
+    },
+    "design": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Which design tool holds the project's design source of truth. Recorded in this committed file so a reader knows where the designs a change is built against live; nothing in this release reads this section.",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["figma", "penpot", "none"],
+          "description": "Which design tool holds the project's design source of truth. 'none' means no design source at all: no design file a change is built against, rather than a decision not yet made. Deliberately has no default, because nothing reads this key in this release: an absent value must read as 'not yet decided' rather than as a silent assumption of one tool, and a default here would oblige the configuration model's defaults to carry a value no generator writes."
+        }
+      }
+    }
+  }
+}

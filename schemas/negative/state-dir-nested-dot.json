@@ -1,0 +1,43 @@
+{
+  "$schema": "../harness.config.schema.json",
+  "version": 1,
+  "projectName": "acme-shop",
+  "defaultBranch": "main",
+  "protectedBranches": ["main", "release/*"],
+  "forge": "github",
+  "stateDir": "sdlc/../.claude",
+  "appDir": "packages/storefront",
+  "scriptsDir": "packages/storefront/scripts",
+  "githooksDir": "githooks",
+  "agentModel": "opus",
+  "agentEffort": "high",
+  "pushEnvPath": ".claude/push-notify.env",
+  "clientEnvPrefix": "PUBLIC_",
+  "layers": [
+    { "name": "data", "path": "packages/storefront/src/data", "conventions": ".claude/context/data-layer.md" },
+    { "name": "domain", "path": "packages/storefront/src/domain", "conventions": ".claude/context/domain.md" },
+    { "name": "presentation", "path": "packages/storefront/src/presentation", "conventions": ".claude/context/presentation.md" },
+    { "name": "general", "path": ".", "conventions": ".claude/context/conventions.md" }
+  ],
+  "commands": {
+    "typecheck": "bash packages/storefront/scripts/typecheck.sh",
+    "test": "bash packages/storefront/scripts/test.sh",
+    "build": "npm run build --workspace packages/storefront",
+    "devServer": "bash packages/storefront/scripts/start-dev-server.sh",
+    "depInstall": "npm ci"
+  },
+  "phases": { "qa": true, "docs": false, "parity": false },
+  "qa": {
+    "driver": "web-playwright",
+    "portSeed": 3001,
+    "credentialsPath": ".claude/qa-accounts.env",
+    "authProvider": "email-password"
+  },
+  "docs": { "root": "packages/storefront/docs" },
+  "deploy": {
+    "provider": "acme-cloud",
+    "target": "acme-shop-production",
+    "command": "bash packages/storefront/scripts/deploy.sh"
+  },
+  "design": { "source": "figma" }
+}

@@ -1,0 +1,62 @@
+# PROVISIONAL — every field name and every default below is unverified. The native eval runner is
+# gated behind early access, so what is known of its case format comes from `--help` output alone:
+# each key here is a guess at a name and each value a guess at a unit. A rename when the gate lifts
+# is expected rather than a defect — `../README.md` argues why the case was written anyway.
+#
+# Two of those guesses are worth naming rather than making silently. Whether `graders/` belongs
+# beside the case, as here, or once at the top of `evals/` shared across cases, is the first.
+# Whether `timeout` counts seconds is the second.
+#
+# **How each arm is driven.** Both arms are handed `prompt.md` unchanged, and its first line is
+# `/autonomous-sdlc-harness:branch-start-plan-semi-autonomous`. A session with the plugin installed
+# resolves that command and enters the plan flow; a baseline session has no such command, reads the
+# line as the literal text it is, and falls through to the task below it. That route is the
+# semi-autonomous one because it is the only one that writes the graded artifacts with no operator
+# present: `/autonomous-sdlc-harness:branch-start-plan` gates its write on "After the user
+# approves", and `/autonomous-sdlc-harness:branch-prompt` writes into the autonomous inbox for a
+# watcher no arm runs. So the case measures whether the installed flow emits the harness's plan
+# shape — not whether a session *discovers* that flow unaided, which is a different measurement and
+# would need a prompt naming no command. If the native runner turns out not to expand a slash
+# command in a case prompt, the drive line moves to however that runner issues one and everything
+# below `prompt.md`'s seed marker is unaffected; `../README.md`'s fallback paragraph says the same
+# for a hand-rolled driver.
+#
+# The working directory `scaffold.sh` builds has three properties a reader meets before any field
+# below matters.
+#
+# It is a **git repository with one commit, checked out on `feat_body_char_count`**, not a plain
+# copy. The copied `harness.config.json`'s `commands.*` name wrapper scripts that derive their
+# working directory from git and exit 1 in a tree that is not a repository — so the tree is
+# initialised and committed deliberately, and neither arm's verification commands would run without
+# it. It is on a branch rather than on `main` because every graded path embeds the branch name, each
+# route resolves that name from `git branch --show-current`, and `main` is in that config's
+# `protectedBranches`.
+#
+# It is an **adopted** repository with no plan written in it yet. That `harness.config.json` is what
+# makes it adopted: it carries the layer vocabulary (`layers[].name`, `layers[].path`) the grader's
+# `_(layer: …)_` invariant is read against — as copied, five rows named `data`, `domain`,
+# `presentation`, `tests` and `general` — and the `stateDir` the story index is expected under, and
+# its `commands.*` resolve because `scripts/` is copied beside it. Its `layers[].conventions` paths
+# into `.claude/` resolve as well, one document per row: those documents are the plan writer's
+# mandated first read, they carry none of the graded shape, and the vocabulary they state is in
+# `harness.config.json` too — `scaffold.sh`'s copy-list comment states that with the two greps that
+# show it. Read the names from the copied file rather than from here; the grader does.
+#
+# What the tree withholds is what an arm is measured on **producing**: `<stateDir>/story_plans/` and
+# `<stateDir>/task_plans/` are absent, as are the captured run artifacts that hold a finished plan in
+# the graded shape. `<stateDir>/task_prompts/` is **seeded**, not withheld — it is an input every
+# route into the plan flow halts without, rather than an output, and seeding it is what makes the
+# assertion observable at all. Three other paths in that config point at nothing, each correctly:
+# `githooksDir`, `pushEnvPath` and `qa.credentialsPath` name a hook directory and two env files
+# nothing in a planning run reads — the two env files are gitignored and never created even in the
+# adoption the fixture was captured from.
+
+prompt: prompt.md
+scaffold: scaffold.sh
+graders: graders/plan-shape.md
+
+repeats: 3
+max_turns: 150
+timeout: 3600
+
+tags: [provisional, plan-shape]

@@ -1,0 +1,58 @@
+# User service unit for the autonomous run watcher of {{projectName}}.
+#
+# A documented template rather than a system unit. `autonomous-sdlc-harness daemon install`
+# renders it to ~/.config/systemd/user/{{label}}, and it is driven with `systemctl --user`
+# throughout — `--user daemon-reload`, then `--user enable --now {{label}}`. As a user unit it
+# runs as the account that installed it, and so has that account's secret store and agent-runner
+# credentials; installed system-wide it would have none of them. Its PATH is not that account's —
+# a user unit inherits the service manager's environment and never a login shell's — so the unit
+# renders one in below.
+#
+# The unit's name carries a slug of the repository it was installed from, so a second repository
+# on this machine installs its own watcher rather than overwriting this one. It is a concrete
+# file and not a `harness-watcher@.service` template unit: systemd resolves an instance name to a
+# literal file of that name before falling back to a template, and a template would have to reach
+# the checkout path through %i — the value this file renders in below instead.
+#
+# On a headless host, `loginctl enable-linger <account>` is what keeps a user unit running
+# while nobody is logged in. That is left to the operator deliberately: it changes how the
+# account behaves outside this harness.
+#
+# Every value below is substituted at install time — no account name, no home directory and no
+# checkout path is written into this file. The renderer escapes each value for the directive it
+# lands in: `%` is doubled everywhere, and the ExecStart path is quoted here and backslash-
+# escaped there, so a checkout holding a space is one command and not two. The two log lines
+# need systemd 240 or newer for `append:`; on anything older, drop them and read the watcher's
+# output from the journal.
+#
+# Prose written here to be shared with, or copied into, the launchd template must carry no double
+# hyphen: a `#` comment forbids nothing, and an XML comment there may not contain one.
+
+[Unit]
+Description=Autonomous SDLC harness run watcher for {{projectName}}
+
+[Service]
+Type=simple
+ExecStart=/bin/bash "{{watcherPath}}"
+WorkingDirectory={{repoRoot}}
+
+# The PATH the service runs on. Without this directive it is whatever the user manager was started
+# with, and the toolchain the outer loop runs — the agent CLI, the configured package manager —
+# need not resolve there. `daemon install` renders the PATH of the shell that ran it; if that shell
+# had none, no directive is rendered at all, because an empty PATH is worse than the manager's own.
+# The value is quoted because a PATH entry may hold a space, so a `"` or a `\` in one is backslash-
+# escaped by the renderer, and its `%` is doubled like every other value here. Re-run
+# `daemon install --force` when the toolchain moves.
+{{environment}}
+# Restarted whenever it exits: a watcher that died between dispatches looks exactly like one
+# with nothing to do, and the run queue drains silently.
+Restart=always
+RestartSec=5
+
+# The watcher's own output, beside the per-run logs in the run-artifact tree, which `init` has
+# already created.
+StandardOutput=append:{{stateDirAbs}}/autonomous_logs/watcher.out.log
+StandardError=append:{{stateDirAbs}}/autonomous_logs/watcher.err.log
+
+[Install]
+WantedBy=default.target

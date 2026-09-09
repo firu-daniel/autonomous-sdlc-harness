@@ -1,0 +1,23 @@
+{
+  "name": "autonomous-sdlc-harness",
+  "version": "0.1.0",
+  "description": "The outer loop of the autonomous SDLC harness: init, doctor, config and daemon management for the harness Claude Code plugin.",
+  "license": "Apache-2.0",
+  "author": "firu-daniel",
+  "homepage": "https://github.com/firu-daniel/autonomous-sdlc-harness",
+  "repository": { "type": "git", "url": "https://github.com/firu-daniel/autonomous-sdlc-harness.git" },
+  "type": "module",
+  "bin": { "autonomous-sdlc-harness": "./dist/cli.js" },
+  "files": ["dist", "scripts", "templates", "README.md", "LICENSE", "NOTICE"],
+  "engines": { "node": ">=20.11.0" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "pretest": "npm run build",
+    "test": "node --test",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^20.14.0"
+  }
+}

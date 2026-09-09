@@ -1,0 +1,17 @@
+{
+  "name": "notes-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=20.11.0" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "pretest": "npm run build",
+    "test": "node --test test/*.test.mjs",
+    "dev": "node tools/dev-server.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

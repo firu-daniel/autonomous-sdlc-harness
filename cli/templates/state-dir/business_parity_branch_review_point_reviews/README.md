@@ -1,0 +1,9 @@
+# business_parity_branch_review_point_reviews/
+
+One `<branch>_parity_review/item_<N>/` folder per reference-parity fix item, holding the findings from re-checking that item's fix. `<N>` is the item's position in the parity review's ordered fix list — the first entry is `item_1`, the second `item_2`. Inside the folder sits one `review_<iteration>.md` per re-check, numbered from `review_0.md` and incremented on each failed one; a later number is added beside the earlier files, never written over them.
+
+A file here is written by the layer reviewer the fix item was routed to, and read by the orchestrator to decide whether the item closes — and, when it did not, by the layer implementer dispatched to fix it, which is handed the folder's most recent file. The parity reviewer itself never writes here: its own findings against the branch go to `<state_dir>/business_parity_branch_reviews/`.
+
+A folder appears the first time one of its item's re-checks has something to report; a re-check with nothing to report writes no file at all, so an item that converged immediately leaves no folder behind. Nothing supersedes an earlier file — the numbered files accumulate into that item's convergence history — and the whole directory is committed with the branch it judged, since no ignore rule reaches it. It exists only while `phases.parity` is on in `harness.config.json`: with no reference implementation to compare against there is no parity fix loop to write into it.
+
+The mistake worth naming is reading this directory as `<state_dir>/business_parity_branch_reviews/`. That one holds the **original** parity findings against the finished branch; this one holds the **re-check of a fix** for one of them. The two have different writers, different readers and different lifetimes, which is why the tree keeps them apart instead of nesting the re-checks under the review that prompted them.

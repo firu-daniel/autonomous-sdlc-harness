@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Caller-agnostic pre-push BACKSTOP, written by `autonomous-sdlc-harness init` into the
+# configured `githooksDir` - which init then points `core.hooksPath` at, so the hook
+# travels with the checkout. Yours from there on: edit it freely, a re-run keeps your copy.
+#
+# WHAT IT DOES: refuses a push whose TARGET ref is a protected branch, whoever invoked git -
+# a person at a terminal, a wrapper script, or an unattended run - because git itself runs
+# this hook on every push GIT PERFORMS, including one started by a subprocess of some other
+# program. A guard that inspects the command an agent submitted sees only that one string,
+# so a push spawned indirectly never re-enters it. This hook closes that gap, which is what
+# makes it a last line of defence rather than a convention. Caller-agnostic WITHIN GIT is
+# the whole of that claim, and the fourth bypass below is the caller it does not reach.
+#
+# IT IS HONESTLY BYPASSABLE ON-BOX - `git push --no-verify`, re-pointing or unsetting
+# core.hooksPath, deleting this file, and pushing with a tool that implements push against
+# the git backend itself instead of running git (`jj git push` in a colocated jj repository
+# performs no git push and therefore runs no git hook - measured on one repository, one
+# hook, seconds apart) all skip it - so it is a backstop, not a floor. The only true floor
+# is a rule enforced by the host the repository is pushed to. This hook is what protects the
+# branch until there is one, and once there is one it is what reports the refusal locally
+# rather than after a round trip.
+#
+# THE PROTECTED SET COMES FROM CONFIGURATION, not from a list baked into this script: the
+# `case` pattern below was substituted, when init wrote this file, from `protectedBranches`
+# in harness.config.json (or that key's schema default when it is absent) UNIONED WITH
+# `defaultBranch` - so the branch work merges back into is in the set whatever the list
+# says, and an empty list means exactly that one branch. `case` patterns are globs, so one
+# entry like `release/*` protects a whole namespace. TO CHANGE THE SET: edit the `case`
+# pattern below and put the same set in `protectedBranches` - or edit that key and re-run
+# `init --force`, which writes the hook again from the config in effect after copying this
+# file to a .bak beside it, so the old set stays readable there. `--force` overwrites
+# generated files but never harness.config.json, which init reads on every run, so a set
+# that lives only in that file is the set this hook is re-rendered from. Without `--force`,
+# delete this file and re-run `init`: a re-run keeps a hook that is already here, so
+# deleting it is the part that makes the re-run re-render it. A third run re-renders this
+# file as a CONSEQUENCE rather than as a way to change the set - `init --reset-config`
+# rebuilds harness.config.json itself, and re-renders this hook from the rebuilt file when
+# the `case` label here no longer matches the set that file resolves, after copying this
+# file to a .bak beside it and never when the label cannot be read at all. Do not reach for
+# it to change the set: it rebuilds the whole config from detection and the flags, so every
+# hand-set value goes with it. Either way the union holds:
+# leaving `defaultBranch` out of `protectedBranches` does not take it out of a re-rendered
+# `case` pattern, so only a hand edit here can drop it and the next re-render puts it back.
+# Never change only one of the two, because the set that is actually enforced on a push is
+# the one in this file.
+#
+# GIT'S CONTRACT: the hook is invoked as `pre-push <remote-name> <remote-url>` and is fed
+# one line per ref on stdin - `<local-ref> <local-sha> <remote-ref> <remote-sha>`. The check
+# is on <remote-ref>, the push TARGET, with `refs/heads/` stripped: `HEAD:main`,
+# `feature:refs/heads/main` and `origin main` all arrive as the same target ref on stdin, so
+# matching that one field covers every spelling and the command line is never re-parsed.
+#
+# `set -uo pipefail`, and deliberately NOT `-e`: a glitch in this script has to fail SAFE
+# toward allowing a legitimate push to an unprotected branch rather than blocking one.
+
+set -uo pipefail
+
+# The happy path is pure string matching on the stdin lines - no git subprocess at all.
+# Empty stdin, or no protected target among the refs, falls through to the exit 0 below.
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Strip the refs/heads/ prefix to get the bare target branch name.
+  target="${remote_ref#refs/heads/}"
+
+  case "$target" in
+    main)
+      echo "pre-push: refusing to push to protected branch '$target' - land the change through a pull request" >&2
+      exit 1
+      ;;
+  esac
+done
+
+exit 0

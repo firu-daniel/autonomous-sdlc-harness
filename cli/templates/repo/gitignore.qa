@@ -1,0 +1,25 @@
+# What the browser half of a run leaves in the working copy. These rules and these comments are
+# rendered only where a browser is actually driven - the interactive-test phase on AND its driver
+# the browser one - because only that driver starts an MCP server, so a repository that drives none
+# carries neither the rules nor prose explaining rules it does not have.
+# The browser server's own output directory, created at the repository root: screenshots, traces and
+# saved sessions. Ignored as a whole directory, unlike the run-artifact directories above - nothing
+# commits a contract file into it, so there is no README a directory rule would take with it, and a
+# re-run writes its own.
+.playwright-mcp/
+# The second pinned browser server writes no fixed project-local directory: it takes a temporary,
+# auto-cleaned user-data-dir by default. This rule is a DEFENSIVE catch if one is ever pointed here
+# (e.g. via an --output-dir flag at run time) rather than a directory the harness knows is written.
+# It costs nothing while the directory never appears, and a re-run neither creates nor needs it.
+.chrome-devtools-mcp/
+# Where the interactive-test agent is told to send a screenshot. It sits inside the run-artifact
+# tree, so an unattended run's launch check tolerates it as a <state_dir> artifact even if this rule
+# is ever dropped. Machine-local evidence of one run: no contract file is committed under it, and a
+# re-run takes its own screenshots.
+{{qaArtifactsDir}}
+# A screenshot the browser server wrote at the repository ROOT under a bare name, because it
+# sanitized the filename it was given rather than honouring the subdirectory in it. DEFENSIVE in the
+# same sense as the rule two above: it costs nothing while the file never appears, and a re-run
+# neither creates nor needs it. The leading slash anchors it at the root and `.png` narrows it to the
+# one artifact kind, so a committed `qa_`-named image in a subdirectory is untouched.
+/qa_*.png

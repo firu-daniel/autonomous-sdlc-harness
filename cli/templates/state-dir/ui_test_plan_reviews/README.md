@@ -1,0 +1,9 @@
+# ui_test_plan_reviews/
+
+One `<branch>/review_{iteration}.md` per iteration, holding the review of the interactive-test plan: written by its reviewer and read by its writer on the next iteration. One `<branch>` subdirectory holds one branch's set. `{iteration}` is the plan-writing loop's own counter, and a new file takes the **next free index in that branch's directory**, so a re-entered loop adds a round beside the earlier files instead of writing over them.
+
+The writer is the UI-test plan reviewer, which is read-only on the plan by construction — its tool allowlist carries no edit tool, and the only file it writes is this one. The reader is the UI-test plan writer, re-dispatched in revision mode with the path to the newest file. Because that writer **revises** the existing files rather than regenerating the set, every Must Fix here has to name which file to change — the index or a specific `ui_test_<N>.md` — or there is nothing the revision dispatch can act on.
+
+A file appears only for a failed gate: a PASS touches no disk, and the reviewer creates the branch directory itself at the moment it first has findings. Files stop at convergence or at the fifth iteration, where the loop escalates with the latest path here. Nothing supersedes an earlier file — the numbered set is that plan's convergence history — and the whole directory is committed with the branch, since no ignore rule reaches it. It exists only while `phases.qa` is `true` in `harness.config.json`.
+
+The mistake worth naming is reading an empty directory as a plan that was never reviewed. Two quite different outcomes both leave nothing here: a plan that passed on the first gate, and a branch with no plan to review at all — for which the reviewer returns PASS immediately and writes nothing, because an absent index means the branch renders no interactively-testable UI and is explicitly **not** a finding. Neither is an omission, and neither is visible from this directory.
