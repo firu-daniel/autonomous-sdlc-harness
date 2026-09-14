@@ -160,6 +160,7 @@ What this harness does not do, and what has not been measured. The first group i
 - [`evals/README.md`](evals/README.md) — the evaluation corpus, with one case written and its runner still unverified.
 - [`examples/notes-app/README.md`](examples/notes-app/README.md) — the minimal project the harness was adopted into, carrying the artifacts of one real end-to-end run over it.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — the engine axis: which runtime and which model as two axes, where the engine is reached, the contract an adapter would have to satisfy, and the open-weight backend path with MCP's place in it — designed, and implemented nowhere in this release.
+- [`ROADMAP.md`](ROADMAP.md) — what is planned beyond this release, one row per feature with a short description and a status.
 - [`LICENSE`](LICENSE) — Apache-2.0, the stock upstream text; its appendix is the template an adopter copies into their own files, so it stays unfilled. [`NOTICE`](NOTICE) carries the copyright assertion the licence body has no slot for — Copyright 2026 Firu Daniel — and `cli/` ships its own copy of both, because it publishes as a package.
 
 Roadmap item numbers cited throughout this tree are listed in [`docs/development.md`](docs/development.md), under "The roadmap this tree defers to".
