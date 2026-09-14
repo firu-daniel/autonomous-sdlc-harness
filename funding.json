@@ -15,7 +15,7 @@
       "name": "autonomous-sdlc-harness",
       "description": "An autonomous software-delivery harness: a task prompt becomes a planned, implemented, reviewed and pushed branch, driven by a fleet of single-purpose agents through plan, implement, review, interactive tests and statistics. It ships as two halves - a Claude Code plugin carrying the process assets, and a Node CLI carrying the outer loop that runs them.",
       "webpageUrl": { "url": "https://github.com/firu-daniel/autonomous-sdlc-harness" },
-      "repositoryUrl": { "url": "https://github.com/firu-daniel/autonomous-sdlc-harness.git" },
+      "repositoryUrl": { "url": "https://github.com/firu-daniel/autonomous-sdlc-harness" },
       "licenses": ["spdx:Apache-2.0"],
       "tags": ["sdlc", "agents", "workflow", "code-review", "automation", "claude-code", "ai-agents", "developer-tools"]
     }
