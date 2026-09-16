@@ -55,6 +55,10 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | 43 | [README summary and checklist](#documentation) |
 | 44 | [Compact the README](#documentation) |
 | 45 | [Threat model](#documentation) |
+| 46 | [Per-run base branch](#flow-and-orchestration) |
+| 47 | [Suggested protected branches at `init`](#security-and-containment) |
+| 48 | [Guided default-branch change](#evidence-and-adoption) |
+| 49 | [Release tags in the protected set](#security-and-containment) |
 
 ## Flow and orchestration
 
@@ -66,6 +70,7 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Multi-plan programs | A task too big for one plan becomes an ordered chain of plans, each picked up from the inbox when the previous one finishes. | Open |
 | Cross-repo tasks | One task split into per-repository plans with an explicit contract between them. | Open |
 | Watcher settings surface | A supported way to change the watcher's tunables instead of hand-editing a file. | Open |
+| Per-run base branch | A run can start from a branch other than `defaultBranch` — a hotfix from `prod`, a fix on `release/x.y`. The config lists the allowed bases, the drop or `/branch-prompt` picks one, and the run records it; the worktree, the branch-review diff and the branch refresh all use that recorded base. Today every run is cut from `defaultBranch`, so the only way is to change the key for one run and change it back. | Open |
 
 ## Planning artifacts and reporting
 
@@ -121,6 +126,7 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Second end-to-end capture | A captured run on a realistic repository, with a remote and more phases enabled. The shipped capture is one run on the example app with parity and docs off; every push failed (no remote) and plan meta-review took three rounds. | Open |
 | Interactive session vs harness run | One plain interactive session against one harness run, on a simple feature and on a complex one, compared on token cost, session duration and branch quality. Quality is measured by running the harness's branch review over both branches, so the interactive session's gaps — and the harness's own weak spots — show up the same way. Numbers stated in the README. | Open |
 | `init` warns when there is no remote | Without a remote, an in-place run reports done with every commit left local. `doctor` fails on it and the Done summary flags it; `init` should warn at setup too. | Open |
+| Guided default-branch change | One command that moves the integration line: sets `defaultBranch` and `protectedBranches` together, re-renders `githooks/pre-push`, checks that `origin/<branch>` exists, and refuses while runs are active, since work cut from the old base would be reviewed and refreshed against the new one. Today these are separate steps; `doctor` catches the stale hook and the missing remote branch, but not the runs in flight. | Open |
 
 ## Security and containment
 
@@ -129,6 +135,8 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | OS-level sandbox in the autonomous profile | `init` adds Claude Code's native sandbox (Seatbelt on macOS, bubblewrap on Linux/WSL2) to `settings.autonomous.json`, so the guard also holds for what allowed commands execute, with a network domain allowlist. Sets `sandbox.failIfUnavailable: true` so an unattended run refuses to start instead of silently running unsandboxed. | Open |
 | `doctor` sandbox checks | Check sandbox prerequisites (bubblewrap and socat on Linux) and document the domain allowlist that package registries and the QA dev server need, plus tools known to break under it (docker, watchman; TLS in `gh`/`terraform` under Seatbelt). | Open |
 | `doctor` flags unverified branch protection | Warn that forge-side branch protection has not been verified. Setting it up stays the user's job; its absence should be visible. | Open |
+| Suggested protected branches at `init` | `init` protects only the detected `defaultBranch`. When `origin` carries well-known environment branches (`main`, `uat`, `staging`, `pre-prod`, `prod`, `release/*`), propose adding them to `protectedBranches` instead of leaving them unguarded until someone edits the list. | Open |
+| Release tags in the protected set | The pre-push backstop and the `PreToolUse` guard judge branch targets only, so a tag push passes both. Unattended runs are still covered — `git tag` and `git push` are on the autonomous profile's ask list, which no one answers there — but a supervised session has only its prompt. An optional protected tag pattern (e.g. `v*`) that both check. | Open |
 
 ## Documentation
 
