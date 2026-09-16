@@ -36,3 +36,10 @@ Also depends on Task 3, which edited a different paragraph of `docs/development.
 - `bash scripts/run-gates.sh` prints `ok    6c llms.txt links resolve on main` and no failure that `dev` did not already print.
 - `bash -n scripts/check-llms-txt.sh` exits 0, and the file is committed with mode `100755` like its neighbours (`git ls-files -s scripts/check-llms-txt.sh`).
 - After this branch merges to `dev`, `bash scripts/publish-main.sh --dry-run` lists `llms.txt` in its diff stat. That is a hand step after merge, because before merge `origin/dev` does not carry this branch.
+
+**Deviations from plan:**
+
+- `git ls-files --error-unmatch -- <path>` also exits 0 when `<path>` is a directory (measured with `plugin`), so a `blob/main/<path>` link additionally requires `git ls-files -- ":(literal)<path>/"` to print nothing. Both probes use `:(literal)` pathspecs so a `*` in a link is not a glob. A planted `blob/main/plugin` copy exits 1 with `'plugin' is a directory; a blob link needs a file`.
+- A missing `<file>` exits 1 naming it, not 2: only an argument count above one is bad usage.
+- Evidence downgrades: `chmod +x scripts/check-llms-txt.sh` required approval and was not run, so the working-tree file is mode `100644`; the `100755` verification is unmet and needs `git update-index --chmod=+x` or a chmod at commit time. `/bin/bash` (3.2) and `bash --version` also required approval, so bash 3.2 compatibility rests on reading (no `mapfile`, no associative arrays, the empty `removed` array is never expanded under `set -u`), and every run used the `bash` on PATH, version not observed. The fail-closed `removed_paths` branch was read, not run, as the plan specifies.
+- `bash scripts/run-gates.sh` in this worktree prints `FAIL 6a`, whose single hit is `./.git:1:gitdir: …`: in a worktree `.git` is a file, which `--exclude-dir=.git` does not exclude. It comes from the checkout shape rather than this diff, and `ok    6c llms.txt links resolve on main` printed.
