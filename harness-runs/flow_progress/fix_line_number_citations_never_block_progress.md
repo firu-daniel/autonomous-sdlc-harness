@@ -6,7 +6,7 @@ Source: harness-runs/task_prompts/fix_line_number_citations_never_block_task_pro
 - phases: parity=false, qa=false, docs=false   (from harness.config.json, read at this write; an unset flag is false)
 
 ## Planning
-- [ ] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
+- [x] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
 - [-] P2. UI-test plan converged (ui-tests-plan-reviewer PASS) — or no_ui
 - [ ] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
 
