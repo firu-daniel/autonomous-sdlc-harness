@@ -59,6 +59,7 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | 47 | [Suggested protected branches at `init`](#security-and-containment) |
 | 48 | [Guided default-branch change](#evidence-and-adoption) |
 | 49 | [Release tags in the protected set](#security-and-containment) |
+| 50 | [Notifications settings command](#flow-and-orchestration) |
 
 ## Flow and orchestration
 
@@ -70,6 +71,7 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Multi-plan programs | A task too big for one plan becomes an ordered chain of plans, each picked up from the inbox when the previous one finishes. | Open |
 | Cross-repo tasks | One task split into per-repository plans with an explicit contract between them. | Open |
 | Watcher settings surface | A supported way to change the watcher's tunables instead of hand-editing a file. | Open |
+| Notifications settings command | A `notifications` command that manages the machine-local `push.env` and nothing else: `set-url` writes the endpoint, `show` names the file in effect and which keys are set without printing a value, and `test` sends one push. Today only `init --notifications` writes the file, and `init` skips a file that already exists, so a `push.env` that is there with both keys empty can be filled only by hand or by `init --force`, which regenerates every other file too. `doctor`'s warning about an empty file then names this command. | Open |
 | Per-run base branch | A run can start from a branch other than `defaultBranch` — a hotfix from `prod`, a fix on `release/x.y`. The config lists the allowed bases, the drop or `/branch-prompt` picks one, and the run records it; the worktree, the branch-review diff and the branch refresh all use that recorded base. Today every run is cut from `defaultBranch`, so the only way is to change the key for one run and change it back. | Open |
 
 ## Planning artifacts and reporting
