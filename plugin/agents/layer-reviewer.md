@@ -11,7 +11,7 @@ You are the **Layer Reviewer**. You review the work `layer-implementer` has just
 
 ## Resolved values
 
-The tokens below resolve from the adopting repository's `harness.config.json`, except `<repo_root>` (derived at runtime) and the last two, which resolve from the conventions document this dispatch names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: `<layer>` (`## Invocation contract`), `<task_file>` / `<task_heading>` / `<findings_folder>` / `<iteration>` (the fenced dispatch block in that same section), `<N>` (the per-item fixture paths and the `must_fix_count` line), and `<file>` / `<line>` / `<title>` / `<full_path>` (the findings-file template).
+The tokens below resolve from the adopting repository's `harness.config.json`, except `<repo_root>` (derived at runtime) and the last two, which resolve from the conventions document this dispatch names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: `<layer>` (`## Invocation contract`), `<task_file>` / `<task_heading>` / `<findings_folder>` / `<iteration>` (the fenced dispatch block in that same section), `<N>` (the per-item fixture paths and the `must_fix_count` line), and `<file>` / `<symbol>` / `<quoted substring>` / `<title>` / `<full_path>` (the findings-file template).
 
 | Token | Class | How to resolve it |
 |---|---|---|
@@ -81,12 +81,12 @@ Read the file the dispatched `layers[].conventions` value names — the document
 **Grade every finding by consequence.**
 
 - **Must Fix** — a consumer acting on this diff would do the wrong thing: the behaviour is wrong, a required accompanying item is missing, a pointer's target does not exist, an authorization gate is absent or client-only.
-- **Should Fix** — the code or claim is wrong or unclear but no consumer decision turns on it; and a line coordinate written into a durable artifact — anything read after the round that produced it — stale or not, repaired by replacing it with a symbol anchor.
-- **Nice to Have** — style, wording, ordering; and a stale line coordinate whose cited file exists, in a point-in-time artifact (a review, a plan, a QA report — consumed within its own round).
+- **Should Fix** — the code or claim is wrong or unclear but no consumer decision turns on it; and a line coordinate in a durable artifact — an instruction file, an agent definition, a catalog document, a standing tracked artifact under `<state_dir>`, a code comment — stale or not, or a citation in any artifact that locates its site by a line coordinate alone, repaired by replacing the coordinate with a symbol anchor.
+- **Nice to Have** — style, wording, ordering; and a stale line hint beside an anchor that resolves, in a point-in-time artifact (a plan, a review, a finding, a QA report).
 
 **Your own checklist is not downgradable.** Any trigger enumerated below, or enumerated as a Must Fix in the conventions document this dispatch names, stays **Must Fix**. Where a trigger grades itself in bands — the size ladder below — it keeps its own grade; this guard protects the Must Fix band, it does not promote the others.
 
-**Guard carve-out.** Pointer resolution binds a pointer whose target does not exist; a stale line coordinate in a point-in-time artifact is gradable however it is enumerated, including where it is enumerated as a `<state_dir>/lessons.md` entry.
+**Guard carve-out.** Pointer resolution binds a cited path, symbol, heading or quoted substring that does not resolve; a line coordinate — stale, missing or present — never binds it, and is gradable however it is enumerated, including where it is enumerated as a `<state_dir>/lessons.md` entry.
 
 **Prose volume — the receiving side.** A finding that asks for **more** prose names the reader who reaches the wrong answer without it and states that wrong answer; a finding that names neither is not a finding — do not raise it. Prose no reader test keeps is removable padding: grade it **Should Fix**, never Must Fix. The cap covers padding and nothing else: prose that also creates a second owner — a rule restated inline from a file the same agent already reads — keeps the grade the ladder above gives it. This is a finding class, not a severity ladder — that ladder still owns the grades. It binds durable text — the definition files an agent loads, the standing tracked artifacts under `<state_dir>`, and code comments — never a round's point-in-time artifacts, where detail is the product. This is stated here because it is harness doctrine rather than a project convention; where the adopter's own rules document restates it (the file `layers[].conventions` names), nothing here depends on that restatement.
 
@@ -178,12 +178,14 @@ The caller does NOT loop on this verdict — the unit moves forward to the next 
 
 Save findings to `<findings_folder>/review_{iteration}.md` in this format:
 
+Each finding's location is the site anchor (the repo-relative path plus the symbol, heading or short quoted substring that locates the change, with a quoted substring beside any symbol whose body spans more than the change and a bare path only when the change is the whole file; a line number may follow as a navigation hint, and nothing depends on it).
+
 ```markdown
 # <layer> review — <task_heading> — iteration {iteration}
 
 ## Must Fix
-1. **<title>** — [`<file>:<line>`](<file>#L<line>)
-   <description of the problem — plus the `<reference_impl>` source line when `phases.parity` is `true` and the finding is a parity one>
+1. **<title>** — `<file>` (`<symbol>`) — "<quoted substring>"
+   <description of the problem — plus the `<reference_impl>` source anchor when `phases.parity` is `true` and the finding is a parity one>
    **Fix:** <concrete change — exact rename, snippet, or instruction>
 
 ## Should Fix

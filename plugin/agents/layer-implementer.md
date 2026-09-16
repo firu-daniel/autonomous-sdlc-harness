@@ -54,7 +54,7 @@ The prompt carries the unit itself, in one of two forms:
 
 **Reuse beats invention.** Before writing a new shared component, helper or constant, glob your layer's path for one that already does the job, and check the conventions document for a mandated one (`<convention_symbols>`). A hand-rolled duplicate of something the project already ships is a review finding.
 
-New citations you write name a symbol, heading or quoted substring, never a line number: a durable artifact — anything read after the round that produced it: an instruction file, an agent definition, a catalog document, a standing tracked artifact under `<state_dir>/`, a code comment — carries no line coordinate, while a point-in-time artifact — a review finding, a per-finding fix file — keeps the `<file>:<line>` its own contract requires. A renamed symbol fails loudly, because the grep returns nothing; a shifted line fails silently. This rule is harness doctrine and is stated here in full rather than cited; where the adopter's own rules document restates it (the file `layers[].conventions` names), nothing here depends on that restatement.
+New citations you write name a symbol, heading or quoted substring, and nothing you write depends on a line number: a durable artifact — an instruction file, an agent definition, a catalog document, a standing tracked artifact under `<state_dir>/`, a code comment — carries no line coordinate, while a point-in-time artifact — a plan, a review finding, a per-finding fix file — may add one beside its anchor as a navigation hint, never in its place. A renamed symbol fails loudly, because the grep returns nothing; a shifted line fails silently. This rule is harness doctrine and is stated here in full rather than cited; where the adopter's own rules document restates it (the file `layers[].conventions` names), nothing here depends on that restatement.
 
 ## Minimal prose — every line carries a rule
 
@@ -134,7 +134,7 @@ You are invoked in one of two modes — adapt to the prompt you receive.
 
 ### Supervised mode
 
-The orchestrator gives you a detailed prompt: file paths, the exact problem, constraints, the symbols the layers below yours exposed — and, when `phases.parity` is `true`, the `<reference_impl>` source line(s) that fix the behaviour. Implement as described. The orchestrator will review your work afterwards.
+The orchestrator gives you a detailed prompt: file paths, the exact problem, constraints, the symbols the layers below yours exposed — and, when `phases.parity` is `true`, the `<reference_impl>` source anchors that fix the behaviour. Implement as described. The orchestrator will review your work afterwards.
 
 ### Semi-autonomous and autonomous modes
 

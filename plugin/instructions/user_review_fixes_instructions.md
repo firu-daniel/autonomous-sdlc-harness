@@ -16,7 +16,7 @@ The two tokens below are neither Mode-contract **bindings** (this file declares 
 ## Phase 1 — Get fix-plan context
 
 1. **Read the active user-review fix-plan index** at the path the calling command passed in (substituted for `<branch>_fix_plan*.md` references throughout this file). The index carries the Context paragraph + the `## Phase 2 Readiness — Ordered Fix List` (the iteration source of truth) + a `### K. Title` pointer per finding + the `## Source observations` section. The body of each finding lives in a self-contained per-finding file at `<repo_root>/<state_dir>/user_reviews/<branch>_fix_plan/finding_<K>.md` (folder name mirrors any round suffix: `<branch>_fix_plan_2/` for round 2). Read only the per-finding file for the item you are about to fix — the orchestration loop in Phase 2 resolves which one. Do **not** read all per-finding files upfront.
-2. **Do not read** the task prompt, the story plan, or any code-review file. The fix plan is self-contained — every per-finding file already cites file:line and carries its own fix, and the `user-review-fix-plan-writer` agent copied the source observations verbatim into the index's `## Source observations` section. Re-reading the upstream artifacts only invites drift between what the user asked for and what gets shipped.
+2. **Do not read** the task prompt, the story plan, or any code-review file. The fix plan is self-contained — every per-finding file already anchors its site and carries its own fix, and the `user-review-fix-plan-writer` agent copied the source observations verbatim into the index's `## Source observations` section. Re-reading the upstream artifacts only invites drift between what the user asked for and what gets shipped.
 
 ## Phase 2 — Fix orchestration
 
