@@ -130,7 +130,7 @@ The remaining triggers are stack-neutral and always apply:
 - The diff touches application-level shared state and the review does not check the store-and-listener path the owning layer's conventions document defines.
 - The diff exhibits a `<state_dir>/lessons.md` category (a new privileged fetch, a new optimistic mutation, new timing or pagination constants, a new shared hook) but no corresponding finding appears and no clean-pass rationale covers it.
 
-**Guard carve-out.** Pointer resolution binds a cited path, symbol, heading or quoted substring that does not resolve; a line coordinate — stale, missing or present — never binds it, and is gradable however it is enumerated, including where it is enumerated as a `<state_dir>/lessons.md` entry.
+**Guard carve-out.** Pointer resolution binds a cited path, symbol, heading or quoted substring that does not resolve; a line coordinate — stale, missing or present — never binds it, and is gradable however it is enumerated, including where it is enumerated as a `<state_dir>/lessons.md` entry. A path or quoted text a finding's fix is about to create is not a cited pointer under this carve-out.
 
 ### Unactionable gates (Must Fix)
 

@@ -11,7 +11,7 @@ Headline: one net-new Should Fix. The code review's Finding 1 fixed the carve-ou
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Exempt to-be-created paths from `review-plan-reviewer`'s carve-out _(layer: plugin)_
+1. [x] **Finding 1** — Exempt to-be-created paths from `review-plan-reviewer`'s carve-out _(layer: plugin)_
 
 ## Must Fix
 
