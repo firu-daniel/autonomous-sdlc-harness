@@ -32,3 +32,4 @@ Its written form is `` `<file>` (`<symbol>`) — "<quoted substring>" ``; the `*
 - `## Source observations` is still byte-identical to the numbered list in `plugin/samples/sample_user_review.md`: compare the five lines.
 - Each finding is still implementable from its own file: its `**File:**` line names a symbol and a quoted substring the body or fix also names (`typeScale.body`, `queryText`, `searchService.fetchRecentSearches`).
 - `claude plugin validate --strict plugin` prints `✔ Validation passed`.
+- **Deviations from plan:** The standalone `claude plugin validate --strict plugin` call was refused by the permission layer; the evidence is gate `1a plugin manifest` reporting `ok` in `bash scripts/test.sh`, which runs that same command (`scripts/run-gates.sh`), not the printed `✔ Validation passed` line.
