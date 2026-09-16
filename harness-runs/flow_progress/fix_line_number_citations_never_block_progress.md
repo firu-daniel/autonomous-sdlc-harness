@@ -23,4 +23,4 @@ Source: harness-runs/task_prompts/fix_line_number_citations_never_block_task_pro
 - [x] C2m.    Skeptic meta-review PASS — or not owed (C2.1 returned PASS, so C2.2 never ran)
 - [x] C2f.    Skeptic findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [-] E.      QA passed (UI-test index all [x] / no_ui)
-- [ ] D.      Branch statistics committed & pushed
+- [x] D.      Branch statistics committed & pushed
