@@ -109,7 +109,7 @@ Write `findings_path` (each finding: the claim, the file that contradicts it, th
 
 - `verdict:` `PASS` or `FAIL`.
   - **PASS** — accurate, adequately researched, and (update mode) faithful to the diff; no factual errors or material omissions.
-  - **FAIL** — a factual error, a shallow/under-researched document, a material omission, or (update mode) a stale/missing change; list the concrete corrections.
+  - **FAIL** — a factual error, a shallow/under-researched document, a material omission, a line coordinate check 2 does not classify as a value, or (update mode) a stale/missing change; list the concrete corrections.
 - `findings_file:` the path you wrote.
 - `missed_docs:` (update mode only) any other document the diff should have touched, or `none`.
 - `summary:` one line.

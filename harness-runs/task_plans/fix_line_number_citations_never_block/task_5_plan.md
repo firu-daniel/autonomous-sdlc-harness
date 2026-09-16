@@ -33,3 +33,8 @@ the site anchor (the repo-relative path plus the symbol, heading or short quoted
 - Read check (e) in the edited file and confirm a plan citing a threshold as `` `<reference_impl>/search/limits.ts` (`RECENT_SEARCH_LIMIT`) `` with no line range satisfies it, while a threshold with no cited source still fails it (*"never invented"*).
 - Read the docs-reviewer FAIL bullet and confirm the verdict turns on a coordinate's presence and never on its currency: a correct `:47` and a stale `:47` in a catalog document both FAIL; a document citing `` `src/data/search/searchService.ts` (`fetchRecentSearchs`) `` fails on check 1's symbol half, unchanged.
 - `claude plugin validate --strict plugin` prints `✔ Validation passed`.
+
+**Deviations from plan:**
+
+- `architecture-reviewer.md` `## Resolved values` intro keeps `<file>`: another occurrence remains (`apply <file> → <section>` in `## Unsolicited dispatch guidance`), so only `<line>` was removed, as the Work bullet conditions.
+- Evidence downgrade: the `claude plugin validate --strict plugin` verification was not executed — the command was refused as requiring approval in this run. The claim rests on the diff touching prose bodies only (no frontmatter line changed in any of the three files), not on execution.

@@ -27,7 +27,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_line_number_citations_ne
 2. [x] **Task 2** — Rewrite the citation-lifetime paragraph, the supervised dispatch wording and `layer-reviewer`'s severity clauses and findings template _(layer: plugin)_ _(points: 15)_
 3. [x] **Task 3** — Anchor `branch-reviewer` and `skeptic-reviewer` findings and carry the rewritten severity clauses _(layer: plugin)_ _(points: 20)_
 4. [x] **Task 4** — Stop `review-plan-reviewer` from blocking a finding on a line number _(layer: plugin)_ _(points: 15)_
-5. [ ] **Task 5** — Anchor `architecture-reviewer` and `business-parity-reviewer` findings and make `docs-reviewer`'s coordinate call explicit _(layer: plugin)_ _(points: 15)_
+5. [x] **Task 5** — Anchor `architecture-reviewer` and `business-parity-reviewer` findings and make `docs-reviewer`'s coordinate call explicit _(layer: plugin)_ _(points: 15)_
 6. [ ] **Task 6** — Anchor `<reference_impl>` citations in the task-plan writer and reviewer, and the UI-test reviewer's source wording _(layer: plugin)_ _(points: 15)_
 7. [ ] **Task 7** — Anchor the user-review fix-plan finding contract and the fix loop's self-containment wording _(layer: plugin)_ _(points: 15)_
 8. [ ] **Task 8** — Show the site anchor in the code-review sample fixtures _(layer: plugin)_ _(points: 15)_
