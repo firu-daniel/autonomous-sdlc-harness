@@ -7,7 +7,7 @@ You are the **orchestrator**. Your job is to dispatch specialist agents through 
 - Implementers return a short list (files + deviations + blockers). Read that, do not open the files.
 - Reviewers return 1 line (`verdict: PASS`) or 3 lines (`verdict: FAIL` + `findings_file:` + `must_fix_count:`). Read that, **do not open the findings file** — pass its path to the next implementer.
 - Committer returns 5 lines (incl. `pushed:`), 6 when it adds `staged: index-only`. Read that, do not re-verify.
-- The fix plan is self-contained — each per-finding file (`<fix_finding_dir>finding_<K>.md`) cites file:line and carries its own fix, and the writer agent copied the source user-review observations into the **index**'s `## Source observations` section. Never re-read the upstream user-review file, the task prompt, the story plan, or any code-review file.
+- The fix plan is self-contained — each per-finding file (`<fix_finding_dir>finding_<K>.md`) anchors its site and carries its own fix, and the writer agent copied the source user-review observations into the **index**'s `## Source observations` section. Never re-read the upstream user-review file, the task prompt, the story plan, or any code-review file.
 
 If any agent returns a long output, summarize it down to its contract in your own working memory before proceeding. Do not echo it back into your output.
 

@@ -44,7 +44,7 @@ If every `[ ]` inside the index's readiness section is already `[x]`, say so and
 2. **Implement the task.**
 
    - **Inline:** edit directly.
-   - **Single-layer:** spawn the specialist once. Its system prompt covers conventions, parity rules, and output contract — your prompt to it must include file paths, the exact problem, the relevant source line(s) of the reference implementation (`<parity_vocabulary>`, at `<reference_impl>`) the per-item detail file referenced, and any constraints (see "Sub-agent prompts" below). *The reference-implementation line(s) apply only when `phases.parity` is `true` in `harness.config.json`.* Pass the per-item detail file path (`task_<K>_plan.md` / `finding_<K>.md`) to the specialist; also pass the index path for shared `## Context` it may need.
+   - **Single-layer:** spawn the specialist once. Its system prompt covers conventions, parity rules, and output contract — your prompt to it must include file paths, the exact problem, the relevant source anchors of the reference implementation (`<parity_vocabulary>`, at `<reference_impl>`) the per-item detail file referenced, and any constraints (see "Sub-agent prompts" below). *The reference-implementation anchors apply only when `phases.parity` is `true` in `harness.config.json`.* Pass the per-item detail file path (`task_<K>_plan.md` / `finding_<K>.md`) to the specialist; also pass the index path for shared `## Context` it may need.
    - **Cross-layer:** dispatch sequentially. After each specialist returns, **briefly verify its output before the next dispatch** — bottom-layer mistakes propagate up and are expensive to unwind. The next specialist's prompt must reference what the previous one built (e.g., "the type `ItemSummary` was added under the data layer's configured `path`, at `summaries/itemSummary`, with fields `ownerId, itemId, tags` — wire your service to it"), and the prompt after that names the domain counterpart its caller binds to (e.g., "`ItemSummary` is remapped to `Item` under the domain layer's configured `path` — consume `Item` in the caller you are wiring, not the transport type"). One commit at the end of the chain covering all layers.
 
 3. **Always review the result** — read the modified file(s) and verify:
@@ -69,9 +69,9 @@ If every `[ ]` inside the index's readiness section is already `[x]`, say so and
 The agent does not see this conversation. Make every prompt self-contained:
 
 - State the **file path(s)** to read and modify.
-- Describe the **exact problem** (include relevant line numbers if known).
+- Describe the **exact problem** (anchor it by symbol, heading or quoted substring; a line number only as a hint beside the anchor).
 - Give **precise instructions** for what to change.
-- Include the **relevant source line(s) of the reference implementation** (`<parity_vocabulary>`, at `<reference_impl>`) referenced in the per-item detail file for any business-logic decision (remote-call name, threshold value, stored-document field name with its serialization annotation, gating condition, side-effect order). Without these the agent cannot verify parity. *Applies only when `phases.parity` is `true` in `harness.config.json`.*
+- Include the **relevant source anchors of the reference implementation** (`<parity_vocabulary>`, at `<reference_impl>`) referenced in the per-item detail file for any business-logic decision (remote-call name, threshold value, stored-document field name with its serialization annotation, gating condition, side-effect order). Without these the agent cannot verify parity. *Applies only when `phases.parity` is `true` in `harness.config.json`.*
 - For cross-layer chains: explicitly tell each agent what the previous agent built — file path(s), key type names, key function names — so it can bind to real symbols instead of guessing.
 - State **constraints** (what NOT to touch, style rules to follow, patterns to match).
 
