@@ -6252,6 +6252,54 @@ test('init refuses a run it cannot safely aim, and says which one it refused', a
 });
 
 /**
+ * The escape the refusal above now names, and the whole of its contract: the one value that opens
+ * that refusal, and the near miss that must not. It is an environment variable rather than a flag
+ * because self-adoption is a contributor workflow and a flag would owe a row in `--help`, where the
+ * only reader it reaches is an adopter it can only mislead (`commands/init.ts`, `SELF_ADOPT_ENV`).
+ *
+ * The fixture is the refusal subtest's, unchanged, because the subject is only which of the two
+ * outcomes that one repository shape reaches. `--dry-run` keeps it that way, and costs the passing
+ * arm its most obvious assertion: a run that got past the gate writes nothing here either, so the
+ * absence of the refusal has to be paired with a line only the far side of the gate prints.
+ */
+test('the self-adoption escape opens the harness-own-repository refusal, and only on its exact value', async (t) => {
+  // Spelled here rather than imported, as every other string this suite asserts against the compiled
+  // CLI is. The second arm ties the two spellings together: it asserts the refusal itself names the
+  // same variable, so a rename that misses this file fails there rather than passing quietly.
+  const SELF_ADOPT_ENV = 'HARNESS_SELF_ADOPT';
+  const harnessOwnRepository = () => ({
+    '.claude-plugin/marketplace.json': { name: 'fixture-marketplace', plugins: [] },
+    'cli/package.json': { name: readJson(join(PACKAGE_ROOT, 'package.json')).name, version: '0.0.0' },
+  });
+
+  await t.test('the exact value wires the repository the bare run refuses', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: harnessOwnRepository() });
+
+    const result = await runCli(dir, ['init', '--dry-run', '--non-interactive'], { [SELF_ADOPT_ENV]: '1' });
+
+    assert.equal(result.status, 0);
+    assert.doesNotMatch(result.stderr, /refusing to wire the harness's own repository/);
+    // The absence above would also hold if `init` had failed before ever reaching the gate, so the
+    // arm asks for a line the run can only have printed from the other side of it.
+    assert.match(result.stdout, /would create\s+harness\.config\.json/);
+    assert.equal(await exists(dir, CONFIG_FILE), false);
+  });
+
+  await t.test('a value that is not exactly it leaves the refusal standing', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: harnessOwnRepository() });
+
+    const result = await runCli(dir, ['init', '--dry-run', '--non-interactive'], { [SELF_ADOPT_ENV]: 'yes' });
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /refusing to wire the harness's own repository/);
+    // Merely being set is not enough, and the refusal says what would be: a contributor who reaches
+    // it learns the way through from the message rather than from the source.
+    assert.match(result.stderr, new RegExp(`${SELF_ADOPT_ENV}=1`));
+    assert.equal(await exists(dir, CONFIG_FILE), false);
+  });
+});
+
+/**
  * The ordering half of those refusals, and the only half a fixture can catch: a refusal answerable
  * from the parsed flags alone must be raised **before** the git gate, whose accept path creates a
  * repository.
