@@ -33,7 +33,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_readme_summary_compact_llms
 
 1. [x] **Task 1** — Re-point the `cli/` comments that send a reader to the README for a measurement _(layer: cli)_ _(points: 8)_
 2. [x] **Task 2** — Move the *git only*, jj-shapes and missing-remote caveats into `docs/cli.md` §2 and §7 _(layer: general)_ _(points: 20)_
-3. [ ] **Task 3** — Move the slash-spelling measurement into `docs/development.md` §6 _(layer: general)_ _(points: 10)_
+3. [x] **Task 3** — Move the slash-spelling measurement into `docs/development.md` §6 _(layer: general)_ _(points: 10)_
 4. [ ] **Task 4** — Move the `.claude/` write-wall measurement into `docs/analyze.md` §3 and re-point `docs/config.md` §3 _(layer: general)_ _(points: 12)_
 5. [ ] **Task 5** — Open `README.md` with three plain lines, the five-step checklist and the caveats below it _(layer: general)_ _(points: 20)_
 6. [ ] **Task 6** — Compact `README.md`'s `## How it is measured`, `## Two ledgers` and `## Scope and limits` _(layer: general)_ _(points: 20)_
