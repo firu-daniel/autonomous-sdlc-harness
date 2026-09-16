@@ -10,6 +10,7 @@
 #      with <path> a tracked file, or `…/tree/main/<path>` with <path> a tracked directory.
 #   4. No target carries `#` or `?`, and no target has any other form.
 #   5. No <path> equals, or starts with `<entry>/` for, an entry of publish-main.sh's `removed_paths`.
+#      A `tree` <path> must also keep at least one tracked file that no entry removes.
 #
 # WHY "TRACKED, MINUS removed_paths" IS "ON main". publish-main.sh builds main's tree as dev's tree
 # with the `removed_paths` entries force-removed from the index; its only other change rewrites the
@@ -129,8 +130,23 @@ while IFS= read -r line || [ -n "$line" ]; do
         finding "$target" "'${path}' is a directory; a blob link needs a file"
       fi
     else
-      if [ -z "$(git ls-files -- ":(literal)$path/")" ]; then
+      tracked_under="$(git ls-files -- ":(literal)$path/")"
+      if [ -z "$tracked_under" ]; then
         finding "$target" "'${path}' is not a tracked directory"
+      else
+        surviving=0
+        while IFS= read -r tracked; do
+          kept=1
+          for entry in "${removed[@]}"; do
+            case "$tracked" in
+              "$entry" | "$entry"/*) kept=0; break ;;
+            esac
+          done
+          if [ "$kept" -eq 1 ]; then surviving=1; break; fi
+        done <<<"$tracked_under"
+        if [ "$surviving" -eq 0 ]; then
+          finding "$target" "every tracked file under '${path}' is removed from main by ${publish_script}"
+        fi
       fi
     fi
   done
