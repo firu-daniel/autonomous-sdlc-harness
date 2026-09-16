@@ -4,7 +4,7 @@
 
 **File:** `src/data/search/searchService.ts` (`fetchRecentSearches`) — "store.query('recent_searches'"
 
-`fetchRecentSearches(limit)` applies `limit` to the stored query without ordering it first, so the store returns the *first* `limit` documents in insertion order — the oldest ones — and every search newer than that page is dropped before the panel ever sees it. `SearchPanel` then sorts what it received by `searched_at` descending before rendering (`src/presentation/search/components/SearchPanel.tsx` (`SearchPanel`)), which is what hides the defect: the rows are genuinely newest-first, but they are the newest of the oldest `limit` records, and the search the user just ran never appears once the store holds more than `limit`. The `<parity_vocabulary>` implementation orders in the query and limits after.
+`fetchRecentSearches(limit)` applies `limit` to the stored query without ordering it first, so the store returns the *first* `limit` documents in insertion order — the oldest ones — and every search newer than that page is dropped before the panel ever sees it. `SearchPanel` then sorts what it received by `searched_at` descending before rendering (`src/presentation/search/components/SearchPanel.tsx` (`SearchPanel`) — ".sort("), which is what hides the defect: the rows are genuinely newest-first, but they are the newest of the oldest `limit` records, and the search the user just ran never appears once the store holds more than `limit`. The `<parity_vocabulary>` implementation orders in the query and limits after.
 
 **Fix:** order in the query, before the limit, and let the service hand back display order:
 
@@ -15,4 +15,4 @@ const rows = await store.query('recent_searches', {
 });
 ```
 
-Then delete the in-memory sort in `SearchPanel` — it is redundant once the read is ordered, and leaving it in keeps the panel looking correct on a small store, which is the reason this shipped. Re-run Task 1's own `**Verification:**` step ("`fetchRecentSearches` returns records in most-recent-first order for a store holding more documents than `limit`") against a store seeded with more than `limit` records rather than the two-record fixture.
+Then delete the in-memory sort in `SearchPanel` (".sort(") — it is redundant once the read is ordered, and leaving it in keeps the panel looking correct on a small store, which is the reason this shipped. Re-run Task 1's own `**Verification:**` step ("`fetchRecentSearches` returns records in most-recent-first order for a store holding more documents than `limit`") against a store seeded with more than `limit` records rather than the two-record fixture.

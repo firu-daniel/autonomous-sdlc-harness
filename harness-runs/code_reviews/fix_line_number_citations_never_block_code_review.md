@@ -8,7 +8,7 @@ Headline conclusions. The branch meets what the prompt asked for. The acceptance
 
 1. [x] **Finding 3** — Close the unclosed aside in the parity-review README's citation sentence _(layer: cli)_
 2. [x] **Finding 4** — Replace the orphaned "reference-implementation line(s)" referent in the supervised orchestration instructions _(layer: plugin)_
-3. [ ] **Finding 2** — Give the code-review sample's secondary `SearchPanel` citation the quoted substring its own precision clause requires _(layer: plugin)_
+3. [x] **Finding 2** — Give the code-review sample's secondary `SearchPanel` citation the quoted substring its own precision clause requires _(layer: plugin)_
 4. [ ] **Finding 1** — Stop `task-plan-reviewer`'s carve-out from reading as a resolution rule over paths a task is about to create _(layer: plugin)_
 
 ## Must Fix
