@@ -31,7 +31,7 @@ Second, the README gets its new opening: three plain lines, a five-step checklis
 
 Each entry maps 1:1 to `harness-runs/task_plans/feat_readme_summary_compact_llms_txt/task_<K>_plan.md`. Entries run bottom-up in ship order, with the catch-all layer last.
 
-1. [ ] **Task 1** — Re-point the `cli/` comments that send a reader to the README for a measurement _(layer: cli)_ _(points: 8)_
+1. [x] **Task 1** — Re-point the `cli/` comments that send a reader to the README for a measurement _(layer: cli)_ _(points: 8)_
 2. [ ] **Task 2** — Move the *git only*, jj-shapes and missing-remote caveats into `docs/cli.md` §2 and §7 _(layer: general)_ _(points: 20)_
 3. [ ] **Task 3** — Move the slash-spelling measurement into `docs/development.md` §6 _(layer: general)_ _(points: 10)_
 4. [ ] **Task 4** — Move the `.claude/` write-wall measurement into `docs/analyze.md` §3 and re-point `docs/config.md` §3 _(layer: general)_ _(points: 12)_

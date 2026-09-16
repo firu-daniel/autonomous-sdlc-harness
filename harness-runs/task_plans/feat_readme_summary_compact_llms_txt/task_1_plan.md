@@ -26,3 +26,5 @@
 - `git diff -- cli` shows changes only inside `/** … */` or `*`-prefixed comment lines.
 - `bash scripts/typecheck.sh` and `bash scripts/test.sh` exit 0. The build is `noUnusedLocals`-strict, and a comment edit must not disturb it.
 - Open the two cited sections and confirm each still carries the quoted sentence above. That is what makes the new pointer true before Tasks 2 and 3 land.
+
+**Deviations from plan:** `bash scripts/test.sh` exits 1, not 0: gate 6a (no machine paths) matches `./.git`, the worktree pointer file this run's checkout carries, which no comment edit touches; gates 1-4 including `npm test` and 6b pass, and `bash scripts/typecheck.sh` passes. Comment lines around each replaced pointer were reflowed to the existing ~100-column width.

@@ -193,11 +193,11 @@ const ANALYZE_COMMAND = `/${ANALYZE_COMMAND_NAME}`;
  * what {@link ANALYZE_INVOCATION} does — meets no picker and is matched exactly, so the bare
  * form fails there with `Unknown command`. That the **prefixed** form succeeds where the bare
  * one fails is not established: the only measurement in this tree is headless and negative on
- * both spellings (root `README.md`, `### Measured while building that evidence, and not fixed
- * here`), and the interactive first-message form waits on the hand-run gate — if that comes back
- * negative the printed line is dropped rather than respelled (`docs/analyze.md` §9). The prefix
- * is taken from {@link PLUGIN_NAME}, which mirrors the plugin manifest, rather than written out
- * here.
+ * both spellings (`docs/development.md` → `## 6. The roadmap this tree defers to`, the
+ * third-debt paragraph), and the interactive first-message form waits on the hand-run gate — if
+ * that comes back negative the printed line is dropped rather than respelled (`docs/analyze.md`
+ * §9). The prefix is taken from {@link PLUGIN_NAME}, which mirrors the plugin manifest, rather than
+ * written out here.
  */
 const ANALYZE_COMMAND_QUALIFIED = `/${PLUGIN_NAME}:${ANALYZE_COMMAND_NAME}`;
 
