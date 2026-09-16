@@ -37,7 +37,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_readme_summary_compact_llms
 4. [x] **Task 4** — Move the `.claude/` write-wall measurement into `docs/analyze.md` §3 and re-point `docs/config.md` §3 _(layer: general)_ _(points: 12)_
 5. [x] **Task 5** — Open `README.md` with three plain lines, the five-step checklist and the caveats below it _(layer: general)_ _(points: 20)_
 6. [x] **Task 6** — Compact `README.md`'s `## How it is measured`, `## Two ledgers` and `## Scope and limits` _(layer: general)_ _(points: 20)_
-7. [ ] **Task 7** — Re-point `ARCHITECTURE.md`'s measurement citations and correct `docs/development.md`'s item 9 row _(layer: general)_ _(points: 12)_
+7. [x] **Task 7** — Re-point `ARCHITECTURE.md`'s measurement citations and correct `docs/development.md`'s item 9 row _(layer: general)_ _(points: 12)_
 8. [ ] **Task 8** — Write `llms.txt` at the repository root from the finished README _(layer: general)_ _(points: 10)_
 9. [ ] **Task 9** — Add the `llms.txt` link check as `scripts/run-gates.sh` gate 6c and document it in `docs/development.md` §5 _(layer: general)_ _(points: 15)_
 10. [ ] **Task 10** — Mark the three roadmap rows `Done` and renumber the `ROADMAP.md` index _(layer: general)_ _(points: 8)_
