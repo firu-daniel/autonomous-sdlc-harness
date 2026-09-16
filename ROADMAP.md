@@ -10,51 +10,50 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 
 | Priority | Feature |
 |---|---|
-| 1 | [Line-number citations never block](#quality-and-testing) |
-| 2 | [Docs-catalog retrieval](#engines-environments-and-integrations) |
-| 3 | [Citation groundedness gate](#quality-and-testing) |
-| 4 | [Structured agent outputs](#quality-and-testing) |
-| 5 | [Golden-task eval suite](#quality-and-testing) |
-| 6 | [Trace export](#planning-artifacts-and-reporting) |
-| 7 | [Cost per feature](#planning-artifacts-and-reporting) |
-| 8 | [Latency tracking](#planning-artifacts-and-reporting) |
-| 9 | [Second-runtime reference port](#engines-environments-and-integrations) |
-| 10 | [Engine / provider abstraction](#engines-environments-and-integrations) |
-| 11 | [Model-change drift gate](#quality-and-testing) |
-| 12 | [Budget governor](#engines-environments-and-integrations) |
-| 13 | [Cloud / CI execution](#engines-environments-and-integrations) |
-| 14 | [First published eval result](#evidence-and-adoption) |
-| 15 | [Outcome-graded eval case](#evidence-and-adoption) |
-| 16 | [Measuring the lessons ledger](#evidence-and-adoption) |
-| 17 | [MCP servers](#engines-environments-and-integrations) |
-| 18 | [Ultra-fast mode](#flow-and-orchestration) |
-| 19 | [Parallel dispatch in waves](#flow-and-orchestration) |
-| 20 | [Task researcher](#flow-and-orchestration) |
-| 21 | [Multi-plan programs](#flow-and-orchestration) |
-| 22 | [Cross-repo tasks](#flow-and-orchestration) |
-| 23 | [Watcher settings surface](#flow-and-orchestration) |
-| 24 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
-| 25 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
-| 26 | [User flow diagram](#planning-artifacts-and-reporting) |
-| 27 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
-| 28 | [Integration tests](#quality-and-testing) |
-| 29 | [Regression tests](#quality-and-testing) |
-| 30 | [Fix-plan structure review](#quality-and-testing) |
-| 31 | [Performance and security review](#quality-and-testing) |
-| 32 | [Deploy to a test environment](#engines-environments-and-integrations) |
-| 33 | [Cloud QA](#engines-environments-and-integrations) |
-| 34 | [Mobile QA drivers](#engines-environments-and-integrations) |
-| 35 | [Design-source ingestion](#engines-environments-and-integrations) |
-| 36 | [`llms.txt`](#engines-environments-and-integrations) |
-| 37 | [Second end-to-end capture](#evidence-and-adoption) |
-| 38 | [Interactive session vs harness run](#evidence-and-adoption) |
-| 39 | [`init` warns when there is no remote](#evidence-and-adoption) |
-| 40 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
-| 41 | [`doctor` sandbox checks](#security-and-containment) |
-| 42 | [`doctor` flags unverified branch protection](#security-and-containment) |
-| 43 | [README summary and checklist](#documentation) |
-| 44 | [Compact the README](#documentation) |
-| 45 | [Threat model](#documentation) |
+| 1 | [Docs-catalog retrieval](#engines-environments-and-integrations) |
+| 2 | [Citation groundedness gate](#quality-and-testing) |
+| 3 | [Structured agent outputs](#quality-and-testing) |
+| 4 | [Golden-task eval suite](#quality-and-testing) |
+| 5 | [Trace export](#planning-artifacts-and-reporting) |
+| 6 | [Cost per feature](#planning-artifacts-and-reporting) |
+| 7 | [Latency tracking](#planning-artifacts-and-reporting) |
+| 8 | [Second-runtime reference port](#engines-environments-and-integrations) |
+| 9 | [Engine / provider abstraction](#engines-environments-and-integrations) |
+| 10 | [Model-change drift gate](#quality-and-testing) |
+| 11 | [Budget governor](#engines-environments-and-integrations) |
+| 12 | [Cloud / CI execution](#engines-environments-and-integrations) |
+| 13 | [First published eval result](#evidence-and-adoption) |
+| 14 | [Outcome-graded eval case](#evidence-and-adoption) |
+| 15 | [Measuring the lessons ledger](#evidence-and-adoption) |
+| 16 | [MCP servers](#engines-environments-and-integrations) |
+| 17 | [Ultra-fast mode](#flow-and-orchestration) |
+| 18 | [Parallel dispatch in waves](#flow-and-orchestration) |
+| 19 | [Task researcher](#flow-and-orchestration) |
+| 20 | [Multi-plan programs](#flow-and-orchestration) |
+| 21 | [Cross-repo tasks](#flow-and-orchestration) |
+| 22 | [Watcher settings surface](#flow-and-orchestration) |
+| 23 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
+| 24 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
+| 25 | [User flow diagram](#planning-artifacts-and-reporting) |
+| 26 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
+| 27 | [Integration tests](#quality-and-testing) |
+| 28 | [Regression tests](#quality-and-testing) |
+| 29 | [Fix-plan structure review](#quality-and-testing) |
+| 30 | [Performance and security review](#quality-and-testing) |
+| 31 | [Deploy to a test environment](#engines-environments-and-integrations) |
+| 32 | [Cloud QA](#engines-environments-and-integrations) |
+| 33 | [Mobile QA drivers](#engines-environments-and-integrations) |
+| 34 | [Design-source ingestion](#engines-environments-and-integrations) |
+| 35 | [`llms.txt`](#engines-environments-and-integrations) |
+| 36 | [Second end-to-end capture](#evidence-and-adoption) |
+| 37 | [Interactive session vs harness run](#evidence-and-adoption) |
+| 38 | [`init` warns when there is no remote](#evidence-and-adoption) |
+| 39 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
+| 40 | [`doctor` sandbox checks](#security-and-containment) |
+| 41 | [`doctor` flags unverified branch protection](#security-and-containment) |
+| 42 | [README summary and checklist](#documentation) |
+| 43 | [Compact the README](#documentation) |
+| 44 | [Threat model](#documentation) |
 
 ## Flow and orchestration
 
@@ -83,7 +82,7 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 
 | Feature | What it is | Status |
 |---|---|---|
-| Line-number citations never block | Review findings anchor on symbols; a stale line number in a citation is no longer a blocking finding. | In progress |
+| Line-number citations never block | Review findings anchor on symbols; a stale line number in a citation is no longer a blocking finding. | Done |
 | Citation groundedness gate | Every citation in a plan, a review finding or a justification is checked against the file and symbol it names, so a fabricated or miscited reference fails the gate instead of reaching a reviewer. | Open |
 | Structured agent outputs | Every agent's return validated against a declared schema at the seam — reviewer verdicts, writer file paths and counts, the statistics block, the committer's sha and subject. The contracts already exist in prose and callers parse those lines word for word, so renaming one breaks a caller silently today. | Open |
 | Golden-task eval suite | A frozen set of task prompts with rubrics, re-run whenever the harness's own instructions change, graded per task class. `evals/` holds one provisional case. | Open |

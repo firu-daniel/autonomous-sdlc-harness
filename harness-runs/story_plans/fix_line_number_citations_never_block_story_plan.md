@@ -32,7 +32,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_line_number_citations_ne
 7. [x] **Task 7** — Anchor the user-review fix-plan finding contract and the fix loop's self-containment wording _(layer: plugin)_ _(points: 15)_
 8. [x] **Task 8** — Show the site anchor in the code-review sample fixtures _(layer: plugin)_ _(points: 15)_
 9. [x] **Task 9** — Show the site anchor in the user-review fix-plan sample fixtures _(layer: plugin)_ _(points: 10)_
-10. [ ] **Task 10** — Mark the roadmap item done and run the closing acceptance sweep _(layer: general)_ _(points: 10)_
+10. [x] **Task 10** — Mark the roadmap item done and run the closing acceptance sweep _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
