@@ -1,0 +1,9 @@
+# branch_statistics/
+
+One `<branch>/statistics.md` per branch, holding that run's end-of-branch metrics: the story-point denominator summed off the story index, the severity-weighted cost of the issues a hands-on review raised, the success rate derived from those two, and the raw counts they came from, retained so every number is re-derivable by hand from the same files. Note the per-branch **subdirectory** — the report is `<state_dir>/branch_statistics/<branch>/statistics.md`, and the writer creates that subdirectory itself if it is absent. The exact format is not this file's to describe: headings, section order, the formula and the edge-case rules are fixed by `${CLAUDE_PLUGIN_ROOT}/samples/sample_statistics.md`, whose numbers are illustrative and never copied.
+
+It is written by the statistics writer and read by the operator. Nothing in the flow keys off it: it carries no readiness list and no per-finding files, no committer flips a checkbox for it, and the caller that dispatches the writer reports the headline rate from the writer's own return block without opening the file.
+
+A branch is written twice over its life. The first write lands at the end of the delivery run, before any hands-on review exists — no issues are counted yet, so the rate is `100%` — and the second lands once a fix round's items are all `[x]`, recounted from scratch and **overwriting** the first rather than sitting beside it. `status:` is what tells the two apart, `pre-user-review` or `post-user-review`, so there is one report per branch and never a round-suffixed series. The directory is committed with the branch, since no ignore rule reaches it.
+
+The mistake worth naming is reading this directory as a scoreboard. Each report is a record of one branch, and the tree deliberately holds no cross-branch roll-up to rank them against each other — so an absent file means that branch's run never reached its final phase, not that it scored nothing.

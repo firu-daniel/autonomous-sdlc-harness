@@ -1,0 +1,9 @@
+# story_plans/
+
+One `<branch>_story_plan.md` per branch, holding the shared context and the ordered readiness list the orchestrator walks task by task. The file is named for the branch and carries no suffix — one index per branch, revised in place rather than versioned. It is deliberately thin: a `## Context` section and, immediately after it, the `## Phase 2 Readiness — Ordered Fix List` section, one `[ ]` entry per task with that task's layer tag and story-point estimate. Each entry resolves to exactly one per-task file in `<state_dir>/task_plans/<branch>/`, and no task body lives here.
+
+It is written by the plan writer, in the same invocation as the per-task files. The orchestrator reads the readiness list to decide what to dispatch next and routes off each entry's layer tag without opening the task's own file; the committer flips that entry from `[ ]` to `[x]` as the task's commit lands; the branch reviewer and the skeptic reviewer read its `## Context` for what the branch is trying to accomplish, and the UI-test plan writer reads it as one of the inputs it writes acceptance tests from; and the statistics writer takes the sum of the point tags as its denominator.
+
+The index appears when the planning loop converges and is revised in place while that loop iterates. After that nothing supersedes it — the flips accumulate on the same file, which makes it the run's live progress record as well as its plan. It is committed with the branch, each flip riding the commit of the task it records.
+
+The mistake worth naming is looking for the run's position anywhere else. This readiness list is the single iteration source; the `[ ]` markers inside a per-task file are informational progress markers for that task's implementer, and the committer never touches them. A loop driven off one of those advances against a checkbox nothing will ever flip.

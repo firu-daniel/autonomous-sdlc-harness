@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "projectName": "autonomous-sdlc-harness",
+  "defaultBranch": "main",
+  "protectedBranches": [
+    "main"
+  ],
+  "stateDir": "harness-runs",
+  "appDir": ".",
+  "scriptsDir": "scripts",
+  "githooksDir": "githooks",
+  "agentModel": "opus",
+  "pushEnvPath": ".claude/push-notify.env",
+  "detection": {
+    "preset": "monorepo",
+    "signal": "monorepo:workspaces-key",
+    "evidence": "package.json#workspaces",
+    "commandFamily": "npm",
+    "review": {
+      "verdict": "applied",
+      "rationale": "Read root package.json#workspaces, cli/package.json, cli/tsconfig.json, cli/src, cli/test, cli/templates, plugin/.claude-plugin/plugin.json, plugin/agents, plugin/commands, plugin/instructions and plugin/hooks; the compiled TypeScript CLI under cli/ and the Markdown agent/command/instruction contracts plus shell hooks under plugin/ are governed by different rules and different gates, so the single catch-all general row was split into cli, plugin and a retained general catch-all at path .",
+      "at": "2026-09-16"
+    }
+  },
+  "layers": [
+    {
+      "name": "cli",
+      "path": "cli",
+      "conventions": ".claude/context/cli.md"
+    },
+    {
+      "name": "plugin",
+      "path": "plugin",
+      "conventions": ".claude/context/plugin.md"
+    },
+    {
+      "name": "general",
+      "path": ".",
+      "conventions": ".claude/context/conventions.md"
+    }
+  ],
+  "commands": {
+    "typecheck": "bash scripts/typecheck.sh",
+    "test": "bash scripts/test.sh",
+    "build": "npm run build",
+    "depInstall": "npm ci"
+  },
+  "phases": {
+    "qa": false,
+    "docs": false,
+    "parity": false
+  }
+}

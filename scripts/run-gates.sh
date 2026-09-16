@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# The harness's own verification, as one command.
+#
+# `docs/development.md` §5 defines nine gates. This script runs the five a process can run
+# unattended and reports the four it cannot, so that a reviewer — human or agent — reading a
+# green result has read the whole automatable half rather than one suite of it. `commands.test`
+# in `harness.config.json` points here for exactly that reason: `npm test` is gate 4 alone, and a
+# branch review that reads it as "verified" is reading four gates' worth of silence as a pass.
+#
+# NOT the generated `scripts/test.sh`. That file is `init`'s, it wraps whatever `commands.test`
+# names, and a re-run regenerates it. This file is hand-written, is not in the set `init --force`
+# rewrites, and is what that wrapper calls.
+#
+# Deliberately no `-e`: every gate runs on every invocation, because "which gates fail" is the
+# answer worth having and stopping at the first one hides it.
+set -uo pipefail
+
+# Anchor to the repository root from this script's own location, never the caller's directory —
+# the same derivation, and the same reasoning, as the wrappers `init` writes.
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$repo_root" ] || ! cd "$repo_root"; then
+  echo "run-gates: could not resolve a repository root from '${script_dir}' (is git on PATH?)" >&2
+  exit 1
+fi
+
+log="$(mktemp -t harness-gates)"
+trap 'rm -f "$log"' EXIT
+
+failed=()
+passed=()
+
+# Run one command and grade it by its EXIT STATUS. Output goes to a file rather than through a
+# pipe: §5's opening rule is that piping a gate into a pager or into `head` returns the *pager's*
+# status, so a failing gate reads as a passing one. Nothing here pipes.
+gate() {
+  local name="$1"; shift
+  if "$@" >"$log" 2>&1; then
+    passed+=("$name")
+    echo "  ok    $name"
+  else
+    local status=$?
+    failed+=("$name")
+    echo "  FAIL  $name (exit $status)"
+    sed 's/^/        /' "$log" | tail -25
+  fi
+}
+
+# Run one command and grade it by its OUTPUT being empty. Gate 6 is the one gate read this way,
+# because `grep` exits 1 precisely when it finds nothing, which is its passing case.
+gate_silent() {
+  local name="$1"; shift
+  "$@" >"$log" 2>&1
+  if [ -s "$log" ]; then
+    failed+=("$name")
+    echo "  FAIL  $name (printed output, which is the finding)"
+    sed 's/^/        /' "$log" | tail -25
+  else
+    passed+=("$name")
+    echo "  ok    $name"
+  fi
+}
+
+echo "== gate 1 — manifests"
+if command -v claude >/dev/null 2>&1; then
+  gate "1a plugin manifest" claude plugin validate --strict plugin
+  gate "1b marketplace manifest" claude plugin validate --strict .
+else
+  # Not skipped quietly. A gate that cannot run is not a gate that passed, and this script exists
+  # because unreported silence is what it is here to prevent.
+  failed+=("1 manifests (BLOCKED: claude is not on PATH)")
+  echo "  BLOCKED  1 manifests — claude is not on PATH"
+fi
+
+echo "== gate 2 — CLI build and run"
+gate "2a build" npm run build
+gate "2b --version" node cli/dist/cli.js --version
+gate "2c --help" node cli/dist/cli.js --help
+gate "2d init --help" node cli/dist/cli.js init --help
+# The one arm graded by REFUSAL: the CLI must reject a command it does not have. `gate` grades a
+# zero exit as a pass, so this arm is inverted by hand rather than passed to it.
+if node cli/dist/cli.js not-a-command >"$log" 2>&1; then
+  failed+=("2e unknown command is refused")
+  echo "  FAIL  2e unknown command is refused (it exited 0)"
+else
+  passed+=("2e unknown command is refused")
+  echo "  ok    2e unknown command is refused"
+fi
+
+echo "== gate 3 — configuration schema"
+gate "3a example validates" npm run validate:config
+gate "3b negative fixtures are refused" npm run validate:config:negative
+
+echo "== gate 4 — init against a throwaway fixture"
+gate "4 npm test" npm test
+
+echo "== gate 6 — self-containment"
+# `$HOME` expands to the home of whoever runs this, which is what makes it a pre-commit self-check
+# rather than an audit — §5 says so, and it is why a clean clone passes it unconditionally.
+gate_silent "6a no machine paths" grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git
+# Two exclusions, not one. `examples/notes-app/.claude` is an adopted repository's own generated
+# output; `./.claude` is THIS repository's, once it adopts the harness itself. Neither is a
+# template committed into the namespace `init` generates, which is the breach this gate is for —
+# and a `.claude/` under `cli/templates/`, or anywhere else, is still printed.
+gate_silent "6b no template in the dot-namespace" \
+  find . -name '.claude' -type d \
+  -not -path './examples/notes-app/.claude' \
+  -not -path './.claude' \
+  -not -path './node_modules/*'
+
+echo
+echo "== gates this script cannot run"
+echo "  5  doctor's exit contract, by hand against gate 4's scratch repository"
+echo "  7  the five adoption shapes, against real directories outside this checkout"
+echo "  8  /harness-analyze, which is judgement and runs inside a model session"
+echo "  9  examples/notes-app, which installs dependencies inside the checkout"
+echo "     -> docs/development.md §5"
+
+echo
+if [ ${#failed[@]} -eq 0 ]; then
+  echo "run-gates: ${#passed[@]} automatable checks passed; gates 5, 7, 8 and 9 remain hand-run"
+  exit 0
+fi
+echo "run-gates: ${#failed[@]} failed, ${#passed[@]} passed" >&2
+for name in "${failed[@]}"; do echo "  - $name" >&2; done
+exit 1

@@ -1,0 +1,9 @@
+# task_plan_point_reviews/
+
+One `<branch>_task_plan/task_<N>/review_<i>.md` per unit review, holding the findings against a single finished task. `<N>` is that task's number in the story index's readiness list — the same number its per-task file carries — which is why the plan format mandates the `Task N` prefix rather than a bare ordinal. Inside the task's folder, `<i>` starts at `review_0.md` and increments once per failed review of that task; a later number is added beside the earlier files, never written over them. The counter is per task, and per layer within a task, so it restarts rather than running on across the branch.
+
+A file here is written by the layer reviewer the task's layer tag routed to, and read by that task's layer implementer on the fix iteration, which is handed the folder's most recent file. The branch reviewer reads this root as well, where its caller supplies it, to see what the per-unit passes already caught. The reviewer creates the folder itself and only when it has findings to write, so a task that passed on the first review leaves no folder behind.
+
+The directory has content only where the mode in force runs the per-unit review step; a mode that goes straight from implementer to committer writes nothing here, and that is not an omission. Nothing supersedes an earlier file — the numbered set is that task's convergence history — and the whole directory is committed with the branch, since no ignore rule reaches it.
+
+The mistake worth naming is reading this as `<state_dir>/task_plan_reviews/`. That one holds the review of the **plan** for the branch, before any code exists; this one holds the review of the **finished work** for one task in it. Different writers, different readers, different lifetimes — which is why they are separate directories keyed by different names instead of one directory holding both.

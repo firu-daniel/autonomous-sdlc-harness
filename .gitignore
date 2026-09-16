@@ -2,3 +2,74 @@ node_modules/
 dist/
 .DS_Store
 *.env
+
+# >>> autonomous-sdlc-harness (managed block: this line to the next blank line; re-run init to extend it) >>>
+# Machine-local files this repository names by path but never commits. Each path is a
+# value in harness.config.json, so it is the same for everyone who clones, while the file
+# it names never leaves the machine. Where one of these has a committed `.example`
+# sibling, that sibling is what a fresh clone copies from. The client env file is the one whose
+# DIRECTORY is the configured value (`appDir`) while its name is fixed: setup-worktree.sh symlinks
+# it into every working copy it bootstraps, so without this rule every fresh worktree opens with an
+# untracked entry. What is ignored is the file and never the directory, so a committed
+# `.env.example` beside it stays committable.
+.claude/push-notify.env
+.env
+# The per-machine settings file the agent runner writes beside the committed profiles.
+.claude/settings.local.json
+# The presence-only marker one user's "don't ask again" answer writes to silence the change-request
+# offer. It lives at the main worktree's root and is checked there from every worktree of this
+# checkout, so one answer covers them all - its existence is the whole signal, so it has no
+# contents to commit.
+.claude/harness-no-offer
+# The run daemon's transcripts, event logs and run registry are machine-local. The
+# directory itself is committed, because its README is the contract for what belongs in
+# it, so the contents are ignored and that one file is excepted - an ignore rule on the
+# directory would take the README with it, and git cannot re-include a file whose parent
+# directory is excluded.
+harness-runs/autonomous_logs/*
+!harness-runs/autonomous_logs/README.md
+# The unattended loop's stop, pause and dispatch-count control files, written flat at the root of
+# the run-artifact tree while a run is in flight. The tree around them is committed, so one
+# `git add` of it would take whichever exist at that moment - and a committed STOP halts every run
+# for everyone who clones, at a step whose own instruction forbids deleting the file.
+harness-runs/.dispatch_counter
+harness-runs/STOP
+harness-runs/AUTONOMOUS_STOP
+harness-runs/PAUSE
+harness-runs/RESUME
+harness-runs/PAUSE_ACK
+harness-runs/PAUSE_PROGRESS.md
+# The questions a parked run asks and the answers it is given are machine-local, while the
+# directory's README is the committed contract for the exchange - so the contents are ignored and
+# that one file is excepted, exactly as for the log directory above. A question sits one level
+# further down, under a <branch> subdirectory, which this glob covers with everything else beneath
+# the directory. On a repository whose ignore file was generated before this pair existed: the
+# managed block is only ever added to and never pruned, so the older whole-directory rule for this
+# channel - the line ending `/clarifications/` - is still in the file and has to be DELETED BY HAND,
+# and so do the two comment lines that stood above it, which state that this channel has no committed
+# README and are wrong now that it has one. While that rule stands the exception cannot take effect,
+# wherever the two sit relative to each other, because git cannot re-include a file whose parent
+# directory is excluded - `doctor`'s `ignore-rules` check reports that state and names every line to
+# delete.
+harness-runs/clarifications/*
+!harness-runs/clarifications/README.md
+# The drop point the unattended loop takes its work from. The prompts left in it are machine-local
+# and its README is the committed contract for what belongs there, so the contents are ignored and
+# that one file is excepted, exactly as for the log directory above.
+harness-runs/autonomous_inbox/*
+!harness-runs/autonomous_inbox/README.md
+# The throwaway files an agent runs a probe or a mutation check from. They are written to be executed
+# once and deleted, never to be committed or read back, while the directory's README is the committed
+# contract for that - so the contents are ignored and that one file is excepted, exactly as for the
+# log directory above.
+harness-runs/scratch/*
+!harness-runs/scratch/README.md
+# The backup `config set` copies the configuration to before every write, and the one .bak an
+# adopter gets without asking for it: applying a layer split is the documented path, so without this
+# rule a wired repository carries an untracked file from its first `config set` onward. The leading
+# slash anchors it at the repository root, the only place the configuration is written.
+/harness.config.json.bak
+# Added by hand in this repository, not by init: the unattended permission profile names this
+# checkout's absolute paths, so it is machine-local here and each clone regenerates its own. The
+# watcher reads it from the main checkout, never from a worktree, so no run needs it committed.
+.claude/settings.autonomous.json
