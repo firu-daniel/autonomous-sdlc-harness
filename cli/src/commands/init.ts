@@ -286,6 +286,23 @@ const CONFIG_SET_COMMAND = `${CLI} config set <key> <value>`;
 const MARKETPLACE_MANIFEST = join('.claude-plugin', 'marketplace.json');
 const CLI_MANIFEST = join('cli', 'package.json');
 
+/**
+ * The environment variable that lets a run wire the harness's own repository on purpose.
+ *
+ * **Self-adoption** — running the harness's own flows against the harness while developing it — is a
+ * contributor workflow, so the escape is an environment variable rather than a flag. A flag would
+ * appear in `--help` and owe a row in `docs/cli.md`'s table, where the only reader it could reach is
+ * an adopter, for whom it can never mean anything but a mistake. It is documented in
+ * `docs/development.md` instead, beside the gates that are the rest of that audience's contract.
+ *
+ * **A variable rather than a one-off source edit**, which is the other way to get one run through,
+ * because `init` is not one-shot: `--force` regenerates a generated file when `cli/templates/`
+ * changes and `--reset-config` rebuilds the configuration, so the run this exists for recurs every
+ * time a template moves. An edit-build-revert-build cycle per template change is a standing invitation
+ * to ship the CLI with its guard removed, and the test that would catch it only runs if it is run.
+ */
+const SELF_ADOPT_ENV = 'HARNESS_SELF_ADOPT';
+
 /** The flag whose value the dot-directory refusal is raised against. */
 const STATE_DIR_FLAG = '--state-dir';
 
@@ -854,13 +871,21 @@ function ownPackageName(): string {
  * `docs/development.md` §5's gate 2 documents running the built CLI from this root, which was a
  * refusal check for as long as `init` refused everything. Once it works, that invocation would
  * generate a config, a state tree and a permission profile into the harness's own tree.
+ *
+ * It is a refusal and not a prohibition: {@link SELF_ADOPT_ENV} set to `1` is how a contributor asks
+ * for that wiring deliberately, and nothing else reaches it.
  */
 function assertNotHarnessOwnRepository(repoRoot: string): void {
   if (!existsSync(join(repoRoot, MARKETPLACE_MANIFEST))) return;
   if (packageNameAt(join(repoRoot, CLI_MANIFEST)) !== ownPackageName()) return;
+  // Checked **after** both identity tests rather than before them, which is what keeps the variable
+  // inert everywhere it is not wanted: every root that is not this one has already returned above,
+  // so a value left in a shell's environment changes the behaviour of no adopter's run. Only the
+  // exact `1` opens it — a variable that is merely *set* is too easy to inherit by accident.
+  if (process.env[SELF_ADOPT_ENV] === '1') return;
 
   throw new HarnessError(
-    `refusing to wire the harness's own repository; run \`${INIT_VERB}\` in the repository you want to adopt it. ${repoRoot} carries ${MARKETPLACE_MANIFEST} and a ${CLI_MANIFEST} naming this package, so it is the harness itself rather than an adopting project: wiring it would generate a ${CONFIG_FILENAME}, a run-artifact tree and a permission profile into the tree that ships them. Run ${INIT_VERB} from the adopting repository, or point it at one with --cwd <path>`,
+    `refusing to wire the harness's own repository; run \`${INIT_VERB}\` in the repository you want to adopt it. ${repoRoot} carries ${MARKETPLACE_MANIFEST} and a ${CLI_MANIFEST} naming this package, so it is the harness itself rather than an adopting project: wiring it would generate a ${CONFIG_FILENAME}, a run-artifact tree and a permission profile into the tree that ships them. Run ${INIT_VERB} from the adopting repository, or point it at one with --cwd <path>. To wire this repository on purpose — the harness's own self-adoption, a contributor workflow \`docs/development.md\` documents — set ${SELF_ADOPT_ENV}=1`,
   );
 }
 
