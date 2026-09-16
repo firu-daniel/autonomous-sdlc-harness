@@ -55,7 +55,9 @@ iteration: <iteration>
 - `${CLAUDE_PLUGIN_ROOT}/samples/sample_task_plan.md` — the split-format reference (explains the index + per-task split and how the two fit together).
 - `${CLAUDE_PLUGIN_ROOT}/samples/sample_story_plan.md` — the story-index template (Context + `Top risks:` + Phase 2 Readiness, no `## Tasks`).
 - `${CLAUDE_PLUGIN_ROOT}/samples/sample_story/task_<N>_plan.md` — the per-task-file templates: **three short files, one per layer the sample branch spans — read all three.** `task_1_plan.md` is the lower-layer task, `task_2_plan.md` the surface task (it demonstrates the cross-file `**Depends on:**` link), `task_3_plan.md` the catch-all task that wires up and documents what the other two built. The sample content is an illustrative worked branch written to the standard it demonstrates, so it sets the **quality bar, not just the format**. The samples are format/quality references, not review targets; your full-set read applies to the plan under review, not to `sample_story/`.
-- `<state_dir>/lessons.md` — the recurring-escape ledger; a plan that re-plans a ledger mistake is a Must Fix (cite the ledger line).
+- `<state_dir>/lessons.md` — the recurring-escape ledger; a plan that re-plans a ledger mistake is a Must Fix (quote the ledger entry).
+
+**Guard carve-out.** Pointer resolution binds a cited path, symbol, heading or quoted substring that does not resolve; a line coordinate — stale, missing or present — never binds it, and is gradable however it is enumerated, including where it is enumerated as a `<state_dir>/lessons.md` entry.
 
 **A cited path you cannot read is a finding, not a fallback.** If one of the samples above, a conventions document or a plan file under review cannot be read, return a `blocker:` line naming the path and the refusal **in place of** the verdict line, and write no findings file. Never substitute another document for a cited one, and never review against a remembered format.
 
@@ -66,7 +68,7 @@ iteration: <iteration>
 
 > **Steps 3–4 are gated. Skip them unless `phases.parity` is `true` in `harness.config.json`.** With the parity phase off there is no reference implementation for the plan to cite, so there is nothing to verify a citation against: the plan is judged on the task prompt and the conventions documents alone. The gate is scoped to these two steps and to the parity check group that names it; every other step and check group in this file is unchanged.
 
-3. For every `<reference_impl>` source the story index or any per-task file cites, open it and verify the citation is real and the line range supports the claim. **Read the cited `<reference_impl>` method / state object in full** — an omitted behaviour is invisible to a citation-by-citation check, because nothing in the plan points at the thing that is missing. The asymmetry is deliberate: full reads on the **reference** side, cited ranges only on the **project** side (step 2).
+3. For every `<reference_impl>` source the story index or any per-task file cites, open it and verify the anchor resolves and the anchored source supports the claim. **Read the cited `<reference_impl>` method / state object in full** — an omitted behaviour is invisible to a citation-by-citation check, because nothing in the plan points at the thing that is missing. The asymmetry is deliberate: full reads on the **reference** side, cited ranges only on the **project** side (step 2).
 4. For every external call name, wire field name, threshold constant or predicate cited anywhere in the set, verify the value against `<reference_impl>`.
 5. Apply the checks below.
 
@@ -137,7 +139,7 @@ Each trigger below has the same shape: a name or value the plan **cites**, the `
 
 - **External call name.** Every name the plan cites for a call crossing the project's external boundary is a real `<reference_impl>` call — you opened the file and confirmed. *Replace with your project's parity surface*: which calls cross that boundary and where the reference declares them.
 - **Wire field name.** Every field name cited matches the **wire name** the reference's serialization declares, not the in-language property name that serialization maps it from. The project's own serialization idiom (`<impl_stack>`) must land on the same wire string. Spot-check at least the highest-traffic fields. *Replace with your project's parity surface*: the documents and shapes it keeps in parity, and how its serialization declares a wire name.
-- **Threshold constants and predicate semantics.** Every numeric threshold, limit and gating condition traces to a cited `<reference_impl>` source line, and boundary comparisons (strict vs. inclusive) and absent-vs-empty checks match it exactly. *Replace with your project's parity surface*: which constants and predicates are parity-bearing.
+- **Threshold constants and predicate semantics.** Every numeric threshold, limit and gating condition traces to a cited `<reference_impl>` source anchor, and boundary comparisons (strict vs. inclusive) and absent-vs-empty checks match it exactly. *Replace with your project's parity surface*: which constants and predicates are parity-bearing.
 - **Side-effect ordering.** The order of writes, dispatches and awaits described in any per-task file matches `<reference_impl>`. *Replace with your project's parity surface*: which sequences are parity-bearing.
 - **Missing whole behaviour.** A `<reference_impl>` behaviour present in the ported source file(s) but absent from the plan — with **no** cited task-prompt exclusion line and **no** planned entry-point deferred-work marker (`// TODO: @claude add a follow up task for this: …`, in the project's own comment syntax) — is a **Must Fix**: parity is the default and there are no silent omissions, so a missing whole behaviour is a parity deviation of the same grade as a wrong field or predicate. **Dead-code carve-out:** commented-out or otherwise dead reference code is not a behaviour to port, so its absence is correct and must not be flagged. This grade and its carve-out are harness doctrine and are stated here in full rather than cited; where the adopter's own rules document restates them (the file `layers[].conventions` names), nothing here depends on that restatement.
 - **Calibration — what is *not* a finding.** Presentation-idiom deviations from `<reference_impl>` (dialog vs. sheet, responsive sizing, theming, platform-appropriate interaction) are acceptable and must not be flagged. **Business-logic** deviations are Must Fix.
@@ -151,7 +153,7 @@ Each trigger below has the same shape: a name or value the plan **cites**, the `
 - Every new unit a task introduces to be consumed by the layers above it has a consuming task naming it as a call target, with the end-to-end exercise in a `**Verification:**` bullet. An unconsumed path is a Must Fix (a silently dead feature).
 - A task adding or changing a **server-side unit** carries its provisioning steps (message topics and subscriptions, secret keys with their exact prefixes, project / environment resolution) or lists them under the Context `Manual setup required:` list; a silent infrastructure assumption is a Must Fix.
 - Lifecycle / reactive behaviours implied by the feature's nature — application-startup initialization, re-fetch when an authorization or entitlement flag flips, deep-link entry points — are represented (the no-silent-omissions grade above applies to them when `phases.parity` is `true`; with the phase off they are judged against the task prompt).
-- The plan does not repeat a `<state_dir>/lessons.md` lesson (Must Fix; cite the ledger line).
+- The plan does not repeat a `<state_dir>/lessons.md` lesson (Must Fix; quote the ledger entry).
 - **Test the register's derivation before raising a missing-site finding — a duty, not an option.**
   - Execute **every** derivation entry stated in the story index's `## Scope register`: **re-run** a command entry verbatim, **re-walk** a procedure entry step by step (artifact → traversal → per-candidate decision rule), the standing-artifact **row-class** entry included wherever one is owed.
   - A procedure entry you cannot run is re-walked, never skipped.
@@ -192,7 +194,7 @@ Nothing else. Do not save a file when PASS.
 
 ## Must Fix
 1. **<title>** — name the offending file: the story index (`<branch>_story_plan.md`) or a per-task file (`task_<N>_plan.md`); use "Index structure" / "Correspondence" for structural and 1:1-mapping findings.
-   <description, with the reference source line when the parity phase is on and the finding cites one>
+   <description, with the reference source anchor when the parity phase is on and the finding cites one>
    **Fix:** <concrete change the writer must apply to that file>
 
 ## Should Fix

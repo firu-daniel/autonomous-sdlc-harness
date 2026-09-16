@@ -40,3 +40,7 @@ Its `## Scope register` bullet grading a coordinate in a `Site` cell as Should F
 - Read step 3 in the edited reviewer and confirm a plan citing `` `<reference_impl>/search/recent_searches_panel.dart` (`RecentSearchesPanel`) `` with no line range passes the citation test, while a citation to a symbol absent from that file fails it (*"verify the anchor resolves"*).
 - The deferral marker in step 4 carries no `:` coordinate: grep `task-plan-writer.md` for `<file>:` and find no hit.
 - `claude plugin validate --strict plugin` prints `✔ Validation passed`.
+
+**Deviations from plan:**
+- The first `**Verification:**` bullet (no `line range` hit in the three targets) conflicts with the step-2 replacement text the `**Work:**` bullet prescribes verbatim (*"a line range may follow as a navigation hint, and nothing depends on it"*). Implemented the prescribed text; the one remaining `line range` hit is that sentence in `task-plan-writer.md` step 2, and every other pattern in that bullet returns no hit.
+- Evidence downgrade: `claude plugin validate --strict plugin` was refused by the permission layer (two attempts, "This command requires approval"), so the manifest gate was not executed. The edits touch agent body text only, no frontmatter or manifest; that claim rests on reading the diff, not on the validator.
