@@ -23,7 +23,7 @@
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_line_number_citations_never_block/task_<K>_plan.md`. Ordered bottom-up in the configured layer order — `cli`, then `plugin`, then the catch-all `general` last.
 
-1. [ ] **Task 1** — Reword the parity-review directory README's citation sentence to an anchored source _(layer: cli)_ _(points: 5)_
+1. [x] **Task 1** — Reword the parity-review directory README's citation sentence to an anchored source _(layer: cli)_ _(points: 5)_
 2. [ ] **Task 2** — Rewrite the citation-lifetime paragraph, the supervised dispatch wording and `layer-reviewer`'s severity clauses and findings template _(layer: plugin)_ _(points: 15)_
 3. [ ] **Task 3** — Anchor `branch-reviewer` and `skeptic-reviewer` findings and carry the rewritten severity clauses _(layer: plugin)_ _(points: 20)_
 4. [ ] **Task 4** — Stop `review-plan-reviewer` from blocking a finding on a line number _(layer: plugin)_ _(points: 15)_
