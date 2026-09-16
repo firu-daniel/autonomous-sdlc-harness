@@ -15,7 +15,7 @@ What is left: a false-pass gap in the new link check, an `llms.txt` section that
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 4** — Restore the "offers to create one" qualifier to the README's *git only* bullet _(layer: general)_
-2. [ ] **Finding 3** — Restore the allowed values and the check's silence to the README's *Forge-agnostic* and *Design→code* bullets _(layer: general)_
+2. [x] **Finding 3** — Restore the allowed values and the check's silence to the README's *Forge-agnostic* and *Design→code* bullets _(layer: general)_
 3. [ ] **Finding 2** — Move `llms.txt`'s five numbered quick-start steps out of the `## Quick start` link section _(layer: general)_
 4. [ ] **Finding 5** — Move the gate 6c paragraph in `docs/development.md` §5 below the `$HOME` discussion _(layer: general)_
 5. [ ] **Finding 1** — Make `check-llms-txt.sh` fail a `tree/main` link whose every tracked file `publish-main.sh` removes _(layer: general)_
