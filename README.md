@@ -1,6 +1,21 @@
 # autonomous-sdlc-harness
 
-An autonomous software-delivery harness: ask for a change in an ordinary Claude Code session and it offers to run it — prompt in, and a headless multi-agent run plans it, implements it unit by unit, puts the result through independent review gates, and ends at a pushed branch ready for a human review: branch out. Under that, one task prompt dropped into a watched directory is the same doorway, for scripts and for anyone who prefers it. It ships as two halves — a Claude Code plugin carrying the process assets, and a Node CLI carrying the outer loop that runs them.
+An autonomous software-delivery harness for Claude Code.
+You ask for a change, and you get back a branch that has been planned, implemented and independently reviewed, pushed and ready for your review.
+You install two things: a Claude Code plugin and a Node CLI.
+
+1. Install the plugin: `claude plugin marketplace add firu-daniel/autonomous-sdlc-harness`, then `claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness` (step A).
+2. Wire your repository: `npx autonomous-sdlc-harness init` (step B).
+3. Teach it the codebase: type `/harness-analyze` in an **interactive** Claude Code session opened on the repository, not in the terminal (step C).
+4. Verify: `npx autonomous-sdlc-harness doctor` (step D).
+5. Start the daemon: `npx autonomous-sdlc-harness daemon install`, then `npx autonomous-sdlc-harness daemon start` (step E).
+
+**Before you run it:**
+
+- **Published.** The npm package and the plugin marketplace are both live, so the checklist runs as written. `npm view autonomous-sdlc-harness version` answers with the published version and exits `0`.
+- **Contributors.** From a clone, the plugin installs as a directory source, and the built CLI is `node cli/dist/cli.js`. Both routes, and the scratch repository step 3 then needs, are [`docs/development.md`](docs/development.md) §1 and §5.
+- **Interactive only.** Step 3 answers `Unknown command` in a headless `claude -p` session. The measurement is [`docs/development.md`](docs/development.md) §6.
+- **The `.claude/` write wall.** Step 3 writes under `.claude/`, which no permission entry opens to an unattended run. There it exits `0` having written nothing, so run it supervised and check that the conventions documents changed. See [`docs/analyze.md`](docs/analyze.md) §3.
 
 ```mermaid
 flowchart TB
@@ -31,19 +46,33 @@ flowchart TB
   B --> N
 ```
 
-**The plugin carries the process assets a run executes** — the instruction cores and their thin forks, the agent definitions, the `branch-*` slash commands and the `/harness-analyze` setup command, the tool-guard hooks declared in `hooks/hooks.json`, the helper scripts those assets invoke, the sample plan and review fixtures their bodies dereference by path, and the two flow documents that describe the loop they run. Every intra-plugin reference is written `${CLAUDE_PLUGIN_ROOT}/…`, the only form that resolves under both a git-sourced install and a directory-sourced one. That inventory is [`plugin/README.md`](plugin/README.md)'s, and why the flow documents travel inside the plugin rather than beside this file is [`plugin/docs/README.md`](plugin/docs/README.md)'s.
+**The plugin carries the process assets a run executes.** These are the instruction cores and their thin forks, the agent definitions, the `branch-*` slash commands, the `/harness-analyze` setup command, the guard hooks, the helper scripts and the sample fixtures. It also carries the two flow documents that describe the loop they run.
 
-**The CLI is the npm package that carries the outer loop** — `init`, `doctor`, `config` and `daemon`. It is a separate package because a plugin cannot write a repository's `settings.json`, and getting that permission profile right is the highest-friction part of adoption. `init` wires an adopting repository in one deterministic pass — the configuration, the wrapper scripts, the run-artifact tree, the conventions stubs, the permission profile, the committable project settings, the repository-root files and the pre-push hook — creating what is absent and keeping what the adopter has edited; `doctor` re-checks a wired repository and reports every finding with its exit status as the contract; `config` reads and updates one dotted configuration key at a time; `daemon` installs, starts and stops this repository's run daemon, and lists the repositories on this machine one has been installed for. The four commands are [`docs/cli.md`](docs/cli.md)'s, and the package's own recorded decisions are [`cli/README.md`](cli/README.md)'s.
+Every reference inside the plugin is written `${CLAUDE_PLUGIN_ROOT}/…`. It is the only form that resolves under both a git-sourced install and a directory-sourced one.
 
-**A drop becomes a pushed branch** with no queue server, no webhook and no scheduler in between: one file written into `<state_dir>/autonomous_inbox/` — by hand, or by the offer that turns a conversational change request into that drop — is acted on by the next poll pass. The filename selects the engine command, the working-copy strategy and where the file lands, all three at once. The watcher prepares that working copy through `create-worktree.sh`, commits a dropped task prompt through `commit-on-branch.sh` and pushes it through `push-branch.sh` — a review drop is placed and deliberately not committed — then launches one headless `-p` session of the bound command in that copy under the generated permission profile, classifies the session's exit into `registry.json`, and sends one notification per lifecycle event through `autonomous-notify.sh`. Inside that session the run drives a fleet of single-purpose sub-agents through plan → implement → review gates → interactive tests → statistics, committing and pushing after every unit, ending at "branch ready for review" and never touching a protected branch. The outer loop is [`docs/watcher.md`](docs/watcher.md)'s; what the run does inside it is [`plugin/docs/AUTONOMOUS_FLOW.md`](plugin/docs/AUTONOMOUS_FLOW.md)'s.
+The inventory is [`plugin/README.md`](plugin/README.md). Why the flow documents travel inside the plugin is [`plugin/docs/README.md`](plugin/docs/README.md).
+
+**The CLI is the npm package that carries the outer loop:** `init`, `doctor`, `config` and `daemon`.
+
+It is a separate package because a plugin cannot write a repository's `settings.json`. Getting that permission profile right is the hardest part of adoption.
+
+`init` wires a repository in one deterministic pass. `doctor` re-checks it. `config` reads and updates one configuration key at a time. `daemon` installs, starts and stops the run daemon, and lists the repositories on this machine that have one.
+
+The four commands are [`docs/cli.md`](docs/cli.md). The package's own recorded decisions are [`cli/README.md`](cli/README.md).
+
+**A drop becomes a pushed branch** with no queue server, webhook or scheduler in between. One file lands in `<state_dir>/autonomous_inbox/`, written by hand or by the conversational offer, and the next poll pass acts on it.
+
+The filename picks the engine command, the working-copy strategy and where the file lands. The watcher prepares the working copy, launches one headless `-p` session in it under the generated permission profile, records the exit in `registry.json` and sends one notification per lifecycle event.
+
+Inside that session, single-purpose sub-agents plan, implement, review, test and report. The run commits and pushes after every unit, ends at a branch ready for review, and never touches a protected branch.
+
+The outer loop is [`docs/watcher.md`](docs/watcher.md). What the run does inside it is [`plugin/docs/AUTONOMOUS_FLOW.md`](plugin/docs/AUTONOMOUS_FLOW.md).
 
 ## Quick start
 
-**Status: published.** The npm package `autonomous-sdlc-harness` is in the registry — `npm view autonomous-sdlc-harness version` answers with the published version and exits `0` — and the marketplace step A adds is this repository, so steps A, B, D, E and step F's `doctor` line are commands an adopter runs as written. What runs from a clone of this repository, with nothing installed, is the example project immediately below. The two contributor routes into a working copy — the directory-source marketplace add that reaches the plugin, and the built `node cli/dist/cli.js` form that produces the wired repository step C needs — are [`docs/development.md`](docs/development.md) §1 and §5's.
-
 ### See it without adopting it
 
-From a clone of this repository, this path runs today, and shows what a finished run leaves behind before you wire anything of your own. A `package-lock.json` is committed beside the project, so the install is `npm ci`; `npm run dev` serves until you stop it.
+This path runs from a clone today, with nothing installed. It shows what a finished run leaves behind. A `package-lock.json` is committed beside the project, so the install is `npm ci`. `npm run dev` serves until you stop it.
 
 ```bash
 cd examples/notes-app
@@ -53,52 +82,31 @@ npm test
 npm run dev
 ```
 
-`examples/notes-app/` is a dull TypeScript notes application — a `localStorage` gateway, a domain layer over it, a DOM surface over that — that the harness was adopted into, and its `sdlc-harness/` directory holds the artifacts of one **real** end-to-end run over it, the branch `feat_note_updated_at`: its task prompt, its story index and per-task plans, its interactive-test plan and the seven per-test files under it, its code review and per-finding files, the three failing meta-review rounds that review took to converge, its flow-progress ledger, its dispatch-additions record, its improvement-observations intake and its statistics report. What "end-to-end" covers there is fixed by that project's own phase configuration, and is stated once under [Scope and limits](#scope-and-limits). Read [`examples/notes-app/README.md`](examples/notes-app/README.md) first — it carries the decisions and disclosures the directory's own files do not state.
+`examples/notes-app/` is a small TypeScript notes application the harness was adopted into. Its `sdlc-harness/` directory holds the artifacts of one **real** end-to-end run over it, the branch `feat_note_updated_at`. They are its task prompt, its story index and per-task plans, its interactive-test plan and the seven per-test files under it, its code review and per-finding files, and the three failing meta-review rounds that review took to converge. They also include its flow-progress ledger, its dispatch-additions record, its improvement-observations intake and its statistics report.
 
-The last three commands above are the lines the harness's generated wrapper scripts wrap, run directly. That directory carries no `.git` of its own, so those wrappers — and the CLI's own checks on a wired repository — resolve to the repository that **contains** it rather than to it; [`examples/notes-app/README.md`](examples/notes-app/README.md) states that in full.
+What "end-to-end" covers there is set by that project's phase configuration, stated under [Scope and limits](#scope-and-limits). Read [`examples/notes-app/README.md`](examples/notes-app/README.md) first. It carries the decisions and disclosures the directory's own files do not.
+
+The last three commands are the ones the generated wrapper scripts wrap. That directory has no `.git` of its own, so the wrappers and the CLI's checks resolve to the repository that contains it.
 
 ### Adopting it in your own repository
 
-**A. Install the harness — once per machine.** Adds this repository as a plugin marketplace, then installs the single plugin it publishes, `autonomous-sdlc-harness`.
+**A. Install the harness — once per machine (checklist step 1).** Adds this repository as a plugin marketplace, then installs the one plugin it publishes, `autonomous-sdlc-harness`. Working from a clone instead: see **Contributors** under **Before you run it**.
 
-```bash
-claude plugin marketplace add firu-daniel/autonomous-sdlc-harness
-claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness
-```
+**B. Wire a project — once per repo (checklist step 2).** One deterministic pass with no model call in it. It creates what is absent and keeps what you have edited. What it writes is [`docs/cli.md`](docs/cli.md) §2.
 
-The two lines above are the **published** form of this step, and they resolve against this repository rather than a clone of it: `marketplace add` accepts `<owner>/<repo>`, an `https://…` URL and a `./path`, but not a `file://` one, so a clone is a **contributor's** source rather than a stand-in for the published repository. Adding the marketplace as `./` from a clone installs the same plugin from a snapshot copy of that clone rather than from the published repository — [`docs/development.md`](docs/development.md) §1 is the decision of record and carries the refresh loop that snapshot needs, and it is the route a contributor changing the **plugin** works through — step C additionally needs a repository wired by §5 gate 8's `node cli/dist/cli.js init --cwd <scratch-analyze>`, after that section's gate 2 build.
+**C. Teach it the codebase — once per repo, LLM-assisted (checklist step 3).** It fills the conventions documents from the repository's real code. It *proposes* a layer-profile revision and never writes `harness.config.json` itself. To run one target at a time, type `/harness-analyze <target>`.
 
-**B. Wire a project — once per repo.** One deterministic pass with no model call in it: the configuration, the run-artifact tree, the outer-loop wrapper scripts, the conventions skeletons, the permission profile, the committable project settings, the repository-root files and the pre-push hook — creating what is absent and keeping what you have edited. Each of those is [`docs/cli.md`](docs/cli.md) §2's.
+This step is limited twice: see **Interactive only** and **The `.claude/` write wall** under **Before you run it**. How the offer to run it reaches a first session is [`docs/analyze.md`](docs/analyze.md) §9.
 
-```bash
-npx autonomous-sdlc-harness init
-```
+**D. Verify (checklist step 4).** Reports everything wrong with a wired repository, not just the first thing. The exit status is the contract: `0` when no check failed, `1` when at least one did. The checks are [`docs/cli.md`](docs/cli.md) §7.
 
-**C. Teach it the codebase — once per repo, LLM-assisted.** In an interactive Claude Code session opened on the wired repository, with the plugin installed — from the marketplace in step A, or from a clone as a directory source (see the note under step A) — type either form. It fills the conventions documents from the repository's real code and *proposes* a layer-profile revision; it never writes `harness.config.json` itself.
+**E. Run (checklist step 5).** Installs this repository's own run daemon into the host's service manager and starts it. On launchd the lifecycle is driven for you. On systemd the unit is written and the `systemctl --user` commands are printed for you to run ([`docs/cli.md`](docs/cli.md) §9).
 
-```
-/harness-analyze              # all targets
-/harness-analyze presentation # or one target at a time
-```
+Then just ask for the change. An ordinary interactive session in this repository offers to run a change request autonomously, and on a yes it invokes `/branch-prompt` with the request. The offer is defined by two files `init` writes: [`cli/templates/claude/CLAUDE.md`](cli/templates/claude/CLAUDE.md) and [`cli/templates/claude/harness-task-offer.md`](cli/templates/claude/harness-task-offer.md).
 
-This step is interactive-only, and it needs write access to the repository's own `.claude/` tree. Both are measured limits, and both are stated once under [Scope and limits](#scope-and-limits). What the command may write is [`docs/analyze.md`](docs/analyze.md) §3; how the offer to run it reaches that first session is §9 of the same document.
+Two direct routes reach the same drop: `/branch-prompt` itself, or a file named `<branch>_task_prompt.md` written into `<state_dir>/autonomous_inbox/` ([`docs/config.md`](docs/config.md) §3). The next poll pass acts on it, as [`docs/watcher.md`](docs/watcher.md) §1 describes.
 
-**D. Verify.** Reports everything wrong with a wired repository rather than the first thing, with the exit status as the contract: `0` when no check failed, `1` when at least one did. The checks are enumerated in [`docs/cli.md`](docs/cli.md) §7.
-
-```bash
-npx autonomous-sdlc-harness doctor
-```
-
-**E. Run.** Installs this repository's own run daemon into the host's service manager and starts it. On launchd the lifecycle is driven for you; on systemd the unit is written and the `systemctl --user` commands are printed for you to run ([`docs/cli.md`](docs/cli.md) §9).
-
-```bash
-npx autonomous-sdlc-harness daemon install
-npx autonomous-sdlc-harness daemon start
-```
-
-Then just ask for the change: an ordinary interactive session in this repository, asked for a change to the project's code, offers to run it autonomously and on that answer invokes `/branch-prompt` itself with the request as its argument — defined by the pair `init` writes: the fence and its trigger in the `## Where a change request runs` section of `.claude/CLAUDE.md` ([`cli/templates/claude/CLAUDE.md`](cli/templates/claude/CLAUDE.md)), and the dialogue itself in `.claude/harness-task-offer.md` ([`cli/templates/claude/harness-task-offer.md`](cli/templates/claude/harness-task-offer.md)). The direct routes reach the same drop: `/branch-prompt` for an adopter who already knows they want a run, and a file written by hand into `<state_dir>/autonomous_inbox/` — `<state_dir>` defaults to `sdlc-harness/` ([`docs/config.md`](docs/config.md) §3) — named `<branch>_task_prompt.md`. The next poll pass acts on it, and what it does then is [`docs/watcher.md`](docs/watcher.md) §1's.
-
-**F. A teammate clones.** `git clone` → open the repository in Claude Code → **accept the workspace trust dialog** → the plugin resolves from the two keys `init` committed into `.claude/settings.json`, with `/reload-plugins` for a session that was already open → `npx autonomous-sdlc-harness doctor`. `enabledPlugins` is written on every run; `extraKnownMarketplaces` — the half that tells a clone where the plugin comes from — wherever the owner slug resolves, from this package's own `repository.url` or from `--marketplace <owner>/<repo>`; where neither route resolves an owner, `init` writes `enabledPlugins` alone ([`docs/cli.md`](docs/cli.md) §2). No `init` re-run: `harness.config.json` and the permission profile are committed.
+**F. A teammate clones.** `git clone` → open the repository in Claude Code → **accept the workspace trust dialog** → the plugin resolves from the keys `init` committed into `.claude/settings.json`, with `/reload-plugins` for a session that was already open → `npx autonomous-sdlc-harness doctor`. Which keys are written is [`docs/cli.md`](docs/cli.md) §2. No `init` re-run is needed: `harness.config.json` and the permission profile are committed.
 
 ## How it is measured
 
