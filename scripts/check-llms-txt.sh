@@ -8,7 +8,7 @@
 #   2. A line starting `> ` appears before the first line starting `## `.
 #   3. Every `](…)` target is `https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/<path>`
 #      with <path> a tracked file, or `…/tree/main/<path>` with <path> a tracked directory.
-#   4. No target carries `#` or `?`, and no target has any other form.
+#   4. No target carries `#` or `?`, no <path> has an empty, `.` or `..` segment, and no target has any other form.
 #   5. No <path> equals, or starts with `<entry>/` for, an entry of publish-main.sh's `removed_paths`.
 #      A `tree` <path> must also keep at least one tracked file that no entry removes.
 #
@@ -112,6 +112,12 @@ while IFS= read -r line || [ -n "$line" ]; do
       finding "$target" "names no path"
       continue
     fi
+    case "/$path/" in
+      *"//"* | *"/./"* | *"/../"*)
+        finding "$target" "'${path}' is not a normalized path (an empty, '.' or '..' segment)"
+        continue
+        ;;
+    esac
 
     for entry in "${removed[@]}"; do
       case "$path" in

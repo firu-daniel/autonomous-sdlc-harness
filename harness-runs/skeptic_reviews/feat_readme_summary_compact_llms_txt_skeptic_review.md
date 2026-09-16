@@ -20,7 +20,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Make `check-llms-txt.sh` refuse a link path with an empty, `.` or `..` segment _(layer: general)_
+1. [x] **Finding 1** — Make `check-llms-txt.sh` refuse a link path with an empty, `.` or `..` segment _(layer: general)_
 
 ---
 
