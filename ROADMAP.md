@@ -10,50 +10,55 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 
 | Priority | Feature |
 |---|---|
-| 1 | [Docs-catalog retrieval](#engines-environments-and-integrations) |
-| 2 | [Citation groundedness gate](#quality-and-testing) |
-| 3 | [Structured agent outputs](#quality-and-testing) |
-| 4 | [Golden-task eval suite](#quality-and-testing) |
-| 5 | [Trace export](#planning-artifacts-and-reporting) |
-| 6 | [Cost per feature](#planning-artifacts-and-reporting) |
-| 7 | [Latency tracking](#planning-artifacts-and-reporting) |
-| 8 | [Second-runtime reference port](#engines-environments-and-integrations) |
-| 9 | [Engine / provider abstraction](#engines-environments-and-integrations) |
-| 10 | [Model-change drift gate](#quality-and-testing) |
-| 11 | [Budget governor](#engines-environments-and-integrations) |
-| 12 | [Cloud / CI execution](#engines-environments-and-integrations) |
-| 13 | [First published eval result](#evidence-and-adoption) |
-| 14 | [Outcome-graded eval case](#evidence-and-adoption) |
-| 15 | [Measuring the lessons ledger](#evidence-and-adoption) |
-| 16 | [MCP servers](#engines-environments-and-integrations) |
-| 17 | [Ultra-fast mode](#flow-and-orchestration) |
-| 18 | [Parallel dispatch in waves](#flow-and-orchestration) |
-| 19 | [Task researcher](#flow-and-orchestration) |
-| 20 | [Multi-plan programs](#flow-and-orchestration) |
-| 21 | [Cross-repo tasks](#flow-and-orchestration) |
-| 22 | [Watcher settings surface](#flow-and-orchestration) |
-| 23 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
-| 24 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
-| 25 | [User flow diagram](#planning-artifacts-and-reporting) |
-| 26 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
-| 27 | [Integration tests](#quality-and-testing) |
-| 28 | [Regression tests](#quality-and-testing) |
-| 29 | [Fix-plan structure review](#quality-and-testing) |
-| 30 | [Performance and security review](#quality-and-testing) |
-| 31 | [Deploy to a test environment](#engines-environments-and-integrations) |
-| 32 | [Cloud QA](#engines-environments-and-integrations) |
-| 33 | [Mobile QA drivers](#engines-environments-and-integrations) |
-| 34 | [Design-source ingestion](#engines-environments-and-integrations) |
-| 35 | [`llms.txt`](#engines-environments-and-integrations) |
-| 36 | [Second end-to-end capture](#evidence-and-adoption) |
-| 37 | [Interactive session vs harness run](#evidence-and-adoption) |
-| 38 | [`init` warns when there is no remote](#evidence-and-adoption) |
-| 39 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
-| 40 | [`doctor` sandbox checks](#security-and-containment) |
-| 41 | [`doctor` flags unverified branch protection](#security-and-containment) |
-| 42 | [README summary and checklist](#documentation) |
-| 43 | [Compact the README](#documentation) |
+| 1 | [README summary and checklist](#documentation) |
+| 2 | [Compact the README](#documentation) |
+| 3 | [Docs-catalog retrieval](#engines-environments-and-integrations) |
+| 4 | [Citation groundedness gate](#quality-and-testing) |
+| 5 | [Structured agent outputs](#quality-and-testing) |
+| 6 | [Golden-task eval suite](#quality-and-testing) |
+| 7 | [Trace export](#planning-artifacts-and-reporting) |
+| 8 | [Cost per feature](#planning-artifacts-and-reporting) |
+| 9 | [Latency tracking](#planning-artifacts-and-reporting) |
+| 10 | [Second-runtime reference port](#engines-environments-and-integrations) |
+| 11 | [Engine / provider abstraction](#engines-environments-and-integrations) |
+| 12 | [Model-change drift gate](#quality-and-testing) |
+| 13 | [Budget governor](#engines-environments-and-integrations) |
+| 14 | [Cloud / CI execution](#engines-environments-and-integrations) |
+| 15 | [First published eval result](#evidence-and-adoption) |
+| 16 | [Outcome-graded eval case](#evidence-and-adoption) |
+| 17 | [Measuring the lessons ledger](#evidence-and-adoption) |
+| 18 | [MCP servers](#engines-environments-and-integrations) |
+| 19 | [Ultra-fast mode](#flow-and-orchestration) |
+| 20 | [Parallel dispatch in waves](#flow-and-orchestration) |
+| 21 | [Task researcher](#flow-and-orchestration) |
+| 22 | [Multi-plan programs](#flow-and-orchestration) |
+| 23 | [Cross-repo tasks](#flow-and-orchestration) |
+| 24 | [Watcher settings surface](#flow-and-orchestration) |
+| 25 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
+| 26 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
+| 27 | [User flow diagram](#planning-artifacts-and-reporting) |
+| 28 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
+| 29 | [Integration tests](#quality-and-testing) |
+| 30 | [Regression tests](#quality-and-testing) |
+| 31 | [Fix-plan structure review](#quality-and-testing) |
+| 32 | [Performance and security review](#quality-and-testing) |
+| 33 | [Deploy to a test environment](#engines-environments-and-integrations) |
+| 34 | [Cloud QA](#engines-environments-and-integrations) |
+| 35 | [Mobile QA drivers](#engines-environments-and-integrations) |
+| 36 | [Design-source ingestion](#engines-environments-and-integrations) |
+| 37 | [`llms.txt`](#engines-environments-and-integrations) |
+| 38 | [Second end-to-end capture](#evidence-and-adoption) |
+| 39 | [Interactive session vs harness run](#evidence-and-adoption) |
+| 40 | [`init` warns when there is no remote](#evidence-and-adoption) |
+| 41 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
+| 42 | [`doctor` sandbox checks](#security-and-containment) |
+| 43 | [`doctor` flags unverified branch protection](#security-and-containment) |
 | 44 | [Threat model](#documentation) |
+| 45 | [Per-run base branch](#flow-and-orchestration) |
+| 46 | [Suggested protected branches at `init`](#security-and-containment) |
+| 47 | [Guided default-branch change](#evidence-and-adoption) |
+| 48 | [Release tags in the protected set](#security-and-containment) |
+| 49 | [Notifications settings command](#flow-and-orchestration) |
 
 ## Flow and orchestration
 
@@ -65,6 +70,8 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Multi-plan programs | A task too big for one plan becomes an ordered chain of plans, each picked up from the inbox when the previous one finishes. | Open |
 | Cross-repo tasks | One task split into per-repository plans with an explicit contract between them. | Open |
 | Watcher settings surface | A supported way to change the watcher's tunables instead of hand-editing a file. | Open |
+| Notifications settings command | A `notifications` command that manages the machine-local `push.env` and nothing else: `set-url` writes the endpoint, `show` names the file in effect and which keys are set without printing a value, and `test` sends one push. Today only `init --notifications` writes the file, and `init` skips a file that already exists, so a `push.env` that is there with both keys empty can be filled only by hand or by `init --force`, which regenerates every other file too. `doctor`'s warning about an empty file then names this command. | Open |
+| Per-run base branch | A run can start from a branch other than `defaultBranch` — a hotfix from `prod`, a fix on `release/x.y`. The config lists the allowed bases, the drop or `/branch-prompt` picks one, and the run records it; the worktree, the branch-review diff and the branch refresh all use that recorded base. Today every run is cut from `defaultBranch`, so the only way is to change the key for one run and change it back. | Open |
 
 ## Planning artifacts and reporting
 
@@ -120,6 +127,7 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Second end-to-end capture | A captured run on a realistic repository, with a remote and more phases enabled. The shipped capture is one run on the example app with parity and docs off; every push failed (no remote) and plan meta-review took three rounds. | Open |
 | Interactive session vs harness run | One plain interactive session against one harness run, on a simple feature and on a complex one, compared on token cost, session duration and branch quality. Quality is measured by running the harness's branch review over both branches, so the interactive session's gaps — and the harness's own weak spots — show up the same way. Numbers stated in the README. | Open |
 | `init` warns when there is no remote | Without a remote, an in-place run reports done with every commit left local. `doctor` fails on it and the Done summary flags it; `init` should warn at setup too. | Open |
+| Guided default-branch change | One command that moves the integration line: sets `defaultBranch` and `protectedBranches` together, re-renders `githooks/pre-push`, checks that `origin/<branch>` exists, and refuses while runs are active, since work cut from the old base would be reviewed and refreshed against the new one. Today these are separate steps; `doctor` catches the stale hook and the missing remote branch, but not the runs in flight. | Open |
 
 ## Security and containment
 
@@ -128,6 +136,8 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | OS-level sandbox in the autonomous profile | `init` adds Claude Code's native sandbox (Seatbelt on macOS, bubblewrap on Linux/WSL2) to `settings.autonomous.json`, so the guard also holds for what allowed commands execute, with a network domain allowlist. Sets `sandbox.failIfUnavailable: true` so an unattended run refuses to start instead of silently running unsandboxed. | Open |
 | `doctor` sandbox checks | Check sandbox prerequisites (bubblewrap and socat on Linux) and document the domain allowlist that package registries and the QA dev server need, plus tools known to break under it (docker, watchman; TLS in `gh`/`terraform` under Seatbelt). | Open |
 | `doctor` flags unverified branch protection | Warn that forge-side branch protection has not been verified. Setting it up stays the user's job; its absence should be visible. | Open |
+| Suggested protected branches at `init` | `init` protects only the detected `defaultBranch`. When `origin` carries well-known environment branches (`main`, `uat`, `staging`, `pre-prod`, `prod`, `release/*`), propose adding them to `protectedBranches` instead of leaving them unguarded until someone edits the list. | Open |
+| Release tags in the protected set | The pre-push backstop and the `PreToolUse` guard judge branch targets only, so a tag push passes both. Unattended runs are still covered — `git tag` and `git push` are on the autonomous profile's ask list, which no one answers there — but a supervised session has only its prompt. An optional protected tag pattern (e.g. `v*`) that both check. | Open |
 
 ## Documentation
 
