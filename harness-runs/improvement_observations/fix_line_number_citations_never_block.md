@@ -1,6 +1,6 @@
 ## The configured test gate cannot pass in a worktree run
 - **category:** tooling-gap
-- **evidence:** every `layer-implementer` dispatch this run that ran `bash scripts/test.sh` (Tasks 1–10, code-review items 1–4, skeptic item 1) reported 11 of 12 gates passing and gate `6a no machine paths` failing on the single hit `./.git:1:gitdir: /Users/daniel/Work/autonomous-sdlc-harness/.git/worktrees/...` — the worktree's `.git` pointer file, which that gate's `--exclude-dir=.git` does not skip because in a worktree `.git` is a file, not a directory (Task 10's return).
+- **evidence:** every `layer-implementer` dispatch this run that ran `bash scripts/test.sh` (Tasks 1–10, code-review items 1–4, skeptic item 1) reported 11 of 12 gates passing and gate `6a no machine paths` failing on the single hit `./.git:1:gitdir: <main checkout>/.git/worktrees/...` — the worktree's `.git` pointer file, which that gate's `--exclude-dir=.git` does not skip because in a worktree `.git` is a file, not a directory (Task 10's return).
 - **cost this run:** `commands.test` exited 1 on every unit, so no unit of this branch shipped with a passing configured test gate; each implementer had to diagnose and explain the same failure.
 - **hypothesis:** (guess) any autonomous run from a per-branch worktree hits this.
 
