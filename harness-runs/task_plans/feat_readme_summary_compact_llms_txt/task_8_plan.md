@@ -37,3 +37,9 @@ The owner slug `firu-daniel/autonomous-sdlc-harness` is the one `plugin/.claude-
 - Every entry of the README's `## Where to read more` has a line in `llms.txt`: read the two lists side by side.
 - `npm pack --dry-run --workspace cli` lists no `llms.txt`, which confirms the repository-only determination.
 - `bash scripts/run-gates.sh`, gate 6a (the `$HOME` grep) stays `ok` with the new file present.
+
+**Deviations from plan:**
+
+- `## Optional` omitted: Task 6's `## Where to read more` already lists both `ROADMAP.md` and `examples/notes-app/README.md`, which is the omission condition the Work list states.
+- Evidence downgrade, `npm pack --dry-run --workspace cli`: the command was refused by the permission layer (both the workspace form and the form run from `cli/`), so "the tarball lists no `llms.txt`" rests on reading `cli/package.json` → `files` (`dist`, `scripts`, `templates`, `README.md`, `LICENSE`, `NOTICE`), not on execution.
+- Evidence downgrade, gate 6a: `bash scripts/test.sh` (run-gates) reports 6a `FAIL`, and its only hit is `./.git:1:gitdir: …`, the worktree pointer file this working copy was created with, not `llms.txt`. That `llms.txt` carries no machine path rests on `grep -n "/Users/" llms.txt` returning nothing. The link contract was checked by executing a probe (`harness-runs/scratch/llms_links.py` via `scripts/scratch-run.sh`): line 1, the blockquote before the first `## `, and all 22 link targets resolving as `blob` files or non-empty `tree` directories, none with a fragment or query and none under a `removed_paths` entry.
