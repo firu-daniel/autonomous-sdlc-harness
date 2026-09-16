@@ -11,7 +11,7 @@ Source: harness-runs/task_prompts/fix_line_number_citations_never_block_task_pro
 - [x] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
 
 ## Implementation
-- [ ] A.      Tasks implemented (story-index readiness all [x])
+- [x] A.      Tasks implemented (story-index readiness all [x])
 - [-] A1.5g.  Branch parity review resolved (index committed — or PASS with no findings, no file written)
 - [-] A1.5f.  Parity findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [ ] A2g.    Branch architecture review resolved (index committed — or PASS with no findings, no file written)
