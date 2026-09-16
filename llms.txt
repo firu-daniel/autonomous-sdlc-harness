@@ -4,6 +4,14 @@
 
 This file is for a language model choosing which document of this repository to read. The harness ships as two halves, `plugin/` and `cli/`. Its setup command, `/harness-analyze`, works only when typed into an interactive Claude Code session; a headless `claude -p` session answers `Unknown command`.
 
+The quick start, in five steps:
+
+1. Install the plugin: `claude plugin marketplace add firu-daniel/autonomous-sdlc-harness`, then `claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness`.
+2. Wire your repository: `npx autonomous-sdlc-harness init`.
+3. Teach it the codebase: type `/harness-analyze` in an interactive Claude Code session opened on the repository, not in the terminal.
+4. Verify: `npx autonomous-sdlc-harness doctor`.
+5. Start the daemon: `npx autonomous-sdlc-harness daemon install`, then `npx autonomous-sdlc-harness daemon start`.
+
 ## The two halves
 
 - [plugin/](https://github.com/firu-daniel/autonomous-sdlc-harness/tree/main/plugin): the Claude Code plugin carrying the process assets a run executes, namely agents, `branch-*` commands, `/harness-analyze`, guard hooks, instructions and samples.
@@ -14,12 +22,6 @@ This file is for a language model choosing which document of this repository to 
 ## Quick start
 
 - [README.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/README.md): the full quick start, its caveats and the scope and limits.
-
-1. Install the plugin: `claude plugin marketplace add firu-daniel/autonomous-sdlc-harness`, then `claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness`.
-2. Wire your repository: `npx autonomous-sdlc-harness init`.
-3. Teach it the codebase: type `/harness-analyze` in an interactive Claude Code session opened on the repository, not in the terminal.
-4. Verify: `npx autonomous-sdlc-harness doctor`.
-5. Start the daemon: `npx autonomous-sdlc-harness daemon install`, then `npx autonomous-sdlc-harness daemon start`.
 
 ## Where to read more
 
