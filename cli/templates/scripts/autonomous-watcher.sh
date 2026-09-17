@@ -40,7 +40,10 @@
 # RESUME sentinel has landed. Both re-launch the SAME engine in the run's
 # EXISTING working copy — they never create one — through `spawn_engine`'s 4th
 # and 5th arguments, and they are what makes yielding a session cost nothing
-# while a run waits. And it carries the last two passes: THE STALENESS WATCHDOG,
+# while a run waits. The park resume is bounded by THE PARK-LOOP GUARD: a run
+# whose park-resumes keep parking without progress becomes `park_loop` and is
+# resumed no further until an operator creates PARK_LOOP_CLEAR in its
+# clarification directory. And it carries the last two passes: THE STALENESS WATCHDOG,
 # described next, and THE USAGE GATE after it — which is what finally WRITES the
 # hold marker every earlier pass already reads — plus THE MACHINE-LEVEL LANE that
 # gate publishes into and every start consults, described below them.
@@ -222,7 +225,8 @@
 # `<state_dir>/autonomous_logs/registry.json` is a single JSON object shaped
 # `{"runs": {"<branch>": {…}}}`, and the shipped commands read it in that shape
 # (`.runs["<branch>"].status`) to report a branch's state. The `.runs` wrapper and
-# the status vocabulary `running | parked | paused | completed | failed` are
+# the status vocabulary `running | parked | park_loop | paused | completed |
+# failed` are
 # therefore fixed: renaming either breaks readers this script never sees.
 #
 # THE KILL SWITCH IS THE OPERATOR'S, AND THIS SCRIPT NEVER DELETES IT.
@@ -343,8 +347,8 @@
 #                 README.md            -> left in place, never archived
 #   a guard       with "$d/sdlc-harness/AUTONOMOUS_STOP" present, or the registry
 #                 already at MAX_PARALLEL_RUNS live runs, the dropped file STAYS
-#                 in the inbox and nothing launches; with a `parked` (or
-#                 `paused`) record for that branch it is archived as
+#                 in the inbox and nothing launches; with a `parked`, `paused` or
+#                 `park_loop` record for that branch it is archived as
 #                 rejected_<ts>_… and that record is byte-identical afterwards;
 #                 with a LIVE `running` record it is archived as dup_<ts>_…
 #   a resume      from a `parked` record whose run wrote question_1.md,
@@ -362,6 +366,19 @@
 #                    empty. Have the stub write an unanswered question_4.md and
 #                    the record is `parked` again rather than `completed`, and a
 #                    further tick with no answer_4.md does NOT resume
+#   a park loop   from that resume setup, a stub that writes an unanswered
+#                 question_<n>.md with an index no higher than any already there
+#                 before it exits, and PARK_LOOP_WINDOW_SECS=0; answer each park
+#                 and tick, twice -> after the second resumed session exits it is
+#                 `park_loop`, park_loop_cycles is 2, ONE `park_loop`
+#                 notification and no `parked` one fire for that exit, and
+#                 watcher.log carries a `resume made no progress (cycle 2/2: …)`
+#                 line and the `park loop` line. Answer the new question and tick
+#                 -> the stub is NOT launched and the record is unchanged. Create
+#                 clarifications/feat_x/PARK_LOOP_CLEAR and tick -> the file is
+#                 gone, the `park loop cleared` line is logged, and the run
+#                 resumes in that same pass. PARK_LOOP_MAX_CYCLES=0 -> it never
+#                 trips; a session the pause resume launched never counts
 #   a pause       a `paused` record with "$d/sdlc-harness/PAUSE_ACK" and
 #                 PAUSE_PROGRESS.md present -> tick does nothing until
 #                 "$d/sdlc-harness/RESUME" exists; then the record is `running`,
@@ -736,6 +753,18 @@ STALL_MAX_RESTARTS="${STALL_MAX_RESTARTS:-2}"
 # non-zero floor is right because idle interpreter and shell noise rounds to ~0.
 STALL_BUSY_CPU_PCT="${STALL_BUSY_CPU_PCT:-1}"
 
+# The park-loop guard (classify_run_exit; clear_park_loops). How many CONSECUTIVE
+# park-resumes that made no progress mark the run `park_loop`, after which it is
+# resumed no further until an operator creates PARK_LOOP_CLEAR. Set 0 to turn the
+# guard off. Both defaults are sized from measured park-resumed sessions; the
+# measurements are in the harness repository's docs/watcher.md §4, "A resume
+# that makes no progress is bounded.".
+PARK_LOOP_MAX_CYCLES="${PARK_LOOP_MAX_CYCLES:-2}"
+# A park-resumed session that parks again inside this many seconds made no
+# progress, whatever question it parked on. Set 0 to judge progress on the
+# question index alone.
+PARK_LOOP_WINDOW_SECS="${PARK_LOOP_WINDOW_SECS:-300}"
+
 # The usage gate (usage_gate; see the header for what it acts on and why only the
 # watcher can). Set 0 to turn the whole pass off — a run then spends the account's
 # remaining window and stops on a refusal instead of at a clean boundary.
@@ -865,7 +894,10 @@ notify() {
 #   pid                 the launched process
 #   branch              the key, stamped into the record so it travels with it
 #   worktree            the working copy the run executes in
-#   status              running | parked | paused | completed | failed
+#   status              running | parked | park_loop | paused | completed | failed.
+#                       `park_loop` is a parked run the park-loop guard holds:
+#                       no resume pass offers it until clear_park_loops finds
+#                       PARK_LOOP_CLEAR and returns it to `parked`
 #   log_path            the central log this run appends to
 #   engine              task | user_review | docs — which engine command it runs,
 #                       re-read on resume so the right one is re-launched
@@ -885,6 +917,21 @@ notify() {
 #                       purpose, because a pause mid park-resume left those
 #                       answers unconsumed. The pause resume never writes this
 #                       field — a pause is not an answer.
+#   resume_kind         `answer` when the park resume launched the current
+#                       session, `pause` when the pause resume did, and empty
+#                       otherwise. Read and cleared by classify_run_exit on every
+#                       non-pause exit; it is how the park-loop guard counts only
+#                       park-resumed sessions. Cleared on a fresh launch
+#   resumed_at_epoch    the epoch second of the most recent resume, stamped by
+#                       both resume paths; the guard's window is measured from it
+#   resume_max_question_index
+#                       the highest numbered question_<n>.md index, top level and
+#                       answered/ together, when the park resume launched. An
+#                       exit that parks with no index above it made no progress
+#   park_loop_cycles    consecutive park-resumed sessions that made no progress.
+#                       At PARK_LOOP_MAX_CYCLES the run becomes `park_loop`. Reset
+#                       by a progress cycle, a `completed` or `failed` exit, the
+#                       operator clear and a fresh launch
 #   stall_warned        `1` while the staleness watchdog is in the warn tier for
 #                       the CURRENT silent episode, so it warns once instead of
 #                       once per pass. Cleared the moment output resumes, which
@@ -1168,7 +1215,7 @@ print_status() {
   ' "$REGISTRY"
   # The resolved tunables, names and values only — the override channel made
   # observable. Nothing else the override file may have set is printed.
-  echo "tunables: MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED"
+  echo "tunables: MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED"
   # Advisory tail: the other repositories armed on this machine. It decides
   # nothing — see the block above print_status.
   machine_footprint_report
@@ -1619,13 +1666,17 @@ launch_run() {
   # still pending keeps both, and the gate's stale-tag sweep inspects only
   # `running` and `paused` records, so this is where they are cleared. The
   # working-copy side of the same inheritance — the pause sentinels — is cleared
-  # by the caller, before this function is reached.
+  # by the caller, before this function is reached. The park-loop guard's
+  # resume_kind and park_loop_cycles are cleared here too, which is why the inbox
+  # pass rejects a drop on a `park_loop` record rather than reaching this function.
   registry_set "$branch" pid ""
   registry_set "$branch" stall_restarts 0
   registry_set "$branch" stall_warned ""
   registry_set "$branch" stall_killing ""
   registry_set "$branch" paused_by ""
   registry_set "$branch" usage_resume_at ""
+  registry_set "$branch" resume_kind ""
+  registry_set "$branch" park_loop_cycles 0
 
   log "launching headless run for '$branch' (engine=$engine_kind) in $worktree (log: $log_path)"
   notify launched "$branch" "$log_path" "engine=$engine_kind"
@@ -1652,6 +1703,30 @@ archive_answered_pair() {
   mkdir -p "$clar_dir/answered" || return 0
   mv "$clar_dir/question_${n}.md" "$clar_dir/answered/question_${n}.md" 2>/dev/null || true
   mv "$clar_dir/answer_${n}.md" "$clar_dir/answered/answer_${n}.md" 2>/dev/null || true
+}
+
+# max_question_index <clar_dir>
+#
+# The highest numbered question_<n>.md index under <clar_dir>, top level and
+# answered/ together, or 0 when there is none. Numeric-only names, as the
+# resume and the exit classification accept. Prints the integer and nothing else,
+# because both callers capture it.
+max_question_index() {
+  local clar_dir="$1" q n max=0
+  for q in "$clar_dir"/question_*.md "$clar_dir"/answered/question_*.md; do
+    [ -e "$q" ] || continue
+    n="${q##*/}"
+    n="${n#question_}"
+    n="${n%.md}"
+    case "$n" in
+      '' | *[!0-9]*) continue ;;
+    esac
+    # Base 10 forced, so a zero-padded index is not read as octal.
+    if [ "$((10#$n))" -gt "$max" ]; then
+      max="$((10#$n))"
+    fi
+  done
+  printf '%s\n' "$max"
 }
 
 # classify_run_exit <branch> <worktree> <log_path> <rc>
@@ -1762,6 +1837,54 @@ classify_run_exit() {
     done
   fi
 
+  # THE PARK-LOOP GUARD. Counts consecutive park-resumed sessions that parked
+  # again without progress, whatever the cause, and past PARK_LOOP_MAX_CYCLES
+  # holds the run as `park_loop` so no resume pass offers it again. Only a
+  # session the PARK resume launched is judged — resume_kind tells it apart from
+  # a fresh launch and a pause resume, whose parked exits leave the count as it
+  # is. Placed after the parked decision above, which it never changes.
+  local resume_kind
+  resume_kind="$(registry_get "$branch" resume_kind)"
+  if [ -n "$resume_kind" ]; then
+    registry_set "$branch" resume_kind ""
+  fi
+  if [ "$parked" = 1 ] && [ "$resume_kind" = "answer" ] && [ "$PARK_LOOP_MAX_CYCLES" != "0" ]; then
+    local base_max now_max resumed_epoch elapsed cycles loop_reason=""
+    base_max="$(registry_get "$branch" resume_max_question_index)"
+    case "$base_max" in '' | *[!0-9]*) base_max=0 ;; esac
+    now_max="$(max_question_index "$clar_dir")"
+    resumed_epoch="$(registry_get "$branch" resumed_at_epoch)"
+    if [ "$now_max" -le "$((10#$base_max))" ]; then
+      loop_reason="no question above index $((10#$base_max))"
+    else
+      case "$resumed_epoch" in
+        '' | *[!0-9]*) ;;
+        *)
+          elapsed=$(($(date +%s) - resumed_epoch))
+          if [ "$elapsed" -lt "$PARK_LOOP_WINDOW_SECS" ]; then
+            loop_reason="re-parked after ${elapsed}s, inside PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS"
+          fi
+          ;;
+      esac
+    fi
+    if [ -n "$loop_reason" ]; then
+      cycles="$(registry_get "$branch" park_loop_cycles)"
+      case "$cycles" in '' | *[!0-9]*) cycles=0 ;; esac
+      cycles=$((10#$cycles + 1))
+      registry_set "$branch" park_loop_cycles "$cycles"
+      log "run '$branch' resume made no progress (cycle $cycles/$PARK_LOOP_MAX_CYCLES: $loop_reason)"
+      if [ "$cycles" -ge "$PARK_LOOP_MAX_CYCLES" ]; then
+        # Instead of the `parked` status, log and notification below.
+        registry_set "$branch" status park_loop
+        log "run '$branch' park loop — $cycles consecutive resumes made no progress; not resuming it again (clear: $clar_dir/PARK_LOOP_CLEAR)"
+        notify park_loop "$branch" "$log_path" "$cycles no-progress resumes — create $clar_dir/PARK_LOOP_CLEAR to clear"
+        return 0
+      fi
+    else
+      registry_set "$branch" park_loop_cycles 0
+    fi
+  fi
+
   if [ "$parked" = 1 ]; then
     registry_set "$branch" status parked
     log "run '$branch' parked (clarification waiting) — rc=$rc"
@@ -1771,10 +1894,12 @@ classify_run_exit() {
     # Clear the watchdog counters so a reused branch key starts clean.
     registry_set "$branch" stall_restarts 0
     registry_set "$branch" stall_warned ""
+    registry_set "$branch" park_loop_cycles 0
     log "run '$branch' completed — branch ready for review"
     notify completed "$branch" "$log_path"
   else
     registry_set "$branch" status failed
+    registry_set "$branch" park_loop_cycles 0
     log "run '$branch' failed — rc=$rc"
     notify failed "$branch" "$log_path" "(exit $rc)"
   fi
@@ -1890,6 +2015,12 @@ resume_parked_run() {
   registry_set "$branch" status running
   registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
   registry_set "$branch" resumed_for_index "$answered_set"
+  # The park-loop guard's baseline, read by classify_run_exit when this session
+  # exits. Recorded before the spawn, while the channel holds only what the
+  # session is about to read.
+  registry_set "$branch" resume_kind answer
+  registry_set "$branch" resumed_at_epoch "$(date +%s)"
+  registry_set "$branch" resume_max_question_index "$(max_question_index "$clar_dir")"
   notify resumed "$branch" "$log_path" "answered clarification(s) #$answered_set"
   open_log_terminal "$branch" "$log_path"
   spawn_engine "$branch" "$worktree" "$log_path" "$answered_set"
@@ -1911,6 +2042,38 @@ resume_parked_runs() {
     [ -n "$b" ] || continue
     [ "$(registry_get "$b" status)" = "parked" ] || continue
     resume_parked_run "$b" || true
+  done <<EOF
+$(registry_branches)
+EOF
+}
+
+# The operator clear for the park-loop guard. A `park_loop` record goes back to
+# `parked`, with its count reset, once <clar_dir>/PARK_LOOP_CLEAR exists in the
+# run's working copy; the file is removed so the clear is spent once. Answering a
+# question never releases the hold — only this file does. A missing working copy
+# or an unresolvable state directory leaves the record held.
+clear_park_loops() {
+  registry_init
+  local b worktree state_rel clear_file
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    [ "$(registry_get "$b" status)" = "park_loop" ] || continue
+    worktree="$(registry_get "$b" worktree)"
+    [ -n "$worktree" ] || continue
+    [ -d "$worktree" ] || {
+      log "park-loop run '$b': working copy missing ($worktree) — leaving it held"
+      continue
+    }
+    state_rel="$(run_state_dir "$worktree")" || {
+      log "park-loop run '$b': the state directory in '$worktree' is unresolvable — leaving it held"
+      continue
+    }
+    clear_file="$worktree/$state_rel/clarifications/$b/PARK_LOOP_CLEAR"
+    [ -e "$clear_file" ] || continue
+    rm -f "$clear_file"
+    registry_set "$b" park_loop_cycles 0
+    registry_set "$b" status parked
+    log "park loop cleared for '$b' (PARK_LOOP_CLEAR found) — back to parked"
   done <<EOF
 $(registry_branches)
 EOF
@@ -2002,6 +2165,9 @@ resume_paused_run() {
   log "resuming paused run '$branch' (RESUME trigger found) in $worktree"
   registry_set "$branch" status running
   registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
+  # `pause` keeps this session's exit out of the park-loop guard's count.
+  registry_set "$branch" resume_kind pause
+  registry_set "$branch" resumed_at_epoch "$(date +%s)"
   notify resumed "$branch" "$log_path" "after pause"
   open_log_terminal "$branch" "$log_path"
   spawn_engine "$branch" "$worktree" "$log_path" "" 1
@@ -2257,7 +2423,7 @@ fail_before_launch() {
 
 # Archive the inbox file as rejected_<ts>_<name> and notify, and NEVER call
 # registry_set — which is the whole difference from fail_before_launch above.
-# Used when the record already there (`parked`, `paused`) has to survive
+# Used when the record already there (`parked`, `paused`, `park_loop`) has to survive
 # untouched so the resume pass can still pick that run up once its clarification
 # answer or its RESUME sentinel lands. Stamping `failed` over it would strand a
 # run that nothing ever goes back for.
@@ -2386,7 +2552,7 @@ process_inbox_file() {
   # touching the registry, so the record stays `parked` and the resume pass can
   # still resume it once the answer lands.
   local hint_worktree hint_state
-  if [ "$existing_status" = "parked" ] || [ "$existing_status" = "paused" ]; then
+  if [ "$existing_status" = "parked" ] || [ "$existing_status" = "paused" ] || [ "$existing_status" = "park_loop" ]; then
     hint_worktree="$(registry_get "$branch" worktree)"
     hint_state="$(run_state_dir "$hint_worktree")" || hint_state="<state_dir>"
     [ -n "$hint_worktree" ] || hint_worktree="its working copy"
@@ -2403,6 +2569,16 @@ process_inbox_file() {
   if [ "$existing_status" = "paused" ]; then
     log "'$branch' has a paused run — rejecting '$fname' (drop $hint_state/RESUME in $hint_worktree to resume it, or resolve the pause, then drop the file again)"
     reject_preserving_status "$branch" "$file" "$fname" "(the branch has a paused run — resume it with a RESUME sentinel, then drop the file again)"
+    return 0
+  fi
+
+  # A run HELD BY THE PARK-LOOP GUARD owns its working copy and its outstanding
+  # clarification state as a parked one does, and a fresh launch would also reset
+  # park_loop_cycles and discard the hold. Rejected the same way; the remedy named
+  # is the clear, because answering does not release the hold.
+  if [ "$existing_status" = "park_loop" ]; then
+    log "'$branch' has a run held by the park-loop guard — rejecting '$fname' (create $hint_worktree/$hint_state/clarifications/$branch/PARK_LOOP_CLEAR to clear it, then drop the file again)"
+    reject_preserving_status "$branch" "$file" "$fname" "(the branch has a run held by the park-loop guard — create $hint_worktree/$hint_state/clarifications/$branch/PARK_LOOP_CLEAR to clear it, then drop the file again)"
     return 0
   fi
 
@@ -3042,7 +3218,10 @@ tick() {
   # or a trigger must not be starved behind a fresh drop when capacity is tight —
   # it already holds a working copy and a history, and the fresh drop does not.
   # Parked before paused, because a park is the older and more expensive wait:
-  # someone answered a question and is waiting to see the effect.
+  # someone answered a question and is waiting to see the effect. The park-loop
+  # clear immediately ahead of it, so a cleared, fully answered run resumes in
+  # this same pass.
+  clear_park_loops
   resume_parked_runs
   resume_paused_runs
 
