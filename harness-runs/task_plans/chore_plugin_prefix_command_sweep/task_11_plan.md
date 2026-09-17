@@ -58,3 +58,7 @@ Copy the facts from those files verbatim: version, command, exact message.
 - `grep -n 'ambiguous exemption' docs/development.md` and `grep -n 'stale exemption' docs/development.md` each find the gate-6d contract paragraph, which states the exactly-one-line rule and the `line` / `contains` kinds.
 - `grep -n 'owed' docs/development.md` finds no sentence that still calls the command-prefix sweep owed.
 - `bash scripts/test.sh` exits 0.
+
+**Deviations from plan:**
+- Verification `bash scripts/test.sh` exits 0 is not met: it exits 1 with `6a no machine paths` as the sole failure (12 passed), every hit outside this task's diff — the worktree's untracked `.git` pointer file, `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md`, and `harness-runs/scratch/t3npm.log` left by an earlier task. `bash scripts/typecheck.sh` exits 0.
+- The closed §6 paragraph adds one sentence the plan did not list: the 2.1.274 headless leg answered `Unknown command` to neither spelling, which disagrees with the 2.1.237 record it keeps; stated beside that record rather than left for a reader to reconcile.
