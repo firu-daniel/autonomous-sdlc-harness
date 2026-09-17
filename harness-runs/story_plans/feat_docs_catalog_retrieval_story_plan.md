@@ -46,7 +46,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_docs_catalog_retrieval/task
 4. [x] **Task 4** — Heading chunker and corpus enumeration _(layer: cli)_ _(points: 10)_
 5. [x] **Task 5** — The PGlite index store and incremental refresh _(layer: cli)_ _(points: 16)_
 6. [x] **Task 6** — The `docs index` verb and the fixture-corpus suite _(layer: cli)_ _(points: 15)_
-7. [ ] **Task 7** — Hybrid search with rerank and abstention, and `docs search` _(layer: cli)_ _(points: 15)_
+7. [x] **Task 7** — Hybrid search with rerank and abstention, and `docs search` _(layer: cli)_ _(points: 15)_
 8. [ ] **Task 8** — `docs serve`: the stdio MCP server exposing `search_docs` _(layer: cli)_ _(points: 16)_
 9. [ ] **Task 9** — The `docs-search-server.sh` launcher and `hr_cache_dir` _(layer: cli)_ _(points: 14)_
 10. [ ] **Task 10** — Retrieval wiring in `.mcp.json`, the permission-profile fragment and the ignore block _(layer: cli)_ _(points: 20)_

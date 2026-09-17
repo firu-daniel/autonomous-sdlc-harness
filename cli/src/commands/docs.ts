@@ -1,6 +1,6 @@
 /**
  * Command: `docs` — search the docs catalog and the conventions documents: build the index, query it,
- * serve it over MCP. `index` is its first sub-verb.
+ * serve it over MCP. Its sub-verbs are `index` and `search`.
  *
  * **The rule this module exists to enforce: the sub-verb table is the one declaration of the
  * sub-verbs.** The usage lines, the refusal naming the legal sub-verbs and the dispatch all read
@@ -15,6 +15,14 @@
 import { requireConfig } from '../config/io.js';
 import { EXIT, HarnessError } from '../core/errors.js';
 import { resolveRepoRoot } from '../core/git.js';
+import {
+  DEFAULT_RESULTS,
+  MAX_RESULTS,
+  renderResults,
+  SEARCH_MODES,
+  searchDocs,
+  type SearchMode,
+} from '../retrieval/search.js';
 import { openRetrieval } from '../retrieval/session.js';
 import type { CommandContext, Subcommand } from './registry.js';
 
@@ -71,12 +79,83 @@ async function index(ctx: CommandContext, args: readonly string[]): Promise<numb
   return EXIT.OK;
 }
 
+const K_FLAG = '--k';
+const MODE_FLAG = '--mode';
+const DEFAULT_MODE: SearchMode = 'fused-rerank';
+
+/**
+ * `docs search <query> [--k <n>] [--mode <mode>]`: refresh the checkout's index, then answer the query.
+ * An abstention exits 0; it is an answer, not an error.
+ */
+async function search(ctx: CommandContext, args: readonly string[]): Promise<number> {
+  const modes = SEARCH_MODES.join(', ');
+  let query: string | undefined;
+  let k = DEFAULT_RESULTS;
+  let mode = DEFAULT_MODE;
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i] ?? '';
+    if (token === K_FLAG || token === MODE_FLAG) {
+      const value = args[i + 1];
+      if (value === undefined) throw new HarnessError(`docs search: ${token} needs a value; ${helpHint()}`);
+      i += 1;
+      if (token === K_FLAG) {
+        if (!/^[0-9]+$/.test(value)) {
+          throw new HarnessError(`docs search: ${K_FLAG} takes a whole number, not ${JSON.stringify(value)}; ${helpHint()}`);
+        }
+        k = Number(value);
+      } else {
+        const found = SEARCH_MODES.find((candidate) => candidate === value);
+        if (found === undefined) {
+          throw new HarnessError(`docs search: unknown mode ${JSON.stringify(value)}; expected ${modes}; ${helpHint()}`);
+        }
+        mode = found;
+      }
+      continue;
+    }
+    if (token.startsWith('-') || query !== undefined) {
+      const what = token.startsWith('-') ? 'unknown option' : 'unexpected argument';
+      throw new HarnessError(`docs search: ${what} ${JSON.stringify(token)}; ${helpHint()}`);
+    }
+    query = token;
+  }
+  if (query === undefined || query.trim() === '') {
+    throw new HarnessError(`docs search: no query given; ${helpHint()}`);
+  }
+
+  const repoRoot = resolveRepoRoot(ctx.cwd);
+  const config = requireConfig(repoRoot);
+  const session = await openRetrieval({ repoRoot, config, inMemory: false });
+  try {
+    const refreshed = await session.refresh();
+    for (const warning of refreshed.warnings) ctx.report.warn(warning);
+    const result = await searchDocs({
+      store: session.store,
+      embedder: session.embedder,
+      reranker: session.reranker,
+      query,
+      k,
+      mode,
+    });
+    const rendered = renderResults(result);
+    if (rendered !== '') ctx.report.result(rendered);
+  } finally {
+    await session.close();
+  }
+  return EXIT.OK;
+}
+
 const SUB_VERBS: readonly DocsSubVerb[] = [
   {
     name: 'index',
     synopsis: `index [${IN_MEMORY_FLAG}]`,
     summary: `Refresh this checkout's index; ${IN_MEMORY_FLAG} builds one in memory and writes nothing`,
     run: index,
+  },
+  {
+    name: 'search',
+    synopsis: `search <query> [${K_FLAG} <n>] [${MODE_FLAG} <${SEARCH_MODES.join('|')}>]`,
+    summary: `Refresh the index and search it; ${K_FLAG} defaults to ${DEFAULT_RESULTS} (at most ${MAX_RESULTS}), ${MODE_FLAG} to ${DEFAULT_MODE}`,
+    run: search,
   },
 ];
 

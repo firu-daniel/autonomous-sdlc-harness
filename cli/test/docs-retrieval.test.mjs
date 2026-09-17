@@ -1,9 +1,10 @@
 /**
- * `docs index` on a fixture corpus: the task prompt's Acceptance 3.
+ * `docs index` and `docs search` on a fixture corpus: the task prompt's Acceptance 3, and the CLI half
+ * of Acceptance 4.
  *
  * **The rules these tests exist to enforce: a refresh embeds exactly the chunks that changed, removes
- * the chunks of a deleted document, and rebuilds on a new embedder — and the suite never downloads a
- * model.** Every run takes the `hash-v1` or `hash-v2` stub through `retrievalEnv`, with the model
+ * the chunks of a deleted document, and rebuilds on a new embedder; a search cites `path#anchor`, and
+ * only `fused-rerank` abstains — and the suite never downloads a model.** Every run takes the `hash-v1` or `hash-v2` stub through `retrievalEnv`, with the model
  * files planted as empty files under a temp `XDG_CACHE_HOME`.
  */
 
@@ -126,6 +127,44 @@ test('(h) docs index refuses with the model files removed, naming a missing file
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Xenova\/bge-small-en-v1\.5\/config\.json/);
   assert.deepEqual(await snapshotTree(dir), before);
+});
+
+async function searchOk(dir, env, args) {
+  const result = await runCli(dir, ['docs', 'search', ...args], env);
+  assert.equal(result.status, 0, `docs search exited ${result.status}\n${result.stderr}`);
+  return result.stdout.trim();
+}
+
+const MATCH_QUERY = 'work without a network';
+const NO_MATCH_QUERY = 'quantum chromodynamics lattice';
+
+test('search (a)-(d): hybrid search, abstention, lexical mode and --k', async (t) => {
+  const { dir, env } = await retrievalFixture(t);
+
+  // (a)
+  const hybrid = await searchOk(dir, env, [MATCH_QUERY]);
+  assert.ok(hybrid.split('\n')[0].startsWith('1. docs/guide.md#offline (score '), hybrid);
+
+  // (b) The abstention half of Acceptance 4 at the CLI.
+  assert.equal(await searchOk(dir, env, [NO_MATCH_QUERY]), 'no confident match');
+
+  // (c)
+  const lexical = await searchOk(dir, env, [MATCH_QUERY, '--mode', 'lexical']);
+  assert.ok(lexical.split('\n')[0].startsWith('1. docs/guide.md#offline (score '), lexical);
+  assert.equal(await searchOk(dir, env, [NO_MATCH_QUERY, '--mode', 'lexical']), '');
+
+  // (d)
+  const one = await searchOk(dir, env, [MATCH_QUERY, '--k', '1']);
+  assert.equal(one.split('\n').filter((line) => /^\d+\. /.test(line)).length, 1, one);
+});
+
+test('search (e): an unknown --mode is refused, naming the four modes', async (t) => {
+  const { dir, env } = await retrievalFixture(t);
+
+  const result = await runCli(dir, ['docs', 'search', MATCH_QUERY, '--mode', 'nonsense'], env);
+
+  assert.notEqual(result.status, 0);
+  for (const mode of ['lexical', 'vector', 'fused', 'fused-rerank']) assert.match(result.stderr, new RegExp(`\\b${mode}\\b`));
 });
 
 test('docs refuses an unknown sub-verb and an unknown flag, naming docs --help', async (t) => {
