@@ -52,7 +52,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_docs_catalog_retrieval/task
 10. [x] **Task 10** — Retrieval wiring in `.mcp.json`, the permission-profile fragment and the ignore block _(layer: cli)_ _(points: 20)_
 11. [x] **Task 11** — The `init --docs-retrieval` flag, its prompt and the config write _(layer: cli)_ _(points: 12)_
 12. [x] **Task 12** — Setup-time runtime install and model download, and `docs fetch-models` _(layer: cli)_ _(points: 18)_
-13. [ ] **Task 13** — The three `doctor` retrieval checks _(layer: cli)_ _(points: 18)_
+13. [x] **Task 13** — The three `doctor` retrieval checks _(layer: cli)_ _(points: 18)_
 14. [ ] **Task 14** — Name the `docs` verb and the launcher in `cli/README.md`, and the verb in the package description _(layer: cli)_ _(points: 7)_
 15. [ ] **Task 15** — Grant `search_docs` to the five agents that already read `<docs_root>` _(layer: plugin)_ _(points: 15)_
 16. [ ] **Task 16** — Grant `search_docs` to the other five agents in the granted set _(layer: plugin)_ _(points: 15)_
