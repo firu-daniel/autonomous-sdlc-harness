@@ -26,7 +26,7 @@ This branch fixes the watcher defect observed on `feat_docs_catalog_retrieval` o
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_watcher_multi_question_resume_loop/task_<K>_plan.md`. Ordered bottom-up in the configured layer order — `cli`, `plugin`, then the catch-all `general` last.
 
-1. [ ] **Task 1** — Watcher: resume a park only when fully answered, and archive exactly the consumed set _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Watcher: resume a park only when fully answered, and archive exactly the consumed set _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Watcher: the park-loop guard, its `park_loop` status and its operator clear _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Declare the `park_loop` notification and status in the notifier and the registry readers _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Tests: the observed multi-question sequence, mid-session answers and late questions _(layer: cli)_ _(points: 20)_
