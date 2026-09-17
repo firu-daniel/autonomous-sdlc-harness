@@ -63,7 +63,10 @@ import { pathToFileURL } from 'node:url';
 import {
   createFixture,
   ignoredAmong,
+  plantModelFiles,
+  plantRetrievalRuntime,
   readJson,
+  retrievalEnv,
   runBash,
   runCli,
   runCliFrom,
@@ -1689,6 +1692,100 @@ test("the mobile note's remedy wires both halves, where a plain re-run wires onl
   // profile is recoverable — the cost the note states.
   assert.equal(readJson(join(dir, CONFIG_FILE)).qa.driver, QA_DRIVER_VALUE);
   assert.ok(await exists(dir, `${PROFILE_FILE}.bak`), 'the regenerated profile left no .bak behind');
+});
+
+/** The docs-retrieval server `.mcp.json` declares when retrieval is on, spelled as the contract. */
+const DOCS_SERVER = 'harness-docs';
+const DOCS_SERVER_ENTRY = { type: 'stdio', command: 'bash', args: ['scripts/docs-search-server.sh'], env: {} };
+const DOCS_INDEX_RULE = `${STATE_DIR}/docs_index/`;
+
+/**
+ * A fixture holding a pre-written config with the docs phase on, `docs.retrieval` set by `retrieval`
+ * and the interactive-test phase on with `qaDriver` when one is given — plus the retrieval
+ * environment every retrieval-on `init` runs under: the stub models and a planted runtime in a
+ * throwaway cache, so no case installs or downloads anything.
+ */
+async function retrievalFixture(t, { retrieval, qaDriver } = {}) {
+  const config = {
+    version: 1,
+    projectName: 'fixture-project',
+    defaultBranch: 'main',
+    stateDir: STATE_DIR,
+    layers: [{ name: 'general', path: '.', conventions: SHARED_STUB }],
+    commands: { typecheck: 'echo typecheck', test: 'echo test' },
+    phases: { docs: true, ...(qaDriver === undefined ? {} : { qa: true }) },
+    docs: { root: 'docs', ...(retrieval ? { retrieval: true } : {}) },
+    ...(qaDriver === undefined ? {} : { qa: { driver: qaDriver } }),
+  };
+  const dir = await fixtureFor(t, {
+    files: { ...nodeProjectFiles(), [CONFIG_FILE]: config, 'docs/README.md': '# docs\n' },
+  });
+  const cacheHome = await mkdtemp(join(tmpdir(), 'harness-retrieval-cache-'));
+  t.after(() => rm(cacheHome, { recursive: true, force: true }));
+  await plantModelFiles(cacheHome);
+  await plantRetrievalRuntime(cacheHome);
+  return { dir, env: retrievalEnv(cacheHome) };
+}
+
+/** The managed ignore block's lines, trimmed. */
+function ignoreLines(dir) {
+  return text(dir, GITIGNORE_FILE)
+    .split('\n')
+    .map((line) => line.trim());
+}
+
+test('retrieval on declares the docs server in .mcp.json and ignores the index, and a re-run changes neither', async (t) => {
+  const { dir, env } = await retrievalFixture(t, { retrieval: true });
+
+  await initOk(dir, [], env);
+
+  const mcp = readJson(join(dir, MCP_FILE));
+  assert.deepEqual(Object.keys(mcp.mcpServers), [DOCS_SERVER], `${MCP_FILE} declares a server beyond the docs one`);
+  assert.deepEqual(mcp.mcpServers[DOCS_SERVER], DOCS_SERVER_ENTRY);
+  assert.ok(ignoreLines(dir).includes(DOCS_INDEX_RULE), `${GITIGNORE_FILE} carries no ${DOCS_INDEX_RULE} rule`);
+
+  const mcpBefore = text(dir, MCP_FILE);
+  const ignoreBefore = text(dir, GITIGNORE_FILE);
+  await initOk(dir, [], env);
+  assert.equal(text(dir, MCP_FILE), mcpBefore, `a second init changed ${MCP_FILE}`);
+  assert.equal(text(dir, GITIGNORE_FILE), ignoreBefore, `a second init changed ${GITIGNORE_FILE}`);
+});
+
+test('retrieval absent declares no docs server and no index rule, and with QA off writes no .mcp.json', async (t) => {
+  const { dir, env } = await retrievalFixture(t, { retrieval: false });
+
+  const { stdout } = await initOk(dir, [], env);
+
+  assert.equal(await exists(dir, MCP_FILE), false, `${MCP_FILE} was written with neither QA nor retrieval on`);
+  assert.match(stdout, /no \.mcp\.json was written/, `nothing on stdout says ${MCP_FILE} was left out:\n${stdout}`);
+  assert.ok(
+    !ignoreLines(dir).some((line) => line.includes('docs_index')),
+    `${GITIGNORE_FILE} carries a docs_index rule with retrieval off`,
+  );
+
+  // QA on and retrieval still off: the browser servers alone.
+  const browser = await retrievalFixture(t, { retrieval: false, qaDriver: QA_DRIVER_VALUE });
+  await initOk(browser.dir, [], browser.env);
+  assert.ok(
+    !Object.hasOwn(readJson(join(browser.dir, MCP_FILE)).mcpServers, DOCS_SERVER),
+    `${MCP_FILE} declares ${DOCS_SERVER} with retrieval off`,
+  );
+});
+
+test('.mcp.json declares both halves with a browser driver, and the docs server alone with a mobile one', async (t) => {
+  const both = await retrievalFixture(t, { retrieval: true, qaDriver: QA_DRIVER_VALUE });
+  await initOk(both.dir, [], both.env);
+  assert.deepEqual(
+    Object.keys(readJson(join(both.dir, MCP_FILE)).mcpServers).sort(),
+    ['chrome-devtools', DOCS_SERVER, 'playwright'].sort(),
+  );
+
+  const mobile = await retrievalFixture(t, { retrieval: true, qaDriver: QA_DRIVER_CHOSEN });
+  const { stdout } = await initOk(mobile.dir, [], mobile.env);
+  assert.deepEqual(Object.keys(readJson(join(mobile.dir, MCP_FILE)).mcpServers), [DOCS_SERVER]);
+  // The file exists, so the note may not say it was not written.
+  assert.doesNotMatch(stdout, /no \.mcp\.json was written/, `the note denies a file retrieval wrote:\n${stdout}`);
+  assert.match(stdout, /no browser MCP server was declared in \.mcp\.json/);
 });
 
 /**

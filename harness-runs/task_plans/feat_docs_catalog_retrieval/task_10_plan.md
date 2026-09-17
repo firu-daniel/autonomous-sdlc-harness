@@ -53,3 +53,9 @@
 - The existing QA-on and QA-off cases in `init.test.mjs`, `profile.test.mjs` and `doctor.test.mjs` pass **without an edit to their expected values**, so the browser half is untouched. The one allowed change is the reworded "no .mcp.json was written" note text, where a case asserts on it.
 - **Task 12 will add a setup step** that `init` runs whenever retrieval is on. These cases already set `retrievalEnv(cacheHome)` (stub on, cache in a temp dir) and plant both the model files and the runtime, so that step finds the runtime installed and the models cached, and runs neither `npm` nor a download. Task 12 edits none of them.
 - The retrieval-on case with a mobile `qa.driver` (or QA off) writes a `.mcp.json` holding only `harness-docs`: `.mcp.json` is written when `browserWiringApplies` **or** `retrievalApplies` holds, which `docs/cli.md` §3 and §6 restate (Task 19).
+
+**Deviations from plan:**
+
+- Plan asked that a retrieval-off profile contain neither `harness-docs` nor `mcp__harness-docs__search_docs` "anywhere". The base template's `_README` (Task 9) names the bare server in its launcher paragraph, so the test asserts `harness-docs` absent from `enabledMcpjsonServers` and the full tool entry absent from the whole document.
+- Plan's `phases.docs off` profile case cannot run through `init`: `config/check.ts` refuses `docs.retrieval: true` without `phases.docs`, so that arm calls `renderProfile` directly with the pair, on the precedent of the file's other direct-render tests.
+- `mergeInto`'s new label parameter is named `label`, not `fragment`, because `fragment` is already its second parameter's name.

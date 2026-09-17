@@ -1,0 +1,11 @@
+{
+  "_comment_docs_retrieval": "Docs-retrieval wiring, written by `autonomous-sdlc-harness init` only when `docs.retrieval` is on, and merged rather than overwritten on a re-run. The program is this repository's own docs-search-server.sh, in its configured scripts directory, which finds the machine-shared retrieval runtime `init` installed, so nothing is fetched at run time and no machine path is committed here. The generated permission profile starts this server and allows its one tool; turning retrieval on after that profile was written needs `init --force` to reach it.",
+  "mcpServers": {
+    "harness-docs": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["{{docsSearchServerPath}}"],
+      "env": {}
+    }
+  }
+}

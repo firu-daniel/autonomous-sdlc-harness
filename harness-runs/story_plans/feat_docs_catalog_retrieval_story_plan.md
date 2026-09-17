@@ -49,7 +49,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_docs_catalog_retrieval/task
 7. [x] **Task 7** — Hybrid search with rerank and abstention, and `docs search` _(layer: cli)_ _(points: 15)_
 8. [x] **Task 8** — `docs serve`: the stdio MCP server exposing `search_docs` _(layer: cli)_ _(points: 16)_
 9. [x] **Task 9** — The `docs-search-server.sh` launcher and `hr_cache_dir` _(layer: cli)_ _(points: 14)_
-10. [ ] **Task 10** — Retrieval wiring in `.mcp.json`, the permission-profile fragment and the ignore block _(layer: cli)_ _(points: 20)_
+10. [x] **Task 10** — Retrieval wiring in `.mcp.json`, the permission-profile fragment and the ignore block _(layer: cli)_ _(points: 20)_
 11. [ ] **Task 11** — The `init --docs-retrieval` flag, its prompt and the config write _(layer: cli)_ _(points: 12)_
 12. [ ] **Task 12** — Setup-time runtime install and model download, and `docs fetch-models` _(layer: cli)_ _(points: 18)_
 13. [ ] **Task 13** — The three `doctor` retrieval checks _(layer: cli)_ _(points: 18)_

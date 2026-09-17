@@ -52,12 +52,21 @@
 
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 
-import { createFixture, readJson, runCli, PACKAGE_ROOT } from './helpers/fixture.mjs';
+import {
+  createFixture,
+  plantModelFiles,
+  plantRetrievalRuntime,
+  readJson,
+  retrievalEnv,
+  runCli,
+  PACKAGE_ROOT,
+} from './helpers/fixture.mjs';
 
 /**
  * A module out of the compiled tree, refused with the same sentence {@link runCli} uses.
@@ -626,6 +635,70 @@ test('the phase on with a mobile driver carries no browser wiring, while the bro
     entries(browser, 'allow').some((entry) => entry.startsWith(MCP_PREFIX)),
     'the browser driver allow-listed no browser tool',
   );
+});
+
+/** The docs-retrieval half's server and its one tool entry, spelled as the contract. */
+const DOCS_SERVER = 'harness-docs';
+const DOCS_TOOL_ENTRY = 'mcp__harness-docs__search_docs';
+
+/**
+ * The profile `init` generates over a seeded config carrying `phases.docs` and `docs.retrieval` as
+ * given, under a throwaway retrieval cache with the stub models and the runtime planted.
+ */
+async function retrievalProfileFor(t, { docsPhase, retrieval }) {
+  const config = seededConfig({
+    phases: { docs: docsPhase },
+    docs: { root: 'docs', ...(retrieval ? { retrieval: true } : {}) },
+  });
+  const dir = await fixtureFor(t, { 'harness.config.json': config, 'docs/README.md': '# docs\n' });
+  const cacheHome = await mkdtemp(join(tmpdir(), 'harness-retrieval-cache-'));
+  t.after(() => rm(cacheHome, { recursive: true, force: true }));
+  await plantModelFiles(cacheHome);
+  await plantRetrievalRuntime(cacheHome);
+  const result = await runCli(dir, ['init'], retrievalEnv(cacheHome));
+  assert.equal(result.status, 0, `init exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+  return { profile: readJson(join(dir, PROFILE_FILE)), text: readFileSync(join(dir, PROFILE_FILE), 'utf8') };
+}
+
+/**
+ * Neither half of the retrieval wiring: no started docs server, and the tool entry nowhere in the
+ * document. The bare server name is not searched for in the whole text, because the base template's
+ * `_README` names it where it explains why the launcher script has no entry of its own.
+ */
+function assertNoRetrievalWiring(profile, text, label) {
+  assert.ok(
+    !(profile[ENABLED_SERVERS_KEY] ?? []).includes(DOCS_SERVER),
+    `${ENABLED_SERVERS_KEY} starts ${DOCS_SERVER} with ${label}`,
+  );
+  assert.ok(!text.includes(DOCS_TOOL_ENTRY), `${PROFILE_FILE} names ${DOCS_TOOL_ENTRY} with ${label}`);
+}
+
+test('retrieval on starts the docs server and allows its tool, and either gate off leaves both out', async (t) => {
+  const { profile } = await retrievalProfileFor(t, { docsPhase: true, retrieval: true });
+  assert.ok(
+    (profile[ENABLED_SERVERS_KEY] ?? []).includes(DOCS_SERVER),
+    `${ENABLED_SERVERS_KEY} does not start ${DOCS_SERVER}`,
+  );
+  assert.ok(entries(profile, 'allow').includes(DOCS_TOOL_ENTRY), `permissions.allow carries no ${DOCS_TOOL_ENTRY}`);
+
+  await t.test('docs.retrieval off', async (subtest) => {
+    const off = await retrievalProfileFor(subtest, { docsPhase: true, retrieval: false });
+    assertNoRetrievalWiring(off.profile, off.text, 'docs.retrieval off');
+  });
+
+  // Driven through the renderer rather than `init`: the config check refuses `docs.retrieval` without
+  // `phases.docs`, so no wired repository can carry this pair, and what is pinned is that the
+  // profile's own gate reads the phase too.
+  await t.test('phases.docs off', () => {
+    const repoRoot = join('/', 'fixture-work-root', 'fixture-project');
+    const profile = renderProfile({
+      repoRoot,
+      workRoot: join('/', 'fixture-work-root'),
+      config: seededConfig({ phases: { docs: false }, docs: { root: 'docs', retrieval: true } }),
+      written: [],
+    });
+    assertNoRetrievalWiring(profile, JSON.stringify(profile), 'phases.docs off');
+  });
 });
 
 test('the phase carries the one instruction an adopter must act on by hand, and only when it is on', async (t) => {
