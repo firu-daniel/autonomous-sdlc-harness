@@ -53,19 +53,20 @@ The thing worth pointing at on a whiteboard is that **every review phase has the
 
 **Isolating the interactive-test phase is the hard part of running several at once.** Two runs sharing a git working copy is prevented by construction, but a dev server, a browser and a set of test accounts are all outside git. So the phase binds its **own** port — probing for the first free one at or above the configured seed, failing loudly on a collision instead of sliding quietly to the next port, and naming that same port again at teardown so a finishing run never kills a sibling's server. Each per-test dispatch is a fresh **agent** session but not a fresh browser — the browser servers are session-level and shared across dispatches — so the tester clears the application's client storage itself before its first step, which is what buys clean per-test attribution *within* a run; the port and the account locks, not that step, are what keep two runs apart. Test accounts are reserved through a **machine-global** lock set rather than a per-working-copy one — deliberately, because two working copies of the same repository are exactly the pair that would otherwise park the same account.
 
-**The exit.** A session's outcome is classified from the engine's real exit code **plus the sentinels it left behind**, into one of the four terminal states in the harness repository's `docs/watcher.md` §1. That the classification lives out there rather than in a session-end hook is a design decision, not an accident: the plugin declares only `PreToolUse` guards and no session-end hook, because a hook inside the session can only report that the session ended — it cannot tell a run that parked with a question from one that finished from one that died.
+**The exit.** A session's outcome is classified from the engine's real exit code **plus the sentinels it left behind**, into one of the five terminal states in the harness repository's `docs/watcher.md` §1. That the classification lives out there rather than in a session-end hook is a design decision, not an accident: the plugin declares only `PreToolUse` guards and no session-end hook, because a hook inside the session can only report that the session ended — it cannot tell a run that parked with a question from one that finished from one that died.
 
 ## The ways a run stops, and which of them come back
 
 | | Who initiates | Comes back? | Mechanism |
 |---|---|---|---|
-| **Park** | the run, because it has a question | yes, when the paired answer lands | writes a question file under `<state_dir>/clarifications/<branch>/` and **ends the session** |
+| **Park** | the run, because it has a question | yes, when the park's question file is answered | writes a question file under `<state_dir>/clarifications/<branch>/` and **ends the session** |
 | **Operator pause** | a person | on a `RESUME` sentinel | `PAUSE` request → the run yields at a clean boundary → `PAUSE_ACK` |
 | **Usage pause** | the usage gate, on the account's own rate-limit signal | yes, when the window resets | the same protocol, plus a recorded resume time the gate acts on |
 | **Self-pause** | the run, after repeated infrastructure failures on one dispatch | no — an outage has no predictable reset | writes the ack directly, with no request from anyone |
 | **Per-run brake** | a person | no | `<state_dir>/STOP` in one working copy, checked by the run before every dispatch |
 | **Global kill switch** | a person | no | `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP`, which also blocks new launches and resumes |
 | **Stall watchdog** | nobody — the control plane, on a run that is alive but hung | yes, up to its restart cap | kills the process tree and brings the run back through the ordinary resume path |
+| **Park-loop guard** | nobody — the control plane, on a run whose resumes make no progress | once an operator clears it | stops resuming the run and records `park_loop` |
 
 The protocol behind the first four is `${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md`, the two brakes are `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md` → `## Safety / reversibility`, and the daemon's half of all of it is the harness repository's `docs/watcher.md` §4.
 
@@ -117,7 +118,7 @@ Three boxes and one arrow each way — **inbox → control plane → engine → 
 
 ## The questions that get asked, and short answers
 
-**"How do you stop it going off the rails?"** Independent limits, each on a different axis: a convergence cap per writer/reviewer loop (five iterations, then it halts and surfaces the findings), a hard dispatch ceiling per session, a re-test round cap, a per-run brake and a global kill switch — plus a deny floor that beats every allow. The values live in the instruction cores that enforce them. Nothing retries forever, and anything that hits a cap stops and says so.
+**"How do you stop it going off the rails?"** Independent limits, each on a different axis: a convergence cap per writer/reviewer loop (five iterations, then it halts and surfaces the findings), a hard dispatch ceiling per session, a re-test round cap, a per-run brake, a global kill switch and a park-loop guard that stops resuming a run whose resumes make no progress — plus a deny floor that beats every allow. The values live in the instruction cores that enforce them. Nothing retries forever, and anything that hits a cap stops and says so.
 
 **"How does it ask a question without blocking?"** By an explicit ask-vs-assume policy: a low-stakes, reversible decision is assumed, documented in the plan, and the run continues; a high-stakes or irreversible one that cannot be resolved from the sources becomes a self-contained question file and the run **ends its session**. Parking costs nothing while it waits. The control plane notices the answer, re-launches the same entry point in the same working copy, and archives the pair only *after* that resumed session exits — consume-then-archive, so the answer is neither missed on re-entry nor processed twice.
 
