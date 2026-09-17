@@ -12,7 +12,7 @@ The one cut this file makes is the **engine axis** — the sites at which the ha
 
 - **[shipped]** [`README.md`](README.md) — what the two halves ship, and the scope-and-limits list. Its *Claude-bound today* bullet states the current position in one paragraph; this document expands that bullet and does not restate it.
 - **[shipped]** [`docs/watcher.md`](docs/watcher.md) — the outer loop's behaviour: what a dropped file becomes, which script does what, the daemon's lifecycle, and the machine-level usage lane.
-- **[shipped]** [`docs/cli.md`](docs/cli.md) — the four subcommands, their flags, exit codes and re-run contract.
+- **[shipped]** [`docs/cli.md`](docs/cli.md) — the five subcommands, their flags, exit codes and re-run contract.
 - **[shipped]** [`docs/config.md`](docs/config.md) — one row per configuration value and parameterization token, and where each one's value comes from.
 - **[shipped]** [`schemas/README.md`](schemas/README.md) — the configuration boundary: what belongs in the committed configuration file and what belongs in machine-local state.
 - **[shipped]** [`plugin/docs/AUTONOMOUS_FLOW.md`](plugin/docs/AUTONOMOUS_FLOW.md) — the inner loop: the phases a run walks, the artifacts it writes, and what it promises when it stops.

@@ -52,7 +52,7 @@ You install two things: a Claude Code plugin and a Node CLI.
 flowchart TB
   subgraph ship["What ships"]
     P["plugin/ — the Claude Code plugin<br/>agents · branch-* commands · /harness-analyze<br/>PreToolUse guard hooks · instruction cores and forks<br/>samples · helper scripts · flow documents"]
-    C["cli/ — the npm package autonomous-sdlc-harness<br/>init · doctor · config · daemon"]
+    C["cli/ — the npm package autonomous-sdlc-harness<br/>init · doctor · config · daemon · docs"]
   end
   subgraph repo["An adopted repository, after init"]
     CFG["harness.config.json — layers, commands,<br/>protectedBranches, stateDir, phases"]
@@ -83,13 +83,13 @@ Every reference inside the plugin is written `${CLAUDE_PLUGIN_ROOT}/…`. It is 
 
 The inventory is [`plugin/README.md`](plugin/README.md). Why the flow documents travel inside the plugin is [`plugin/docs/README.md`](plugin/docs/README.md).
 
-**The CLI is the npm package that carries the outer loop:** `init`, `doctor`, `config` and `daemon`.
+**The CLI is the npm package that carries the outer loop:** `init`, `doctor`, `config` and `daemon`, with `docs` beside them.
 
 It is a separate package because a plugin cannot write a repository's `settings.json`. Getting that permission profile right is the hardest part of adoption.
 
-`init` wires a repository in one deterministic pass. `doctor` re-checks it. `config` reads and updates one configuration key at a time. `daemon` installs, starts and stops the run daemon, and lists the repositories on this machine that have one.
+`init` wires a repository in one deterministic pass. `doctor` re-checks it. `config` reads and updates one configuration key at a time. `daemon` installs, starts and stops the run daemon, and lists the repositories on this machine that have one. `docs` is an opt-in, local search over the docs catalog and the conventions documents, served to the plan writer and the reviewers as an MCP tool; it is off by default and not yet measured against reading the docs index first.
 
-The four commands are [`docs/cli.md`](docs/cli.md). The package's own recorded decisions are [`cli/README.md`](cli/README.md).
+The five commands are [`docs/cli.md`](docs/cli.md). The package's own recorded decisions are [`cli/README.md`](cli/README.md).
 
 **A drop becomes a pushed branch** with no queue server, webhook or scheduler in between. One file lands in `<state_dir>/autonomous_inbox/`, written by hand or by the conversational offer, and the next poll pass acts on it.
 
@@ -214,7 +214,8 @@ What this harness does not do, in three groups: the shape of the system as desig
 
 - [`docs/watcher.md`](docs/watcher.md) — the outer loop: what turns a dropped file into an unattended run, which script does what, the daemon's lifecycle, and the machine-level usage lane.
 - [`docs/analyze.md`](docs/analyze.md) — `/harness-analyze`'s decisions of record: what it fills in from real code, what it refuses to guess, and how the offer to run it reaches a session.
-- [`docs/cli.md`](docs/cli.md) — the four subcommands, their flags and exit codes, the `init` re-run contract, the stack-detection table, and the failure modes the generated permission profile encodes.
+- [`docs/cli.md`](docs/cli.md) — the five subcommands, their flags and exit codes, the `init` re-run contract, the stack-detection table, and the failure modes the generated permission profile encodes.
+- [`docs/retrieval.md`](docs/retrieval.md) — docs retrieval: opt-in, local, not yet measured; its design, measured facts and trade-offs.
 - [`docs/config.md`](docs/config.md) — one row per configuration value and parameterization token, saying where each one's value comes from.
 - [`docs/development.md`](docs/development.md) — changing a file in this repository: running the plugin from a working copy, what that forces on references between assets, and which commands decide whether a change is good.
 - [`docs/outer-loop-verification.md`](docs/outer-loop-verification.md) — what the outer-loop scripts do when driven, and which paths ship unexercised.
