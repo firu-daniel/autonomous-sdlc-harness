@@ -37,3 +37,10 @@
 - The new section cites `cli/src/retrieval/server.ts` by repo-relative path, not by a `${CLAUDE_PLUGIN_ROOT}` path (`.claude/context/plugin.md` → `## Citation`).
 - `grep -n "docs-search-server.sh" plugin/hooks/autonomous-script-allowlist-guard.sh plugin/hooks/README.md` returns a hit in the guard's *LEFT ALLOWED* comment and one in the deny-list section's allowed list; `git diff plugin/hooks/autonomous-script-allowlist-guard.sh` touches only lines beginning with `#`, and `DENY_SCRIPT_BASENAMES` still holds exactly its four entries.
 - `bash scripts/test.sh` and `bash scripts/run-gates.sh` exit zero with the same results as before this task (the guard's behaviour is unchanged).
+
+**Deviations from plan:**
+
+- The rule sentence as quoted leaves four non-granted files unaccounted for (`docs-reviewer`, `statistics-plan-writer`, `conventions-writer`, `conventions-reviewer`); `statistics-plan-writer` in particular reads as a "plan writer" by name. Implemented the quoted sentence and extended its exclusion clause to name them, so the rule is true of every file in `plugin/agents/`.
+- The re-derive command `grep -rln "mcp__harness-docs__search_docs" plugin/agents` returns eleven files once `README.txt` names the tool itself. The README states `grep -rln --include='*.md' …` instead, which was run and returns exactly the ten; the plan's own first Verification bullet is met against that form.
+- Evidence downgrade: `claude plugin validate --strict plugin` was refused by the permission layer (requires approval) and was not run; the claim rests on reading only — the edits add no `.md` file under `plugin/agents/` and touch no frontmatter or manifest.
+- Evidence downgrade: `bash scripts/test.sh` (which runs `run-gates.sh`) exits 1 on gate `6a no machine paths`, whose only hits are the worktree's untracked `.git` pointer file and pre-existing `harness-runs/` artifacts quoting it — none in a file this task touched. The other 12 gates pass. Not a same-as-before comparison run.
