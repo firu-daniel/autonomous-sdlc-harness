@@ -36,3 +36,8 @@
 - Every sentence this task added or changed that makes a claim about the system opens with `**[shipped]**`, `**[designed]**` or `**[external]**` (`ARCHITECTURE.md` §2). Check with `git diff -U0 ARCHITECTURE.md`.
 - `git diff ARCHITECTURE.md` touches only §6's permission-model row, §7's one bullet and §10's two sub-sections named above, plus Task 23's *"five subcommands"* line. `git grep -n -E "items? [0-9]+" -- ARCHITECTURE.md` reports no line this task added.
 - `bash scripts/run-gates.sh` passes gate 6a (no machine paths): the new text names `<scriptsDir>/docs-search-server.sh` and `docs serve`, never a cache path.
+
+**Deviations from plan:**
+
+- The plan says the third §10 grep "now also prints `repoRoot.ts`'s retrieval reader". Measured: `grep -rn 'mcpServers' plugin/ cli/src/ | grep -v templates` prints the same four lines on this branch as on `main` (the `SERVERS_KEY` constant and one doc comment in each of `cli/src/generators/repoRoot.ts` and `cli/src/doctor/checks.ts`); `retrievalWiring` reads the key through that shared constant and adds no printed line. The interpreting sentence was restated to cover what is printed: the generator merging both templates through one key constant its browser and retrieval readers share, and the `doctor` check reading the file back, with the server located in `cli/src/retrieval/server.ts`.
+- Gate 6a fails in `bash scripts/test.sh`, on hits outside this task's diff only: the worktree's untracked `.git` pointer file, `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md`, and a `harness-runs/scratch/` log. No hit is in `ARCHITECTURE.md`; every other automated gate passed.
