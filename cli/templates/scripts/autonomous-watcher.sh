@@ -1428,8 +1428,7 @@ spawn_engine() {
   # On a RESUME, name every top-level answer file the watcher just unblocked so
   # the engine consumes all of them (the planning fork detects the resume from
   # those top-level answer_<n>.md files; the watcher archives exactly that set
-  # only after this run exits — the consume-then-archive contract). The clause's
-  # wording is quoted by the engine's Override 2(a); change both together.
+  # only after this run exits — the consume-then-archive contract).
   local resume_clause=""
   if [ -n "$resume_indexes" ]; then
     local i resume_files=""
