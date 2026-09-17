@@ -320,6 +320,9 @@ const APP_DIR_FLAG = '--app-dir';
 /** The flag that answers the QA-driver question — named in the prompt, the refusal and the note. */
 const QA_DRIVER_FLAG = '--qa-driver';
 
+/** The flag that answers the docs-retrieval question, read by its option row, its refusal and its prompt. */
+const DOCS_RETRIEVAL_FLAG = '--docs-retrieval';
+
 /**
  * The two spellings that answer the analyze offer — one accept, one decline, and neither given is
  * the state {@link resolveAnalyzeOffer} answers with the documented default.
@@ -600,7 +603,7 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
   },
   {
     key: 'docsRetrieval',
-    flag: '--docs-retrieval',
+    flag: DOCS_RETRIEVAL_FLAG,
     kind: 'switch',
     summary: 'Turn docs retrieval on: a local search tool over the docs and conventions (with --docs)',
     configValue: 'docs.retrieval',
@@ -833,7 +836,7 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
   // `phases.docs` is a config-check error, so the generated config would fail the write guard.
   if (switches.has('docsRetrieval') && !switches.has('docs')) {
     throw new HarnessError(
-      'init: --docs-retrieval needs --docs: retrieval searches the documentation corpus the docs phase maintains, so it is legal only with that phase on',
+      `init: ${DOCS_RETRIEVAL_FLAG} needs --docs: retrieval searches the documentation corpus the docs phase maintains, so it is legal only with that phase on`,
     );
   }
 
@@ -1236,7 +1239,7 @@ function askRetrieval(ctx: CommandContext): boolean | undefined {
       question:
         'Turn on docs retrieval? It adds a local search tool over the docs and conventions for the plan writer and reviewers. Setup installs about 300 MB of local runtime and downloads two small models into a cache shared by every checkout on this machine. Off by default.',
       defaultAnswer: false,
-      flag: '--docs-retrieval',
+      flag: DOCS_RETRIEVAL_FLAG,
       flagHint: 'to turn it on without being asked',
     },
     promptCtx,
