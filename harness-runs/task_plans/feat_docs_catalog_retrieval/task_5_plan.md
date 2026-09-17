@@ -18,6 +18,11 @@
 - `cli/src/retrieval/refresh.ts` (new).
 - `cli/src/core/writer.ts` — the header paragraph declaring the per-checkout index as the one in-repository write outside the engine.
 
+**Deviations from plan:**
+
+- `store.ts` additionally records the `embedding` column's width in `meta` under `dimensions`; `openPgliteStore` over an index built at another width drops `chunks` and the `embedder` record, so the next refresh rebuilds instead of failing on `vector(<n>)`. The plan's schema is `CREATE TABLE IF NOT EXISTS`, which would otherwise keep the old width. Executed in `harness-runs/scratch/task5-store-probe.mjs`.
+- `store.ts` exports `EMBEDDER_META_KEY` and `refresh.ts` imports it, so the meta key has one producer; the arm result type is named `RankedId` (same shape as the plan's inline `{ id; rank }`).
+
 **Work:**
 
 - [ ] `store.ts`: export `INDEX_DIR_NAME = 'docs_index'` and `indexDataDir(repoRoot: string, stateDir: string): string`, which is `<repoRoot>/<normalizeRepoDir(stateDir)>/docs_index`. Task 10's ignore rule reads the name from here. Export the interface:

@@ -44,7 +44,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_docs_catalog_retrieval/task
 2. [x] **Task 2** — Retrieval cache paths and the optional-dependency loader _(layer: cli)_ _(points: 16)_
 3. [x] **Task 3** — Embedder and reranker interfaces, the Transformers.js models and the deterministic stubs _(layer: cli)_ _(points: 15)_
 4. [x] **Task 4** — Heading chunker and corpus enumeration _(layer: cli)_ _(points: 10)_
-5. [ ] **Task 5** — The PGlite index store and incremental refresh _(layer: cli)_ _(points: 16)_
+5. [x] **Task 5** — The PGlite index store and incremental refresh _(layer: cli)_ _(points: 16)_
 6. [ ] **Task 6** — The `docs index` verb and the fixture-corpus suite _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — Hybrid search with rerank and abstention, and `docs search` _(layer: cli)_ _(points: 15)_
 8. [ ] **Task 8** — `docs serve`: the stdio MCP server exposing `search_docs` _(layer: cli)_ _(points: 16)_

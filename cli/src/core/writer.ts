@@ -9,12 +9,19 @@
  * file it is writing out of the table below; it does not invent one, and it never calls `fs`
  * itself.
  *
- * **One artifact is deliberately outside this engine**, and it is machine state rather than an
+ * **Two writes are deliberately outside this engine.** The first is machine state rather than an
  * adopter's file: the repository registry `machine/registry.ts` owns, which `daemon install`
  * rewrites in place. Its header states why none of the four policies below fits it. The daemon
  * unit and the push-notification settings file *are* on a plan, under `allowOutsideRepo` — they
  * are create-if-absent artifacts an operator goes on to edit, which is exactly what this engine
- * is for.
+ * is for. The second is an exception to this engine's monopoly on writing into an adopting
+ * repository: the per-checkout docs-retrieval index under `<stateDir>/docs_index/`
+ * (`INDEX_DIR_NAME`), a derived, gitignored, always-rebuildable cache that
+ * `cli/src/retrieval/store.ts` → `openPgliteStore` creates and PGlite persists into at query time,
+ * never an `init` artifact. `cli/src/retrieval/store.ts` is the **one** module that makes that write
+ * and `<stateDir>/docs_index/` the **one** path. `.claude/context/conventions.md` →
+ * `### Where a new responsibility goes` does not yet record the exception; it is raised for a
+ * supervised amendment.
  *
  * ## The re-run contract, per artifact
  *
