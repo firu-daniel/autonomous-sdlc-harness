@@ -156,7 +156,13 @@ npx autonomous-sdlc-harness daemon start
 
 Then just ask for the change. An ordinary interactive session in this repository offers to run a change request autonomously, and on a yes it invokes `/autonomous-sdlc-harness:branch-prompt` with the request. The offer is defined by two files `init` writes: [`cli/templates/claude/CLAUDE.md`](cli/templates/claude/CLAUDE.md) and [`cli/templates/claude/harness-task-offer.md`](cli/templates/claude/harness-task-offer.md).
 
-Two direct routes reach the same drop: `/autonomous-sdlc-harness:branch-prompt` itself, or a file named `<branch>_task_prompt.md` written into `<state_dir>/autonomous_inbox/` ([`docs/config.md`](docs/config.md) §3). The next poll pass acts on it, as [`docs/watcher.md`](docs/watcher.md) §1 describes.
+Two direct routes reach the same drop. The first is the command itself, typed into an interactive Claude Code session with the task description on the same line:
+
+```
+/autonomous-sdlc-harness:branch-prompt <task description>
+```
+
+The second is a file named `<branch>_task_prompt.md` written into `<state_dir>/autonomous_inbox/` ([`docs/config.md`](docs/config.md) §3). The next poll pass acts on either, as [`docs/watcher.md`](docs/watcher.md) §1 describes.
 
 **F. A teammate clones.** `git clone` → open the repository in Claude Code → **accept the workspace trust dialog** → the plugin resolves from the keys `init` committed into `.claude/settings.json`, with `/reload-plugins` for a session that was already open. Then verify:
 
