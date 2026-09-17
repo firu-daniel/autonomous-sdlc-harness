@@ -19,3 +19,7 @@
 
 - `bash scripts/test.sh` exits 0, including the stack cases whose expected-warning maps carry the respelled key.
 - `grep -n '/harness-analyze' cli/src/detect/presets.ts cli/test/stack-presets.test.mjs` prints nothing. The qualified form does not contain that substring, so any line it prints is a site this task missed.
+
+**Deviations from plan:**
+
+- `bash scripts/test.sh` exited 1, not 0, and the failures are outside this task's targets. Gate 4 (`npm test`) had one failing test: `init.test.mjs` → *"an api-service tree with a directory beside its routes: both commands name it"*. `init.test.mjs` still expects `ANALYZE_FIRST_REMEDY` qualified, as Task 2 left it, while `doctor`'s layer-gap remedy still prints `/harness-analyze`, and that is Task 4's target (`cli/src/doctor/checks.ts`). Gate 6a failed on this worktree's untracked `.git` pointer file. Every `stack-presets.test.mjs` case passed (`ok 163 - stack detection maps each seeded layout to its preset`), and `bash scripts/typecheck.sh` passed.
