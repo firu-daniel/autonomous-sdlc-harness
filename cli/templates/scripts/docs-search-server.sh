@@ -16,7 +16,9 @@
 # THE RUNTIME IS THE ONLY THING THIS RUNS, with no fallback to any other
 # installation: a committed `.mcp.json` cannot know where an adopter's own CLI
 # lives. `doctor`'s `retrieval-dependencies` check and `init`'s install both key
-# on the same entry file this script tests.
+# on the same entry file this script tests. `PATH` is settled through the
+# library's fallback list before the `exec`, because the starter is the agent
+# runner rather than a login shell.
 #
 # MIRRORS — a change to any owner below is an edit here too:
 #   `retrieval/runtime` and `node_modules/autonomous-sdlc-harness/dist/cli.js`
@@ -36,6 +38,12 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/harness-run-lib.sh
 . "$script_dir/lib/harness-run-lib.sh"
+
+# The agent runner starts this script, and a runner launched from a desktop session carries a
+# minimal PATH. The library appends the usual locations without promoting any of them, which is the
+# same bootstrap autonomous-watcher.sh runs for the same reason.
+PATH="$(hr_path_with_fallbacks)"
+export PATH
 
 if ! root="$(hr_repo_root "$script_dir")"; then
   echo "docs-search-server: $script_dir is not inside a git repository, so there is no checkout to serve" >&2
