@@ -32,7 +32,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_watcher_multi_question_r
 4. [x] **Task 4** — Tests: the observed multi-question sequence, mid-session answers and late questions _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Tests: the loop guard trips, clears, and never catches a real double park _(layer: cli)_ _(points: 20)_
 6. [x] **Task 6** — State-dir READMEs: one question file per park, and the consumed-set archive _(layer: cli)_ _(points: 10)_
-7. [ ] **Task 7** — Planning fork: redefine the clarification channel as one exchange per park _(layer: plugin)_ _(points: 15)_
+7. [x] **Task 7** — Planning fork: redefine the clarification channel as one exchange per park _(layer: plugin)_ _(points: 15)_
 8. [ ] **Task 8** — The other three autonomous forks write and consume one exchange per park _(layer: plugin)_ _(points: 15)_
 9. [ ] **Task 9** — Shared modules: digest a whole park per block, and the ledger's resume sentence _(layer: plugin)_ _(points: 10)_
 10. [ ] **Task 10** — Commands: answer a whole park, and name the `park_loop` status and its clear action _(layer: plugin)_ _(points: 15)_
