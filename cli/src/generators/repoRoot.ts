@@ -274,7 +274,13 @@ export interface RepoRootOptions {
   readonly plan: WritePlan;
 }
 
-/** What the generator produced, for `init`'s summary and for `doctor`. */
+/**
+ * What the generator produced, for `init`'s summary and for `doctor`.
+ *
+ * `.mcp.json` is written when **either** {@link RepoRootResult.browserWired} or
+ * {@link RepoRootResult.retrievalWired} is true — the two servers share one file — so a caller asking
+ * whether that file was enqueued reads the disjunction off this type rather than re-deriving it.
+ */
 export interface RepoRootResult {
   /** Repo-relative paths enqueued, in the order they were enqueued. */
   readonly files: readonly string[];
@@ -285,7 +291,7 @@ export interface RepoRootResult {
    * the browser one ({@link browserWiringApplies}), which is the driver-gated condition rather than
    * the phase alone: a mobile-driver repository has the phase on and no browser server declared.
    */
-  readonly mcpWritten: boolean;
+  readonly browserWired: boolean;
   /** True when the docs-retrieval server was enqueued into `.mcp.json` ({@link retrievalApplies}). */
   readonly retrievalWired: boolean;
   /** Informational lines, one each, for the reporter's `info`. */
@@ -672,5 +678,5 @@ export function writeRepoRootFiles({ repoRoot, config, plan }: RepoRootOptions):
     .map((line) => line.trim())
     .filter((line) => line !== '' && !line.startsWith('#'));
 
-  return { files, ignored, mcpWritten: wiresBrowser, retrievalWired: wiresRetrieval, notes };
+  return { files, ignored, browserWired: wiresBrowser, retrievalWired: wiresRetrieval, notes };
 }

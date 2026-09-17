@@ -8,8 +8,8 @@
 
 **Fix:** either give the pair a reader or make the names true. The smaller edit, and the one that keeps the module's shape, is to rename and re-word:
 
-- [ ] Rename `mcpWritten` to `browserWired`, mirroring `retrievalWired`, and keep its comment's `browserWiringApplies` explanation.
-- [ ] Add one sentence to `RepoRootResult`'s own doc comment stating that `.mcp.json` is written when either flag is true, so a future caller reads the disjunction off the type rather than re-deriving it.
-- [ ] Update the single `return` site: `return { files, ignored, browserWired: wiresBrowser, retrievalWired: wiresRetrieval, notes };`
+- [x] Rename `mcpWritten` to `browserWired`, mirroring `retrievalWired`, and keep its comment's `browserWiringApplies` explanation.
+- [x] Add one sentence to `RepoRootResult`'s own doc comment stating that `.mcp.json` is written when either flag is true, so a future caller reads the disjunction off the type rather than re-deriving it.
+- [x] Update the single `return` site: `return { files, ignored, browserWired: wiresBrowser, retrievalWired: wiresRetrieval, notes };`
 
 Nothing imports either field, so the rename compiles with no other edit and no test changes.
