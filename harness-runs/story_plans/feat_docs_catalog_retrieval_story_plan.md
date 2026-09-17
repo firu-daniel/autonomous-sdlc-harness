@@ -57,7 +57,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_docs_catalog_retrieval/task
 15. [x] **Task 15** — Grant `search_docs` to the five agents that already read `<docs_root>` _(layer: plugin)_ _(points: 15)_
 16. [x] **Task 16** — Grant `search_docs` to the other five agents in the granted set _(layer: plugin)_ _(points: 15)_
 17. [x] **Task 17** — Record the ten-agent grant in `plugin/agents/README.txt`, the verb in `plugin/README.md`, and the launcher in the guard's left-allowed set _(layer: plugin)_ _(points: 11)_
-18. [ ] **Task 18** — Add the `docs.retrieval` schema property, its phase clause and a negative fixture _(layer: general)_ _(points: 10)_
+18. [x] **Task 18** — Add the `docs.retrieval` schema property, its phase clause and a negative fixture _(layer: general)_ _(points: 10)_
 19. [ ] **Task 19** — Document the key and the token in `docs/config.md`, and retrieval in `docs/cli.md`'s `init` sections _(layer: general)_ _(points: 14)_
 20. [ ] **Task 20** — Document the `docs` verb, the `doctor` retrieval checks and the launcher in `docs/cli.md` _(layer: general)_ _(points: 17)_
 21. [ ] **Task 21** — Write `docs/retrieval.md`: the design, the model choice, the measured facts and the trade-offs _(layer: general)_ _(points: 20)_
