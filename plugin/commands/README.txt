@@ -10,7 +10,7 @@ landed the nineteen `branch-*` commands beside this file: the four supervised
 ones, the semi-autonomous pair, the two autonomous entry points, the four
 user-review commands across those modes, the phase-gated documentation and
 browser-QA commands, and the five run-control entry points. Not every command
-here is a `branch-*` one: item 15 added `/harness-analyze`, the supervised
+here is a `branch-*` one: item 15 added `/autonomous-sdlc-harness:harness-analyze`, the supervised
 first-session command that fills the conventions documents `init` writes as
 skeletons from the adopted repository's real code. Each command body reaches its
 instruction, sample and script assets as `${CLAUDE_PLUGIN_ROOT}/<dir>/<file>`,

@@ -36,7 +36,7 @@ You are the **orchestrator** for the whole session. You do not draft the fix pla
 
 The same command serves both entry points — there is **no** separate `-watch` command (to "watch" is simply to run this engine interactively):
 
-- **(a) Manual / interactive** — the user invokes `/branch-start-user-review-fix-autonomous` themselves on the branch and watches the heartbeat live (`[fix-plan-write · iter <i>]` lines from the fix-plan loop, then the fix loop's `[A · Item <N> · <layer> · iter <i>]` and `[QA · …]` heartbeats, whose format and examples are canonical in `user_review_fixes_instructions_core.md` → `## Safety contract — applies before EVERY Agent dispatch` step 3 and its `## Phase QA — UI-test augment + QA loop`). This is the de-risking validation point and is simplest in the **main** worktree on the current branch, where every path anchor already matches. Clarification questions surface **live** for inline answering (supervised behavior).
+- **(a) Manual / interactive** — the user invokes `/autonomous-sdlc-harness:branch-start-user-review-fix-autonomous` themselves on the branch and watches the heartbeat live (`[fix-plan-write · iter <i>]` lines from the fix-plan loop, then the fix loop's `[A · Item <N> · <layer> · iter <i>]` and `[QA · …]` heartbeats, whose format and examples are canonical in `user_review_fixes_instructions_core.md` → `## Safety contract — applies before EVERY Agent dispatch` step 3 and its `## Phase QA — UI-test augment + QA loop`). This is the de-risking validation point and is simplest in the **main** worktree on the current branch, where every path anchor already matches. Clarification questions surface **live** for inline answering (supervised behavior).
 - **(b) Watcher / headless** — the watcher (`<scripts_dir>/autonomous-watcher.sh`) launches this same command with `claude -p` plus the generated permission profile via `--settings`, inside the branch's worktree. Clarification questions are written to `<state_dir>/clarifications/<branch>/question_<n>.md`, the run yields, and the watcher marks it `parked` and resumes on an answer.
 
 A thin `-watch` wrapper is acceptable **only** if it adds ergonomics (e.g. "run in the current worktree, skip the watcher") and contains **no** duplicated orchestration. Default to not adding one.
@@ -80,7 +80,7 @@ Per-run statistics and the Done summary stay **per-worktree** (each run writes `
 
 **Round-aware by inheritance:** a dropped `<branch>_review_2.md` drives `<branch>_fix_plan_2.md` / `<branch>_fix_plan_2/` via the shared fix-plan core's latest-round resolution (canonical in `user_review_fix_plan_writing_instructions_core.md`, `## Flow` steps 2–3) — never re-implemented here.
 
-**Manual smoke validation (after installing the plugin):** invoke `/branch-start-user-review-fix-autonomous` interactively on a branch with a `<branch>_review.md` present and confirm it resolves the round, runs both gates, and proceeds straight into fix implementation without an approval pause.
+**Manual smoke validation (after installing the plugin):** invoke `/autonomous-sdlc-harness:branch-start-user-review-fix-autonomous` interactively on a branch with a `<branch>_review.md` present and confirm it resolves the round, runs both gates, and proceeds straight into fix implementation without an approval pause.
 
 ## Retaining improvement observations — read before step 1
 

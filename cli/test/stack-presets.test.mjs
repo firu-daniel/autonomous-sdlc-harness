@@ -766,8 +766,8 @@ const CODEGEN_NOTE = 'generates sources before they analyse';
  * in layers keeps the four-layer profile it has today and gains only the pair of commands it was
  * missing — that is case (k), and it is a regression control before it is a feature test. The row
  * catches what fell to `flat`: the feature-first `lib/`, whose decomposition into features is a
- * judgement call and therefore `/harness-analyze`'s, so the preset names the one directory that is
- * certain.
+ * judgement call and therefore `/autonomous-sdlc-harness:harness-analyze`'s, so the preset names the
+ * one directory that is certain.
  *
  * The tool has **two positives**: an application marker file, or a Flutter SDK dependency in the
  * manifest. That manifest read decides only the tool of an already-selected preset, never which
@@ -2861,7 +2861,7 @@ test('the general-only warning names the disposition doctor will grade, per pres
     signal: 'monorepo:workspaces-key',
     layers: ['general'],
     warningCounts: {
-      "`/harness-analyze`'s to propose": 1,
+      "`/autonomous-sdlc-harness:harness-analyze`'s to propose": 1,
       'grades this a decision rather than drift': 1,
     },
   });
@@ -2882,7 +2882,7 @@ test('the general-only warning names the disposition doctor will grade, per pres
     signal: 'api-service:go-module',
     layers: ['general'],
     warningCounts: {
-      "`/harness-analyze`'s to propose": 1,
+      "`/autonomous-sdlc-harness:harness-analyze`'s to propose": 1,
       'grades this a decision rather than drift': 0,
     },
   });

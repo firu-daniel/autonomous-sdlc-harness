@@ -45,12 +45,12 @@ import { join, posix } from 'node:path';
 
 import { DEFAULTS, type HarnessConfig, type HarnessLayer } from '../config/model.js';
 import { defaultProjectName, readTemplate } from '../core/paths.js';
+import { ANALYZE_COMMAND, PLUGIN_NAME } from '../core/pluginIdentity.js';
 import { normalizeRepoPathStrict } from '../core/repoPaths.js';
 import { renderTemplate } from '../core/templating.js';
 import type { WritePlan } from '../core/writer.js';
 import { SHARED_CONVENTIONS_PATH } from '../detect/presets.js';
 import { PUSH_ENV_PATH, QA_CREDENTIALS_PATH } from './harnessConfig.js';
-import { PLUGIN_NAME } from './projectSettings.js';
 
 /** The adopter-side directory this whole template subtree lands in. The dot is `init`-side only. */
 const CLAUDE_DIR = '.claude';
@@ -123,8 +123,8 @@ const CONTEXT_TEMPLATE_DIR = 'context';
  *   skeletons for three concerns no preset detects — local persistence, a documentation catalog,
  *   shared application state. Nothing `init` generates points at them, and the one route that reads
  *   one is an adopter pointing a `layers[].conventions` at that exact basename and re-running
- *   `init`. A path a `/harness-analyze` layer-profile revision newly names does **not** reach them:
- *   that command never re-runs `init`, so `conventions-writer` composes the document with no file
+ *   `init`. A path a `/autonomous-sdlc-harness:harness-analyze` layer-profile revision newly names
+ *   does **not** reach them: that command never re-runs `init`, so `conventions-writer` composes the document with no file
  *   behind it. They are kept rather than deleted because writing one of those documents from
  *   nothing is the expensive part, and they are named here so a later reader does not take them for
  *   dead templates.
@@ -195,9 +195,6 @@ export function isUntouchedSkeletonText(content: string): boolean {
  * still covered by the no-argument pass.
  */
 export const RESERVED_ANALYZE_TARGETS = ['project', 'conventions', 'layers'] as const;
-
-/** The command each stub footer points at, argument appended. */
-const ANALYZE_COMMAND = '/harness-analyze';
 
 /**
  * The delimiters of the **setup-pending banner** the generated project file carries under its
@@ -629,6 +626,7 @@ export function writeClaudeContext({
     setupBanner: setupBanner(analyzeOffer),
     routingRows: routingRows(stubs, sharedPath, stateDir),
     stateDir,
+    pluginName: PLUGIN_NAME,
   });
   const keepClaudeMd = force && keepsIdenticalProjectFile(repoRoot, claudeMdContent);
 

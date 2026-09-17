@@ -118,17 +118,17 @@
         "review": {
           "type": "object",
           "additionalProperties": false,
-          "description": "The verdict a layer-profile review reached on the detected profile, so a decline leaves a trace rather than nothing. Written by the '/harness-analyze' command's 'layers' target through 'config set detection.review', never by 'init'; read by 'doctor', whose 'layer-profile' check this record is what clears.",
+          "description": "The verdict a layer-profile review reached on the detected profile, so a decline leaves a trace rather than nothing. Written by the '/autonomous-sdlc-harness:harness-analyze' command's 'layers' target through 'config set detection.review', never by 'init'; read by 'doctor', whose 'layer-profile' check this record is what clears.",
           "properties": {
             "verdict": {
               "type": "string",
               "enum": ["applied", "considered-no-change", "proposed-and-refused"],
-              "description": "What the review decided: 'applied' — a revised layer profile was written; 'considered-no-change' — the target examined the profile and declined to propose a revision; 'proposed-and-refused' — a revision was proposed and the operator refused it. Written by '/harness-analyze'; read by 'doctor'."
+              "description": "What the review decided: 'applied' — a revised layer profile was written; 'considered-no-change' — the target examined the profile and declined to propose a revision; 'proposed-and-refused' — a revision was proposed and the operator refused it. Written by '/autonomous-sdlc-harness:harness-analyze'; read by 'doctor'."
             },
             "rationale": {
               "type": "string",
               "minLength": 1,
-              "description": "One line saying why that verdict was reached, so a later reader has the reasoning and not only the outcome. Written by '/harness-analyze'; read by a human."
+              "description": "One line saying why that verdict was reached, so a later reader has the reasoning and not only the outcome. Written by '/autonomous-sdlc-harness:harness-analyze'; read by a human."
             },
             "at": {
               "type": "string",
