@@ -9,8 +9,9 @@
  * reads the index opens it through `retrieval/session.ts` → `openRetrieval`, which owns the refusals
  * that precede any load.
  *
- * **`--dry-run` builds in memory.** The global flag promises that nothing is written, and the only
- * thing `index` writes is the per-checkout index, so a dry run takes the same path as `--in-memory`.
+ * **`--dry-run` never persists the index.** The global flag promises that nothing is written, and the
+ * only thing a sub-verb writes is the per-checkout index: `index` and `search` build it in memory, the
+ * same path as `--in-memory`, and `serve` refuses the flag before opening anything.
  */
 
 import { requireConfig } from '../config/io.js';
@@ -135,7 +136,7 @@ async function search(ctx: CommandContext, args: readonly string[]): Promise<num
 
   const repoRoot = resolveRepoRoot(ctx.cwd);
   const config = requireConfig(repoRoot);
-  const session = await openRetrieval({ repoRoot, config, inMemory: false });
+  const session = await openRetrieval({ repoRoot, config, inMemory: ctx.flags.dryRun });
   try {
     const refreshed = await session.refresh();
     for (const warning of refreshed.warnings) ctx.report.warn(warning);
@@ -164,6 +165,9 @@ async function search(ctx: CommandContext, args: readonly string[]): Promise<num
  */
 async function serve(ctx: CommandContext, args: readonly string[]): Promise<number> {
   parseFlags('serve', args, []);
+  if (ctx.flags.dryRun) {
+    throw new HarnessError(`docs serve: --dry-run is not supported, because a server persists the index it refreshes; ${helpHint()}`);
+  }
   const repoRoot = resolveRepoRoot(ctx.cwd);
   const config = requireConfig(repoRoot);
   await serveDocs({ repoRoot, config, version: ownManifestString('version'), report: ctx.report });
@@ -229,7 +233,8 @@ function usage(): readonly string[] {
     ...SUB_VERBS.map((verb) => `  ${verb.synopsis.padEnd(width)}  ${verb.summary}`),
     '',
     'Retrieval must be on (phases.docs and docs.retrieval true) and the model cache present;',
-    'init sets both up. --dry-run builds the index in memory and writes nothing.',
+    'init sets both up. --dry-run builds the index in memory for index and search and writes',
+    'nothing; serve refuses it.',
   ];
 }
 

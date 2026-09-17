@@ -9,6 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { mkdtemp, realpath, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -171,6 +172,17 @@ test('search (e): an unknown --mode is refused, naming the four modes', async (t
   for (const mode of ['lexical', 'vector', 'fused', 'fused-rerank']) assert.match(result.stderr, new RegExp(`\\b${mode}\\b`));
 });
 
+test('search (f): docs search --dry-run answers from memory and leaves the tree byte-identical', async (t) => {
+  const { dir, env } = await retrievalFixture(t);
+  const before = await snapshotTree(dir);
+
+  const hybrid = await searchOk(dir, env, [MATCH_QUERY, '--dry-run']);
+  assert.ok(hybrid.split('\n')[0].startsWith('1. docs/guide.md#offline (score '), hybrid);
+
+  assert.deepEqual(await snapshotTree(dir), before);
+  assert.equal(existsSync(join(dir, 'sdlc-harness', 'docs_index')), false);
+});
+
 test('docs refuses an unknown sub-verb and an unknown flag, naming docs --help', async (t) => {
   const { dir, env } = await retrievalFixture(t);
   for (const args of [['docs', 'reindex'], ['docs', 'index', '--bogus'], ['docs']]) {
@@ -240,4 +252,16 @@ test('serve (e): docs serve with docs.retrieval false exits non-zero before the 
   assert.notEqual(result.status, 0);
   assert.equal(result.stdout, '');
   assert.match(result.stderr, /docs retrieval is off in harness\.config\.json/);
+});
+
+test('serve (f): docs serve --dry-run exits non-zero before the handshake and writes nothing', async (t) => {
+  const { dir, env } = await retrievalFixture(t);
+  const before = await snapshotTree(dir);
+
+  const result = await runCli(dir, ['docs', 'serve', '--dry-run'], env);
+
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /docs serve: --dry-run is not supported/);
+  assert.deepEqual(await snapshotTree(dir), before);
 });
