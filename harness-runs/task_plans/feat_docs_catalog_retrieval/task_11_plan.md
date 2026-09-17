@@ -31,3 +31,8 @@
 - `bash scripts/test.sh` exits zero with cases (a) to (e) green.
 - `cli/test/prompt.test.mjs` still passes. The new prompt goes through `askYesNo`, so the source guard on `cli/src/core/prompt.ts` needs no change.
 - In a real terminal, `node cli/dist/cli.js init --docs --dry-run` against a scratch repository outside this checkout asks the retrieval question once. With `--docs` absent it asks nothing.
+
+**Deviations from plan:**
+
+- The real-terminal verification bullet was not executed: the implementer's shell has no TTY. It rests on reading `askRetrieval` in `cli/src/commands/init.ts` (gated by `canPrompt`, called only from `buildConfig`'s `phases.docs` arm when `--docs-retrieval` is absent) and on case (b), which proves the unasked path under a piped stdin.
+- `bash scripts/test.sh` exits 1 on gate `6a no machine paths` alone. Its only hits are the worktree's untracked `.git` pointer file and untracked run artifacts quoting it. Every other gate, `4 npm test` included, passed.

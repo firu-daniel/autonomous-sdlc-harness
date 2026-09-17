@@ -1788,6 +1788,97 @@ test('.mcp.json declares both halves with a browser driver, and the docs server 
   assert.match(stdout, /no browser MCP server was declared in \.mcp\.json/);
 });
 
+/** The note a `--docs` run that could not put the retrieval question prints. */
+const RETRIEVAL_UNASKED_NOTE = 'docs retrieval stays off: this run could not ask';
+
+/** A throwaway retrieval cache holding the stub models and a planted runtime, and the env naming it. */
+async function retrievalCacheEnv(t) {
+  const cacheHome = await mkdtemp(join(tmpdir(), 'harness-retrieval-cache-'));
+  t.after(() => rm(cacheHome, { recursive: true, force: true }));
+  await plantModelFiles(cacheHome);
+  await plantRetrievalRuntime(cacheHome);
+  return retrievalEnv(cacheHome);
+}
+
+/**
+ * `--docs-retrieval`, the flag half of the retrieval question. Every subprocess has a pipe for stdin,
+ * so no prompt is reachable and each unflagged run takes the documented default, off.
+ */
+test('--docs-retrieval turns retrieval on, is refused without --docs, and defaults off', async (t) => {
+  await t.test('--docs --docs-retrieval writes docs.retrieval true', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const env = await retrievalCacheEnv(subtest);
+
+    await initOk(dir, ['--docs', '--docs-retrieval'], env);
+
+    assert.equal(readJson(join(dir, CONFIG_FILE)).docs.retrieval, true);
+  });
+
+  await t.test('--docs alone writes no retrieval key and notes that it could not ask', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { stdout } = await initOk(dir, ['--docs']);
+
+    const { docs } = readJson(join(dir, CONFIG_FILE));
+    assert.equal(Object.hasOwn(docs, 'retrieval'), false, `an unasked run wrote docs.retrieval: ${JSON.stringify(docs)}`);
+    assert.ok(stdout.includes(RETRIEVAL_UNASKED_NOTE), `the unasked run did not say so:\n${stdout}`);
+  });
+
+  await t.test('--docs-retrieval without --docs is refused, leaving the tree byte-identical', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const before = await snapshotTree(dir);
+
+    const result = await runCli(dir, ['init', '--docs-retrieval']);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /--docs-retrieval needs --docs/);
+    assert.deepEqual(await snapshotTree(dir), before, 'a refused run changed the tree');
+  });
+
+  await t.test('--docs-retrieval without --docs under --git-init creates no repository', async (subtest) => {
+    const dir = await fixtureFor(subtest, { git: false, files: nodeProjectFiles() });
+    const before = await snapshotTree(dir);
+
+    const result = await runCli(dir, ['init', '--git-init', '--docs-retrieval']);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /--docs-retrieval needs --docs/);
+    assert.equal(await exists(dir, '.git'), false, 'a refused run created a repository');
+    assert.deepEqual(await snapshotTree(dir), before, 'a refused run changed the tree');
+  });
+
+  await t.test('a kept-config re-run with --docs-retrieval warns that the value went unwritten', async (subtest) => {
+    const { dir, env } = await retrievalFixture(subtest, { retrieval: false });
+    const before = text(dir, CONFIG_FILE);
+
+    const { stderr } = await initOk(dir, ['--docs', '--docs-retrieval'], env);
+
+    const reported = warningLines(stderr).filter((line) => line.includes('was read rather than written on this run'));
+    assert.equal(reported.length, 1, `the dropped flags were not reported once:\n${stderr}`);
+    assert.ok(reported[0].includes('--docs-retrieval'), `the warning does not name the flag:\n${reported[0]}`);
+    assert.ok(
+      reported[0].includes('config set docs.retrieval <value>'),
+      `the warning names no per-key route for docs.retrieval:\n${reported[0]}`,
+    );
+    assert.equal(text(dir, CONFIG_FILE), before, 'a kept config was rewritten from the command line');
+  });
+
+  await t.test('init --help lists --docs-retrieval directly after --docs-root', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { status, stdout } = await runCli(dir, ['init', '--help']);
+
+    assert.equal(status, 0);
+    const flags = stdout
+      .split('\n')
+      .map((line) => line.trim().split(/\s+/)[0])
+      .filter((flag) => flag.startsWith('--'));
+    const root = flags.indexOf('--docs-root');
+    assert.ok(root >= 0, `--help lists no --docs-root:\n${stdout}`);
+    assert.equal(flags[root + 1], '--docs-retrieval', `--docs-retrieval does not follow --docs-root:\n${stdout}`);
+  });
+});
+
 /**
  * `--qa-driver`, the flag half of a question `init` otherwise puts on a terminal.
  *

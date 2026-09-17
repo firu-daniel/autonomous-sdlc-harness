@@ -404,7 +404,7 @@ export interface InitFlags extends HarnessConfigFlags, ProjectSettingsFlags {
 }
 
 /**
- * The keys {@link InitFlags} holds a boolean in: the three phase toggles, the two flags whose
+ * The keys {@link InitFlags} holds a boolean in: the three phase toggles, `--docs-retrieval`, the two flags whose
  * subject is the *shape* of this run rather than a value written into the config — `--git-init`,
  * which decides whether there is a repository to wire at all, and `--reset-config`, which decides
  * whether the config in it is read or rebuilt — and the {@link ANALYZE_FLAG} /
@@ -595,6 +595,13 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
     placeholder: '<dir>',
     summary: 'Documentation root the docs phase keeps current (with --docs)',
     configValue: 'docs.root',
+  },
+  {
+    key: 'docsRetrieval',
+    flag: '--docs-retrieval',
+    kind: 'switch',
+    summary: 'Turn docs retrieval on: a local search tool over the docs and conventions (with --docs)',
+    configValue: 'docs.retrieval',
   },
   {
     key: 'parity',
@@ -820,6 +827,13 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
       `init: ${ANALYZE_FLAG} and ${NO_ANALYZE_FLAG} answer the same question opposite ways and both were given: pass one, or neither — with neither, the documented default accepts the offer`,
     );
   }
+  // Refused rather than warned, unlike `--qa-driver` without `--qa`: `docs.retrieval: true` without
+  // `phases.docs` is a config-check error, so the generated config would fail the write guard.
+  if (switches.has('docsRetrieval') && !switches.has('docs')) {
+    throw new HarnessError(
+      'init: --docs-retrieval needs --docs: retrieval searches the documentation corpus the docs phase maintains, so it is legal only with that phase on',
+    );
+  }
 
   return {
     ...Object.fromEntries([...values]),
@@ -831,6 +845,7 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
     notifications: switches.has('notifications'),
     qa: switches.has('qa'),
     docs: switches.has('docs'),
+    docsRetrieval: switches.has('docsRetrieval'),
     parity: switches.has('parity'),
   } as InitFlags;
 }
@@ -1201,6 +1216,26 @@ function askQaDriver(ctx: CommandContext): string | undefined {
       question: `the detected preset says nothing about how this project's application is reached: which driver should the interactive test phase run? (${qaDriverChoices()})`,
       flag: QA_DRIVER_FLAG,
       defaultValue: DEFAULTS.qa.driver,
+    },
+    promptCtx,
+  );
+}
+
+/**
+ * Ask whether to turn docs retrieval on — or answer `undefined` on every run that cannot be asked, for
+ * {@link askQaDriver}'s reason: the generator notes an unasked run, and must not note a declined one.
+ */
+function askRetrieval(ctx: CommandContext): boolean | undefined {
+  const promptCtx = { flags: ctx.flags, report: ctx.report };
+  if (!canPrompt(promptCtx)) return undefined;
+
+  return askYesNo(
+    {
+      question:
+        'Turn on docs retrieval? It adds a local search tool over the docs and conventions for the plan writer and reviewers. Setup installs about 300 MB of local runtime and downloads two small models into a cache shared by every checkout on this machine. Off by default.',
+      defaultAnswer: false,
+      flag: '--docs-retrieval',
+      flagHint: 'to turn it on without being asked',
     },
     promptCtx,
   );
@@ -2072,6 +2107,8 @@ async function run(ctx: CommandContext): Promise<number> {
     // back-references it ({@link askQaDriver}) — "the detected preset" names nothing an adopter who
     // has not read that line can resolve.
     askDriver: () => askQaDriver(ctx),
+    // Lazy for the same reason: asked only while the docs phase is on and `--docs-retrieval` was absent.
+    askRetrieval: () => askRetrieval(ctx),
   });
   // `kept` is known only now, so this is where the four held-back lists are published or dropped —
   // ahead of `config.warnings`, which is the order they printed in before they were gated. A kept
