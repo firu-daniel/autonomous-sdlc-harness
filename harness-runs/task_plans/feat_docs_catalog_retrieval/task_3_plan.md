@@ -36,3 +36,9 @@
 - `bash scripts/typecheck.sh` exits zero. `models.ts` has no static value import of `@huggingface/transformers`; types come from `import type`. Task 2's source guard stays green.
 - `grep -rn "allowRemoteModels" cli/src` reports `models.ts` only, set from `options.allowRemote`. `grep -rn "allowRemote: true" cli/src` reports `fetchModels` only.
 - The stubs are exercised end to end by Task 6's suite, whose fixture sets `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB=hash-v1`. The real models are exercised by Gate 10 (Task 22) by hand.
+
+**Deviations from plan:**
+
+- Model "size" in the constants' doc comments is given as the upstream model cards' parameter counts (about 33M and 23M), not as on-disk bytes. A HEAD request for the `onnx/model_quantized.onnx` byte sizes was refused by the permission layer, so the figures come from reading the cards, not from a measurement.
+- The plan fixes no reranker `id`. The real reranker's is `` `${RERANK_MODEL}:q8:sigmoid:v${MODEL_VERSION}` ``, following the embedder's pattern.
+- `MODEL_FILES` was read off `@huggingface/transformers` 4.3.0 (`utils/hub.js` → `buildResourcePaths`, `utils/cache/FileCache.js` → `match`, `utils/model_registry/get_model_files.js` → `get_model_files`, `get_tokenizer_files.js`). It matches the plan's expected shape. For the real models, the evidence is that reading plus a scratch probe of an offline load against an empty cache, which refused with `env.allowRemoteModels=false` and file not found. No populated cache was loaded (that is Gate 10's).
