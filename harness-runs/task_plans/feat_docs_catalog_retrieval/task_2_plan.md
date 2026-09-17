@@ -35,3 +35,11 @@
 - Plant a static `import { PGlite } from '@electric-sql/pglite'` in any `cli/src` module and run the suite: case (a) fails. Revert.
 - `grep -rn "XDG_CACHE_HOME" cli/src` reports `cli/src/machine/paths.ts` alone.
 - Later tasks (6, 7, 8, 12, 13) keep case (b) green. A retrieval check or verb that resolves a peer with retrieval off turns it red.
+
+**Deviations from plan:**
+
+- `bash scripts/test.sh` exits 1, not 0: its sole failing gate is `6a no machine paths`, whose hits are this worktree's untracked `.git` pointer file and `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md`, neither touched by this task. Gate 4 (`npm test`) passed; `node --test test/retrieval-loading.test.mjs` ran 5 passed, 0 failed.
+- `retrievalCliEntry`'s `source` is typed `'this-installation' | typeof RETRIEVAL_RUNTIME_DIRNAME` and the runtime answer returns that constant. The plan's literal `'runtime'` union would make `grep -rn "'runtime'" cli/src/retrieval` report two lines beyond the declaration, contradicting its own Verification bullet. The value is still the string `runtime`.
+- Case (b) passes the hook as `NODE_OPTIONS=--import=<register URL>` through `runCli` rather than a `node --import <register> <CLI_ENTRY>` argv, so it reuses the shared runner's isolated environment; the effect on the child is the same. A control case was added proving the hook refuses an `import()` of a peer, so a silently inert hook cannot pass (b).
+- Case (a)'s static-import pattern also matches a side-effect `import '<peer>'` (no `from`), which the rule covers.
+- Evidence downgrade: the `ERR_MODULE_NOT_FOUND` branch of `loadRetrievalModule` rests on reading, not execution — every peer resolves in this workspace. Executed by probe: the non-peer refusal (exit code 2, `internal()` message), a real peer load (`@electric-sql/pglite-pgvector` → export `vector`), `retrievalCliEntry()` → `this-installation`, and the case-(a) mutation (a static `import { PGlite } from '@electric-sql/pglite'` appended to `cli/src/core/nameList.ts` made case (a) fail; reverted before the gates ran).
