@@ -27,3 +27,7 @@
 - `bash scripts/typecheck.sh` and `bash scripts/test.sh` exit 0 (the test run builds `cli/dist` through the package's `pretest`).
 - After that build, `node cli/dist/cli.js doctor --help` prints "none of the watcher's seven" followed by "lifecycle words", and never "watcher's six".
 - `grep -rn "watcher's six\|six lifecycle words" cli/src cli/test` prints nothing. (`docs/cli.md` carries the same count and is Task 12's; it is out of this task's roots so this task ships independently.)
+
+**Deviations from plan:**
+
+- Verification `bash scripts/test.sh` exits 1, not 0: the sole failure is gate `6a no machine paths`, whose hits are this worktree's untracked `.git` pointer file and the already-tracked `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md`, neither touched by this task; gate `4 npm test` and the other 12 gates pass.
