@@ -60,7 +60,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_docs_catalog_retrieval/task
 18. [x] **Task 18** — Add the `docs.retrieval` schema property, its phase clause and a negative fixture _(layer: general)_ _(points: 10)_
 19. [x] **Task 19** — Document the key and the token in `docs/config.md`, and retrieval in `docs/cli.md`'s `init` sections _(layer: general)_ _(points: 14)_
 20. [x] **Task 20** — Document the `docs` verb, the `doctor` retrieval checks and the launcher in `docs/cli.md` _(layer: general)_ _(points: 17)_
-21. [ ] **Task 21** — Write `docs/retrieval.md`: the design, the model choice, the measured facts and the trade-offs _(layer: general)_ _(points: 20)_
+21. [x] **Task 21** — Write `docs/retrieval.md`: the design, the model choice, the measured facts and the trade-offs _(layer: general)_ _(points: 20)_
 22. [ ] **Task 22** — Add hand-run Gate 10 for the real-model smoke check, and list it in `scripts/run-gates.sh` _(layer: general)_ _(points: 10)_
 23. [ ] **Task 23** — Mention retrieval in `README.md`, `llms.txt` and `ARCHITECTURE.md`, and replace the roadmap row's text _(layer: general)_ _(points: 15)_
 24. [ ] **Task 24** — Add the launcher to `docs/watcher.md` §2's outer-loop table and left-allowed set _(layer: general)_ _(points: 6)_
