@@ -1,6 +1,6 @@
 /**
  * Command: `docs` — search the docs catalog and the conventions documents: build the index, query it,
- * serve it over MCP. Its sub-verbs are `index` and `search`.
+ * serve it over MCP. Its sub-verbs are `index`, `search` and `serve`.
  *
  * **The rule this module exists to enforce: the sub-verb table is the one declaration of the
  * sub-verbs.** The usage lines, the refusal naming the legal sub-verbs and the dispatch all read
@@ -23,6 +23,8 @@ import {
   searchDocs,
   type SearchMode,
 } from '../retrieval/search.js';
+import { ownManifestString } from '../retrieval/runtime.js';
+import { serveDocs } from '../retrieval/server.js';
 import { openRetrieval } from '../retrieval/session.js';
 import type { CommandContext, Subcommand } from './registry.js';
 
@@ -144,6 +146,21 @@ async function search(ctx: CommandContext, args: readonly string[]): Promise<num
   return EXIT.OK;
 }
 
+/**
+ * `docs serve`: the stdio MCP server, through `retrieval/server.ts` → `serveDocs`. **Nothing but the
+ * transport may write to stdout** — a stray byte corrupts the JSON-RPC stream and an agent sees a tool
+ * that never loads — so this sub-verb writes no `result` line and sends every warning to stderr
+ * through `report.warn`. A refusal before the transport starts exits non-zero with its message on
+ * stderr.
+ */
+async function serve(ctx: CommandContext, args: readonly string[]): Promise<number> {
+  parseFlags('serve', args, []);
+  const repoRoot = resolveRepoRoot(ctx.cwd);
+  const config = requireConfig(repoRoot);
+  await serveDocs({ repoRoot, config, version: ownManifestString('version'), report: ctx.report });
+  return EXIT.OK;
+}
+
 const SUB_VERBS: readonly DocsSubVerb[] = [
   {
     name: 'index',
@@ -156,6 +173,12 @@ const SUB_VERBS: readonly DocsSubVerb[] = [
     synopsis: `search <query> [${K_FLAG} <n>] [${MODE_FLAG} <${SEARCH_MODES.join('|')}>]`,
     summary: `Refresh the index and search it; ${K_FLAG} defaults to ${DEFAULT_RESULTS} (at most ${MAX_RESULTS}), ${MODE_FLAG} to ${DEFAULT_MODE}`,
     run: search,
+  },
+  {
+    name: 'serve',
+    synopsis: 'serve',
+    summary: 'Serve search_docs over stdio MCP; stdout carries the protocol and nothing else',
+    run: serve,
   },
 ];
 

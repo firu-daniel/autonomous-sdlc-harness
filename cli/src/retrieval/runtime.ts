@@ -67,7 +67,7 @@ function ownManifest(): { [key: string]: unknown } {
 }
 
 /** A string field of this package's own manifest. */
-function ownManifestString(key: 'name' | 'version'): string {
+export function ownManifestString(key: 'name' | 'version'): string {
   const value = ownManifest()[key];
   if (typeof value !== 'string' || value === '') throw internal(`this CLI's own manifest carries no ${key}`);
   return value;

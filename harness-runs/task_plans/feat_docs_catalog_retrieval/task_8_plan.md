@@ -42,3 +42,8 @@
 - `grep -rn "from 'zod'" cli/src` is empty.
 - `grep -n "docs serve\|serveDocs" cli/src/core/report.ts` finds the header clause, and `grep -n "report.ts" cli/src/retrieval/server.ts` finds the header's pointer to it.
 - `grep -rn "process.stdout" cli/src` prints no hit outside `cli/src/retrieval/server.ts`.
+
+**Deviations from plan:**
+
+- `serveDocs` takes `version`, and `CommandContext` has none. `cli/src/retrieval/runtime.ts` → `ownManifestString` is now exported, and `docs serve` passes `ownManifestString('version')` rather than reading the manifest a second time. `runtime.ts` was not in the target list.
+- `bash scripts/test.sh` exits 1. Gate 4 (`npm test`) passes with serve cases (a)-(e) green. The only failure is gate 6a (`no machine paths`), and all its hits are machine paths in the worktree's `.git` pointer file and in untracked files under `harness-runs/`, not in any file this task touched.

@@ -1,6 +1,6 @@
 /**
- * `docs index` and `docs search` on a fixture corpus: the task prompt's Acceptance 3, and the CLI half
- * of Acceptance 4.
+ * `docs index`, `docs search` and `docs serve` on a fixture corpus: the task prompt's Acceptance 3, and
+ * Acceptance 4 at the CLI and through the MCP SDK's own client.
  *
  * **The rules these tests exist to enforce: a refresh embeds exactly the chunks that changed, removes
  * the chunks of a deleted document, and rebuilds on a new embedder; a search cites `path#anchor`, and
@@ -14,7 +14,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
 import {
+  CLI_ENTRY,
   createFixture,
   plantModelFiles,
   retrievalEnv,
@@ -174,4 +178,66 @@ test('docs refuses an unknown sub-verb and an unknown flag, naming docs --help',
     assert.notEqual(result.status, 0, args.join(' '));
     assert.match(result.stderr, /docs --help/, args.join(' '));
   }
+});
+
+/**
+ * Run `body` against a `docs serve` child through the SDK's stdio client, closing the client in a
+ * `finally` so a failing assertion leaves no server process behind.
+ */
+async function withServer(fixture, body) {
+  const client = new Client({ name: 'docs-retrieval-test', version: '0.0.0' });
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [CLI_ENTRY, 'docs', 'serve', '--cwd', fixture.dir],
+    env: { ...process.env, ...retrievalEnv(fixture.cacheHome) },
+    stderr: 'pipe',
+  });
+  try {
+    await client.connect(transport);
+    await body(client);
+  } finally {
+    await client.close();
+  }
+}
+
+function toolText(result) {
+  return result.content.map((part) => part.text).join('\n');
+}
+
+test('serve (a)-(d): search_docs over stdio MCP', async (t) => {
+  const fixture = await retrievalFixture(t);
+
+  await withServer(fixture, async (client) => {
+    // (a) The handshake passing is also the proof nothing reached stdout ahead of the transport.
+    const { tools } = await client.listTools();
+    assert.deepEqual(
+      tools.map((tool) => tool.name),
+      ['search_docs'],
+    );
+
+    // (b) Acceptance 4.
+    const match = await client.callTool({ name: 'search_docs', arguments: { query: MATCH_QUERY } });
+    assert.notEqual(match.isError, true, toolText(match));
+    assert.ok(toolText(match).split('\n')[0].startsWith('1. docs/guide.md#offline (score '), toolText(match));
+
+    // (c) Acceptance 4.
+    const none = await client.callTool({ name: 'search_docs', arguments: { query: NO_MATCH_QUERY } });
+    assert.equal(toolText(none), 'no confident match');
+
+    // (d)
+    const empty = await client.callTool({ name: 'search_docs', arguments: { query: '' } });
+    assert.equal(empty.isError, true);
+  });
+});
+
+test('serve (e): docs serve with docs.retrieval false exits non-zero before the handshake', async (t) => {
+  const { dir, env } = await retrievalFixture(t);
+  const set = await runCli(dir, ['config', 'set', 'docs.retrieval', 'false'], env);
+  assert.equal(set.status, 0, set.stderr);
+
+  const result = await runCli(dir, ['docs', 'serve'], env);
+
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /docs retrieval is off in harness\.config\.json/);
 });
