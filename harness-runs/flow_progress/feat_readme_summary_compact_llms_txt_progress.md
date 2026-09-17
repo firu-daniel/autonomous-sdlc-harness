@@ -6,7 +6,7 @@ Source: harness-runs/task_prompts/feat_readme_summary_compact_llms_txt_task_prom
 - phases: parity=false, qa=false, docs=false   (from harness.config.json, read at this write; an unset flag is false)
 
 ## Fix planning
-- [ ] R1. Fix plan written & converged (parity + architecture gates PASS)
+- [x] R1. Fix plan written & converged (parity + architecture gates PASS)
 - [ ] R2. Fix plan + source review committed
 ## Fixing
 - [ ] R3. All fix-plan findings implemented (fix-plan index all [x])
