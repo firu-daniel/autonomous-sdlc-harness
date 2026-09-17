@@ -20,4 +20,8 @@ _The entry below is a worked example, not a lesson from this project — delete 
 
 _[Add headings of your own as themes emerge — one per recurring theme — and file each new lesson under the heading it belongs to.]_
 
+## Adopter-facing documentation
+
+- **Every command an adopter is meant to run sits in a fenced block, one command per line; never inline it, join two with prose, or cut its block when compacting a document.** _(taught by: feat_readme_summary_compact_llms_txt)_
+
 _Written by `autonomous-sdlc-harness init`, and yours from there on: a re-run never touches a ledger that already exists._

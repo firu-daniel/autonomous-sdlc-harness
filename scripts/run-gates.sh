@@ -107,6 +107,7 @@ gate_silent "6b no template in the dot-namespace" \
   -not -path './examples/notes-app/.claude' \
   -not -path './.claude' \
   -not -path './node_modules/*'
+gate "6c llms.txt links resolve on main" bash scripts/check-llms-txt.sh
 
 echo
 echo "== gates this script cannot run"
