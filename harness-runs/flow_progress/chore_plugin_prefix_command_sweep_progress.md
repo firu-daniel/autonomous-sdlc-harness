@@ -14,7 +14,7 @@ Source: harness-runs/task_prompts/chore_plugin_prefix_command_sweep_task_prompt.
 - [x] A.      Tasks implemented (story-index readiness all [x])
 - [-] A1.5g.  Branch parity review resolved (index committed — or PASS with no findings, no file written)
 - [-] A1.5f.  Parity findings fixed (findings index all [x] — or no index, the review having passed clean)
-- [ ] A2g.    Branch architecture review resolved (index committed — or PASS with no findings, no file written)
+- [x] A2g.    Branch architecture review resolved (index committed — or PASS with no findings, no file written)
 - [ ] A2f.    Architecture findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [ ] Bg.     Branch review generated & committed
 - [ ] Bm.     Review-plan meta-review PASS (B.2)
