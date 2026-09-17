@@ -101,6 +101,7 @@ import {
   DEFAULTS,
   isPlaceholder,
   qaDriverChoices,
+  retrievalApplies,
   STATE_DIR_DOT_PATTERN,
   type HarnessCommands,
   type HarnessConfig,
@@ -169,6 +170,7 @@ import {
   type WrittenWrapper,
 } from '../generators/scripts.js';
 import { writeStateDir } from '../generators/stateDir.js';
+import { setUpRetrieval } from '../retrieval/setup.js';
 import type { CommandContext, Subcommand } from './registry.js';
 
 /** The command's one-line summary, in the usage block and at the head of its own `--help`. */
@@ -2272,6 +2274,15 @@ async function run(ctx: CommandContext): Promise<number> {
   const hooksPath = pointHooksPath({ repoRoot, githooksDir: hooks.githooksDir, dryRun: ctx.flags.dryRun });
   warnings.push(...hooksPath.warnings);
   notes.push(...hooksPath.notes);
+
+  // After the plan: this step writes nothing into the repository, and a real install takes minutes, so
+  // it must not delay the plan's own report. Before the commit, which a failure here must not stop.
+  if (retrievalApplies(effective)) {
+    ctx.report.step('docs retrieval setup');
+    const retrieval = setUpRetrieval({ dryRun: ctx.flags.dryRun });
+    warnings.push(...retrieval.warnings);
+    notes.push(...retrieval.notes);
+  }
 
   // The second post-plan step, and after the plan for a reason of its own: the managed `.gitignore`
   // block that decides what `git add -A` may stage arrived with the plan. Before the summary, so the

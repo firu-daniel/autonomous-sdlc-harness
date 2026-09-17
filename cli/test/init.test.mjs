@@ -20,6 +20,10 @@
  * it from here would need a pty, which Node cannot allocate without a native dependency this package
  * does not carry.
  *
+ * **The real runtime install and model download are not covered.** Both reach the network, which no
+ * test may; every retrieval-on case runs under the stub and a planted model cache, and the setup cases
+ * assert only the skips, the dry-run notes and the stub refusals. Gate 10 covers the real path by hand.
+ *
  * ## Four non-obvious choices, and where each comes from
  *
  * 1. **Every test builds its own fixture and tears it down.** No directory is shared and none is
@@ -1876,6 +1880,79 @@ test('--docs-retrieval turns retrieval on, is refused without --docs, and defaul
     const root = flags.indexOf('--docs-root');
     assert.ok(root >= 0, `--help lists no --docs-root:\n${stdout}`);
     assert.equal(flags[root + 1], '--docs-retrieval', `--docs-retrieval does not follow --docs-root:\n${stdout}`);
+  });
+});
+
+/** A throwaway cache holding the stub models and no runtime, its runtime directory, and the env naming it. */
+async function retrievalSetupCache(t) {
+  const cacheHome = await mkdtemp(join(tmpdir(), 'harness-retrieval-cache-'));
+  t.after(() => rm(cacheHome, { recursive: true, force: true }));
+  await plantModelFiles(cacheHome);
+  return { cacheHome, runtimeDir: join(cacheHome, 'autonomous-sdlc-harness', 'retrieval', 'runtime'), env: retrievalEnv(cacheHome) };
+}
+
+/** Every file under `dir`, absolute and sorted. */
+async function filesUnder(dir) {
+  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => join(entry.parentPath ?? entry.path, entry.name))
+    .sort();
+}
+
+/**
+ * The setup step `init` runs when retrieval is on: the runtime install and the model download. No case
+ * reaches the network — each either plants the runtime, runs a dry run, or relies on the stub refusal.
+ */
+test('retrieval setup installs nothing when the runtime is planted, names the install on a dry run, and never installs under the stub', async (t) => {
+  const version = readJson(join(PACKAGE_ROOT, 'package.json')).version;
+
+  await t.test('(a) a dry run with no runtime names the npm install and writes nothing', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const { cacheHome, runtimeDir, env } = await retrievalSetupCache(subtest);
+    const before = await snapshotTree(dir);
+
+    const { stdout } = await initOk(dir, ['--docs', '--docs-retrieval', '--dry-run'], env);
+
+    assert.ok(stdout.includes(`npm install --prefix ${runtimeDir} `), `no npm install note names the runtime:\n${stdout}`);
+    assert.ok(stdout.includes(`autonomous-sdlc-harness@${version}`), `the install note names no pinned CLI:\n${stdout}`);
+    assert.match(stdout, /stub models \(.*\) need no download/, `no note says the stub needs no download:\n${stdout}`);
+    assert.deepEqual(await snapshotTree(dir), before, 'a dry run changed the tree');
+    assert.equal(existsSync(runtimeDir), false, 'a dry run created the runtime directory');
+
+    await plantRetrievalRuntime(cacheHome, { version: '0.0.0-other' });
+    const other = await initOk(dir, ['--docs', '--docs-retrieval', '--dry-run'], env);
+    assert.ok(
+      other.stdout.includes(`npm install --prefix ${runtimeDir} `),
+      `a runtime at another version was treated as installed:\n${other.stdout}`,
+    );
+  });
+
+  await t.test('(b) a planted runtime means no install runs', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const { cacheHome, runtimeDir, env } = await retrievalSetupCache(subtest);
+    const planted = await plantRetrievalRuntime(cacheHome);
+
+    const { stdout } = await initOk(dir, ['--docs', '--docs-retrieval'], env);
+
+    assert.match(stdout, /docs retrieval runtime already installed/, `no note says the runtime is installed:\n${stdout}`);
+    assert.deepEqual(await filesUnder(runtimeDir), planted, 'the runtime directory changed');
+  });
+
+  await t.test('(c) a stub run refuses fetch-models and never installs the runtime', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const { runtimeDir, env } = await retrievalSetupCache(subtest);
+
+    const fetch = await runCli(dir, ['docs', 'fetch-models'], env);
+    assert.notEqual(fetch.status, 0, 'docs fetch-models ran under the stub');
+    assert.match(fetch.stderr, /AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB/, `the refusal does not name the stub:\n${fetch.stderr}`);
+
+    const { stderr } = await initOk(dir, ['--docs', '--docs-retrieval'], env);
+    assert.ok(
+      warningLines(stderr).some((line) => line.includes('a stub run') && line.includes('never installs it')),
+      `no warning says a stub run never installs the runtime:\n${stderr}`,
+    );
+    assert.equal(existsSync(runtimeDir), false, 'a stub run created the runtime directory');
   });
 });
 

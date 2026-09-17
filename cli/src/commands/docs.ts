@@ -1,6 +1,7 @@
 /**
  * Command: `docs` — search the docs catalog and the conventions documents: build the index, query it,
- * serve it over MCP. Its sub-verbs are `index`, `search` and `serve`.
+ * serve it over MCP, and fetch the models it runs on. Its sub-verbs are `index`, `search`, `serve` and
+ * `fetch-models`.
  *
  * **The rule this module exists to enforce: the sub-verb table is the one declaration of the
  * sub-verbs.** The usage lines, the refusal naming the legal sub-verbs and the dispatch all read
@@ -23,7 +24,14 @@ import {
   searchDocs,
   type SearchMode,
 } from '../retrieval/search.js';
-import { ownManifestString } from '../retrieval/runtime.js';
+import {
+  EMBEDDING_MODEL,
+  fetchModels,
+  modelFilesPresent,
+  RERANK_MODEL,
+  RETRIEVAL_STUB_ENV,
+} from '../retrieval/models.js';
+import { ownManifestString, retrievalModelCacheDir } from '../retrieval/runtime.js';
 import { serveDocs } from '../retrieval/server.js';
 import { openRetrieval } from '../retrieval/session.js';
 import type { CommandContext, Subcommand } from './registry.js';
@@ -161,6 +169,29 @@ async function serve(ctx: CommandContext, args: readonly string[]): Promise<numb
   return EXIT.OK;
 }
 
+/**
+ * `docs fetch-models`: download both models into the shared model cache. **The one command that reaches
+ * the network.** `init` runs it at setup time (`retrieval/setup.ts`), and a person may run it by hand.
+ * It refuses under {@link RETRIEVAL_STUB_ENV} before loading anything, because a stub run must never
+ * download.
+ */
+async function fetchModelsVerb(ctx: CommandContext, args: readonly string[]): Promise<number> {
+  parseFlags('fetch-models', args, []);
+  if ((process.env[RETRIEVAL_STUB_ENV] ?? '') !== '') {
+    throw new HarnessError(
+      `docs fetch-models: refusing to download while ${RETRIEVAL_STUB_ENV} is set, because a stub run never downloads; unset it to fetch the real models`,
+    );
+  }
+  await fetchModels();
+  const dir = retrievalModelCacheDir();
+  const { present, missing } = modelFilesPresent(dir);
+  if (!present) {
+    throw new HarnessError(`docs fetch-models: the download finished but ${dir} is missing ${missing.join(', ')}`);
+  }
+  ctx.report.result(`docs fetch-models: ${EMBEDDING_MODEL} and ${RERANK_MODEL} cached in ${dir}`);
+  return EXIT.OK;
+}
+
 const SUB_VERBS: readonly DocsSubVerb[] = [
   {
     name: 'index',
@@ -179,6 +210,12 @@ const SUB_VERBS: readonly DocsSubVerb[] = [
     synopsis: 'serve',
     summary: 'Serve search_docs over stdio MCP; stdout carries the protocol and nothing else',
     run: serve,
+  },
+  {
+    name: 'fetch-models',
+    synopsis: 'fetch-models',
+    summary: 'Download both models into the shared model cache; the one sub-verb that reaches the network',
+    run: fetchModelsVerb,
   },
 ];
 
