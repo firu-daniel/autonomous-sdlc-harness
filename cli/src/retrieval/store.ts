@@ -59,7 +59,13 @@ export interface DocStore {
   deleteChunks(keys: readonly string[]): Promise<void>;
   /** Removes every chunk; meta is kept. */
   clear(): Promise<void>;
-  /** Only chunks matching a query term, best first. */
+  /**
+   * The best-scoring chunks for the query, lower-is-better score first, up to `limit`.
+   * **Not necessarily only matching chunks:** the filter to matching rows belongs to the BM25 index
+   * scan rather than to the `<@>` operator, so a plan that falls back to a sequential scan — which a
+   * small corpus does — returns non-matching rows at score `0` after the matches. Measured in
+   * `docs/retrieval.md` → `## Measured, and how`, item (b), and open under `## Still open`.
+   */
   lexicalSearch(query: string, limit: number): Promise<readonly RankedId[]>;
   /** Nearest chunks by cosine distance, best first. */
   vectorSearch(embedding: readonly number[], limit: number): Promise<readonly RankedId[]>;
@@ -174,7 +180,9 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
 
     async lexicalSearch(query, limit) {
       if (query.trim() === '') return [];
-      // pg_textsearch scores lower-is-better and returns only rows matching a term.
+      // pg_textsearch scores lower-is-better; a non-matching row scores 0, so matches sort first.
+      // Filtering to matching rows alone is the index scan's behaviour, not the operator's — see the
+      // interface comment above.
       const result = await db.query<{ id: number }>(
         "SELECT id FROM chunks ORDER BY text <@> to_bm25query($1, 'chunks_bm25') LIMIT $2",
         [query, limit],
