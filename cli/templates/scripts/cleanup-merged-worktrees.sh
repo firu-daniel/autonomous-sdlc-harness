@@ -37,10 +37,10 @@
 #     checkout's own directory;
 #   * a branch with an ACTIVE RUN — one whose record in the run registry
 #     (`<state_dir>/autonomous_logs/registry.json`, shaped
-#     `{"runs": {"<branch>": {"status": …}}}`) says `running`, `parked` or
-#     `paused`. All three own a working copy the watcher will come back to: a
-#     parked run is waiting for a clarification answer and a paused one for a
-#     RESUME sentinel, and `worktree remove --force` would discard the pause
+#     `{"runs": {"<branch>": {"status": …}}}`) says `running`, `parked`,
+#     `park_loop` or `paused`. All four own a working copy the watcher will come
+#     back to: a parked run is waiting for a clarification answer, a `park_loop`
+#     one for an operator to clear it, and a paused one for a RESUME sentinel, and `worktree remove --force` would discard the pause
 #     note the resumed engine is pointed at.
 #
 # CAVEAT: `: gone` + force-delete also catches an ABANDONED branch whose remote
@@ -120,7 +120,7 @@
 #                 printf '%s' '{"runs":{"feat_gone":{"status":"running"}}}' \
 #                   > "$d/sdlc-harness/autonomous_logs/registry.json"
 #                 -> the skip line for feat_gone; nothing deleted (same with
-#                    "parked" and "paused")
+#                    "parked", "park_loop" and "paused")
 #   unresolvable  printf 'x' > "$d/harness.config.json"
 #                 -> one line, exit 0, nothing deleted
 #   offline       git -C "$d" remote set-url origin /nonexistent.git
@@ -206,7 +206,7 @@ if [ -e "$registry" ]; then
   # document without it is a registry this cannot enumerate, so `jq` fails and
   # the refusal below fires — which is the point: reading such a file as "no
   # active runs" would delete a branch a run is still working on.
-  if ! active="$(jq -r '.runs | to_entries[] | select(.value.status == "running" or .value.status == "parked" or .value.status == "paused") | .key' "$registry" 2>/dev/null)"; then
+  if ! active="$(jq -r '.runs | to_entries[] | select(.value.status == "running" or .value.status == "parked" or .value.status == "park_loop" or .value.status == "paused") | .key' "$registry" 2>/dev/null)"; then
     echo "cleanup-merged-worktrees.sh: '$registry' could not be read as a run registry — refusing to delete anything"
     exit 0
   fi

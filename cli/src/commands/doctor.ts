@@ -90,10 +90,10 @@ const OWN_FLAGS: readonly string[] = Object.freeze([TEST_NOTIFICATION_FLAG, CHEC
 /**
  * The event word the test send carries.
  *
- * Deliberately **not** one of the notifier's six lifecycle words. That vocabulary is a contract owned
- * by the watcher — `completed`, `parked`, `paused`, `failed`, `launched`, `resumed` — and sending one
- * from here would put a message an operator reads as a real run's outcome into the same stream real
- * ones arrive in. The script's header states that an unrecognized word is still delivered, under a
+ * Deliberately **not** one of the notifier's seven lifecycle words. That vocabulary is a contract
+ * owned by the watcher — `completed`, `parked`, `paused`, `failed`, `launched`, `resumed`,
+ * `park_loop` — and sending one from here would put a message an operator reads as a real run's
+ * outcome into the same stream real ones arrive in. The script's header states that an unrecognized word is still delivered, under a
  * generic title, and its dispatcher's `*)` branch is where this one lands: the message reads
  * `Run '<branch>': doctor-test.` and cannot be mistaken for a lifecycle event.
  */
@@ -132,7 +132,7 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   '',
   'A default run sends nothing: the notifications check reads which settings file the notifier',
   `resolves and prints no value from it, and only ${TEST_NOTIFICATION_FLAG} delivers a message. The`,
-  `test send carries the event word ${TEST_NOTIFICATION_EVENT}, which is none of the watcher's six`,
+  `test send carries the event word ${TEST_NOTIFICATION_EVENT}, which is none of the watcher's seven`,
   "lifecycle words, so it cannot be read as a real run's outcome. It does not change the exit status:",
   'a best-effort notifier that could not reach an endpoint is not a failed check. Under --dry-run it',
   'reports the invocation it would make and sends nothing, after every refusal a real run would make.',

@@ -24,24 +24,24 @@ This file is the canonical policy. A flow **activates** it by adding one `Overri
 
 ## What is digested
 
-- **The source set** is every `question_<n>.md` under `$REPO_ROOT/<state_dir>/clarifications/<branch>/` **and** every one under that directory's `answered/` archive. Read **both**: by the consume-then-archive ordering in `${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_autonomous.md` → `## Clarification channel — file format (canonical, single source of truth)`, an earlier park's pair is already archived while the pair that resumed *this* session is still at the top level. That section is the one definition of the channel's directory, filenames and question/answer pairing; resolve each pair by its rule and restate none of it here.
+- **The source set** is every `question_<n>.md` under `$REPO_ROOT/<state_dir>/clarifications/<branch>/` **and** every one under that directory's `answered/` archive. Read **both**: by the consume-then-archive ordering in `${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_autonomous.md` → `## Clarification channel — file format (canonical, single source of truth)`, an earlier park's pairs are already archived while the pairs that resumed *this* session are still at the top level. That section is the one definition of the channel's directory, filenames and question/answer pairing; resolve each pair by its rule and restate none of it here.
 - **Derived from files on disk, never from session memory.** That is what makes this class fully reproducible on a resumed session and on a later round, unlike the freely-observed class of the intake beside it.
 - **A question whose paired answer file is absent still takes an entry**, saying so — `## The entry format` gives the two fields their arms for that case. The run reached Phase D, so the block was resolved out of band, and dropping it is the silence this step exists to remove.
 - **This opens no reviewer findings file and reads no review artifact.** Both orchestration cores' *"Do NOT read the contents of any reviewer findings file. The path is enough."* is untouched and needs no exception here.
 
 ## The entry format
 
-One block per `question_<n>` in the source set, keyed by that index, in this shape:
+One block per `question_<n>` **file** in the source set — one per park, however many questions it holds — keyed by that index, in this shape:
 
 ```markdown
 ## question_<n> — <one-line problem statement, the decision this park needed>
-- **raised by:** the agent or phase the question names
-- **asked:** the decision needed, and the options the run was choosing between
-- **answered:** the operator's ruling, quoted verbatim from its answer file — or, where no `answer_<n>.md` exists on disk, exactly `no answer file on disk — resolved out of band`, and nothing else: the fact that the run continued is the record, and an account of *how* it continued is the paraphrase the rule below forbids
-- **carries beyond this branch:** what that ruling settles which outlives this branch — a rule about the project's own conventions corpus, an inventory of claims the branch falsifies, a standing decision — or `nothing beyond this branch`; on an absent answer this is `nothing beyond this branch`, since there is no ruling to carry
+- **raised by:** the agent or phase the question file names
+- **asked:** each `Q<k>` of the file, in order — its decision needed and the options the run was choosing between
+- **answered:** the operator's ruling, the answer file quoted verbatim — or, where no `answer_<n>.md` exists on disk, exactly `no answer file on disk — resolved out of band`, and nothing else: the fact that the run continued is the record, and an account of *how* it continued is the paraphrase the rule below forbids
+- **carries beyond this branch:** what that ruling settles for the park as a whole which outlives this branch — a rule about the project's own conventions corpus, an inventory of claims the branch falsifies, a standing decision — or `nothing beyond this branch`; on an absent answer this is `nothing beyond this branch`, since there is no ruling to carry
 ```
 
-- **The heading is the key.** `question_<n>` is the block's identity and is never re-worded, re-numbered or reordered by a later run: it is the index of the source file the block was derived from, so it cannot drift from what is on disk, and the channel section cited in `## What is digested` is what keeps it unique for the branch's whole lifetime, `answered/` archive included. Read the existing file before appending and **skip any block whose `## question_<n>` prefix is already present** — that comparison, and nothing about the prose after it, is what `## Where it is written`'s append-only rule and `## Ledger / resume`'s byte-unchanged re-entry are decided by.
+- **The heading is the key.** `question_<n>` is the block's identity and is never re-worded, re-numbered or reordered by a later run: it is the index of the source file the block was derived from, so it cannot drift from what is on disk, and the channel section cited in `## What is digested` is what keeps it unique for the branch's whole lifetime, `answered/` archive included. Read the existing file before appending and **skip any block whose `## question_<n>` prefix is already present** — that comparison, and nothing about the prose after it, is what `## Where it is written`'s append-only rule and `## Ledger / resume`'s byte-unchanged re-entry are decided by. A block written for a one-question file from before one file per park is left exactly as written: its key is still the unique index of the file it came from, so neither rule is affected.
 - **Enumerated content is carried verbatim**, from either file: a table, a list, an inventory. That is the diagnostic work a discarded exchange destroys, and a one-line gist of it is not a record of it.
 - **Prose diagnosis is summarised to what a later reader must act on.** The block is a record, not a re-argument.
 - **A ruling is never paraphrased, and never edited by a later run.** A later disagreement is a new question, parked and answered like the first.

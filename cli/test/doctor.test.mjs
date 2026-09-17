@@ -2365,7 +2365,7 @@ const PUSH_CMD = '/nonexistent/n0tifier-appears-nowhere-else';
 /** The notifier `--test-notification` invokes, beside the watcher in the configured scriptsDir. */
 const NOTIFY_FILE = 'autonomous-notify.sh';
 
-/** The event word the test send carries — none of the watcher's six, so it reads as no run's outcome. */
+/** The event word the test send carries — none of the watcher's seven, so it reads as no run's outcome. */
 const TEST_EVENT = 'doctor-test';
 
 /**
