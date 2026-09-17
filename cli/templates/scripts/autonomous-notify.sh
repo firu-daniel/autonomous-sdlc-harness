@@ -10,12 +10,14 @@
 # completed branch, a parked question or a failed run is noticed at all.
 #
 # THE EVENT VOCABULARY IS A CONTRACT. The watcher's exit classifier and its
-# launch, resume, park and stall paths all call this script with one of these six
-# words, and nothing else may be added here without adding it there:
+# launch, resume, park and stall paths all call this script with one of these
+# seven words, and nothing else may be added here without adding it there:
 #
 #   completed  the run reached "branch ready for review"
 #   parked     the run wrote a clarification question and yielded — idle until
 #              the answer file lands
+#   park_loop  the watcher stopped resuming a parked run whose resumes made no
+#              progress — idle until an operator clears it
 #   paused     the run honored a PAUSE request and yielded — idle until RESUME
 #   failed     the run exited non-zero, or its process vanished
 #   launched   a fresh inbox run was just started
@@ -98,7 +100,7 @@
 #
 # Usage:
 #   autonomous-notify.sh <event> <branch> [log_path] [detail]
-#     event     completed | parked | paused | failed | launched | resumed
+#     event     completed | parked | park_loop | paused | failed | launched | resumed
 #     branch    the run's branch name
 #     log_path  optional path to the central run log, shown in the message
 #     detail    optional one-line extra, e.g. the clarification question's file
@@ -140,7 +142,7 @@ LOG_PATH="${3:-}"
 DETAIL="${4:-}"
 
 if [ -z "$EVENT" ] || [ -z "$BRANCH" ]; then
-  echo "usage: $self <completed|parked|paused|failed|launched|resumed> <branch> [log_path] [detail]" >&2
+  echo "usage: $self <completed|parked|park_loop|paused|failed|launched|resumed> <branch> [log_path] [detail]" >&2
   exit 2
 fi
 
@@ -196,6 +198,10 @@ completed)
 parked)
   TITLE="[$slug] Run parked — $BRANCH"
   MESSAGE="Run '$BRANCH' is waiting for a clarification answer."
+  ;;
+park_loop)
+  TITLE="[$slug] Run stuck in a park loop — $BRANCH"
+  MESSAGE="Run '$BRANCH' parked again after resumes that made no progress; the watcher has stopped resuming it."
   ;;
 paused)
   TITLE="[$slug] Run paused — $BRANCH"
