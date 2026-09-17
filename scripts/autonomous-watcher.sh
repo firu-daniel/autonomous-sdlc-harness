@@ -606,6 +606,34 @@ AGENT_MODEL="$(hr_agent_model "$MAIN_REPO")" || AGENT_MODEL=""
 # there is exactly one place a test can point at a stub and exactly one place to
 # look when asking what this watcher actually executes.
 AGENT_CLI="${HARNESS_AGENT_CLI:-claude}"
+# THE SPELLING OF THESE THREE IS MEASURED, NOT ASSUMED.
+# Measured on Claude Code 2.1.274, plugin `autonomous-sdlc-harness 0.1.0` (per
+# `claude plugin details autonomous-sdlc-harness@autonomous-sdlc-harness`), from a
+# checkout that enables the plugin, with the task engine's launch_prompt below
+# spelled each way:
+#   claude -p "<the task-engine launch_prompt, spelled either way>" --permission-mode plan --max-turns 4 --output-format stream-json --verbose
+# The `system`/`init` event of both legs listed
+# `autonomous-sdlc-harness:branch-start-plan-autonomous` among its slash commands
+# and did not list `branch-start-plan-autonomous`; neither appeared under skills.
+#   "/branch-start-plan-autonomous": exit 0, no `Skill` tool_use; the first tool
+#     call was `Bash`; result success, first line: "I didn't start
+#     `/branch-start-plan-autonomous`. The instructions don't match this
+#     checkout, and plan mode is on, so I couldn't have run it anyway. Nothing
+#     was changed, committed or parked."
+#   "/autonomous-sdlc-harness:branch-start-plan-autonomous": exit 0, no `Skill`
+#     tool_use; the tool calls were `Bash` then `Write` (the plan-mode plan file);
+#     result success, first line: "I didn't start the autonomous run for
+#     `spelling_probe_no_such_branch`, and nothing in the repository changed.
+#     The request didn't match what's in this worktree:"
+# Route: `bare`. The `prefixed` row needs the prefixed leg to emit a `Skill`
+# tool_use naming `autonomous-sdlc-harness:branch-start-plan-autonomous` with a
+# non-error result; it emitted none, so the `bare` row ("every other outcome")
+# decided: the bare strings, which `fix_line_number_citations_never_block` and
+# `feat_readme_summary_compact_llms_txt` launched and completed with, stand. The
+# user-review and docs engines are launched by the same sentence and resolve the
+# name the same way, so the one route covers all three strings.
+# Still owed: an unattended run launched after this change reaching its first
+# phase. Record: `docs/development.md` -> `## 6. The roadmap this tree defers to`.
 ENGINE_COMMAND_TASK="/branch-start-plan-autonomous"
 ENGINE_COMMAND_USER_REVIEW="/branch-start-user-review-fix-autonomous"
 ENGINE_COMMAND_DOCS="/branch-start-docs-autonomous"
