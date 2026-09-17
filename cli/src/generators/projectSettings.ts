@@ -66,9 +66,6 @@ import { packageRoot, parseRepoSlug } from '../core/paths.js';
 import { PLUGIN_NAME } from '../core/pluginIdentity.js';
 import type { WritePlan } from '../core/writer.js';
 
-/** Re-exported for `cli/test/doctor.test.mjs`, which loads it from this compiled module. */
-export { PLUGIN_NAME };
-
 /** The marketplace's name, mirroring `.claude-plugin/marketplace.json`'s `name`. */
 export const MARKETPLACE_NAME = 'autonomous-sdlc-harness';
 

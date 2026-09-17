@@ -4535,7 +4535,8 @@ test('the layer-drift check names the directories no layer covers, and is not gr
  * under any other key is a record the check correctly reports nothing about, so it has to be the
  * CLI's own string rather than this file's guess at it.
  */
-const { MARKETPLACE_NAME, PLUGIN_KEY, PLUGIN_NAME } = await loadCompiled('generators/projectSettings.js');
+const { MARKETPLACE_NAME, PLUGIN_KEY } = await loadCompiled('generators/projectSettings.js');
+const { PLUGIN_NAME } = await loadCompiled('core/pluginIdentity.js');
 const CLAUDE_PLUGINS_DIR = 'plugins';
 const INSTALLED_PLUGINS_FILE = 'installed_plugins.json';
 const KNOWN_MARKETPLACES_FILE = 'known_marketplaces.json';
