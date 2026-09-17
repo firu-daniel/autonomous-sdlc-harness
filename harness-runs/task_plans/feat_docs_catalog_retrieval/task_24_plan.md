@@ -25,3 +25,8 @@
 - Every row of `OUTER_LOOP_SCRIPTS` has a §2 table row: walk `grep -n "Object.freeze({ file:" cli/src/generators/outerLoopScripts.ts` (the launcher's row names `DOCS_SEARCH_SERVER_SCRIPT_NAME`, `harness-run-lib.sh` appears in the table as `lib/harness-run-lib.sh`) and match each entry by name against the table, rather than comparing counts.
 - The left-allowed list in `docs/watcher.md` names the same scripts as `plugin/hooks/README.md` → `## The deny list` and the guard's *LEFT ALLOWED* comment: `grep -n "LEFT ALLOWED" -A2 plugin/hooks/autonomous-script-allowlist-guard.sh` and the paragraph agree name for name.
 - `bash scripts/run-gates.sh` passes gate 6a (no machine paths): the row names `.mcp.json` and `docs serve`, never a cache path.
+
+**Deviations from plan:**
+
+- The table row links `docs/retrieval.md` → `## How it fits together` from its "What it does" cell (the plan allowed the cell or the sentence after the table).
+- Gate 6a verification rests on the gate's hit list rather than a pass: `bash scripts/test.sh` exited 1 with 6a as its only failure, and every hit is outside this task's diff — the worktree's untracked `.git` pointer file, `harness-runs/scratch/task6-test.log` and `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md`. No hit names `docs/watcher.md`.
