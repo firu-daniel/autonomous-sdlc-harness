@@ -41,3 +41,7 @@
 - `grep -n "^tools:" plugin/agents/task-plan-writer.md plugin/agents/ui-tests-plan-writer.md plugin/agents/ui-tests-plan-reviewer.md plugin/agents/architecture-reviewer.md plugin/agents/branch-reviewer.md` shows every original tool still present and in order, with the MCP tool last, and no browser namespace added.
 - `claude plugin validate --strict plugin` passes (`docs/development.md` → `## 5. Verifying a change`, Gate 1).
 - Every `<docs_retrieval>` used in a body has its row in the same file's `## Resolved values` (`.claude/context/plugin.md` → `## The placeholder vocabulary`).
+
+**Deviations from plan:**
+
+- Evidence downgrade: `claude plugin validate --strict plugin` was refused by the permission layer ("This command requires approval"), so the Gate 1 bullet was not executed. The frontmatter change is one appended entry on the existing `tools:` line with no key added; the claim rests on that reading and on `bash scripts/test.sh` gates other than 6a passing, not on the validator.
