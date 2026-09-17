@@ -19,3 +19,4 @@
 
 - `bash scripts/test.sh` exits 0, including the `setup-analysis`, `layer-profile`, `layer-drift` and `task-offer-rules` cases.
 - `grep -n '/harness-analyze' cli/src/doctor/checks.ts cli/test/doctor.test.mjs` prints nothing. Any line it prints is a site this task missed.
+- **Deviations from plan:** `bash scripts/test.sh` exited 1, not 0: its gate 4 (`npm test`) passed, and the sole failure was gate 6a `no machine paths`, whose hits are the worktree's `.git` pointer file, `harness-runs/scratch/t3npm.log` and `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md` — none of them this task's targets. The `grep -n '/harness-analyze'` verification printed nothing.

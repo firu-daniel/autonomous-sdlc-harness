@@ -149,6 +149,7 @@ import {
   MARKETPLACE_NAME,
   marketplaceEntryDefect,
   PLUGIN_KEY,
+  PLUGIN_NAME,
   SETTINGS_PATH,
   SLUG_SHAPE,
 } from '../generators/projectSettings.js';
@@ -2709,8 +2710,8 @@ const STATE_DIR_TREE_CHECK: Check = {
   },
 };
 
-/** The command both remedies below name, spelled as `init` and every stub footer spell it. */
-const ANALYZE_COMMAND = '/harness-analyze';
+/** The command both remedies below name, plugin-qualified as `init` and every stub footer spell it. */
+const ANALYZE_COMMAND = `/${PLUGIN_NAME}:harness-analyze`;
 
 /**
  * Setup's judgement half, reported as the four facts that decide it: a configured conventions
@@ -3001,7 +3002,7 @@ function detectionProvenance(detection: HarnessDetection): string {
  *
  * **It is deliberately blind to the conventions documents.** {@link SETUP_ANALYSIS_CHECK} above
  * grades those, and its skeleton warning was the last indirect trace that a fallback profile had
- * never been examined — a trace `/harness-analyze conventions` clears by filling the documents,
+ * never been examined — a trace `/autonomous-sdlc-harness:harness-analyze conventions` clears by filling the documents,
  * leaving `doctor` green about a profile nobody looked at. This check reads no document, so that
  * command does not move it.
  *

@@ -3718,7 +3718,7 @@ const SETUP_PENDING_OPEN = '<!-- harness:setup-pending -->';
 const SETUP_PENDING_CLOSE = '<!-- /harness:setup-pending -->';
 
 /** The analyze command, as both remedies name it. */
-const ANALYZE_COMMAND = '/harness-analyze';
+const ANALYZE_COMMAND = '/autonomous-sdlc-harness:harness-analyze';
 
 /**
  * The conventions documents the wired config points at.
@@ -4044,7 +4044,7 @@ test('a rules file no fence names warns, names both remedies, and leaves the exi
   assert.ok(stderr.includes(TASK_OFFER_FILE), `the warning does not name the orphaned file:\n${stderr}`);
 
   // Both remedies, because they cost different things and the adopter picks: the section added by
-  // hand keeps everything `/harness-analyze` filled, the forced re-render does not.
+  // hand keeps everything `/autonomous-sdlc-harness:harness-analyze` filled, the forced re-render does not.
   assert.ok(stderr.includes(TASK_OFFER_SECTION), `the warning does not name the section to add by hand:\n${stderr}`);
   assert.match(stderr, /autonomous-sdlc-harness init --force/);
   assert.match(stdout, CLEAN_SUMMARY);
@@ -4104,7 +4104,7 @@ async function wiredLayeredFixture(t) {
  *
  * **The subject is the disappearing signal**, which is why the first case runs `doctor` twice. Before
  * this check, the only trace that a `flat` fallback profile had never been examined was
- * `setup-analysis`'s skeleton warning — and `/harness-analyze conventions` clears that by filling the
+ * `setup-analysis`'s skeleton warning — and `/autonomous-sdlc-harness:harness-analyze conventions` clears that by filling the
  * documents, without the profile having been looked at at all. The second run in case (a) is that
  * state, reached by hand: `setup-analysis` passes and this check still warns.
  *
@@ -4366,7 +4366,7 @@ const FLAT_DIRS = Object.freeze(['cmd', 'lib', 'pkg', 'tools', 'test']);
  * pass on a reworded sentence.
  */
 const STANDING_GAP_REMEDY =
-  'If any of them is a real layer, run `/harness-analyze` in a session here and answer `skip` for every already-filled document; ' +
+  'If any of them is a real layer, run `/autonomous-sdlc-harness:harness-analyze` in a session here and answer `skip` for every already-filled document; ' +
   'a no-argument run with `--yes` takes `merge` on all of them and rewrites documents nobody asked to touch. ' +
   'The profile itself is applied through `npx autonomous-sdlc-harness config set layers`';
 
@@ -4447,7 +4447,7 @@ test('the layer-drift check names the directories no layer covers, and is not gr
   await t.test('a recorded review does not silence it — a layer hand-added after the review still drifts', async (subtest) => {
     const dir = await wiredLayeredFixture(subtest);
     mkdirSync(join(dir, DRIFTED_DIR), { recursive: true });
-    // The record `/harness-analyze layers` writes, hand-added in the shape `config set
+    // The record `/autonomous-sdlc-harness:harness-analyze layers` writes, hand-added in the shape `config set
     // detection.review` takes. It clears `layer-profile` and nothing else: a verdict is a statement
     // about the profile at the moment it was reviewed, so a directory that appeared afterwards is
     // exactly Finding 38's entry 2 — "a layer is hand-added between runs".

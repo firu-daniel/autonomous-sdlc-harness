@@ -47,7 +47,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_plugin_prefix_command_swee
 1. [x] **Task 1** — Measure the watcher's first-message spelling and set `ENGINE_COMMAND_*` in the watcher template from the result _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Qualify the analyze command in `init`, the stub footers and the `flat` fallback warning, re-measure the headless leg, and update `init.test.mjs` _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — Qualify the analyze command in `detect/presets.ts` and update `stack-presets.test.mjs` _(layer: cli)_ _(points: 10)_
-4. [ ] **Task 4** — Qualify the analyze command in `doctor`'s checks and update `doctor.test.mjs` _(layer: cli)_ _(points: 15)_
+4. [x] **Task 4** — Qualify the analyze command in `doctor`'s checks and update `doctor.test.mjs` _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — Qualify the command spellings in the comment-only `cli/src` modules and the `cli/templates/claude/` templates _(layer: cli)_ _(points: 10)_
 6. [ ] **Task 6** — Qualify every command spelling under `plugin/commands/`, `**Usage:**` lines included _(layer: plugin)_ _(points: 15)_
 7. [ ] **Task 7** — Qualify every command spelling under `plugin/instructions/`, fork binding values included _(layer: plugin)_ _(points: 15)_
