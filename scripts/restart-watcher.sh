@@ -52,7 +52,7 @@
 #
 #   * the run registry (`<state_dir>/autonomous_logs/registry.json`, shaped
 #     `{"runs": {"<branch>": {"status": …}}}`) is the SOURCE OF TRUTH: a record
-#     whose status is `running` or `parked` is a run in flight;
+#     whose status is `running`, `parked` or `park_loop` is a run in flight;
 #   * a process probe for the agent binary — `${HARNESS_AGENT_CLI:-claude}`, the
 #     same variable the watcher launches through — is a BACKSTOP, for a run OF
 #     THIS PROJECT whose record has not been written yet or was written by a
@@ -119,7 +119,8 @@
 #
 #   in flight     printf '%s' '{"runs":{"feat_x":{"status":"running"}}}' > "$reg"
 #                 run            -> the in-flight report, exit 2, and no
-#                                   "$w/calls" at all (same for "parked")
+#                                   "$w/calls" at all (same for "parked"
+#                                   and "park_loop")
 #   forced        run --force    -> the same report plus the restarting line,
 #                                   and "$w/calls" holds `daemon stop` then
 #                                   `daemon install`, in that order
@@ -257,7 +258,7 @@ else
   # document that has no such wrapper is a registry this cannot enumerate, so
   # `jq` fails and the refusal below fires. Reading such a file as "no active
   # runs" is the one misreading that costs a run.
-  elif ! active="$(jq -r '.runs | to_entries[] | select(.value.status == "running" or .value.status == "parked") | "\(.value.status) \(.key)"' "$registry" 2>/dev/null)"; then
+  elif ! active="$(jq -r '.runs | to_entries[] | select(.value.status == "running" or .value.status == "parked" or .value.status == "park_loop") | "\(.value.status) \(.key)"' "$registry" 2>/dev/null)"; then
     active=""
     unknown="'$registry' could not be read as a run registry (invalid JSON, or no .runs wrapper)"
   fi

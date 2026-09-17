@@ -38,7 +38,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_watcher_multi_question_r
 10. [x] **Task 10** — Commands: answer a whole park, and name the `park_loop` status and its clear action _(layer: plugin)_ _(points: 15)_
 11. [x] **Task 11** — Plugin flow documents: the park exchange and the loop guard _(layer: plugin)_ _(points: 10)_
 12. [x] **Task 12** — Developer docs: the watcher's park protocol, `park_loop` and its knobs _(layer: general)_ _(points: 15)_
-13. [ ] **Task 13** — Mirror the changed templates into this repository's own copies _(layer: general)_ _(points: 5)_
+13. [x] **Task 13** — Mirror the changed templates into this repository's own copies _(layer: general)_ _(points: 5)_
 
 ## Scope register
 
