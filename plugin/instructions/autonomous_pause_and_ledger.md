@@ -306,8 +306,8 @@ see the warning above). This makes every flip safe to re-run on a resumed run.
 4. Within the resume-point phase, the phase's **detail index** drives within-phase resume, exactly as the
    per-task / per-finding / per-test loops already do today (find the first `[ ]` item).
 5. `PAUSE_PROGRESS.md` (§2) is read only as a **human-readable hint / audit trail** — the ledger is
-   authoritative. This composes with the clarification park/resume (`Override 2(a)`): a top-level `answer_<n>.md`
-   is consumed as today; the ledger independently says which phase to be in.
+   authoritative. This composes with the clarification park/resume (`Override 2(a)`): the top-level answered pairs
+   the watcher resumed for are consumed as `Override 2(a)` states; the ledger independently says which phase to be in.
 
 This is what makes resume deterministic and answers "will the fork know where to resume" — it also removes
 the naive re-run of the non-checkbox review phases that the existing clarification park/resume otherwise
