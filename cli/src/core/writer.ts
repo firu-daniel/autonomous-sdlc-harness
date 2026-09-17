@@ -13,8 +13,10 @@
  * adopter's file: the repository registry `machine/registry.ts` owns, which `daemon install`
  * rewrites in place. Its header states why none of the four policies below fits it. The
  * docs-retrieval runtime and model cache under `machineCacheDir()/retrieval/` are machine state of
- * the same class: outside the repository, written by `npm` and Transformers.js, and created by
- * `cli/src/retrieval/setup.ts` → `setUpRetrieval`. The daemon
+ * the same class, outside the repository, with both paths owned by `cli/src/retrieval/runtime.ts`:
+ * the runtime installation is created by `cli/src/retrieval/setup.ts` → `setUpRuntime` through
+ * `npm`, and the model cache is written by `cli/src/retrieval/models.ts` → `fetchModels` through
+ * Transformers.js, in the `docs fetch-models` child that `setup.ts` → `setUpModels` spawns. The daemon
  * unit and the push-notification settings file *are* on a plan, under `allowOutsideRepo` — they
  * are create-if-absent artifacts an operator goes on to edit, which is exactly what this engine
  * is for. The second is an exception to this engine's monopoly on writing into an adopting

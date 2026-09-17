@@ -15,8 +15,10 @@
  * - **A failed step is a warning.** The wiring the plan wrote stays valid; `doctor` fails until a
  *   re-run completes the step.
  *
- * Both steps write machine state outside the repository, through `npm` and Transformers.js, not
- * through the write engine (`cli/src/core/writer.ts` header).
+ * Both steps put machine state outside the repository, not through the write engine
+ * (`cli/src/core/writer.ts` header). `setUpRuntime` writes the runtime itself, through `npm`;
+ * `setUpModels` only spawns `docs fetch-models`, and the model cache's write belongs to
+ * `retrieval/models.ts` → `fetchModels`, through Transformers.js, in that child process.
  */
 
 import { execFileSync } from 'node:child_process';
