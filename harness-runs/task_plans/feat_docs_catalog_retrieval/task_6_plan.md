@@ -64,3 +64,10 @@
 - `node cli/dist/cli.js --help` lists `docs`, and `node cli/dist/cli.js docs --help` lists `index`.
 - `session.ts` opens with its module header: it names what the module owns, and `grep -n "The rule this module exists to enforce" cli/src/retrieval/session.ts` hits inside that header, which names both refusals and `allowRemote: false`.
 - Task 2's `retrieval-loading.test.mjs` stays green: `docs` is not among its verbs, and no module this task adds statically imports a peer.
+
+**Deviations from plan:**
+
+- Case (a) expects no `; rebuilt for a new embedder` suffix on a first build, but Task 5's `refreshIndex` set `rebuilt` whenever the stored embedder id differed, including when none was stored. `cli/src/retrieval/refresh.ts` now sets `rebuilt` only when a stored id existed and differed, and the `RefreshResult.rebuilt` doc comment says so. Known edge: a width change drops the stored id in `openPgliteStore`, so that rebuild re-embeds everything without the suffix.
+- `docs index` under the global `--dry-run` builds in memory, like `--in-memory`, so the flag's "write nothing" promise holds; the plan did not address `--dry-run`. Stated in the module header and the usage lines.
+- The fixture suite's `XDG_CACHE_HOME` is a separate `mkdtemp` directory torn down with the test rather than a path inside the fixture repository, so the planted cache is never part of the repository tree `snapshotTree` compares.
+- Case (a)'s wall time was measured with a scratch probe running five fresh-fixture `docs index` subprocesses (967 to 1372 ms, macOS, Node v20.19.5), not inside the suite run itself.

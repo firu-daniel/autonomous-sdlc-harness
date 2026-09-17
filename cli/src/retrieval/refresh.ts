@@ -24,6 +24,7 @@ export interface RefreshResult {
   readonly unchanged: number;
   /** Chunks whose file or heading is gone; rows a rebuild cleared are not counted. */
   readonly deleted: number;
+  /** A stored embedder id differed from this one; a first build, with none stored, is not a rebuild. */
   readonly rebuilt: boolean;
   readonly warnings: readonly string[];
 }
@@ -48,10 +49,11 @@ export async function refreshIndex(options: {
   const { repoRoot, config, store, embedder } = options;
 
   let rebuilt = false;
-  if ((await store.readMeta(EMBEDDER_META_KEY)) !== embedder.id) {
+  const storedEmbedder = await store.readMeta(EMBEDDER_META_KEY);
+  if (storedEmbedder !== embedder.id) {
     await store.clear();
     await store.writeMeta(EMBEDDER_META_KEY, embedder.id);
-    rebuilt = true;
+    rebuilt = storedEmbedder !== undefined;
   }
 
   const corpus = corpusFiles(repoRoot, config);
