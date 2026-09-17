@@ -30,7 +30,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_watcher_multi_question_r
 2. [x] **Task 2** — Watcher: the park-loop guard, its `park_loop` status and its operator clear _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — Declare the `park_loop` notification and status in the notifier and the registry readers _(layer: cli)_ _(points: 10)_
 4. [x] **Task 4** — Tests: the observed multi-question sequence, mid-session answers and late questions _(layer: cli)_ _(points: 20)_
-5. [ ] **Task 5** — Tests: the loop guard trips, clears, and never catches a real double park _(layer: cli)_ _(points: 20)_
+5. [x] **Task 5** — Tests: the loop guard trips, clears, and never catches a real double park _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 6** — State-dir READMEs: one question file per park, and the consumed-set archive _(layer: cli)_ _(points: 10)_
 7. [ ] **Task 7** — Planning fork: redefine the clarification channel as one exchange per park _(layer: plugin)_ _(points: 15)_
 8. [ ] **Task 8** — The other three autonomous forks write and consume one exchange per park _(layer: plugin)_ _(points: 15)_
