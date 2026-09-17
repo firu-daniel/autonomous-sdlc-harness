@@ -14,7 +14,7 @@
 
 Each entry points to a self-contained `harness-runs/user_reviews/feat_readme_summary_compact_llms_txt_fix_plan/finding_<K>.md` file through its `**Finding K**` reference. Entries are sorted from lowest blast radius to widest refactor.
 
-1. [ ] **Finding 1** — Put every adopter command in `README.md` (checklist steps 1–5, steps A/B/D/E/F, the **Published.** caveat) and in the `llms.txt` checklist into fenced blocks, one command per line, with no ", then" joins. _(layer: general)_
+1. [x] **Finding 1** — Put every adopter command in `README.md` (checklist steps 1–5, steps A/B/D/E/F, the **Published.** caveat) and in the `llms.txt` checklist into fenced blocks, one command per line, with no ", then" joins. _(layer: general)_
 
 ---
 

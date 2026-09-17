@@ -6,11 +6,37 @@ This file is for a language model choosing which document of this repository to 
 
 The quick start, in five steps:
 
-1. Install the plugin: `claude plugin marketplace add firu-daniel/autonomous-sdlc-harness`, then `claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness`.
-2. Wire your repository: `npx autonomous-sdlc-harness init`.
-3. Teach it the codebase: type `/harness-analyze` in an interactive Claude Code session opened on the repository, not in the terminal.
-4. Verify: `npx autonomous-sdlc-harness doctor`.
-5. Start the daemon: `npx autonomous-sdlc-harness daemon install`, then `npx autonomous-sdlc-harness daemon start`.
+1. Install the plugin:
+
+   ```bash
+   claude plugin marketplace add firu-daniel/autonomous-sdlc-harness
+   claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness
+   ```
+
+2. Wire your repository:
+
+   ```bash
+   npx autonomous-sdlc-harness init
+   ```
+
+3. Teach it the codebase: type this in an interactive Claude Code session opened on the repository, not in the terminal:
+
+   ```
+   /harness-analyze
+   ```
+
+4. Verify:
+
+   ```bash
+   npx autonomous-sdlc-harness doctor
+   ```
+
+5. Start the daemon:
+
+   ```bash
+   npx autonomous-sdlc-harness daemon install
+   npx autonomous-sdlc-harness daemon start
+   ```
 
 ## The two halves
 

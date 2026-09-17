@@ -4,15 +4,46 @@ An autonomous software-delivery harness for Claude Code.
 You ask for a change, and you get back a branch that has been planned, implemented and independently reviewed, pushed and ready for your review.
 You install two things: a Claude Code plugin and a Node CLI.
 
-1. Install the plugin: `claude plugin marketplace add firu-daniel/autonomous-sdlc-harness`, then `claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness` (step A).
-2. Wire your repository: `npx autonomous-sdlc-harness init` (step B).
-3. Teach it the codebase: type `/harness-analyze` in an **interactive** Claude Code session opened on the repository, not in the terminal (step C).
-4. Verify: `npx autonomous-sdlc-harness doctor` (step D).
-5. Start the daemon: `npx autonomous-sdlc-harness daemon install`, then `npx autonomous-sdlc-harness daemon start` (step E).
+1. Install the plugin (step A):
+
+   ```bash
+   claude plugin marketplace add firu-daniel/autonomous-sdlc-harness
+   claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness
+   ```
+
+2. Wire your repository (step B):
+
+   ```bash
+   npx autonomous-sdlc-harness init
+   ```
+
+3. Teach it the codebase: type this in an **interactive** Claude Code session opened on the repository, not in the terminal (step C):
+
+   ```
+   /harness-analyze
+   ```
+
+4. Verify (step D):
+
+   ```bash
+   npx autonomous-sdlc-harness doctor
+   ```
+
+5. Start the daemon (step E):
+
+   ```bash
+   npx autonomous-sdlc-harness daemon install
+   npx autonomous-sdlc-harness daemon start
+   ```
 
 **Before you run it:**
 
-- **Published.** The npm package and the plugin marketplace are both live, so the checklist runs as written. `npm view autonomous-sdlc-harness version` answers with the published version and exits `0`.
+- **Published.** The npm package and the plugin marketplace are both live, so the checklist runs as written. This command answers with the published version and exits `0`:
+
+  ```bash
+  npm view autonomous-sdlc-harness version
+  ```
+
 - **Contributors.** From a clone, the plugin installs as a directory source, and the built CLI is `node cli/dist/cli.js`. Both routes, and the scratch repository step 3 then needs, are [`docs/development.md`](docs/development.md) §1 and §5.
 - **Interactive only.** Step 3 answers `Unknown command` in a headless `claude -p` session. The measurement is [`docs/development.md`](docs/development.md) §6.
 - **The `.claude/` write wall.** Step 3 writes under `.claude/`, which no permission entry opens to an unattended run. There it exits `0` having written nothing, so run it supervised and check that the conventions documents changed. See [`docs/analyze.md`](docs/analyze.md) §3.
@@ -92,7 +123,16 @@ The last three commands are the ones the generated wrapper scripts wrap. That di
 
 **A. Install the harness — once per machine (checklist step 1).** Adds this repository as a plugin marketplace, then installs the one plugin it publishes, `autonomous-sdlc-harness`. Working from a clone instead: see **Contributors** under **Before you run it**.
 
+```bash
+claude plugin marketplace add firu-daniel/autonomous-sdlc-harness
+claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness
+```
+
 **B. Wire a project — once per repo (checklist step 2).** One deterministic pass with no model call in it. It creates what is absent and keeps what you have edited. What it writes is [`docs/cli.md`](docs/cli.md) §2.
+
+```bash
+npx autonomous-sdlc-harness init
+```
 
 **C. Teach it the codebase — once per repo, LLM-assisted (checklist step 3).** It fills the conventions documents from the repository's real code. It *proposes* a layer-profile revision and never writes `harness.config.json` itself. To run one target at a time, type `/harness-analyze <target>`.
 
@@ -100,13 +140,28 @@ This step is limited twice: see **Interactive only** and **The `.claude/` write 
 
 **D. Verify (checklist step 4).** Reports everything wrong with a wired repository, not just the first thing. The exit status is the contract: `0` when no check failed, `1` when at least one did. The checks are [`docs/cli.md`](docs/cli.md) §7.
 
+```bash
+npx autonomous-sdlc-harness doctor
+```
+
 **E. Run (checklist step 5).** Installs this repository's own run daemon into the host's service manager and starts it. On launchd the lifecycle is driven for you. On systemd the unit is written and the `systemctl --user` commands are printed for you to run ([`docs/cli.md`](docs/cli.md) §9).
+
+```bash
+npx autonomous-sdlc-harness daemon install
+npx autonomous-sdlc-harness daemon start
+```
 
 Then just ask for the change. An ordinary interactive session in this repository offers to run a change request autonomously, and on a yes it invokes `/branch-prompt` with the request. The offer is defined by two files `init` writes: [`cli/templates/claude/CLAUDE.md`](cli/templates/claude/CLAUDE.md) and [`cli/templates/claude/harness-task-offer.md`](cli/templates/claude/harness-task-offer.md).
 
 Two direct routes reach the same drop: `/branch-prompt` itself, or a file named `<branch>_task_prompt.md` written into `<state_dir>/autonomous_inbox/` ([`docs/config.md`](docs/config.md) §3). The next poll pass acts on it, as [`docs/watcher.md`](docs/watcher.md) §1 describes.
 
-**F. A teammate clones.** `git clone` → open the repository in Claude Code → **accept the workspace trust dialog** → the plugin resolves from the keys `init` committed into `.claude/settings.json`, with `/reload-plugins` for a session that was already open → `npx autonomous-sdlc-harness doctor`. Which keys are written is [`docs/cli.md`](docs/cli.md) §2. No `init` re-run is needed: `harness.config.json` and the permission profile are committed.
+**F. A teammate clones.** `git clone` → open the repository in Claude Code → **accept the workspace trust dialog** → the plugin resolves from the keys `init` committed into `.claude/settings.json`, with `/reload-plugins` for a session that was already open. Then verify:
+
+```bash
+npx autonomous-sdlc-harness doctor
+```
+
+Which keys are written is [`docs/cli.md`](docs/cli.md) §2. No `init` re-run is needed: `harness.config.json` and the permission profile are committed.
 
 ## How it is measured
 

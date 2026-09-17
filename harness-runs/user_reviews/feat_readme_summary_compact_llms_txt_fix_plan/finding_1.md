@@ -66,3 +66,5 @@ The rule the user set: **every command an adopter is meant to run is copiable, m
 - `grep -n ', then `' README.md llms.txt` prints nothing.
 - `bash scripts/check-llms-txt.sh` exits `0`.
 - Rendered on GitHub, each of the five checklist items shows its fenced block inside the numbered item and the numbering does not restart. Steps A, B, D, E and F each show a copy button on their command block. Copying any block and pasting it into a shell runs it line by line with no stray words.
+
+**Deviations from plan:** The third Verify bullet (GitHub rendering, copy buttons, numbering continuity) was not executed: no GitHub render is reachable from this run. It rests on reading the edited Markdown, which nests every checklist fence at a three-space indent under its item with a blank line either side, and the **Published.** fence at a two-space indent under its bullet. The first two bullets were executed: the `grep` printed nothing and `bash scripts/check-llms-txt.sh` exited `0`.
