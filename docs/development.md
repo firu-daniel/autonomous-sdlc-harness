@@ -109,9 +109,9 @@ The repo-scoped side of the same boundary — what belongs in the committed `har
 
 ## 5. Verifying a change
 
-Nine gates. Run each **without a pipe** and read the exit status: piping into a pager or into `head` returns the *pager's* status, not the tool's, so a failing gate reads as a passing one.
+Ten gates. Run each **without a pipe** and read the exit status: piping into a pager or into `head` returns the *pager's* status, not the tool's, so a failing gate reads as a passing one.
 
-**Five of the nine run unattended, and `scripts/run-gates.sh` is how.** It runs gates 1, 2, 3, 4 and 6 — every gate below that a process can run without a terminal, a browser or a model session — grades each one the way this section says to grade it, and prints the remaining four rather than passing over them. `commands.test` in `harness.config.json` points at it, so a branch review's verification is the automatable half of this section rather than gate 4 alone. It is hand-written and is not in the set `init --force` regenerates; the `scripts/test.sh` that wraps it is generated and is not this file. Running the gates by hand, as written below, stays correct and is what the script's own text is checked against.
+**Five of the ten run unattended, and `scripts/run-gates.sh` is how.** It runs gates 1, 2, 3, 4 and 6 — every gate below that a process can run without a terminal, a browser, a model session or a network — grades each one the way this section says to grade it, and prints the remaining five, gates 5, 7, 8, 9 and 10, rather than passing over them. `commands.test` in `harness.config.json` points at it, so a branch review's verification is the automatable half of this section rather than gate 4 alone. It is hand-written and is not in the set `init --force` regenerates; the `scripts/test.sh` that wraps it is generated and is not this file. Running the gates by hand, as written below, stays correct and is what the script's own text is checked against.
 
 **One standing exemption, stated here so no gate has to restate it.** `examples/notes-app/` is two
 things with different obligations, and its own README draws the line (*"The capture is frozen; the
@@ -447,6 +447,72 @@ Read each match rather than counting them — `grep -rln '{{' cli/templates` is 
 **What this gate deliberately does not do**, for one reason covering all of it: it runs neither `node cli/dist/cli.js doctor --cwd examples/notes-app` nor any `bash examples/notes-app/scripts/*.sh`. `init`, `doctor` **and** every generated wrapper derive the repository root from git, and this fixture carries no `.git` of its own, so all three resolve to **this** repository rather than to the fixture and would report on the wrong tree.
 
 **One convention is part of this project's published design and survives packaging.** Every agent definition declares a `tools:` allowlist; the browser-automation MCP tools are granted to the single QA agent and to no other agent. A plugin-shipped agent's allowlist is enforced exactly as a project-level agent's is — an agent declaring `tools: Read` was denied `Bash` from a session that explicitly allowed it — so the containment holds through packaging on the allowlists alone. It is done that way, and **not** with a `permissions.deny` backstop, because a deny is evaluated before any allow and would revoke the QA agent's own grant along with everyone else's. An agent added without a `tools:` field inherits the full default tool set and silently re-opens browser access; reviewing for that is not optional. The rule is restated where it is easiest to miss, in `plugin/agents/README.txt`.
+
+**Gate 10 — docs retrieval with the real models.** Every retrieval case in gate 4 runs under the hash stub and never loads a model (`docs/cli.md` → *"Docs retrieval is tested without a model and without a network"*), so no gate above shows the real embedder and reranker working, the `.mcp.json` launcher starting, or an unattended session reaching `search_docs`. It is hand-run because leg (i) installs a runtime and downloads models into the machine-wide cache every checkout shares. Run it against a throwaway git repository **outside this checkout** holding a `docs/` of a few real documents and at least one commit — never a fixture, and never this repository, for the reason gate 2 gives. Run each command **without a pipe**, from that repository's root. Only leg (i) needs network access for retrieval; leg (v)'s session reaches the model service as any session does. Six legs.
+
+**(i) Setup.**
+
+```
+time npx autonomous-sdlc-harness init --docs --docs-retrieval --non-interactive
+du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/runtime"
+du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models"
+```
+
+Record the elapsed time and both sizes. Setup skips each step that is already satisfied, so also record whether the cache was cold: a warm cache's elapsed time is not a setup time.
+
+**(ii) `doctor`.**
+
+```
+npx autonomous-sdlc-harness doctor
+```
+
+`retrieval-dependencies`, `retrieval-model-cache` and `retrieval-index` all report `PASS`. Read those three lines rather than the exit status: a scratch repository with no remote fails `remote` (gate 5), which is not this leg's subject. Then move the model directory aside, re-run, and move it back:
+
+```
+mv "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models" "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models.aside"
+npx autonomous-sdlc-harness doctor
+mv "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models.aside" "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models"
+```
+
+The middle run reports `retrieval-model-cache` and `retrieval-index` failing. The cache is shared by every checkout on the machine, so move it back before anything else uses it.
+
+**(iii) Cold build.**
+
+```
+time npx autonomous-sdlc-harness docs index
+```
+
+Record its `docs index: <files> files, <chunks> chunks; embedded <e>, unchanged <u>, deleted <d>` line and the wall time. `doctor`'s `retrieval-index` builds in memory and writes nothing, so this is still the first on-disk build: the real-model cold build `docs/retrieval.md` compares against the stub's.
+
+**(iv) Search.**
+
+```
+npx autonomous-sdlc-harness docs search "<a question one known section of docs/ answers>"
+npx autonomous-sdlc-harness docs search "<a question nothing in docs/ answers>"
+```
+
+Both run in the default `fused-rerank` mode, which is where the reranker is shown to run. Record the first query's first result and its score, and whether it names the known section. Record whether the second prints `no confident match`, and if it does not, its first score. These scores are the real-model evidence for the provisional abstain threshold.
+
+**(v) Unattended.**
+
+```
+claude -p "Call the search_docs tool once with the query <the first question from leg (iv)>, then print its result verbatim." --settings .claude/settings.autonomous.json --permission-mode acceptEdits --output-format stream-json --verbose
+```
+
+Never add a permission-bypass flag: the leg measures what the generated profile grants. Record whether `mcp__harness-docs__search_docs` was available and called with no approval prompt — `-p` puts no prompt, so an ungranted call shows in the stream as a permission denial — and whether the call returned results. A call that returned results is the evidence that the relative launcher path in `.mcp.json` resolved from the session's working directory.
+
+**(vi) Platform.**
+
+```
+uname -sr
+node --version
+claude --version
+npx autonomous-sdlc-harness --version
+```
+
+Record all four, the `claude` line being the version leg (v) ran under.
+
+**Where the results go.** Each leg's command and exact output is recorded in `docs/retrieval.md` → `## Measured, and how`, item (d), replacing its placeholder, dated and carrying leg (vi)'s platform. A Linux run also settles that document's Linux question under `## Still open`. A run that could not execute this gate says so in its Done summary, naming the legs it could not run and why, rather than leaving the placeholder unexplained.
 
 ---
 

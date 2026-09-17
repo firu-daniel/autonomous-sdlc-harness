@@ -36,3 +36,8 @@
 - `grep -n "^\*\*Gate 10" docs/development.md` returns one line, and every command inside Gate 10 sits in a fenced block.
 - `grep -n -E "Nine gates|nine gates|of the nine|remaining four|four gates|the four it cannot|7, 8 and 9 remain" docs/development.md scripts/run-gates.sh` is empty — it catches every stale count this task edits, in §5's paragraph and in the script's header and closing line alike.
 - **Record in the Done summary** whether this run executed Gate 10, and its output if it did. An unattended run with no web access cannot run leg (i), and says so.
+
+**Deviations from plan:**
+
+- `bash scripts/run-gates.sh` exits 1, not 0: gate 6a prints hits in `./.git` (this worktree's `gitdir:` line) and in `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md` and `harness-runs/scratch/task6-test.log`, none in a file this task edits; the same hits appear in the earlier `task6-test.log`, so they predate this task. The other 12 checks pass, the hand-run list shows gate 10, and the success-path closing line was verified by reading the edited `echo`, not by execution.
+- Gate 10 was not executed: this dispatch did not install the retrieval runtime, download models or start a headless `claude` session.
