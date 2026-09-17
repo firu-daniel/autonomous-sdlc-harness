@@ -37,8 +37,8 @@ while this one fills the per-layer conventions documents `<layer_path_map>` poin
 what it could not determine. The setup verb it completes is written in full, `autonomous-sdlc-harness init`,
 never a bare `init`.
 
-**Usage:** `/harness-analyze` with no argument runs every target; `$ARGUMENTS` may name one target plus flags,
-e.g. `/harness-analyze <target> --existing`.
+**Usage:** `/autonomous-sdlc-harness:harness-analyze` with no argument runs every target; `$ARGUMENTS` may name one target plus flags,
+e.g. `/autonomous-sdlc-harness:harness-analyze <target> --existing`.
 
 **Targets are read from `harness.config.json` at invocation time, and this file enumerates none of them:** the
 `<layer_names>` values, plus the reserved `project` (the always-loaded file), `conventions` (the shared
@@ -84,7 +84,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    step 6 names the pair once.
 
    **What a run that does not itself write the shared cross-layer document sends as `shared_document`.** Two
-   run shapes do not write it: `/harness-analyze <layer>` for a layer whose own `conventions` is some other
+   run shapes do not write it: `/autonomous-sdlc-harness:harness-analyze <layer>` for a layer whose own `conventions` is some other
    document, and any run — no-argument or single-target — in which (4a) classified that document `skip`. The
    discriminator is **whether this run writes it**, never whether the document set contains it; (4a) settles
    that for the whole set before any dispatch leaves, so the value is decided by the time one goes out. In both
@@ -162,7 +162,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    keeps is what the orchestrator decides.
 
    **Ordering, for the set the run actually has.** **When this run writes the shared cross-layer document** —
-   every no-argument run in which (4a) did not classify it `skip`, a `/harness-analyze conventions` run, and a
+   every no-argument run in which (4a) did not classify it `skip`, a `/autonomous-sdlc-harness:harness-analyze conventions` run, and a
    single-target run naming the layer whose `conventions` is that document, which every generated
    configuration's catch-all row is — `<shared_conventions_path>` is written first, in its own
    write→review→fix chain completed before any per-layer document is dispatched: it owns the cross-layer
@@ -184,7 +184,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    writes it and in the on-disk cases step 1 names; and `parity`, only when `phases.parity` is
    `true`.
 
-   **What governs the prompt beyond that block.** `/harness-analyze` does **not** activate
+   **What governs the prompt beyond that block.** `/autonomous-sdlc-harness:harness-analyze` does **not** activate
    `${CLAUDE_PLUGIN_ROOT}/instructions/dispatch_discipline_instructions.md`: that file's activation list is
    closed and this command is not on it, so activating would mean editing a policy every dispatching
    instruction core obeys, and its obligations have no write point here — a setup run in an adopter's
@@ -532,7 +532,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    every `## Not determined` line collected across the documents; every conflict found between the adopter's
    existing prose and the code; the corpus pass's own outcome, including every outstanding cross-document
    item, in the shape the corpus block below sets out; and the next action —
-   `npx autonomous-sdlc-harness doctor` to confirm nothing is left unfilled, and `/harness-analyze <target>`
+   `npx autonomous-sdlc-harness doctor` to confirm nothing is left unfilled, and `/autonomous-sdlc-harness:harness-analyze <target>`
    to redo one document. A run that wrote nothing says so explicitly. Report in the **announced target order
    regardless of completion order**, so concurrency changes nothing a reader sees.
 
@@ -599,5 +599,5 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    count: a finding landing in a `role: context` member; a divergence or corpus finding the writer declined;
    and a reconciliation (4d.0) held divergences for but could not send, this run not having written the shared
    cross-layer document. Each is reported **among the results above**, named as the run's outstanding item —
-   and only then may `Next actions` name `/harness-analyze <target>` as its remedy. **A run that ends with
+   and only then may `Next actions` name `/autonomous-sdlc-harness:harness-analyze <target>` as its remedy. **A run that ends with
    none says so explicitly**, in the same place, as a run that wrote nothing does.

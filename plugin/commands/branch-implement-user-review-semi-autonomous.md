@@ -18,7 +18,7 @@ The tokens below are not ordinary **path placeholders** (`<branch>`, `<N>`, `<K>
 
 ## Context
 
-This is the **semi-autonomous** variant of `/branch-implement-user-review`. The supervised flow fixes one fix-plan item per session and pauses for user review between items; this variant runs the entire fix plan end-to-end without supervision.
+This is the **semi-autonomous** variant of `/autonomous-sdlc-harness:branch-implement-user-review`. The supervised flow fixes one fix-plan item per session and pauses for user review between items; this variant runs the entire fix plan end-to-end without supervision.
 
 **Phase A (fixes) followed by a QA phase.** First, implement every item in the fix plan: for each item, dispatch the `layer-implementer` agent once per layer the item touches, bottom-up by layer, passing that layer as its dispatch argument (which layer that is comes from the routing table in `unit_loop_core.md`, not restated here); after each implementer, dispatch `layer-reviewer` for that same layer; loop up to 5 times until the reviewer returns `PASS`; then dispatch the `committer` agent to commit. One commit per item. Then run **Phase QA**: augment the UI-test plan via `ui-tests-plan-writer` (the user review may have asked for behaviour the original UI-test plan never described), then drive the running app through the UI-test plan via `qa-tester` and loop any QA findings back through the normal implementer / reviewer / committer agents until QA passes (reusing the task-plan flow's Phase E machinery, with a non-colliding QA-review round suffix). **Skip this phase unless `phases.qa` is `true` in `harness.config.json`.** There is still **no Phase B (end-of-branch diff review) and no Phase C (review-plan implementation)** in this flow — the user-review file the fix plan was derived from already IS the hands-on review, so another end-of-branch diff review here would re-find the same items the user chose to skip. (Phase QA verifies the app's behaviour in a browser; it is not a diff review, so that rationale still holds.)
 
@@ -42,10 +42,10 @@ You are the **orchestrator** for this entire session. You do not edit code, you 
    - **Halt if missing.** If `grep` returns no match, halt immediately with this exact user-facing message:
 
      ```
-     No user-review fix plan found at <state_dir>/user_reviews/<branch>_fix_plan*.md. Run /branch-start-user-review-fix-plan first.
+     No user-review fix plan found at <state_dir>/user_reviews/<branch>_fix_plan*.md. Run /autonomous-sdlc-harness:branch-start-user-review-fix-plan first.
      ```
 
-     Do NOT auto-dispatch the fix-plan-writer. The supervised `/branch-start-user-review-fix-plan` command exists for that and the user invokes it out-of-band.
+     Do NOT auto-dispatch the fix-plan-writer. The supervised `/autonomous-sdlc-harness:branch-start-user-review-fix-plan` command exists for that and the user invokes it out-of-band.
    - **No task-prompt check.** The fix plan is self-contained (see `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fixes_instructions.md`); no task prompt is required.
    - **Working tree must be clean** (`git status --short` empty). If dirty, stop and tell the user — uncommitted changes would get caught in the first item's commit.
 

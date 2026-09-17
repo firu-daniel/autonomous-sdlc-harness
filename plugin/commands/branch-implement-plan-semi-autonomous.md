@@ -19,7 +19,7 @@ The tokens below are not ordinary **path placeholders** (`<branch>`, `<N>`, whic
 
 ## Context
 
-This is the **semi-autonomous** variant of `/branch-implement-plan`. Unlike the supervised flow (which implements one plan task per session and pauses for user review), this variant runs the entire flow without supervision:
+This is the **semi-autonomous** variant of `/autonomous-sdlc-harness:branch-implement-plan`. Unlike the supervised flow (which implements one plan task per session and pauses for user review), this variant runs the entire flow without supervision:
 
 - **Phase A:** Implement every task in the plan. For each task, dispatch the `layer-implementer` agent once per layer the task touches, bottom-up by layer, passing that layer as its dispatch argument (which layer that is comes from the routing table in `unit_loop_core.md`, not restated here); after each implementer, dispatch `layer-reviewer` for that same layer; loop up to 5 times until the reviewer returns `PASS`; then dispatch the `committer` agent to commit. One commit per task.
 - **Phase A1.5:** Once every task is committed, dispatch the `business-parity-reviewer` agent for a `<parity_vocabulary>` business-logic parity review of the implemented branch; if it finds deviations, loop the fixes through the normal implementer/reviewer/committer agents (reusing Phase C's per-item loop against a `<state_dir>/business_parity_branch_reviews/` index) until it passes; then proceed to the architecture review (Phase A2). **Skip this phase unless `phases.parity` is `true` in `harness.config.json`.**
@@ -39,7 +39,7 @@ You are the **orchestrator** for this entire session. You do not edit code, you 
 2. **Determine branch** with `git branch --show-current`.
 
 3. **Confirm prerequisites:**
-   - Story index exists at `<state_dir>/story_plans/<branch>_story_plan.md` (the thin index: `## Context` + `## Phase 2 Readiness — Ordered Fix List`; per-task detail lives in `<state_dir>/task_plans/<branch>/task_<N>_plan.md`). If missing, stop and tell the user to run `/branch-start-plan-semi-autonomous` first.
+   - Story index exists at `<state_dir>/story_plans/<branch>_story_plan.md` (the thin index: `## Context` + `## Phase 2 Readiness — Ordered Fix List`; per-task detail lives in `<state_dir>/task_plans/<branch>/task_<N>_plan.md`). If missing, stop and tell the user to run `/autonomous-sdlc-harness:branch-start-plan-semi-autonomous` first.
    - Task prompt exists at `<state_dir>/task_prompts/<branch>_task_prompt.md`. Having confirmed it exists, run `grep -nE '^#+ *Run mode' <state_dir>/task_prompts/<branch>_task_prompt.md`. **No hit → this run has no run mode**: carry `none` into the loop below, emit `📌 Run mode: none` at the disclosure site, and do not open `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md`. **A hit →** read `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` and follow it; it owns everything else, and none of it is restated here. This entry point runs the **implementation half alone**, so nothing upstream of it has established the run mode in this session — which is why the check belongs here as much as at a planning command's confirm-and-establish step.
    - Working tree is clean (`git status --short` empty). If dirty, stop and tell the user — uncommitted changes would get caught in the first task's commit.
 
