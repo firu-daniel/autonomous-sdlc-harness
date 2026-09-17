@@ -22,7 +22,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Surface the corpus-coverage warnings in the `search_docs` result and in `doctor`'s `retrieval-index` pass message _(layer: cli)_
+1. [x] **Finding 1** — Surface the corpus-coverage warnings in the `search_docs` result and in `doctor`'s `retrieval-index` pass message _(layer: cli)_
 
 ---
 

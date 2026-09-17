@@ -71,7 +71,7 @@
  *   config key — and `doctor` stays a command that is safe to run against a repository at any time.
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { accessSync, constants as fsConstants, existsSync, readFileSync, statSync } from 'node:fs';
 import { delimiter, join, posix, resolve as resolvePath } from 'node:path';
 
@@ -4194,6 +4194,13 @@ function lastNonEmptyLine(output: string): string | undefined {
  * so no server starts and nothing is written. It is a child at all because {@link Check.run} is
  * synchronous and the store is not. Its entry is {@link retrievalCliEntry}'s: the probe asks whether an
  * index builds, not what the launcher runs, which `retrieval-dependencies` grades.
+ *
+ * **`spawnSync` rather than `execFileSync`**, for the reason `cli/src/commands/doctor.ts` →
+ * `runNotifier` states: `execFileSync` returns stdout and surfaces a child's stderr on the error path
+ * only, and the child's corpus-coverage warnings — an unset or mis-spelled `docs.root`, a missing
+ * conventions document — are printed on stderr by a run that **succeeds**. This is the one check an
+ * adopter runs to answer "is retrieval set up correctly?", so a build over a corpus missing the whole
+ * documentation catalog must not read as an unqualified pass.
  */
 const RETRIEVAL_INDEX_CHECK: Check = {
   id: 'retrieval-index',
@@ -4206,23 +4213,26 @@ const RETRIEVAL_INDEX_CHECK: Check = {
     const resolved = retrievalCliEntry();
     if (resolved === undefined) return fail('cannot build without the retrieval libraries (see retrieval-dependencies)');
 
+    // `spawnSync` does not throw on a non-zero exit, so this `try` now covers a spawn failure alone;
+    // the child's own failure is graded on `status` and `error` below.
     try {
-      const stdout = execFileSync(
-        process.execPath,
-        [resolved.entry, 'docs', 'index', '--in-memory', '--cwd', ctx.repoRoot],
-        {
-          encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'pipe'],
-          timeout: RETRIEVAL_INDEX_TIMEOUT_MS,
-          env: process.env,
-        },
-      );
-      return pass(stdout.trim());
+      const child = spawnSync(process.execPath, [resolved.entry, 'docs', 'index', '--in-memory', '--cwd', ctx.repoRoot], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: RETRIEVAL_INDEX_TIMEOUT_MS,
+        env: process.env,
+      });
+      const line = lastNonEmptyLine(child.stderr ?? '');
+      if (child.error !== undefined || child.status !== 0) {
+        const how = child.status === null ? `it was stopped by ${child.signal}` : `it exited with status ${child.status}`;
+        return fail(
+          `the docs-retrieval index did not build in memory: ${line ?? (child.error === undefined ? how : messageOf(child.error))} — run \`${CLI} init\` to set retrieval up`,
+        );
+      }
+      return pass(line === undefined ? child.stdout.trim() : `${child.stdout.trim()} — ${line}`);
     } catch (error) {
-      const stderr = (error as { stderr?: unknown }).stderr;
-      const line = typeof stderr === 'string' ? lastNonEmptyLine(stderr) : undefined;
       return fail(
-        `the docs-retrieval index did not build in memory: ${line ?? messageOf(error)} — run \`${CLI} init\` to set retrieval up`,
+        `the docs-retrieval index did not build in memory: ${messageOf(error)} — run \`${CLI} init\` to set retrieval up`,
       );
     }
   },

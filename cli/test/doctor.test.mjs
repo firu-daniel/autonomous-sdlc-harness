@@ -5099,3 +5099,21 @@ test('Acceptance 6 (d): with no runtime installed, or one at another version, re
     });
   }
 });
+
+/**
+ * The child prints its coverage warnings on stderr and still exits 0, so this asserts the one thing
+ * `execFileSync` cannot deliver: a *passing* build whose corpus was truncated says so. Without it,
+ * "the documentation catalog was never indexed" reads as a pass with a smaller file count, on the one
+ * check an adopter runs to answer whether retrieval is set up correctly.
+ */
+test('Acceptance 6 (e): a passing index check quotes the coverage warning the build printed', async (t) => {
+  const { dir, env } = await retrievalDoctorFixture(t);
+  await rm(join(dir, 'docs'), { recursive: true, force: true });
+
+  const { stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+  assert.match(stdout, passLine('retrieval-index'), `${stdout}\n${stderr}`);
+  const line = detailLine(stdout, passLine('retrieval-index'));
+  assert.ok(line.includes('docs index: 1 files'), line);
+  assert.ok(line.includes('docs.root docs is not a directory'), line);
+});

@@ -267,3 +267,30 @@ test('serve (f): docs serve --dry-run exits non-zero before the handshake and wr
   assert.match(result.stderr, /docs serve: --dry-run is not supported/);
   assert.deepEqual(await snapshotTree(dir), before);
 });
+
+/**
+ * A corpus-coverage warning reaches the calling agent, which reads the tool result and never the
+ * server log stderr is captured into. The tool's own description must declare the shape, so the two
+ * are asserted together: an agent told only about hits and `no confident match` would read a `note:`
+ * line as a result rather than as a diagnostic.
+ */
+test('serve (g): a skipped corpus file becomes a note line on the tool result, declared in the description', async (t) => {
+  const fixture = await retrievalFixture(t);
+  await unlink(join(fixture.dir, 'conventions.md'));
+
+  await withServer(fixture, async (client) => {
+    const { tools } = await client.listTools();
+    assert.match(tools[0].description, /"note: " lines/, tools[0].description);
+
+    const match = await client.callTool({ name: 'search_docs', arguments: { query: MATCH_QUERY } });
+    assert.notEqual(match.isError, true, toolText(match));
+    const lines = toolText(match).split('\n');
+    assert.equal(
+      lines[0],
+      'note: conventions document conventions.md of layer general is missing and was skipped',
+      toolText(match),
+    );
+    assert.equal(lines[1], '', toolText(match));
+    assert.ok(lines[2].startsWith('1. docs/guide.md#offline (score '), toolText(match));
+  });
+});
