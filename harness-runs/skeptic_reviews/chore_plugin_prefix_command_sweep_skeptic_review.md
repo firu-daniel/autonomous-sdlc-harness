@@ -23,7 +23,7 @@ This review was de-duplicated against two committed reviews. The first is `harne
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Repoint §6's headless-leg citation from `ANALYZE_COMMAND` to `ANALYZE_INVOCATION` in `cli/src/commands/init.ts` _(layer: general)_
+1. [x] **Finding 1** — Repoint §6's headless-leg citation from `ANALYZE_COMMAND` to `ANALYZE_INVOCATION` in `cli/src/commands/init.ts` _(layer: general)_
 
 ---
 
