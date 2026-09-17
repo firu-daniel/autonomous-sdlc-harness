@@ -108,12 +108,13 @@ gate_silent "6b no template in the dot-namespace" \
   -not -path './.claude' \
   -not -path './node_modules/*'
 gate "6c llms.txt links resolve on main" bash scripts/check-llms-txt.sh
+gate "6d plugin command spellings carry the prefix" bash scripts/check-command-spelling.sh
 
 echo
 echo "== gates this script cannot run"
 echo "  5  doctor's exit contract, by hand against gate 4's scratch repository"
 echo "  7  the five adoption shapes, against real directories outside this checkout"
-echo "  8  /harness-analyze, which is judgement and runs inside a model session"
+echo "  8  /autonomous-sdlc-harness:harness-analyze, which is judgement and runs inside a model session"
 echo "  9  examples/notes-app, which installs dependencies inside the checkout"
 echo "     -> docs/development.md §5"
 

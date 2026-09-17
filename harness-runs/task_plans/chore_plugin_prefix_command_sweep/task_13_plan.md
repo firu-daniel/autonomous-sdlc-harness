@@ -48,3 +48,8 @@
 - Sentence-final half: the `REPRO` block holds the `Then run /branch-status.` plant in `docs/cli.md`, with exit code 1 and its verbatim `check-command-spelling: docs/cli.md:<line> — …` finding. `git diff -- docs/cli.md` is empty.
 - Ambiguous-exemption half: temporarily append a second line whose whole content is `/harness-analyze` to `docs/development.md`. Confirm the script exits 1 and reports an `ambiguous exemption` for the gate-8 `line` entry. Revert.
 - Every `contains` entry in the table passes `grep -cF '<text>' <path>` with output `1`.
+
+**Deviations from plan:**
+- The scan runs `git --no-pager grep --untracked --no-color -I -nE`: `--no-color` keeps a `color.grep` setting from corrupting the `<path>:<line>:` parse, and `-I` skips binary files, whose `Binary file … matches` line carries no line number to report. The scan set and pattern are the contract's.
+- A match on a line an `ambiguous exemption` entry covers is also reported as a bare spelling, because an entry covering more than one line exempts none of them.
+- `bash scripts/test.sh` exits 1 on `6a no machine paths` alone, whose hits are the worktree's `.git` pointer file and gitignored files under `harness-runs/` (an earlier dispatch's `harness-runs/scratch/t3npm.log`, and `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md`, which records the same `.git` hit on a prior branch). Every other gate, 6d included, reports `ok`.

@@ -56,7 +56,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_plugin_prefix_command_swee
 10. [x] **Task 10** — Sweep `docs/analyze.md`, `docs/cli.md`, `docs/config.md`, `schemas/` and `examples/notes-app/README.md` _(layer: general)_ _(points: 15)_
 11. [x] **Task 11** — Record the spelling rule and the gate-6d contract, sweep `docs/development.md`, and close the debt paragraph _(layer: general)_ _(points: 20)_
 12. [x] **Task 12** — Sweep `README.md`, `llms.txt`, `ARCHITECTURE.md` and `ROADMAP.md`, and align their measurement text with §6 _(layer: general)_ _(points: 15)_
-13. [ ] **Task 13** — Add `scripts/check-command-spelling.sh` as gate 6d, sweep `run-gates.sh`, and prove the gate fails on a planted bare spelling _(layer: general)_ _(points: 20)_
+13. [x] **Task 13** — Add `scripts/check-command-spelling.sh` as gate 6d, sweep `run-gates.sh`, and prove the gate fails on a planted bare spelling _(layer: general)_ _(points: 20)_
 
 ## Scope register
 
