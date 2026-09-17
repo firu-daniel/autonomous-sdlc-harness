@@ -50,7 +50,7 @@ Each entry resolves to `harness-runs/code_reviews/chore_plugin_prefix_command_sw
 2. [x] **Finding 4** — Load `PLUGIN_NAME` from `core/pluginIdentity.js` in `doctor.test.mjs` and drop the test-only re-export from `projectSettings.ts` _(layer: cli)_
 3. [x] **Finding 5** — Move the README's `branch-prompt` route out of prose into a fenced block, with its task-description argument _(layer: general)_
 4. [x] **Finding 1** — Name the watcher header mapping comment and the `docs/watcher.md` engine-command cells in gate 6d's documented carve-outs _(layer: general)_
-5. [ ] **Finding 3** — Qualify the README's "every command in this tree is documented with the plugin prefix" by pointing at gate 6's carve-outs _(layer: general)_
+5. [x] **Finding 3** — Qualify the README's "every command in this tree is documented with the plugin prefix" by pointing at gate 6's carve-outs _(layer: general)_
 
 ---
 
