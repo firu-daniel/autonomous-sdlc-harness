@@ -6,11 +6,12 @@
  * heuristics, no scoring, no language model. `init` has to be reproducible — a second `init`
  * against the same tree must reach the same answer, and an adopter must be able to re-derive what
  * `init` decided by reading this table — and a judgement call cannot offer that. Refining a
- * profile with judgement is `/harness-analyze`'s job, not this table's: it **proposes** a revision
- * and applies it through `config set layers` after a yes, never writing `harness.config.json`
- * itself. That is why the last row is an unconditional fallback rather than a refusal: an
- * unrecognised layout is exactly the repository `/harness-analyze` exists to handle, and refusing
- * there would block adoption on it.
+ * profile with judgement is `/autonomous-sdlc-harness:harness-analyze`'s job, not this table's: it
+ * **proposes** a revision and applies it through `config set layers` after a yes, never writing
+ * `harness.config.json` itself. That is why the last row is an unconditional fallback rather than a
+ * refusal: an unrecognised layout is exactly the repository
+ * `/autonomous-sdlc-harness:harness-analyze` exists to handle, and refusing there would block
+ * adoption on it.
  *
  * **{@link SIGNALS} is exported as data** so `docs/cli.md` documents the same rows the code
  * evaluates, in the same order, instead of a prose paraphrase that drifts from them.
@@ -29,6 +30,7 @@ import { DETECTION_PRESET_NAMES } from '../config/model.js';
 import { EXIT, HarnessError } from '../core/errors.js';
 import { isJsonObject, readJsonFile, type JsonObject } from '../core/json.js';
 import { insideRepo } from '../core/paths.js';
+import { PLUGIN_NAME } from '../generators/projectSettings.js';
 
 /**
  * The layer presets, in signal-table order — the schema's `detection.preset` enum, re-exported
@@ -51,7 +53,7 @@ export const FLAT_FALLBACK_SIGNAL_ID = 'flat:fallback';
 
 /** The warning the `flat` fallback row carries, so an unrecognised layout says what to do next. */
 export const FLAT_FALLBACK_WARNING =
-  'unrecognised layout — using the `flat` preset; run `/harness-analyze` to refine the layer profile';
+  `unrecognised layout — using the \`flat\` preset; run \`/${PLUGIN_NAME}:harness-analyze\` to refine the layer profile`;
 
 /**
  * The npm manifest, read for its top-level `workspaces` key and its `scripts` **names**.
@@ -1074,7 +1076,8 @@ export function findAnyReadManifest(context: DetectContext): string | undefined 
  *
  * The `src/` fallback covers the `src`-layout convention, where the importable package is one
  * level further down; naming `src` there is enough for a layer path, and picking which package
- * inside it is the layer is a judgement call and therefore `/harness-analyze`'s.
+ * inside it is the layer is a judgement call and therefore
+ * `/autonomous-sdlc-harness:harness-analyze`'s.
  */
 export function findPythonPackageDir(context: DetectContext): string | undefined {
   for (const root of context.manifestRoots) {
@@ -1300,8 +1303,9 @@ export const SIGNALS: readonly Signal[] = [
     // **A Cargo workspace root carries this same manifest, and is deliberately not told from a
     // plain crate.** Distinguishing them would mean reading the file for a `[workspace]` table, and
     // what it would buy is a per-member layer list — a judgement call, and therefore
-    // `/harness-analyze`'s. A workspace root that keeps a `src/` gets the single source-root layer,
-    // one that does not gets `general` alone, and either is better than the `flat` fallback.
+    // `/autonomous-sdlc-harness:harness-analyze`'s. A workspace root that keeps a `src/` gets the
+    // single source-root layer, one that does not gets `general` alone, and either is better than
+    // the `flat` fallback.
     //
     // **Above the fallback and below every row before it**, which costs nothing: no earlier row
     // matches on a Rust name, and no row above this one matches on a `Cargo.toml`.
