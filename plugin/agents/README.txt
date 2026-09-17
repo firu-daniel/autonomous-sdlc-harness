@@ -5,13 +5,14 @@ This directory holds the harness's agent definitions: the per-layer implementers
 the plan writers and their plan reviewers, the per-unit and end-of-branch code
 reviewers, the skeptic, the docs writer and reviewer, the committer, and the
 interactive-test (QA) agent. Roadmap item 4 filled it. It also holds the pair the
-setup command `/harness-analyze` dispatches — the conventions writer, which writes
-one conventions document per dispatch, and the conventions reviewer, which works
-on two axes: a document pass, dispatched once per document, reading that one
-document and never re-reading it, and a corpus pass, dispatched at most twice per
-run, reading the corpus against itself — the whole set on the first dispatch, a
-set narrowed to what the first pass's fixes changed on the second. It returns
-findings on both axes and emits a verdict on neither.
+setup command `/autonomous-sdlc-harness:harness-analyze` dispatches — the
+conventions writer, which writes one conventions document per dispatch, and the
+conventions reviewer, which works on two axes: a document pass, dispatched once
+per document, reading that one document and never re-reading it, and a corpus
+pass, dispatched at most twice per run, reading the corpus against itself — the
+whole set on the first dispatch, a set narrowed to what the first pass's fixes
+changed on the second. It returns findings on both axes and emits a verdict on
+neither.
 
 The interactive-test agent ships as THREE files keyed by the `qa.driver` config
 value, but exposes ONE dispatchable name. Flows dispatch `qa-tester` by name, so a
