@@ -52,8 +52,8 @@
 # an `hr_lane_*` function still gets a library that only reads. The lane's
 # ceilings are the only environment values here that carry policy, because the
 # lane is machine-scoped and has no configuration key to carry them; each is
-# named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `HOME` and `PWD`
-# are also read, as location anchors only, and `PATH` is read by
+# named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
+# `HOME` and `PWD` are also read, as location anchors only, and `PATH` is read by
 # `hr_path_with_fallbacks` alone — as that function's input, which it prints back
 # transformed and never assigns.
 #
@@ -196,6 +196,8 @@
 #   anchors           hr_main_repo "$root"; hr_work_root "$root"
 #                     hr_worktree_dir "$root" feat/x; hr_repo_slug "$root"
 #                     hr_state_path "$root" autonomous_logs/registry.json
+#   machine dirs      ( XDG_CACHE_HOME= hr_cache_dir )     -> $HOME/.cache/autonomous-sdlc-harness
+#                     ( XDG_CACHE_HOME=/x/ hr_cache_dir )  -> /x/autonomous-sdlc-harness
 #   the PATH policy   run each in a SUBSHELL, so your own PATH is untouched:
 #                     ( PATH="$HOME/.rbenv/shims:/usr/bin:/bin"
 #                       hr_path_with_fallbacks )
@@ -966,6 +968,20 @@ hr_machine_config_dir() {
   printf '%s/autonomous-sdlc-harness\n' "${base%/}"
 }
 
+# The machine-local cache directory, holding the shared docs-retrieval runtime.
+# Mirrors `machineCacheDir()` in `cli/src/machine/paths.ts`: the variable when
+# set and non-empty, else `$HOME/.cache`, one trailing slash stripped. Return 1
+# when there is no home to anchor it to.
+hr_cache_dir() {
+  local base="${XDG_CACHE_HOME-}"
+  [ -n "$base" ] || base="${HOME-}/.cache"
+  case "$base" in
+    /.cache) return 1 ;;
+  esac
+  [ -n "$base" ] || return 1
+  printf '%s/autonomous-sdlc-harness\n' "${base%/}"
+}
+
 # The push-notification credential files, in RESOLUTION ORDER, one per line and
 # whether or not each exists — the caller sources the first that does:
 #
@@ -1068,7 +1084,7 @@ hr_push_env_files() {
 # THE THREE CEILINGS ARE THE ONLY ENVIRONMENT VALUES THAT CARRY POLICY HERE. The
 # file's other environment reads are location anchors, not policy:
 # `XDG_STATE_HOME` and `HOME` in `hr_lane_dir`, `XDG_CONFIG_HOME` and `HOME` in
-# `hr_machine_config_dir`, `PWD` in `hr_repo_root` and `hr_main_repo`. The
+# `hr_machine_config_dir`, `XDG_CACHE_HOME` and `HOME` in `hr_cache_dir`, `PWD` in `hr_repo_root` and `hr_main_repo`. The
 # ceilings are machine-scoped policy with no configuration key:
 #
 #   HR_LANE_STATE_MAX_AGE_SECS   21600  when a PUBLISHED RECORD THAT NAMED NO

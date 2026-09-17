@@ -386,3 +386,102 @@ export async function snapshotTree(dir, { exclude = DEFAULT_EXCLUDES } = {}) {
 export function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
+
+/** `<cacheHome>/autonomous-sdlc-harness/retrieval`, as `machineCacheDir()` and `retrieval/runtime.ts` spell it. */
+function retrievalCacheDir(cacheHome) {
+  return join(cacheHome, 'autonomous-sdlc-harness', 'retrieval');
+}
+
+/**
+ * The files an offline load of each model needs, restated from `cli/src/retrieval/models.ts` →
+ * `MODEL_FILES` so the suites assert against the contract rather than the source.
+ */
+const RETRIEVAL_MODEL_FILES = Object.freeze({
+  'Xenova/bge-small-en-v1.5': ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'onnx/model_quantized.onnx'],
+  'Xenova/ms-marco-MiniLM-L-6-v2': ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'onnx/model_quantized.onnx'],
+});
+
+/**
+ * The environment a retrieval verb runs offline under: the machine cache under `cacheHome`, and the
+ * `hash-v1` stub models.
+ *
+ * @param {string} cacheHome
+ * @returns {Record<string, string>}
+ */
+export function retrievalEnv(cacheHome) {
+  return { XDG_CACHE_HOME: cacheHome, AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB: 'hash-v1' };
+}
+
+/**
+ * Plant every model file as an empty file under `<cacheHome>/autonomous-sdlc-harness/retrieval/models`,
+ * which the retrieval verbs check for even under the stub.
+ *
+ * @param {string} cacheHome
+ * @returns {Promise<string[]>} the planted paths.
+ */
+export async function plantModelFiles(cacheHome) {
+  const planted = [];
+  for (const [modelId, files] of Object.entries(RETRIEVAL_MODEL_FILES)) {
+    for (const file of files) {
+      const target = join(retrievalCacheDir(cacheHome), 'models', modelId, file);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, '');
+      planted.push(target);
+    }
+  }
+  return planted;
+}
+
+/**
+ * Plant the retrieval runtime under `<cacheHome>/autonomous-sdlc-harness/retrieval/runtime` as the
+ * three things `retrievalRuntimeState()` tests: the CLI entry, that CLI's manifest at `version`, and a
+ * manifest per optional peer of `cli/package.json`.
+ *
+ * This is how every retrieval-on `init` and `doctor` case stays offline: the runtime counts as
+ * installed, so `setUpRetrieval` runs no `npm`.
+ *
+ * @param {string} cacheHome
+ * @param {{ version?: string }} [options] defaults to `cli/package.json`'s version, read at call time.
+ * @returns {Promise<string[]>} the planted paths, sorted, so a caller can prove no install added to them.
+ */
+export async function plantRetrievalRuntime(cacheHome, { version } = {}) {
+  const manifest = readJson(join(PACKAGE_ROOT, 'package.json'));
+  const modules = join(retrievalCacheDir(cacheHome), 'runtime', 'node_modules');
+  const planted = [];
+  const plant = async (target, text) => {
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, text);
+    planted.push(target);
+  };
+
+  await plant(join(modules, 'autonomous-sdlc-harness', 'dist', 'cli.js'), 'process.exit(0);\n');
+  await plant(
+    join(modules, 'autonomous-sdlc-harness', 'package.json'),
+    `${JSON.stringify({ version: version ?? manifest.version })}\n`,
+  );
+  for (const name of Object.keys(manifest.peerDependencies ?? {})) {
+    if (manifest.peerDependenciesMeta?.[name]?.optional !== true) continue;
+    await plant(join(modules, name, 'package.json'), '{}\n');
+  }
+  return planted.sort();
+}
+
+/**
+ * Write a valid `harness.config.json` into `dir` with retrieval on: `phases.docs` true, `docs.root`
+ * `docs`, and one catch-all layer whose conventions document is `conventions.md`.
+ *
+ * @param {string} dir
+ * @returns {Promise<void>}
+ */
+export async function writeRetrievalConfig(dir) {
+  const config = {
+    version: 1,
+    defaultBranch: 'main',
+    stateDir: 'sdlc-harness',
+    layers: [{ name: 'general', path: '.', conventions: 'conventions.md' }],
+    commands: { typecheck: 'echo typecheck', test: 'echo test' },
+    phases: { docs: true },
+    docs: { root: 'docs', retrieval: true },
+  };
+  await writeFile(insideFixture(dir, 'harness.config.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+}

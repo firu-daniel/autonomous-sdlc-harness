@@ -1,0 +1,9 @@
+{
+  "_README": [
+    "THE DOCS-RETRIEVAL HALF, ADDED ONLY WHEN TWO CONDITIONS BOTH HOLD - THE DOCS PHASE IS ENABLED, AND DOCS RETRIEVAL IS ON: the `harness-docs` entry in `enabledMcpjsonServers` and the one `mcp__harness-docs__` entry at the end of `allow` were merged in because `phases.docs` AND `docs.retrieval` were both true when this file was generated. Fail either condition and neither is written. BOTH ARE NEEDED AND THEY DO DIFFERENT THINGS: the enablement STARTS the server the repository's own `.mcp.json` declares, and the allow entry lets its one tool run - without the enablement the tool does not exist, and an un-loaded tool in print mode stalls the run rather than failing it. Turning retrieval on in `harness.config.json` and re-running `autonomous-sdlc-harness init` does NOT rewrite this file - it is yours once written, and a plain re-run adds the server to `.mcp.json` while leaving this profile starting none of it; run `init --force`, which takes a .bak first, or copy the two entries in from a fresh generation."
+  ],
+  "enabledMcpjsonServers": ["harness-docs"],
+  "permissions": {
+    "allow": ["mcp__harness-docs__search_docs"]
+  }
+}

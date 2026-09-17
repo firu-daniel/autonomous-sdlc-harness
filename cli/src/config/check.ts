@@ -27,7 +27,10 @@
  * `commands.typecheck` and `commands.test` are present and non-empty, with `<none>` graded on
  * `commands.typecheck` as the answer *this repository has no type check* and warned about anywhere
  * else it is written; `qa.portSeed` is an integer
- * within the schema's bounds — the only numeric constraint the schema states anywhere.
+ * within the schema's bounds — the only numeric constraint the schema states anywhere;
+ * `docs.retrieval` is `true` only while `phases.docs` is `true`, mirroring the schema's top-level
+ * `allOf` clause — the one cross-field error, graded beside the phase-section warnings rather than
+ * among them.
  *
  * ## What it deliberately does not re-implement
  *
@@ -128,7 +131,8 @@ const COMMAND_REQUIRED = ['typecheck', 'test'] as const;
 const PHASE_KEYS = ['qa', 'docs', 'parity'] as const;
 const QA_KEYS = ['driver', 'portSeed', 'credentialsPath', 'authProvider'] as const;
 const QA_STRING_KEYS = ['credentialsPath', 'authProvider'] as const;
-const DOCS_KEYS = ['root'] as const;
+const DOCS_KEYS = ['root', 'retrieval'] as const;
+const DOCS_STRING_KEYS = ['root'] as const;
 const PARITY_KEYS = ['referenceName', 'referenceImplPath', 'toolchainCommands'] as const;
 const PARITY_STRING_KEYS = ['referenceName', 'referenceImplPath'] as const;
 const DEPLOY_KEYS = ['provider', 'target', 'command'] as const;
@@ -242,7 +246,7 @@ function checkStringArray(parent: Record<string, unknown>, key: string, prefix: 
   });
 }
 
-/** A declared boolean key: the three `phases` toggles. */
+/** A declared boolean key: the three `phases` toggles and `docs.retrieval`. */
 function checkBoolean(parent: Record<string, unknown>, key: string, prefix: string, problems: Problems): void {
   const value = parent[key];
   if (value === undefined) return;
@@ -501,6 +505,26 @@ function checkPhaseSections(
 }
 
 /**
+ * `docs.retrieval: true` with `phases.docs` not `true` — the schema's `allOf` clause, and an
+ * **error**, unlike {@link checkPhaseSections}'s warnings: the schema rejects the config outright.
+ *
+ * It must refuse exactly the configs that clause refuses: `false` or absent is legal in every phase
+ * state, and a non-boolean `retrieval` or a non-object `docs` is already an error of its own, so
+ * neither is reported here too.
+ */
+function checkRetrievalPhase(
+  docs: Record<string, unknown> | undefined,
+  phases: Record<string, unknown> | undefined,
+  problems: Problems,
+): void {
+  if (docs?.['retrieval'] !== true || phases?.['docs'] === true) return;
+  problems.error(
+    'docs.retrieval',
+    'docs.retrieval is true but phases.docs is not: retrieval searches the documentation corpus the docs phase maintains, so it is legal only with that phase on. Set phases.docs true, or set docs.retrieval false',
+  );
+}
+
+/**
  * Check a parsed value against the shape `harness.config.json` must have, and return everything
  * wrong with it — never throwing, so one pass names every problem.
  *
@@ -607,7 +631,10 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
   }
 
   const docs = section(value, 'docs', DOCS_KEYS, problems);
-  if (docs !== undefined) for (const key of DOCS_KEYS) checkString(docs, key, 'docs', problems);
+  if (docs !== undefined) {
+    for (const key of DOCS_STRING_KEYS) checkString(docs, key, 'docs', problems);
+    checkBoolean(docs, 'retrieval', 'docs', problems);
+  }
 
   const parity = section(value, 'parity', PARITY_KEYS, problems);
   if (parity !== undefined) {
@@ -631,6 +658,7 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
   }
 
   checkPhaseSections(value, phases, problems);
+  checkRetrievalPhase(docs, phases, problems);
 
   return problems.found;
 }

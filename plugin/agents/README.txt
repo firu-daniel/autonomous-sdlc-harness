@@ -51,6 +51,48 @@ agent definition and fails `claude plugin validate --strict` with
 "frontmatter: No frontmatter block found".
 
 
+The docs-retrieval grant — one roster, one wire
+-----------------------------------------------
+
+The docs-retrieval search tool `mcp__harness-docs__search_docs` is granted to
+exactly these ten agents:
+
+  architecture-reviewer.md
+  branch-reviewer.md
+  business-parity-reviewer.md
+  review-plan-reviewer.md
+  skeptic-reviewer.md
+  task-plan-reviewer.md
+  task-plan-writer.md
+  ui-tests-plan-reviewer.md
+  ui-tests-plan-writer.md
+  user-review-fix-plan-writer.md
+
+The set is every plan writer, every plan reviewer and every end-of-branch
+reviewer; the per-unit `layer-reviewer`, the implementers, the committer,
+`docs-writer` and the interactive-test agents are excluded, as are
+`docs-reviewer`, `statistics-plan-writer` (which writes a report, not a plan)
+and the conventions pair `/harness-analyze` dispatches.
+
+Each of those allowlists names the tool whatever the configuration, and each
+contract's `<docs_retrieval>` row and bullet tell the agent to ignore it unless
+`phases.docs` and `docs.retrieval` are both true. Unlike the browser tools, no
+`permissions.deny` entry is involved: the unattended profile allows the tool
+only when retrieval is on (`cli/templates/claude/settings.autonomous.retrieval.json`).
+
+The server name and the tool name are a wire owned by `cli/src/retrieval/server.ts`
+(`DOCS_SERVER_NAME`, `SEARCH_TOOL_NAME`). Renaming either is an edit to the ten
+agent files above, that module, and the two CLI templates that carry the server
+name (`cli/templates/repo/mcp.retrieval.json`,
+`cli/templates/claude/settings.autonomous.retrieval.json`). Re-derive the roster
+with
+
+  grep -rln --include='*.md' "mcp__harness-docs__search_docs" plugin/agents
+
+whose output must be exactly the ten files listed above; the `--include` keeps
+this file, which names the tool, out of the result.
+
+
 Sample fixture pointers — never rewrite one to make it resolve
 --------------------------------------------------------------
 

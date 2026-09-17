@@ -297,6 +297,48 @@ test('set stores a legal value for a key init writes no line for', async (t) => 
 });
 
 /**
+ * **The rule these cases enforce: `docs.retrieval` may be `true` only while `phases.docs` is `true`**
+ * — the schema's `allOf` clause, mirrored in `config/check.ts` as an error. The third case is the one
+ * that shows the check is cross-field rather than a guard on setting the retrieval key: turning the
+ * phase off under a file already holding the flag is refused by the same message.
+ */
+const RETRIEVAL_PHASE_REFUSAL = 'docs.retrieval is true but phases.docs is not';
+
+test('set docs.retrieval true with phases.docs off is refused, and writes nothing', async (t) => {
+  const dir = await wiredFixture(t);
+  assert.equal(readJson(join(dir, CONFIG_FILE)).phases.docs, false, 'the fixture does not start with the docs phase off');
+  const before = await snapshotTree(dir);
+
+  const { status, stderr } = await runCli(dir, ['config', 'set', 'docs.retrieval', 'true']);
+
+  assert.equal(status, 1);
+  assert.ok(stderr.includes(RETRIEVAL_PHASE_REFUSAL), `the refusal is not the cross-field one:\n${stderr}`);
+  assert.deepEqual(await snapshotTree(dir), before, 'a refused set changed the tree');
+});
+
+test('set docs.retrieval true with phases.docs on stores the boolean', async (t) => {
+  const dir = await wiredFixture(t);
+  await configOk(dir, ['set', 'phases.docs', 'true']);
+
+  await configOk(dir, ['set', 'docs.retrieval', 'true']);
+
+  assert.equal(readJson(join(dir, CONFIG_FILE)).docs.retrieval, true);
+});
+
+test('set phases.docs false under a file holding docs.retrieval true is refused, and writes nothing', async (t) => {
+  const dir = await wiredFixture(t);
+  await configOk(dir, ['set', 'phases.docs', 'true']);
+  await configOk(dir, ['set', 'docs.retrieval', 'true']);
+  const before = await snapshotTree(dir);
+
+  const { status, stderr } = await runCli(dir, ['config', 'set', 'phases.docs', 'false']);
+
+  assert.equal(status, 1);
+  assert.ok(stderr.includes(RETRIEVAL_PHASE_REFUSAL), `the refusal is not the cross-field one:\n${stderr}`);
+  assert.deepEqual(await snapshotTree(dir), before, 'a refused set changed the tree');
+});
+
+/**
  * The write path and the read guard agreeing about `detection.commandFamily`.
  *
  * The accepting arm is the one that matters: the key is written by `init` itself, so a guard that did

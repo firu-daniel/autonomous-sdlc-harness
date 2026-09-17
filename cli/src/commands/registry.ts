@@ -15,6 +15,7 @@
 import type { Reporter } from '../core/report.js';
 import { CONFIG_COMMAND } from './config.js';
 import { DAEMON_COMMAND } from './daemon.js';
+import { DOCS_COMMAND } from './docs.js';
 import { DOCTOR_COMMAND } from './doctor.js';
 import { INIT_COMMAND } from './init.js';
 
@@ -69,6 +70,7 @@ export const SUBCOMMANDS: ReadonlyArray<Subcommand> = [
   DOCTOR_COMMAND,
   CONFIG_COMMAND,
   DAEMON_COMMAND,
+  DOCS_COMMAND,
 ];
 
 /** The dispatch check. Returns `undefined` for an unknown command. */

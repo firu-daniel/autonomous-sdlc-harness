@@ -160,6 +160,8 @@ export interface HarnessConfigFlags {
   readonly qaDriver?: HarnessQaDriver;
   /** `--docs-root`. Read only when `--docs` is on. */
   readonly docsRoot?: string;
+  /** `--docs-retrieval`. Read only when `--docs` is on. */
+  readonly docsRetrieval?: boolean;
   /** `--reference-impl`. Read only when `--parity` is on. */
   readonly referenceImpl?: string;
 }
@@ -241,6 +243,12 @@ export interface BuildConfigOptions {
    * was given, so passing it costs a caller no prompt it did not need.
    */
   readonly askDriver?: () => string | undefined;
+  /**
+   * Ask whether to turn docs retrieval on, answering `undefined` on every run that could not be
+   * asked, on {@link askDriver}'s terms. Called at most once, only while `phases.docs` is on and only
+   * when `--docs-retrieval` was not given.
+   */
+  readonly askRetrieval?: () => boolean | undefined;
 }
 
 /**
@@ -696,7 +704,8 @@ function resolveQaDriver(
  * `defaultBranch` and `protectedBranches` were written as), {@link resolveQaDriver}'s unknown-answer
  * arm (what `qa.driver` was written as) and {@link settleQaDriver} (what the written driver costs)
  * are deferred warnings, and {@link resolveDefaultBranch}'s five rung notes together with
- * {@link resolveQaDriver}'s three are deferred notes — every note this assembler has. The
+ * {@link resolveQaDriver}'s three and the docs-retrieval could-not-ask note are deferred notes —
+ * every note this assembler has. The
  * `--qa-driver` without `--qa` and `--parity` without `--reference-impl` arms below are not
  * deferred: each is about a flag the adopter typed on this command line.
  */
@@ -709,6 +718,7 @@ export function buildConfig({
   noteIfWritten,
   warnIfWritten,
   askDriver,
+  askRetrieval,
 }: BuildConfigOptions): HarnessConfig {
   const report = warn ?? ((): void => {});
   const informIfWritten = noteIfWritten ?? ((): void => {});
@@ -760,7 +770,15 @@ export function buildConfig({
     );
   }
   if (phases.docs) {
-    config.docs = { root: flags.docsRoot ?? DEFAULT_DOCS_ROOT };
+    const asked = flags.docsRetrieval === true ? true : askRetrieval?.();
+    if (asked === undefined) {
+      informIfWritten(
+        `docs retrieval stays off: this run could not ask. Pass --docs-retrieval to turn it on, or later run \`${CLI} config set docs.retrieval true\` and then \`init --force\``,
+      );
+    }
+    // The key is written only when on: an absent key is the schema default, so a declined or unasked
+    // run writes the `docs` section it wrote before retrieval existed.
+    config.docs = { root: flags.docsRoot ?? DEFAULT_DOCS_ROOT, ...(asked === true ? { retrieval: true } : {}) };
   }
   if (phases.parity) {
     // Omitted rather than written empty when there is nothing to put in it: the phase toggle is
@@ -828,6 +846,7 @@ export function writeHarnessConfig({
   dryRun = false,
   appDirSource = 'default',
   askDriver,
+  askRetrieval,
 }: HarnessConfigOptions): HarnessConfigResult {
   const warnings: string[] = [];
   const notes: string[] = [];
@@ -841,6 +860,7 @@ export function writeHarnessConfig({
     detection,
     ...(preset === undefined ? {} : { preset }),
     ...(askDriver === undefined ? {} : { askDriver }),
+    ...(askRetrieval === undefined ? {} : { askRetrieval }),
     flags,
     warn: (message) => warnings.push(message),
     warnIfWritten: (message) => ifWritten.push(message),
