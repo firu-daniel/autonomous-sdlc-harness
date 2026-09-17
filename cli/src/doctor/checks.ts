@@ -619,11 +619,11 @@ const GIT_CHECK: Check = {
  * No `jj` binary is looked for and none is invoked.
  *
  * **What the directory establishes is that `jj` manages this working copy, and not that the
- * repository is colocated.** Measured on jj 0.44.0 and recorded in `README.md`'s `## Scope and
- * limits`, in the bullet opening *Both `jj` shapes adopt*: a **non**-colocated repository's
- * `.jj/repo/store/git_target` holds `../../../.git`, so it too keeps a real non-bare `.git` at the
- * working-copy root with `.jj/` beside it, and this probe answers the same on both shapes. The one
- * clause of the warning below that is colocated-only says so in its own words.
+ * repository is colocated.** Measured on jj 0.44.0 and recorded in `docs/cli.md` §7, the
+ * `jj-repository` bullet: a **non**-colocated repository's `.jj/repo/store/git_target` holds
+ * `../../../.git`, so it too keeps a real non-bare `.git` at the working-copy root with `.jj/`
+ * beside it, and this probe answers the same on both shapes. The one clause of the warning below
+ * that is colocated-only says so in its own words.
  */
 const JJ_DIR = '.jj';
 

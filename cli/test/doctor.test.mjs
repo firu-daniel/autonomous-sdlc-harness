@@ -1779,10 +1779,10 @@ test('a repository with no commit reports protected-set as not graded, not as a 
  * facts stop being read at all. It asserts the check id's own line is the *only* place `jj` is named.
  *
  * **The fourth case is the shape the probe cannot tell from the first**, and it is what holds the
- * report's wording to what was actually read. Measured on jj 0.44.0 and recorded in `README.md`'s
- * `## Scope and limits`: a **non**-colocated repository's `.jj/repo/store/git_target` holds
- * `../../../.git` and `.jj/repo/store/git` does not exist, so it too keeps a real non-bare `.git` at
- * the working-copy root with `.jj/` beside it. The check therefore warns on it exactly as it warns
+ * report's wording to what was actually read. Measured on jj 0.44.0 and recorded in
+ * `docs/cli.md` §7, the `jj-repository` bullet: a **non**-colocated repository's
+ * `.jj/repo/store/git_target` holds `../../../.git` and `.jj/repo/store/git` does not exist, so it
+ * too keeps a real non-bare `.git` at the working-copy root with `.jj/` beside it. The check therefore warns on it exactly as it warns
  * on a colocated one — that much is correct, since the hook gap and the session guard's bound are
  * properties of `jj git push` in either shape — and the case asserts it does **not** call the
  * repository colocated, and that the detection-rung clause carries the qualifier that makes it true
@@ -1812,8 +1812,8 @@ function seedColocated(dir) {
 }
 
 /**
- * The **non**-colocated shape as jj 0.44.0 leaves it, per `README.md`'s `## Scope and limits`: the
- * store pointing back at the working copy's own `.git` (`../../../.git`, resolved from
+ * The **non**-colocated shape as jj 0.44.0 leaves it, per `docs/cli.md` §7, the `jj-repository`
+ * bullet: the store pointing back at the working copy's own `.git` (`../../../.git`, resolved from
  * `.jj/repo/store/`) and no `.jj/repo/store/git` beside it. `HEAD` is left on its branch, because
  * jj exports nothing to git here.
  */
