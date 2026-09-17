@@ -34,6 +34,15 @@
   - §6: restate the paragraph opening *"Both conditions are the gate, and the repository's `.mcp.json` (§3) is gated on the same one, in the same run"* for both halves. The browser half keeps its gate and its mobile-driver reasoning, but the sentence no longer says `.mcp.json` is not written for a mobile driver: it says no **browser** block is. Add the retrieval half in the same register: `retrievalApplies` gates both the `harness-docs` entry in `.mcp.json` and the retrieval profile fragment (`settings.autonomous.retrieval.json`), in the same run, and gating one side alone is the same un-loaded-tool stall, so the two move together; turning retrieval on later is the configuration change plus `init --force` shown in §2's fenced block (link to it, never inline). Leave the rest of the paragraph (the `phases.qa` / `qa.driver` asymmetry, the `.bak` sentence) unchanged.
   - §3, after those artifacts: add a sentence that the runtime directory and model cache are **machine state outside the write engine**, written by `npm` and the model library at setup time and skipped when already satisfied, and that the per-checkout index is a derived, uncommitted cache that no `init` run writes.
 
+**Deviations from plan:**
+
+- The §5 cell says "the `config` command's `set`" rather than `` `config set` ``: the plan's own Verification probe `git diff -U0 docs/config.md | grep -E "^\+.*(config set|init --force)"` would otherwise match the refusal clause, which names no command to run.
+- `### The interaction rule` had no enumerated question list, so one was added (all five questions, in the order `init` asks them, each with its flag and default), and the retrieval question went into it.
+- `docs/cli.md` §2 had two sentences this branch made false, fixed in the file this task owns: *"The third of the four questions"* (the analyze offer) now reads *"The fourth of the five"*, because `askRetrieval` runs inside `writeHarnessConfig`, ahead of `resolveAnalyzeOffer`; and the pins clause's *"declares no server"* now reads *"declares no browser server"*.
+- The machine-state and index sentence went into §3's existing *"Nothing is written outside the repository"* bullet, since the runtime and model cache now sit outside the repository and that bullet lists what does.
+- `docs/development.md` line 278 (hand-run gate: *"Four questions, in this order"*) is outside this task's targets and was left alone. Its gate runs without `--docs`, so retrieval is never asked there.
+- Evidence: `bash scripts/test.sh` exited 1, and its only failure was gate 6a. Every 6a hit is outside this diff: the worktree's `.git` pointer file, `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md` and the untracked `harness-runs/scratch/task6-test.log`. `grep -n "/Users/" docs/cli.md docs/config.md` is empty.
+
 **Verification:**
 
 - `grep -n "docs.retrieval" docs/config.md docs/cli.md` shows the §5 row, the §2 flag row, the §3 re-run entries and the §6 paragraph, and `grep -n "docs_retrieval" docs/config.md` shows the §4 row.
