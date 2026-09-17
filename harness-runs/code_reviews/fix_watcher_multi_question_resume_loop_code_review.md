@@ -41,7 +41,7 @@ The four findings below are all prose or comment accuracy defects the branch int
 1. [x] **Finding 1** — Drop the false "quoted by the engine's Override 2(a)" sentence from the watcher's resume-clause comment, in the template and its mirror _(layer: cli, general)_
 2. [x] **Finding 3** — Restate the park signal as "a question file left at the top level" in `docs/watcher.md` §4 and the clarifications README pair _(layer: cli, general)_
 3. [x] **Finding 4** — Scope the mode contract's Class (i-b) and the owning fork's "nothing out of scope is stranded" claims to shipped files, naming non-shipped citers of the channel anchor only as examples _(layer: plugin)_
-4. [ ] **Finding 2** — Bring `ARCHITECTURE.md`'s `classify_run_exit` inventory row and paragraph up to the new park signal and the park-loop guard _(layer: general)_
+4. [x] **Finding 2** — Bring `ARCHITECTURE.md`'s `classify_run_exit` inventory row and paragraph up to the new park signal and the park-loop guard _(layer: general)_
 
 ---
 
