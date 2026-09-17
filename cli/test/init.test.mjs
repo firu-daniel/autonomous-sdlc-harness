@@ -268,6 +268,7 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'autonomous-notify.sh',
   'autonomous-watcher.sh',
   'restart-watcher.sh',
+  'docs-search-server.sh',
 ];
 
 /** A left-over template token — none may survive into a generated file. */
