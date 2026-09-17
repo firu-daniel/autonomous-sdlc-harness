@@ -149,6 +149,16 @@ export async function fetchModels(): Promise<void> {
 /** The environment variable that selects the stubs; this constant is its only spelling in `cli/src`. */
 export const RETRIEVAL_STUB_ENV = 'AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB';
 
+/** {@link RETRIEVAL_STUB_ENV}'s value, unset read as empty; the only read of the variable in `cli/src`. */
+function stubEnvValue(): string {
+  return process.env[RETRIEVAL_STUB_ENV] ?? '';
+}
+
+/** True when {@link RETRIEVAL_STUB_ENV} is set to a non-empty value — the one reading of "a stub run". */
+export function stubModelsSelected(): boolean {
+  return stubEnvValue() !== '';
+}
+
 const STUB_VERSIONS = ['hash-v1', 'hash-v2'] as const;
 
 type StubVersion = (typeof STUB_VERSIONS)[number];
@@ -201,8 +211,8 @@ const STUB_RERANKER: Reranker = {
  * non-empty value, and otherwise {@link loadModels}.
  */
 export async function resolveModels(options: { allowRemote: boolean }): Promise<{ embedder: Embedder; reranker: Reranker }> {
-  const value = process.env[RETRIEVAL_STUB_ENV];
-  if (value === undefined || value === '') return loadModels(options);
+  if (!stubModelsSelected()) return loadModels(options);
+  const value = stubEnvValue();
   const version = STUB_VERSIONS.find((candidate) => candidate === value);
   if (version === undefined) {
     throw new HarnessError(

@@ -30,6 +30,7 @@ import {
   modelFilesPresent,
   RERANK_MODEL,
   RETRIEVAL_STUB_ENV,
+  stubModelsSelected,
 } from '../retrieval/models.js';
 import { ownManifestString, retrievalModelCacheDir } from '../retrieval/runtime.js';
 import { serveDocs } from '../retrieval/server.js';
@@ -177,7 +178,7 @@ async function serve(ctx: CommandContext, args: readonly string[]): Promise<numb
  */
 async function fetchModelsVerb(ctx: CommandContext, args: readonly string[]): Promise<number> {
   parseFlags('fetch-models', args, []);
-  if ((process.env[RETRIEVAL_STUB_ENV] ?? '') !== '') {
+  if (stubModelsSelected()) {
     throw new HarnessError(
       `docs fetch-models: refusing to download while ${RETRIEVAL_STUB_ENV} is set, because a stub run never downloads; unset it to fetch the real models`,
     );

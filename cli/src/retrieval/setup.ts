@@ -23,7 +23,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { modelFilesPresent, RETRIEVAL_STUB_ENV } from './models.js';
+import { modelFilesPresent, RETRIEVAL_STUB_ENV, stubModelsSelected } from './models.js';
 import {
   ownManifestString,
   retrievalCliEntry,
@@ -39,11 +39,6 @@ const STEP_TIMEOUT_MS = 900000;
 
 const REMEDY =
   're-run `npx autonomous-sdlc-harness init`; `npx autonomous-sdlc-harness doctor` reports what is missing';
-
-/** Set to a non-empty value, the same reading `models.ts` → `resolveModels` takes. */
-function stubSelected(): boolean {
-  return (process.env[RETRIEVAL_STUB_ENV] ?? '') !== '';
-}
 
 /** A warning for a failed child: the command, its exit status and the last line it wrote to stderr. */
 function failureWarning(step: string, command: readonly string[], error: unknown): string {
@@ -95,7 +90,7 @@ function setUpRuntime(dryRun: boolean, notes: string[], warnings: string[]): voi
     notes.push(`docs retrieval runtime would be installed (dry run): \`${command.join(' ')}\``);
     return;
   }
-  if (stubSelected()) {
+  if (stubModelsSelected()) {
     warnings.push(
       `docs retrieval runtime is not installed in ${runtimeDir}, and a stub run (${RETRIEVAL_STUB_ENV} set) never installs it; unset ${RETRIEVAL_STUB_ENV} and ${REMEDY}`,
     );
@@ -107,7 +102,7 @@ function setUpRuntime(dryRun: boolean, notes: string[], warnings: string[]): voi
 
 function setUpModels(dryRun: boolean, notes: string[], warnings: string[]): void {
   const cacheDir = retrievalModelCacheDir();
-  if (stubSelected()) {
+  if (stubModelsSelected()) {
     notes.push(`docs retrieval models: stub models (${RETRIEVAL_STUB_ENV} set) need no download`);
     return;
   }

@@ -18,7 +18,7 @@ The one Must Fix is a copy of a single responsibility: the "is a stub selected?"
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Stub-selection predicate re-spelled in `commands/docs.ts` and `retrieval/setup.ts` instead of imported from `retrieval/models.ts` _(layer: cli)_
+1. [x] **Finding 1** — Stub-selection predicate re-spelled in `commands/docs.ts` and `retrieval/setup.ts` instead of imported from `retrieval/models.ts` _(layer: cli)_
 2. [ ] **Finding 2** — `docs search` and `docs serve` ignore `--dry-run` and persist the index _(layer: cli)_
 3. [ ] **Finding 3** — The machine-cache writes are missing from the cli layer's list of machine-scoped writes, and `core/writer.ts` names the wrong writer for the model download _(layer: cli)_
 
