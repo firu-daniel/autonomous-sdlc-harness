@@ -49,3 +49,7 @@
 - `grep -rln "docs_root" plugin/agents` now reaches rows 1–12 of the story index's `## Scope register`, and nothing else.
 - `grep -n -e "feat_docs_catalog_retrieval" -e "answer_[0-9]" -e "clarifications/" plugin/agents/business-parity-reviewer.md plugin/agents/review-plan-reviewer.md plugin/agents/skeptic-reviewer.md plugin/agents/task-plan-reviewer.md plugin/agents/user-review-fix-plan-writer.md` is empty.
 - `claude plugin validate --strict plugin` passes.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the `claude plugin validate --strict plugin` bullet was not executed. The command needed approval in this run and was refused twice, once with a relative path and once with an absolute one. The claim rests on reading the diff instead: the only frontmatter change is appending a value to each file's existing `tools:` line, and no key was added. The other four verification greps were executed and met.
