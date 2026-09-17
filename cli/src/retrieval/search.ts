@@ -30,7 +30,7 @@ export const DEFAULT_RESULTS = 5;
 export const MAX_RESULTS = 20;
 
 /** The snippet length, before the `...` a cut appends. */
-export const SNIPPET_CHARS = 240;
+const SNIPPET_CHARS = 240;
 
 /**
  * PROVISIONAL: the best reranker score below which `fused-rerank` abstains. Set from the fixture

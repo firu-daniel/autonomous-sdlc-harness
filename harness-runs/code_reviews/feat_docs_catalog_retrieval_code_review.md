@@ -28,7 +28,7 @@ Each entry resolves to a self-contained `harness-runs/code_reviews/feat_docs_cat
 4. [x] **Finding 1** — State `lexicalSearch`'s measured behaviour in its interface comment and its SQL comment _(layer: cli)_
 5. [x] **Finding 4** — Settle `PATH` through `hr_path_with_fallbacks` before the launcher `exec`s `node` _(layer: cli)_
 6. [x] **Finding 6** — Give `RepoRootResult.retrievalWired` a consumer or drop it, and re-word `mcpWritten` _(layer: cli)_
-7. [ ] **Finding 7** — Drop `export` from the five new retrieval symbols nothing outside their module reads _(layer: cli)_
+7. [x] **Finding 7** — Drop `export` from the five new retrieval symbols nothing outside their module reads _(layer: cli)_
 8. [ ] **Finding 8** — Make `docs search` answer when a non-abstaining mode returns zero hits _(layer: cli, general)_
 
 ---

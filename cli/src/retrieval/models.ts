@@ -46,7 +46,7 @@ export interface Reranker {
 export const EMBEDDING_MODEL = 'Xenova/bge-small-en-v1.5';
 
 /** bge-v1.5's retrieval instruction, prepended to queries only. */
-export const EMBEDDING_QUERY_PREFIX = 'Represent this sentence for searching relevant passages: ';
+const EMBEDDING_QUERY_PREFIX = 'Represent this sentence for searching relevant passages: ';
 
 /**
  * ONNX port of `cross-encoder/ms-marco-MiniLM-L-6-v2`, Apache-2.0; about 23M parameters, per the
@@ -55,7 +55,7 @@ export const EMBEDDING_QUERY_PREFIX = 'Represent this sentence for searching rel
 export const RERANK_MODEL = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
 /** Bumped by hand when any loading parameter above changes, so the embedder's `id` changes with it. */
-export const MODEL_VERSION = 1;
+const MODEL_VERSION = 1;
 
 /** The vector width of {@link EMBEDDING_MODEL}, which the stub embedder matches. */
 const EMBEDDING_DIMENSIONS = 384;
@@ -96,7 +96,7 @@ interface ListTensor {
 }
 
 /** The real models. Remote loading follows `options.allowRemote`, set before anything is loaded. */
-export async function loadModels(options: { allowRemote: boolean }): Promise<{ embedder: Embedder; reranker: Reranker }> {
+async function loadModels(options: { allowRemote: boolean }): Promise<{ embedder: Embedder; reranker: Reranker }> {
   const transformers = await loadRetrievalModule<typeof Transformers>(TRANSFORMERS_SPECIFIER);
   const { env } = transformers;
   env.cacheDir = retrievalModelCacheDir();

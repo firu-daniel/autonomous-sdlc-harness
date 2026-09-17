@@ -45,7 +45,7 @@ const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
  * issued in this file: a repeat gets `-1`, `-2`, … in order, skipping any suffixed form a literal
  * heading already took, so every slug in one file is distinct.
  */
-export function headingSlug(text: string, seen: Map<string, number>): string {
+function headingSlug(text: string, seen: Map<string, number>): string {
   const base = text
     .toLowerCase()
     .replace(/[^\p{L}\p{N} _-]/gu, '')
