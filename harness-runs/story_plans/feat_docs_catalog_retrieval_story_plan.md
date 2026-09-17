@@ -40,7 +40,7 @@ The work runs bottom-up in the configured layer order, `cli`, then `plugin`, the
 
 Each entry maps 1:1 to `harness-runs/task_plans/feat_docs_catalog_retrieval/task_<K>_plan.md`. Entries run bottom-up in ship order, with the catch-all layer last.
 
-1. [ ] **Task 1** — Add `docs.retrieval` to the config model and the structural check _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — Add `docs.retrieval` to the config model and the structural check _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 2** — Retrieval cache paths and the optional-dependency loader _(layer: cli)_ _(points: 16)_
 3. [ ] **Task 3** — Embedder and reranker interfaces, the Transformers.js models and the deterministic stubs _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Heading chunker and corpus enumeration _(layer: cli)_ _(points: 10)_

@@ -107,6 +107,8 @@ export interface HarnessQa {
 export interface HarnessDocs {
   /** Repo-relative directory holding the maintained reference documents the phase keeps current. */
   root?: string;
+  /** Turn on the local docs-retrieval search tool over `docs.root` and the conventions documents; legal only while `phases.docs` is true. */
+  retrieval?: boolean;
 }
 
 /** Settings for the parity phase. Read only when `phases.parity` is true. */
@@ -508,6 +510,24 @@ export function asQaDriver(value: string): HarnessQaDriver | undefined {
 export function browserWiringApplies(config: HarnessConfig): boolean {
   if (config.phases?.qa !== true) return false;
   return (config.qa?.driver ?? DEFAULTS.qa.driver) === 'web-playwright';
+}
+
+/**
+ * Does this config call for the docs-retrieval wiring — the search server, its permission-profile
+ * entries, its ignore rules, `init`'s setup step, the `docs` verbs and `doctor`'s checks?
+ *
+ * **Declared once, here, because every one of those consumers has to agree.** A copy of this
+ * predicate in one of them that drifted would register a server the permission profile never starts,
+ * or start one nothing registers — and nothing checks two spellings of the config question against
+ * each other, so there is only ever one. Import it; do not re-spell it.
+ *
+ * Both conditions are needed, and the phase test is not redundant with the structural check that
+ * grades `docs.retrieval: true` without `phases.docs` an error: `config/io.ts` → `loadConfig` still
+ * returns a config carrying that error to a caller that does not refuse on one, and retrieval
+ * searches the corpus the docs phase maintains.
+ */
+export function retrievalApplies(config: HarnessConfig): boolean {
+  return config.phases?.docs === true && config.docs?.retrieval === true;
 }
 
 /** The schema's `qa.portSeed` bounds, mirrored verbatim. */

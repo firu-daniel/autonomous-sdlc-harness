@@ -33,3 +33,5 @@ This task's check must reject exactly what that clause rejects, and nothing else
 - `bash scripts/typecheck.sh` and `bash scripts/test.sh` exit zero, run without a pipe.
 - The three new cases pass. Case (c) is the one that shows the check is cross-field rather than a guard on the `set` path alone.
 - `grep -rn "phases?.docs === true && " cli/src` reports only `retrievalApplies`. Later tasks must import the predicate.
+
+**Deviations from plan:** `bash scripts/test.sh` exits 1, not 0: its sole failing gate is `6a no machine paths`, whose hits are this worktree's untracked `.git` pointer file and `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md` — neither touched by this task. Gate 4 (`npm test`) passed, and `node --test test/config-command.test.mjs` ran 29 passed, 0 failed, including the three new cases.
