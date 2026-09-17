@@ -27,3 +27,10 @@
 - `bash scripts/test.sh` exits 0 with both new files in the run; every case above passes against the watcher Task 1 delivered.
 - Perturbation, by hand and not committed: restore the lowest-index selection in the fixture's written watcher (`resume_parked_run` picking one index) and the observed-sequence case fails on the second tick with a spurious resume — the suite catches the defect it was written for.
 - No fixture is created inside this checkout: every path the helper writes sits under the directory `createFixture` returned.
+
+**Deviations from plan:**
+
+- `tick` also sets `CLAR` (the plan's `setStub` contract needs it in the stub's environment) and `CLEANUP_INTERVAL_SECS=999999999999`: the cleanup pass runs on a process's first pass and acts on worktrees and branches no case asserts.
+- The stub sleeps 0.3s before its body: the pass's `registry_set <branch> pid` and the session's exit classification both rewrite `registry.json` read-modify-rename, so an instantly exiting stub can lose one update. The race is the watcher's, pre-existing, and not changed here.
+- Verification `bash scripts/test.sh` exits 1, not 0: the sole failure is gate `6a no machine paths` (this worktree's `.git` pointer file and the tracked `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md`); gate `4 npm test`, which runs both new files, passes.
+- Perturbation run through `harness-runs/scratch/task4_lowest_index_mutation.mjs` (resume on any answered pair, one index): the observed-sequence case fails on its FIRST tick (a spurious resume with only answers 1 and 2), not the second; the late-question and partly-archived cases fail too. Reverted before the gates ran.
