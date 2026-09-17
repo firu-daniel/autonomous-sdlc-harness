@@ -44,7 +44,7 @@ This branch pays the debt `docs/development.md` → `## 6. The roadmap this tree
 
 Each entry maps 1:1 to `harness-runs/task_plans/chore_plugin_prefix_command_sweep/task_<K>_plan.md`. Entries run bottom-up in ship order, with the catch-all layer last.
 
-1. [ ] **Task 1** — Measure the watcher's first-message spelling and set `ENGINE_COMMAND_*` in the watcher template from the result _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Measure the watcher's first-message spelling and set `ENGINE_COMMAND_*` in the watcher template from the result _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Qualify the analyze command in `init`, the stub footers and the `flat` fallback warning, re-measure the headless leg, and update `init.test.mjs` _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Qualify the analyze command in `detect/presets.ts` and update `stack-presets.test.mjs` _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Qualify the analyze command in `doctor`'s checks and update `doctor.test.mjs` _(layer: cli)_ _(points: 15)_
