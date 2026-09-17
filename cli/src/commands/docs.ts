@@ -148,8 +148,7 @@ async function search(ctx: CommandContext, args: readonly string[]): Promise<num
       k,
       mode,
     });
-    const rendered = renderResults(result);
-    if (rendered !== '') ctx.report.result(rendered);
+    ctx.report.result(renderResults(result));
   } finally {
     await session.close();
   }

@@ -45,6 +45,9 @@ export const ABSTAIN_SCORE_THRESHOLD = 0.3;
 /** The whole rendering of an abstention. */
 export const ABSTAIN_MESSAGE = 'no confident match';
 
+/** The whole rendering of a search that found nothing, in a mode that does not abstain. Module-private: {@link renderResults} is its only reader. */
+const NO_RESULTS_MESSAGE = 'no results';
+
 /** `lexical` and `vector` run one arm, `fused` both, `fused-rerank` both plus the reranker. */
 export type SearchMode = 'lexical' | 'vector' | 'fused' | 'fused-rerank';
 
@@ -135,10 +138,13 @@ export async function searchDocs(options: {
 
 /**
  * {@link ABSTAIN_MESSAGE} alone on an abstention; otherwise two lines per hit, `n. ref (score s)` and
- * the indented snippet, with no blank line between hits. No hits and no abstention render as `''`.
+ * the indented snippet, with no blank line between hits. No hits and no abstention render as
+ * {@link NO_RESULTS_MESSAGE}: every caller prints what this returns, so an empty string would leave a
+ * run that answered indistinguishable from one that did nothing.
  */
 export function renderResults(result: SearchResult): string {
   if (result.abstained) return ABSTAIN_MESSAGE;
+  if (result.hits.length === 0) return NO_RESULTS_MESSAGE;
   return result.hits
     .flatMap((hit, index) => [`${index + 1}. ${hit.ref} (score ${hit.score.toFixed(3)})`, `   ${hit.snippet}`])
     .join('\n');

@@ -532,7 +532,7 @@ Refreshes the index, then answers the query. `--k` takes a whole number, default
    <snippet>
 ```
 
-Where nothing clears the threshold it prints `no confident match` instead. Abstention happens **only in `fused-rerank`**, below the provisional `ABSTAIN_SCORE_THRESHOLD`: the other modes' scores are rank-derived and uncalibrated, so they always return hits. An abstention exits `0` — it is an answer, not an error. An empty query and an unknown mode are refused with exit `1`.
+Where nothing clears the threshold it prints `no confident match` instead. Abstention happens **only in `fused-rerank`**, below the provisional `ABSTAIN_SCORE_THRESHOLD`: the other modes' scores are rank-derived and uncalibrated, so they never abstain and return whatever they ranked. A mode that does not abstain prints `no results` when it found none — against an empty index, or a `lexical` query nothing matches. Both answers exit `0` — they are answers, not errors, and the command always prints one line. An empty query and an unknown mode are refused with exit `1`.
 
 ### `docs serve`
 

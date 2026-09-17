@@ -156,7 +156,9 @@ test('search (a)-(d): hybrid search, abstention, lexical mode and --k', async (t
   // (c)
   const lexical = await searchOk(dir, env, [MATCH_QUERY, '--mode', 'lexical']);
   assert.ok(lexical.split('\n')[0].startsWith('1. docs/guide.md#offline (score '), lexical);
-  assert.equal(await searchOk(dir, env, [NO_MATCH_QUERY, '--mode', 'lexical']), '');
+  // A mode that never abstains still answers when it found nothing — the one thing a caller cannot
+  // tell from a run that did nothing at all.
+  assert.equal(await searchOk(dir, env, [NO_MATCH_QUERY, '--mode', 'lexical']), 'no results');
 
   // (d)
   const one = await searchOk(dir, env, [MATCH_QUERY, '--k', '1']);
