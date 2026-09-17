@@ -30,7 +30,7 @@ import { DETECTION_PRESET_NAMES } from '../config/model.js';
 import { EXIT, HarnessError } from '../core/errors.js';
 import { isJsonObject, readJsonFile, type JsonObject } from '../core/json.js';
 import { insideRepo } from '../core/paths.js';
-import { PLUGIN_NAME } from '../generators/projectSettings.js';
+import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
 
 /**
  * The layer presets, in signal-table order — the schema's `detection.preset` enum, re-exported
@@ -53,7 +53,7 @@ export const FLAT_FALLBACK_SIGNAL_ID = 'flat:fallback';
 
 /** The warning the `flat` fallback row carries, so an unrecognised layout says what to do next. */
 export const FLAT_FALLBACK_WARNING =
-  `unrecognised layout — using the \`flat\` preset; run \`/${PLUGIN_NAME}:harness-analyze\` to refine the layer profile`;
+  `unrecognised layout — using the \`flat\` preset; run \`${ANALYZE_COMMAND}\` to refine the layer profile`;
 
 /**
  * The npm manifest, read for its top-level `workspaces` key and its `scripts` **names**.

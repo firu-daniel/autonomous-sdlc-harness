@@ -18,8 +18,9 @@
  * Every field of a recorded review is optional (`config/model.ts`), so each is rendered only where
  * it is present — no `undefined` token may reach an adopter.
  *
- * Both callers pass their own command spellings rather than importing a constant from here: `init`
- * and `doctor` each keep their own `ANALYZE_COMMAND` and `CLI`, and this module names neither.
+ * Both callers pass their command spellings in rather than this module importing them: `init` and
+ * `doctor` each keep their own `CLI` and take `ANALYZE_COMMAND` from `core/pluginIdentity.ts`, and
+ * this module names neither.
  * `init --reset-config` is named by neither arm: it rebuilds the whole file from a fresh detection,
  * which is not a remedy for one uncovered directory.
  *

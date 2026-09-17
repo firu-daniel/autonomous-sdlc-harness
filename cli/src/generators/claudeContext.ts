@@ -45,12 +45,12 @@ import { join, posix } from 'node:path';
 
 import { DEFAULTS, type HarnessConfig, type HarnessLayer } from '../config/model.js';
 import { defaultProjectName, readTemplate } from '../core/paths.js';
+import { ANALYZE_COMMAND, PLUGIN_NAME } from '../core/pluginIdentity.js';
 import { normalizeRepoPathStrict } from '../core/repoPaths.js';
 import { renderTemplate } from '../core/templating.js';
 import type { WritePlan } from '../core/writer.js';
 import { SHARED_CONVENTIONS_PATH } from '../detect/presets.js';
 import { PUSH_ENV_PATH, QA_CREDENTIALS_PATH } from './harnessConfig.js';
-import { PLUGIN_NAME } from './projectSettings.js';
 
 /** The adopter-side directory this whole template subtree lands in. The dot is `init`-side only. */
 const CLAUDE_DIR = '.claude';
@@ -195,9 +195,6 @@ export function isUntouchedSkeletonText(content: string): boolean {
  * still covered by the no-argument pass.
  */
 export const RESERVED_ANALYZE_TARGETS = ['project', 'conventions', 'layers'] as const;
-
-/** The command each stub footer points at, argument appended. */
-const ANALYZE_COMMAND = `/${PLUGIN_NAME}:harness-analyze`;
 
 /**
  * The delimiters of the **setup-pending banner** the generated project file carries under its

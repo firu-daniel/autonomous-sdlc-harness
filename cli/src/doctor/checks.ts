@@ -99,6 +99,7 @@ import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
 import { readTemplate, workRoot } from '../core/paths.js';
+import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
 import { normalizeRepoPathStrict } from '../core/repoPaths.js';
 import { probeWritable } from '../core/writer.js';
 import { detectBackend, resolveWatcherPath, watcherMissingMessage } from '../daemon/backend.js';
@@ -149,7 +150,6 @@ import {
   MARKETPLACE_NAME,
   marketplaceEntryDefect,
   PLUGIN_KEY,
-  PLUGIN_NAME,
   SETTINGS_PATH,
   SLUG_SHAPE,
 } from '../generators/projectSettings.js';
@@ -2709,9 +2709,6 @@ const STATE_DIR_TREE_CHECK: Check = {
     );
   },
 };
-
-/** The command both remedies below name, plugin-qualified as `init` and every stub footer spell it. */
-const ANALYZE_COMMAND = `/${PLUGIN_NAME}:harness-analyze`;
 
 /**
  * Setup's judgement half, reported as the four facts that decide it: a configured conventions

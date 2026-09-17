@@ -16,7 +16,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Give the plugin-qualified analyze command one owner in `cli/src/core/` and remove the new `detect/` → `generators/` import _(layer: cli)_
+1. [x] **Finding 1** — Give the plugin-qualified analyze command one owner in `cli/src/core/` and remove the new `detect/` → `generators/` import _(layer: cli)_
 
 ## Must Fix
 

@@ -28,7 +28,7 @@
  */
 
 import { placeholderCommand, type HarnessCommands, type HarnessLayer } from '../config/model.js';
-import { PLUGIN_NAME } from '../generators/projectSettings.js';
+import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
 import {
   appScriptNames,
   declaresNodeScript,
@@ -2152,7 +2152,7 @@ function splitDetectionNote(claim: {
 }): string {
   return (
     'no layout signal matched this repository, so the `flat` fallback supplied the layer profile and ' +
-    `\`/${PLUGIN_NAME}:harness-analyze\` is what refines it — the command half did resolve: ${commandSourceClaim(claim)}. ` +
+    `\`${ANALYZE_COMMAND}\` is what refines it — the command half did resolve: ${commandSourceClaim(claim)}. ` +
     'The unrecognised-layout warning is about the layer profile ' +
     'alone, not about the command lines this run wrote'
   );
@@ -2245,7 +2245,7 @@ export function buildPreset(detection: DetectionResult): PresetProfile {
       ? '`doctor` grades this a decision rather than drift, and it does not grade `layer-drift` while the profile carries no row below the root, so the directories under it are not enumerated anywhere until a profile is proposed'
       : "`doctor` keeps warning about it as an unresolved source root until a profile is recorded, since nothing else repeats this line";
     context.warn(
-      `the \`${preset}\` preset gives this repository the \`general\` layer only — per-package or per-module layers are \`/${PLUGIN_NAME}:harness-analyze\`'s to propose. ${disposition}`,
+      `the \`${preset}\` preset gives this repository the \`general\` layer only — per-package or per-module layers are \`${ANALYZE_COMMAND}\`'s to propose. ${disposition}`,
     );
   }
 

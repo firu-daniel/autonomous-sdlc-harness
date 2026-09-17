@@ -113,6 +113,7 @@ import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
 import { insideRepo, packageRoot } from '../core/paths.js';
+import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
 import { askLine, askYesNo, canPrompt } from '../core/prompt.js';
 import { normalizeRepoDir, normalizeRepoPathStrict } from '../core/repoPaths.js';
 import { WritePlan } from '../core/writer.js';
@@ -149,7 +150,6 @@ import {
   MARKETPLACE_FLAG,
   MARKETPLACE_NAME,
   MARKETPLACES_KEY,
-  PLUGIN_NAME,
   SETTINGS_PATH,
   SLUG_SHAPE,
   type ProjectSettingsFlags,
@@ -177,35 +177,6 @@ const SUMMARY =
 
 /** The roadmap item this command belongs to, as the registry reports it. */
 const ROADMAP_ITEM = 13;
-
-/** The analyze command's own name, without the leading `/` and without the plugin prefix. */
-const ANALYZE_COMMAND_NAME = 'harness-analyze';
-
-/**
- * The analyze command as every line addressing the adopter names it — step C of the install story.
- *
- * One spelling serves both uses: the name a person types into an open session and the first message
- * {@link ANALYZE_INVOCATION} passes (`docs/development.md` → `## 5. Verifying a change` → gate 6
- * records the spelling rule). The prefix is taken from {@link PLUGIN_NAME}, which mirrors the plugin
- * manifest, rather than written out here. The interactive first-message form waits on the hand-run
- * gate — if that comes back negative the printed line is dropped rather than respelled
- * (`docs/analyze.md` §9).
- *
- * Headless first-message leg, re-measured: Claude Code 2.1.274, from this checkout with the plugin
- * enabled; the `system`/`init` event of both runs listed `autonomous-sdlc-harness:harness-analyze`
- * among its slash commands and did not list `harness-analyze`.
- * - `claude -p "/autonomous-sdlc-harness:harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
- *   exit 1; no `Skill` call, the first tool call was the command's own `Bash` read of the
- *   unfilled-stub markers; final `result` event `is_error: true`, `result: null`, verbatim message
- *   `Reached maximum number of turns (2)`.
- * - `claude -p "/harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
- *   exit 1; the first tool call was `Skill` naming `autonomous-sdlc-harness:harness-analyze`, which
- *   loaded the command; final `result` event `is_error: true`, `result: null`, verbatim message
- *   `Reached maximum number of turns (2)`.
- * Both exits are the two-turn cap, not a resolution failure: the prefixed spelling ran the command
- * directly, and the bare one reached it only through the model choosing the `Skill` tool.
- */
-const ANALYZE_COMMAND = `/${PLUGIN_NAME}:${ANALYZE_COMMAND_NAME}`;
 
 /**
  * How this CLI is typed, for every line that tells an adopter to run something — stated here once
@@ -273,6 +244,26 @@ const MCP_LAUNCHER = 'npx -y';
  */
 const AGENT_CLI = 'claude';
 const MARKETPLACE_ADD_COMMAND = `${AGENT_CLI} plugin marketplace add ${SLUG_SHAPE}`;
+/**
+ * Step C of the install story as a first message: {@link ANALYZE_COMMAND} is the one spelling both
+ * for the name a person types into an open session and for this. The interactive first-message form
+ * waits on the hand-run gate — if that comes back negative the printed line is dropped rather than
+ * respelled (`docs/analyze.md` §9).
+ *
+ * Headless first-message leg, re-measured: Claude Code 2.1.274, from this checkout with the plugin
+ * enabled; the `system`/`init` event of both runs listed `autonomous-sdlc-harness:harness-analyze`
+ * among its slash commands and did not list `harness-analyze`.
+ * - `claude -p "/autonomous-sdlc-harness:harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
+ *   exit 1; no `Skill` call, the first tool call was the command's own `Bash` read of the
+ *   unfilled-stub markers; final `result` event `is_error: true`, `result: null`, verbatim message
+ *   `Reached maximum number of turns (2)`.
+ * - `claude -p "/harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
+ *   exit 1; the first tool call was `Skill` naming `autonomous-sdlc-harness:harness-analyze`, which
+ *   loaded the command; final `result` event `is_error: true`, `result: null`, verbatim message
+ *   `Reached maximum number of turns (2)`.
+ * Both exits are the two-turn cap, not a resolution failure: the prefixed spelling ran the command
+ * directly, and the bare one reached it only through the model choosing the `Skill` tool.
+ */
 const ANALYZE_INVOCATION = `${AGENT_CLI} "${ANALYZE_COMMAND}"`;
 
 /** The verb that applies a layer-profile revision — the one writer of `layers[]` (`docs/analyze.md` §3). */
