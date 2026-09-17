@@ -4,7 +4,7 @@ description: Fix the next unresolved finding of the current branch's latest user
 
 # Scope: Continue work on the current branch's user-review fix plan
 
-## Context: A user-review fix plan has been drafted on the current branch (via `/branch-start-user-review-fix-plan`). The next finding not marked as done needs to be fixed. For an unsupervised end-to-end variant that loops every fix-plan item without per-item pauses, see `/branch-implement-user-review-semi-autonomous`.
+## Context: A user-review fix plan has been drafted on the current branch (via `/autonomous-sdlc-harness:branch-start-user-review-fix-plan`). The next finding not marked as done needs to be fixed. For an unsupervised end-to-end variant that loops every fix-plan item without per-item pauses, see `/autonomous-sdlc-harness:branch-implement-user-review-semi-autonomous`.
 
 ## Resolved values
 

@@ -53,7 +53,7 @@ export interface HarnessDetection {
    * `config set detection.review`.
    */
   commandFamily?: string;
-  /** The layer-profile review's verdict, written by `/harness-analyze` through `config set detection.review`. */
+  /** The layer-profile review's verdict, written by `/autonomous-sdlc-harness:harness-analyze` through `config set detection.review`. */
   review?: HarnessLayerReview;
 }
 
@@ -308,7 +308,7 @@ export const STATE_DIR_DOT_PATTERN = /(^|\/)\./;
  * `bundle` the only resolver, so there is no second runner to stay neutral about. Its profile is a
  * source root — `app/` or `lib/`, whichever exists — rather than a Rails layer list, because
  * naming a Rails application's `app/` sub-directories as layers would decide its architecture, and
- * that is `/harness-analyze`'s. A Rails-shaped repository does not reach this preset at all: it
+ * that is `/autonomous-sdlc-harness:harness-analyze`'s. A Rails-shaped repository does not reach this preset at all: it
  * matches `api-service:route-directory` on its `app/controllers`, keeps that profile, and gains
  * the Bundler commands through the command family, which is selected independently of the preset.
  * A repository whose root `package.json` declares a script the npm commands are derived from does

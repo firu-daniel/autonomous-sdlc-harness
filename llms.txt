@@ -2,7 +2,7 @@
 
 > An autonomous software-delivery harness for Claude Code: you ask for a change, and you get back a branch that has been planned, implemented, independently reviewed and pushed, ready for your review. You install two things, a Claude Code plugin and a Node CLI.
 
-This file is for a language model choosing which document of this repository to read. The harness ships as two halves, `plugin/` and `cli/`. Its setup command, `/harness-analyze`, works only when typed into an interactive Claude Code session; a headless `claude -p` session answers `Unknown command`.
+This file is for a language model choosing which document of this repository to read. The harness ships as two halves, `plugin/` and `cli/`. Its setup command is `/autonomous-sdlc-harness:harness-analyze`, typed into an interactive Claude Code session; every command the plugin ships carries that `autonomous-sdlc-harness:` prefix.
 
 The quick start, in five steps:
 
@@ -22,7 +22,7 @@ The quick start, in five steps:
 3. Teach it the codebase: type this in an interactive Claude Code session opened on the repository, not in the terminal:
 
    ```
-   /harness-analyze
+   /autonomous-sdlc-harness:harness-analyze
    ```
 
 4. Verify:
@@ -40,7 +40,7 @@ The quick start, in five steps:
 
 ## The two halves
 
-- [plugin/](https://github.com/firu-daniel/autonomous-sdlc-harness/tree/main/plugin): the Claude Code plugin carrying the process assets a run executes, namely agents, `branch-*` commands, `/harness-analyze`, guard hooks, instructions and samples.
+- [plugin/](https://github.com/firu-daniel/autonomous-sdlc-harness/tree/main/plugin): the Claude Code plugin carrying the process assets a run executes, namely agents, `branch-*` commands, `/autonomous-sdlc-harness:harness-analyze`, guard hooks, instructions and samples.
 - [cli/](https://github.com/firu-daniel/autonomous-sdlc-harness/tree/main/cli): the npm package `autonomous-sdlc-harness` carrying the outer loop, namely `init`, `doctor`, `config` and `daemon`.
 - [plugin/README.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/plugin/README.md): the inventory of the plugin's asset directories.
 - [cli/README.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/cli/README.md): the CLI package's commands, flags, exit codes and recorded decisions.
@@ -52,7 +52,7 @@ The quick start, in five steps:
 ## Where to read more
 
 - [docs/watcher.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/watcher.md): the outer loop that turns a dropped file into an unattended run.
-- [docs/analyze.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/analyze.md): the decisions of record for `/harness-analyze`, including what it fills in and what it refuses to guess.
+- [docs/analyze.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/analyze.md): the decisions of record for `/autonomous-sdlc-harness:harness-analyze`, including what it fills in and what it refuses to guess.
 - [docs/cli.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/cli.md): the four subcommands, their flags and exit codes, and the `init` re-run contract.
 - [docs/config.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/config.md): one row per configuration value and parameterization token, saying where its value comes from.
 - [docs/development.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/development.md): changing a file in this repository, and which commands decide whether a change is good.

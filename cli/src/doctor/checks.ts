@@ -99,6 +99,7 @@ import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
 import { readTemplate, workRoot } from '../core/paths.js';
+import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
 import { normalizeRepoPathStrict } from '../core/repoPaths.js';
 import { probeWritable } from '../core/writer.js';
 import { detectBackend, resolveWatcherPath, watcherMissingMessage } from '../daemon/backend.js';
@@ -2709,9 +2710,6 @@ const STATE_DIR_TREE_CHECK: Check = {
   },
 };
 
-/** The command both remedies below name, spelled as `init` and every stub footer spell it. */
-const ANALYZE_COMMAND = '/harness-analyze';
-
 /**
  * Setup's judgement half, reported as the four facts that decide it: a configured conventions
  * document with nothing behind it, one that is still an untouched skeleton, a configured
@@ -3001,7 +2999,7 @@ function detectionProvenance(detection: HarnessDetection): string {
  *
  * **It is deliberately blind to the conventions documents.** {@link SETUP_ANALYSIS_CHECK} above
  * grades those, and its skeleton warning was the last indirect trace that a fallback profile had
- * never been examined — a trace `/harness-analyze conventions` clears by filling the documents,
+ * never been examined — a trace `/autonomous-sdlc-harness:harness-analyze conventions` clears by filling the documents,
  * leaving `doctor` green about a profile nobody looked at. This check reads no document, so that
  * command does not move it.
  *

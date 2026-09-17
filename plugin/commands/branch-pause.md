@@ -25,7 +25,7 @@ The autonomous flow has no way to *suspend* a run short of the hard `STOP` (whic
 auto-resumed). This command drops a **`<state_dir>/PAUSE`** request into a running run's **worktree**. At its
 next safety-contract checkpoint, if the tree has no uncommitted tracked changes (a clean boundary), the
 orchestrator appends a note to `<state_dir>/PAUSE_PROGRESS.md`, writes `<state_dir>/PAUSE_ACK`, and **ends its
-session** — the watcher marks the run `paused` and notifies. Resume later with `/branch-resume <branch>`
+session** — the watcher marks the run `paused` and notifies. Resume later with `/autonomous-sdlc-harness:branch-resume <branch>`
 (the watcher re-launches from the committed flow-progress ledger). Wraps "Pause / resume a run" in
 `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`.
 
@@ -33,8 +33,8 @@ Only a **running** run can honor a PAUSE (the engine must be alive to see it). T
 marker file and reports — it must NOT modify `<scripts_dir>/autonomous-watcher.sh`, the engines, or the
 instruction forks.
 
-**Usage:** type `/branch-pause`. Optionally target a branch with a leading `<branch>: ` prefix and add a
-free-text reason after it, e.g. `/branch-pause feat_settings_search: session token window nearly full`. The
+**Usage:** type `/autonomous-sdlc-harness:branch-pause`. Optionally target a branch with a leading `<branch>: ` prefix and add a
+free-text reason after it, e.g. `/autonomous-sdlc-harness:branch-pause feat_settings_search: session token window nearly full`. The
 reason (everything after any `<branch>: ` prefix) is written verbatim as the PAUSE file's body for your
 own audit — the orchestrator only checks the file's **presence**, never its content.
 
@@ -57,6 +57,6 @@ own audit — the orchestrator only checks the file's **presence**, never its co
 5. Report: the run will honor the pause at its **next clean tracked-tree checkpoint** (it lets any pending
    commit finish first, so an in-flight unit is not left half-done), then write `PAUSE_PROGRESS.md` and end
    its session; the watcher will mark it `paused` and notify. Tell the user to resume later with
-   `/branch-resume <branch>` (or by dropping `<state_dir>/RESUME` in the worktree). Note that the pause is
+   `/autonomous-sdlc-harness:branch-resume <branch>` (or by dropping `<state_dir>/RESUME` in the worktree). Note that the pause is
    not instantaneous — the checkpoint is reached between sub-agent dispatches, so an in-flight dispatch
    (e.g. a long interactive-test or review) finishes first.

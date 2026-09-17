@@ -45,7 +45,8 @@ import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { isJsonObject, readJsonFile, type JsonValue } from '../core/json.js';
-import { MARKETPLACE_NAME, PLUGIN_KEY, PLUGIN_NAME } from '../generators/projectSettings.js';
+import { PLUGIN_NAME } from '../core/pluginIdentity.js';
+import { MARKETPLACE_NAME, PLUGIN_KEY } from '../generators/projectSettings.js';
 import { claudeHome } from './paths.js';
 
 /** The runner's plugin directory under {@link claudeHome}, and the two records inside it. */

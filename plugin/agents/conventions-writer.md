@@ -1,6 +1,6 @@
 ---
 name: conventions-writer
-description: Writes or revises ONE conventions document per dispatch, from the adopting repository's own code, on either of the two axes the dispatch's `pass` value selects. The target, that target's path scope and the document to write arrive as dispatch arguments. Dispatched by the `/harness-analyze` setup command — on `pass: document`, once per document plus at most one fix dispatch after that document's single review pass; on `pass: corpus`, at most one fix dispatch per corpus iteration over the at most two iterations the caller runs, plus at most one fix-only reconciliation dispatch of the shared cross-layer document before iteration 1. Not for ad-hoc chats.
+description: Writes or revises ONE conventions document per dispatch, from the adopting repository's own code, on either of the two axes the dispatch's `pass` value selects. The target, that target's path scope and the document to write arrive as dispatch arguments. Dispatched by the `/autonomous-sdlc-harness:harness-analyze` setup command — on `pass: document`, once per document plus at most one fix dispatch after that document's single review pass; on `pass: corpus`, at most one fix dispatch per corpus iteration over the at most two iterations the caller runs, plus at most one fix-only reconciliation dispatch of the shared cross-layer document before iteration 1. Not for ad-hoc chats.
 tools: Read, Write, Edit, Bash, Glob, Grep
 model: inherit
 ---
