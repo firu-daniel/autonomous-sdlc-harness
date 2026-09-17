@@ -2,7 +2,7 @@
 
 **Who reads this:** someone about to run `init` against a repository, or debugging a repository it already wired. It answers what each command does, what it writes, what it refuses, and what its exit status means — so the decision "is this repository correctly adopted, and if not what do I change" can be made from the CLI's own output rather than from its source.
 
-The commands are `init`, `doctor`, `config` and `daemon`. The process assets a wired repository then runs — agents, slash commands, hooks, instructions and samples — are not in this package; they ship as the sibling plugin.
+The commands are `init`, `doctor`, `config`, `daemon` and `docs`. The process assets a wired repository then runs — agents, slash commands, hooks, instructions and samples — are not in this package; they ship as the sibling plugin.
 
 ---
 
@@ -286,7 +286,7 @@ Three files hold three views of one string: `harness.config.json`, the wrapper s
 
 That first arm is now **reported rather than silently blessed**, at all three sites that can see it: `init` warns as it inlines the raw line into the wrapper, `config set` warns as the value is stored — and names the **write that has to precede** the corrective `set`, because at that boundary the key was the placeholder and no wrapper was written for it yet — and `doctor`'s `command-wrappers` check (§7) grades it on every later run. The value is stored verbatim and the wrapper runs it once `init` has inlined it — what the report names is that the permission profile allow-lists `bash <scriptsDir>/<name>.sh` and not the raw line, so an agent told to run the configured string as written is refused on it. **That inlining has a condition, and the message carries it:** wrappers are `create-if-absent` (§3), so a plain re-run writes one from this line **only while the file is absent** — the hand-fill boundary's own state, where the key held the placeholder and no wrapper was written for it. Over a wrapper already on disk a re-run keeps the file and discards the body it just computed, so that arm is `init --force`, which copies the file to a `.bak` before replacing it, or the file deleted and `init` re-run. Then, and only then, set the key to the invocation. Setting it first leaves the precedence above nothing to inline — the raw line is gone from the key and detection only ever produced the placeholder — so the wrapper is written to fail and the adopter's command line is lost. One condition and one sentence serve all three, so the three cannot come to describe one defect differently.
 
-**Two families land in `scriptsDir`, and only one of them is generated.** A **wrapper** is generated: its body is a command line detected for or configured by this repository, so `init` renders it and the configuration holds its invocation. An **outer-loop script** — the run watcher, the git wrappers, the worktree tooling, the scratch runner and the shared library they all source — ships fixed and is copied byte for byte, because it reads `harness.config.json` *at run time* instead of carrying values frozen in when `init` ran; a guard whose protected-branch set was baked into a file at generation time enforces the wrong set the moment that list changes, and does it silently. The permission profile treats the two differently as well. Every wrapper that is written is allow-listed (§6), because the whole reason it exists is that an agent runs it. An outer-loop script is allow-listed **only** when its row in the shipped table marks it agent-invocable — true of the git wrappers a dispatched agent commits, pushes and refreshes its branch through, and of `scratch-run.sh`, which runs a dispatched agent's language probe or mutation check in the interpreter that file's extension names and refuses any argument that does not resolve inside `<state_dir>/scratch/`; false of everything the watcher process or a person starts. That flag records what a script is **meant** to be run by and decides the profile; it is not what puts the rest out of reach. The plugin's script-allowlist guard grants independently of the profile — it auto-allows a `.sh` under `scriptsDir` whose basename it does not deny, so absence from the profile withholds nothing on its own. That allow is bounded, and by the command rather than by the file: the guard scans the whole command string and withholds it when anything — a commit subject included — carries `$(…)`, a backtick, `|` (hence `||`), `<`, a braced expansion other than a bare `${IDENT}`, or a `>` that is neither a descriptor duplication (`2>&1`, `>&2`, `2>&-`) nor a redirection to the literal `/dev/null`, and refuses outright any `.sh` token carrying a `$` in any spelling. What makes a destructive script unreachable is that guard's `DENY_SCRIPT_BASENAMES`, which carries the watcher, its restart wrapper and the worktree sweep; a row that must not be agent-runnable needs an entry there **as well as** `agentInvocable: false` here. The flag sits in the same table that writes the files, so a profile cannot name a script `init` did not write, nor one it wrote for something other than an agent to run.
+**Two families land in `scriptsDir`, and only one of them is generated.** A **wrapper** is generated: its body is a command line detected for or configured by this repository, so `init` renders it and the configuration holds its invocation. An **outer-loop script** — the run watcher, the git wrappers, the worktree tooling, the docs-retrieval server launcher, the scratch runner and the shared library they all source — ships fixed and is copied byte for byte, because it reads `harness.config.json` *at run time* instead of carrying values frozen in when `init` ran; a guard whose protected-branch set was baked into a file at generation time enforces the wrong set the moment that list changes, and does it silently. The permission profile treats the two differently as well. Every wrapper that is written is allow-listed (§6), because the whole reason it exists is that an agent runs it. An outer-loop script is allow-listed **only** when its row in the shipped table marks it agent-invocable — true of the git wrappers a dispatched agent commits, pushes and refreshes its branch through, and of `scratch-run.sh`, which runs a dispatched agent's language probe or mutation check in the interpreter that file's extension names and refuses any argument that does not resolve inside `<state_dir>/scratch/`; false of everything the watcher process, the agent runner or a person starts — the agent runner starts `docs-search-server.sh` from `.mcp.json` when `docs.retrieval` is on, and its one tool is granted by the retrieval half of the profile (§6) rather than by a script entry. That flag records what a script is **meant** to be run by and decides the profile; it is not what puts the rest out of reach. The plugin's script-allowlist guard grants independently of the profile — it auto-allows a `.sh` under `scriptsDir` whose basename it does not deny, so absence from the profile withholds nothing on its own. That allow is bounded, and by the command rather than by the file: the guard scans the whole command string and withholds it when anything — a commit subject included — carries `$(…)`, a backtick, `|` (hence `||`), `<`, a braced expansion other than a bare `${IDENT}`, or a `>` that is neither a descriptor duplication (`2>&1`, `>&2`, `2>&-`) nor a redirection to the literal `/dev/null`, and refuses outright any `.sh` token carrying a `$` in any spelling. What makes a destructive script unreachable is that guard's `DENY_SCRIPT_BASENAMES`, which carries the watcher, its restart wrapper and the worktree sweep; a row that must not be agent-runnable needs an entry there **as well as** `agentInvocable: false` here. The flag sits in the same table that writes the files, so a profile cannot name a script `init` did not write, nor one it wrote for something other than an agent to run.
 
 ---
 
@@ -352,6 +352,9 @@ Nothing is repaired and nothing is written, beyond a temp file the writability p
 | `profile-deny-floor` | the profile keeps the deny floor a generated one ships with |
 | `plugin-permissions` | the profile grants the helper-script entries a run needs at each of this machine's plugin roots, and a read grant where the runtime resolves the plugin to a different one |
 | `browser-wiring` | the interactive-test phase can reach the application |
+| `retrieval-dependencies` | the machine-shared runtime the docs-retrieval launcher runs is installed at this CLI's version with every optional peer |
+| `retrieval-model-cache` | every model file docs retrieval loads offline is in the shared model cache |
+| `retrieval-index` | the docs-retrieval index builds |
 
 The list is also the order of evaluation and of the report, and a fix works down it the same way: a failed `git` check makes every question below it unanswerable, and an unreadable profile makes the three profile checks unanswerable, so the first failure is almost always the one to act on. A check whose preconditions did not hold says so rather than guessing. Two placements in that order carry a reason worth stating. `jj-repository` sits immediately under `git` because it is that check's own question one step on — `git` establishes that there **is** a work tree, this says what shape of work tree it is — and every branch line below it is qualified by that answer, the detection rung a detached `HEAD` costs and the caller set the committed hook actually reaches. And `pre-push-guard` and `protected-set` close the branch block under `base-freshness`, because they ask the two remaining questions about the same value from opposite sides: whether the guard on disk is the one the configured name describes, and whether the configuration still names branches this repository has. They come after the trio rather than before it so that a reader who has just read three lines about one name reads next what enforces it.
 
@@ -382,6 +385,15 @@ Which severity a check carries is a decision, not a default:
 - **`pre-push-guard` is a warning in every state it can report**, and it is the only check that grades the file rather than the value. The three lines above it ask what the configured name is and what a run's working copy can be cut from; this compares the guard **on disk** with the set that configuration resolves — `protectedBranches` unioned with `defaultBranch` — by reading the `case` label the hook was rendered with. The hook is `create-if-absent` (§3), so it carries the set substituted into it when it was written, while `config set defaultBranch <name>` and a hand edit to `harness.config.json` both change only the config; the state it was written from is a measured adoption whose report was all passes and warnings while its hook **allowed** a push to the integration line and **refused** one to an ordinary feature branch, because nothing anywhere compared the rendered list to the value it was rendered from. Four graded states: the label matching the resolved set **passes**; a label naming a different set **warns**, saying that git runs the file and a push is therefore judged by the hook's set rather than the config's; **no readable hook** warns that nothing in this checkout judges a push at all, naming a plain `init`, which writes it because it is create-if-absent; and a hook carrying no label in the generated shape warns that it was edited or not written by this CLI, so what it protects cannot be read out of it. It never fails because the flow runs — what is wrong is which branch is guarded — and the true floor is a rule enforced by the host the repository is pushed to. Its remedy is `init --force`, which `.bak`s the hook and re-renders it from the config in effect, or deleting the hook and re-running `init`; **never `--reset-config`**, which would rebuild the whole configuration and cost every hand-set value. One thing it deliberately does not grade is whether `core.hooksPath` points at the directory the hook is in — that is `init`'s own warning, and saying it again here would report one fault twice.
 - **`protected-set` is a warning in every state it can report** too, and it closes the branch block from the opposite side: it asks whether every branch `protectedBranches` **lists** still exists here, as a local branch or an `origin/` remote-tracking ref. The key is optional, and an **absent** one is graded all the same — the guards are rendered from the same schema default (`docs/config.md` §5) — but every line says which of the two it read, because a report telling an adopter the file "lists" an entry sends them looking for a line that is not there. The state it exists for is a guard permanently protecting a branch nobody will ever push to again — `config set defaultBranch <new>` moves one key of a pair the guards read together, so the abandoned name stays in the list, gets rendered into the next hook's `case` label and is resolved by the git wrappers on every call, with nothing ageing it out and nothing saying it is there. Three things are deliberately **not graded**, each because grading it would make one finding two or nag about a supported use: a **glob** entry, which names a namespace rather than one branch and is the documented way to protect a whole family with one entry; an entry equal to **`defaultBranch`**, whose resolution is that check's line above; and a **repository with no commit**, where nothing resolves at all and which state that is, is again `default-branch`'s to say. The first two are named wherever the grade lands, so an entry a reader can see in the file is never silently absent from the line. **A stale entry is reported and never removed**, and that decision is settled rather than pending: narrowing a protected set automatically is the one direction that fails unsafely — a tool that dropped an entry it could not resolve would unprotect a branch on the strength of a ref lookup — so the check names what it found and names the edit, `config set protectedBranches '<json>'` followed by `init --force` to re-render the guard from it, and the adopter makes it. It never fails because an over-wide set stops nothing, and a branch that does not exist *yet* is a legitimate thing to have listed.
 - **`browser-wiring` asks about whichever driver is configured**, which is why the row above says *the application* rather than *a browser*. It reads the same condition the generators write on (§6), so a repository whose `qa.driver` is one of the mobile values **passes**, naming that driver: `.mcp.json` and the profile's interactive-test fragment are deliberately absent there, and warning about wiring `init` withheld would be a finding no adopter could clear. The four warnings above — an undeclared server, an absent `enabledMcpjsonServers`, a launch command that does not resolve, and, under `--check-registry` alone, a pinned MCP package the registry did not answer for — are asked only of the browser driver. A resolved launch command answers none of the fourth, so a default run says so where it passes: the declared servers are launched with `npx -y`, each pinned package is fetched from the registry on first use rather than installed by `init`, and this run did not check that it can be.
+- **The three `retrieval-*` checks come last, under `browser-wiring`**, in the order each needs the one above it: the runtime, the models, then whether an index builds from both. Each **passes** with the same sentence where retrieval is off — `phases.docs` and `docs.retrieval` not both true — because no library, model or index is expected there; each is **not evaluated** where the repository root or `harness.config.json` did not resolve, naming the `git` or `config` check; and where retrieval is on, each **fails** when unsatisfied and names the same remedy, which is the command that installs the runtime and downloads the models:
+
+  ```bash
+  npx autonomous-sdlc-harness init
+  ```
+
+- **`retrieval-dependencies` grades the runtime the launcher runs**, `<machineCacheDir>/retrieval/runtime` — `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/runtime` — installed at this CLI's version with every optional peer. It fails where that installation is absent, at another version or short of a peer, naming what is missing: `docs-search-server.sh` `exec`s that installation's `docs serve`, so without it the search server never starts. Whether the CLI running `doctor` can load its own peers is **not** consulted — the launcher never runs that installation, so a pass on it would be a pass on a server that never starts.
+- **`retrieval-model-cache` fails when any model file is missing** from `<machineCacheDir>/retrieval/models`, naming the first five and counting the rest. A session loads the models with remote loading off, and an unattended run has no web access, so a file missing now is never fetched later.
+- **`retrieval-index` builds the index in memory in a child process** — this CLI's `docs index --in-memory` (§11), bounded by a 600-second timeout because a real corpus embeds every chunk on this probe. It starts no server and writes nothing, so it keeps this section's promise that nothing is written. It passes with the child's one output line and fails with the last line the child wrote to stderr; where neither this installation nor the runtime can load the retrieval libraries it fails without spawning, pointing at `retrieval-dependencies`.
 
 **`--test-notification`** sends one message, after the report and the counts summary, so a repository whose wiring is broken still gets its findings first. It goes out through **this repository's own `autonomous-notify.sh`**, resolved under the configured `scriptsDir` exactly as the daemon resolves the watcher beside it — so there is one place a message is built, with one credential precedence, one pair of delivery arms and one title format, and what you are testing is the thing an unattended run will actually use. The event word is `doctor-test`, which is deliberately none of the watcher's six lifecycle words (`watcher.md` §1 lists them; the script's own header is where that vocabulary is normative): the script delivers an unrecognized word under a generic title, so the message cannot be read as a real run's outcome. The script's exit status and its stderr lines are reported as it wrote them — it prints one line per arm that did not deliver and never prints a value — and an absent notifier is reported as a warning naming the path and `init`, with nothing sent. Under `--dry-run` it reports the invocation it would make and sends nothing; every refusal above still applies, so a dry run cannot report a send a real run would not have made.
 
@@ -467,4 +479,90 @@ Four choices in that harness are worth knowing before they cost a debugging roun
 
 The tests run against the **compiled** entry point, so the build precedes them; the runner says so in its own refusal rather than leaving a module-resolution error to explain it. The end-to-end assertions that matter most are the pair in both directions — every wrapper that was written is allow-listed in every form a caller may use, and no allow entry names a wrapper that was not written — plus idempotence and `--dry-run` purity, which are asserted before anything else. A case whose subject is one of the machine-local paths of §3 points the matching XDG base variable at a throwaway directory as well as the repository — otherwise it measures the machine the tests are running on rather than the fixture, and for the push-notification settings the file it would measure is the operator's own.
 
+**Docs retrieval is tested without a model and without a network.** Every retrieval case sets `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` to `hash-v1` or `hash-v2`, which selects a deterministic hash embedder and reranker in place of the real models, and points `XDG_CACHE_HOME` at a throwaway directory holding the model files planted as empty files, so the model-file gate passes where an adopter's would and the machine's own cache is never read. Switching the stub from `hash-v1` to `hash-v2` is how a new embedder is simulated.
+
+- **`cli/test/docs-retrieval.test.mjs`** drives `docs index` — incremental refresh, deletion, the rebuild on a new embedder, `--in-memory` leaving the tree byte-identical, and both refusals — then `docs search` in its modes, with abstention and `--k`, and `docs serve` through the MCP SDK's own client over stdio, including the refusal before the handshake when retrieval is off.
+- **`cli/test/retrieval-loading.test.mjs`** covers the no-load guarantee: a source guard that only the retrieval path imports a retrieval package, verbs that do not retrieve run under a resolve hook that throws on any peer, the manifest declares every peer optional and no `dependencies` key, and the runtime-installed predicate against a planted cache.
+- **The retrieval cases in the existing suites**: `init.test.mjs` for `--docs-retrieval`, the `.mcp.json` server entry and the index ignore rule, and a setup that installs nothing where the runtime is planted and refuses `docs fetch-models` under the stub; `profile.test.mjs` for the retrieval fragment on and off; `doctor.test.mjs` for the three `retrieval-*` checks passing, failing and reporting retrieval off; `outer-loop-scripts.test.mjs` for the launcher written verbatim, its refusal with an empty stdout when no runtime is installed, and its `exec` of the runtime's `docs serve`.
+
+**Deliberately not covered: the real runtime install and the real model download**, both of which need the network and minutes of time, and neither of which the stub reaches. They are covered by hand, in `development.md` §5 Gate 10.
+
 The gates that run these, and the rest of the acceptance set, are in `development.md` §5.
+
+---
+
+## 11. `docs`
+
+Searches this repository's docs catalog and conventions documents: it builds a per-checkout index, answers queries against it, serves it to agents over MCP, and fetches the two local models it runs on. It is **opt-in** — every sub-verb but `fetch-models` refuses unless `phases.docs` and `docs.retrieval` are both true (`docs/config.md` §5) — and its retrieval quality is **not yet measured** on a real corpus, so its abstention threshold is provisional. The design, the model choice and the measured facts are [`retrieval.md`](retrieval.md).
+
+The sub-verb is required, and `docs --help` lists the four:
+
+```bash
+npx autonomous-sdlc-harness docs --help
+```
+
+An unknown sub-verb, flag or extra argument is refused with exit `1`, naming `docs --help`. The sub-verbs that read the index refuse, before loading anything, where retrieval is off and where a model file is missing from the shared cache (§7's `retrieval-model-cache`); a retrieval library this installation cannot load is refused naming it and `init` as what installs it.
+
+### `docs index`
+
+```bash
+npx autonomous-sdlc-harness docs index
+npx autonomous-sdlc-harness docs index --in-memory
+```
+
+Refreshes this checkout's index under `<stateDir>/docs_index`, embedding only the chunks whose text changed and removing the chunks of deleted documents. It prints one line on stdout:
+
+```text
+docs index: <files> files, <chunks> chunks; embedded <e>, unchanged <u>, deleted <d>
+```
+
+with `; rebuilt for a new embedder` appended when the index was built for a different embedder and was rebuilt. `--in-memory` builds the whole index in memory and writes nothing, and so does `--dry-run`. Exit `0` on a built index, `1` on a refusal.
+
+### `docs search`
+
+```bash
+npx autonomous-sdlc-harness docs search "<query>"
+npx autonomous-sdlc-harness docs search "<query>" --k 10 --mode lexical
+```
+
+Refreshes the index, then answers the query. `--k` takes a whole number, defaults to 5 and is clamped to 1–20. `--mode` is `lexical`, `vector`, `fused` or `fused-rerank`, defaulting to `fused-rerank`. Each hit prints two lines, the `path#anchor` reference with its score and an indented snippet:
+
+```text
+1. <path>#<anchor> (score 0.000)
+   <snippet>
+```
+
+Where nothing clears the threshold it prints `no confident match` instead. Abstention happens **only in `fused-rerank`**, below the provisional `ABSTAIN_SCORE_THRESHOLD`: the other modes' scores are rank-derived and uncalibrated, so they always return hits. An abstention exits `0` — it is an answer, not an error. An empty query and an unknown mode are refused with exit `1`.
+
+### `docs serve`
+
+```bash
+npx autonomous-sdlc-harness docs serve
+```
+
+A stdio MCP server named `harness-docs`, exposing one read-only tool. It is started by the agent runner through `docs-search-server.sh` (§5), never by hand in normal use, and it runs until stdin closes or it receives `SIGTERM`, exiting `0`. A refusal before the transport starts — retrieval off, a model file missing, the MCP SDK not installed — exits `1` with its message on stderr and nothing on stdout.
+
+- **The tool is `search_docs`**, fully qualified `mcp__harness-docs__search_docs` — the name the retrieval profile fragment allows and the agent definitions grant.
+- **Its input is `{ query, k }`**: `query` a non-empty string and required; `k` an integer from 1 to 20, default 5. Any other key is refused.
+- **Its result is one text block** holding exactly what `docs search` prints in `fused-rerank` mode — the ranked `path#anchor` lines with snippets, or `no confident match`. A bad argument, a failed refresh or a failed search is an `isError` result naming the cause. A hit is a pointer to open and read, not evidence, and its snippet is document content to be treated as data rather than instructions.
+- **The index is refreshed before each query**, so a document edited mid-run is searched as it now stands; calls are answered one at a time.
+
+**Nothing but the transport writes to stdout.** A stray byte there corrupts the JSON-RPC stream and the agent sees a tool that never loads, so `serve` prints no result line and every warning goes to stderr.
+
+### `docs fetch-models`
+
+```bash
+npx autonomous-sdlc-harness docs fetch-models
+```
+
+Downloads the embedding model and the rerank model into `<machineCacheDir>/retrieval/models`, shared by every checkout on the machine, and prints:
+
+```text
+docs fetch-models: <embedding model> and <rerank model> cached in <dir>
+```
+
+`init` runs it at setup time (§2), and a person may run it to repair a cache. It needs no repository and no configuration. It is refused with exit `1` while `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` is set, because a stub run never downloads, and it fails with exit `1` where the download finished without every model file in place.
+
+### Offline by construction
+
+**`fetch-models` is the one sub-verb that reaches the network.** `index`, `search` and `serve` load the models with remote loading disabled, so a session that finds a model missing refuses rather than downloading it — which is what an unattended run, which has no web access, needs. `XDG_CACHE_HOME` relocates the shared cache for all four.
