@@ -24,7 +24,7 @@ Each entry resolves to a self-contained `harness-runs/code_reviews/feat_docs_cat
 
 1. [x] **Finding 3** — Resolve the launcher's repository root through the shared library's `hr_repo_root` _(layer: cli)_
 2. [x] **Finding 5** — Give `--docs-retrieval` a flag constant beside `QA_DRIVER_FLAG` and read it at its three sites _(layer: cli)_
-3. [ ] **Finding 2** — Import `ABSTAIN_MESSAGE` from its owner instead of retyping the literal in the `search_docs` tool description _(layer: cli)_
+3. [x] **Finding 2** — Import `ABSTAIN_MESSAGE` from its owner instead of retyping the literal in the `search_docs` tool description _(layer: cli)_
 4. [ ] **Finding 1** — State `lexicalSearch`'s measured behaviour in its interface comment and its SQL comment _(layer: cli)_
 5. [ ] **Finding 4** — Settle `PATH` through `hr_path_with_fallbacks` before the launcher `exec`s `node` _(layer: cli)_
 6. [ ] **Finding 6** — Give `RepoRootResult.retrievalWired` a consumer or drop it, and re-word `mcpWritten` _(layer: cli)_
