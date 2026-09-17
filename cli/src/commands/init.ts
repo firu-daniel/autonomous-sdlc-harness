@@ -2450,7 +2450,7 @@ function analyzeRecordSentence(
  * published — because step 1 has just said the session resolves the plugin only once one of the two
  * routes it names is taken, and handing the line over without that precondition would contradict it.
  * **The outcome is stated as intended on both arms**: whether the prefixed first-message form
- * succeeds is not established ({@link ANALYZE_COMMAND}), so the line an adopter acts on
+ * succeeds is not established ({@link ANALYZE_INVOCATION}), so the line an adopter acts on
  * immediately names the typed route as the measured one instead of asserting its own.
  *
  * **One blank line between the numbered steps, and none before that paste line.** Each step is a
@@ -2530,7 +2530,7 @@ function reportNextSteps(
   // arm, handing the line over without that precondition would contradict the step above it, which
   // has said the session resolves the plugin only once one of the two routes it names is taken.
   // The name typed into an open session is the measured route; the interactive first message is not,
-  // so the outcome is named as intended ({@link ANALYZE_COMMAND}, `docs/analyze.md` §9).
+  // so the outcome is named as intended ({@link ANALYZE_INVOCATION}, `docs/analyze.md` §9).
   const pasteUnconfirmed =
     ' That first-message form is not confirmed on the version measured here; the name above, typed into an open session, is the route that is.';
   const pasteIntro =
