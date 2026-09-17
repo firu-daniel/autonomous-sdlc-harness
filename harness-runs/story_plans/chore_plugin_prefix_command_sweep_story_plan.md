@@ -53,7 +53,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_plugin_prefix_command_swee
 7. [x] **Task 7** — Qualify every command spelling under `plugin/instructions/`, fork binding values included _(layer: plugin)_ _(points: 15)_
 8. [x] **Task 8** — Qualify the command spellings in the plugin's agents, READMEs, flow whiteboard and samples _(layer: plugin)_ _(points: 10)_
 9. [x] **Task 9** — Mirror the watcher template into `scripts/` and sweep `docs/watcher.md` and `docs/outer-loop-verification.md` _(layer: general)_ _(points: 10)_
-10. [ ] **Task 10** — Sweep `docs/analyze.md`, `docs/cli.md`, `docs/config.md`, `schemas/` and `examples/notes-app/README.md` _(layer: general)_ _(points: 15)_
+10. [x] **Task 10** — Sweep `docs/analyze.md`, `docs/cli.md`, `docs/config.md`, `schemas/` and `examples/notes-app/README.md` _(layer: general)_ _(points: 15)_
 11. [ ] **Task 11** — Record the spelling rule and the gate-6d contract, sweep `docs/development.md`, and close the debt paragraph _(layer: general)_ _(points: 20)_
 12. [ ] **Task 12** — Sweep `README.md`, `llms.txt`, `ARCHITECTURE.md` and `ROADMAP.md`, and align their measurement text with §6 _(layer: general)_ _(points: 15)_
 13. [ ] **Task 13** — Add `scripts/check-command-spelling.sh` as gate 6d, sweep `run-gates.sh`, and prove the gate fails on a planted bare spelling _(layer: general)_ _(points: 20)_
