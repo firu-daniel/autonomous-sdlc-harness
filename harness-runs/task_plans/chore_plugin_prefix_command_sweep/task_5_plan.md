@@ -30,3 +30,7 @@
 - `bash scripts/test.sh` exits 0. The render-time every-token-has-a-value check and the `init` fixture cases still pass over the edited template. The appended case shows that a generated `.claude/CLAUDE.md` in a fixture reads `/autonomous-sdlc-harness:…`.
 - `grep -nE '(^|[^A-Za-z0-9_.}/:-])/(branch-([a-z-]*[a-z]|\*)|harness-analyze)([^A-Za-z0-9_./-]|$)' cli/src/config/model.ts cli/src/core/writer.ts cli/src/generators/harnessConfig.ts cli/templates/claude/CLAUDE.md cli/templates/claude/README.md` returns no output.
 - `grep -n "autonomous-sdlc-harness:" cli/templates/claude/CLAUDE.md` returns no output. A hit means the plugin name was typed into the rendered template instead of taken from `{{pluginName}}`.
+
+**Deviations from plan:**
+- `cli/templates/claude/CLAUDE.md` carried a third `/harness-analyze`, in the `## Context files` re-render paragraph; qualified through `{{pluginName}}` under "spell every slash spelling through the token".
+- Verification `bash scripts/test.sh exits 0` not met: it exits 1 on gate `6a no machine paths` alone, whose hits are the worktree's untracked `.git` pointer, a gitignored `harness-runs/scratch/t3npm.log` from an earlier task, and `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md`; no hit is in a file this task touched. Gate `4 npm test` (the `init` fixture cases, including the appended one) passed.

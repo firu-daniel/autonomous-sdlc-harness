@@ -4989,6 +4989,27 @@ test('both banner wordings say where the command comes from and end on their own
 });
 
 /**
+ * The plugin name reaches the project file's command spellings through the `pluginName` render value,
+ * taken from `PLUGIN_NAME`, never as a literal typed into the template — so a token left unrendered is
+ * as much a fault as an unqualified spelling.
+ */
+test('the generated project file spells the harness commands qualified by the plugin name', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+
+  await initOk(dir);
+
+  const content = text(dir, CLAUDE_MD);
+  for (const spelling of [
+    '/autonomous-sdlc-harness:harness-analyze',
+    '/autonomous-sdlc-harness:branch-*',
+    '/autonomous-sdlc-harness:harness-*',
+  ]) {
+    assert.ok(content.includes(spelling), `${CLAUDE_MD} does not carry the qualified spelling ${spelling}`);
+  }
+  assert.ok(!content.includes('{{pluginName}}'), `${CLAUDE_MD} carries an unrendered {{pluginName}} token`);
+});
+
+/**
  * The two fill prompts, which are a cross-task interface rather than prose: they are what the analyze
  * pass classifies this file's two fillable sections — the project paragraph and the naming table — as
  * untouched or already written by, so each has to stay one line, appear once, and sit in its own
