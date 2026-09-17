@@ -22,7 +22,7 @@
 
 Each entry resolves to a self-contained `harness-runs/code_reviews/feat_docs_catalog_retrieval_code_review/finding_<K>.md` file via its `**Finding K**` reference. Sorted with the one Must Fix leading, then lowest blast-radius first among the rest: the two single-token edits, then the comment corrections, then the second launcher edit, then the surface items.
 
-1. [ ] **Finding 3** — Resolve the launcher's repository root through the shared library's `hr_repo_root` _(layer: cli)_
+1. [x] **Finding 3** — Resolve the launcher's repository root through the shared library's `hr_repo_root` _(layer: cli)_
 2. [ ] **Finding 5** — Give `--docs-retrieval` a flag constant beside `QA_DRIVER_FLAG` and read it at its three sites _(layer: cli)_
 3. [ ] **Finding 2** — Import `ABSTAIN_MESSAGE` from its owner instead of retyping the literal in the `search_docs` tool description _(layer: cli)_
 4. [ ] **Finding 1** — State `lexicalSearch`'s measured behaviour in its interface comment and its SQL comment _(layer: cli)_

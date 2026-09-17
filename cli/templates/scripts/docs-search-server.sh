@@ -25,11 +25,11 @@
 #   `hr_cache_dir` mirrors `machineCacheDir()` in `cli/src/machine/paths.ts`.
 #
 # Exit contract:
-#   1    no runtime entry at the resolved path, or no cache directory to
-#        resolve it under; stderr names which
+#   1    no runtime entry at the resolved path, no cache directory to resolve
+#        it under, or no repository at this script's location; stderr names
+#        which
 #   N    otherwise `docs serve`'s own status, through `exec`; a failure to
-#        source the library or to resolve the repository root exits non-zero
-#        before that, on stderr only
+#        source the library exits non-zero before that, on stderr only
 
 set -euo pipefail
 
@@ -37,7 +37,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/harness-run-lib.sh
 . "$script_dir/lib/harness-run-lib.sh"
 
-root="$(git -C "$script_dir" rev-parse --show-toplevel)"
+if ! root="$(hr_repo_root "$script_dir")"; then
+  echo "docs-search-server: $script_dir is not inside a git repository, so there is no checkout to serve" >&2
+  exit 1
+fi
 
 if ! cache_dir="$(hr_cache_dir)"; then
   echo "docs-search-server: neither XDG_CACHE_HOME nor HOME is set, so the retrieval runtime cannot be located" >&2
