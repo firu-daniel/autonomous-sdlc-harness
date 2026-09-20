@@ -1,0 +1,15 @@
+### 5. The `Cloud / CI execution` roadmap row does not name docs-retrieval provisioning
+
+**Site anchor.** `ROADMAP.md` → the table row beginning `| Cloud / CI execution |`, under the *Engines, environments and integrations* section. Its current cell reads: `Runs as a chain of bounded CI jobs that resume from the ledger, with draft-PR output. Seam declared (`forge`).` Status `Open`. Line 107 today, a navigation hint only.
+
+**Problem.** This branch's design assumes a machine: the retrieval runtime and the model weights are installed **once per machine**, into `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/`, and `docs/retrieval.md` gives that sharing as the reason the runtime lives in a machine cache rather than in the adopter's project. An ephemeral CI job starts with that directory empty, so "installed once per machine" silently becomes "installed once per job" — roughly 300 MB of `npm install` plus two model downloads on the front of every job. Nothing in the roadmap records that the cloud row inherits this problem, so a reader planning that work has no reason to look for it, and the reader of this branch has no pointer forward.
+
+**Fix.** Add one clause to the `Cloud / CI execution` row's description cell, after the existing seam sentence. Keep the row's format — one cell, prose, ending in the status column `Open`, unchanged. The clause states three things and nothing more:
+
+- [ ] **The sub-problem.** Docs-retrieval provisioning is a known sub-problem of this row: the machine-shared runtime and model cache at `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/` is empty at the start of every ephemeral job, so installing once per machine becomes installing once per job.
+
+- [ ] **The seam a fix would use.** `retrievalRuntimeState()` decides whether the runtime is installed by testing for files under that directory, so a job that restores the cache satisfies it with **no code change** — CI cache restore is the whole mechanism.
+
+  **Write the predicate accurately.** Do **not** copy the phrase "three file-existence tests" from the user review into the roadmap. `cli/src/retrieval/runtime.ts` → `retrievalRuntimeState` is: one `existsSync` on the runtime's CLI entry **combined with a version match** against this CLI's own manifest version, then one `existsSync` per optional retrieval peer — so the count is the peer count plus one, and a restored cache satisfies it only when it was populated at the same CLI version. Word the clause as *"file-existence tests over that directory, plus a version match"*, or more simply as *"a restored cache satisfies it with no code change"* without stating a count. The version-match detail matters to whoever implements the cache key, so prefer the wording that carries it.
+
+- [ ] **Nothing else moves.** The row stays `Open`. No new roadmap row, no numbered-item change, no edit to the numbered-item legend in `docs/development.md` §6, and no change to any other row. This is a one-clause amendment.
