@@ -34,3 +34,24 @@
 - **evidence:** `ls harness-runs/task_plan_reviews/feat_docs_catalog_retrieval | grep -c '^review_'` = 5 and the same over `harness-runs/architecture_reviews/feat_docs_catalog_retrieval` = 5, so 10 rounds for one unit (the plan); the business-parity gate contributed 0, `phases.parity` being `false`. Diffing the last two task-plan rounds by finding title: `review_4.md` carries **1 net-new** Must Fix (`Task 24 leaves "who starts the rest" false in the paragraph it edits`) and **8 re-raised** items, which it groups under its own literal heading *"These items were raised before and are still open"* (concurrent PGlite opens, the launcher's silent exit, `MACHINE_DIR_MODE`, the `agentInvocable` doc comment, `invokedPath`'s export, missing `## Corpus staleness` entries, baked-in counts in three task files, Task 20's remedy block, `cli/README.md`'s `doctor` description) — each of which also appears in `review_3.md`. The loop hit its 5-revision cap twice and parked twice on the clarification channel (`question_4.md`, `question_5.md`); `answer_5.md` closed it by accepting the last Must Fix without a re-gate.
 - **cost this run:** two clarification parks and two operator decisions before planning converged; the branch entered implementation with those 8 re-raised non-blocking items still open.
 - **hypothesis:** (a guess) the re-raised set is non-blocking severity the writer is not required to close, so each round re-reports it — the count says nothing about whether the writer or the reviewer is at fault.
+
+# User-review fix round 1 — six user-review findings implemented across cli, plugin and general
+
+## The same `commit_prefix` argument was rendered two different ways by the same agent on one branch
+
+- **category:** agent-contract
+- **evidence:** six `committer` `mode: review_item` dispatches on this round each passed a `commit_prefix` token from unit-loop row `UR-A`'s three-way rule (`chore` / `refactor` / `fix`). Five returns reported that the repository's `## Commit-message policy` designates `none` for the review-fix class and rendered the subject with no prefix — `2f00807`, `dc269cf`, `fa34268`, `15ca3a2`, `e8e2786`. One, `e08d1a4` (Finding 1, dispatched with the identical `commit_prefix: chore`), rendered `chore: Split the retrieval Trade-offs section into buys / next / costs`. The branch's fix commits are therefore not uniform in subject form.
+- **cost this run:** one commit subject on this branch carries a prefix the other five do not.
+- **hypothesis:** (a guess) row `UR-A`'s three-way rule and the adopter's own policy name different vocabularies, and which one a dispatch lands on is decided per dispatch rather than by the contract.
+
+## The fix-plan convergence commit stages no path for `lessons.md`, which the fix-plan writer appends to
+
+- **category:** silent-failure
+- **evidence:** `user-review-fix-plan-writer.md` step 6 appends net-new lessons to `<state_dir>/lessons.md` in initial-write mode, and this round's writer did (three lines). `user_review_fix_plan_writing_instructions_autonomous.md` → `## Override 3` lists five explicit staging paths and `lessons.md` is not among them; `git grep -l "lessons.md" plugin/instructions/` returns only `run_mode_instructions.md`, so no step of this flow stages it. After the writer returned, `git status --short` showed ` M harness-runs/lessons.md` — a modified **tracked** file, which the engine's own clean-tree checkpoints treat as dirty. This run added the path to the Override 3 wrapper call by hand (commit `7add756`) rather than leave it dangling.
+- **cost this run:** one orchestrator-side deviation from the Override's stated path list; left unmodified, the round's lessons would have been uncommitted at "branch ready for review".
+
+## A multi-layer unit's second layer-reviewer overwrites the first's findings file
+
+- **category:** shared-state
+- **evidence:** unit-loop row `UR-A`'s `Per-item findings folder` is keyed by item alone (`<per_item_findings_root>item_<K>/`), and step 3 resets `iteration = 0` on entering each layer, so every layer's first reviewer dispatch writes `review_0.md` into the same folder. On Finding 3 (`_(layer: cli, general)_`) the `cli` reviewer wrote `item_3/review_0.md` at dispatch `#16` (returning PASS with a Should Fix about `queryLog.ts`'s inherited-environment list) and the `general` reviewer wrote the same path at `#18`. `ls harness-runs/user_review_fix_plan_point_reviews/feat_docs_catalog_retrieval_fix_plan/item_3/` returns exactly `review_0.md`, carrying the `general` reviewer's findings; the `cli` reviewer's are gone. The same shape held for Findings 6 and 2 (two and three layers).
+- **cost this run:** the `cli` reviewer's Should Fix on Finding 3 survives only in that dispatch's transcript, and the D.2 Nice-to-Have scan under-counts multi-layer units.
