@@ -10,7 +10,7 @@ All six observations verified as valid against the working tree. None were inval
 
 **This list is the single source of truth for the implementation loop.** Checkbox markers `[ ]` anywhere else in this plan — including sub-step bullets inside the per-finding files — are informational only; the committer never touches them. Sorted lowest blast-radius first.
 
-1. [ ] **Finding 5** — Name docs-retrieval provisioning in the `Cloud / CI execution` roadmap row. _(layer: general)_
+1. [x] **Finding 5** — Name docs-retrieval provisioning in the `Cloud / CI execution` roadmap row. _(layer: general)_
 2. [ ] **Finding 4** — Add a real-catalog cold-build and index-size leg to Gate 10. _(layer: general)_
 3. [ ] **Finding 1** — Split `## Trade-offs` into buys / next / costs. _(layer: general)_
 4. [ ] **Finding 6** — Emit no chunk for an empty `##` section that has `###` children. _(layer: cli, general)_
