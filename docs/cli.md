@@ -53,7 +53,7 @@ Every flag is optional; the two generator-flag groups are listed as `init --help
 | `--qa-driver <driver>` | Which interactive-test driver the QA phase runs (with `--qa`): `web-playwright`, `mobile-maestro` or `mobile-mcp`. Validated at parse time; asked for on a terminal when absent — see "The interactive-test driver is asked for" below. |
 | `--docs` | Turn the documentation phase on. |
 | `--docs-root <dir>` | Documentation root the docs phase keeps current (with `--docs`). |
-| `--docs-retrieval` | Turn docs retrieval on: a local search tool over the docs and conventions (with `--docs`), written as `docs.retrieval: true`. Without `--docs` it is refused while the flags are parsed, rather than warned about as `--qa-driver` is: `init: --docs-retrieval needs --docs: …`. Asked for on a terminal when absent — see "The interaction rule" below. |
+| `--docs-retrieval`, `--rag` | Turn RAG (docs retrieval) on: a local search tool over the docs and conventions (with `--docs`), written as `docs.retrieval: true`. `--rag` is an accepted alias setting the same key, carried on this flag's own row rather than matched beside it, so both spellings appear in `--help` and in the discarded-flag warning; `--docs-retrieval` stays the canonical one the prompt and this file name. Without `--docs` either spelling is refused while the flags are parsed, rather than warned about as `--qa-driver` is: `init: --docs-retrieval needs --docs: …`, naming the spelling that was typed. Asked for on a terminal when absent — see "The interaction rule" below. |
 | `--parity` | Turn the reference-parity phase on. |
 | `--reference-impl <path>` | Checkout of the reference implementation to compare against (with `--parity`). |
 | `--reference-toolchain-path <abs>` | Absolute directory of the reference implementation's own toolchain (with `--parity`). See §7. |
@@ -352,9 +352,9 @@ Nothing is repaired and nothing is written, beyond a temp file the writability p
 | `profile-deny-floor` | the profile keeps the deny floor a generated one ships with |
 | `plugin-permissions` | the profile grants the helper-script entries a run needs at each of this machine's plugin roots, and a read grant where the runtime resolves the plugin to a different one |
 | `browser-wiring` | the interactive-test phase can reach the application |
-| `retrieval-dependencies` | the machine-shared runtime the docs-retrieval launcher runs is installed at this CLI's version with every optional peer |
-| `retrieval-model-cache` | every model file docs retrieval loads offline is in the shared model cache |
-| `retrieval-index` | the docs-retrieval index builds |
+| `retrieval-dependencies` | the machine-shared runtime the RAG launcher runs is installed at this CLI's version with every optional peer |
+| `retrieval-model-cache` | every model file RAG loads offline is in the shared model cache |
+| `retrieval-index` | the RAG index builds |
 
 The list is also the order of evaluation and of the report, and a fix works down it the same way: a failed `git` check makes every question below it unanswerable, and an unreadable profile makes the three profile checks unanswerable, so the first failure is almost always the one to act on. A check whose preconditions did not hold says so rather than guessing. Two placements in that order carry a reason worth stating. `jj-repository` sits immediately under `git` because it is that check's own question one step on — `git` establishes that there **is** a work tree, this says what shape of work tree it is — and every branch line below it is qualified by that answer, the detection rung a detached `HEAD` costs and the caller set the committed hook actually reaches. And `pre-push-guard` and `protected-set` close the branch block under `base-freshness`, because they ask the two remaining questions about the same value from opposite sides: whether the guard on disk is the one the configured name describes, and whether the configuration still names branches this repository has. They come after the trio rather than before it so that a reader who has just read three lines about one name reads next what enforces it.
 

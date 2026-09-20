@@ -1873,13 +1873,75 @@ test('--docs-retrieval turns retrieval on, is refused without --docs, and defaul
     const { status, stdout } = await runCli(dir, ['init', '--help']);
 
     assert.equal(status, 0);
+    // The first token of a row, with the comma an aliased row's spelling list puts after it removed.
     const flags = stdout
       .split('\n')
-      .map((line) => line.trim().split(/\s+/)[0])
+      .map((line) => line.trim().split(/\s+/)[0].replace(/,$/, ''))
       .filter((flag) => flag.startsWith('--'));
     const root = flags.indexOf('--docs-root');
     assert.ok(root >= 0, `--help lists no --docs-root:\n${stdout}`);
     assert.equal(flags[root + 1], '--docs-retrieval', `--docs-retrieval does not follow --docs-root:\n${stdout}`);
+  });
+});
+
+/**
+ * `--rag`, the second accepted spelling of `--docs-retrieval`. It is carried on that flag's
+ * `INIT_OPTIONS` row rather than at the parse site, so the three consumers of that table — the
+ * parser, the `--help` block and the discarded-flag warning — each have to know about it.
+ */
+test('--rag is accepted wherever --docs-retrieval is, and is named back as it was typed', async (t) => {
+  await t.test('--docs --rag writes docs.retrieval true', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const env = await retrievalCacheEnv(subtest);
+
+    await initOk(dir, ['--docs', '--rag'], env);
+
+    assert.equal(readJson(join(dir, CONFIG_FILE)).docs.retrieval, true);
+  });
+
+  await t.test('--rag without --docs is refused, naming --rag rather than the canonical flag', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const before = await snapshotTree(dir);
+
+    const result = await runCli(dir, ['init', '--rag']);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /--rag needs --docs/);
+    assert.ok(
+      !result.stderr.includes('--docs-retrieval needs'),
+      `the refusal names a flag the run never used:\n${result.stderr}`,
+    );
+    assert.deepEqual(await snapshotTree(dir), before, 'a refused run changed the tree');
+  });
+
+  await t.test('--rag does not take a value', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const result = await runCli(dir, ['init', '--docs', '--rag=true']);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /--rag does not take a value/);
+  });
+
+  await t.test('init --help prints --rag on the --docs-retrieval row', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { status, stdout } = await runCli(dir, ['init', '--help']);
+
+    assert.equal(status, 0);
+    const row = stdout.split('\n').find((line) => line.trim().startsWith('--docs-retrieval'));
+    assert.ok(row !== undefined, `--help lists no --docs-retrieval row:\n${stdout}`);
+    assert.match(row, /--docs-retrieval, --rag\s/);
+  });
+
+  await t.test('a kept-config re-run with --rag names both spellings in the warning', async (subtest) => {
+    const { dir, env } = await retrievalFixture(subtest, { retrieval: false });
+
+    const { stderr } = await initOk(dir, ['--docs', '--rag'], env);
+
+    const reported = warningLines(stderr).filter((line) => line.includes('was read rather than written on this run'));
+    assert.equal(reported.length, 1, `the dropped flags were not reported once:\n${stderr}`);
+    assert.ok(reported[0].includes('--docs-retrieval (or --rag)'), `the warning names no alias:\n${reported[0]}`);
   });
 });
 

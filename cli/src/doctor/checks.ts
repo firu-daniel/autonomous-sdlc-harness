@@ -4116,7 +4116,7 @@ const BROWSER_WIRING_CHECK: Check = {
 
 /** The pass every retrieval check gives when {@link retrievalApplies} is false. */
 const RETRIEVAL_OFF =
-  'docs.retrieval is off (it needs phases.docs and docs.retrieval both true), so no retrieval library is expected and none was resolved';
+  'docs.retrieval is off (it needs phases.docs and docs.retrieval both true), so no RAG library is expected and none was resolved';
 
 /** How many missing model files {@link RETRIEVAL_MODEL_CACHE_CHECK} names before it counts the rest. */
 const MISSING_MODEL_FILES_NAMED = 5;
@@ -4137,7 +4137,9 @@ const RETRIEVAL_INDEX_TIMEOUT_MS = 600_000;
  */
 const RETRIEVAL_DEPENDENCIES_CHECK: Check = {
   id: 'retrieval-dependencies',
-  title: "docs retrieval's libraries resolve",
+  // The first of the three retrieval checks in registration order, and so the one that expands the
+  // term for the whole report: the other two say "RAG" alone.
+  title: 'RAG (docs retrieval) libraries resolve',
   run: (ctx) => {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
@@ -4147,11 +4149,11 @@ const RETRIEVAL_DEPENDENCIES_CHECK: Check = {
     const state = retrievalRuntimeState();
     if (state.installed) {
       return pass(
-        `the docs-retrieval runtime is installed at ${runtime} (version ${state.version ?? 'unknown'}) with every optional peer, and ${MCP_PATH}'s launcher ${DOCS_SEARCH_SERVER_SCRIPT_NAME} execs that installation's entry`,
+        `the RAG runtime is installed at ${runtime} (version ${state.version ?? 'unknown'}) with every optional peer, and ${MCP_PATH}'s launcher ${DOCS_SEARCH_SERVER_SCRIPT_NAME} execs that installation's entry`,
       );
     }
     return fail(
-      `the docs-retrieval runtime at ${runtime} is missing ${nameList(state.missing)}, so ${MCP_PATH}'s launcher ${DOCS_SEARCH_SERVER_SCRIPT_NAME} has nothing to exec until it is installed and the search server never starts — run \`${CLI} init\`, which installs it`,
+      `the RAG runtime at ${runtime} is missing ${nameList(state.missing)}, so ${MCP_PATH}'s launcher ${DOCS_SEARCH_SERVER_SCRIPT_NAME} has nothing to exec until it is installed and the search server never starts — run \`${CLI} init\`, which installs it`,
     );
   },
 };
@@ -4159,7 +4161,7 @@ const RETRIEVAL_DEPENDENCIES_CHECK: Check = {
 /** Are both models' files in the shared model cache — the offline load's precondition? */
 const RETRIEVAL_MODEL_CACHE_CHECK: Check = {
   id: 'retrieval-model-cache',
-  title: "docs retrieval's models are cached",
+  title: "RAG's models are cached",
   run: (ctx) => {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
@@ -4167,7 +4169,7 @@ const RETRIEVAL_MODEL_CACHE_CHECK: Check = {
 
     const dir = retrievalModelCacheDir();
     const { present, missing } = modelFilesPresent(dir);
-    if (present) return pass(`every model file docs retrieval loads offline is cached in ${dir}`);
+    if (present) return pass(`every model file RAG loads offline is cached in ${dir}`);
 
     const named = missing.slice(0, MISSING_MODEL_FILES_NAMED).join(', ');
     const rest = missing.length - MISSING_MODEL_FILES_NAMED;
@@ -4204,14 +4206,14 @@ function lastNonEmptyLine(output: string): string | undefined {
  */
 const RETRIEVAL_INDEX_CHECK: Check = {
   id: 'retrieval-index',
-  title: 'the docs-retrieval index builds',
+  title: 'the RAG index builds',
   run: (ctx) => {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
     if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
 
     const resolved = retrievalCliEntry();
-    if (resolved === undefined) return fail('cannot build without the retrieval libraries (see retrieval-dependencies)');
+    if (resolved === undefined) return fail('cannot build without the RAG libraries (see retrieval-dependencies)');
 
     // `spawnSync` does not throw on a non-zero exit, so this `try` now covers a spawn failure alone;
     // the child's own failure is graded on `status` and `error` below.
@@ -4226,13 +4228,13 @@ const RETRIEVAL_INDEX_CHECK: Check = {
       if (child.error !== undefined || child.status !== 0) {
         const how = child.status === null ? `it was stopped by ${child.signal}` : `it exited with status ${child.status}`;
         return fail(
-          `the docs-retrieval index did not build in memory: ${line ?? (child.error === undefined ? how : messageOf(child.error))} — run \`${CLI} init\` to set retrieval up`,
+          `the RAG index did not build in memory: ${line ?? (child.error === undefined ? how : messageOf(child.error))} — run \`${CLI} init\` to set retrieval up`,
         );
       }
       return pass(line === undefined ? child.stdout.trim() : `${child.stdout.trim()} — ${line}`);
     } catch (error) {
       return fail(
-        `the docs-retrieval index did not build in memory: ${messageOf(error)} — run \`${CLI} init\` to set retrieval up`,
+        `the RAG index did not build in memory: ${messageOf(error)} — run \`${CLI} init\` to set retrieval up`,
       );
     }
   },

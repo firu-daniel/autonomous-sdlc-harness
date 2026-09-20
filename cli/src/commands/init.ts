@@ -324,6 +324,17 @@ const QA_DRIVER_FLAG = '--qa-driver';
 const DOCS_RETRIEVAL_FLAG = '--docs-retrieval';
 
 /**
+ * The second accepted spelling of that flag, in the word an adopter arrives with. It sets the same
+ * key; {@link DOCS_RETRIEVAL_FLAG} stays the canonical one the prompt and the documentation name.
+ *
+ * A constant rather than a literal for the reason every flag above is one: the `--help` row, the
+ * parser's lookup and the messages that name it to a reader are one spelling read from one owner,
+ * and it reaches all three through {@link InitOption.aliases} rather than through a second accepted-
+ * token list beside {@link INIT_OPTIONS}.
+ */
+const DOCS_RETRIEVAL_ALIAS_FLAG = '--rag';
+
+/**
  * The two spellings that answer the analyze offer — one accept, one decline, and neither given is
  * the state {@link resolveAnalyzeOffer} answers with the documented default.
  *
@@ -432,6 +443,12 @@ type ValueFlagKey = Exclude<keyof InitFlags, SwitchFlagKey>;
  * path — which nothing downstream could detect, because both are `undefined` when the flag is
  * absent and the flag is absent on almost every run.
  *
+ * **`aliases` carries every other accepted spelling of the row's flag, on the row rather than at the
+ * parse site.** No accepted token is matched anywhere outside this table: a spelling added at the
+ * parser alone would parse, appear in no `--help` row and in no re-invocation line, and sit outside
+ * the completeness check {@link initOptions} runs. The three consumers read it through
+ * {@link optionSpellings}.
+ *
  * **`configValue` marks the discarded class, on the row rather than in a list beside it.** Its
  * membership test is about where the value is **written**: the flag's value is written to a
  * {@link CONFIG_FILENAME} key, so a run that reads that file instead of writing it writes that value
@@ -463,6 +480,8 @@ type InitOption =
       readonly key: ValueFlagKey;
       /** The flag as it is typed. */
       readonly flag: string;
+      /** Further accepted spellings of the same flag, canonical one excluded ({@link optionSpellings}). */
+      readonly aliases?: readonly string[];
       readonly kind: 'value';
       /** The value placeholder, for the usage line and for the "requires a value" refusal. */
       readonly placeholder: string;
@@ -475,6 +494,8 @@ type InitOption =
   | {
       readonly key: SwitchFlagKey;
       readonly flag: string;
+      /** Further accepted spellings of the same flag, canonical one excluded ({@link optionSpellings}). */
+      readonly aliases?: readonly string[];
       readonly kind: 'switch';
       readonly summary: string;
       /** Set on a discarded-class row: the config key this flag's value is written to (type header). */
@@ -604,8 +625,9 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
   {
     key: 'docsRetrieval',
     flag: DOCS_RETRIEVAL_FLAG,
+    aliases: [DOCS_RETRIEVAL_ALIAS_FLAG],
     kind: 'switch',
-    summary: 'Turn docs retrieval on: a local search tool over the docs and conventions (with --docs)',
+    summary: 'Turn RAG (docs retrieval) on: a local search tool over the docs and conventions (with --docs)',
     configValue: 'docs.retrieval',
   },
   {
@@ -667,6 +689,15 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
 ] as const);
 
 /**
+ * Every token a row accepts, canonical first: its flag and any {@link InitOption.aliases}. The one
+ * reader of that field, so the parser, the `--help` block and the discarded-flag warning cannot
+ * disagree about which spellings exist.
+ */
+function optionSpellings(option: InitOption): readonly string[] {
+  return [option.flag, ...(option.aliases ?? [])];
+}
+
+/**
  * A flag value as a reader can retype it: quoted only where a shell would otherwise split or expand
  * it, so the remedy below stays copy-pasteable for an ordinary branch name and stays correct for a
  * path with a space in it.
@@ -705,15 +736,18 @@ function discardedConfigFlagsWarning(flags: InitFlags): string | undefined {
     const configKey = option.configValue;
     if (configKey === undefined) continue;
     const steersDetection = option.steersDetection === true;
+    // The naming carries every accepted spelling, so a reader who typed an alias recognises the line
+    // as theirs; the re-invocation stays on the canonical one, because that half is pasted back.
+    const named = option.aliases === undefined ? option.flag : `${option.flag} (or ${option.aliases.join(', ')})`;
     if (option.kind === 'switch') {
       if (flags[option.key] === true) {
-        dropped.push({ flag: option.flag, configKey, invocation: option.flag, steersDetection });
+        dropped.push({ flag: named, configKey, invocation: option.flag, steersDetection });
       }
       continue;
     }
     const value = flags[option.key];
     if (value === undefined) continue;
-    dropped.push({ flag: option.flag, configKey, invocation: `${option.flag} ${retypable(value)}`, steersDetection });
+    dropped.push({ flag: named, configKey, invocation: `${option.flag} ${retypable(value)}`, steersDetection });
   }
   if (dropped.length === 0) return undefined;
 
@@ -727,10 +761,13 @@ function discardedConfigFlagsWarning(flags: InitFlags): string | undefined {
   return `${dropped.map((entry) => entry.flag).join(', ')} ${one ? 'was' : 'were'} given, and ${CONFIG_FILENAME} was read rather than written on this run: ${one ? 'that flag supplies a value' : 'each of those flags supplies a value'} for a key of that file, so no such value was written and the keys in the file are the ones every generator after it read.${steeringClause} Apply ${one ? 'it' : 'them'} by rebuilding the file from detection and this command line with \`${INIT_VERB} --reset-config ${dropped.map((entry) => entry.invocation).join(' ')}\`, which copies the file that is there to a .bak first and is the only route that also re-derives what a value implies — or change ${one ? 'the key' : 'the keys'} alone with ${keyRemedies}`;
 }
 
-/** The command's own `Options:` rows, invocation-aligned, derived from {@link INIT_OPTIONS}. */
+/**
+ * The command's own `Options:` rows, invocation-aligned, derived from {@link INIT_OPTIONS}. A row
+ * with aliases prints every spelling it accepts, so no accepted token is absent from `--help`.
+ */
 function initOptionLines(): readonly string[] {
   const invocations = INIT_OPTIONS.map(
-    (option) => `${option.flag}${option.kind === 'switch' ? '' : ` ${option.placeholder}`}`,
+    (option) => `${optionSpellings(option).join(', ')}${option.kind === 'switch' ? '' : ` ${option.placeholder}`}`,
   );
   const width = Math.max(...invocations.map((invocation) => invocation.length));
   return INIT_OPTIONS.map((option, index) => `  ${(invocations[index] as string).padEnd(width)}  ${option.summary}`);
@@ -779,14 +816,16 @@ function parseQaDriver(value: string): HarnessQaDriver {
 
 function parseInitFlags(argv: readonly string[]): InitFlags {
   const values = new Map<ValueFlagKey, string>();
-  const switches = new Set<SwitchFlagKey>();
+  // The spelling each switch was typed as, not merely that it was given: a row accepting an alias
+  // ({@link InitOption.aliases}) must be named back to the reader in the words they used.
+  const switches = new Map<SwitchFlagKey, string>();
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index] as string;
     const separator = token.startsWith('--') ? token.indexOf('=') : -1;
     const name = separator > 0 ? token.slice(0, separator) : token;
     const inlineValue = separator > 0 ? token.slice(separator + 1) : undefined;
-    const option = INIT_OPTIONS.find((candidate) => candidate.flag === name);
+    const option = INIT_OPTIONS.find((candidate) => optionSpellings(candidate).includes(name));
 
     if (option === undefined) {
       throw new HarnessError(
@@ -798,7 +837,7 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
 
     if (option.kind === 'switch') {
       if (inlineValue !== undefined) throw new HarnessError(`init: ${name} does not take a value`);
-      switches.add(option.key);
+      switches.set(option.key, name);
       continue;
     }
 
@@ -835,8 +874,12 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
   // Refused rather than warned, unlike `--qa-driver` without `--qa`: `docs.retrieval: true` without
   // `phases.docs` is a config-check error, so the generated config would fail the write guard.
   if (switches.has('docsRetrieval') && !switches.has('docs')) {
+    // Named as it was typed: a run refused for passing the alias is not told about a flag it never
+    // used. The fallback is unreachable while the key is set only from a token, and is here so the
+    // message has a spelling rather than `undefined` if that ever stops holding.
+    const typed = switches.get('docsRetrieval') ?? DOCS_RETRIEVAL_FLAG;
     throw new HarnessError(
-      `init: ${DOCS_RETRIEVAL_FLAG} needs --docs: retrieval searches the documentation corpus the docs phase maintains, so it is legal only with that phase on`,
+      `init: ${typed} needs --docs: retrieval searches the documentation corpus the docs phase maintains, so it is legal only with that phase on`,
     );
   }
 
@@ -1237,7 +1280,7 @@ function askRetrieval(ctx: CommandContext): boolean | undefined {
   return askYesNo(
     {
       question:
-        'Turn on docs retrieval? It adds a local search tool over the docs and conventions for the plan writer and reviewers. Setup installs about 300 MB of local runtime and downloads two small models into a cache shared by every checkout on this machine. Off by default.',
+        'Turn on RAG (docs retrieval)? It adds a local search tool over the docs and conventions for the plan writer and reviewers. Setup installs about 300 MB of local runtime and downloads two small models into a cache shared by every checkout on this machine. Off by default.',
       defaultAnswer: false,
       flag: DOCS_RETRIEVAL_FLAG,
       flagHint: 'to turn it on without being asked',

@@ -1,6 +1,6 @@
-# Docs retrieval
+# RAG (docs retrieval)
 
-**Who reads this:** contributors changing docs-catalog retrieval, and the follow-up branch `feat_docs_retrieval_eval`, which measures it. It owns the retrieval design and its measured facts: how the pieces fit, why each dependency and model was chosen, what was measured and how, what stays open, what the design buys, where it goes next and what it costs. The `docs` verb's surface is [`cli.md`](cli.md) §11, its setup §2 and its `doctor` checks §7; the `docs.retrieval` key is [`config.md`](config.md) §5. Neither is restated here.
+**Who reads this:** contributors changing this repository's RAG, and the follow-up branch `feat_docs_retrieval_eval`, which measures it. It owns the retrieval design and its measured facts: how the pieces fit, why each dependency and model was chosen, what was measured and how, what stays open, what the design buys, where it goes next and what it costs. The `docs` verb's surface is [`cli.md`](cli.md) §11, its setup §2 and its `doctor` checks §7; the `docs.retrieval` key is [`config.md`](config.md) §5. Neither is restated here.
 
 **Retrieval is off by default, opt-in, and not yet measured** against the index-first navigation agents use today. Whether it earns its place is the eval branch's question, under the roadmap row *Docs-catalog retrieval*. The Markdown stays the source of truth: the index is a derived, uncommitted cache, and deleting it loses nothing.
 
