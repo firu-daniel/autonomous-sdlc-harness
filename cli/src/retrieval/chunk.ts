@@ -7,9 +7,11 @@
  * or a hash over anything but the embedded text, would turn every refresh into a full rebuild or miss
  * a change.
  *
- * A chunk starts at every `## ` or `### ` line outside a fenced code block; a `###` section is its own
- * chunk and is not folded into its parent `##`. Content before the first such heading is the preamble
- * chunk, emitted only when something but the title line is in it.
+ * A chunk starts at every `## ` or `### ` line outside a fenced code block, with two exceptions that
+ * exist to keep near-empty rows out of a fixed per-arm candidate budget: a `##` section with no body
+ * of its own that has at least one `###` child is folded into those children, and content before the
+ * first heading becomes the preamble chunk only when something but the title line is in it. A `###`
+ * section is otherwise its own chunk and is never folded into its parent `##`.
  */
 
 import { createHash } from 'node:crypto';
@@ -98,8 +100,9 @@ function makeChunk(path: string, anchor: string | undefined, heading: string, he
  * Splits `markdown`, read from the repo-relative `path`, into its chunks in document order.
  *
  * Every ATX heading outside a fence, at any level, consumes a slug, because GitHub numbers repeats
- * across all levels; only `##` and `###` start a chunk. The title is the first `# ` line outside a
- * fence, falling back to the file's basename.
+ * across all levels; `##` and `###` start a chunk, except for the bodiless `##` wrapper the emission
+ * loop below folds into its `###` children. The title is the first `# ` line outside a fence, falling
+ * back to the file's basename.
  */
 export function chunkMarkdown(path: string, markdown: string): DocChunk[] {
   const lines = markdown.split(/\r?\n/);
@@ -150,21 +153,31 @@ export function chunkMarkdown(path: string, markdown: string): DocChunk[] {
   const resolvedTitle = title ?? posix.basename(path);
   const chunks: DocChunk[] = [];
   let parent: string | undefined;
-  for (const section of sections) {
+  for (const [index, section] of sections.entries()) {
     if (section.level === 0) {
       const own = section.lines.filter((_, index) => index !== titleLineInPreamble);
       const body = joinBody(own);
       if (body !== '') chunks.push(makeChunk(path, undefined, '', resolvedTitle, resolvedTitle, body));
       continue;
     }
+    const body = joinBody(section.lines);
     let headingPath: string;
     if (section.level === 2) {
       parent = `## ${section.heading}`;
       headingPath = `${resolvedTitle} > ${parent}`;
+      // A `##` used only to group its `###` children carries no text of its own, so its row would be
+      // a near-duplicate of every other wrapper in the corpus while competing for the same fixed
+      // per-arm candidate budget. Folding it loses nothing: `headingPath` below spells the parent
+      // into each child, so the wrapper's words stay searchable through them.
+      //
+      // Decision, for the remaining case — an empty `##` or `###` with no child at all: it is still
+      // emitted. Unlike the wrapper, its words survive nowhere else in the index, so dropping it
+      // would make that heading unfindable; the fold above removes a duplicate, not merely a short row.
+      if (body === '' && sections[index + 1]?.level === 3) continue;
     } else {
       headingPath = parent === undefined ? `${resolvedTitle} > ### ${section.heading}` : `${resolvedTitle} > ${parent} > ### ${section.heading}`;
     }
-    chunks.push(makeChunk(path, section.anchor, section.heading, headingPath, resolvedTitle, joinBody(section.lines)));
+    chunks.push(makeChunk(path, section.anchor, section.heading, headingPath, resolvedTitle, body));
   }
   return chunks;
 }

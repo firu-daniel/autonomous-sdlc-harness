@@ -55,9 +55,9 @@ const CORPUS = {
   'conventions.md': '# Conventions\nIntro line of the conventions.\n## Rules\nA line about the rules.\n',
 };
 
-/** A retrieval-on fixture with the corpus, a planted model cache and its env; torn down with `t`. */
-async function retrievalFixture(t) {
-  const fixture = await createFixture({ files: CORPUS, remote: false });
+/** A retrieval-on fixture with a corpus, a planted model cache and its env; torn down with `t`. */
+async function retrievalFixture(t, files = CORPUS) {
+  const fixture = await createFixture({ files, remote: false });
   t.after(fixture.cleanup);
   await writeRetrievalConfig(fixture.dir);
   const cacheHome = await realpath(await mkdtemp(join(tmpdir(), 'harness-retrieval-cache-')));
@@ -132,6 +132,81 @@ test('(h) docs index refuses with the model files removed, naming a missing file
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Xenova\/bge-small-en-v1\.5\/config\.json/);
   assert.deepEqual(await snapshotTree(dir), before);
+});
+
+/**
+ * A house-template document: a `##` wrapper whose body is `howItWorksBody` over two `###` children, a
+ * `##` with a body of its own over one child, and a `##` with neither body nor child.
+ */
+function catalog(howItWorksBody) {
+  return [
+    '# Catalog',
+    'Intro line of the catalog.',
+    '## How it works',
+    howItWorksBody,
+    '### Cache lookup',
+    'A stored entry is returned unchanged.',
+    '### Cache write',
+    'A miss is written back to the store.',
+    '## What it is',
+    'The catalog groups documents by topic.',
+    '### Scope',
+    'One line about which documents are in.',
+    '## Open questions',
+    '',
+  ].join('\n');
+}
+
+const CATALOG_CORPUS = {
+  'docs/catalog.md': catalog(''),
+  'conventions.md': CORPUS['conventions.md'],
+};
+
+/**
+ * The wrapper fold, on the shape that makes it worth having: a catalog written to a house template,
+ * where the same bodiless `##` heading opens most documents. Eight chunks, not nine — `## How it
+ * works` is folded into its two children, while the `##` with a body and the childless empty `##`
+ * are both emitted.
+ */
+test('chunking: a bodiless ## wrapper is folded into its ### children', async (t) => {
+  const { dir, env } = await retrievalFixture(t, CATALOG_CORPUS);
+
+  assert.equal(await indexOk(dir, env), 'docs index: 2 files, 8 chunks; embedded 8, unchanged 0, deleted 0');
+
+  // The wrapper's words reach the index only through its children's heading path, which is the whole
+  // reason folding it loses nothing.
+  const wrapper = await searchOk(dir, env, ['how it works cache lookup', '--mode', 'lexical', '--k', '5']);
+  assert.ok(!wrapper.includes('#how-it-works'), wrapper);
+  assert.match(wrapper, /docs\/catalog\.md#cache-lookup/);
+
+  // A `##` with a body of its own and a `###` child: both still emitted, exactly as before.
+  const withBody = await searchOk(dir, env, ['groups documents by topic', '--mode', 'lexical']);
+  assert.match(withBody, /docs\/catalog\.md#what-it-is/);
+  const child = await searchOk(dir, env, ['which documents are in', '--mode', 'lexical']);
+  assert.match(child, /docs\/catalog\.md#scope/);
+
+  // The recorded decision: an empty section with no child at all is kept, because its words survive
+  // nowhere else in the index.
+  const childless = await searchOk(dir, env, ['open questions', '--mode', 'lexical']);
+  assert.match(childless, /docs\/catalog\.md#open-questions/);
+});
+
+/**
+ * Why this change needs no index version bump: a chunk's identity is `path#anchor`, so an index built
+ * before the fold simply carries a key the corpus no longer produces, and the next refresh deletes it
+ * without re-embedding anything else and without rebuilding.
+ */
+test('chunking: an index holding a wrapper row drops it on the next refresh, no rebuild', async (t) => {
+  const { dir, env } = await retrievalFixture(t, {
+    ...CATALOG_CORPUS,
+    'docs/catalog.md': catalog('A paragraph the wrapper owns.'),
+  });
+
+  assert.equal(await indexOk(dir, env), 'docs index: 2 files, 9 chunks; embedded 9, unchanged 0, deleted 0');
+
+  await writeFile(join(dir, 'docs/catalog.md'), catalog(''));
+
+  assert.equal(await indexOk(dir, env), 'docs index: 2 files, 8 chunks; embedded 0, unchanged 8, deleted 1');
 });
 
 async function searchOk(dir, env, args) {

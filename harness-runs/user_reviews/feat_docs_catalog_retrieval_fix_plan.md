@@ -13,7 +13,7 @@ All six observations verified as valid against the working tree. None were inval
 1. [x] **Finding 5** — Name docs-retrieval provisioning in the `Cloud / CI execution` roadmap row. _(layer: general)_
 2. [x] **Finding 4** — Add a real-catalog cold-build and index-size leg to Gate 10. _(layer: general)_
 3. [x] **Finding 1** — Split `## Trade-offs` into buys / next / costs. _(layer: general)_
-4. [ ] **Finding 6** — Emit no chunk for an empty `##` section that has `###` children. _(layer: cli, general)_
+4. [x] **Finding 6** — Emit no chunk for an empty `##` section that has `###` children. _(layer: cli, general)_
 5. [ ] **Finding 3** — Opt-in `search_docs` query logging behind one environment variable. _(layer: cli, general)_
 6. [ ] **Finding 2** — Rename the adopter-facing surface to "RAG", leaving every identifier alone. _(layer: cli, plugin, general)_
 
