@@ -448,7 +448,7 @@ Read each match rather than counting them — `grep -rln '{{' cli/templates` is 
 
 **One convention is part of this project's published design and survives packaging.** Every agent definition declares a `tools:` allowlist; the browser-automation MCP tools are granted to the single QA agent and to no other agent. A plugin-shipped agent's allowlist is enforced exactly as a project-level agent's is — an agent declaring `tools: Read` was denied `Bash` from a session that explicitly allowed it — so the containment holds through packaging on the allowlists alone. It is done that way, and **not** with a `permissions.deny` backstop, because a deny is evaluated before any allow and would revoke the QA agent's own grant along with everyone else's. An agent added without a `tools:` field inherits the full default tool set and silently re-opens browser access; reviewing for that is not optional. The rule is restated where it is easiest to miss, in `plugin/agents/README.txt`.
 
-**Gate 10 — docs retrieval with the real models.** Every retrieval case in gate 4 runs under the hash stub and never loads a model (`docs/cli.md` → *"Docs retrieval is tested without a model and without a network"*), so no gate above shows the real embedder and reranker working, the `.mcp.json` launcher starting, or an unattended session reaching `search_docs`. It is hand-run because leg (i) installs a runtime and downloads models into the machine-wide cache every checkout shares. Run it against a throwaway git repository **outside this checkout** holding a `docs/` of a few real documents and at least one commit — never a fixture, and never this repository, for the reason gate 2 gives. Run each command **without a pipe**, from that repository's root. Only leg (i) needs network access for retrieval; leg (v)'s session reaches the model service as any session does. Six legs.
+**Gate 10 — docs retrieval with the real models.** Every retrieval case in gate 4 runs under the hash stub and never loads a model (`docs/cli.md` → *"Docs retrieval is tested without a model and without a network"*), so no gate above shows the real embedder and reranker working, the `.mcp.json` launcher starting, or an unattended session reaching `search_docs`. It is hand-run because leg (i) installs a runtime and downloads models into the machine-wide cache every checkout shares. Run it against a throwaway git repository **outside this checkout** holding a `docs/` of real documents and at least one commit — never a fixture, and never this repository, for the reason gate 2 gives. That `docs/` must be large enough to index to **at least ~1,500 chunks**: below that the cold build measures process and PGlite start-up rather than the model, which is the whole subject of leg (iii). The chunk count is read off leg (iii)'s own `docs index: <files> files, <chunks> chunks` summary line, and a run whose count falls under the floor is invalid — enlarge the corpus and re-run rather than recording the figure. Run each command **without a pipe**, from that repository's root. Only leg (i) needs network access for retrieval; leg (v)'s session reaches the model service as any session does. Six legs.
 
 **(i) Setup.**
 
@@ -480,9 +480,10 @@ The middle run reports `retrieval-model-cache` and `retrieval-index` failing. Th
 
 ```
 time npx autonomous-sdlc-harness docs index
+du -sh <stateDir>/docs_index
 ```
 
-Record its `docs index: <files> files, <chunks> chunks; embedded <e>, unchanged <u>, deleted <d>` line and the wall time. `doctor`'s `retrieval-index` builds in memory and writes nothing, so this is still the first on-disk build: the real-model cold build `docs/retrieval.md` compares against the stub's.
+`<stateDir>` is the value the target repository's own `harness.config.json` carries. Record its `docs index: <files> files, <chunks> chunks; embedded <e>, unchanged <u>, deleted <d>` line, the wall time, and the `du` figure — the on-disk size is the other half of what the feature costs an adopter, and nothing else in the suite reports it. `doctor`'s `retrieval-index` builds in memory and writes nothing, so this is still the first on-disk build: the real-model cold build `docs/retrieval.md` compares against the stub's. That comparison decides one thing — `docs/retrieval.md` → **Why `setup-worktree.sh` does not warm the index.** states that warming is not worth a model load per worktree, and its stated revisit condition is a real-model cold build long enough that a first `search_docs` call risks the agent runner's tool-call timeout. This wall time is the number that condition is judged against; if it is met, warming in `setup-worktree.sh` is the move.
 
 **(iv) Search.**
 
@@ -512,7 +513,7 @@ npx autonomous-sdlc-harness --version
 
 Record all four, the `claude` line being the version leg (v) ran under.
 
-**Where the results go.** Each leg's command and exact output is recorded in `docs/retrieval.md` → `## Measured, and how`, item (d), replacing its placeholder, dated and carrying leg (vi)'s platform. A Linux run also settles that document's Linux question under `## Still open`. A run that could not execute this gate says so in its Done summary, naming the legs it could not run and why, rather than leaving the placeholder unexplained.
+**Where the results go.** Each leg's command and exact output is recorded in `docs/retrieval.md` → `## Measured, and how`, item (d), replacing its placeholder, dated and carrying leg (vi)'s platform. Item (d) carries leg (iii)'s **chunk count** and its **`du` figure** by name alongside the wall time: the chunk count is what shows the corpus floor was met, and the `du` figure is reported nowhere else. A Linux run also settles that document's Linux question under `## Still open`. A run that could not execute this gate says so in its Done summary, naming the legs it could not run and why, rather than leaving the placeholder unexplained.
 
 ---
 
