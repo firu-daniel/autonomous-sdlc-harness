@@ -54,7 +54,7 @@ The quick start, in five steps:
 - [docs/watcher.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/watcher.md): the outer loop that turns a dropped file into an unattended run.
 - [docs/analyze.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/analyze.md): the decisions of record for `/harness-analyze`, including what it fills in and what it refuses to guess.
 - [docs/cli.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/cli.md): the five subcommands, their flags and exit codes, and the `init` re-run contract.
-- [docs/retrieval.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/retrieval.md): docs retrieval, opt-in, local and not yet measured: its design, measured facts and trade-offs.
+- [docs/retrieval.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/retrieval.md): docs retrieval, opt-in, local and not yet measured: its design, measured facts, what it buys and what it costs.
 - [docs/config.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/config.md): one row per configuration value and parameterization token, saying where its value comes from.
 - [docs/development.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/development.md): changing a file in this repository, and which commands decide whether a change is good.
 - [docs/outer-loop-verification.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/outer-loop-verification.md): what the outer-loop scripts do when driven, and which paths ship unexercised.

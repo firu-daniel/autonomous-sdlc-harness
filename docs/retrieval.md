@@ -1,6 +1,6 @@
 # Docs retrieval
 
-**Who reads this:** contributors changing docs-catalog retrieval, and the follow-up branch `feat_docs_retrieval_eval`, which measures it. It owns the retrieval design and its measured facts: how the pieces fit, why each dependency and model was chosen, what was measured and how, what stays open, and the trade-offs. The `docs` verb's surface is [`cli.md`](cli.md) §11, its setup §2 and its `doctor` checks §7; the `docs.retrieval` key is [`config.md`](config.md) §5. Neither is restated here.
+**Who reads this:** contributors changing docs-catalog retrieval, and the follow-up branch `feat_docs_retrieval_eval`, which measures it. It owns the retrieval design and its measured facts: how the pieces fit, why each dependency and model was chosen, what was measured and how, what stays open, what the design buys, where it goes next and what it costs. The `docs` verb's surface is [`cli.md`](cli.md) §11, its setup §2 and its `doctor` checks §7; the `docs.retrieval` key is [`config.md`](config.md) §5. Neither is restated here.
 
 **Retrieval is off by default, opt-in, and not yet measured** against the index-first navigation agents use today. Whether it earns its place is the eval branch's question, under the roadmap row *Docs-catalog retrieval*. The Markdown stays the source of truth: the index is a derived, uncommitted cache, and deleting it loses nothing.
 
@@ -76,10 +76,22 @@ A re-run on this branch (same date, macOS, Node v20.19.5; `@electric-sql/pglite`
 
 ---
 
-## Trade-offs
+## What this buys you
 
 - **Local, not hosted.** An adopter's docs never leave their machine. There is no hosted vector database and no embedding or rerank API, so there is no key to manage and nothing to reach from an unattended run.
 - **Embedded and in-process.** There is no database server to install or keep running. The index is a per-checkout cache that its worktree owns and can rebuild.
 - **One Postgres engine rather than two stores.** BM25 and vectors share one transaction, one set of chunk ids and one refresh, so lexical and vector results can never describe different corpus states. There is also one dependency to pin rather than two.
-- **At scale.** At millions of chunks, the move is a real Postgres with the same two extensions, `pgvector` and `pg_textsearch`, behind the same `DocStore` interface, reached by connection string. The store keeps its SQL to plain Postgres plus those extensions so that stays possible. This branch does not build it.
-- **The costs, stated plainly.** About 300 MB of runtime per machine. A PGlite version pinned exactly, because the two extension packages dictate it. And an index that is a second representation of the docs, which is why it is never committed and always rebuildable.
+
+---
+
+## Where it goes next
+
+The adapter seam is deliberately kept open. At millions of chunks, the move is a real Postgres with the same two extensions, `pgvector` and `pg_textsearch`, behind the same `DocStore` interface, reached by connection string. The store keeps its SQL to plain Postgres plus those extensions so that stays possible. This branch does not build it.
+
+---
+
+## What it costs
+
+- About 300 MB of runtime per machine.
+- A PGlite version pinned exactly, because the two extension packages dictate it.
+- An index that is a second representation of the docs, which is why it is never committed and always rebuildable.

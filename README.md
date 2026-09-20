@@ -215,7 +215,7 @@ What this harness does not do, in three groups: the shape of the system as desig
 - [`docs/watcher.md`](docs/watcher.md) — the outer loop: what turns a dropped file into an unattended run, which script does what, the daemon's lifecycle, and the machine-level usage lane.
 - [`docs/analyze.md`](docs/analyze.md) — `/harness-analyze`'s decisions of record: what it fills in from real code, what it refuses to guess, and how the offer to run it reaches a session.
 - [`docs/cli.md`](docs/cli.md) — the five subcommands, their flags and exit codes, the `init` re-run contract, the stack-detection table, and the failure modes the generated permission profile encodes.
-- [`docs/retrieval.md`](docs/retrieval.md) — docs retrieval: opt-in, local, not yet measured; its design, measured facts and trade-offs.
+- [`docs/retrieval.md`](docs/retrieval.md) — docs retrieval: opt-in, local, not yet measured; its design, measured facts, what it buys and what it costs.
 - [`docs/config.md`](docs/config.md) — one row per configuration value and parameterization token, saying where each one's value comes from.
 - [`docs/development.md`](docs/development.md) — changing a file in this repository: running the plugin from a working copy, what that forces on references between assets, and which commands decide whether a change is good.
 - [`docs/outer-loop-verification.md`](docs/outer-loop-verification.md) — what the outer-loop scripts do when driven, and which paths ship unexercised.
