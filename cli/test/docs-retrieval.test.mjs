@@ -6,11 +6,15 @@
  * the chunks of a deleted document, and rebuilds on a new embedder; a search cites `path#anchor`, and
  * only `fused-rerank` abstains — and the suite never downloads a model.** Every run takes the `hash-v1` or `hash-v2` stub through `retrievalEnv`, with the model
  * files planted as empty files under a temp `XDG_CACHE_HOME`.
+ *
+ * The `serve (h)`-`(j)` cases add one more: the query log is off until its variable names a path, its
+ * record key set is the contract `feat_docs_retrieval_eval` reads, and a log that cannot be written
+ * costs a caller a stderr warning and never its answer.
  */
 
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdtemp, realpath, rm, unlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -273,20 +277,33 @@ test('docs refuses an unknown sub-verb and an unknown flag, naming docs --help',
  * Run `body` against a `docs serve` child through the SDK's stdio client, closing the client in a
  * `finally` so a failing assertion leaves no server process behind.
  */
-async function withServer(fixture, body) {
+async function withServer(fixture, body, extraEnv = {}) {
   const client = new Client({ name: 'docs-retrieval-test', version: '0.0.0' });
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [CLI_ENTRY, 'docs', 'serve', '--cwd', fixture.dir],
-    env: { ...process.env, ...retrievalEnv(fixture.cacheHome) },
+    env: { ...process.env, ...retrievalEnv(fixture.cacheHome), ...extraEnv },
     stderr: 'pipe',
+  });
+  let stderr = '';
+  transport.stderr?.on('data', (chunk) => {
+    stderr += String(chunk);
   });
   try {
     await client.connect(transport);
-    await body(client);
+    await body(client, () => stderr);
   } finally {
     await client.close();
   }
+}
+
+/** Poll `read` until it matches `pattern` or the budget runs out; the server's stderr is a second pipe. */
+async function waitForStderr(read, pattern) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (pattern.test(read())) return read();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return read();
 }
 
 function toolText(result) {
@@ -368,4 +385,81 @@ test('serve (g): a skipped corpus file becomes a note line on the tool result, d
     assert.equal(lines[1], '', toolText(match));
     assert.ok(lines[2].startsWith('1. docs/guide.md#offline (score '), toolText(match));
   });
+});
+
+/** The variable `cli/src/retrieval/queryLog.ts` owns; its only spelling outside that module. */
+const LOG_ENV = 'AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG';
+
+/**
+ * The key set of one record, which the `feat_docs_retrieval_eval` branch reads as a contract: it is
+ * asserted whole and in order rather than key by key, so a field quietly dropped or renamed fails
+ * here rather than on that branch.
+ */
+const LOG_KEYS = ['outcome', 'timestamp', 'query', 'k', 'hits', 'bestScore', 'abstained', 'refresh', 'durationMs'];
+
+test('serve (h): one search_docs call appends one JSONL record carrying every field', async (t) => {
+  const fixture = await retrievalFixture(t);
+  const logPath = join(fixture.dir, 'queries.jsonl');
+
+  await withServer(
+    fixture,
+    async (client) => {
+      const match = await client.callTool({ name: 'search_docs', arguments: { query: MATCH_QUERY } });
+      assert.notEqual(match.isError, true, toolText(match));
+    },
+    { [LOG_ENV]: logPath },
+  );
+
+  const lines = (await readFile(logPath, 'utf8')).split('\n');
+  assert.deepEqual(lines.slice(1), [''], 'exactly one line, newline-terminated');
+  const record = JSON.parse(lines[0]);
+  assert.deepEqual(Object.keys(record), LOG_KEYS);
+  assert.equal(record.outcome, 'answered');
+  assert.match(record.timestamp, /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/);
+  assert.equal(record.query, MATCH_QUERY);
+  assert.equal(record.k, 5);
+  assert.ok(record.hits > 0, lines[0]);
+  assert.equal(typeof record.bestScore, 'number');
+  assert.equal(record.abstained, false);
+  // The first call of a server is also the cold build, so the refresh counts are the ones
+  // `docs index` reports for this corpus.
+  assert.deepEqual(record.refresh, { embedded: 9, unchanged: 0, deleted: 0 });
+  assert.equal(typeof record.durationMs, 'number');
+});
+
+test('serve (i): with the variable unset, a search_docs call creates no log anywhere', async (t) => {
+  const fixture = await retrievalFixture(t);
+  const logPath = join(fixture.dir, 'queries.jsonl');
+
+  await withServer(fixture, async (client) => {
+    const match = await client.callTool({ name: 'search_docs', arguments: { query: MATCH_QUERY } });
+    assert.notEqual(match.isError, true, toolText(match));
+  });
+
+  assert.equal(existsSync(logPath), false);
+});
+
+/**
+ * The seam may not cost a caller its answer: a logging failure is the server's problem and the search
+ * result is returned unchanged, with the diagnostic on stderr — never on stdout, which the MCP
+ * transport owns.
+ */
+test('serve (j): an unwritable log path still answers, warning on stderr', async (t) => {
+  const fixture = await retrievalFixture(t);
+  const logPath = join(fixture.dir, 'no-such-dir', 'queries.jsonl');
+
+  await withServer(
+    fixture,
+    async (client, stderr) => {
+      const match = await client.callTool({ name: 'search_docs', arguments: { query: MATCH_QUERY } });
+      assert.notEqual(match.isError, true, toolText(match));
+      assert.ok(toolText(match).split('\n')[0].startsWith('1. docs/guide.md#offline (score '), toolText(match));
+
+      const captured = await waitForStderr(stderr, new RegExp(LOG_ENV));
+      assert.match(captured, new RegExp(`${LOG_ENV}: appending to .*queries\\.jsonl failed`));
+    },
+    { [LOG_ENV]: logPath },
+  );
+
+  assert.equal(existsSync(logPath), false);
 });

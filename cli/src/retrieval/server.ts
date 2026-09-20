@@ -17,6 +17,8 @@
  * peer of this package.
  */
 
+import { performance } from 'node:perf_hooks';
+
 import type * as McpServerModule from '@modelcontextprotocol/sdk/server/index.js';
 import type * as McpStdioModule from '@modelcontextprotocol/sdk/server/stdio.js';
 import type * as McpTypesModule from '@modelcontextprotocol/sdk/types.js';
@@ -24,6 +26,7 @@ import type * as McpTypesModule from '@modelcontextprotocol/sdk/types.js';
 import type { HarnessConfig } from '../config/model.js';
 import { HarnessError } from '../core/errors.js';
 import type { Reporter } from '../core/report.js';
+import { logQuery, type QueryOutcome } from './queryLog.js';
 import type { RefreshResult } from './refresh.js';
 import { loadRetrievalModule } from './runtime.js';
 import { ABSTAIN_MESSAGE, DEFAULT_RESULTS, MAX_RESULTS, renderResults, searchDocs } from './search.js';
@@ -93,14 +96,43 @@ function parseArguments(args: unknown): { query: string; k: number } | string {
 }
 
 async function answer(session: RetrievalSession, report: Reporter, args: unknown): Promise<ToolResult> {
+  const started = performance.now();
   const parsed = parseArguments(args);
+  // The argument refusal is the one exit this log does not record: it precedes the call, so there is
+  // no resolved query and no resolved `k` to put in a record whose key set is fixed.
   if (typeof parsed === 'string') return textResult(parsed, true);
+
+  /** One line per exit, through the module that owns the field list (`retrieval/queryLog.ts`). */
+  const log = (
+    outcome: QueryOutcome,
+    counts: RefreshResult | undefined,
+    found: { hits: number; bestScore: number | null; abstained: boolean } | undefined,
+  ): void => {
+    logQuery(
+      {
+        outcome,
+        timestamp: new Date().toISOString(),
+        query: parsed.query,
+        k: parsed.k,
+        hits: found?.hits ?? null,
+        bestScore: found === undefined ? null : found.bestScore,
+        abstained: found?.abstained ?? null,
+        refresh:
+          counts === undefined
+            ? null
+            : { embedded: counts.embedded, unchanged: counts.unchanged, deleted: counts.deleted },
+        durationMs: Math.round(performance.now() - started),
+      },
+      report,
+    );
+  };
 
   let refreshed: RefreshResult;
   try {
     refreshed = await session.refresh();
     for (const warning of refreshed.warnings) report.warn(warning);
   } catch (error) {
+    log('refresh-failed', undefined, undefined);
     return textResult(
       `${SEARCH_TOOL_NAME}: refreshing the docs index failed: ${messageOf(error)}; run \`${CLI} doctor\` in this repository`,
       true,
@@ -122,8 +154,14 @@ async function answer(session: RetrievalSession, report: Reporter, args: unknown
     // `isError` result.
     const body = renderResults(result);
     const notes = refreshed.warnings.map((warning) => `${COVERAGE_NOTE_PREFIX}${warning}`);
+    log('answered', refreshed, {
+      hits: result.hits.length,
+      bestScore: result.hits[0]?.score ?? null,
+      abstained: result.abstained,
+    });
     return textResult(notes.length === 0 ? body : `${notes.join('\n')}\n\n${body}`);
   } catch (error) {
+    log('search-failed', refreshed, undefined);
     return textResult(`${SEARCH_TOOL_NAME}: the search failed: ${messageOf(error)}`, true);
   }
 }

@@ -24,6 +24,21 @@
 
 **Server.** `cli/src/retrieval/server.ts` → `docs serve` is a stdio MCP server named `harness-docs` with one read-only tool, `search_docs`, fully qualified `mcp__harness-docs__search_docs`. It refreshes the index before each query. Its result is document text, which an agent treats as a pointer to open, not as instructions or evidence.
 
+**Query log.** `cli/src/retrieval/queryLog.ts` owns `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG`, whose value is a path to a file: set and non-empty, the server appends one JSON line per `search_docs` call, carrying the outcome (answered, refresh failure or search failure), the UTC timestamp, the query as received, `k` as resolved, the hit count, the best score, whether the call abstained, the refresh counts and the wall time in milliseconds; unset or empty, nothing is opened and nothing is written. This is what the eval branch starts from, and it is the only thing that distinguishes a tool no agent reaches for from one agents reach for and get nothing from (an argument refusal is not recorded: it precedes the resolved query and `k` the record's fixed key set requires). It is not a `harness.config.json` key, a failed append degrades to a warning on stderr rather than failing the call, and nothing is ever written to stdout, which belongs to the MCP transport.
+
+- **How the variable reaches the server, since an export does not.** The agent runner starts the server from `.mcp.json` and passes only the MCP SDK's fixed inherited set — `DEFAULT_INHERITED_ENV_VARS` in `@modelcontextprotocol/sdk/client/stdio.js` is `HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM` and `USER` on POSIX — so a variable exported in the shell that starts the runner never reaches `docs-search-server.sh`. The route is an entry the operator adds by hand to the `harness-docs` server's `env` object in their own `.mcp.json`, which `init` merges rather than overwrites, so the hand-added key survives a re-run. `init` never generates it and no shipped template carries the spelling: an adopter who wants no log gains no surface to read. Give an **absolute** path: whether the agent runner starts this server with the checkout root as its working directory is still open (`## Still open`), so a relative one is not safe.
+
+  ```json
+  "harness-docs": {
+    "type": "stdio",
+    "command": "bash",
+    "args": ["scripts/docs-search-server.sh"],
+    "env": { "AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG": "/absolute/path/to/docs-queries.jsonl" }
+  }
+  ```
+
+  `command`, `args` and `type` are `init`'s and already correct for your configured `scriptsDir`; add only the `env` key.
+
 **Launcher and registration.** When retrieval applies, `init` writes a `harness-docs` entry into `.mcp.json` whose command is `bash` on the repository's own `<scriptsDir>/docs-search-server.sh`. It also merges a profile fragment, `settings.autonomous.retrieval.json`, that enables the server and allows its tool. The launcher resolves the machine cache directory through `hr_cache_dir` and `exec`s the runtime's `docs serve`, with no fallback.
 
 - **Why the committed `.mcp.json` names a repository script, not a machine path.** A committed file cannot know where one machine's cache or `npx` cache sits, and this follows `cli/scripts/README.md`'s *"The daemon's program stays inside the repository it works on"*: a long-running program is started from inside the checkout rather than from an evictable cache path.
