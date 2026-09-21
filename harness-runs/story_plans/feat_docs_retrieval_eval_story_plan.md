@@ -44,7 +44,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_docs_r
 1. [x] **Task 1** — Store case: the lexical arm's non-matching rows, and the synthetic bisect for the index-scan crossover _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — The two committed corpora and their query sets, in the graded JSONL format _(layer: general)_ _(points: 15)_
 3. [x] **Task 3** — Runner core: runner-owned config, index build, label hygiene, argument surface _(layer: general)_ _(points: 20)_
-4. [ ] **Task 4** — Arms B–E, the metrics, and the results file of record _(layer: general)_ _(points: 20)_
+4. [x] **Task 4** — Arms B–E, the metrics, and the results file of record _(layer: general)_ _(points: 20)_
 5. [ ] **Task 5** — Calibrate `ABSTAIN_SCORE_THRESHOLD` and retire the provisional marker _(layer: cli)_ _(points: 10)_
 6. [ ] **Task 14** — The threshold calibration record in `docs/retrieval-eval-results.md` _(layer: general)_ _(points: 10)_
 7. [ ] **Task 6** — Arm A's harness, its agent-task text and its transcript scorer — built, never run _(layer: general)_ _(points: 15)_
