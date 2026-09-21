@@ -42,7 +42,7 @@ That regeneration is lossy in one direction and the plan handles it rather than 
 Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_docs_retrieval_eval/task_<K>_plan.md` file. The leading ordinal is the **ship order**; the bold **Task K** is the file's name, and the two stop agreeing at entry 6: `task_14_plan.md` was split out of Task 5 in revision (the calibration's `cli` half and its `docs/` record half are different layers and so must be different tasks), and it took the next free number rather than renumbering eight files and every cross-reference inside them. Walk the entries in the order they are listed.
 
 1. [x] **Task 1** — Store case: the lexical arm's non-matching rows, and the synthetic bisect for the index-scan crossover _(layer: cli)_ _(points: 20)_
-2. [ ] **Task 2** — The two committed corpora and their query sets, in the graded JSONL format _(layer: general)_ _(points: 15)_
+2. [x] **Task 2** — The two committed corpora and their query sets, in the graded JSONL format _(layer: general)_ _(points: 15)_
 3. [ ] **Task 3** — Runner core: runner-owned config, index build, label hygiene, argument surface _(layer: general)_ _(points: 20)_
 4. [ ] **Task 4** — Arms B–E, the metrics, and the results file of record _(layer: general)_ _(points: 20)_
 5. [ ] **Task 5** — Calibrate `ABSTAIN_SCORE_THRESHOLD` and retire the provisional marker _(layer: cli)_ _(points: 10)_

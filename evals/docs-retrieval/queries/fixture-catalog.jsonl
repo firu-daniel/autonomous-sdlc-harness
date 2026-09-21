@@ -1,0 +1,12 @@
+{"id":"q-fc-route-choice","query":"how does the planner decide which depots a parcel travels through","labels":[{"ref":"docs/routing.md#how-a-route-is-chosen","grade":3},{"ref":"docs/routing.md#zone-graph","grade":2},{"ref":"docs/routing.md#cut-off-times","grade":1}]}
+{"id":"q-fc-late-handin","query":"i handed a parcel in after the depot closed its lane, does it still go today","labels":[{"ref":"docs/routing.md#cut-off-times","grade":3}]}
+{"id":"q-fc-barcode-contents","query":"what is actually encoded in the barcode printed on the label","labels":[{"ref":"docs/labels.md#the-routing-barcode","grade":3},{"ref":"docs/labels.md#label-anatomy","grade":2}]}
+{"id":"q-fc-unreadable-label","query":"the depot cannot scan my label, what happens to the parcel","labels":[{"ref":"docs/labels.md#when-a-label-is-rejected","grade":3},{"ref":"docs/depot-operations.md#inbound-scanning","grade":2},{"ref":"docs/labels.md#printing-and-label-stock","grade":1}]}
+{"id":"q-fc-billable-weight","query":"a big light box costs more than it weighs, how is the charged weight worked out","labels":[{"ref":"docs/rates.md#volumetric-weight","grade":3},{"ref":"docs/rates.md#rate-cards","grade":2}]}
+{"id":"q-fc-surcharge-compounding","query":"do the extra charges stack on top of each other","labels":[{"ref":"docs/rates.md#fuel-surcharge","grade":3},{"ref":"docs/rates.md#remote-area-surcharge","grade":2}]}
+{"id":"q-fc-webhook-retry","query":"my endpoint was down, how many times will you retry and what happens after that","labels":[{"ref":"docs/webhooks.md#delivery-and-retries","grade":3},{"ref":"docs/webhooks.md#replaying-missed-events","grade":1}]}
+{"id":"q-fc-verify-callback","query":"how do i prove a callback really came from you and not from someone replaying one","labels":[{"ref":"docs/webhooks.md#signature-verification","grade":3}]}
+{"id":"q-fc-token-lifetime","query":"how long is a token good for and when should my client get a new one","labels":[{"ref":"docs/api-auth.md#token-exchange","grade":3},{"ref":"docs/api-auth.md#api-keys","grade":1}]}
+{"id":"q-fc-negative-recruitment","query":"how do i apply for a job as a delivery driver","labels":[]}
+{"id":"q-fc-negative-lattice","query":"quantum chromodynamics lattice spacing","labels":[]}
+{"id":"q-fc-negative-datastore","query":"which database engine stores the shipment records","labels":[]}
