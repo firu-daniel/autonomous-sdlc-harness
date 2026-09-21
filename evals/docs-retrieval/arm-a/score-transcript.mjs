@@ -29,8 +29,14 @@
 
 import { readFileSync } from 'node:fs';
 
-/** The arm letter these records carry. `evals/docs-retrieval/arms.mjs` owns the table; this is its one arm with no mode. */
-const NAVIGATION_LETTER = 'A';
+import { ARMS } from '../arms.mjs';
+
+/** Arm A's letter, read off the one declared table rather than retyped (`evals/docs-retrieval/arms.mjs`). */
+const NAVIGATION_LETTER = (() => {
+  const arm = ARMS.find((entry) => entry.mode === null);
+  if (arm === undefined) throw new Error('eval: the arm table declares no navigation arm for a transcript to score into');
+  return arm.letter;
+})();
 
 /** The answer that means "this catalog does not cover the question", per `agent-task.md`. */
 const ABSTENTION_TOKEN = 'none';

@@ -17,8 +17,8 @@ This declaration is a second copy of arm A's letter, and its own doc comment nam
 
 **The fix.** Read it off the table, the way every other module does:
 
-- [ ] Add `import { ARMS } from '../arms.mjs';` to the import block.
-- [ ] Replace the constant with the derivation, keeping the by-name refusal the rest of the eval uses:
+- [x] Add `import { ARMS } from '../arms.mjs';` to the import block.
+- [x] Replace the constant with the derivation, keeping the by-name refusal the rest of the eval uses:
 
   ```js
   /** Arm A's letter, read off the one declared table rather than retyped (`evals/docs-retrieval/arms.mjs`). */
@@ -29,4 +29,4 @@ This declaration is a second copy of arm A's letter, and its own doc comment nam
   })();
   ```
 
-- [ ] Leave the `arm: NAVIGATION_LETTER` field on each record as it is: the constant is now derived, and the field is what makes a record readable on its own.
+- [x] Leave the `arm: NAVIGATION_LETTER` field on each record as it is: the constant is now derived, and the field is what makes a record readable on its own.
