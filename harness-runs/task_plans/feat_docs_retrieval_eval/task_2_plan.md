@@ -1,0 +1,37 @@
+### Task 2 — The two committed corpora and their query sets, in the graded JSONL format
+
+**Goal:** Commit the two corpora every later arm runs on, and the query sets that label them: `fixture-catalog`, a made-up docs catalog carrying its **own `INDEX.md`** because arm A navigates from one, and `self-docs`, this repository's own `docs/` plus the three conventions documents — which needs no new documents, only a query set.
+
+**Where this task stops.** This task ships **data**, not code. Nothing here imports `cli/dist`, computes a metric or builds an index; Task 3 does all three. The one contract this task owns and the later tasks consume is the record shape below, which is stated in full in the story index's `## Context` as well, because three tasks read it.
+
+**The record shape, restated so this file is self-contained.** One JSONL record per query, no blank lines, in `evals/docs-retrieval/queries/<corpus-id>.jsonl`:
+
+```json
+{"id":"q-abstain-threshold","query":"when does the docs search abstain","labels":[{"ref":"docs/retrieval.md#abstention","grade":3}]}
+{"id":"q-negative-lattice","query":"quantum chromodynamics lattice spacing","labels":[]}
+```
+
+`id` unique and stable across runs. `ref` is `path#anchor` **exactly as `SearchHit.ref` renders it** — repo-relative path with forward slashes, GitHub-style heading slug, and `path` alone for a preamble chunk. `grade` is an integer `1`–`3`: `3` is the section that answers the query, `2` a section that carries part of the answer, `1` related and useful. An **empty `labels` array is a negative query** — nothing in the corpus answers it — and it is excluded from recall and MRR and is the other half of the abstention calibration.
+
+### Targets
+
+- `evals/docs-retrieval/corpora/fixture-catalog/docs/INDEX.md` (new) — the catalog index arm A navigates from, linking every document below with a one-line description each.
+- `evals/docs-retrieval/corpora/fixture-catalog/docs/*.md` (new) — eight documents of a made-up product's docs catalog.
+- `evals/docs-retrieval/queries/fixture-catalog.jsonl` (new).
+- `evals/docs-retrieval/queries/self-docs.jsonl` (new).
+- `evals/docs-retrieval/queries/README.md` (new) — the query-set directory contract alone: what the directory holds, the `<corpus-id>.jsonl` naming rule, the one-object-per-line requirement, and a pointer to `docs/retrieval-eval.md` for the record format. It restates no field, grade or negative-query rule.
+
+**Work:**
+
+- [ ] Write the eight `fixture-catalog` documents: an invented, unbranded subject — a fictional parcel-routing service — with real `##`/`###` structure, aiming at **30–45 chunks in total** under `cli/src/retrieval/chunk.ts`'s rules (a chunk per `## `/`### ` outside a fence; a bodiless `##` with `###` children is folded into them). Give at least two documents overlapping vocabulary, so a lexical arm and a vector arm can plausibly disagree, and at least one document a near-empty section, so the folding rule is exercised. **Invent every name**: no real product, company or machine path may appear — `scripts/run-gates.sh` gate 6a greps the tree for the home directory of whoever runs it and gate 6 is the standing self-containment check.
+- [ ] Write `INDEX.md` in the same directory: a title, one line saying what the catalog is, then one link per document with a one-sentence description. This is the only navigation surface arm A is given, so a document missing from it is a document arm A cannot reach by design rather than by accident.
+- [ ] Write `evals/docs-retrieval/queries/fixture-catalog.jsonl`: **twelve** records — nine positive, of which at least three carry more than one label and at least two carry a `grade: 1` alongside a `grade: 3`, and three negative with `"labels": []`. Every `ref` names a heading that exists in the documents just written, spelled as the GitHub slug of that heading.
+- [ ] Write `evals/docs-retrieval/queries/self-docs.jsonl`: **twenty** records over this repository's `docs/*.md` and the three conventions documents `harness.config.json` → `layers[]` names (`.claude/context/conventions.md`, `.claude/context/cli.md`, `.claude/context/plugin.md`) — fifteen positive, five negative. Write the queries as the questions an agent actually asks this corpus (*"where does a new configuration key go"*, *"which guard may answer deny"*, *"what accompanies a new CLI subcommand"*), not as keyword strings lifted out of the headings: a query set written backwards from the headings measures string matching rather than retrieval.
+- [ ] Write one short `evals/docs-retrieval/queries/README.md` carrying the **directory contract alone**: what the directory holds (one query set per corpus), the `<corpus-id>.jsonl` file-naming rule that binds each set to the corpus id it labels, that every set must stay parseable as one JSON object per line, and that the machine enforcement of both the parse and the labels is Task 3's `evals/docs-retrieval/queries.mjs` — not this file. **The record format has one home and it is not this README**: no field list, no grade scale, no restatement of what an empty `labels` array means. State the format only as a pointer to `docs/retrieval-eval.md`'s query-set-format section, which owns the field list, the grade scale and the negative-query rule together with what the metrics do with each — splitting the fields from their interpretation is exactly what would create the second copy. That file is Task 10's and does not exist yet, so the pointer is **unresolved from this task until Task 10 lands** — the same deliberate contract-before-consumer hand-off Task 9 and Task 10 use for the floor pointer. Put the exact heading text you cited in this task's commit body so Task 10 can make its heading match it, and cite the section by that heading rather than by a bare file name.
+
+**Verification:**
+
+- Both `.jsonl` files parse: every line is a JSON object carrying `id`, `query` and `labels`, every `id` is unique within its file, every `grade` is an integer in `1..3`, and no record carries a `labels` entry with an empty `ref`. Check it through `bash scripts/scratch-run.sh harness-runs/scratch/check-queries.mjs`, a throwaway launcher that reads both files and prints the record and label counts; a bare `node …` tool call stalls an unattended run.
+- Every `ref` in `fixture-catalog.jsonl` resolves to a heading that exists: grep each anchor's source heading text out of the fixture documents. The machine check of the same property is Task 3's label-hygiene gate, which will be the real proof — this pass is so that Task 3 starts from a set that should be clean.
+- Every `ref` in `self-docs.jsonl` names a path that exists — **every `*.md` under `docs/` that this branch does not add** (the nine that exist today: `analyze.md`, `cli.md`, `config.md`, `development.md`, `guard-verification.md`, `outer-loop-verification.md`, `retrieval.md`, `typecheck-key-decision.md`, `watcher.md`; the two this branch adds, `retrieval-eval.md` and `retrieval-eval-results.md`, are Tasks 10 and 4's and are off-limits here), plus the three conventions documents — twelve corpus files in total, which is the count `task_3_plan.md`'s clean-run verification asserts — and every anchor's heading is present in the file its `ref` names. Do not label a heading this branch is about to add: Tasks 10 and 12 change `docs/`, and a query set labelling a heading that does not exist yet would fail Task 3's hygiene check on a clean tree.
+- `bash scripts/run-gates.sh` passes, with gate 6a (no machine paths) green over the new fixture documents.
