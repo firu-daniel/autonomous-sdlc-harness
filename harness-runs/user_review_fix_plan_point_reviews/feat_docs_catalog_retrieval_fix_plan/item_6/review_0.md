@@ -1,0 +1,8 @@
+# cli review — 6. Empty `##` wrapper sections become their own chunks — iteration 0
+
+## Nice to Have
+1. **`index` is shadowed inside the emission loop** — `cli/src/retrieval/chunk.ts` (`chunkMarkdown`) — `"section.lines.filter((_, index) => index !== titleLineInPreamble)"`
+   The loop head became `for (const [index, section] of sections.entries())` in this change, so the pre-existing `filter` callback parameter in the level-0 branch now shadows an outer binding of the same name. Both uses are correct — confirmed by probe (see note below), and the preamble chunk is still emitted with the title line removed — but a reader of the level-0 branch has to prove to themselves that the `index` being compared to `titleLineInPreamble` is the callback's and not the section ordinal.
+   **Fix:** rename the callback parameter, e.g. `section.lines.filter((_, lineIndex) => lineIndex !== titleLineInPreamble)`.
+
+_Confirmation note for the finding above and for the fold semantics generally: run, not read. `node --test cli/test/docs-retrieval.test.mjs` (14/14) and the full `npm test` in `cli/` (706/706) both pass, and a scratch probe through `bash scripts/scratch-run.sh harness-runs/scratch/chunkprobe.mjs` drove `chunkMarkdown` over seven shapes — empty wrapper with `###` children (folded, children carry `T > ## How it works > ### One`), empty wrapper with no child (emitted), wrapper whose body is blank lines only (folded), wrapper with a body plus a child (both emitted), empty `###` under a folded wrapper (emitted), a trailing empty `##` (emitted), and two consecutive empty `##` (the childless one emitted, the one with a child folded). All matched the plan's stated rule._
