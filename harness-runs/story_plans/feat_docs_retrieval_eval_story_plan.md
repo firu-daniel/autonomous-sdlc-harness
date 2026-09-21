@@ -54,7 +54,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_docs_r
 11. [x] **Task 10** — `docs/retrieval-eval.md`: how to run it anywhere, what each metric means, and the decision rule _(layer: general)_ _(points: 20)_
 12. [x] **Task 11** — The arm A hand-run procedure, written for an operator at a terminal _(layer: general)_ _(points: 15)_
 13. [x] **Task 12** — `docs/retrieval.md`: the real-model record, the retired and reworded `## Still open` entries, and the `setup-worktree.sh` argument _(layer: general)_ _(points: 20)_
-14. [ ] **Task 13** — The two directory contracts: `evals/README.md`'s second tenant and `evals/docs-retrieval/README.md` _(layer: general)_ _(points: 10)_
+14. [x] **Task 13** — The two directory contracts: `evals/README.md`'s second tenant and `evals/docs-retrieval/README.md` _(layer: general)_ _(points: 10)_
 
 ## Scope register
 

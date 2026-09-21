@@ -225,6 +225,8 @@ What this harness does not do, in three groups: the shape of the system as desig
 - [`docs/analyze.md`](docs/analyze.md) — `/autonomous-sdlc-harness:harness-analyze`'s decisions of record: what it fills in from real code, what it refuses to guess, and how the offer to run it reaches a session.
 - [`docs/cli.md`](docs/cli.md) — the five subcommands, their flags and exit codes, the `init` re-run contract, the stack-detection table, and the failure modes the generated permission profile encodes.
 - [`docs/retrieval.md`](docs/retrieval.md) — RAG (docs retrieval): opt-in, local, not yet measured; its design, measured facts, what it buys and what it costs.
+- [`docs/retrieval-eval.md`](docs/retrieval-eval.md) — the docs-retrieval relevance eval: how to run it against any checkout, what each metric means, the decision rule, and the regression floor the gate enforces.
+- [`docs/retrieval-eval-results.md`](docs/retrieval-eval-results.md) — the figures that eval measured, per corpus and per arm, with the threshold calibration, the cold build, the query-log pass and the arm still awaiting a hand run.
 - [`docs/config.md`](docs/config.md) — one row per configuration value and parameterization token, saying where each one's value comes from.
 - [`docs/development.md`](docs/development.md) — changing a file in this repository: running the plugin from a working copy, what that forces on references between assets, and which commands decide whether a change is good.
 - [`docs/outer-loop-verification.md`](docs/outer-loop-verification.md) — what the outer-loop scripts do when driven, and which paths ship unexercised.
