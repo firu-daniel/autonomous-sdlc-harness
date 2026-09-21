@@ -167,11 +167,11 @@ One JSON object per line, no array wrapper and no commentary:
 - **`ref`** — `path#anchor`, **exactly as a search hit cites it**: the path relative to the corpus's own
   root, a GitHub-style slug for the heading, and `path` alone for a document's preamble chunk. This is
   `SearchHit.ref`'s own spelling, which is what lets a label be compared to a hit by string equality.
-- **`grade`** — an integer `1`–`3`. **`3`** is the section that *answers* the query; **`2`** is a
-  the middle grade, for a section that is more than related but does not itself answer; **`1`** is
-  related and useful. Relevance is graded rather than
-  binary because a threshold calibrated against "any related section" and one calibrated against "the
-  answering section" are different numbers, and both columns ship.
+- **`grade`** — an integer `1`–`3`. **`3`** is the section that *answers* the query; **`2`** is the
+  middle grade, for a section that is more than related but does not itself answer; **`1`** is related
+  and useful. Relevance is graded rather than binary because a threshold calibrated against "any
+  related section" and one calibrated against "the answering section" are different numbers, and both
+  columns ship.
 - **An empty `labels` array is a negative query** — the corpus does not cover the question, and the
   right answer is to find nothing. It enters neither recall nor MRR, where it would score `0` by
   construction and drag every arm down by the share of negatives in the set. It is the other half of
