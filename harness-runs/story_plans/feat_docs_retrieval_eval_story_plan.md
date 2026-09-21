@@ -51,7 +51,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_docs_r
 8. [x] **Task 7** — The query-log pass over MCP against the real models _(layer: general)_ _(points: 15)_
 9. [x] **Task 8** — Cold-build wall time and index size on disk, through `scratch-run.sh` _(layer: general)_ _(points: 15)_
 10. [x] **Task 9** — The regression gate: the recorded floor, `run-gates.sh`, gate 11 in `docs/development.md` §5, and the post-move regeneration of the results file's generated region _(layer: general)_ _(points: 20)_
-11. [ ] **Task 10** — `docs/retrieval-eval.md`: how to run it anywhere, what each metric means, and the decision rule _(layer: general)_ _(points: 20)_
+11. [x] **Task 10** — `docs/retrieval-eval.md`: how to run it anywhere, what each metric means, and the decision rule _(layer: general)_ _(points: 20)_
 12. [ ] **Task 11** — The arm A hand-run procedure, written for an operator at a terminal _(layer: general)_ _(points: 15)_
 13. [ ] **Task 12** — `docs/retrieval.md`: the real-model record, the retired and reworded `## Still open` entries, and the `setup-worktree.sh` argument _(layer: general)_ _(points: 20)_
 14. [ ] **Task 13** — The two directory contracts: `evals/README.md`'s second tenant and `evals/docs-retrieval/README.md` _(layer: general)_ _(points: 10)_
