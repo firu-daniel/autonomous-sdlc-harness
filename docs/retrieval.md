@@ -132,4 +132,4 @@ The adapter seam is deliberately kept open. At millions of chunks, the move is a
 
 - About 300 MB of runtime per machine.
 - A PGlite version pinned exactly, because the two extension packages dictate it.
-- An index that is a second representation of the docs, which is why it is never committed and always rebuildable.
+- An index that is a second representation of the docs, **per checkout** — 43.2 MB for this repository's own 177 chunks, extrapolating to a few hundred megabytes at a mature catalog's ~1,500, with a 12.2 s cold build (`docs/retrieval-eval-results.md` → `## Cold build and index size`, whose size row is an upper bound). It is never committed and always rebuildable, which is why deleting it loses nothing.
