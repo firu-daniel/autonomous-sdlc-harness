@@ -493,7 +493,7 @@ The gates that run these, and the rest of the acceptance set, are in `developmen
 
 ## 11. `docs`
 
-Searches this repository's docs catalog and conventions documents: it builds a per-checkout index, answers queries against it, serves it to agents over MCP, and fetches the two local models it runs on. It is **opt-in** — every sub-verb but `fetch-models` refuses unless `phases.docs` and `docs.retrieval` are both true (`docs/config.md` §5) — and its retrieval quality is **not yet measured** on a real corpus, so its abstention threshold is provisional. The design, the model choice and the measured facts are [`retrieval.md`](retrieval.md).
+Searches this repository's docs catalog and conventions documents: it builds a per-checkout index, answers queries against it, serves it to agents over MCP, and fetches the two local models it runs on. It is **opt-in** — every sub-verb but `fetch-models` refuses unless `phases.docs` and `docs.retrieval` are both true (`docs/config.md` §5) — and its retrieval quality is **not yet measured** on a real corpus, though its abstention threshold is calibrated against the real reranker's measured score distribution — `docs/retrieval-eval-results.md` → `## Threshold calibration` is the record of how that value was chosen and on what, and this section restates neither the value nor its derivation. The design, the model choice and the measured facts are [`retrieval.md`](retrieval.md).
 
 The sub-verb is required, and `docs --help` lists the four:
 
@@ -532,7 +532,7 @@ Refreshes the index, then answers the query. `--k` takes a whole number, default
    <snippet>
 ```
 
-Where nothing clears the threshold it prints `no confident match` instead. Abstention happens **only in `fused-rerank`**, below the provisional `ABSTAIN_SCORE_THRESHOLD`: the other modes' scores are rank-derived and uncalibrated, so they never abstain and return whatever they ranked. A mode that does not abstain prints `no results` when it found none — against an empty index, or a `lexical` query nothing matches. Both answers exit `0` — they are answers, not errors, and the command always prints one line. An empty query and an unknown mode are refused with exit `1`.
+Where nothing clears the threshold it prints `no confident match` instead. Abstention happens **only in `fused-rerank`**, below the calibrated `ABSTAIN_SCORE_THRESHOLD` — the constant lives in `cli/src/retrieval/search.ts` and how its value was chosen is `docs/retrieval-eval-results.md` → `## Threshold calibration`: the other modes' scores are rank-derived and uncalibrated, so they never abstain and return whatever they ranked. A mode that does not abstain prints `no results` when it found none — against an empty index, or a `lexical` query nothing matches. Both answers exit `0` — they are answers, not errors, and the command always prints one line. An empty query and an unknown mode are refused with exit `1`.
 
 ### `docs serve`
 
