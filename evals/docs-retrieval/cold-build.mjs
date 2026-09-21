@@ -32,7 +32,7 @@
  */
 
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { hostname } from 'node:os';
+import { platform, release } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
@@ -125,7 +125,7 @@ export async function measureColdBuild({ repoRoot, corpus, dataDir }) {
   return {
     corpus: resolved.id,
     dataDir,
-    host: hostname(),
+    host: `${platform()} ${release()}`,
     node: process.version,
     ranAt: startedAt.toISOString(),
     snapshot: { files: refresh.files, chunks: refresh.chunks },

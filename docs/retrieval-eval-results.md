@@ -55,7 +55,7 @@ within a row.
   pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
   calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —
   so both variables that moved between the two readings, the threshold and the corpus, are named.
-- Host `Daniels-MacBook-Air.local`, Node `v20.19.5`, 2026-09-21T18:59:36.311Z.
+- Host `darwin 24.6.0`, Node `v20.19.5`, 2026-09-21T18:59:36.311Z.
 
 ```json
 {
@@ -75,7 +75,7 @@ within a row.
     "negatives": 3
   },
   "generatedAt": "2026-09-21T18:59:36.311Z",
-  "host": "Daniels-MacBook-Air.local",
+  "host": "darwin 24.6.0",
   "node": "v20.19.5",
   "arms": [
     {
@@ -1745,7 +1745,7 @@ within a row.
   pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
   calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —
   so both variables that moved between the two readings, the threshold and the corpus, are named.
-- Host `Daniels-MacBook-Air.local`, Node `v20.19.5`, 2026-09-21T19:00:20.828Z.
+- Host `darwin 24.6.0`, Node `v20.19.5`, 2026-09-21T19:00:20.828Z.
 
 ```json
 {
@@ -1765,7 +1765,7 @@ within a row.
     "negatives": 5
   },
   "generatedAt": "2026-09-21T19:00:20.828Z",
-  "host": "Daniels-MacBook-Air.local",
+  "host": "darwin 24.6.0",
   "node": "v20.19.5",
   "arms": [
     {
@@ -4476,7 +4476,7 @@ restating its figures: a number that belongs to the calibration is added here an
 `best < ABSTAIN_SCORE_THRESHOLD` to the top reranker score of the `fused-rerank` mode alone.
 
 **What it was calibrated on.** Arm E of the eval, run on 2026-09-21 (`2026-09-21T16:46:12.749Z` for
-`fixture-catalog`, `2026-09-21T16:46:35.978Z` for `self-docs`) on host `Daniels-MacBook-Air.local`
+`fixture-catalog`, `2026-09-21T16:46:35.978Z` for `self-docs`) on host `darwin 24.6.0`
 under Node `v20.19.5`, with embedder `Xenova/bge-small-en-v1.5:q8:cls:384:v1` and reranker
 `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` loaded outside the stub, over the two committed corpora
 at the snapshots that run reported: `fixture-catalog` at 9 files / 41 chunks (9 positive and 3
@@ -4702,7 +4702,7 @@ which this repository has not — so building at the configured location would h
 derived cache. It is the same store, opened the same way by the same `openPgliteStore` call, so the sizes
 above are the sizes `<stateDir>/docs_index/` would hold for this corpus.
 
-**What these figures do not settle.** One host (`Daniels-MacBook-Air.local`), one macOS, one Node
+**What these figures do not settle.** One host (`darwin 24.6.0`), one macOS, one Node
 (`v20.19.5`), one corpus of 177 chunks, on 2026-09-21. The 1,500-chunk extrapolations are **linear in the
 chunk count**, which the per-chunk embedding cost supports — every chunk is embedded once, in batches —
 and which the rest may not: the store's own index-build cost need not be linear, and the size figure is
@@ -4798,7 +4798,7 @@ the abstention threshold in force is the one this checkout's `search.js` carries
 its own corpus snapshot `{ files: 13, chunks: 177 }`, off the cold build's own counts, while
 library-level arm E above was taken at `{ files: 13, chunks: 173 }` under threshold `0.3`
 (2026-09-21T16:46:35.978Z) — different stamps, so the two latency rows are read as server-side
-against library-level and never as a before/after pair. Host `Daniels-MacBook-Air.local`, Node
+against library-level and never as a before/after pair. Host `darwin 24.6.0`, Node
 `v20.19.5`, 2026-09-21T18:18:03.552Z. The pass is `runQueryLogPass` in
 `evals/docs-retrieval/query-log-pass.mjs`, driven through a launcher under the run's scratch
 directory that calls it with the eval's own parsed arguments for this corpus:

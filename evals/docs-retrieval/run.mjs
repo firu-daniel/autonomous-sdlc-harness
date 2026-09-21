@@ -28,7 +28,7 @@
  */
 
 import { writeFileSync, readFileSync } from 'node:fs';
-import { hostname } from 'node:os';
+import { platform, release } from 'node:os';
 import { relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -132,7 +132,7 @@ export async function runEval(options) {
       repeat: options.repeat,
       embedderId: session.embedder.id,
       rerankerId: session.reranker.id,
-      host: hostname(),
+      host: `${platform()} ${release()}`,
       node: process.version,
       generatedAt: new Date().toISOString(),
       arms,

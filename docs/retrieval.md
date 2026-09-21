@@ -90,7 +90,7 @@ A re-run on this branch (same date, macOS, Node v20.19.5; `@electric-sql/pglite`
 
 **(d) The real models end to end.** Gate 10 (`docs/development.md` §5) is **partly** satisfied: that gate is defined against a throwaway repository outside this checkout whose `docs/` indexes to at least ~1,500 chunks, and no run has had one — so its own six legs stay owed, and the figures below were taken over the two committed eval corpora instead.
 
-Both models loaded and ran **outside the stub** on 2026-09-21, host `Daniels-MacBook-Air.local`, Node `v20.19.5`, embedder `Xenova/bge-small-en-v1.5:q8:cls:384:v1` and reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`. The reranker's real load and run is what retires the reranker question that stood under `## Still open`. Each figure is cited rather than restated, because the eval's results file is its one home:
+Both models loaded and ran **outside the stub** on 2026-09-21, host `darwin 24.6.0`, Node `v20.19.5`, embedder `Xenova/bge-small-en-v1.5:q8:cls:384:v1` and reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`. The reranker's real load and run is what retires the reranker question that stood under `## Still open`. Each figure is cited rather than restated, because the eval's results file is its one home:
 
 - Per-arm recall, MRR, latency and cost, each with the corpus stamp, the models and the abstention threshold it was taken under — `docs/retrieval-eval-results.md`, the generated region.
 - The cold build, per phase and per chunk, and the index size on disk — `docs/retrieval-eval-results.md` → `## Cold build and index size`.

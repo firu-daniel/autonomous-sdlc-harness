@@ -29,7 +29,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { hostname, tmpdir } from 'node:os';
+import { platform, release, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
@@ -340,7 +340,7 @@ export async function runQueryLogPass({ repo, corpus, queries: queriesPath }) {
       corpus,
       legs: { logged: LOGGED_LEG, unset: UNSET_LEG },
       ranAt: new Date().toISOString(),
-      host: hostname(),
+      host: `${platform()} ${release()}`,
       node: process.version,
       fixture: {
         dir: fixture.dir,
