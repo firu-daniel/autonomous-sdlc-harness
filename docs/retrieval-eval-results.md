@@ -4579,6 +4579,63 @@ negative queries return scores at or above `0.32`, or whose positives fall below
 choice — and because every negative here is censored rather than measured, a run that observes the
 negative distribution instead of bounding it is enough on its own to re-derive the number.
 
+## The shipped default against fusion alone
+
+**What this section records.** On both committed corpora the shipped default mode — arm E,
+`fused-rerank` — scores **below** arm D, `fused`, on every relevance column, at two orders of
+magnitude more latency. E is the default of `docs search` (`cli/src/commands/docs.ts` →
+`DEFAULT_MODE`) and the only mode the MCP server can ask for (`cli/src/retrieval/server.ts`), so D is
+reachable only by a hand-passed `--mode fused`. This is a **measurement**, not a recommendation:
+whether either of those two defaults should change, and whether the abstention policy should extend to
+`fused`, are decisions this section does not take and no figure here settles.
+
+The figures are read off this file's generated region above — the per-arm tables and the per-query
+records in the same fences — and none is retyped from elsewhere. The `snapshot` stamp belongs to each
+row pair, because the two corpora are two different measurements and not a series.
+
+| Corpus | `snapshot` | Arm | recall@1 | recall@3 | recall@5 | MRR | p50 ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `fixture-catalog` | `{ files: 9, chunks: 41 }` | D `fused` | 0.556 | 1.000 | 1.000 | 0.759 | 5.9 |
+| `fixture-catalog` | `{ files: 9, chunks: 41 }` | E `fused-rerank` | 0.444 | 0.667 | 0.667 | 0.556 | 652.4 |
+| `self-docs` | `{ files: 13, chunks: 177 }` | D `fused` | 0.533 | 0.800 | 0.867 | 0.650 | 9.8 |
+| `self-docs` | `{ files: 13, chunks: 177 }` | E `fused-rerank` | 0.400 | 0.600 | 0.600 | 0.500 | 1145.3 |
+
+**What the deficit is made of — and the two corpora answer differently.** A positive query E misses is
+either an **abstention**, where the top reranker score fell below `ABSTAIN_SCORE_THRESHOLD` and the
+mode returned nothing at all (`hits: []`), or a **non-abstaining miss**, where it returned five hits
+and no relevant one among them.
+
+- On `fixture-catalog`, **all three** of E's missed positives are abstentions —
+  `q-fc-billable-weight`, `q-fc-surcharge-compounding`, `q-fc-verify-callback`. D ranks a relevant hit
+  for every one of the nine positives. So on this corpus the entire gap is the abstention policy and
+  none of it is the ranking.
+- On `self-docs`, E misses six positives: **two** abstentions (`q-sd-new-config-key`,
+  `q-sd-run-gates`) and **four** non-abstaining misses (`q-sd-deny-guard`, `q-sd-usage-limit`,
+  `q-sd-retrieval-network`, `q-sd-analyze-writes`). D misses only two, `q-sd-deny-guard` and
+  `q-sd-retrieval-network`, which E misses as well — so of the four, two are shared with fusion and
+  **two are demotions the cross-encoder caused**: `q-sd-usage-limit` (rank 4 under D) and
+  `q-sd-analyze-writes` (rank 1 under D) were inside the top five that fusion alone produced and were
+  pushed out of it by the rerank.
+
+**The one column E wins.** E abstains on **every** negative query — 3 of 3 on `fixture-catalog` and 5
+of 5 on `self-docs` — where B, C and D abstain on none of either, each answering confidently on a
+query the corpus has no answer for. That is bar 3, **Failure**, of
+`docs/retrieval-eval.md` → `## The decision rule`, and it is the only one of that rule's three bars on
+which E beats D.
+
+**So the comparison is a trade, and on these two corpora it runs this way:** E buys a clean refusal on
+every negative query at the price of relevance on positives and of a p50 in the hundreds of
+milliseconds — and on `fixture-catalog` it pays that price *only* in abstentions, which is a
+threshold, while on `self-docs` it also pays it in two demotions, which is the reranker.
+
+**What this does not settle.** The same limit `## The limit on this calibration` above states, in the
+same terms: two fixture-sized corpora at 41 and 177 chunks, both far below the roughly 1,500 chunks of
+a mature docs catalog; one host and one Node version; one repetition per query, so no figure here
+carries a spread. The step that would confirm or overturn it is the hand run of
+`docs/development.md` §5 → gate 10 against a private real catalog, which this branch does not perform
+— with the same standing rule in force that a figure measured on a fixture-sized corpus never
+justifies a design decision on its own.
+
 ## Cold build and index size
 
 **The decision this section settles, first.** The standing rule is that a cold build costing more than

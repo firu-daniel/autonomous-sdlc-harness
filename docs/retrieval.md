@@ -95,6 +95,7 @@ Both models loaded and ran **outside the stub** on 2026-09-21, host `Daniels-Mac
 - Per-arm recall, MRR, latency and cost, each with the corpus stamp, the models and the abstention threshold it was taken under — `docs/retrieval-eval-results.md`, the generated region.
 - The cold build, per phase and per chunk, and the index size on disk — `docs/retrieval-eval-results.md` → `## Cold build and index size`.
 - The shipped stdio MCP server driven over the larger corpus with the real models, with its server-side and client-side latency — `docs/retrieval-eval-results.md` → `## The query-log pass`. That server was started with an explicit working directory against a throwaway fixture repository, which is **not** the `.mcp.json` launch path and settles nothing about it.
+- The shipped default mode `fused-rerank` measured against `fused` on both corpora — it scores lower on every relevance column and abstains on every negative query where `fused` abstains on none — `docs/retrieval-eval-results.md` → `## The shipped default against fusion alone`.
 
 Three legs remain unrun, and none of them is something this repository can supply for itself:
 

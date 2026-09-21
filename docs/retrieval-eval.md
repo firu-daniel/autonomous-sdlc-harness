@@ -260,6 +260,13 @@ The outcomes, each a different change:
 - **Relevance does not clear** → retrieval is **withdrawn**: the tool and its optional dependencies
   come out, and this eval and its numbers stay as the record of why.
 
+**The rule compares E to A; the recorded figures also bear on which mode is the default.** This rule
+is silent on arm D, and on both committed corpora arm D `fused` outscores the shipped `fused-rerank`
+default on every relevance column while abstaining on no negative query at all — recorded, with the
+decomposition, in `docs/retrieval-eval-results.md` → `## The shipped default against fusion alone`. It
+is a measurement rather than a second decision rule: what to do about the default mode is not settled
+there and is not settled here.
+
 **The decision is taken on a real catalog, not on either committed corpus.** Both are far below a
 mature catalog's size, and the standing rule in the lessons ledger is that a figure measured on a
 fixture-sized corpus never justifies a design decision on its own. The step that produces the

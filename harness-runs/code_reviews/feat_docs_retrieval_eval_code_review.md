@@ -8,7 +8,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Record the arm D versus arm E result in the file of record _(layer: general)_
+1. [x] **Finding 1** — Record the arm D versus arm E result in the file of record _(layer: general)_
 2. [ ] **Finding 8** — Drop the stray article in the `grade` bullet _(layer: general)_
 3. [ ] **Finding 6** — Read arm A's letter off the arm table instead of retyping it _(layer: general)_
 4. [ ] **Finding 4** — Make `--transcript` an explicit case and refuse in `default:` _(layer: general)_
