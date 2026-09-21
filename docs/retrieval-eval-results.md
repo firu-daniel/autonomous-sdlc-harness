@@ -4569,8 +4569,95 @@ _Task 8 fills this section: cold-build wall time and the index's size on disk._
 
 ## The query-log pass
 
-_Task 7 fills this section: the pass over the shipped query log against the real models, and its own
-latency figures._
+**What this pass measures, and why it is not a by-product of the arm runs.** `logQuery` is called
+from `cli/src/retrieval/server.ts` alone, so arms B-E — which drive `searchDocs` directly — write no
+record at all; and the server hardcodes `mode: 'fused-rerank'`, so every record it can write is an
+arm E record. This pass therefore drives the shipped stdio MCP server over the larger corpus and
+reports its latency separately from library-level arm E, because it is the only figure that includes
+the per-call incremental refresh and the MCP round trip — what an agent actually waits for.
+
+**The fixture repository, and its configuration.** `docs serve` refuses unless `phases.docs` and
+`docs.retrieval` are both true, and this repository's `harness.config.json` satisfies neither and is
+deliberately left alone — so **these numbers are not this repository's own configuration**. The pass
+mirrors the resolved `self-docs` corpus into a git-initialized repository under the system temp
+directory, one commit, removed at the end: 13 files copied at their own repo-relative paths, which
+is exactly what `corpusConfig({ corpus: 'self-docs' })` resolves — the pass asserts the two counts
+are equal, so a layer added to this checkout's configuration grows the fixture or fails the pass.
+Its configuration is this checkout's own with the corpus's keys layered over it: `docs.root` `docs`,
+`docs.retrieval` and `phases.docs` true, `stateDir` `harness-runs`, and the rules documents of the
+checkout's own layer entries, mapped one for one onto their copied paths:
+
+- `cli` → `.claude/context/cli.md`
+- `plugin` → `.claude/context/plugin.md`
+- `general` → `.claude/context/conventions.md`
+
+**The two legs.** Each is one `docs serve` child over that fixture, with all 20 queries of
+`self-docs` called once through the MCP SDK's own stdio client at the server's default `k` of 5,
+every round trip timed from the client side.
+
+| Leg | What it asserted |
+| --- | --- |
+| `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` set | The log holds exactly one JSON line per call, in call order, each line's `query` byte-identical to the query as sent; every line carries every key `cli/src/retrieval/queryLog.ts` declares — `outcome`, `timestamp`, `query`, `k`, `hits`, `bestScore`, `abstained`, `refresh`, `durationMs` — with none absent and `outcome` one of `answered`, `refresh-failed`, `search-failed`. |
+| `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` unset | The same query set again with the key deleted from the child's environment: the fixture's file listing is byte-for-byte the same set of paths before and after, and the log the other leg wrote is neither re-opened nor extended — the same 20 lines, unchanged. |
+
+**The latencies.** Server-side is each record's own `durationMs`, read back out of the JSONL rather
+than out of the client; client-side is the round trip the caller waits for. Library-level arm E is
+read out of this file's generated region for the same corpus.
+
+| Figure | p50 ms | p95 ms |
+| --- | --- | --- |
+| Server-side `durationMs`, from the log | 819.0 | 956.0 |
+| Client-side MCP round trip | 822.3 | 959.2 |
+| Library-level arm E (`fused-rerank`), `docs/retrieval-eval-results.md` generated region | 600.7 | 748.2 |
+| Client-side round trip of the `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` unset leg, for comparison | 873.2 | 908.8 |
+
+**What the server answered, read back out of the JSONL.** 13 of the 20 records carry `abstained: false`
+with `hits` in {5} and a `bestScore` no lower than `0.33899036049842834`; the other 7 carry
+`abstained: true` with `hits: 0` and `bestScore: null`, which is the shape an abstention takes in
+this log.
+
+**The gap, and its two causes.** Server-side against library-level arm E, the gap is +218.3 ms at
+p50 and +207.8 ms at p95, and it is what the two things only this pass's calls carry cost: the
+per-call incremental refresh, which re-reads and re-hashes the whole corpus before every search, and
+the MCP round trip between the client and the server child — 3.3 ms of it at p50, which is the
+client-side figure above minus the server-side one. Neither is the dominant term at this corpus
+size: both rows are reranker-bound, and each query was called once, so a gap of this size is not
+separable from the run-to-run variation of one reranker-bound call — see the repeatability note
+below.
+
+**What the refresh costs after the first call.** The first call of a server is also its cold build:
+`{ embedded: 177, unchanged: 0, deleted: 0 }`. Every later call reports `{ embedded: 0, unchanged: 177, deleted: 0 }`
+on 19 of them — nothing re-embedded, so what the per-call refresh costs from the second call on is
+the corpus walk and the hash comparison alone.
+
+**Provenance.** 7 of the 20 calls abstained. Both legs ran with
+`AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` deleted from the child's environment, so the child loaded
+the real embedder `Xenova/bge-small-en-v1.5` and the real reranker `Xenova/ms-marco-MiniLM-L-6-v2`;
+the abstention threshold in force is the one this checkout's `search.js` carries. This pass ran at
+its own corpus snapshot `{ files: 13, chunks: 177 }`, off the cold build's own counts, while
+library-level arm E above was taken at `{ files: 13, chunks: 173 }` under threshold `0.3`
+(2026-09-21T16:46:35.978Z) — different stamps, so the two latency rows are read as server-side
+against library-level and never as a before/after pair. Host `Daniels-MacBook-Air.local`, Node
+`v20.19.5`, 2026-09-21T18:18:03.552Z. The pass is `runQueryLogPass` in
+`evals/docs-retrieval/query-log-pass.mjs`, driven through a launcher under the run's scratch
+directory that calls it with the eval's own parsed arguments for this corpus:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/<launcher>.mjs
+```
+
+**Repeatability, and why the gap above is a ceiling rather than a measurement.** The pass ran five
+times on this tree while it was being built, back to back on the same host, with the same models and
+the same 20 queries. Server-side p50 came out `575`, `637`, `649`, `702` and `819` ms and p95 `816`,
+`819`, `842`, `917` and `956` ms, in run order — the p50 rising about 42% across the five and the p95
+about 17%, on a laptop whose load rose with each run. The table above publishes the last of the
+five, so its gap against library-level arm E is the widest of the five rather than the
+representative one: the first run's server-side p50 sat 25.7 ms **below** that arm. What the series
+does establish is that the per-call refresh and the MCP round trip are small against a
+reranker-bound call — the round trip is 1.8-3.3 ms of client-side overhead in every one of the five,
+and the refresh re-embeds nothing after the first call. What it does not establish is a stable figure for the gap; that needs repetitions on an
+idle host, which is the same real-catalog hand run `## The limit on this calibration` above already
+names as out of scope here.
 
 ## Arm A — awaiting a hand run
 

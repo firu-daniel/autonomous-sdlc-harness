@@ -26,8 +26,14 @@ import { refreshIndex } from '../../cli/dist/retrieval/refresh.js';
 import { retrievalModelCacheDir, retrievalRuntimeState } from '../../cli/dist/retrieval/runtime.js';
 import { openPgliteStore } from '../../cli/dist/retrieval/store.js';
 
-/** The three refusals, each before anything is loaded, each naming what to do about it. */
-function assertRealModelsAreAvailable() {
+/**
+ * The three refusals, each before anything is loaded, each naming what to do about it.
+ *
+ * Exported because a pass that takes real-model numbers without building an index here owes the same
+ * three checks (`evals/docs-retrieval/query-log-pass.mjs`, which measures the shipped server instead),
+ * and a second copy of them would drift from this one.
+ */
+export function assertRealModelsAreAvailable() {
   if ((process.env[RETRIEVAL_STUB_ENV] ?? '') !== '') {
     throw new Error(
       `eval: ${RETRIEVAL_STUB_ENV} is set; the eval records real-model numbers only, so unset it and re-run`,

@@ -43,8 +43,14 @@ function firstRelevantRank(hits, refs) {
   return index === -1 ? 0 : index + 1;
 }
 
-/** The nearest-rank percentile of `values` — sorted ascending, index `ceil(p/100 * n) - 1`. */
-function percentile(values, p) {
+/**
+ * The nearest-rank percentile of `values` — sorted ascending, index `ceil(p/100 * n) - 1`.
+ *
+ * Exported so a pass reporting a latency beside an arm's computes it the same way
+ * (`evals/docs-retrieval/query-log-pass.mjs`); two percentiles of different definitions are not
+ * comparable, and that comparison is what the query-log pass exists to publish.
+ */
+export function percentile(values, p) {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
   const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
