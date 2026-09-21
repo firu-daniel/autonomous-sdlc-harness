@@ -1,0 +1,4 @@
+## [A2 · Item 3 · general · iter 0] → layer-implementer  (#58)
+- **added:** `context_notes:`
+- **verbatim:** `context_notes: the cli-layer implementer for this same finding already applied its parts 1 and 2 (uncommitted edits to cli/src/core/writer.ts and cli/src/retrieval/setup.ts in the working tree) and returned part 3 — the `## Corpus staleness` entry in harness-runs/story_plans/feat_docs_catalog_retrieval_story_plan.md — unapplied because that path is outside the cli layer (source: `git status --porcelain`; that implementer's return)`
+- **why the agent could not derive it:** the finding's readiness entry is tagged `_(layer: cli)_` only, so this second, `general`-layer dispatch for the same unit has no artifact on disk saying which parts the cli-layer dispatch (#57) had already applied — that exists only in #57's return

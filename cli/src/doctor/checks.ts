@@ -54,6 +54,14 @@
  *    did not ask says so, rather than leaving an adopter to read a pass as a promise the packages can
  *    be fetched.
  *
+ *    **The three docs-retrieval checks keep that line.** `retrieval-dependencies` and
+ *    `retrieval-model-cache` are file tests answered by `retrieval/runtime.ts`'s
+ *    {@link retrievalRuntimeState} and `retrieval/models.ts`'s {@link modelFilesPresent}, and load
+ *    nothing. `retrieval-index` spawns a child of this CLI running `docs index --in-memory`: a child
+ *    because {@link Check.run} is synchronous and the store is not, and because the child is the
+ *    installation whose optional peers resolve beside it. It builds in memory and exits, so it starts
+ *    no server and writes nothing.
+ *
  * ## What this module deliberately does not do
  *
  * - **It writes nothing** beyond {@link probeWritable}'s temp file, which that function removes with
@@ -63,7 +71,7 @@
  *   config key — and `doctor` stays a command that is safe to run against a repository at any time.
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { accessSync, constants as fsConstants, existsSync, readFileSync, statSync } from 'node:fs';
 import { delimiter, join, posix, resolve as resolvePath } from 'node:path';
 
@@ -78,6 +86,7 @@ import {
   FALLBACK_PRESET,
   isPlaceholder,
   LAYER_CATCH_ALL_PATH,
+  retrievalApplies,
   STATE_DIR_DOT_PATTERN,
   STATE_DIR_PATTERN,
   type HarnessConfig,
@@ -129,7 +138,7 @@ import {
   pushEnvCandidates,
   type PushEnvCandidate,
 } from '../generators/notifications.js';
-import { outerLoopScriptsDir } from '../generators/outerLoopScripts.js';
+import { DOCS_SEARCH_SERVER_SCRIPT_NAME, outerLoopScriptsDir } from '../generators/outerLoopScripts.js';
 import {
   bashScriptRule,
   entryWord,
@@ -182,6 +191,13 @@ import {
   pluginScriptsDir,
 } from '../machine/plugins.js';
 import { inspect, readRegistry, registryPath, type EntryState, type InspectedEntry } from '../machine/registry.js';
+import { modelFilesPresent } from '../retrieval/models.js';
+import {
+  retrievalCliEntry,
+  retrievalModelCacheDir,
+  retrievalRuntimeDir,
+  retrievalRuntimeState,
+} from '../retrieval/runtime.js';
 
 /**
  * How the CLI is typed, for every remedy that tells an operator what to run next. The `npx` prefix
@@ -4096,6 +4112,132 @@ const BROWSER_WIRING_CHECK: Check = {
   },
 };
 
+/** The pass every retrieval check gives when {@link retrievalApplies} is false. */
+const RETRIEVAL_OFF =
+  'docs.retrieval is off (it needs phases.docs and docs.retrieval both true), so no RAG library is expected and none was resolved';
+
+/** How many missing model files {@link RETRIEVAL_MODEL_CACHE_CHECK} names before it counts the rest. */
+const MISSING_MODEL_FILES_NAMED = 5;
+
+/**
+ * How long the `retrieval-index` probe may run. Wide because a real corpus embeds every chunk on this
+ * probe, and a bound that cut that off would fail an index that builds.
+ */
+const RETRIEVAL_INDEX_TIMEOUT_MS = 600_000;
+
+/**
+ * Is the runtime `.mcp.json`'s launcher `exec`s installed, at this CLI's version, with its peers?
+ *
+ * Answered by {@link retrievalRuntimeState} alone — the predicate `init`'s setup skips the install on —
+ * so the two cannot disagree (choice 1). Whether **this** installation resolves its own peers is not
+ * consulted: the launcher never runs this installation, so a pass on it would be a pass on a server
+ * that never starts.
+ */
+const RETRIEVAL_DEPENDENCIES_CHECK: Check = {
+  id: 'retrieval-dependencies',
+  // The first of the three retrieval checks in registration order, and so the one that expands the
+  // term for the whole report: the other two say "RAG" alone.
+  title: 'RAG (docs retrieval) libraries resolve',
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+
+    const runtime = retrievalRuntimeDir();
+    const state = retrievalRuntimeState();
+    if (state.installed) {
+      return pass(
+        `the RAG runtime is installed at ${runtime} (version ${state.version ?? 'unknown'}) with every optional peer, and ${MCP_PATH}'s launcher ${DOCS_SEARCH_SERVER_SCRIPT_NAME} execs that installation's entry`,
+      );
+    }
+    return fail(
+      `the RAG runtime at ${runtime} is missing ${nameList(state.missing)}, so ${MCP_PATH}'s launcher ${DOCS_SEARCH_SERVER_SCRIPT_NAME} has nothing to exec until it is installed and the search server never starts — run \`${CLI} init\`, which installs it`,
+    );
+  },
+};
+
+/** Are both models' files in the shared model cache — the offline load's precondition? */
+const RETRIEVAL_MODEL_CACHE_CHECK: Check = {
+  id: 'retrieval-model-cache',
+  title: "RAG's models are cached",
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+
+    const dir = retrievalModelCacheDir();
+    const { present, missing } = modelFilesPresent(dir);
+    if (present) return pass(`every model file RAG loads offline is cached in ${dir}`);
+
+    const named = missing.slice(0, MISSING_MODEL_FILES_NAMED).join(', ');
+    const rest = missing.length - MISSING_MODEL_FILES_NAMED;
+    return fail(
+      `the model cache at ${dir} is missing ${named}${rest > 0 ? ` and ${rest} more` : ''} — run \`${CLI} init\`, which downloads them at setup time. An unattended run has no web access, so a model missing now is never fetched later`,
+    );
+  },
+};
+
+/** The last non-empty line of a child's output, or `undefined` when it printed nothing. */
+function lastNonEmptyLine(output: string): string | undefined {
+  return output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+    .at(-1);
+}
+
+/**
+ * Does the docs-retrieval index build?
+ *
+ * A child process of this CLI runs `docs index --in-memory` rather than the server being launched —
+ * choice 3's *"never a launch"*: the child builds the whole index in memory, prints one line and exits,
+ * so no server starts and nothing is written. It is a child at all because {@link Check.run} is
+ * synchronous and the store is not. Its entry is {@link retrievalCliEntry}'s: the probe asks whether an
+ * index builds, not what the launcher runs, which `retrieval-dependencies` grades.
+ *
+ * **`spawnSync` rather than `execFileSync`**, for the reason `cli/src/commands/doctor.ts` →
+ * `runNotifier` states: `execFileSync` returns stdout and surfaces a child's stderr on the error path
+ * only, and the child's corpus-coverage warnings — an unset or mis-spelled `docs.root`, a missing
+ * conventions document — are printed on stderr by a run that **succeeds**. This is the one check an
+ * adopter runs to answer "is retrieval set up correctly?", so a build over a corpus missing the whole
+ * documentation catalog must not read as an unqualified pass.
+ */
+const RETRIEVAL_INDEX_CHECK: Check = {
+  id: 'retrieval-index',
+  title: 'the RAG index builds',
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+
+    const resolved = retrievalCliEntry();
+    if (resolved === undefined) return fail('cannot build without the RAG libraries (see retrieval-dependencies)');
+
+    // `spawnSync` does not throw on a non-zero exit, so this `try` now covers a spawn failure alone;
+    // the child's own failure is graded on `status` and `error` below.
+    try {
+      const child = spawnSync(process.execPath, [resolved.entry, 'docs', 'index', '--in-memory', '--cwd', ctx.repoRoot], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: RETRIEVAL_INDEX_TIMEOUT_MS,
+        env: process.env,
+      });
+      const line = lastNonEmptyLine(child.stderr ?? '');
+      if (child.error !== undefined || child.status !== 0) {
+        const how = child.status === null ? `it was stopped by ${child.signal}` : `it exited with status ${child.status}`;
+        return fail(
+          `the RAG index did not build in memory: ${line ?? (child.error === undefined ? how : messageOf(child.error))} — run \`${CLI} init\` to set retrieval up`,
+        );
+      }
+      return pass(line === undefined ? child.stdout.trim() : `${child.stdout.trim()} — ${line}`);
+    } catch (error) {
+      return fail(
+        `the RAG index did not build in memory: ${messageOf(error)} — run \`${CLI} init\` to set retrieval up`,
+      );
+    }
+  },
+};
+
 /**
  * The checks, in the order they are evaluated and reported: the host and the tools first, then the
  * repository's own wiring, then the permission profile and the browser half that depends on it.
@@ -4177,6 +4319,9 @@ const BROWSER_WIRING_CHECK: Check = {
  * question whose other half is not in the repository at all — the plugin's machine-local install
  * root — so it is answerable only once the profile itself has been read, and a reader whose
  * profile lines all passed reads it as the last thing that can still be missing from that file.
+ *
+ * The three `retrieval-*` checks come last, under `browser-wiring`: the runtime, the models, then
+ * whether an index builds, which needs libraries and models both and so reads after them.
  */
 export const CHECKS: readonly Check[] = Object.freeze([
   GIT_CHECK,
@@ -4212,6 +4357,9 @@ export const CHECKS: readonly Check[] = Object.freeze([
   PROFILE_DENY_FLOOR_CHECK,
   PLUGIN_PERMISSIONS_CHECK,
   BROWSER_WIRING_CHECK,
+  RETRIEVAL_DEPENDENCIES_CHECK,
+  RETRIEVAL_MODEL_CACHE_CHECK,
+  RETRIEVAL_INDEX_CHECK,
 ]);
 
 /**

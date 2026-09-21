@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # The harness's own verification, as one command.
 #
-# `docs/development.md` §5 defines nine gates. This script runs the five a process can run
-# unattended and reports the four it cannot, so that a reviewer — human or agent — reading a
+# `docs/development.md` §5 defines ten gates. This script runs the five a process can run
+# unattended and reports the five it cannot, so that a reviewer — human or agent — reading a
 # green result has read the whole automatable half rather than one suite of it. `commands.test`
 # in `harness.config.json` points here for exactly that reason: `npm test` is gate 4 alone, and a
-# branch review that reads it as "verified" is reading four gates' worth of silence as a pass.
+# branch review that reads it as "verified" is reading five gates' worth of silence as a pass.
 #
 # NOT the generated `scripts/test.sh`. That file is `init`'s, it wraps whatever `commands.test`
 # names, and a re-run regenerates it. This file is hand-written, is not in the set `init --force`
@@ -116,11 +116,12 @@ echo "  5  doctor's exit contract, by hand against gate 4's scratch repository"
 echo "  7  the five adoption shapes, against real directories outside this checkout"
 echo "  8  /autonomous-sdlc-harness:harness-analyze, which is judgement and runs inside a model session"
 echo "  9  examples/notes-app, which installs dependencies inside the checkout"
+echo "  10 docs retrieval with the real models, which downloads them and needs a network"
 echo "     -> docs/development.md §5"
 
 echo
 if [ ${#failed[@]} -eq 0 ]; then
-  echo "run-gates: ${#passed[@]} automatable checks passed; gates 5, 7, 8 and 9 remain hand-run"
+  echo "run-gates: ${#passed[@]} automatable checks passed; gates 5, 7, 8, 9 and 10 remain hand-run"
   exit 0
 fi
 echo "run-gates: ${#failed[@]} failed, ${#passed[@]} passed" >&2

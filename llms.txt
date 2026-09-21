@@ -41,7 +41,7 @@ The quick start, in five steps:
 ## The two halves
 
 - [plugin/](https://github.com/firu-daniel/autonomous-sdlc-harness/tree/main/plugin): the Claude Code plugin carrying the process assets a run executes, namely agents, `branch-*` commands, `/autonomous-sdlc-harness:harness-analyze`, guard hooks, instructions and samples.
-- [cli/](https://github.com/firu-daniel/autonomous-sdlc-harness/tree/main/cli): the npm package `autonomous-sdlc-harness` carrying the outer loop, namely `init`, `doctor`, `config` and `daemon`.
+- [cli/](https://github.com/firu-daniel/autonomous-sdlc-harness/tree/main/cli): the npm package `autonomous-sdlc-harness` carrying the outer loop, namely `init`, `doctor`, `config` and `daemon`, plus `docs`, an opt-in local docs-retrieval search that is not yet measured.
 - [plugin/README.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/plugin/README.md): the inventory of the plugin's asset directories.
 - [cli/README.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/cli/README.md): the CLI package's commands, flags, exit codes and recorded decisions.
 
@@ -53,7 +53,8 @@ The quick start, in five steps:
 
 - [docs/watcher.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/watcher.md): the outer loop that turns a dropped file into an unattended run.
 - [docs/analyze.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/analyze.md): the decisions of record for `/autonomous-sdlc-harness:harness-analyze`, including what it fills in and what it refuses to guess.
-- [docs/cli.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/cli.md): the four subcommands, their flags and exit codes, and the `init` re-run contract.
+- [docs/cli.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/cli.md): the five subcommands, their flags and exit codes, and the `init` re-run contract.
+- [docs/retrieval.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/retrieval.md): docs retrieval, opt-in, local and not yet measured: its design, measured facts, what it buys and what it costs.
 - [docs/config.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/config.md): one row per configuration value and parameterization token, saying where its value comes from.
 - [docs/development.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/development.md): changing a file in this repository, and which commands decide whether a change is good.
 - [docs/outer-loop-verification.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/outer-loop-verification.md): what the outer-loop scripts do when driven, and which paths ship unexercised.

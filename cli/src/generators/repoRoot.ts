@@ -1,7 +1,8 @@
 /**
  * Generator: the files `init` writes at the adopting repository's own root — the ignore rules for
  * the machine-local files the harness configures by path, the line-ending attributes that keep its
- * shell assets runnable, and the browser wiring the interactive test phase needs.
+ * shell assets runnable, the browser wiring the interactive test phase needs, and the docs-retrieval
+ * server's wiring.
  *
  * **The rule this module exists to enforce: nothing here may take a file the adopter already owns
  * away from them.** All three targets are files a repository is likely to have before the harness
@@ -46,6 +47,13 @@
  *    names the servers it starts, and a server it starts that this file does not declare never
  *    starts at all — an un-loaded tool stalls an unattended run rather than failing it, which is the
  *    one failure mode both files exist to prevent.
+ *
+ *    **The docs-retrieval half is gated the same way on its own predicate**, {@link retrievalApplies}
+ *    (`phases.docs` and `docs.retrieval` both on), and {@link assertRetrievalServersMatchProfile}
+ *    checks it against the profile's docs-retrieval fragment. So `.mcp.json` is written when
+ *    **either** predicate holds, as **one** `merge-json` request carrying whichever halves apply —
+ *    two requests for one path would be two writers of one file. With retrieval on and no browser
+ *    driven, the file declares the docs server alone.
  * 4. **The block covers files a harness command creates, and of the `.bak` siblings only the
  *    configuration's.** OS and editor noise (`.DS_Store`, `*~`) is per-developer and per-OS, so it
  *    belongs in the adopter's own ignore file or a global `core.excludesFile` and not in a block
@@ -62,15 +70,22 @@
 
 import { join } from 'node:path';
 
-import { browserWiringApplies, CONFIG_FILENAME, DEFAULTS, type HarnessConfig } from '../config/model.js';
+import { browserWiringApplies, CONFIG_FILENAME, DEFAULTS, retrievalApplies, type HarnessConfig } from '../config/model.js';
 import { internal } from '../core/errors.js';
 import { isJsonObject, type JsonObject, type JsonValue } from '../core/json.js';
 import { readTemplate } from '../core/paths.js';
 import { normalizeRepoDir } from '../core/repoPaths.js';
 import { renderTemplate } from '../core/templating.js';
 import type { WritePlan } from '../core/writer.js';
+import { DOCS_SERVER_NAME } from '../retrieval/server.js';
+import { INDEX_DIR_NAME } from '../retrieval/store.js';
 import { PUSH_ENV_PATH, QA_CREDENTIALS_PATH } from './harnessConfig.js';
-import { QA_TEMPLATE_PATH as QA_PROFILE_FRAGMENT } from './permissionProfile.js';
+import { DOCS_SEARCH_SERVER_SCRIPT_NAME } from './outerLoopScripts.js';
+import {
+  QA_TEMPLATE_PATH as QA_PROFILE_FRAGMENT,
+  RETRIEVAL_TEMPLATE_PATH as RETRIEVAL_PROFILE_FRAGMENT,
+} from './permissionProfile.js';
+import { invokedPath, scriptInvocation } from './scripts.js';
 import { STATE_DIR_ENTRIES } from './stateDir.js';
 
 /** The templates' subdirectory under `cli/templates/`, addressed as {@link readTemplate} wants it. */
@@ -90,12 +105,16 @@ const TEMPLATE_DIR = 'repo';
  * then both absent from a repository that drives no browser, which one token per rule in the parent
  * template could not do: the write engine drops a blank line but keeps a comment, so gated rules with
  * an ungated comment group would leave the file explaining rules it does not carry.
+ * `gitignoreRetrieval` is the same kind of fragment, rendered into `docsRetrievalIndex` under
+ * {@link retrievalApplies}, and `mcpRetrieval` is the retrieval half merged into the one `.mcp.json`.
  */
 const TEMPLATES = Object.freeze({
   gitignore: 'gitignore',
   gitignoreQa: 'gitignore.qa',
+  gitignoreRetrieval: 'gitignore.retrieval',
   gitattributes: 'gitattributes',
   mcp: 'mcp.json',
+  mcpRetrieval: 'mcp.retrieval.json',
 } as const);
 
 /** Where each of those lands, relative to the adopting repository's root. */
@@ -217,8 +236,33 @@ const README_FILENAME = 'README.md';
 /** The key `.mcp.json` declares its servers under. */
 const SERVERS_KEY = 'mcpServers';
 
-/** The key the permission profile's interactive-test fragment starts those servers with. */
+/** The key the permission profile's fragments start those servers with. */
 const ENABLED_SERVERS_KEY = 'enabledMcpjsonServers';
+
+/** The token `mcp.retrieval.json` carries for the launcher's repo-relative path. */
+const DOCS_SEARCH_SERVER_PATH_TOKEN = 'docsSearchServerPath';
+
+/** One permission-profile fragment, and the `.mcp.json` template whose servers it must start. */
+interface ProfileFragment {
+  /** The fragment's template path, as {@link readTemplate} wants it. */
+  readonly path: string;
+  /** How a message names the fragment. */
+  readonly role: string;
+  /** The `.mcp.json` template it is checked against. */
+  readonly mcpTemplate: string;
+}
+
+const BROWSER_FRAGMENT: ProfileFragment = Object.freeze({
+  path: QA_PROFILE_FRAGMENT,
+  role: 'interactive-test',
+  mcpTemplate: TEMPLATES.mcp,
+});
+
+const RETRIEVAL_FRAGMENT: ProfileFragment = Object.freeze({
+  path: RETRIEVAL_PROFILE_FRAGMENT,
+  role: 'docs-retrieval',
+  mcpTemplate: TEMPLATES.mcpRetrieval,
+});
 
 /** Everything {@link writeRepoRootFiles} needs. */
 export interface RepoRootOptions {
@@ -230,7 +274,13 @@ export interface RepoRootOptions {
   readonly plan: WritePlan;
 }
 
-/** What the generator produced, for `init`'s summary and for `doctor`. */
+/**
+ * What the generator produced, for `init`'s summary and for `doctor`.
+ *
+ * `.mcp.json` is written when **either** {@link RepoRootResult.browserWired} or
+ * {@link RepoRootResult.retrievalWired} is true — the two servers share one file — so a caller asking
+ * whether that file was enqueued reads the disjunction off this type rather than re-deriving it.
+ */
 export interface RepoRootResult {
   /** Repo-relative paths enqueued, in the order they were enqueued. */
   readonly files: readonly string[];
@@ -239,9 +289,11 @@ export interface RepoRootResult {
   /**
    * True when the browser wiring was enqueued — i.e. when `phases.qa` is on **and** `qa.driver` is
    * the browser one ({@link browserWiringApplies}), which is the driver-gated condition rather than
-   * the phase alone: a mobile-driver repository has the phase on and no `.mcp.json`.
+   * the phase alone: a mobile-driver repository has the phase on and no browser server declared.
    */
-  readonly mcpWritten: boolean;
+  readonly browserWired: boolean;
+  /** True when the docs-retrieval server was enqueued into `.mcp.json` ({@link retrievalApplies}). */
+  readonly retrievalWired: boolean;
   /** Informational lines, one each, for the reporter's `info`. */
   readonly notes: readonly string[];
 }
@@ -278,18 +330,18 @@ function parseTemplateObject(path: string): JsonObject {
   return parsed;
 }
 
-/** The servers the permission profile's interactive-test fragment starts for a run. */
-function serversStartedByProfile(): readonly string[] {
-  const fragment = parseTemplateObject(QA_PROFILE_FRAGMENT);
-  const enabled = fragment[ENABLED_SERVERS_KEY];
+/** The servers one of the permission profile's fragments starts for a run. */
+function serversStartedByProfile(fragment: ProfileFragment): readonly string[] {
+  const parsed = parseTemplateObject(fragment.path);
+  const enabled = parsed[ENABLED_SERVERS_KEY];
   if (!Array.isArray(enabled)) {
     throw internal(
-      `the permission profile's interactive-test fragment ${QA_PROFILE_FRAGMENT} has no \`${ENABLED_SERVERS_KEY}\` list, so the servers it starts cannot be checked against the ones ${MCP_PATH} declares`,
+      `the permission profile's ${fragment.role} fragment ${fragment.path} has no \`${ENABLED_SERVERS_KEY}\` list, so the servers it starts cannot be checked against the ones ${MCP_PATH} declares`,
     );
   }
   return enabled.map((entry) => {
     if (typeof entry !== 'string') {
-      throw internal(`\`${ENABLED_SERVERS_KEY}\` in ${QA_PROFILE_FRAGMENT} carries an entry that is not a string`);
+      throw internal(`\`${ENABLED_SERVERS_KEY}\` in ${fragment.path} carries an entry that is not a string`);
     }
     return entry;
   });
@@ -309,23 +361,33 @@ function serversStartedByProfile(): readonly string[] {
  * exit {@link EXIT.INTERNAL}. The end-to-end pairing — the generated profile against the generated
  * `.mcp.json` — is the fixture tests', which can see the files this module only plans.
  */
-function assertServersMatchProfile(servers: JsonObject): void {
+function assertServersMatchFragment(servers: JsonObject, fragment: ProfileFragment): void {
   const declared = Object.keys(servers);
-  const started = serversStartedByProfile();
+  const started = serversStartedByProfile(fragment);
 
   const undeclared = started.filter((name) => !declared.includes(name));
   if (undeclared.length > 0) {
     throw internal(
-      `the permission profile's interactive-test fragment starts the MCP server(s) ${undeclared.join(', ')}, which the ${MCP_PATH} template does not declare: the server would never start, so the tools the profile allow-lists would not exist at run time and the phase would stall rather than fail`,
+      `the permission profile's ${fragment.role} fragment starts the MCP server(s) ${undeclared.join(', ')}, which the ${MCP_PATH} template ${fragment.mcpTemplate} does not declare: the server would never start, so the tools the profile allow-lists would not exist at run time and the phase would stall rather than fail`,
     );
   }
 
   const unstarted = declared.filter((name) => !started.includes(name));
   if (unstarted.length > 0) {
     throw internal(
-      `the ${MCP_PATH} template declares the MCP server(s) ${unstarted.join(', ')}, which the permission profile's interactive-test fragment does not start: the wiring would be present and unreachable`,
+      `the ${MCP_PATH} template ${fragment.mcpTemplate} declares the MCP server(s) ${unstarted.join(', ')}, which the permission profile's ${fragment.role} fragment does not start: the wiring would be present and unreachable`,
     );
   }
+}
+
+/** {@link assertServersMatchFragment} for the browser half. */
+function assertServersMatchProfile(servers: JsonObject): void {
+  assertServersMatchFragment(servers, BROWSER_FRAGMENT);
+}
+
+/** {@link assertServersMatchFragment} for the docs-retrieval half. */
+function assertRetrievalServersMatchProfile(servers: JsonObject): void {
+  assertServersMatchFragment(servers, RETRIEVAL_FRAGMENT);
 }
 
 /** The `mcpServers` object of the browser-wiring template, checked against the profile fragment. */
@@ -337,6 +399,74 @@ function browserWiring(): JsonObject {
   }
   assertServersMatchProfile(servers);
   return template;
+}
+
+/**
+ * The docs-retrieval template, parsed first and substituted second (`permissionProfile.ts` → choice
+ * 3), with its one launcher argument set to the repo-relative path of the script `init` writes.
+ *
+ * That path is {@link invokedPath} over {@link scriptInvocation}'s own return value, so `.mcp.json`
+ * and the outer-loop writer cannot name two different files.
+ */
+function retrievalWiring(scriptsDir: string): JsonObject {
+  const templatePath = `${TEMPLATE_DIR}/${TEMPLATES.mcpRetrieval}`;
+  const template = parseTemplateObject(templatePath);
+  const servers = template[SERVERS_KEY];
+  if (!isJsonObject(servers)) {
+    throw internal(`the ${templatePath} template has no \`${SERVERS_KEY}\` object, so there is nothing to merge`);
+  }
+
+  const names = Object.keys(servers);
+  if (names.length !== 1 || names[0] !== DOCS_SERVER_NAME) {
+    throw internal(
+      `the ${templatePath} template declares the MCP server(s) ${names.join(', ') || '(none)'}, where it must declare exactly ${DOCS_SERVER_NAME}: that is the server the docs tool is allow-listed under, so any other key declares a server whose tool no run may call`,
+    );
+  }
+
+  const server = servers[DOCS_SERVER_NAME];
+  const args = isJsonObject(server) ? server['args'] : undefined;
+  if (!isJsonObject(server) || !Array.isArray(args) || args.length !== 1 || typeof args[0] !== 'string') {
+    throw internal(
+      `the ${templatePath} template's ${DOCS_SERVER_NAME} server does not carry exactly one \`args\` string, so the launcher path has nowhere to go`,
+    );
+  }
+
+  const docsSearchServerPath = invokedPath(scriptInvocation(scriptsDir, DOCS_SEARCH_SERVER_SCRIPT_NAME));
+  server['args'] = [
+    renderTemplate(
+      args[0],
+      { [DOCS_SEARCH_SERVER_PATH_TOKEN]: docsSearchServerPath },
+      { describe: `the ${templatePath} template's launcher argument` },
+    ),
+  ];
+
+  assertRetrievalServersMatchProfile(servers);
+  return template;
+}
+
+/**
+ * The one `.mcp.json` payload: the browser template when {@link browserWiringApplies} holds, plus the
+ * retrieval template's servers and its other keys when {@link retrievalApplies} does. A key both
+ * templates carry is refused, because the merged object would silently keep only one of them.
+ */
+function mcpWiring(wiresBrowser: boolean, wiresRetrieval: boolean, scriptsDir: string): JsonObject {
+  const content: JsonObject = wiresBrowser ? browserWiring() : { [SERVERS_KEY]: {} };
+  if (!wiresRetrieval) return content;
+
+  const servers = content[SERVERS_KEY] as JsonObject;
+  for (const [key, value] of Object.entries(retrievalWiring(scriptsDir))) {
+    const target = key === SERVERS_KEY ? servers : content;
+    const additions = key === SERVERS_KEY ? (value as JsonObject) : { [key]: value };
+    for (const [name, entry] of Object.entries(additions)) {
+      if (Object.hasOwn(target, name)) {
+        throw internal(
+          `the ${MCP_PATH} templates ${TEMPLATES.mcp} and ${TEMPLATES.mcpRetrieval} both declare \`${name}\`, so the merged file would keep only one of them`,
+        );
+      }
+      target[name] = entry;
+    }
+  }
+  return content;
 }
 
 /**
@@ -425,7 +555,9 @@ export function clarificationsIgnoreRules(stateDir: string): ClarificationsIgnor
 /**
  * Enqueue the repository-root files: the ignore block (`merge-lines`), the line-ending attributes
  * (`create-if-absent`), and — only where {@link browserWiringApplies} holds, i.e. the interactive
- * test phase enabled **and** its driver the browser one — the browser wiring (`merge-json`).
+ * test phase enabled **and** its driver the browser one — the browser wiring, and only where
+ * {@link retrievalApplies} holds the docs-retrieval server, both in one `.mcp.json` request
+ * (`merge-json`).
  *
  * Each is one action in the run's log, so a re-run reports per file whether it was created, merged
  * into or left alone rather than reporting "repository root" once.
@@ -435,6 +567,7 @@ export function writeRepoRootFiles({ repoRoot, config, plan }: RepoRootOptions):
   const notes: string[] = [];
 
   const stateDir = normalizeRepoDir(config.stateDir ?? DEFAULTS.stateDir);
+  const scriptsDir = normalizeRepoDir(config.scriptsDir ?? DEFAULTS.scriptsDir);
   const logs = contentsIgnoredDirectory(stateDir, LOGS_DIR);
   const inbox = contentsIgnoredDirectory(stateDir, INBOX_DIR);
   const scratch = contentsIgnoredDirectory(stateDir, SCRATCH_DIR);
@@ -459,6 +592,11 @@ export function writeRepoRootFiles({ repoRoot, config, plan }: RepoRootOptions):
   const qaBrowserArtifacts = wiresBrowser
     ? render(TEMPLATES.gitignoreQa, { qaArtifactsDir: `${stateDir}/${QA_ARTIFACTS_DIR}/` }).trimEnd()
     : '';
+  const wiresRetrieval = retrievalApplies(config);
+  // On the browser group's precedent: the rule and its comment are rendered together or not at all.
+  const docsRetrievalIndex = wiresRetrieval
+    ? render(TEMPLATES.gitignoreRetrieval, { docsIndexDir: `${stateDir}/${INDEX_DIR_NAME}/` }).trimEnd()
+    : '';
 
   const ignoreBlock = render(TEMPLATES.gitignore, {
     pushEnvPath: pushEnv,
@@ -478,6 +616,7 @@ export function writeRepoRootFiles({ repoRoot, config, plan }: RepoRootOptions):
     // Derived from the configuration's own filename, so a rename moves its ignore rule with it.
     configBackupFile: `${CONFIG_FILENAME}.bak`,
     qaBrowserArtifacts,
+    docsRetrievalIndex,
   });
 
   plan.add({
@@ -499,24 +638,36 @@ export function writeRepoRootFiles({ repoRoot, config, plan }: RepoRootOptions):
   });
   files.push(GITATTRIBUTES_PATH);
 
-  if (wiresBrowser) {
+  // One request for the one path, whichever halves apply (choice 3).
+  if (wiresBrowser || wiresRetrieval) {
     plan.add({
       path: join(repoRoot, MCP_PATH),
       policy: 'merge-json',
-      content: browserWiring(),
-      label: 'browser MCP wiring',
+      content: mcpWiring(wiresBrowser, wiresRetrieval, scriptsDir),
+      label: wiresBrowser
+        ? wiresRetrieval
+          ? 'browser and docs-retrieval MCP wiring'
+          : 'browser MCP wiring'
+        : 'docs-retrieval MCP wiring',
     });
     files.push(MCP_PATH);
-  } else if (qaEnabled) {
+  }
+
+  // With retrieval on the file exists, so the notes below say no browser server was declared in it
+  // rather than that it was not written.
+  const noBrowserWiring = wiresRetrieval
+    ? `no browser MCP server was declared in ${MCP_PATH}`
+    : `no ${MCP_PATH} was written`;
+  if (!wiresBrowser && qaEnabled) {
     // The phase is on and its driver reaches the application some other way. A distinct note, not
     // the phase-off one: "turn the phase on" is advice this adopter has already taken, and the thing
     // they need to know is that the omission is the driver's doing and is not a gap to fill in.
     notes.push(
-      `no ${MCP_PATH} was written because qa.driver is ${config.qa?.driver ?? DEFAULTS.qa.driver}, which reaches the application through a device runner rather than a browser: the mobile interactive-test variants are declared-not-implemented in this release and carry built-ins-only tool allowlists, so there is no MCP server for them to start. The permission profile omits its browser half for the same reason. To wire a browser instead, change the driver in ${CONFIG_FILENAME} — by hand, or with \`config set qa.driver web-playwright\`, which copies the file to a .bak sibling before replacing it — then re-run \`init --force\`, which moves the half a plain re-run cannot: an ordinary re-run merges ${MCP_PATH} in but keeps the create-if-absent permission profile, leaving the profile starting none of the servers ${MCP_PATH} declares — which stalls the phase rather than failing it — while --force regenerates that profile from the config in effect. --force overwrites generated files but never ${CONFIG_FILENAME}, which init reads on every run, so the driver just set is the one both halves are wired from, and everything --force regenerates is copied to a .bak sibling first`,
+      `${noBrowserWiring} because qa.driver is ${config.qa?.driver ?? DEFAULTS.qa.driver}, which reaches the application through a device runner rather than a browser: the mobile interactive-test variants are declared-not-implemented in this release and carry built-ins-only tool allowlists, so there is no MCP server for them to start. The permission profile omits its browser half for the same reason. To wire a browser instead, change the driver in ${CONFIG_FILENAME} — by hand, or with \`config set qa.driver web-playwright\`, which copies the file to a .bak sibling before replacing it — then re-run \`init --force\`, which moves the half a plain re-run cannot: an ordinary re-run merges ${MCP_PATH} in but keeps the create-if-absent permission profile, leaving the profile starting none of the servers ${MCP_PATH} declares — which stalls the phase rather than failing it — while --force regenerates that profile from the config in effect. --force overwrites generated files but never ${CONFIG_FILENAME}, which init reads on every run, so the driver just set is the one both halves are wired from, and everything --force regenerates is copied to a .bak sibling first`,
     );
-  } else {
+  } else if (!wiresBrowser) {
     notes.push(
-      `no ${MCP_PATH} was written, because phases.qa is off and nothing would drive a browser: an adopter who never runs the interactive test phase pays neither the browser tool schemas in every session's context nor a launched browser process. Turn the phase on in ${CONFIG_FILENAME} — by hand, or with \`config set phases.qa true\` (and \`config set qa.driver <driver>\` for a driver other than the default), which copies the file to a .bak sibling before replacing it — then re-run \`init --force\`, which moves the half a plain re-run cannot: an ordinary re-run merges ${MCP_PATH} in but keeps the create-if-absent permission profile, which would then start none of the servers it declares, while --force regenerates that profile from the config in effect. --force overwrites generated files but never ${CONFIG_FILENAME}, which init reads on every run, so the phase just turned on is the one both halves are wired from, and everything --force regenerates is copied to a .bak sibling first`,
+      `${noBrowserWiring}, because phases.qa is off and nothing would drive a browser: an adopter who never runs the interactive test phase pays neither the browser tool schemas in every session's context nor a launched browser process. Turn the phase on in ${CONFIG_FILENAME} — by hand, or with \`config set phases.qa true\` (and \`config set qa.driver <driver>\` for a driver other than the default), which copies the file to a .bak sibling before replacing it — then re-run \`init --force\`, which moves the half a plain re-run cannot: an ordinary re-run merges ${MCP_PATH} in but keeps the create-if-absent permission profile, which would then start none of the servers it declares, while --force regenerates that profile from the config in effect. --force overwrites generated files but never ${CONFIG_FILENAME}, which init reads on every run, so the phase just turned on is the one both halves are wired from, and everything --force regenerates is copied to a .bak sibling first`,
     );
   }
 
@@ -527,5 +678,5 @@ export function writeRepoRootFiles({ repoRoot, config, plan }: RepoRootOptions):
     .map((line) => line.trim())
     .filter((line) => line !== '' && !line.startsWith('#'));
 
-  return { files, ignored, mcpWritten: wiresBrowser, notes };
+  return { files, ignored, browserWired: wiresBrowser, retrievalWired: wiresRetrieval, notes };
 }

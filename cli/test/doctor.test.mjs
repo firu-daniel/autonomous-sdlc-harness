@@ -40,13 +40,24 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 
-import { createFixture, readJson, runCli, runGit, snapshotTree, PACKAGE_ROOT } from './helpers/fixture.mjs';
+import {
+  createFixture,
+  plantModelFiles,
+  plantRetrievalRuntime,
+  readJson,
+  retrievalEnv,
+  runCli,
+  runGit,
+  snapshotTree,
+  writeRetrievalConfig,
+  PACKAGE_ROOT,
+} from './helpers/fixture.mjs';
 
 /**
  * A compiled module of the CLI, imported for the one answer a subprocess cannot be asked for: the
@@ -4999,4 +5010,111 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     assert.match(pastedRun.stdout, passLine('plugin-permissions'));
     assert.doesNotMatch(pastedRun.stderr, warnLine('plugin-permissions'));
   });
+});
+
+/**
+ * Acceptance 6 — the three docs-retrieval checks. With retrieval on, `retrieval-dependencies` fails
+ * unless the runtime the `.mcp.json` launcher execs is installed at this CLI's version with its peers,
+ * `retrieval-model-cache` fails unless the model files are cached, and `retrieval-index` fails unless
+ * an index builds in memory. With retrieval off, all three pass saying nothing is expected.
+ *
+ * The fixture is not wired by `init`, whose retrieval setup would install the runtime, so these cases
+ * assert the three report lines rather than a clean summary.
+ */
+const RETRIEVAL_CHECK_IDS = ['retrieval-dependencies', 'retrieval-model-cache', 'retrieval-index'];
+
+const RETRIEVAL_OFF_TEXT = 'docs.retrieval is off (it needs phases.docs and docs.retrieval both true)';
+
+const REMEDY = 'npx autonomous-sdlc-harness init';
+
+/** A retrieval-on fixture with a one-file corpus, a planted model cache and, unless told not to, a planted runtime. */
+async function retrievalDoctorFixture(t, { runtime = true, runtimeVersion } = {}) {
+  const fixture = await createFixture({
+    files: {
+      'docs/guide.md': '# Guide\nIntro line.\n## Setup\nInstall the tool.\n',
+      'conventions.md': '# Conventions\n## Rules\nA line about the rules.\n',
+    },
+  });
+  t.after(fixture.cleanup);
+  await writeRetrievalConfig(fixture.dir);
+  const cacheHome = await realpath(await mkdtemp(join(tmpdir(), 'harness-doctor-retrieval-')));
+  t.after(() => rm(cacheHome, { recursive: true, force: true }));
+  await plantModelFiles(cacheHome);
+  if (runtime) await plantRetrievalRuntime(cacheHome, runtimeVersion === undefined ? {} : { version: runtimeVersion });
+  return { dir: fixture.dir, cacheHome, env: retrievalEnv(cacheHome) };
+}
+
+test('Acceptance 6 (a): with retrieval on and everything in place, the three retrieval checks pass and the tree is unchanged', async (t) => {
+  const { dir, env } = await retrievalDoctorFixture(t);
+  const before = await snapshotTree(dir);
+
+  const { stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+  for (const id of RETRIEVAL_CHECK_IDS) {
+    assert.match(stdout, passLine(id), `${id} did not pass\n${stdout}\n${stderr}`);
+  }
+  assert.ok(
+    detailLine(stdout, passLine('retrieval-index')).includes('docs index: 2 files'),
+    `the index check did not quote the build line:\n${stdout}`,
+  );
+  assert.deepEqual(await snapshotTree(dir), before);
+});
+
+test('Acceptance 6 (b): with the model cache removed, the model and index checks fail and doctor exits non-zero', async (t) => {
+  const { dir, cacheHome, env } = await retrievalDoctorFixture(t);
+  await rm(join(cacheHome, 'autonomous-sdlc-harness', 'retrieval', 'models'), { recursive: true, force: true });
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+  assert.notEqual(status, 0);
+  assert.match(stderr, failLine('retrieval-model-cache'), stdout);
+  assert.match(stderr, failLine('retrieval-index'), stdout);
+  assert.ok(detailLine(stderr, failLine('retrieval-model-cache')).includes(REMEDY), stderr);
+});
+
+test('Acceptance 6 (c): with phases.docs off, the three retrieval checks pass with the off sentence', async (t) => {
+  const dir = await wiredFixture(t);
+
+  const { stdout, stderr } = await runCli(dir, ['doctor']);
+
+  for (const id of RETRIEVAL_CHECK_IDS) {
+    assert.ok(detailLine(stdout, passLine(id)).includes(RETRIEVAL_OFF_TEXT), `${id}:\n${stdout}\n${stderr}`);
+  }
+});
+
+test('Acceptance 6 (d): with no runtime installed, or one at another version, retrieval-dependencies fails', async (t) => {
+  for (const [label, options] of [
+    ['no runtime', { runtime: false }],
+    ['runtime at another version', { runtimeVersion: '0.0.0-other' }],
+  ]) {
+    await t.test(label, async (subtest) => {
+      const { dir, env } = await retrievalDoctorFixture(subtest, options);
+
+      const { status, stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+      assert.notEqual(status, 0);
+      assert.match(stderr, failLine('retrieval-dependencies'), stdout);
+      const line = detailLine(stderr, failLine('retrieval-dependencies'));
+      assert.ok(line.includes('autonomous-sdlc-harness'), line);
+      assert.ok(line.includes(REMEDY), line);
+    });
+  }
+});
+
+/**
+ * The child prints its coverage warnings on stderr and still exits 0, so this asserts the one thing
+ * `execFileSync` cannot deliver: a *passing* build whose corpus was truncated says so. Without it,
+ * "the documentation catalog was never indexed" reads as a pass with a smaller file count, on the one
+ * check an adopter runs to answer whether retrieval is set up correctly.
+ */
+test('Acceptance 6 (e): a passing index check quotes the coverage warning the build printed', async (t) => {
+  const { dir, env } = await retrievalDoctorFixture(t);
+  await rm(join(dir, 'docs'), { recursive: true, force: true });
+
+  const { stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+  assert.match(stdout, passLine('retrieval-index'), `${stdout}\n${stderr}`);
+  const line = detailLine(stdout, passLine('retrieval-index'));
+  assert.ok(line.includes('docs index: 1 files'), line);
+  assert.ok(line.includes('docs.root docs is not a directory'), line);
 });

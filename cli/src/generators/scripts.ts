@@ -169,8 +169,11 @@ const INVOCATION_PREFIX = 'bash ';
  * value. It is the inverse of {@link scriptInvocation} over that one producer's own output, which is
  * why it may slice a fixed prefix; a `commands.*` value may legitimately be a raw command line, and
  * parsing one back into a path is how the three views drift apart (`docs/cli.md` §6).
+ *
+ * Exported for `generators/repoRoot.ts`, which names `.mcp.json`'s docs-retrieval launcher from
+ * {@link scriptInvocation}'s own return value, so that path keeps one producer.
  */
-function invokedPath(invocation: string): string {
+export function invokedPath(invocation: string): string {
   return invocation.slice(INVOCATION_PREFIX.length);
 }
 
