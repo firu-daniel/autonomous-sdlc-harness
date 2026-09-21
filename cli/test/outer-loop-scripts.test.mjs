@@ -842,25 +842,38 @@ test('the sweep bounds a hanging fetch and releases its output pipe', async (t) 
   );
 });
 
-test('a HARNESS_FETCH_TIMEOUT that is not a positive integer falls back to the default, never to unbounded', async (t) => {
+test('a HARNESS_FETCH_TIMEOUT that is not a usable ceiling falls back to the default, never to unbounded', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(dir);
 
-  // The clause is read out of the shipped script rather than restated here: the one thing this
-  // knob must not be able to express is "wait forever", and that is a property of its own text.
+  // The clause is read out of the SHIPPED script rather than restated here, and it is then driven
+  // through the SAME `[ "$waited" -ge "$limit" ]` comparison `run_bounded` makes of it. Asserting
+  // the resolved string alone is what let two values ship that the script's own prose calls
+  // impossible: a 19-digit number is all digits, and the comparison against it ERRORS rather than
+  // returning false, so the timeout branch never fires — a ceiling that reads as `99999…` looks
+  // fine as a string and is unbounded in use. `00` is the mirror image: it reads as a number and
+  // fires on the first poll, disabling the sweep for good. Both are in the table below.
   const sweep = text(dir, `${SCRIPTS_DIR}/cleanup-merged-worktrees.sh`);
-  const clause = sweep.match(/^fetch_timeout=.*?^esac$/ms);
+  const clause = sweep.match(/^fetch_timeout=.*?^fi$/ms);
   assert.ok(clause, 'the sweep carries no HARNESS_FETCH_TIMEOUT validation clause');
 
-  for (const value of ['', 'abc', '0', '-5', '4x']) {
-    const { stdout } = await runBash(dir, ['-c', `${clause[0]}\nprintf '%s' "$fetch_timeout"`], {
-      HARNESS_FETCH_TIMEOUT: value,
-    });
-    assert.equal(stdout, '60', `HARNESS_FETCH_TIMEOUT='${value}' resolved to '${stdout}', not the 60s default`);
+  // `probe` reports the resolved ceiling AND what the loop's own test says about it at waited=0:
+  // `fires` means a ceiling that expires immediately, `never` a ceiling that can never expire.
+  const probe = `${clause[0]}
+if [ 0 -ge "$fetch_timeout" ] 2>/dev/null; then verdict=fires; elif [ 1 -ge "$fetch_timeout" ] 2>/dev/null || [ "$fetch_timeout" -ge 1 ] 2>/dev/null; then verdict=bounded; else verdict=never; fi
+printf '%s %s' "$fetch_timeout" "$verdict"`;
+
+  for (const value of ['', 'abc', '0', '00', '000', '-5', '4x', '99999999999999999999', '3601']) {
+    const { stdout } = await runBash(dir, ['-c', probe], { HARNESS_FETCH_TIMEOUT: value });
+    assert.equal(
+      stdout,
+      '60 bounded',
+      `HARNESS_FETCH_TIMEOUT='${value}' resolved to '${stdout}' instead of the bounded 60s default`,
+    );
   }
 
-  const { stdout: honoured } = await runBash(dir, ['-c', `${clause[0]}\nprintf '%s' "$fetch_timeout"`], {
-    HARNESS_FETCH_TIMEOUT: '5',
-  });
-  assert.equal(honoured, '5', 'a positive integer was not honoured');
+  for (const value of ['1', '5', '3600']) {
+    const { stdout } = await runBash(dir, ['-c', probe], { HARNESS_FETCH_TIMEOUT: value });
+    assert.equal(stdout, `${value} bounded`, `a usable ceiling of ${value}s was not honoured: '${stdout}'`);
+  }
 });
