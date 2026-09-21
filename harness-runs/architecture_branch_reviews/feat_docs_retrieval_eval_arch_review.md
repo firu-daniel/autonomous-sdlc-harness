@@ -22,7 +22,7 @@ with no owning roadmap row.
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — `LIMIT = 50` retypes the exported `ARM_CANDIDATES` _(layer: cli)_
-2. [ ] **Finding 2** — a deferral in `docs/retrieval.md` cites no numbered roadmap item _(layer: general)_
+2. [x] **Finding 2** — a deferral in `docs/retrieval.md` cites no numbered roadmap item _(layer: general)_
 3. [ ] **Finding 3** — the new suite retypes `store.ts`'s BM25 index and lexical ordering SQL _(layer: cli)_
 
 ## Must Fix
