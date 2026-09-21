@@ -31,3 +31,14 @@
 - `git diff --stat` shows one file changed. A change reaching `docs/` or `cli/test/` in this commit is out of this task's scope and belongs to its owner.
 - The doc comment is not a measured record: read it back and confirm it carries the value, the stub bound and the pointer, and that no date, host, corpus name, chunk count, model id or distribution figure appears anywhere in `cli/src/retrieval/search.ts`. Those belong to Task 14's `## Threshold calibration`, and two owners of one measured fact is the defect this split exists to prevent.
 - The hand-off is complete: the commit body carries every figure Task 14's `## Threshold calibration` bullet asks for, in the order that bullet lists them.
+
+**Deviations from plan:** The plan reads the choice off two uncensored distributions. The `json` fence
+was generated with the threshold `0.3` in force, and `bestScore` is the top **returned** hit's score,
+so every query that abstained carries `null`: all 8 negative queries (3 on `fixture-catalog`, 5 on
+`self-docs`) and 5 positives are censored, and **no negative score is observable at all** — only the
+fact that each is strictly below `0.30`. The pooled gap was therefore taken as the interval the
+evidence actually asserts, `[0.30, 0.339]` — `0.30` the censoring bound on every negative, `0.33899`
+(`q-sd-analyze-writes`) the lowest observed positive — and its midpoint `0.3195` rounded to two
+decimals: **`0.32`**. Task 14's `## Threshold calibration` must quote the negatives as censored rather
+than as measured values. The arms were not re-run to uncensor them, per this task's `**Depends on:**`
+clause.
