@@ -27,7 +27,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      # Pinned to a full commit sha, not the `v5` tag: a tag is mutable, and this job holds a
+      # token that can write to the `publish` branch. fbc6f39 is what v5 and v5.1.0 both
+      # named when this was pinned; bump it deliberately, never by moving a tag.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: dev
           fetch-depth: 0
