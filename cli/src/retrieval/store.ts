@@ -38,11 +38,7 @@ import { loadRetrievalModule } from './runtime.js';
 /** The index directory's name under `stateDir`; the ignore rule reads it from here. */
 export const INDEX_DIR_NAME = 'docs_index';
 
-/**
- * The chunk table's name, so a composed statement names the same table the store's own DDL creates.
- * The single-table statements below still spell `chunks` inline: they carry no shape a caller composes,
- * and rewriting them would enlarge this change to no reviewer's benefit.
- */
+/** The chunk table's name, so a composed statement names the same table the store's own DDL creates. */
 export const CHUNKS_TABLE = 'chunks';
 
 /** The BM25 lexical index's name, spliced rather than bound — see the header's spliced-token clause. */
@@ -186,7 +182,7 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
     writeMeta,
 
     async listChunkHashes() {
-      const result = await db.query<{ key: string; hash: string }>('SELECT key, hash FROM chunks');
+      const result = await db.query<{ key: string; hash: string }>(`SELECT key, hash FROM ${CHUNKS_TABLE}`);
       return new Map(result.rows.map((row) => [row.key, row.hash]));
     },
 
@@ -201,7 +197,8 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
             throw internal(`an embedding for ${chunk.key} has ${embedding.length} dimensions where the index has ${dimensions}`);
           }
           await tx.query(
-            'INSERT INTO chunks (key, path, anchor, heading, body, text, hash, embedding) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector) ' +
+            `INSERT INTO ${CHUNKS_TABLE} (key, path, anchor, heading, body, text, hash, embedding) ` +
+              'VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector) ' +
               'ON CONFLICT (key) DO UPDATE SET path = EXCLUDED.path, anchor = EXCLUDED.anchor, heading = EXCLUDED.heading, ' +
               'body = EXCLUDED.body, text = EXCLUDED.text, hash = EXCLUDED.hash, embedding = EXCLUDED.embedding',
             [chunk.key, chunk.path, chunk.anchor, chunk.heading, chunk.body, chunk.text, chunk.hash, vectorLiteral(embedding)],
@@ -212,11 +209,11 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
 
     async deleteChunks(keys) {
       if (keys.length === 0) return;
-      await db.query('DELETE FROM chunks WHERE key = ANY($1::text[])', [[...keys]]);
+      await db.query(`DELETE FROM ${CHUNKS_TABLE} WHERE key = ANY($1::text[])`, [[...keys]]);
     },
 
     async clear() {
-      await db.exec('DELETE FROM chunks');
+      await db.exec(`DELETE FROM ${CHUNKS_TABLE}`);
     },
 
     async lexicalSearch(query, limit) {
@@ -232,17 +229,17 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
     },
 
     async vectorSearch(embedding, limit) {
-      const result = await db.query<{ id: number }>('SELECT id FROM chunks ORDER BY embedding <=> $1::vector LIMIT $2', [
-        vectorLiteral(embedding),
-        limit,
-      ]);
+      const result = await db.query<{ id: number }>(
+        `SELECT id FROM ${CHUNKS_TABLE} ORDER BY embedding <=> $1::vector LIMIT $2`,
+        [vectorLiteral(embedding), limit],
+      );
       return ranked(result.rows);
     },
 
     async getChunks(ids) {
       if (ids.length === 0) return [];
       const result = await db.query<StoredChunk>(
-        'SELECT id, key, path, anchor, heading, body FROM chunks WHERE id = ANY($1::int[])',
+        `SELECT id, key, path, anchor, heading, body FROM ${CHUNKS_TABLE} WHERE id = ANY($1::int[])`,
         [[...ids]],
       );
       const byId = new Map(result.rows.map((row) => [row.id, row]));

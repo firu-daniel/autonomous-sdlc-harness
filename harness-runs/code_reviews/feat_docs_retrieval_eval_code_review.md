@@ -15,7 +15,7 @@
 5. [x] **Finding 5** — Say which entry point reads `--floor` _(layer: general)_
 6. [x] **Finding 7** — State the 60-second crossover over the cold-build total _(layer: general)_
 7. [x] **Finding 11** — ASCII punctuation in the two renderers _(layer: general)_
-8. [ ] **Finding 10** — Finish `CHUNKS_TABLE` across the store's statements _(layer: cli)_
+8. [x] **Finding 10** — Finish `CHUNKS_TABLE` across the store's statements _(layer: cli)_
 9. [ ] **Finding 9** — Cite the measured index size in `## What it costs` _(layer: general)_
 10. [ ] **Finding 2** — Replace the recorded hostname with the platform, in code and in the eight committed sites _(layer: general)_
 11. [ ] **Finding 3** — Ship the two missing launcher bodies _(layer: general)_
