@@ -4562,11 +4562,19 @@ figures.
 **The move costs no positive.** recall@5, recall@3, recall@1 and MRR are unchanged on both corpora,
 and the same 5 positives abstain at both values — `q-fc-billable-weight`,
 `q-fc-surcharge-compounding`, `q-fc-verify-callback` on `fixture-catalog`, `q-sd-new-config-key` and
-`q-sd-run-gates` on `self-docs`, the 5 already censored at `0.3`. After the move the arm abstains on
-**every** negative query: 3 of 3 on `fixture-catalog`, 5 of 5 on `self-docs`. The figures above are
-not re-checkable in the generated region as it stands, which is the pre-move run; they become
-re-checkable when Task 9 regenerates that region post-move, whose provenance states its own, later
-snapshot and the threshold in force.
+`q-sd-run-gates` on `self-docs`, the 5 already censored at `0.3`.
+
+**And the move buys no measured negative either.** The arm abstains on every negative query — 3 of 3
+on `fixture-catalog`, 5 of 5 on `self-docs` — and it did so at `0.3` as well, since every negative is
+`null` in the distributions quoted above, which is what abstaining at `0.3` renders as. So on these
+two corpora the move changes no measured outcome at all. What it buys is margin this run could not
+observe: a negative scoring in `[0.30, 0.32)` abstains under the new value, and every negative here
+is censored below `0.30` rather than measured, so none of them is such a query. The case for `0.32`
+over `0.3` is the interval midpoint above and nothing in this subsection.
+
+The figures above are not re-checkable in the generated region as it stands, which is the pre-move
+run; they become re-checkable when Task 9 regenerates that region post-move, whose provenance states
+its own, later snapshot and the threshold in force.
 
 ### The limit on this calibration
 
