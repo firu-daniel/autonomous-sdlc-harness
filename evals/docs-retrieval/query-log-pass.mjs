@@ -381,7 +381,7 @@ function ms(value) {
 
 /** A difference, with its sign written out, so a reader is never left to infer which row is higher. */
 function signed(value) {
-  return `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(1)}`;
+  return `${value >= 0 ? '+' : '-'}${Math.abs(value).toFixed(1)}`;
 }
 
 function uniqueRefreshes(counts) {

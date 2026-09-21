@@ -145,7 +145,7 @@ function tableSection(corpus) {
     `filled by re-running the eval with \`--transcript\` against a hand-run transcript, per the procedure in`,
     '`docs/retrieval-eval.md` → `## Running arm A by hand`.',
     '',
-    'The `cost` column is not a score, and **the arms’ scores are not comparable across rows**: the non-reranking',
+    "The `cost` column is not a score, and **the arms' scores are not comparable across rows**: the non-reranking",
     'modes report rank-derived reciprocal-rank-fusion values in the `0.004`–`0.033` range, while the reranking mode',
     'reports calibrated `[0, 1]` cross-encoder scores. Compare recall, MRR and latency across rows; compare scores only',
     'within a row.',
@@ -169,12 +169,12 @@ function provenanceSection(corpus) {
     `- \`docs.root\`: \`${corpus.config.docs.root}\`, as the runner set it (the eval owns the retrieval gate and`,
     '  `docs.root` alone).',
     `- The corpus is *every* \`*.md\` under that \`docs.root\`, with no file filtered out, so a document added`,
-    '  under it joins the corpus that measures it — and where that root is this checkout’s own `docs/`, this',
+    "  under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this",
     '  file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp',
     '  taken before such a document existed is therefore a different corpus.',
     layers[0] === undefined
       ? '- `layers[]`: none — this corpus is read as a repository of its own and carries no conventions documents.'
-      : '- `layers[]`, read out of the resolved checkout’s `harness.config.json` and never composed here:',
+      : "- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:",
     ...layers.map(layerLine),
     `- Query set: \`${corpus.queries.path}\` — ${corpus.queries.positives} positive, ${corpus.queries.negatives} negative.`,
     `- \`k\`: ${corpus.k}; repetitions per query: ${corpus.repeat}.`,
