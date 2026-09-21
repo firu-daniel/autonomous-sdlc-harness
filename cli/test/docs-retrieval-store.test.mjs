@@ -1,7 +1,7 @@
 /**
- * `DocStore.lexicalSearch` at corpus scale: what the lexical arm returns at the two committed
- * corpora's sizes, and the row count at which a stats-informed planner starts choosing the BM25
- * index scan.
+ * `DocStore.lexicalSearch` at corpus scale: what the lexical arm returns at synthetic row counts
+ * bracketing the two committed corpora's recorded sizes, and the row count at which a
+ * stats-informed planner starts choosing the BM25 index scan.
  *
  * **The rule these tests exist to enforce: the lexical arm's "matching rows only" property belongs to
  * the BM25 index scan and not to the `<@>` operator, so it holds above a row count and not below it,
@@ -127,10 +127,13 @@ async function storeOf(t, n) {
   return store;
 }
 
-test('(a) lexicalSearch returns the matching chunk alone at both committed corpora sizes', async (t) => {
-  // 40 is the `fixture-catalog` corpus's order of magnitude and 166 the `self-docs` corpus's measured
-  // chunk count; 1024 is far above the `(b)` crossover and is here to show the property is not a
-  // small-corpus artefact. The chunk carrying the term is inserted last, so its id is `n`.
+test('(a) lexicalSearch returns the matching chunk alone at three synthetic corpus sizes', async (t) => {
+  // 40 and 166 are the order of magnitude of the two committed corpora, which this branch recorded at
+  // 41 and 177 chunks (`docs/retrieval-eval-results.md`, the generated region's snapshots); 1024 is
+  // far above both, and above the `(b)` crossover, and is here to show the property is not a
+  // small-corpus artefact. The three points are orders of magnitude rather than the corpora's exact
+  // counts because the property is size-independent in this plan — see the header. The chunk carrying
+  // the term is inserted last, so its id is `n`.
   //
   // THE OTHER BRANCH, which item (b)'s prior expects and which this measurement did NOT find: the
   // non-matching rows coming back after the match at score `0`, which is what a `Seq Scan` returns.
