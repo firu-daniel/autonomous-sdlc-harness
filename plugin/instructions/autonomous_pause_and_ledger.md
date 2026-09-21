@@ -54,7 +54,7 @@ against a crash or pause.
 
 ### 1.3 Templates (fixed — the driving fork lays this down verbatim, substituting `<branch>`)
 
-**Task engine** (`/branch-start-plan-autonomous`):
+**Task engine** (`/autonomous-sdlc-harness:branch-start-plan-autonomous`):
 ```markdown
 # Flow progress — <branch>   (engine: task)
 
@@ -85,7 +85,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - [ ] D.      Branch statistics committed & pushed
 ```
 
-**User-review engine** (`/branch-start-user-review-fix-autonomous`), re-seeded per round `<n>`:
+**User-review engine** (`/autonomous-sdlc-harness:branch-start-user-review-fix-autonomous`), re-seeded per round `<n>`:
 ```markdown
 # Flow progress — <branch>   (engine: user_review, round <n>)
 
@@ -306,8 +306,8 @@ see the warning above). This makes every flip safe to re-run on a resumed run.
 4. Within the resume-point phase, the phase's **detail index** drives within-phase resume, exactly as the
    per-task / per-finding / per-test loops already do today (find the first `[ ]` item).
 5. `PAUSE_PROGRESS.md` (§2) is read only as a **human-readable hint / audit trail** — the ledger is
-   authoritative. This composes with the clarification park/resume (`Override 2(a)`): a top-level `answer_<n>.md`
-   is consumed as today; the ledger independently says which phase to be in.
+   authoritative. This composes with the clarification park/resume (`Override 2(a)`): the top-level answered pairs
+   the watcher resumed for are consumed as `Override 2(a)` states; the ledger independently says which phase to be in.
 
 This is what makes resume deterministic and answers "will the fork know where to resume" — it also removes
 the naive re-run of the non-checkbox review phases that the existing clarification park/resume otherwise
@@ -317,7 +317,7 @@ suffers.
 the ledger. The watcher (`<scripts_dir>/autonomous-watcher.sh`) only *names* it in the resume prose it emits
 into a relaunch prompt ("continue at the first phase entry still marked [ ] and SKIP every phase already
 marked [x]"), which stays true verbatim under `[-]`, since a `[-]` entry is neither of the two markers that
-sentence quantifies over. The branch-status command never opens the ledger at all. `/branch-resume` **does**
+sentence quantifies over. The branch-status command never opens the ledger at all. `/autonomous-sdlc-harness:branch-resume` **does**
 state the marker set in its own resume prose ("skipping every phase already marked `[x]` or `[-]`"), so it is
 edited whenever that set changes — it already carries the third marker. To re-derive which surfaces name a
 marker at all, grep the corpus for the literal `[-]`.
@@ -377,9 +377,9 @@ watcher-owned resume, and differ only in **who notices** and **who resumes**:
 
 | Trigger | Detected by | Path in | Auto-resumes? |
 |---|---|---|---|
-| Operator pause (`/branch-pause`) | the operator | drops `<state_dir>/PAUSE` → run honors it at a clean boundary (**§2.2**) | no — waits for `/branch-resume` |
+| Operator pause (`/autonomous-sdlc-harness:branch-pause`) | the operator | drops `<state_dir>/PAUSE` → run honors it at a clean boundary (**§2.2**) | no — waits for `/autonomous-sdlc-harness:branch-resume` |
 | **Usage limit** (5 h `five_hour` / weekly `seven_day`) | the **watcher**, parsing `rate_limit_event` off the run's `<branch>.stream.jsonl` | watcher drops `<state_dir>/PAUSE` → run honors it (**§2.2**) | **yes** — watcher records `usage_resume_at` and drops `RESUME` when the window resets |
-| **API overload** (`529` / `500` / `503`) | the **run itself**, from a failed Agent dispatch | run writes `PAUSE_ACK` directly — **no `PAUSE` request** (**§2.5**) | no — an outage has no predictable reset; waits for `/branch-resume` |
+| **API overload** (`529` / `500` / `503`) | the **run itself**, from a failed Agent dispatch | run writes `PAUSE_ACK` directly — **no `PAUSE` request** (**§2.5**) | no — an outage has no predictable reset; waits for `/autonomous-sdlc-harness:branch-resume` |
 
 So the usage gate is *not* a self-pause: it is watcher-detected and routed through the ordinary request/ack
 path. §2.5 is the only **run-initiated** pause, which is why it is the only one that writes `PAUSE_ACK` with no
@@ -394,10 +394,10 @@ what fixes classification**, so the run-side rule in §2.5 is required regardles
 ### 2.1 Files — FLAT under `<state_dir>/`, machine-local (never commit them)
 | File | Role | Written / removed by |
 |---|---|---|
-| `<state_dir>/PAUSE` | **request** (input): pause this run | user drops it (or `/branch-pause`); **watcher** removes on resume |
+| `<state_dir>/PAUSE` | **request** (input): pause this run | user drops it (or `/autonomous-sdlc-harness:branch-pause`); **watcher** removes on resume |
 | `<state_dir>/PAUSE_PROGRESS.md` | append-only pause note (phase, ledger state, next step) | driving fork appends; kept across resumes |
 | `<state_dir>/PAUSE_ACK` | **ack**: "I actually paused" (drives registry `paused`) | driving fork **writes** (never `touch` — §2.2b); also written *unrequested* on a §2.5 self-pause; **watcher** removes on resume |
-| `<state_dir>/RESUME` | **trigger** (input): resume this run | user drops it (or `/branch-resume`); **watcher** removes on resume |
+| `<state_dir>/RESUME` | **trigger** (input): resume this run | user drops it (or `/autonomous-sdlc-harness:branch-resume`); **watcher** removes on resume |
 
 They are **flat** under `<state_dir>/` — deliberately **never** a `<state_dir>/pause/` subdir, because on a
 case-insensitive filesystem (macOS default) `<state_dir>/PAUSE` and `<state_dir>/pause/` are the **same path**
@@ -503,7 +503,7 @@ elapses". A headless `claude -p` session is torn down when the turn ends: the pr
 monitor dies with it, and nothing re-invokes the run. That exit is `rc=0` with no `PAUSE_ACK`, so
 `classify_run_exit` stamps the run **`completed`** and fires a **success** notification for a run that never
 finished — the flow is silently abandoned mid-phase behind a green light, and because the registry says
-`completed` rather than `paused`, both `/branch-resume` and the watcher's `resume_paused_runs` (which filters
+`completed` rather than `paused`, both `/autonomous-sdlc-harness:branch-resume` and the watcher's `resume_paused_runs` (which filters
 on `status == "paused"`) refuse to touch it, so even a hand-dropped `RESUME` is ignored. Writing `PAUSE_ACK`
 and ending the session is the **only** durable way to survive an outage.
 
@@ -514,7 +514,7 @@ and ending the session is the **only** durable way to survive an outage.
       `#<n>`), and **the tracked-tree state** (see the dirty-tree rule below).
    b. Write `<state_dir>/PAUSE_ACK` (Write tool or `echo "" > <state_dir>/PAUSE_ACK`; **never** `touch` — §2.2b).
    c. Emit `PAUSED: <branch> — <phase> (API overload)` to the run log. The `(API overload)` suffix is what tells
-      this pause apart from a usage pause or a hand-dropped `/branch-pause` in the notification's log tail.
+      this pause apart from a usage pause or a hand-dropped `/autonomous-sdlc-harness:branch-pause` in the notification's log tail.
    d. **End the session** — truly stop and yield, exactly as §2.2d.
 
 **Dirty-tracked tree — this pause deliberately diverges from §2.2.** §2.2 *defers* a pause while a unit is
@@ -539,8 +539,8 @@ never marking a test passed on the strength of an uncommitted claim.
 **Who resumes.** Nothing auto-resumes an overload pause. An outage has no predictable reset the way the 5 h
 usage window does, so — unlike the usage auto-pause, which records `usage_resume_at` and drops `RESUME`
 itself — the run sits at registry `paused` at zero dispatch cost until a `<state_dir>/RESUME` lands. The operator
-resumes it with `/branch-resume` once the incident is clear. Because the status is genuinely `paused`, both
-`/branch-resume` and `resume_paused_runs` act on it normally, which is precisely what a falsely-`completed`
+resumes it with `/autonomous-sdlc-harness:branch-resume` once the incident is clear. Because the status is genuinely `paused`, both
+`/autonomous-sdlc-harness:branch-resume` and `resume_paused_runs` act on it normally, which is precisely what a falsely-`completed`
 run denies them.
 
 ---

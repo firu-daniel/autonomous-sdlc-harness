@@ -297,9 +297,7 @@ const GENERIC_STUB_NOTE = 'no dedicated skeleton';
  */
 const UNFILLED_MARKER = '<!-- harness:unfilled -->';
 const GUIDANCE_MARKER = '**What belongs here**';
-const ANALYZE_COMMAND = '/harness-analyze';
-/** The same command as a first message must spell it: that path meets no picker to fuzzy-match it. */
-const QUALIFIED_ANALYZE_COMMAND = '/autonomous-sdlc-harness:harness-analyze';
+const ANALYZE_COMMAND = '/autonomous-sdlc-harness:harness-analyze';
 
 /** How the reporter renders a step heading, and the whole of what delimits one block from the next. */
 const STEP_MARKER = '== ';
@@ -3062,7 +3060,7 @@ test('stack detection maps each seeded layout to its preset', async (t) => {
       }
       if (testCase.name === 'flat') {
         assert.match(stderr, /unrecognised layout/);
-        assert.match(stderr, /\/harness-analyze/);
+        assert.match(stderr, /\/autonomous-sdlc-harness:harness-analyze/);
         // The fallback row's own evidence string, which is what turns "nothing matched" into a
         // recorded fact instead of an absence a later reader has to guess at.
         assert.equal(config.detection.evidence, 'no signal matched');
@@ -3076,7 +3074,7 @@ const GAP_NOTE = 'covered by no layer';
 
 /** The two remedy leads, so a case can assert which arm composed the sentence it read. */
 const CONFIG_SET_LAYERS = 'config set layers';
-const ANALYZE_FIRST_REMEDY = 'run `/harness-analyze` in a session here and answer `skip`';
+const ANALYZE_FIRST_REMEDY = 'run `/autonomous-sdlc-harness:harness-analyze` in a session here and answer `skip`';
 
 /** A directory an adopter adds beside the ones the preset wrote rows for, per fixture shape. */
 const API_DRIFTED_DIR = 'src/handlers';
@@ -3095,7 +3093,7 @@ const GAP_LAYERED_DIRS = Object.freeze(['src/data', 'src/domain', 'src/presentat
  */
 const GAP_PUBSPEC = 'name: fixture\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n';
 
-/** The record `/harness-analyze layers` writes, in the shape `config set detection.review` takes. */
+/** The record `/autonomous-sdlc-harness:harness-analyze layers` writes, in the shape `config set detection.review` takes. */
 const REVIEW_VERDICT = 'considered-no-change';
 const REVIEW_DATE = '2026-08-01';
 
@@ -3189,7 +3187,7 @@ test('init names the source directories no layer covers, as doctor does', async 
     const dir = await fixtureFor(subtest, { files: { 'pubspec.yaml': GAP_PUBSPEC, 'lib/main.dart': 'void main() {}\n' } });
     await initOk(dir);
     // The two hand edits an adopter's own repository makes between runs: a directory added after the
-    // profile was written, and the record `/harness-analyze layers` leaves behind.
+    // profile was written, and the record `/autonomous-sdlc-harness:harness-analyze layers` leaves behind.
     mkdirSync(join(dir, FLUTTER_DRIFTED_DIR), { recursive: true });
     editConfig(dir, (config) => {
       config.detection.review = { verdict: REVIEW_VERDICT, at: REVIEW_DATE };
@@ -3211,7 +3209,7 @@ test('init names the source directories no layer covers, as doctor does', async 
       `the note tells an adopter with a recorded review to re-derive the same decision:\n${note}`,
     );
     assert.ok(
-      note.indexOf(CONFIG_SET_LAYERS) < note.indexOf('/harness-analyze', note.indexOf(GAP_NOTE)),
+      note.indexOf(CONFIG_SET_LAYERS) < note.indexOf('/autonomous-sdlc-harness:harness-analyze', note.indexOf(GAP_NOTE)),
       `the remedy does not lead with the route that needs no session:\n${note}`,
     );
   });
@@ -5115,7 +5113,7 @@ test('each conventions stub names the analyze target of the layer that points at
  *
  * The config schema's `name` pattern admits `project`, `conventions` and `layers`, so this is a
  * legal repository rather than a hypothetical one. The rule is that the reserved meaning wins and
- * the run says so: a footer reading `/harness-analyze project` would send the adopter at the
+ * the run says so: a footer reading `/autonomous-sdlc-harness:harness-analyze project` would send the adopter at the
  * always-loaded project file while promising this layer's document, which is the silent resolution
  * the collision rule exists to refuse.
  */
@@ -5319,6 +5317,27 @@ test('both banner wordings say where the command comes from and end on their own
 });
 
 /**
+ * The plugin name reaches the project file's command spellings through the `pluginName` render value,
+ * taken from `PLUGIN_NAME`, never as a literal typed into the template — so a token left unrendered is
+ * as much a fault as an unqualified spelling.
+ */
+test('the generated project file spells the harness commands qualified by the plugin name', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+
+  await initOk(dir);
+
+  const content = text(dir, CLAUDE_MD);
+  for (const spelling of [
+    '/autonomous-sdlc-harness:harness-analyze',
+    '/autonomous-sdlc-harness:branch-*',
+    '/autonomous-sdlc-harness:harness-*',
+  ]) {
+    assert.ok(content.includes(spelling), `${CLAUDE_MD} does not carry the qualified spelling ${spelling}`);
+  }
+  assert.ok(!content.includes('{{pluginName}}'), `${CLAUDE_MD} carries an unrendered {{pluginName}} token`);
+});
+
+/**
  * The two fill prompts, which are a cross-task interface rather than prose: they are what the analyze
  * pass classifies this file's two fillable sections — the project paragraph and the naming table — as
  * untouched or already written by, so each has to stay one line, appear once, and sit in its own
@@ -5486,7 +5505,7 @@ function pluginKey() {
 }
 
 /** The invocation the accepted arm prints for pasting, and the three fragments the unresolved-slug arm owes. */
-const PASTEABLE_INVOCATION = `claude "${QUALIFIED_ANALYZE_COMMAND}"`;
+const PASTEABLE_INVOCATION = `claude "${ANALYZE_COMMAND}"`;
 const MARKETPLACE_ADD_VERB = 'claude plugin marketplace add';
 const MARKETPLACE_FLAG = '--marketplace';
 const MARKETPLACES_KEY = 'extraKnownMarketplaces';

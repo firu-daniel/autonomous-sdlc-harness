@@ -68,7 +68,7 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Cross-repo tasks | One task split into per-repository plans with an explicit contract between them. | Open |
 | Watcher settings surface | A supported way to change the watcher's tunables instead of hand-editing a file. | Open |
 | Notifications settings command | A `notifications` command that manages the machine-local `push.env` and nothing else: `set-url` writes the endpoint, `show` names the file in effect and which keys are set without printing a value, and `test` sends one push. Today only `init --notifications` writes the file, and `init` skips a file that already exists, so a `push.env` that is there with both keys empty can be filled only by hand or by `init --force`, which regenerates every other file too. `doctor`'s warning about an empty file then names this command. | Open |
-| Per-run base branch | A run can start from a branch other than `defaultBranch` — a hotfix from `prod`, a fix on `release/x.y`. The config lists the allowed bases, the drop or `/branch-prompt` picks one, and the run records it; the worktree, the branch-review diff and the branch refresh all use that recorded base. Today every run is cut from `defaultBranch`, so the only way is to change the key for one run and change it back. | Open |
+| Per-run base branch | A run can start from a branch other than `defaultBranch` — a hotfix from `prod`, a fix on `release/x.y`. The config lists the allowed bases, the drop or `/autonomous-sdlc-harness:branch-prompt` picks one, and the run records it; the worktree, the branch-review diff and the branch refresh all use that recorded base. Today every run is cut from `defaultBranch`, so the only way is to change the key for one run and change it back. | Open |
 
 ## Planning artifacts and reporting
 
@@ -140,7 +140,7 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 
 | Feature | What it is | Status |
 |---|---|---|
-| README summary and checklist | Open with three plain lines — what it is, what you get — and a five-step checklist: install, `init`, `/harness-analyze` (in Claude Code, not the terminal), `doctor`, start the daemon. Caveats move below it. | Done |
+| README summary and checklist | Open with three plain lines — what it is, what you get — and a five-step checklist: install, `init`, `/autonomous-sdlc-harness:harness-analyze` (in Claude Code, not the terminal), `doctor`, start the daemon. Caveats move below it. | Done |
 | Compact the README | Cut the README to what a new reader needs: short sentences, one idea per paragraph, and the long measured caveats moved into the docs they belong to, linked rather than inlined. | Done |
 | Threat model | Name what the guards protect against (agent mistakes, protected branches — via the deny floor, `git push` on ask, per-agent tool allowlists and the `PreToolUse` guards) and what they don't: allowed commands such as tests, builds and the dev server run agent-written code with the user's full rights. Point to the sandbox or a container, and note the sandbox covers shell commands, not MCP servers or hooks. | Open |
 

@@ -37,6 +37,6 @@ The tokens below are neither Mode-contract **bindings** (this file declares none
 
    Dispatch with the first-write (pre-user-review) prompt above — the `statistics-plan-writer` agent owns the counting and the output format. Relay the returned `success_rate` / `statistics_file` to the user.
 
-   **If there ARE findings to fix, do NOT write statistics here.** The statistics write for a non-clean review happens after the fixes land — in the `/branch-implement-review` fix flow (`${CLAUDE_PLUGIN_ROOT}/instructions/code_review_fixes_instructions.md`), once every review item is `[x]`. Writing here as well would double-write.
+   **If there ARE findings to fix, do NOT write statistics here.** The statistics write for a non-clean review happens after the fixes land — in the `/autonomous-sdlc-harness:branch-implement-review` fix flow (`${CLAUDE_PLUGIN_ROOT}/instructions/code_review_fixes_instructions.md`), once every review item is `[x]`. Writing here as well would double-write.
 
-   Stop after this — fix implementation (when there are findings) happens in a separate session via `/branch-implement-review`.
+   Stop after this — fix implementation (when there are findings) happens in a separate session via `/autonomous-sdlc-harness:branch-implement-review`.

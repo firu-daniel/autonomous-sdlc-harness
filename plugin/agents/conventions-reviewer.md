@@ -1,6 +1,6 @@
 ---
 name: conventions-reviewer
-description: Accuracy-reviews ONE just-written conventions document against the source it describes on a document-pass dispatch, and reviews the conventions corpus as a whole against itself on a corpus-pass dispatch, at most twice per run. Read-only on both axes — edits nothing, writes no file, emits no verdict, returns its findings to the caller, and is never dispatched twice for the same document. Dispatched by the `/harness-analyze` setup command. Not for ad-hoc chats.
+description: Accuracy-reviews ONE just-written conventions document against the source it describes on a document-pass dispatch, and reviews the conventions corpus as a whole against itself on a corpus-pass dispatch, at most twice per run. Read-only on both axes — edits nothing, writes no file, emits no verdict, returns its findings to the caller, and is never dispatched twice for the same document. Dispatched by the `/autonomous-sdlc-harness:harness-analyze` setup command. Not for ad-hoc chats.
 tools: Read, Glob, Grep, Bash
 model: inherit
 ---

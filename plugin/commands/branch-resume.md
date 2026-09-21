@@ -29,12 +29,12 @@ run's **worktree**. On its next poll tick the watcher detects RESUME, clears the
 ledger (`<state_dir>/flow_progress/<branch>_progress.md`), skipping every phase already marked `[x]` or `[-]`. You do
 not re-launch. Wraps "Pause / resume a run" in `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`.
 
-Only a **paused** run can be resumed this way (a `parked` run resumes via `/branch-answer`; a `failed` /
+Only a **paused** run can be resumed this way (a `parked` run resumes via `/autonomous-sdlc-harness:branch-answer`; a `failed` /
 `completed` run is re-triggered by a fresh inbox drop). This command writes ONE marker file and reports —
 it must NOT modify `<scripts_dir>/autonomous-watcher.sh`, the engines, or the instruction forks.
 
-**Usage:** type `/branch-resume`, optionally targeting a branch with a leading `<branch>:` prefix, e.g.
-`/branch-resume feat_settings_search`.
+**Usage:** type `/autonomous-sdlc-harness:branch-resume`, optionally targeting a branch with a leading `<branch>:` prefix, e.g.
+`/autonomous-sdlc-harness:branch-resume feat_settings_search`.
 
 ## Steps
 
@@ -46,7 +46,7 @@ it must NOT modify `<scripts_dir>/autonomous-watcher.sh`, the engines, or the in
    Enumerate with `jq -r '.runs | to_entries[] | select(.value.status=="paused") | .key'`.
 3. **State check.** Read the target's status with `jq -r '.runs["<branch>"].status'`. If it is not
    `paused`, report the actual status and stop — RESUME only acts on a paused run (for a `parked` run use
-   `/branch-answer`; a `completed`/`failed` run needs a fresh inbox drop). If the **global kill switch**
+   `/autonomous-sdlc-harness:branch-answer`; a `completed`/`failed` run needs a fresh inbox drop). If the **global kill switch**
    `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` is present, warn that the watcher defers all resumes until it is
    removed.
 4. From the registry record for `<branch>`, read the `worktree` field. Write an empty

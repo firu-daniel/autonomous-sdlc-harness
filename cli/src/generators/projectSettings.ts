@@ -13,9 +13,10 @@
  *
  * ## Three non-obvious choices, and where each comes from
  *
- * 1. **The identity is resolved here, in one place, and the owner is parsed rather than written
- *    down.** {@link PLUGIN_NAME} and {@link MARKETPLACE_NAME} mirror the two manifests named on
- *    them, and their composite is the key `enabledPlugins` is measured to use. The owner half of
+ * 1. **The identity is composed here, in one place, and the owner is parsed rather than written
+ *    down.** {@link PLUGIN_NAME} comes from `core/pluginIdentity.ts`, which owns it for every area
+ *    that prints a plugin-qualified command; it and {@link MARKETPLACE_NAME} mirror the two
+ *    manifests named on them, and their composite is the key `enabledPlugins` is measured to use. The owner half of
  *    the slug comes from this CLI package's own `repository.url` — the one value that already has
  *    to be right for the package to be published — so no account name is hardcoded anywhere in
  *    the CLI, and a fork inherits its own.
@@ -62,20 +63,8 @@ import { join } from 'node:path';
 import { HarnessError, internal } from '../core/errors.js';
 import { isJsonObject, type JsonObject, type JsonValue } from '../core/json.js';
 import { packageRoot, parseRepoSlug } from '../core/paths.js';
+import { PLUGIN_NAME } from '../core/pluginIdentity.js';
 import type { WritePlan } from '../core/writer.js';
-
-/**
- * The plugin's name, mirroring `plugin/.claude-plugin/plugin.json`'s `name`.
- *
- * A second spelling of either manifest's name is the failure this constant exists to prevent: the
- * composite below is matched against the installed plugin by string, so a rename that reaches only
- * one of the two files produces a settings file that is valid, committed, and enables nothing.
- *
- * `claudeContext.ts` renders it into the task-offer template's `{{pluginName}}` for the same reason:
- * the `<plugin>:branch-prompt` skill that file's answer-1 path invokes is that name, and a shipped
- * literal there would survive a rename in every adopter's checkout with nothing reporting it.
- */
-export const PLUGIN_NAME = 'autonomous-sdlc-harness';
 
 /** The marketplace's name, mirroring `.claude-plugin/marketplace.json`'s `name`. */
 export const MARKETPLACE_NAME = 'autonomous-sdlc-harness';

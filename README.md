@@ -20,7 +20,7 @@ You install two things: a Claude Code plugin and a Node CLI.
 3. Teach it the codebase: type this in an **interactive** Claude Code session opened on the repository, not in the terminal (step C):
 
    ```
-   /harness-analyze
+   /autonomous-sdlc-harness:harness-analyze
    ```
 
 4. Verify (step D):
@@ -45,13 +45,12 @@ You install two things: a Claude Code plugin and a Node CLI.
   ```
 
 - **Contributors.** From a clone, the plugin installs as a directory source, and the built CLI is `node cli/dist/cli.js`. Both routes, and the scratch repository step 3 then needs, are [`docs/development.md`](docs/development.md) §1 and §5.
-- **Interactive only.** Step 3 answers `Unknown command` in a headless `claude -p` session. The measurement is [`docs/development.md`](docs/development.md) §6.
 - **The `.claude/` write wall.** Step 3 writes under `.claude/`, which no permission entry opens to an unattended run. There it exits `0` having written nothing, so run it supervised and check that the conventions documents changed. See [`docs/analyze.md`](docs/analyze.md) §3.
 
 ```mermaid
 flowchart TB
   subgraph ship["What ships"]
-    P["plugin/ — the Claude Code plugin<br/>agents · branch-* commands · /harness-analyze<br/>PreToolUse guard hooks · instruction cores and forks<br/>samples · helper scripts · flow documents"]
+    P["plugin/ — the Claude Code plugin<br/>agents · branch-* commands · /autonomous-sdlc-harness:harness-analyze<br/>PreToolUse guard hooks · instruction cores and forks<br/>samples · helper scripts · flow documents"]
     C["cli/ — the npm package autonomous-sdlc-harness<br/>init · doctor · config · daemon · docs"]
   end
   subgraph repo["An adopted repository, after init"]
@@ -65,8 +64,8 @@ flowchart TB
   C -->|writes| SCR
   C -->|writes| ST
   D["a file is dropped:<br/>stateDir/autonomous_inbox/&lt;branch&gt;_task_prompt.md"] --> W
-  ASK["an ordinary session: 'add a pin button'<br/>→ the offer → /branch-prompt"] --> D
-  N -.->|"writes it by hand, or through /branch-prompt"| D
+  ASK["an ordinary session: 'add a pin button'<br/>→ the offer → /autonomous-sdlc-harness:branch-prompt"] --> D
+  N -.->|"writes it by hand, or through /autonomous-sdlc-harness:branch-prompt"| D
   W["autonomous-watcher.sh — route by filename,<br/>prepare a working copy with create-worktree.sh,<br/>place and commit the prompt, launch headless,<br/>classify the exit"]
   W -->|"one -p session under the generated profile"| E
   P -.->|"supplies the command, agents and instructions the session runs"| E
@@ -77,7 +76,7 @@ flowchart TB
   B --> N
 ```
 
-**The plugin carries the process assets a run executes.** These are the instruction cores and their thin forks, the agent definitions, the `branch-*` slash commands, the `/harness-analyze` setup command, the guard hooks, the helper scripts and the sample fixtures. It also carries the two flow documents that describe the loop they run.
+**The plugin carries the process assets a run executes.** These are the instruction cores and their thin forks, the agent definitions, the `branch-*` slash commands, the `/autonomous-sdlc-harness:harness-analyze` setup command, the guard hooks, the helper scripts and the sample fixtures. It also carries the two flow documents that describe the loop they run.
 
 Every reference inside the plugin is written `${CLAUDE_PLUGIN_ROOT}/…`. It is the only form that resolves under both a git-sourced install and a directory-sourced one.
 
@@ -134,9 +133,13 @@ claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness
 npx autonomous-sdlc-harness init
 ```
 
-**C. Teach it the codebase — once per repo, LLM-assisted (checklist step 3).** It fills the conventions documents from the repository's real code. It *proposes* a layer-profile revision and never writes `harness.config.json` itself. To run one target at a time, type `/harness-analyze <target>`.
+**C. Teach it the codebase — once per repo, LLM-assisted (checklist step 3).** It fills the conventions documents from the repository's real code. It *proposes* a layer-profile revision and never writes `harness.config.json` itself. To run one target at a time, type this instead:
 
-This step is limited twice: see **Interactive only** and **The `.claude/` write wall** under **Before you run it**. How the offer to run it reaches a first session is [`docs/analyze.md`](docs/analyze.md) §9.
+```
+/autonomous-sdlc-harness:harness-analyze <target>
+```
+
+This step is limited once: see **The `.claude/` write wall** under **Before you run it**. How the offer to run it reaches a first session is [`docs/analyze.md`](docs/analyze.md) §9.
 
 **D. Verify (checklist step 4).** Reports everything wrong with a wired repository, not just the first thing. The exit status is the contract: `0` when no check failed, `1` when at least one did. The checks are [`docs/cli.md`](docs/cli.md) §7.
 
@@ -151,9 +154,15 @@ npx autonomous-sdlc-harness daemon install
 npx autonomous-sdlc-harness daemon start
 ```
 
-Then just ask for the change. An ordinary interactive session in this repository offers to run a change request autonomously, and on a yes it invokes `/branch-prompt` with the request. The offer is defined by two files `init` writes: [`cli/templates/claude/CLAUDE.md`](cli/templates/claude/CLAUDE.md) and [`cli/templates/claude/harness-task-offer.md`](cli/templates/claude/harness-task-offer.md).
+Then just ask for the change. An ordinary interactive session in this repository offers to run a change request autonomously, and on a yes it invokes `/autonomous-sdlc-harness:branch-prompt` with the request. The offer is defined by two files `init` writes: [`cli/templates/claude/CLAUDE.md`](cli/templates/claude/CLAUDE.md) and [`cli/templates/claude/harness-task-offer.md`](cli/templates/claude/harness-task-offer.md).
 
-Two direct routes reach the same drop: `/branch-prompt` itself, or a file named `<branch>_task_prompt.md` written into `<state_dir>/autonomous_inbox/` ([`docs/config.md`](docs/config.md) §3). The next poll pass acts on it, as [`docs/watcher.md`](docs/watcher.md) §1 describes.
+Two direct routes reach the same drop. The first is the command itself, typed into an interactive Claude Code session with the task description on the same line:
+
+```
+/autonomous-sdlc-harness:branch-prompt <task description>
+```
+
+The second is a file named `<branch>_task_prompt.md` written into `<state_dir>/autonomous_inbox/` ([`docs/config.md`](docs/config.md) §3). The next poll pass acts on either, as [`docs/watcher.md`](docs/watcher.md) §1 describes.
 
 **F. A teammate clones.** `git clone` → open the repository in Claude Code → **accept the workspace trust dialog** → the plugin resolves from the keys `init` committed into `.claude/settings.json`, with `/reload-plugins` for a session that was already open. Then verify:
 
@@ -205,7 +214,7 @@ What this harness does not do, in three groups: the shape of the system as desig
 
 ### Measured while building that evidence, and not fixed here
 
-- **Every documented `/autonomous-sdlc-harness:…` slash spelling is interactive-only.** The documented `/…harness-analyze` spellings work only in an interactive session; headless, both answer `Unknown command`. The measurement and its versions are in [`docs/development.md`](docs/development.md) §6, the paragraph opening "A third debt belongs to no row at all".
+- **Pasting a command with an argument is not yet measured.** Every command in this tree is documented with the plugin prefix, outside the carve-outs [`docs/development.md`](docs/development.md) §5 gate 6 names. Headless, on Claude Code 2.1.274, the prefixed spelling runs the command directly, and the unprefixed one reaches it only when the model chooses the `Skill` tool. What an interactive session does when a command carrying an argument is pasted and submitted was not measured, in either spelling. The measurement and its versions are in [`docs/development.md`](docs/development.md) §6, the paragraph opening "A third debt belongs to no row at all".
 - **Any write under a repository's own `.claude/` tree is a supervised action.** No permission entry opens it, and an unattended run exits 0 having written nothing. So run step C interactively and check that the conventions documents changed ([`docs/analyze.md`](docs/analyze.md) §3, "What it may write").
 - **A remote is a precondition for a run to *start*.** With no remote, a dropped prompt never starts, and a run started in place reports success while nothing is pushed. `doctor`'s `remote` check fails first ([`docs/cli.md`](docs/cli.md) §7, the `remote` check).
 - **Both `jj` shapes adopt.** A `jj git push` is not seen by the git pre-push hook. The measurement, its version and what `doctor` reports are in [`docs/cli.md`](docs/cli.md) §7, the `jj-repository` check.
@@ -213,7 +222,7 @@ What this harness does not do, in three groups: the shape of the system as desig
 ## Where to read more
 
 - [`docs/watcher.md`](docs/watcher.md) — the outer loop: what turns a dropped file into an unattended run, which script does what, the daemon's lifecycle, and the machine-level usage lane.
-- [`docs/analyze.md`](docs/analyze.md) — `/harness-analyze`'s decisions of record: what it fills in from real code, what it refuses to guess, and how the offer to run it reaches a session.
+- [`docs/analyze.md`](docs/analyze.md) — `/autonomous-sdlc-harness:harness-analyze`'s decisions of record: what it fills in from real code, what it refuses to guess, and how the offer to run it reaches a session.
 - [`docs/cli.md`](docs/cli.md) — the five subcommands, their flags and exit codes, the `init` re-run contract, the stack-detection table, and the failure modes the generated permission profile encodes.
 - [`docs/retrieval.md`](docs/retrieval.md) — RAG (docs retrieval): opt-in, local, not yet measured; its design, measured facts, what it buys and what it costs.
 - [`docs/config.md`](docs/config.md) — one row per configuration value and parameterization token, saying where each one's value comes from.

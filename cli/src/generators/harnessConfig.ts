@@ -398,7 +398,7 @@ function buildCommands(scriptsDir: string, raw: RawCommands): HarnessCommands {
  * on the same single-derivation rule the reporting lines in `detect/presets.ts` read it by, and the
  * written key means **this family derived at least one of the two required commands**.
  *
- * **No `review` key is written here.** It is the `/harness-analyze` command's to record through
+ * **No `review` key is written here.** It is the `/autonomous-sdlc-harness:harness-analyze` command's to record through
  * `config set detection.review`, and an empty object would read as a review that happened.
  *
  * **Written on the run that generates the file, and never refreshed by a plain re-run.**

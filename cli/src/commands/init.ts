@@ -7,7 +7,7 @@
  * reproducible: a second `init` over the same repository produces the same result, and an adopter can
  * re-derive the recorded preset from the detection table by hand. It is also why judgement-dependent
  * work — reading real code to refine a layer profile, filling a conventions stub — belongs to
- * `/harness-analyze` and is deliberately absent from this file. The offer to run it
+ * `/autonomous-sdlc-harness:harness-analyze` and is deliberately absent from this file. The offer to run it
  * ({@link resolveAnalyzeOffer}) adds no model call and no external process here: the answer's whole
  * material effect is which banner wording the generated always-loaded file carries and which closing
  * pointer this run prints.
@@ -114,6 +114,7 @@ import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
 import { insideRepo, packageRoot } from '../core/paths.js';
+import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
 import { askLine, askYesNo, canPrompt } from '../core/prompt.js';
 import { normalizeRepoDir, normalizeRepoPathStrict } from '../core/repoPaths.js';
 import { WritePlan } from '../core/writer.js';
@@ -150,7 +151,6 @@ import {
   MARKETPLACE_FLAG,
   MARKETPLACE_NAME,
   MARKETPLACES_KEY,
-  PLUGIN_NAME,
   SETTINGS_PATH,
   SLUG_SHAPE,
   type ProjectSettingsFlags,
@@ -179,29 +179,6 @@ const SUMMARY =
 
 /** The roadmap item this command belongs to, as the registry reports it. */
 const ROADMAP_ITEM = 13;
-
-/** The analyze command's own name, without the leading `/` and without the plugin prefix. */
-const ANALYZE_COMMAND_NAME = 'harness-analyze';
-
-/** The analyze command as a line addressing the adopter names it — step C of the install story. */
-const ANALYZE_COMMAND = `/${ANALYZE_COMMAND_NAME}`;
-
-/**
- * The same command, spelled as something **executed** rather than read.
- *
- * A session's `/` picker lists every command of this plugin under the plugin's own prefix and
- * fuzzy-matches a bare name onto it, so {@link ANALYZE_COMMAND} reaches the command wherever a
- * person types it into a session. A command passed as a session's **first message** — which is
- * what {@link ANALYZE_INVOCATION} does — meets no picker and is matched exactly, so the bare
- * form fails there with `Unknown command`. That the **prefixed** form succeeds where the bare
- * one fails is not established: the only measurement in this tree is headless and negative on
- * both spellings (`docs/development.md` → `## 6. The roadmap this tree defers to`, the
- * third-debt paragraph), and the interactive first-message form waits on the hand-run gate — if
- * that comes back negative the printed line is dropped rather than respelled (`docs/analyze.md`
- * §9). The prefix is taken from {@link PLUGIN_NAME}, which mirrors the plugin manifest, rather than
- * written out here.
- */
-const ANALYZE_COMMAND_QUALIFIED = `/${PLUGIN_NAME}:${ANALYZE_COMMAND_NAME}`;
 
 /**
  * How this CLI is typed, for every line that tells an adopter to run something — stated here once
@@ -269,7 +246,27 @@ const MCP_LAUNCHER = 'npx -y';
  */
 const AGENT_CLI = 'claude';
 const MARKETPLACE_ADD_COMMAND = `${AGENT_CLI} plugin marketplace add ${SLUG_SHAPE}`;
-const ANALYZE_INVOCATION = `${AGENT_CLI} "${ANALYZE_COMMAND_QUALIFIED}"`;
+/**
+ * Step C of the install story as a first message: {@link ANALYZE_COMMAND} is the one spelling both
+ * for the name a person types into an open session and for this. The interactive first-message form
+ * waits on the hand-run gate — if that comes back negative the printed line is dropped rather than
+ * respelled (`docs/analyze.md` §9).
+ *
+ * Headless first-message leg, re-measured: Claude Code 2.1.274, from this checkout with the plugin
+ * enabled; the `system`/`init` event of both runs listed `autonomous-sdlc-harness:harness-analyze`
+ * among its slash commands and did not list `harness-analyze`.
+ * - `claude -p "/autonomous-sdlc-harness:harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
+ *   exit 1; no `Skill` call, the first tool call was the command's own `Bash` read of the
+ *   unfilled-stub markers; final `result` event `is_error: true`, `result: null`, verbatim message
+ *   `Reached maximum number of turns (2)`.
+ * - `claude -p "/harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`:
+ *   exit 1; the first tool call was `Skill` naming `autonomous-sdlc-harness:harness-analyze`, which
+ *   loaded the command; final `result` event `is_error: true`, `result: null`, verbatim message
+ *   `Reached maximum number of turns (2)`.
+ * Both exits are the two-turn cap, not a resolution failure: the prefixed spelling ran the command
+ * directly, and the bare one reached it only through the model choosing the `Skill` tool.
+ */
+const ANALYZE_INVOCATION = `${AGENT_CLI} "${ANALYZE_COMMAND}"`;
 
 /** The verb that applies a layer-profile revision — the one writer of `layers[]` (`docs/analyze.md` §3). */
 const CONFIG_SET_LAYERS_COMMAND = `${CLI} config set layers`;
@@ -2537,12 +2534,9 @@ function analyzeRecordSentence(
  * rather than a fifth thing to do. It names {@link AGENT_CLI} directly where the generated watcher
  * reaches the same binary through `${HARNESS_AGENT_CLI:-claude}`
  * (`templates/scripts/autonomous-watcher.sh`) — an override that belongs to a script's own
- * environment and would mean nothing on a line printed for a person to paste. It names
- * {@link ANALYZE_COMMAND_QUALIFIED} where step 2 above it names {@link ANALYZE_COMMAND}, and the
- * difference is the two paths rather than an inconsistency: step 2 is a name to type into a session,
- * whose picker resolves the bare form, while this line is a first message, which is matched exactly —
- * the introducing sentence says so, because a report that showed both spellings and explained neither
- * would read as a typo. It is withheld wherever
+ * environment and would mean nothing on a line printed for a person to paste. It names the same
+ * {@link ANALYZE_COMMAND} spelling step 2 above it names, so the introducing sentence gives no
+ * spelling reason. It is withheld wherever
  * it would contradict the report around it: on the declined arm, whose answer the same step just
  * quoted; on the skip branch, where there is nothing to fill; and under `--dry-run`, which wired
  * nothing to run it against. On the unresolved-slug arm it is **printed but qualified** rather than
@@ -2550,7 +2544,7 @@ function analyzeRecordSentence(
  * published — because step 1 has just said the session resolves the plugin only once one of the two
  * routes it names is taken, and handing the line over without that precondition would contradict it.
  * **The outcome is stated as intended on both arms**: whether the prefixed first-message form
- * succeeds is not established ({@link ANALYZE_COMMAND_QUALIFIED}), so the line an adopter acts on
+ * succeeds is not established ({@link ANALYZE_INVOCATION}), so the line an adopter acts on
  * immediately names the typed route as the measured one instead of asserting its own.
  *
  * **One blank line between the numbered steps, and none before that paste line.** Each step is a
@@ -2629,16 +2623,14 @@ function reportNextSteps(
   // The sentence introducing the line carries the precondition step 1 just stated. On the unresolved
   // arm, handing the line over without that precondition would contradict the step above it, which
   // has said the session resolves the plugin only once one of the two routes it names is taken.
-  const pasteReason =
-    " It is spelled with the plugin prefix because a first message is matched exactly, where a session's command picker matches the name above.";
-  // Whether the prefixed first message succeeds is unmeasured, so the outcome is named as intended
-  // and the measured route is pointed at ({@link ANALYZE_COMMAND_QUALIFIED}, `docs/analyze.md` §9).
+  // The name typed into an open session is the measured route; the interactive first message is not,
+  // so the outcome is named as intended ({@link ANALYZE_INVOCATION}, `docs/analyze.md` §9).
   const pasteUnconfirmed =
     ' That first-message form is not confirmed on the version measured here; the name above, typed into an open session, is the route that is.';
   const pasteIntro =
     wiring.marketplaceSlug === undefined
-      ? ` Once the plugin resolves — step 1 names both routes — paste the line below at this repository's root: it is meant to start a session with that command already running.${pasteReason}${pasteUnconfirmed}`
-      : ` Paste the line below at this repository's root: it is meant to start a session with that command already running.${pasteReason}${pasteUnconfirmed}`;
+      ? ` Once the plugin resolves — step 1 names both routes — paste the line below at this repository's root: it is meant to start a session with that command already running.${pasteUnconfirmed}`
+      : ` Paste the line below at this repository's root: it is meant to start a session with that command already running.${pasteUnconfirmed}`;
 
   ctx.report.step('next');
   ctx.report.info(`1. ${wired}`);
