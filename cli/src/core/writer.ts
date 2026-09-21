@@ -9,12 +9,29 @@
  * file it is writing out of the table below; it does not invent one, and it never calls `fs`
  * itself.
  *
- * **One artifact is deliberately outside this engine**, and it is machine state rather than an
+ * **Three writes are deliberately outside this engine.** The first is machine state rather than an
  * adopter's file: the repository registry `machine/registry.ts` owns, which `daemon install`
- * rewrites in place. Its header states why none of the four policies below fits it. The daemon
+ * rewrites in place. Its header states why none of the four policies below fits it. The
+ * docs-retrieval runtime and model cache under `machineCacheDir()/retrieval/` are machine state of
+ * the same class, outside the repository, with both paths owned by `cli/src/retrieval/runtime.ts`:
+ * the runtime installation is created by `cli/src/retrieval/setup.ts` → `setUpRuntime` through
+ * `npm`, and the model cache is written by `cli/src/retrieval/models.ts` → `fetchModels` through
+ * Transformers.js, in the `docs fetch-models` child that `setup.ts` → `setUpModels` spawns. The daemon
  * unit and the push-notification settings file *are* on a plan, under `allowOutsideRepo` — they
  * are create-if-absent artifacts an operator goes on to edit, which is exactly what this engine
- * is for.
+ * is for. The second is an exception to this engine's monopoly on writing into an adopting
+ * repository: the per-checkout docs-retrieval index under `<stateDir>/docs_index/`
+ * (`INDEX_DIR_NAME`), a derived, gitignored, always-rebuildable cache that
+ * `cli/src/retrieval/store.ts` → `openPgliteStore` creates and PGlite persists into at query time,
+ * never an `init` artifact. `cli/src/retrieval/store.ts` is the **one** module that makes that write
+ * and `<stateDir>/docs_index/` the **one** path for it. The third is the `search_docs` query log,
+ * whose path is the **operator's own** rather than this CLI's choice: it is whatever the environment
+ * variable `cli/src/retrieval/queryLog.ts` owns (`RETRIEVAL_LOG_ENV`) names, so it may land inside or
+ * outside the target repository and **no policy in the table below applies to it**.
+ * `cli/src/retrieval/queryLog.ts` is the **one** module that makes that write, nothing is opened or
+ * created when the variable is unset, and it is no `init` artifact.
+ * `.claude/context/conventions.md` → `### Where a new responsibility goes` records neither the index
+ * nor the query log; both are raised for a supervised amendment.
  *
  * ## The re-run contract, per artifact
  *

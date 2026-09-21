@@ -78,6 +78,7 @@ Each row stands on its own; join it to a register entry by token name.
 | `<scripts_dir>` | config value | `scriptsDir` |
 | `<layer_path_map>` | config value | `layers[].path` together with `layers[].conventions` |
 | `<docs_root>` | config value | `docs.root` (read only when `phases.docs` is true) |
+| `<docs_retrieval>` | config value | `docs.retrieval` (read only when `phases.docs` is true) |
 | `<githooks_dir>` | config value | `githooksDir` |
 | `<push_env_path>` | config value | `pushEnvPath` |
 | `<reference_toolchain_path>` | machine-local, per user | plugin `userConfig` key `reference_toolchain_path` — still **reserved**; supplied meanwhile by `init --reference-toolchain-path`, read only when `phases.parity` is true |
@@ -145,6 +146,7 @@ One row per key; each row stands on its own. The five required top-level keys ar
 | `qa.credentialsPath` | string | — | Repo-relative path to the test-account credentials file. Keep that file out of version control; only its location is configured. |
 | `qa.authProvider` | string | — | Which sign-in route the phase takes to reach an authenticated screen, when the application offers more than one. |
 | `docs.root` | string | — | Repo-relative directory holding the maintained reference documents the docs phase keeps current. |
+| `docs.retrieval` | boolean | `false` | Turns on RAG (docs retrieval): a local search tool over `docs.root` and the conventions documents, served over MCP to the ten plan-writer and reviewer agents. **Legal only while `phases.docs` is true**: the schema, the `config` command's `set` and `doctor` all refuse it otherwise. Off by default and opt-in, and **not yet measured** against index-first navigation — that evaluation is the follow-up branch `feat_docs_retrieval_eval`, under the roadmap row *Docs-catalog retrieval*. Turning it on after adoption takes a configuration change and then a forced re-run, because the permission profile is `create-if-absent` and a plain re-run keeps the one without the retrieval entries; the two commands are the fenced block in [`cli.md`](cli.md) §2, `### The interaction rule`. The design is [`retrieval.md`](retrieval.md). |
 | `parity.referenceName` | string | — | Human-readable name of the implementation treated as the source of truth, as it should read in a review finding. |
 | `parity.referenceImplPath` | string | — | Absolute or repo-relative path to a checkout of that reference implementation, so a reviewer can cite the exact source it compared against. |
 | `parity.toolchainCommands` | string[] | — | Commands belonging to the reference implementation's own toolchain. Listed apart because they may be unavailable in an isolated working copy, where the phase reports them deferred instead of failing. |

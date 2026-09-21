@@ -6,6 +6,15 @@
  * engine's action log and the human-readable log are the same log, and the output is
  * **plain ASCII** — no colour escapes and no emoji — so a test can diff it verbatim.
  *
+ * **One named exception: `docs serve`.** While that sub-verb runs, the process's stdout belongs to
+ * the MCP stdio transport `cli/src/retrieval/server.ts` → `serveDocs` starts, and to nothing else;
+ * that module is the **one** place in the package where a transport writes to stdout. This
+ * `Reporter` still carries every narration and warning line of the sub-verb, on stderr only
+ * (`warn` / `fail`). `--quiet` and the plain-ASCII guarantee do not apply to the protocol frames,
+ * which are JSON-RPC rather than output a test diffs. `.claude/context/conventions.md` →
+ * `## Output, logging and errors` does not yet record this exception; it is raised for a supervised
+ * amendment.
+ *
  * Markers: `+` something was written (or would be), `~` an existing file was merged into,
  * `=` an existing file was left as it stood, `!` needs attention (a warning or a failure).
  *

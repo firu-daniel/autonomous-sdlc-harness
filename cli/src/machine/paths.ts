@@ -1,10 +1,10 @@
 /**
- * The machine-local directories this CLI addresses, resolved once: its own two, and the agent
+ * The machine-local directories this CLI addresses, resolved once: its own three, and the agent
  * runner's configuration home.
  *
  * **The rule this module exists to enforce: the environment variables that move any of them are read
  * here and nowhere else in the CLI.**
- * `grep -rn 'XDG_STATE_HOME\|XDG_CONFIG_HOME\|CLAUDE_CONFIG_DIR' cli/src` answers with this file
+ * `grep -rn 'XDG_STATE_HOME\|XDG_CONFIG_HOME\|XDG_CACHE_HOME\|CLAUDE_CONFIG_DIR' cli/src` answers with this file
  * alone, which is the property that makes the resolution correctable in one place — a second reader
  * would be a second answer, and the two would disagree exactly on the machines whose environment is
  * not the default one.
@@ -21,7 +21,10 @@
  *    `XDG_STATE_HOME`, falls back to `$HOME/.local/state` when it is **unset or empty**, strips one
  *    trailing slash, and appends {@link MACHINE_DIR_NAME}. So does {@link resolveMachineDir}, with
  *    `homeRoot()` — `core/paths.ts`'s single definition of the account home — standing in for
- *    `$HOME`. A variable holding a relative path yields a relative directory here exactly as it
+ *    `$HOME`. `hr_cache_dir()` in `cli/templates/scripts/lib/harness-run-lib.sh` mirrors
+ *    {@link machineCacheDir} the same way, over `XDG_CACHE_HOME` and `$HOME/.cache`: the retrieval
+ *    launcher resolves the runtime it `exec`s through it, so a change to either resolution is an
+ *    edit to both. A variable holding a relative path yields a relative directory here exactly as it
  *    does there. Only a target on a `WritePlan` is refused for that, and of these two directories
  *    the one that goes on a plan is {@link machineConfigDir} — `generators/notifications.ts`
  *    enqueues it under `allowOutsideRepo`. `machine/registry.ts` writes {@link machineStateDir}
@@ -38,7 +41,7 @@
 import { homeRoot } from '../core/paths.js';
 
 /**
- * The one directory name both machine-local trees carry, under whichever base applies.
+ * The one directory name every machine-local tree of this CLI carries, under whichever base applies.
  *
  * It is the package name, and it is shared with the shell half's `hr_lane_dir`. Changing it here
  * without changing it there would leave two components each believing they hold the machine.
@@ -90,6 +93,16 @@ export function machineStateDir(): string {
  */
 export function machineConfigDir(): string {
   return resolveMachineDir('XDG_CONFIG_HOME', '.config');
+}
+
+/**
+ * The machine-local **cache** directory — `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness`.
+ *
+ * What lives in it is re-creatable and shared by every repository on the machine: the docs-retrieval
+ * runtime installation and its model weights, whose paths `retrieval/runtime.ts` owns.
+ */
+export function machineCacheDir(): string {
+  return resolveMachineDir('XDG_CACHE_HOME', '.cache');
 }
 
 /**

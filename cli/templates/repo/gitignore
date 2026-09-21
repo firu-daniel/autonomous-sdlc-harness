@@ -59,3 +59,4 @@
 # slash anchors it at the repository root, the only place the configuration is written.
 /{{configBackupFile}}
 {{qaBrowserArtifacts}}
+{{docsRetrievalIndex}}
