@@ -1,0 +1,19 @@
+### 3. `## Threshold calibration` presents abstention on every negative query as the move's outcome, when the pre-move run already abstained on all of them
+
+**Site.** `docs/retrieval-eval-results.md` → `## Threshold calibration` → `### What the move cost`, the paragraph beginning **The move costs no positive.** — specifically its sentence *"After the move the arm abstains on **every** negative query: 3 of 3 on `fixture-catalog`, 5 of 5 on `self-docs`."*
+
+**The problem.** That sentence sits inside a paragraph about what the move bought and reads as the move's gain. It is not one. The section's own quoted distribution table, two subsections above, records **every** negative query on both corpora as `null — censored, < 0.30`, and the paragraph introducing that table states what `null` means: *"`null` means the query abstained at `0.3`, so its score is censored: known only to be `< 0.30`, never observed."* So all 8 negatives abstained **before** the move as well.
+
+Put the paragraph's two halves together and the measured effect of moving `ABSTAIN_SCORE_THRESHOLD` from `0.3` to `0.32` on both committed corpora is **nil**: recall@1/@3/@5 and MRR unchanged, the same 5 positives abstaining, and the same 8 of 8 negatives abstaining. What the move actually buys is unobservable in this run and is worth one clause rather than being left as an inference: a negative query scoring in `[0.30, 0.32)` abstains under the new value, and because every negative here is censored below `0.30` rather than measured, no query in this run is such a query.
+
+**Who reaches the wrong answer, and what it is.** A maintainer re-opening the calibration — which `### The limit on this calibration` explicitly invites, *"a real-catalog arm E whose negative queries return scores at or above `0.32` … reopens the choice"* — reads `### What the move cost` and concludes the move improved abstention on negatives to 3 of 3 and 5 of 5 from something worse. It did not: the negative column was already complete at `0.3`, so nothing in this subsection favours `0.32` over `0.3`, and the only basis for the value is the midpoint derivation in `### The two bounds that fixed the choice`. A reader who takes the negative sentence as evidence will defend `0.32` on a gain that was never measured.
+
+**The proof.** All within the one section, no run needed:
+
+- `### The pre-calibration distributions, quoted` — all eight `negative` rows across both corpora read `null — censored, < 0.30`, and the paragraph above the table defines `null` as *"the query abstained at `0.3`"*.
+- `### What the move cost` — the table reports arm E recall@5 identical at `0.3` and `0.32` on both corpora (`0.667` and `0.600`), and the paragraph states *"the same 5 positives abstain at both values"*.
+- `### The two bounds that fixed the choice` — the interval `[0.30, 0.33899036049842834]` and its midpoint `0.3195 → 0.32`, which is the whole of the positive case for the value.
+
+**The fix.** One sentence replaced, in a hand-written section below `<!-- eval:generated:end -->`; no figure changes and no run is needed.
+
+- [ ] In `### What the move cost`, replace the sentence *"After the move the arm abstains on **every** negative query: 3 of 3 on `fixture-catalog`, 5 of 5 on `self-docs`."* with: *"**And the move buys no measured negative either.** The arm abstains on every negative query — 3 of 3 on `fixture-catalog`, 5 of 5 on `self-docs` — and it did so at `0.3` as well, since every negative is `null` in the distributions quoted above, which is what abstaining at `0.3` renders as. So on these two corpora the move changes no measured outcome at all. What it buys is margin this run could not observe: a negative scoring in `[0.30, 0.32)` abstains under the new value, and every negative here is censored below `0.30` rather than measured, so none of them is such a query. The case for `0.32` over `0.3` is the interval midpoint above and nothing in this subsection."*

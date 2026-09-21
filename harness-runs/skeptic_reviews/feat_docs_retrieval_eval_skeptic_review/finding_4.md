@@ -1,0 +1,25 @@
+### 4. Arm A's task text shows both answer forms inside a code fence, and nothing in the pipeline handles one
+
+**Site.** `evals/docs-retrieval/arm-a/agent-task.md` — the *"Worked example"* block and the *"answer with the single word"* block, both of which render the answer form inside a triple-backtick fence; read against `evals/docs-retrieval/arm-a/run-arm-a.sh`'s `refs` extraction (`jq -R -s 'split("\n") | map(sub(…)) | map(select(. != ""))'`) and `evals/docs-retrieval/arm-a/score-transcript.mjs` → `scoreTranscript`.
+
+**The problem.** The task text instructs the agent to *"Answer with **nothing but section references**, one per line"* — and then shows it, twice, what such an answer looks like: a fenced block containing `docs/webhooks.md#signature-verification`, and a fenced block containing `none`. Those are the only two renderings of the answer the prompt ever shows.
+
+Nothing downstream handles a fence. `run-arm-a.sh` takes the agent's `.result` verbatim, splits it on newlines, trims each line and drops the empty ones — its own header states the contract, *"`refs` is the agent's answer split into lines, in the order it gave them, with nothing repaired"*. `scoreTranscript` then normalises each entry with `trim`, a leading `./` and a trailing slash, and deliberately nothing else: *"a misspelled or invented ref is a miss, which is the measurement."* So an answer wrapped in a fence arrives as refs, with the fence delimiters among them:
+
+- A fenced list of five references scores as **seven** refs, two of which (` ``` `) can never match a label. Because `hits[].score` is `1 / (position + 1)`, the leading fence line takes rank 1, pushing every real reference down one rank — so MRR is depressed on every query and recall@1 is lost on all of them.
+- A fenced `none` is **not read as an abstention**: `scoreTranscript`'s test is `refs.length === 0 || (refs.length === 1 && refs[0].toLowerCase() === 'none')`, and `[" ``` ", "none", " ``` "]` satisfies neither. Its own header states the consequence — *"A `none` sitting among other refs is left as a ref and misses"* — so arm A's abstention column, the one column the results file reports arm E winning on, would read `0` for a run that abstained correctly every time.
+
+**Why it is reachable, and why it is not a Must Fix.** Arm A is deliberately unrun on this branch, so nothing has shipped wrong yet; the exposure is the hand run `docs/retrieval-eval.md` → `## Running arm A by hand` sends an operator into, at real token cost, across five repetitions. That procedure's **Before spending tokens** list covers the flag spellings and three cheap `REPRO` checks and does not cover the answer's shape, and the transcript form is only inspectable after the tokens are spent. I have not measured what the agent CLI actually emits — what I have proven is that the prompt's only two worked examples are fenced, and that a fenced answer is silently mis-scored rather than refused.
+
+**The proof.**
+
+- `evals/docs-retrieval/arm-a/agent-task.md`: the two fenced blocks, and the instruction *"one per line … a line that is not a reference invalidates the answer"* — which states the requirement but is not what the examples show.
+- `evals/docs-retrieval/arm-a/run-arm-a.sh`, the `refs=` line: `map(select(. != ""))` is the only filter, so a fence delimiter survives.
+- `evals/docs-retrieval/arm-a/score-transcript.mjs`: `normalizeRef` (trim, `./`, trailing slash), the `abstention` expression, and the header sentence *"A `none` sitting *among* other refs is left as a ref and misses, because an answer that both abstains and does not is not an abstention to be inferred."*
+- `evals/docs-retrieval/arm-a/sample-transcript.json` carries bare refs, so the fixture does not exercise the fenced shape either.
+
+**The fix.** Tighten the prompt rather than the extraction — the extraction's no-repair rule is stated in three places and is the measurement's own contract, so it stays.
+
+- [ ] In `evals/docs-retrieval/arm-a/agent-task.md`, after the sentence *"Write no prose, no preamble, no numbering and no explanation — a line that is not a reference invalidates the answer."*, add: *"Do not wrap the answer in a code fence. The blocks below show what one reference and the no-answer word look like; your own answer is bare lines with no ``` around them, because a fence line is scored as a reference and misses."*
+- [ ] In the same file, after the fenced `none` block's following sentence (*"A wrong reference and a guessed reference both score as misses, so `none` is the correct answer whenever the catalog does not cover the question."*), add: *"Answer it as the bare word on its own line, with nothing else — not inside a fence."*
+- [ ] In `docs/retrieval-eval.md` → `## Running arm A by hand` → **Before spending tokens**, add one item to the cheap-checks sentence: *"and, after the first query alone, that the transcript's first record carries bare `path#anchor` strings in its `refs` array and no ``` entry — a fenced answer is scored as references and silently costs every rank."*
