@@ -524,10 +524,11 @@ export function renderQueryLogSection(result) {
     `rows are read as server-side against library-level and never as a before/after pair. Host \`${result.host}\`, Node \`${result.node}\`,`,
     `${result.ranAt}. The pass is \`runQueryLogPass\` in \`evals/docs-retrieval/query-log-pass.mjs\`, driven`,
     `through a launcher under the run's scratch directory that calls it with the eval's own parsed`,
-    `arguments for this corpus:`,
+    `arguments for this corpus, whose body is \`docs/retrieval-eval.md\` → \`### The cold-build and`,
+    `query-log launchers\`:`,
     ``,
     '```',
-    `bash scripts/scratch-run.sh harness-runs/scratch/<launcher>.mjs`,
+    `bash scripts/scratch-run.sh harness-runs/scratch/query-log-pass.mjs`,
     '```',
   ]);
 }

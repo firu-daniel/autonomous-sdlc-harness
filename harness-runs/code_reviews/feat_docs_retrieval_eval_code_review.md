@@ -18,7 +18,7 @@
 8. [x] **Finding 10** — Finish `CHUNKS_TABLE` across the store's statements _(layer: cli)_
 9. [x] **Finding 9** — Cite the measured index size in `## What it costs` _(layer: general)_
 10. [x] **Finding 2** — Replace the recorded hostname with the platform, in code and in the eight committed sites _(layer: general)_
-11. [ ] **Finding 3** — Ship the two missing launcher bodies _(layer: general)_
+11. [x] **Finding 3** — Ship the two missing launcher bodies _(layer: general)_
 
 ## Must Fix
 

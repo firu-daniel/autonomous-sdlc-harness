@@ -119,6 +119,54 @@ comparing two runs. This repository takes the second route deliberately:
 corpus is stamped with the snapshot of the run that took it, and why **two figures carrying different
 stamps are not a before/after pair** — part of the difference is the corpus, not the change under test.
 
+### The cold-build and query-log launchers
+
+Two passes are not entered through `run.mjs` and carry no flag of their own: each is an exported
+function a launcher calls directly, filling one hand-written section of
+`docs/retrieval-eval-results.md` — `## Cold build and index size` and `## The query-log pass`. Both
+launchers live under `harness-runs/scratch/` and are run exactly like `eval.mjs` above.
+
+**The cold build.** `measureColdBuild` takes `{ repoRoot, corpus, dataDir }` and returns an object
+rather than printing one, so the launcher resolves the repo root through the eval's own `parseArgs`
+and names the corpus and the index directory the recorded figures were taken with. Create
+`harness-runs/scratch/cold-build.mjs`:
+
+```
+import { parseArgs } from '../../evals/docs-retrieval/args.mjs';
+import { measureColdBuild } from '../../evals/docs-retrieval/cold-build.mjs';
+const { repo } = parseArgs([]);
+console.log(JSON.stringify(await measureColdBuild({ repoRoot: repo, corpus: 'self-docs', dataDir: `${repo}/harness-runs/scratch/docs_index` }), null, 2));
+```
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/cold-build.mjs
+```
+
+**One measurement per process**, which is why the launcher calls it once and why three runs means
+three invocations of that command: the returned model-load figure is a per-process load, and a second
+`resolveModels` in the same process would time a load that had already happened.
+`dataDir` is required — there is nothing to size about an in-memory store — and it is **removed**
+before the build starts, so it names a scratch path and never an index worth keeping.
+
+**The query-log pass.** `runQueryLogPass` takes the same parsed argument surface and returns a result
+object; `renderQueryLogSection` is what turns that object into the section's prose. Create
+`harness-runs/scratch/query-log-pass.mjs`:
+
+```
+import { parseArgs } from '../../evals/docs-retrieval/args.mjs';
+import { renderQueryLogSection, runQueryLogPass } from '../../evals/docs-retrieval/query-log-pass.mjs';
+console.log(renderQueryLogSection(await runQueryLogPass(parseArgs(['--corpus', 'self-docs']))));
+```
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/query-log-pass.mjs
+```
+
+The pass takes no `--out` and writes into no document: its stdout is pasted into
+`docs/retrieval-eval-results.md` under `## The query-log pass`, which sits **below** the
+`<!-- eval:generated:end -->` marker. Never inside the generated region — that region has exactly one
+writer, and the next `--out` run destroys anything else put there.
+
 ### Arm A's row is generated, never typed
 
 `--transcript <path>` names an arm A transcript produced by a hand run. `evals/docs-retrieval/run.mjs`

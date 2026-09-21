@@ -4716,7 +4716,9 @@ is run the 60-second conclusion rests on 177 chunks of this repository's own `do
 
 **How to reproduce it.** The measurement is `measureColdBuild` in `evals/docs-retrieval/cold-build.mjs`,
 committed so it is re-runnable, driven once per process by a launcher under the run's scratch directory
-that calls it for this corpus and that index directory:
+that calls it for this corpus and that index directory. The launcher's body is
+`docs/retrieval-eval.md` → `### The cold-build and query-log launchers`, which also states why three
+runs means three invocations of this command:
 
 ```
 bash scripts/scratch-run.sh harness-runs/scratch/cold-build.mjs
@@ -4801,10 +4803,11 @@ library-level arm E above was taken at `{ files: 13, chunks: 173 }` under thresh
 against library-level and never as a before/after pair. Host `darwin 24.6.0`, Node
 `v20.19.5`, 2026-09-21T18:18:03.552Z. The pass is `runQueryLogPass` in
 `evals/docs-retrieval/query-log-pass.mjs`, driven through a launcher under the run's scratch
-directory that calls it with the eval's own parsed arguments for this corpus:
+directory that calls it with the eval's own parsed arguments for this corpus, whose body is
+`docs/retrieval-eval.md` → `### The cold-build and query-log launchers`:
 
 ```
-bash scripts/scratch-run.sh harness-runs/scratch/<launcher>.mjs
+bash scripts/scratch-run.sh harness-runs/scratch/query-log-pass.mjs
 ```
 
 **Repeatability, and why the gap above is a ceiling rather than a measurement.** The pass ran five
