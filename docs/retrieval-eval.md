@@ -163,7 +163,10 @@ bash scripts/scratch-run.sh harness-runs/scratch/query-log-pass.mjs
 ```
 
 The pass takes no `--out` and writes into no document: its stdout is pasted into
-`docs/retrieval-eval-results.md` under `## The query-log pass`, which sits **below** the
+`docs/retrieval-eval-results.md` under `## The query-log pass`. That section quotes the generated
+region's arm E row, which `runQueryLogPass` reads live, so an `--out` run that regenerates the region
+leaves the quotation describing bytes that are gone — re-run this pass after the region, never before
+it, or restate the quoted row by hand. The section sits **below** the
 `<!-- eval:generated:end -->` marker. Never inside the generated region — that region has exactly one
 writer, and the next `--out` run destroys anything else put there.
 

@@ -4779,7 +4779,8 @@ read out of this file's generated region for the same corpus.
 | --- | --- | --- |
 | Server-side `durationMs`, from the log | 819.0 | 956.0 |
 | Client-side MCP round trip | 822.3 | 959.2 |
-| Library-level arm E (`fused-rerank`), `docs/retrieval-eval-results.md` generated region | 600.7 | 748.2 |
+| Library-level arm E (`fused-rerank`), `docs/retrieval-eval-results.md` generated region | 1145.3 | 1263.5 |
+| Library-level arm E as the region stood when this pass ran, since regenerated | 600.7 | 748.2 |
 | Client-side round trip of the `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` unset leg, for comparison | 873.2 | 908.8 |
 
 **What the server answered, read back out of the JSONL.** 13 of the 20 records carry `abstained: false`
@@ -4787,14 +4788,14 @@ with `hits` in {5} and a `bestScore` no lower than `0.33899036049842834`; the ot
 `abstained: true` with `hits: 0` and `bestScore: null`, which is the shape an abstention takes in
 this log.
 
-**The gap, and its two causes.** Server-side against library-level arm E, the gap is +218.3 ms at
-p50 and +207.8 ms at p95, and it is what the two things only this pass's calls carry cost: the
-per-call incremental refresh, which re-reads and re-hashes the whole corpus before every search, and
-the MCP round trip between the client and the server child — 3.3 ms of it at p50, which is the
+**The gap, and its two causes.** Server-side against library-level arm E, the gap is -326.3 ms at
+p50 and -307.5 ms at p95, so the server-side figure sits below the published library-level arm rather
+than above it, and the two things only this pass's calls carry — the per-call incremental refresh,
+which re-reads and re-hashes the whole corpus before every search, and the MCP round trip, 3.3 ms of
+it at p50 — are smaller than the run-to-run variation of one reranker-bound call, which is what the
+difference between the two rows is made of. See the repeatability note below. That 3.3 ms is the
 client-side figure above minus the server-side one. Neither is the dominant term at this corpus
-size: both rows are reranker-bound, and each query was called once, so a gap of this size is not
-separable from the run-to-run variation of one reranker-bound call — see the repeatability note
-below.
+size: both rows are reranker-bound, and each query was called once.
 
 **What the refresh costs after the first call.** The first call of a server is also its cold build:
 `{ embedded: 177, unchanged: 0, deleted: 0 }`. Every later call reports `{ embedded: 0, unchanged: 177, deleted: 0 }`
@@ -4806,9 +4807,10 @@ the corpus walk and the hash comparison alone.
 the real embedder `Xenova/bge-small-en-v1.5` and the real reranker `Xenova/ms-marco-MiniLM-L-6-v2`;
 the abstention threshold in force is the one this checkout's `search.js` carries. This pass ran at
 its own corpus snapshot `{ files: 13, chunks: 177 }`, off the cold build's own counts, while
-library-level arm E above was taken at `{ files: 13, chunks: 173 }` under threshold `0.3`
-(2026-09-21T16:46:35.978Z) — different stamps, so the two latency rows are read as server-side
-against library-level and never as a before/after pair. Host `darwin 24.6.0`, Node
+library-level arm E above was taken at `{ files: 13, chunks: 177 }` under threshold `0.32`
+(2026-09-21T19:00:20.828Z) — the same stamp as this pass, but a separate run of a reranker-bound
+call, so the two latency rows are read as server-side against library-level and never as a
+before/after pair. Host `darwin 24.6.0`, Node
 `v20.19.5`, 2026-09-21T18:18:03.552Z. The pass is `runQueryLogPass` in
 `evals/docs-retrieval/query-log-pass.mjs`, driven through a launcher under the run's scratch
 directory that calls it with the eval's own parsed arguments for this corpus, whose body is
@@ -4823,8 +4825,8 @@ times on this tree while it was being built, back to back on the same host, with
 the same 20 queries. Server-side p50 came out `575`, `637`, `649`, `702` and `819` ms and p95 `816`,
 `819`, `842`, `917` and `956` ms, in run order — the p50 rising about 42% across the five and the p95
 about 17%, on a laptop whose load rose with each run. The table above publishes the last of the
-five, so its gap against library-level arm E is the widest of the five rather than the
-representative one: the first run's server-side p50 sat 25.7 ms **below** that arm. What the series
+five, so its gap against library-level arm E is the narrowest of the five rather than the
+representative one: every one of the five server-side p50s sat **below** that arm. What the series
 does establish is that the per-call refresh and the MCP round trip are small against a
 reranker-bound call — the round trip is 1.8-3.3 ms of client-side overhead in every one of the five,
 and the refresh re-embeds nothing after the first call. What it does not establish is a stable figure for the gap; that needs repetitions on an

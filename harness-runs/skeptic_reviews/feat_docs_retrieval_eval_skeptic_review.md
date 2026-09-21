@@ -13,7 +13,7 @@ What survives is one **ordering defect the plan designed and nobody caught**: th
 1. [x] **Finding 3** — Say that the threshold move changed no measured outcome _(layer: general)_
 2. [x] **Finding 4** — Forbid a code fence around arm A's answer _(layer: general)_
 3. [x] **Finding 2** — Stop calling 166 the `self-docs` chunk count _(layer: cli, general)_
-4. [ ] **Finding 1** — Restate the query-log pass's comparison against the region as it ships _(layer: general)_
+4. [x] **Finding 1** — Restate the query-log pass's comparison against the region as it ships _(layer: general)_
 
 ## Must Fix
 
