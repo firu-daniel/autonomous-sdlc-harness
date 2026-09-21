@@ -212,11 +212,85 @@ if [ -e "$registry" ]; then
   fi
 fi
 
+# Run one command with a WALL-CLOCK CEILING, and report a timeout as 124 the way
+# GNU `timeout` does. Written out here rather than taken from `timeout`, which is
+# not on a stock macOS, nor from lib/harness-run-lib.sh, which an adopter's
+# `scriptsDir` may be carrying at an older revision than this file — a sweep that
+# dies on an unbound function is a worse failure than the hang it closes.
+#
+# The command runs in the BACKGROUND and is polled, because `wait` alone cannot be
+# bounded in POSIX shell. On expiry the child gets a TERM, then a KILL two seconds
+# later if it is still there, so it is asked before it is forced.
+#
+# THE SIGNAL GOES TO THE PROCESS GROUP, NOT THE CHILD — `kill -TERM -$pid`, with
+# the negative pid — and `set -m` is what makes that possible, by giving the
+# background job a process group of its own whose id is that pid. Signalling the
+# child alone is not enough and was measured not to be: `git fetch` spawns the
+# transport (`ssh`, `git-remote-https`) as its own child, and that grandchild
+# INHERITS THIS SCRIPT'S STDOUT. Kill only git and the transport survives, holding
+# the write end of the pipe the watcher is reading, so the watcher blocks on a
+# sweep that already printed its verdict — the original hang, moved rather than
+# closed. Against a fetch stalled for 3 seconds under a 3-second ceiling, the
+# child-only version returned its message on time and did not let the script exit
+# for 144 seconds; the group kill ends it in the 2 the escalation costs.
+#
+# Job control is restored to whatever it was, since a script that leaves `-m` on
+# behind it changes how every later background command here reports.
+#
+# run_bounded <seconds> <command> [args…]
+run_bounded() {
+  local limit="$1" pid waited=0 job_control=0
+  shift
+  case "$-" in *m*) job_control=1 ;; esac
+  set -m
+  "$@" &
+  pid=$!
+  [ "$job_control" -eq 1 ] || set +m
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$waited" -ge "$limit" ]; then
+      kill -TERM "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || :
+      sleep 2
+      kill -KILL "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || :
+      wait "$pid" 2>/dev/null || :
+      return 124
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  wait "$pid"
+}
+
 # Refresh remote-tracking refs so a deleted upstream becomes `[gone]`. A failed
 # fetch (offline, or an unreachable remote) skips this round rather than sweeping
 # on stale tracking information, which would report every branch as gone.
-if ! git -C "$main_repo" fetch --prune --quiet 2>/dev/null; then
-  echo "cleanup-merged-worktrees.sh: fetch --prune failed (offline?); skipping this round"
+#
+# BOUNDED, BECAUSE THIS SWEEP RUNS INSIDE THE WATCHER'S LOOP.
+# `autonomous-watcher.sh` calls this script synchronously, so a fetch that HANGS
+# rather than fails stalls the whole loop — no inbox pass, no drop picked up,
+# nothing written to `watcher.log`, and the watcher still alive and healthy-looking
+# in `ps`. The paragraph above anticipated a fetch that FAILS and skips the round;
+# a stale TCP connection left behind by a network change or a laptop sleep never
+# fails, and an unbounded `git fetch` sits in it indefinitely. The ceiling turns
+# that second mode into the first, which this script already handles.
+#
+# `GIT_TERMINAL_PROMPT=0` closes the other hang of the same shape: a credential
+# prompt, on a remote whose authentication has lapsed, blocks on a terminal that
+# no unattended run is watching.
+#
+# SIXTY SECONDS, AND OVERRIDABLE. The default is generous next to a healthy fetch
+# of a repository this size and short next to the watcher's poll interval, so a
+# slow network costs a round rather than the loop. `HARNESS_FETCH_TIMEOUT` raises
+# it for an adopter on a link where that is not true, and lowers it for the test
+# that drives this ceiling; a value that is not a positive integer is ignored in
+# favour of the default rather than disabling the bound, because the one setting
+# this knob must not be able to express is "wait forever".
+fetch_timeout="${HARNESS_FETCH_TIMEOUT:-60}"
+case "$fetch_timeout" in
+  '' | *[!0-9]* | 0) fetch_timeout=60 ;;
+esac
+
+if ! GIT_TERMINAL_PROMPT=0 run_bounded "$fetch_timeout" git -C "$main_repo" fetch --prune --quiet 2>/dev/null; then
+  echo "cleanup-merged-worktrees.sh: fetch --prune failed (offline, unreachable or timed out); skipping this round"
   exit 0
 fi
 

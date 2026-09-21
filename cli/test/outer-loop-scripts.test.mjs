@@ -783,3 +783,84 @@ test('hr_cache_dir resolves the machine cache directory the way machineCacheDir(
   assert.equal(slashed.status, 0, `hr_cache_dir exited ${slashed.status}: ${slashed.stderr}`);
   assert.equal(slashed.stdout, '/x/autonomous-sdlc-harness\n', 'one trailing slash was not stripped');
 });
+
+/**
+ * The sweep's fetch is BOUNDED, and the bound releases the output pipe as well as the child.
+ *
+ * `autonomous-watcher.sh` runs `cleanup-merged-worktrees.sh` synchronously inside its watch loop
+ * and reads what it prints, so a fetch that HANGS — rather than one that fails, which the script
+ * has always handled — stalls the whole loop: no inbox pass, no drop picked up, nothing appended
+ * to `watcher.log`, and a watcher that still looks alive in `ps`. That is not hypothetical; it is
+ * what this test was written from.
+ *
+ * TWO ASSERTIONS, AND THE SECOND IS THE ONE THAT BITES. Printing the verdict on time is not the
+ * contract — EXITING is. `git fetch` spawns its transport (`ssh`, `git-remote-https`) as a child
+ * of its own, and that grandchild inherits the script's stdout; a ceiling that signals only the
+ * direct child leaves the transport holding the write end of the pipe, so the reader blocks on a
+ * sweep that already said its piece. A child-only kill measured 144 s against a 3 s ceiling here
+ * while printing its message at 3 s, which is why `run_bounded` signals the process GROUP and why
+ * the wall clock is asserted rather than the message alone. `runBash` resolving at all is half the
+ * proof: `execFile` does not call back while a descendant holds the pipe.
+ *
+ * The fake `git` hangs ONLY on `fetch` and delegates every other subcommand to the real one, so
+ * the script's own repository probing is untouched and the ceiling is the only thing under test.
+ */
+const HANGING_GIT = [
+  '#!/usr/bin/env bash',
+  'for a in "$@"; do [ "$a" = "fetch" ] && { sleep 300; exit 0; }; done',
+  'exec %REAL_GIT% "$@"',
+  '',
+].join('\n');
+
+test('the sweep bounds a hanging fetch and releases its output pipe', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+
+  const realGit = execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  const shims = join(dir, 'shims');
+  mkdirSync(shims, { recursive: true });
+  writeFileSync(join(shims, 'git'), HANGING_GIT.replace('%REAL_GIT%', realGit), { mode: 0o755 });
+
+  const ceiling = 3;
+  const started = Date.now();
+  const { stdout } = await runBash(dir, [join(dir, `${SCRIPTS_DIR}/cleanup-merged-worktrees.sh`)], {
+    PATH: `${shims}:${process.env.PATH ?? ''}`,
+    HARNESS_FETCH_TIMEOUT: String(ceiling),
+  });
+  const elapsed = (Date.now() - started) / 1000;
+
+  assert.match(
+    stdout,
+    /fetch --prune failed \(offline, unreachable or timed out\); skipping this round/,
+    `the sweep did not report the bounded fetch:\n${stdout}`,
+  );
+  // The ceiling plus the TERM→KILL escalation, and generous room over that for a loaded machine.
+  // A child-only kill does not come in under this; it waits for the orphan.
+  assert.ok(
+    elapsed < ceiling + 20,
+    `the sweep took ${elapsed.toFixed(1)}s against a ${ceiling}s ceiling — the fetch's transport is still holding the pipe`,
+  );
+});
+
+test('a HARNESS_FETCH_TIMEOUT that is not a positive integer falls back to the default, never to unbounded', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+
+  // The clause is read out of the shipped script rather than restated here: the one thing this
+  // knob must not be able to express is "wait forever", and that is a property of its own text.
+  const sweep = text(dir, `${SCRIPTS_DIR}/cleanup-merged-worktrees.sh`);
+  const clause = sweep.match(/^fetch_timeout=.*?^esac$/ms);
+  assert.ok(clause, 'the sweep carries no HARNESS_FETCH_TIMEOUT validation clause');
+
+  for (const value of ['', 'abc', '0', '-5', '4x']) {
+    const { stdout } = await runBash(dir, ['-c', `${clause[0]}\nprintf '%s' "$fetch_timeout"`], {
+      HARNESS_FETCH_TIMEOUT: value,
+    });
+    assert.equal(stdout, '60', `HARNESS_FETCH_TIMEOUT='${value}' resolved to '${stdout}', not the 60s default`);
+  }
+
+  const { stdout: honoured } = await runBash(dir, ['-c', `${clause[0]}\nprintf '%s' "$fetch_timeout"`], {
+    HARNESS_FETCH_TIMEOUT: '5',
+  });
+  assert.equal(honoured, '5', 'a positive integer was not honoured');
+});
