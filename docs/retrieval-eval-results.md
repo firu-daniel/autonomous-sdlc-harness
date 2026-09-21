@@ -4574,5 +4574,44 @@ latency figures._
 
 ## Arm A — awaiting a hand run
 
-_Task 6 fills this section: arm A's harness and the procedure that produces the transcript whose
-records fill its row above. The row itself is generated and never hand-edited._
+**What arm A measures.** Index-first navigation by an agent: the alternative the docs-retrieval tool
+has to beat. An agent is started in a documentation catalog with a read-only tool set, told to read
+that catalog's `INDEX.md` first and to answer with nothing but the `path#heading` references of the
+sections it would use — the same `ref` spelling the query sets label and the other arms return — so
+recall, MRR and latency are computed over its answer by the same code that scores arms B–E. Its cost
+column is the one that is not `local`: an arm A run bills agent tokens, and the transcript carries
+each invocation's usage block.
+
+**No arm A number is recorded on this branch, and the run that built its harness made no `claude -p`
+call at all.** Arm A needs a nested agent subprocess, and the unattended permission profile carries
+no grant for the agent binary; per that profile's own `_README` a tool call matching neither `allow`
+nor `deny` stalls in print mode rather than prompting, so an unattended attempt would hang the run
+instead of reporting a refusal. The scratch-runner route to the same subprocess was technically open
+and was declined on purpose: it would have put an unsupervised nested agent session, with its own
+auth and no token cap, inside an unattended run in order to take a measurement. The arm's row above
+therefore reads *awaiting hand run* rather than carrying a zero.
+
+**What is committed, and what fills the row.** The harness is built and exercised:
+
+- `evals/docs-retrieval/arm-a/agent-task.md` — the task text the agent is given, with one
+  substitution token for the query.
+- `evals/docs-retrieval/arm-a/run-arm-a.sh` — the invocation an operator runs by hand, one agent call
+  per query, appending one transcript record each.
+- `evals/docs-retrieval/arm-a/score-transcript.mjs` — transcript to arm A records, which the eval
+  runner scores through the same `scoreArm` call every other arm goes through.
+- `evals/docs-retrieval/arm-a/sample-transcript.json` — a hand-written three-record transcript, with
+  invented usage figures, that the scorer is exercised against without an agent. Nothing in this file
+  is taken from it.
+
+The row is filled by re-running the eval with `--out` and `--transcript` against a real transcript,
+which regenerates the table from the same rendering path as every other row. It is never hand-edited:
+the generated region has one writer, and the next `--out` run destroys anything typed into it.
+
+**One corpus, and one reason for it.** Arm A is defined over `fixture-catalog` alone: it navigates
+from an `INDEX.md`, that corpus carries its own, and this repository's `docs/` has none. The
+`self-docs` table renders an arm A row because the table walks the declared arms for every corpus;
+that row stays empty after a hand run too, and awaits a catalog with an index rather than a run.
+
+**The procedure is its companion document's.** `docs/retrieval-eval.md` → `## Running arm A by hand`
+owns how to produce that transcript: the preconditions, the commands and what to do with the output.
+It is not restated here.

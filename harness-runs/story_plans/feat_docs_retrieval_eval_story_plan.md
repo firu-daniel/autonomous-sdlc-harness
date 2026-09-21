@@ -47,7 +47,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_docs_r
 4. [x] **Task 4** — Arms B–E, the metrics, and the results file of record _(layer: general)_ _(points: 20)_
 5. [x] **Task 5** — Calibrate `ABSTAIN_SCORE_THRESHOLD` and retire the provisional marker _(layer: cli)_ _(points: 10)_
 6. [x] **Task 14** — The threshold calibration record in `docs/retrieval-eval-results.md` _(layer: general)_ _(points: 10)_
-7. [ ] **Task 6** — Arm A's harness, its agent-task text and its transcript scorer — built, never run _(layer: general)_ _(points: 15)_
+7. [x] **Task 6** — Arm A's harness, its agent-task text and its transcript scorer — built, never run _(layer: general)_ _(points: 15)_
 8. [ ] **Task 7** — The query-log pass over MCP against the real models _(layer: general)_ _(points: 15)_
 9. [ ] **Task 8** — Cold-build wall time and index size on disk, through `scratch-run.sh` _(layer: general)_ _(points: 15)_
 10. [ ] **Task 9** — The regression gate: the recorded floor, `run-gates.sh`, gate 11 in `docs/development.md` §5, and the post-move regeneration of the results file's generated region _(layer: general)_ _(points: 20)_
