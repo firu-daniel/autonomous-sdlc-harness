@@ -387,7 +387,9 @@ file's own opening comment gives.
 carries them as the documented surface and **has never been run**, so a renamed flag shows up as a
 failed first query rather than as a refusal. Then the three cheap checks the script's own `REPRO`
 header block lists: the task text holds exactly one `{{query}}` token, the query set's ids parse, and
-the corpus root carries `docs/INDEX.md`.
+the corpus root carries `docs/INDEX.md`. One further check costs the first query alone and is worth
+it: that the transcript's first record carries bare `path#anchor` strings in its `refs` array and no
+`` ``` `` entry — a fenced answer is scored as references and silently costs every rank.
 
 ### The command
 

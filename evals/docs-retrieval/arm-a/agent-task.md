@@ -28,7 +28,9 @@ The question:
 
 Answer with **nothing but section references**, one per line, most useful first, at most five. Write
 no prose, no preamble, no numbering and no explanation — a line that is not a reference invalidates
-the answer.
+the answer. Do not wrap the answer in a code fence. The blocks below show what one reference and the
+no-answer word look like; your own answer is bare lines with no `` ``` `` around them, because a
+fence line is scored as a reference and misses.
 
 A reference is written `path#anchor`:
 
@@ -52,4 +54,5 @@ none
 ```
 
 and nothing else. A wrong reference and a guessed reference both score as misses, so `none` is the
-correct answer whenever the catalog does not cover the question.
+correct answer whenever the catalog does not cover the question. Answer it as the bare word on its
+own line, with nothing else — not inside a fence.
