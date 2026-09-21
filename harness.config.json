@@ -4,7 +4,8 @@
   "defaultBranch": "dev",
   "protectedBranches": [
     "main",
-    "dev"
+    "dev",
+    "publish"
   ],
   "stateDir": "harness-runs",
   "appDir": ".",

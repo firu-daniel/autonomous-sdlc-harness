@@ -1,5 +1,6 @@
-# Publish main from dev on every push to dev — so each pull request merged into dev becomes one
-# commit on main. What a publication is, and the guard that refuses one, are in
+# Stage a publication of main from dev on every push to dev — so each pull request merged into dev
+# becomes one commit staged on the `publish` branch, for a pull request a human merges onto main.
+# What a publication is, why it does not push to main, and the guard that refuses one, are in
 # scripts/publish-main.sh. This file exists only on dev: the script removes it from what it
 # publishes, and a push event runs the workflow file as it stands in the pushed commit.
 name: Publish main
@@ -8,10 +9,16 @@ on:
   push:
     branches: [dev]
 
+# contents: write reaches the `publish` branch and nothing more — main takes no push from here,
+# by ruleset and with no bypass actor. pull-requests: write is for opening the publication pull
+# request, which succeeds only if "Allow GitHub Actions to create and approve pull requests" is on;
+# it is off here, so the script prints the link instead and the job still passes.
 permissions:
   contents: write
+  pull-requests: write
 
-# One publication at a time, in push order: each builds on the main the previous one pushed.
+# One publication at a time, in push order: each is built on main's tip as it stands, so a second
+# run while a publication is still unmerged would stage a commit on the same parent.
 concurrency:
   group: publish-main
   cancel-in-progress: false
@@ -25,4 +32,6 @@ jobs:
           ref: dev
           fetch-depth: 0
       - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/publish-main.sh
