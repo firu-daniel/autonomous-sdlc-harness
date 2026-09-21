@@ -317,9 +317,134 @@ runs and what a failure means.
 
 ## Running arm A by hand
 
-**The procedure lands here** — the preconditions, the commands that produce an arm A transcript, and
-what to do with the output — and `docs/retrieval-eval-results.md` → `## Arm A — awaiting a hand run`
-cites this heading for it. It is **not yet written**: until it is, the mechanism is
-`evals/docs-retrieval/arm-a/run-arm-a.sh`, whose own header states how it is invoked, and
-`evals/docs-retrieval/arm-a/agent-task.md` is the task text it gives the agent. Arm A is deliberately
-not run by any automated route in this repository; `## Arm A — awaiting a hand run` states why.
+**Who runs this, and why it is you.** Arm A needs a nested agent subprocess, and no automated route in
+this repository may start one: the unattended permission profile carries no grant for the agent binary
+and an unmatched tool call stalls in print mode rather than refusing, while the `scratch-run.sh` route
+to the same subprocess is declined on purpose rather than unavailable — it would put an unsupervised
+agent session with its own auth and no token cap inside an unattended run. So an operator at a terminal
+runs arm A, and nobody else. `docs/retrieval-eval-results.md` → `## Arm A — awaiting a hand run` is the
+record of that decision; the mechanism is `evals/docs-retrieval/arm-a/run-arm-a.sh` and the task text
+it sends is `evals/docs-retrieval/arm-a/agent-task.md` — that name, not `prompt.md`, for the reason the
+file's own opening comment gives.
+
+**Before spending tokens.** Confirm the agent CLI's print-mode flag spellings — `-p`,
+`--output-format`, `--allowed-tools`, `--disallowed-tools` — against its own `--help`. The script
+carries them as the documented surface and **has never been run**, so a renamed flag shows up as a
+failed first query rather than as a refusal. Then the three cheap checks the script's own `REPRO`
+header block lists: the task text holds exactly one `{{query}}` token, the query set's ids parse, and
+the corpus root carries `docs/INDEX.md`.
+
+### The command
+
+From the repository root:
+
+```
+bash evals/docs-retrieval/arm-a/run-arm-a.sh \
+  evals/docs-retrieval/corpora/fixture-catalog \
+  evals/docs-retrieval/queries/fixture-catalog.jsonl \
+  /tmp/arm-a-fixture-catalog-rep1.jsonl
+```
+
+`bash` explicitly: the script is committed non-executable. The three arguments are **relative to the
+base the script documents** — the working directory your shell is in when you invoke it, which the
+script resolves before it changes directory — and are never prefixed with a derived checkout root.
+They are, in order: the **corpus root**, the directory holding the catalog's `docs/`, which becomes the
+agent's own working directory so it cannot read past the corpus and every `ref` it writes is relative
+to it; the **query set**, a labelled set from `evals/docs-retrieval/queries/`; and the **output path**,
+appended to one JSON record per query as each finishes, created if absent.
+
+The agent binary is reached through `${HARNESS_AGENT_CLI:-claude}` — set `HARNESS_AGENT_CLI` to name it
+if `claude` is not what is on your PATH. That single indirection is the place the engine binary is
+chosen (`ARCHITECTURE.md` §4).
+
+**One output path per repetition.** The script appends, so pointing two repetitions at one file leaves
+two records per query id in a file the scorer reads as a single pass.
+
+### The tool set, and the network
+
+The property the measurement depends on: **arm A is read-only over the corpus and nothing else.**
+`Read`, `Grep` and `Glob` are granted — what navigating a catalog needs — and `Bash`, `Write`, `Edit`,
+`MultiEdit`, `NotebookEdit`, `WebFetch` and `WebSearch` are withheld. The script passes both the allow
+list and the deny list, because an allow list that a future default widens is not on its own a fence.
+
+Each withheld tool would invalidate a different thing. A **web tool** makes the arm something other
+than index-first navigation over the corpus: an answer assembled from the open web is not the
+alternative retrieval is being measured against, and its `ref`s would cite sections the corpus does not
+contain. A **shell** makes the tool fence meaningless — anything withheld above is reachable through
+it — so the run would no longer be bounded by the corpus at all. `Write`, `Edit`, `MultiEdit` and
+`NotebookEdit` would let the arm modify the corpus it is being scored over.
+
+**How it is kept off the network:** the withheld web tools are the whole of it on the tool side. After
+the run, confirm no web tool call appears in the run's output. The session's **own model traffic** is
+not "the network" in this sense — every arm's inference goes somewhere, arms B–E to a local runtime and
+arm A to the agent's API — and it is not what this fence is about; what is fenced is the arm reaching
+material outside the corpus.
+
+### Reading the token cost out of the run
+
+The script requests `--output-format json` and keeps two fields of the result object: `.result`, the
+answer, split into the record's `refs` in the order the agent gave them with nothing repaired; and
+`.usage`, **verbatim**, as the record's `usage`. Token counts live in that block's own fields. One
+record, with invented numbers, in the shape
+`evals/docs-retrieval/arm-a/sample-transcript.json` commits:
+
+```json
+{"id":"q-fc-verify-callback","query":"how do i prove a callback really came from you and not from someone replaying one","refs":["docs/webhooks.md#signature-verification","docs/webhooks.md#delivery-and-retries"],"durationMs":14000,"usage":{"input_tokens":9120,"output_tokens":48,"cache_read_input_tokens":0}}
+```
+
+`durationMs` has **whole-second resolution**: the `bash` floor in this tree is 3.2 and BSD `date` has
+no sub-second format, which an agent turn measured in seconds can afford.
+
+The **figure recorded for arm A is the sum over the whole query set for one repetition**, and that is
+what the published row carries: `score-transcript.mjs` sums every numeric field of every record's
+`usage` by field name and renders arm A's `cost` cell as
+`agent hand run over <n> queries — <field> <total>, …`. **Keep the per-query figures as well** — they
+are the per-record `usage` blocks in your transcripts — because arm A's cost is the column arms B–E
+cannot have, and a total alone cannot say whether one pathological query paid for the arm.
+
+No money figure enters the transcript: the script keeps `.usage` alone, so converting tokens to a
+charge is done outside it, at your own rates, and is not part of the recorded row.
+
+### Five repetitions, and what is recorded
+
+Take **five** repetitions of the whole query set, each to its own output path, and **record every
+one**. An agent arm is not deterministic, so a single run has no spread to report, and a spread is the
+difference between a result and an anecdote. What goes in the record:
+
+- The **median** and the **p95** across the five repetitions, for latency and for token cost.
+- The **per-repetition** recall@5 and MRR — five values each, not their mean alone.
+
+**A repetition whose returned refs differ from the others is kept and reported, never discarded.** The
+spread is itself a result: an arm whose answers move between runs is a different proposition from one
+whose answers do not, whatever its mean. Discarding the odd repetition would report the second arm's
+figures for the first arm's behaviour.
+
+### What to do with the result
+
+Score each repetition on its own, which prints the table and writes nothing:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --transcript /tmp/arm-a-fixture-catalog-rep1.jsonl
+```
+
+That hands the transcript to `scoreTranscript({ transcript, queries })`, whose records go into the same
+`scoreArm` call as arms B–E, so arm A's metrics come from the same metric code and are comparable to
+theirs by construction. Then **publish by re-running the eval** — `--out
+docs/retrieval-eval-results.md --transcript <path>`, through the launcher route `## How to run it`
+above names — and let the results renderer regenerate arm A's row in the same walk that renders every
+other row. `--transcript` takes one path, so the run that publishes carries the **first**
+repetition's transcript, matching `--repeat`'s own rule that the first repetition is the scored one.
+
+**The row is never hand-edited.** It sits inside the `<!-- eval:generated:start -->` /
+`<!-- eval:generated:end -->` region, which has exactly one writer, so numbers typed there are
+destroyed by the next `--out` run without a word.
+
+**The spread is hand-written**, and goes under `docs/retrieval-eval-results.md` → `## Arm A — awaiting
+a hand run` — **below the end marker**, which is hand-written territory the runner never rewrites.
+Rename that heading once a number exists; a section still announcing an awaited run above a recorded
+one is a false record. Read the filled row against `## The decision rule` above, which was written
+before any arm A number existed precisely so this comparison cannot be chosen to fit it.
+
+**This step does not close the roadmap row, and neither did this branch.** Arm A on `fixture-catalog`
+fixes the procedure; the verdict is taken on a real catalog. This hand run plus the private-catalog
+numbers from `docs/development.md` §5 → gate 10 are together what closes it.
