@@ -14,8 +14,9 @@
  * real row estimate. `openPgliteStore` builds the index on an empty table and every row arrives after
  * it, so the planner has no statistics for `chunks` and takes its default estimate — and case (a)
  * measures that it therefore picks the index scan at every size this suite reaches. That makes the
- * crossover unreachable through `lexicalSearch`, so case (b) bisects it on a table carrying the same
- * BM25 index options and the same `<@>` ordering with the index built after the rows: the conditions
+ * crossover unreachable through `lexicalSearch`, so case (b) bisects it on a table carrying the store's
+ * own BM25 index definition and `<@>` ordering clause — imported from `cli/src/retrieval/store.ts`,
+ * never retyped — with the index built after the rows: the conditions
  * item (b) measured, and the ones a `REINDEX` or a dump restore would recreate under a store whose
  * rows are already there.
  *
@@ -36,7 +37,19 @@ import { vector } from '@electric-sql/pglite-pgvector';
 // `ARM_CANDIDATES` is the limit the lexical arm actually calls with, imported rather than retyped so
 // that moving it in `cli/src/retrieval/search.ts` moves what both cases below measure.
 import { ARM_CANDIDATES } from '../dist/retrieval/search.js';
-import { openPgliteStore } from '../dist/retrieval/store.js';
+// The BM25 index definition, the `<@>` ordering clause and the two columns the plan's cost depends on
+// are `cli/src/retrieval/store.ts`'s, imported rather than retyped: the `(b)` case below measures the
+// planner's choice over exactly those shapes, so a change to any of them must move the measurement
+// instead of leaving it describing a store that no longer exists.
+import {
+  BM25_INDEX,
+  BM25_INDEX_DEFINITION,
+  BM25_ORDER_CLAUSE,
+  CHUNK_TEXT_COLUMN,
+  CHUNKS_TABLE,
+  chunkEmbeddingColumn,
+  openPgliteStore,
+} from '../dist/retrieval/store.js';
 
 /** The embedder's width (`docs/retrieval.md` → **Models**); no model is loaded to get it. */
 const DIMENSIONS = 384;
@@ -148,23 +161,28 @@ test('(b) the index-scan crossover, bisected on a stats-informed plan', async (t
   await db.exec('CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_textsearch;');
 
   // The table carries the two columns the ordering's cost depends on — the indexed text and the
-  // embedding whose width sets the rows per page — and the index is built AFTER the rows, which is
-  // the one thing `openPgliteStore` cannot be made to do and the whole reason this case does not run
-  // through it. A fresh table per probe rather than deletes: dead tuples inflate the page count a
+  // embedding whose width sets the rows per page — composed from the store's own declarations and
+  // omitting only the columns the plan does not cost (`key`, `path`, `anchor`, `heading`, `body`,
+  // `hash`). The index is built AFTER the rows, which is the one thing `openPgliteStore` cannot be
+  // made to do and the whole reason this case does not run through it; the index's definition and the
+  // ordering clause are the store's, so the only thing this closure owns is that ordering of
+  // operations. A fresh table per probe rather than deletes: dead tuples inflate the page count a
   // sequential scan is costed on, and would make the answer depend on the probe order.
   const filtersAt = async (n) => {
-    await db.exec('DROP TABLE IF EXISTS chunks');
-    await db.exec(`CREATE TABLE chunks (id serial PRIMARY KEY, text text NOT NULL, embedding vector(${DIMENSIONS}) NOT NULL)`);
+    await db.exec(`DROP TABLE IF EXISTS ${CHUNKS_TABLE}`);
+    await db.exec(
+      `CREATE TABLE ${CHUNKS_TABLE} (id serial PRIMARY KEY, ${CHUNK_TEXT_COLUMN}, ${chunkEmbeddingColumn(DIMENSIONS)})`,
+    );
     await db.transaction(async (tx) => {
       for (const chunk of corpusOf(n)) {
-        await tx.query('INSERT INTO chunks (text, embedding) VALUES ($1, $2::vector)', [
+        await tx.query(`INSERT INTO ${CHUNKS_TABLE} (text, embedding) VALUES ($1, $2::vector)`, [
           chunk.text,
           `[${vectorFor(chunk.key).join(',')}]`,
         ]);
       }
     });
-    await db.exec("CREATE INDEX chunks_bm25 ON chunks USING bm25 (text) WITH (text_config='english')");
-    const result = await db.query("SELECT id FROM chunks ORDER BY text <@> to_bm25query($1, 'chunks_bm25') LIMIT $2", [
+    await db.exec(`CREATE INDEX ${BM25_INDEX} ${BM25_INDEX_DEFINITION}`);
+    const result = await db.query(`SELECT id FROM ${CHUNKS_TABLE} ORDER BY ${BM25_ORDER_CLAUSE} LIMIT $2`, [
       PROBE_TERM,
       ARM_CANDIDATES,
     ]);

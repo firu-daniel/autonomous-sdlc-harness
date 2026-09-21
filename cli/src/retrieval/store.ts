@@ -9,6 +9,16 @@
  * `to_bm25query($1, 'chunks_bm25')`. Keeping the dialect plain is what would let a real Postgres
  * implement {@link DocStore} by connection string; this module builds no such implementation.
  *
+ * **The shapes the lexical plan's cost depends on are exported, and a caller composes them rather than
+ * retyping them:** {@link CHUNKS_TABLE}, {@link BM25_INDEX}, {@link BM25_INDEX_DEFINITION},
+ * {@link BM25_ORDER_CLAUSE}, {@link CHUNK_TEXT_COLUMN} and {@link chunkEmbeddingColumn}. They exist for
+ * `cli/test/docs-retrieval-store.test.mjs`, which measures the row count at which the planner chooses
+ * the BM25 index scan and must build that index *after* the rows — which this module's open path cannot
+ * do. The statements below are issued from those same constants, so there is no second copy inside the
+ * owner either, and a change to the indexed column, the `text_config`, the index name, the row width or
+ * the ordering operator moves the measurement with it instead of leaving it describing a store that no
+ * longer exists.
+ *
  * The PGlite packages are optional peers reached only through `loadRetrievalModule`
  * (`cli/src/retrieval/runtime.ts`); this file takes their types with `import type`.
  */
@@ -27,6 +37,35 @@ import { loadRetrievalModule } from './runtime.js';
 
 /** The index directory's name under `stateDir`; the ignore rule reads it from here. */
 export const INDEX_DIR_NAME = 'docs_index';
+
+/**
+ * The chunk table's name, so a composed statement names the same table the store's own DDL creates.
+ * The single-table statements below still spell `chunks` inline: they carry no shape a caller composes,
+ * and rewriting them would enlarge this change to no reviewer's benefit.
+ */
+export const CHUNKS_TABLE = 'chunks';
+
+/** The BM25 lexical index's name, spliced rather than bound — see the header's spliced-token clause. */
+export const BM25_INDEX = 'chunks_bm25';
+
+/**
+ * Everything after the index name in the BM25 index's `CREATE INDEX`: the indexed column and the
+ * `text_config` the planner's row estimate and the scan's matching-rows behaviour both depend on. The
+ * `IF NOT EXISTS` is the open path's alone, so a caller building the index after its rows composes the
+ * same definition without it.
+ */
+export const BM25_INDEX_DEFINITION = `ON ${CHUNKS_TABLE} USING bm25 (text) WITH (text_config='english')`;
+
+/** The lexical arm's ordering clause; `$1` is the bound query text. */
+export const BM25_ORDER_CLAUSE = `text <@> to_bm25query($1, '${BM25_INDEX}')`;
+
+/** The BM25-indexed column's declaration. */
+export const CHUNK_TEXT_COLUMN = 'text text NOT NULL';
+
+/** The embedding column's declaration; its width is what sets the rows per page a scan is costed on. */
+export function chunkEmbeddingColumn(dimensions: number): string {
+  return `embedding vector(${dimensions}) NOT NULL`;
+}
 
 /** `<repoRoot>/<stateDir>/docs_index` — the per-checkout index PGlite persists into. */
 export function indexDataDir(repoRoot: string, stateDir: string): string {
@@ -128,14 +167,16 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
 
   const width = String(dimensions);
   if ((await readMeta(DIMENSIONS_META_KEY)) !== width) {
-    await db.exec('DROP TABLE IF EXISTS chunks');
+    await db.exec(`DROP TABLE IF EXISTS ${CHUNKS_TABLE}`);
     await db.query('DELETE FROM meta WHERE key = $1', [EMBEDDER_META_KEY]);
   }
   await db.exec(
-    `CREATE TABLE IF NOT EXISTS chunks (id serial PRIMARY KEY, key text UNIQUE NOT NULL, path text NOT NULL, anchor text NOT NULL, heading text NOT NULL, body text NOT NULL, text text NOT NULL, hash text NOT NULL, embedding vector(${dimensions}) NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS ${CHUNKS_TABLE} (id serial PRIMARY KEY, key text UNIQUE NOT NULL, path text NOT NULL, ` +
+      `anchor text NOT NULL, heading text NOT NULL, body text NOT NULL, ${CHUNK_TEXT_COLUMN}, hash text NOT NULL, ` +
+      `${chunkEmbeddingColumn(dimensions)})`,
   );
-  await db.exec('CREATE INDEX IF NOT EXISTS chunks_hnsw ON chunks USING hnsw (embedding vector_cosine_ops)');
-  await db.exec("CREATE INDEX IF NOT EXISTS chunks_bm25 ON chunks USING bm25 (text) WITH (text_config='english')");
+  await db.exec(`CREATE INDEX IF NOT EXISTS chunks_hnsw ON ${CHUNKS_TABLE} USING hnsw (embedding vector_cosine_ops)`);
+  await db.exec(`CREATE INDEX IF NOT EXISTS ${BM25_INDEX} ${BM25_INDEX_DEFINITION}`);
   await writeMeta(DIMENSIONS_META_KEY, width);
 
   const ranked = (rows: readonly { id: number }[]): RankedId[] => rows.map((row, index) => ({ id: row.id, rank: index + 1 }));
@@ -184,7 +225,7 @@ export async function openPgliteStore(options: { dataDir: string | undefined; di
       // Filtering to matching rows alone is the index scan's behaviour, not the operator's — see the
       // interface comment above.
       const result = await db.query<{ id: number }>(
-        "SELECT id FROM chunks ORDER BY text <@> to_bm25query($1, 'chunks_bm25') LIMIT $2",
+        `SELECT id FROM ${CHUNKS_TABLE} ORDER BY ${BM25_ORDER_CLAUSE} LIMIT $2`,
         [query, limit],
       );
       return ranked(result.rows);
