@@ -42,7 +42,7 @@ const FLAGS = Object.freeze([
   ['--repeat <n>', `how many times each query is run (default ${DEFAULT_REPEAT})`],
   ['--out <path>', 'where to write the results; absent means nothing is written'],
   ['--data-dir <path>', 'where the index is stored; absent means in memory, and nothing is written'],
-  ['--floor <path>', 'the recorded regression floor to grade this run against'],
+  ['--floor <path>', 'the recorded regression floor; read by check-floor.mjs alone, not by a run'],
   ['--transcript <path>', "an arm A hand-run transcript, scored by run.mjs and by nothing in this module"],
 ]);
 

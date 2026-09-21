@@ -97,7 +97,7 @@ against:
 | `--k <n>` | How many hits each arm returns; the default is the CLI's own `DEFAULT_RESULTS`. Every recall@k column with `k` above this is measured over a short list, so leave it at the default when comparing against a recorded figure. |
 | `--repeat <n>` | How many times each query is run. Every repetition contributes a latency sample; the **first** repetition is the one scored, and a later repetition returning different refs is recorded as a non-determinism warning rather than averaged away. |
 | `--data-dir <path>` | Where the index is persisted. Absent, the store is held in memory and nothing is written into any tree. |
-| `--floor <path>` | The recorded floor to grade this run against — see `## The regression floor`. |
+| `--floor <path>` | The recorded floor `evals/docs-retrieval/check-floor.mjs` grades against — read by that module alone and not by a launcher run; see `## The regression floor`. |
 | `--out <path>` | Where the results are written. Absent, nothing is written and the table goes to stdout. |
 | `--transcript <path>` | An arm A hand-run transcript — see below. |
 
