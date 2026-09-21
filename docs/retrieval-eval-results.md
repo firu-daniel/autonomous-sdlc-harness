@@ -4451,8 +4451,117 @@ within a row.
 
 ## Threshold calibration
 
-_Task 14 fills this section: the value `ABSTAIN_SCORE_THRESHOLD` was calibrated to, the two score
-distributions it separates, and the corpora it was calibrated on._
+**This section is the record of the calibration** — the one place the value, the evidence it was
+chosen from, what it costs and the limit on it are written down. The constant's own doc comment in
+`cli/src/retrieval/search.ts`, `docs/retrieval.md` and `docs/cli.md` §11 cite this section rather than
+restating its figures: a number that belongs to the calibration is added here and nowhere else.
+
+**The value.** `ABSTAIN_SCORE_THRESHOLD = 0.32` in `cli/src/retrieval/search.ts`, applied as
+`best < ABSTAIN_SCORE_THRESHOLD` to the top reranker score of the `fused-rerank` mode alone.
+
+**What it was calibrated on.** Arm E of the eval, run on 2026-09-21 (`2026-09-21T16:46:12.749Z` for
+`fixture-catalog`, `2026-09-21T16:46:35.978Z` for `self-docs`) on host `Daniels-MacBook-Air.local`
+under Node `v20.19.5`, with embedder `Xenova/bge-small-en-v1.5:q8:cls:384:v1` and reranker
+`Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` loaded outside the stub, over the two committed corpora
+at the snapshots that run reported: `fixture-catalog` at 9 files / 41 chunks (9 positive and 3
+negative queries) and `self-docs` at 13 files / 173 chunks (15 positive and 5 negative queries).
+
+### The two bounds that fixed the choice
+
+They come from different places and are not interchangeable.
+
+- **The measured distribution bounds the value from inside**, and is the evidence quoted below. The
+  run was taken with the threshold at `0.3`, and `bestScore` is the top **returned** hit's score, so
+  an abstaining query carries `null`: **no negative score is observable at all**, only that each is
+  strictly below `0.30`. The interval the evidence therefore asserts, pooled over both corpora, is
+  `[0.30, 0.33899036049842834]` — `0.30` the censoring bound on every negative, `0.33899036049842834`
+  (`q-sd-analyze-writes`, `self-docs`) the lowest observed positive. Its midpoint `0.3195`, rounded to
+  two decimals, is `0.32`. Per corpus: the lowest observed positive is `0.5472269654273987`
+  (`q-fc-webhook-retry`) on `fixture-catalog` and `0.33899036049842834` on `self-docs`, and on both
+  every negative is censored at `< 0.30`.
+- **The stub-fixture bound bounds it from outside**, and is a property of the code rather than of any
+  corpus: the abstention cases of `cli/test/docs-retrieval.test.mjs` run under the `stub-overlap`
+  reranker, which scores a matching query's best hit `1.000` and the no-match query `0.000`, so any
+  value strictly inside `(0.000, 1.000)` keeps them passing and a value at or outside either end
+  flips one. The constant's doc comment restates this bound, because that is where it binds.
+
+### The pre-calibration distributions, quoted
+
+These are the per-query best scores of the run above, copied out of this file's generated region as it
+stood at the calibration. They are **quoted here rather than cited** because Task 9 regenerates that
+region under the calibrated threshold, and a regenerated fence cannot carry a `bestScoreOnPositive`
+for the queries the new threshold abstains on — which are exactly the queries the choice was made
+from. `null` means the query abstained at `0.3`, so its score is censored: known only to be `< 0.30`,
+never observed.
+
+| Corpus | Query | Kind | `bestScoreOnPositive` / `bestScoreOnNegative` |
+| --- | --- | --- | --- |
+| `fixture-catalog` | `q-fc-route-choice` | positive | `0.9988245368003845` |
+| `fixture-catalog` | `q-fc-late-handin` | positive | `0.9811885952949524` |
+| `fixture-catalog` | `q-fc-barcode-contents` | positive | `0.941379964351654` |
+| `fixture-catalog` | `q-fc-unreadable-label` | positive | `0.9988497495651245` |
+| `fixture-catalog` | `q-fc-billable-weight` | positive | `null` — censored, `< 0.30` |
+| `fixture-catalog` | `q-fc-surcharge-compounding` | positive | `null` — censored, `< 0.30` |
+| `fixture-catalog` | `q-fc-webhook-retry` | positive | `0.5472269654273987` |
+| `fixture-catalog` | `q-fc-verify-callback` | positive | `null` — censored, `< 0.30` |
+| `fixture-catalog` | `q-fc-token-lifetime` | positive | `0.983818769454956` |
+| `fixture-catalog` | `q-fc-negative-recruitment` | negative | `null` — censored, `< 0.30` |
+| `fixture-catalog` | `q-fc-negative-lattice` | negative | `null` — censored, `< 0.30` |
+| `fixture-catalog` | `q-fc-negative-datastore` | negative | `null` — censored, `< 0.30` |
+| `self-docs` | `q-sd-new-config-key` | positive | `null` — censored, `< 0.30` |
+| `self-docs` | `q-sd-deny-guard` | positive | `0.8066375851631165` |
+| `self-docs` | `q-sd-new-subcommand` | positive | `0.9983236789703369` |
+| `self-docs` | `q-sd-run-gates` | positive | `null` — censored, `< 0.30` |
+| `self-docs` | `q-sd-state-dir` | positive | `0.9128396511077881` |
+| `self-docs` | `q-sd-commit-prefix` | positive | `0.7014356851577759` |
+| `self-docs` | `q-sd-guard-shell-options` | positive | `0.9804458022117615` |
+| `self-docs` | `q-sd-cross-asset-reference` | positive | `0.9992165565490723` |
+| `self-docs` | `q-sd-daemon-lifecycle` | positive | `0.9118318557739258` |
+| `self-docs` | `q-sd-usage-limit` | positive | `0.9862282872200012` |
+| `self-docs` | `q-sd-search-abstains` | positive | `0.5403093695640564` |
+| `self-docs` | `q-sd-retrieval-network` | positive | `0.6682106852531433` |
+| `self-docs` | `q-sd-analyze-writes` | positive | `0.33899036049842834` |
+| `self-docs` | `q-sd-stack-detection` | positive | `0.9918370842933655` |
+| `self-docs` | `q-sd-second-init` | positive | `0.9619483947753906` |
+| `self-docs` | `q-sd-negative-ingress` | negative | `null` — censored, `< 0.30` |
+| `self-docs` | `q-sd-negative-tungsten` | negative | `null` — censored, `< 0.30` |
+| `self-docs` | `q-sd-negative-blog` | negative | `null` — censored, `< 0.30` |
+| `self-docs` | `q-sd-negative-grpc` | negative | `null` — censored, `< 0.30` |
+| `self-docs` | `q-sd-negative-migration` | negative | `null` — censored, `< 0.30` |
+
+### What the move cost
+
+Arm E was run on both corpora twice in one pass over one tree — once with the constant at `0.3` and
+once at `0.32`, with a rebuild between the two runs and no other edit — through
+`bash scripts/scratch-run.sh` over a launcher that calls `runEval` without `--out`, so it printed the
+table and each corpus's `snapshot` stamp and wrote nothing. Both readings of each corpus reported the
+**same** stamp, which is the only reason the pair below is a before/after rather than two unrelated
+figures.
+
+| Corpus | `snapshot` (both readings) | arm E recall@5 at `0.3` | arm E recall@5 at `0.32` |
+| --- | --- | --- | --- |
+| `fixture-catalog` | `{ files: 9, chunks: 41 }` | `0.667` (0.6666666666666666) | `0.667` (0.6666666666666666) |
+| `self-docs` | `{ files: 13, chunks: 173 }` | `0.600` (0.6) | `0.600` (0.6) |
+
+**The move costs no positive.** recall@5, recall@3, recall@1 and MRR are unchanged on both corpora,
+and the same 5 positives abstain at both values — `q-fc-billable-weight`,
+`q-fc-surcharge-compounding`, `q-fc-verify-callback` on `fixture-catalog`, `q-sd-new-config-key` and
+`q-sd-run-gates` on `self-docs`, the 5 already censored at `0.3`. After the move the arm abstains on
+**every** negative query: 3 of 3 on `fixture-catalog`, 5 of 5 on `self-docs`. The figures above are
+not re-checkable in the generated region as it stands, which is the pre-move run; they become
+re-checkable when Task 9 regenerates that region post-move, whose provenance states its own, later
+snapshot and the threshold in force.
+
+### The limit on this calibration
+
+Both corpora are far below the roughly 1,500 chunks of a mature docs catalog — 41 and 173 — so this
+is a calibration on two small committed corpora rather than on a real catalog, and its standing
+reproduction is gate 11 of `scripts/run-gates.sh`, which re-runs the eval against the recorded floor,
+rather than a remembered run; its confirmation is a hand run against a private real catalog, which
+this branch does not perform. What would move the value is that run: a real-catalog arm E whose
+negative queries return scores at or above `0.32`, or whose positives fall below it, reopens the
+choice — and because every negative here is censored rather than measured, a run that observes the
+negative distribution instead of bounding it is enough on its own to re-derive the number.
 
 ## Cold build and index size
 

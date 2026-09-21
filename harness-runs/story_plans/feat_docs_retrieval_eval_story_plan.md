@@ -46,7 +46,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_docs_r
 3. [x] **Task 3** — Runner core: runner-owned config, index build, label hygiene, argument surface _(layer: general)_ _(points: 20)_
 4. [x] **Task 4** — Arms B–E, the metrics, and the results file of record _(layer: general)_ _(points: 20)_
 5. [x] **Task 5** — Calibrate `ABSTAIN_SCORE_THRESHOLD` and retire the provisional marker _(layer: cli)_ _(points: 10)_
-6. [ ] **Task 14** — The threshold calibration record in `docs/retrieval-eval-results.md` _(layer: general)_ _(points: 10)_
+6. [x] **Task 14** — The threshold calibration record in `docs/retrieval-eval-results.md` _(layer: general)_ _(points: 10)_
 7. [ ] **Task 6** — Arm A's harness, its agent-task text and its transcript scorer — built, never run _(layer: general)_ _(points: 15)_
 8. [ ] **Task 7** — The query-log pass over MCP against the real models _(layer: general)_ _(points: 15)_
 9. [ ] **Task 8** — Cold-build wall time and index size on disk, through `scratch-run.sh` _(layer: general)_ _(points: 15)_
