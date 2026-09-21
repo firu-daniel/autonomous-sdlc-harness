@@ -4642,9 +4642,9 @@ justifies a design decision on its own.
 **60 seconds** moves out of the agent's path and into `scripts/setup-worktree.sh`, because the agent
 runner's MCP tool-call timeout defaults to 60 s and an adopter may set their Bash timeouts lower. The
 measured refresh here is **62.51 ms per chunk**, which extrapolates to **93.8 s** at the roughly 1,500
-chunks of a mature docs catalog and crosses 60 s at about **960 chunks** — so **the rule trips, and the
-decision is that the cold build belongs in `setup-worktree.sh`**, not in the first `search_docs` call an
-agent makes. Below that crossover the in-line build is within the budget; this repository's own 177-chunk
+chunks of a mature docs catalog and crosses 60 s in total at about **940 chunks** (60 s less the 1.07 s
+the two fixed phases cost, divided by 62.51 ms per chunk) — so **the rule trips, and the decision is that
+the cold build belongs in `setup-worktree.sh`**, not in the first `search_docs` call an agent makes. Below that crossover the in-line build is within the budget; this repository's own 177-chunk
 corpus builds in 12.2 s. Task 12 carries the argument into `docs/retrieval.md`; the confirmation on a
 real catalog is `docs/development.md` §5 gate 10's hand run, which replaces the extrapolation with a
 measurement.
