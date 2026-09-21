@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # The harness's own verification, as one command.
 #
-# `docs/development.md` §5 defines ten gates. This script runs the five a process can run
-# unattended and reports the five it cannot, so that a reviewer — human or agent — reading a
-# green result has read the whole automatable half rather than one suite of it. `commands.test`
-# in `harness.config.json` points here for exactly that reason: `npm test` is gate 4 alone, and a
-# branch review that reads it as "verified" is reading five gates' worth of silence as a pass.
+# `docs/development.md` §5 defines eleven gates. This script runs the six a process can run
+# unattended — gate 11 among them where the retrieval model cache is provisioned, and reported with
+# the hand-run gates where it is not — and reports the five it cannot, so that a reviewer — human or
+# agent — reading a green result has read the whole automatable half rather than one suite of it.
+# `commands.test` in `harness.config.json` points here for exactly that reason: `npm test` is gate 4
+# alone, and a branch review that reads it as "verified" is reading the other five automatable
+# gates' worth of silence as a pass.
 #
 # NOT the generated `scripts/test.sh`. That file is `init`'s, it wraps whatever `commands.test`
 # names, and a re-run regenerates it. This file is hand-written, is not in the set `init --force`
@@ -29,6 +31,8 @@ trap 'rm -f "$log"' EXIT
 
 failed=()
 passed=()
+# Gate 11's third outcome, which is neither of the two arrays: see that gate's own block below.
+floor_blocked=0
 
 # Run one command and grade it by its EXIT STATUS. Output goes to a file rather than through a
 # pipe: §5's opening rule is that piping a gate into a pager or into `head` returns the *pager's*
@@ -110,6 +114,31 @@ gate_silent "6b no template in the dot-namespace" \
 gate "6c llms.txt links resolve on main" bash scripts/check-llms-txt.sh
 gate "6d plugin command spellings carry the prefix" bash scripts/check-command-spelling.sh
 
+echo "== gate 11 — docs-retrieval relevance floor"
+# Written by hand rather than handed to `gate`, the way gate 2e is, because this gate has THREE
+# outcomes and that helper grades two: it pushes every non-zero onto `failed`, and anything on
+# `failed` makes this script exit 1. Status 3 is the model-cache status
+# `evals/docs-retrieval/check-floor.mjs` reserves, and an empty machine-shared cache is a
+# provisioning gap rather than a regression — counting it would turn `commands.test` red on every
+# contributor's machine and in every branch worktree without the several-hundred-megabyte download,
+# which is why §5 sorts real-model retrieval into gate 10. So it is reported below with the gates
+# this script cannot run and pushed onto neither array. A SHORTFALL against the recorded floor is
+# any other non-zero and still fails the script. It depends on gate 2a having built `cli/dist`.
+node evals/docs-retrieval/check-floor.mjs >"$log" 2>&1
+floor_status=$?
+if [ "$floor_status" -eq 0 ]; then
+  passed+=("11 docs-retrieval relevance floor")
+  echo "  ok    11 docs-retrieval relevance floor"
+elif [ "$floor_status" -eq 3 ]; then
+  floor_blocked=1
+  echo "  BLOCKED 11 docs-retrieval relevance floor — the retrieval model cache is empty"
+  sed 's/^/        /' "$log" | tail -25
+else
+  failed+=("11 docs-retrieval relevance floor")
+  echo "  FAIL  11 docs-retrieval relevance floor (exit $floor_status)"
+  sed 's/^/        /' "$log" | tail -25
+fi
+
 echo
 echo "== gates this script cannot run"
 echo "  5  doctor's exit contract, by hand against gate 4's scratch repository"
@@ -117,11 +146,21 @@ echo "  7  the five adoption shapes, against real directories outside this check
 echo "  8  /autonomous-sdlc-harness:harness-analyze, which is judgement and runs inside a model session"
 echo "  9  examples/notes-app, which installs dependencies inside the checkout"
 echo "  10 docs retrieval with the real models, which downloads them and needs a network"
+if [ "$floor_blocked" -eq 1 ]; then
+  echo "  11 the docs-retrieval relevance floor, reported BLOCKED above: it runs unattended where the"
+  echo "     retrieval model cache is provisioned and is listed here where it is not"
+fi
 echo "     -> docs/development.md §5"
+
+# The same conditional the block above states, in the line a caller reads off a green run.
+hand_run="gates 5, 7, 8, 9 and 10 remain hand-run"
+if [ "$floor_blocked" -eq 1 ]; then
+  hand_run="$hand_run, and gate 11 with them — it runs unattended only where the model cache is provisioned"
+fi
 
 echo
 if [ ${#failed[@]} -eq 0 ]; then
-  echo "run-gates: ${#passed[@]} automatable checks passed; gates 5, 7, 8, 9 and 10 remain hand-run"
+  echo "run-gates: ${#passed[@]} automatable checks passed; $hand_run"
   exit 0
 fi
 echo "run-gates: ${#failed[@]} failed, ${#passed[@]} passed" >&2

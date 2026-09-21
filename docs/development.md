@@ -109,9 +109,9 @@ The repo-scoped side of the same boundary — what belongs in the committed `har
 
 ## 5. Verifying a change
 
-Ten gates. Run each **without a pipe** and read the exit status: piping into a pager or into `head` returns the *pager's* status, not the tool's, so a failing gate reads as a passing one.
+Eleven gates. Run each **without a pipe** and read the exit status: piping into a pager or into `head` returns the *pager's* status, not the tool's, so a failing gate reads as a passing one.
 
-**Five of the ten run unattended, and `scripts/run-gates.sh` is how.** It runs gates 1, 2, 3, 4 and 6 — every gate below that a process can run without a terminal, a browser, a model session or a network — grades each one the way this section says to grade it, and prints the remaining five, gates 5, 7, 8, 9 and 10, rather than passing over them. `commands.test` in `harness.config.json` points at it, so a branch review's verification is the automatable half of this section rather than gate 4 alone. It is hand-written and is not in the set `init --force` regenerates; the `scripts/test.sh` that wraps it is generated and is not this file. Running the gates by hand, as written below, stays correct and is what the script's own text is checked against.
+**Six of the eleven run unattended, and `scripts/run-gates.sh` is how.** It runs gates 1, 2, 3, 4, 6 and 11 — every gate below that a process can run without a terminal, a browser, a model session or a network — grades each one the way this section says to grade it, and prints the remaining five, gates 5, 7, 8, 9 and 10, rather than passing over them. **Gate 11 is the one conditional member of that six:** it runs unattended **where the retrieval model cache is provisioned**, and where the cache is empty it is printed with the gates the script cannot run and counted among neither the passes nor the failures — so the script's exit status never depends on a several-hundred-megabyte download. `commands.test` in `harness.config.json` points at it, so a branch review's verification is the automatable half of this section rather than gate 4 alone. It is hand-written and is not in the set `init --force` regenerates; the `scripts/test.sh` that wraps it is generated and is not this file. Running the gates by hand, as written below, stays correct and is what the script's own text is checked against.
 
 **One standing exemption, stated here so no gate has to restate it.** `examples/notes-app/` is two
 things with different obligations, and its own README draws the line (*"The capture is frozen; the
@@ -494,7 +494,7 @@ npx autonomous-sdlc-harness docs search "<a question one known section of docs/ 
 npx autonomous-sdlc-harness docs search "<a question nothing in docs/ answers>"
 ```
 
-Both run in the default `fused-rerank` mode, which is where the reranker is shown to run. Record the first query's first result and its score, and whether it names the known section. Record whether the second prints `no confident match`, and if it does not, its first score. These scores are the real-model evidence for the provisional abstain threshold.
+Both run in the default `fused-rerank` mode, which is where the reranker is shown to run. Record the first query's first result and its score, and whether it names the known section. Record whether the second prints `no confident match`, and if it does not, its first score. These scores are the real-catalog check on the calibration recorded in `docs/retrieval-eval-results.md` → `## Threshold calibration`, which is that fact's one home (`cli/src/retrieval/search.ts` carries the constant and points there).
 
 **(v) Unattended.**
 
@@ -516,6 +516,8 @@ npx autonomous-sdlc-harness --version
 Record all four, the `claude` line being the version leg (v) ran under.
 
 **Where the results go.** Each leg's command and exact output is recorded in `docs/retrieval.md` → `## Measured, and how`, item (d), replacing its placeholder, dated and carrying leg (vi)'s platform. Item (d) carries leg (iii)'s **chunk count** and its **`du` figure** by name alongside the wall time: the chunk count is what shows the corpus floor was met, and the `du` figure is reported nowhere else. A Linux run also settles that document's Linux question under `## Still open`. A run that could not execute this gate says so in its Done summary, naming the legs it could not run and why, rather than leaving the placeholder unexplained.
+
+**Gate 11 — docs-retrieval relevance floor.** `scripts/run-gates.sh` runs it as `node evals/docs-retrieval/check-floor.mjs`, which drives the docs-retrieval eval over the committed **`fixture-catalog`** corpus — that corpus alone — for every arm the eval's arm table has a search mode for, and grades each arm's recall@5 and MRR against the values recorded in `evals/docs-retrieval/floor.json`. It loads the **real** embedder and reranker: `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` is set nowhere on that path and the eval refuses to produce a number while it is set, so unlike every retrieval case in gate 4 this gate exercises the models gate 10 installs. **A failure means retrieval got worse**: a measured figure below a recorded floor, on a corpus that moves only when this eval moves, so the change is a property of the retrieval code rather than of the documents. **An empty model cache is reported, not counted as a failure** — the module exits with a status reserved for that case, the script prints it as `BLOCKED` and lists it with the gates it cannot run, and it pushes the gate onto neither the passes nor the failures, so a machine without the hand-provisioned cache still reads a true green. A shortfall is not exempt: it fails the script. The floor policy itself — the margin between a measured figure and its recorded floor, why the graded corpus is `fixture-catalog` alone, and when a floor is re-recorded — is stated in `docs/retrieval-eval.md` → `## The regression floor`, which `floor.json`'s own `see` field names.
 
 ---
 

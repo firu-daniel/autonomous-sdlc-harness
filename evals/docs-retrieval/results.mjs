@@ -168,6 +168,10 @@ function provenanceSection(corpus) {
     '  two figures carrying different stamps are not a before/after pair.',
     `- \`docs.root\`: \`${corpus.config.docs.root}\`, as the runner set it (the eval owns the retrieval gate and`,
     '  `docs.root` alone).',
+    `- The corpus is *every* \`*.md\` under that \`docs.root\`, with no file filtered out, so a document added`,
+    '  under it joins the corpus that measures it — and where that root is this checkout’s own `docs/`, this',
+    '  file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp',
+    '  taken before such a document existed is therefore a different corpus.',
     layers[0] === undefined
       ? '- `layers[]`: none — this corpus is read as a repository of its own and carries no conventions documents.'
       : '- `layers[]`, read out of the resolved checkout’s `harness.config.json` and never composed here:',
@@ -177,6 +181,10 @@ function provenanceSection(corpus) {
     `- Embedder: \`${corpus.embedderId}\`. Reranker: \`${corpus.rerankerId}\` — loaded and run outside the stub.`,
     `- \`${RETRIEVAL_STUB_ENV}\` was unset for this run, which the index build refuses to proceed without.`,
     `- Abstention threshold in force: \`${ABSTAIN_SCORE_THRESHOLD}\`, read off the \`search.js\` this run loaded.`,
+    '- The figures above are the **post-calibration** ones for the one arm that threshold applies to. The',
+    '  pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold',
+    '  calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —',
+    '  so both variables that moved between the two readings, the threshold and the corpus, are named.',
     `- Host \`${corpus.host}\`, Node \`${corpus.node}\`, ${corpus.generatedAt}.`,
   ].join('\n');
 }

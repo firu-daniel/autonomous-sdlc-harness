@@ -20,10 +20,10 @@ mean: `docs/retrieval-eval.md` owns that, and `docs/retrieval.md` owns how the t
 | Arm | Mode | recall@1 | recall@3 | recall@5 | MRR | strict recall@5 | strict MRR | p50 ms | p95 ms | cost |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | A | — | — | — | — | — | — | — | — | — | awaiting hand run |
-| B | `lexical` | 0.444 | 0.889 | 1.000 | 0.657 | 1.000 | 0.606 | 0.4 | 3.3 | local — no billed tokens (0 embed calls, 0 rerank calls) |
-| C | `vector` | 0.778 | 1.000 | 1.000 | 0.889 | 1.000 | 0.806 | 5.2 | 5.5 | local — no billed tokens (12 embed calls, 0 rerank calls) |
-| D | `fused` | 0.556 | 1.000 | 1.000 | 0.759 | 1.000 | 0.685 | 5.4 | 7.1 | local — no billed tokens (12 embed calls, 0 rerank calls) |
-| E | `fused-rerank` | 0.444 | 0.667 | 0.667 | 0.556 | 0.667 | 0.556 | 388.0 | 483.7 | local — no billed tokens (12 embed calls, 12 rerank calls) |
+| B | `lexical` | 0.444 | 0.889 | 1.000 | 0.657 | 1.000 | 0.606 | 0.6 | 4.2 | local — no billed tokens (0 embed calls, 0 rerank calls) |
+| C | `vector` | 0.778 | 1.000 | 1.000 | 0.889 | 1.000 | 0.806 | 5.8 | 6.5 | local — no billed tokens (12 embed calls, 0 rerank calls) |
+| D | `fused` | 0.556 | 1.000 | 1.000 | 0.759 | 1.000 | 0.685 | 5.9 | 7.7 | local — no billed tokens (12 embed calls, 0 rerank calls) |
+| E | `fused-rerank` | 0.444 | 0.667 | 0.667 | 0.556 | 0.667 | 0.556 | 652.4 | 799.4 | local — no billed tokens (12 embed calls, 12 rerank calls) |
 
 Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its row is
 filled by re-running the eval with `--transcript` against a hand-run transcript, per the procedure in
@@ -41,13 +41,21 @@ within a row.
   two figures carrying different stamps are not a before/after pair.
 - `docs.root`: `docs`, as the runner set it (the eval owns the retrieval gate and
   `docs.root` alone).
+- The corpus is *every* `*.md` under that `docs.root`, with no file filtered out, so a document added
+  under it joins the corpus that measures it — and where that root is this checkout’s own `docs/`, this
+  file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
+  taken before such a document existed is therefore a different corpus.
 - `layers[]`: none — this corpus is read as a repository of its own and carries no conventions documents.
 - Query set: `evals/docs-retrieval/queries/fixture-catalog.jsonl` — 9 positive, 3 negative.
 - `k`: 5; repetitions per query: 1.
 - Embedder: `Xenova/bge-small-en-v1.5:q8:cls:384:v1`. Reranker: `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` — loaded and run outside the stub.
 - `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
-- Abstention threshold in force: `0.3`, read off the `search.js` this run loaded.
-- Host `Daniels-MacBook-Air.local`, Node `v20.19.5`, 2026-09-21T16:46:12.749Z.
+- Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
+- The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
+  pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
+  calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —
+  so both variables that moved between the two readings, the threshold and the corpus, are named.
+- Host `Daniels-MacBook-Air.local`, Node `v20.19.5`, 2026-09-21T18:59:36.311Z.
 
 ```json
 {
@@ -56,7 +64,7 @@ within a row.
     "files": 9,
     "chunks": 41
   },
-  "abstainScoreThreshold": 0.3,
+  "abstainScoreThreshold": 0.32,
   "embedder": "Xenova/bge-small-en-v1.5:q8:cls:384:v1",
   "reranker": "Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1",
   "k": 5,
@@ -66,7 +74,7 @@ within a row.
     "positives": 9,
     "negatives": 3
   },
-  "generatedAt": "2026-09-21T16:46:12.749Z",
+  "generatedAt": "2026-09-21T18:59:36.311Z",
   "host": "Daniels-MacBook-Air.local",
   "node": "v20.19.5",
   "arms": [
@@ -104,8 +112,8 @@ within a row.
           "mrr": 0.6055555555555556
         },
         "latency": {
-          "p50": 0.3935830000000351,
-          "p95": 3.263749999999618
+          "p50": 0.6111659999996846,
+          "p95": 4.170292000000245
         },
         "samples": 12,
         "abstainedOnNegative": 0,
@@ -137,7 +145,7 @@ within a row.
               }
             ],
             "durationMs": [
-              3.263749999999618
+              4.170292000000245
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -171,7 +179,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.5560419999997066
+              1.2911659999999756
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -205,7 +213,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.40429100000028484
+              0.6478750000001128
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -239,7 +247,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.4310840000002827
+              0.6638750000001892
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -273,7 +281,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.3975000000000364
+              0.6084999999998217
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -307,7 +315,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.3653749999998581
+              0.572624999999789
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -341,7 +349,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.3935830000000351
+              0.6077499999996689
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -375,7 +383,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.38954199999989214
+              0.6143749999996544
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -409,7 +417,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.38579100000015387
+              0.6111659999996846
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -443,7 +451,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.41600000000016735
+              0.6481250000001637
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -454,7 +462,7 @@ within a row.
             "abstained": false,
             "hits": [],
             "durationMs": [
-              0.14704099999971731
+              0.23050000000012005
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -486,7 +494,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.3845409999998992
+              0.5816250000002583
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -523,8 +531,8 @@ within a row.
           "mrr": 0.8055555555555556
         },
         "latency": {
-          "p50": 5.225082999999813,
-          "p95": 5.513416000000234
+          "p50": 5.762374999999793,
+          "p95": 6.468499999999949
         },
         "samples": 12,
         "abstainedOnNegative": 0,
@@ -556,7 +564,7 @@ within a row.
               }
             ],
             "durationMs": [
-              4.042875000000095
+              5.236041000000114
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -590,7 +598,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.513416000000234
+              6.090416000000005
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -624,7 +632,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.225082999999813
+              5.823041999999987
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -658,7 +666,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.2794999999996435
+              5.762374999999793
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -692,7 +700,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.2961669999999685
+              6.468499999999949
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -726,7 +734,7 @@ within a row.
               }
             ],
             "durationMs": [
-              4.952291999999943
+              5.545375000000149
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -760,7 +768,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.430707999999868
+              6.308958000000075
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -794,7 +802,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.396166999999878
+              6.218708000000333
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -828,7 +836,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.422667000000274
+              6.016415999999936
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -862,7 +870,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.159625000000233
+              5.5448749999995925
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -894,7 +902,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.088916999999583
+              5.361292000000049
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -926,7 +934,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.072415999999976
+              5.386332999999922
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -963,8 +971,8 @@ within a row.
           "mrr": 0.6851851851851851
         },
         "latency": {
-          "p50": 5.385375000000295,
-          "p95": 7.120707999999922
+          "p50": 5.865124999999807,
+          "p95": 7.719375000000127
         },
         "samples": 12,
         "abstainedOnNegative": 0,
@@ -996,7 +1004,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.242707999999766
+              5.9692919999997684
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1030,7 +1038,7 @@ within a row.
               }
             ],
             "durationMs": [
-              7.120707999999922
+              6.116167000000132
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1064,7 +1072,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.621208000000024
+              5.574083000000428
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1098,7 +1106,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.443250000000262
+              5.865124999999807
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.032266458495966696,
@@ -1132,7 +1140,7 @@ within a row.
               }
             ],
             "durationMs": [
-              6.279457999999977
+              7.719375000000127
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.032266458495966696,
@@ -1166,7 +1174,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.12112500000012
+              5.504707999999937
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03252247488101534,
@@ -1200,7 +1208,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.411208999999872
+              7.628374999999778
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1234,7 +1242,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.385375000000295
+              6.04024999999956
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1268,7 +1276,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.266000000000076
+              5.955583999999817
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1302,7 +1310,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.998042000000169
+              5.528875000000426
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.03076923076923077
@@ -1334,7 +1342,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.32870899999989
+              4.708000000000084
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -1366,7 +1374,7 @@ within a row.
               }
             ],
             "durationMs": [
-              4.780374999999822
+              5.266958000000159
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.032266458495966696
@@ -1403,8 +1411,8 @@ within a row.
           "mrr": 0.5555555555555556
         },
         "latency": {
-          "p50": 387.95337500000005,
-          "p95": 483.6779580000002
+          "p50": 652.4469169999998,
+          "p95": 799.3642080000009
         },
         "samples": 12,
         "abstainedOnNegative": 3,
@@ -1436,7 +1444,7 @@ within a row.
               }
             ],
             "durationMs": [
-              450.1607919999997
+              517.770583
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9988245368003845,
@@ -1470,7 +1478,7 @@ within a row.
               }
             ],
             "durationMs": [
-              388.72837500000014
+              545.5106249999999
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9811885952949524,
@@ -1504,7 +1512,7 @@ within a row.
               }
             ],
             "durationMs": [
-              483.6779580000002
+              652.4469169999998
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.941379964351654,
@@ -1538,7 +1546,7 @@ within a row.
               }
             ],
             "durationMs": [
-              381.89074999999957
+              607.866
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9988497495651245,
@@ -1551,7 +1559,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              389.35262499999953
+              629.0243339999997
             ],
             "warnings": [],
             "bestScoreOnPositive": null,
@@ -1564,7 +1572,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              381.2952500000001
+              678.095875
             ],
             "warnings": [],
             "bestScoreOnPositive": null,
@@ -1598,7 +1606,7 @@ within a row.
               }
             ],
             "durationMs": [
-              395.13516699999946
+              703.5496669999993
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.5472269654273987,
@@ -1611,7 +1619,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              387.95337500000005
+              754.9446669999998
             ],
             "warnings": [],
             "bestScoreOnPositive": null,
@@ -1645,7 +1653,7 @@ within a row.
               }
             ],
             "durationMs": [
-              375.1113750000004
+              782.9009169999999
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.983818769454956,
@@ -1658,7 +1666,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              377.9772499999999
+              776.3848749999997
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -1669,7 +1677,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              395.26166699999976
+              799.3642080000009
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -1680,7 +1688,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              141.1967909999994
+              331.1431670000002
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -1699,10 +1707,10 @@ within a row.
 | Arm | Mode | recall@1 | recall@3 | recall@5 | MRR | strict recall@5 | strict MRR | p50 ms | p95 ms | cost |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | A | — | — | — | — | — | — | — | — | — | awaiting hand run |
-| B | `lexical` | 0.333 | 0.733 | 0.933 | 0.554 | 0.733 | 0.351 | 1.0 | 2.9 | local — no billed tokens (0 embed calls, 0 rerank calls) |
-| C | `vector` | 0.533 | 0.533 | 0.667 | 0.560 | 0.333 | 0.247 | 3.9 | 5.8 | local — no billed tokens (20 embed calls, 0 rerank calls) |
-| D | `fused` | 0.533 | 0.800 | 0.933 | 0.674 | 0.733 | 0.369 | 4.3 | 6.2 | local — no billed tokens (20 embed calls, 0 rerank calls) |
-| E | `fused-rerank` | 0.400 | 0.600 | 0.600 | 0.500 | 0.533 | 0.383 | 600.7 | 748.2 | local — no billed tokens (20 embed calls, 20 rerank calls) |
+| B | `lexical` | 0.333 | 0.667 | 0.933 | 0.534 | 0.733 | 0.344 | 2.6 | 6.8 | local — no billed tokens (0 embed calls, 0 rerank calls) |
+| C | `vector` | 0.533 | 0.533 | 0.600 | 0.547 | 0.333 | 0.247 | 7.8 | 9.1 | local — no billed tokens (20 embed calls, 0 rerank calls) |
+| D | `fused` | 0.533 | 0.800 | 0.867 | 0.650 | 0.667 | 0.352 | 9.8 | 12.2 | local — no billed tokens (20 embed calls, 0 rerank calls) |
+| E | `fused-rerank` | 0.400 | 0.600 | 0.600 | 0.500 | 0.533 | 0.383 | 1145.3 | 1263.5 | local — no billed tokens (20 embed calls, 20 rerank calls) |
 
 Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its row is
 filled by re-running the eval with `--transcript` against a hand-run transcript, per the procedure in
@@ -1715,11 +1723,15 @@ within a row.
 
 **Provenance.**
 
-- Corpus `self-docs` — snapshot `{ files: 13, chunks: 173 }`,
+- Corpus `self-docs` — snapshot `{ files: 13, chunks: 177 }`,
   as the index build of this run reported it. A figure over `self-docs` is read with this stamp beside it;
   two figures carrying different stamps are not a before/after pair.
 - `docs.root`: `docs`, as the runner set it (the eval owns the retrieval gate and
   `docs.root` alone).
+- The corpus is *every* `*.md` under that `docs.root`, with no file filtered out, so a document added
+  under it joins the corpus that measures it — and where that root is this checkout’s own `docs/`, this
+  file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
+  taken before such a document existed is therefore a different corpus.
 - `layers[]`, read out of the resolved checkout’s `harness.config.json` and never composed here:
   - `cli` (path `cli`) → `.claude/context/cli.md`
   - `plugin` (path `plugin`) → `.claude/context/plugin.md`
@@ -1728,17 +1740,21 @@ within a row.
 - `k`: 5; repetitions per query: 1.
 - Embedder: `Xenova/bge-small-en-v1.5:q8:cls:384:v1`. Reranker: `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` — loaded and run outside the stub.
 - `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
-- Abstention threshold in force: `0.3`, read off the `search.js` this run loaded.
-- Host `Daniels-MacBook-Air.local`, Node `v20.19.5`, 2026-09-21T16:46:35.978Z.
+- Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
+- The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
+  pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
+  calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —
+  so both variables that moved between the two readings, the threshold and the corpus, are named.
+- Host `Daniels-MacBook-Air.local`, Node `v20.19.5`, 2026-09-21T19:00:20.828Z.
 
 ```json
 {
   "corpus": "self-docs",
   "snapshot": {
     "files": 13,
-    "chunks": 173
+    "chunks": 177
   },
-  "abstainScoreThreshold": 0.3,
+  "abstainScoreThreshold": 0.32,
   "embedder": "Xenova/bge-small-en-v1.5:q8:cls:384:v1",
   "reranker": "Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1",
   "k": 5,
@@ -1748,7 +1764,7 @@ within a row.
     "positives": 15,
     "negatives": 5
   },
-  "generatedAt": "2026-09-21T16:46:35.978Z",
+  "generatedAt": "2026-09-21T19:00:20.828Z",
   "host": "Daniels-MacBook-Air.local",
   "node": "v20.19.5",
   "arms": [
@@ -1773,21 +1789,21 @@ within a row.
         "negatives": 5,
         "recall": {
           "1": 0.3333333333333333,
-          "3": 0.7333333333333333,
+          "3": 0.6666666666666666,
           "5": 0.9333333333333333
         },
-        "mrr": 0.5544444444444444,
+        "mrr": 0.5344444444444444,
         "strict": {
           "recall": {
             "1": 0.2,
             "3": 0.4,
             "5": 0.7333333333333333
           },
-          "mrr": 0.3511111111111111
+          "mrr": 0.34444444444444444
         },
         "latency": {
-          "p50": 0.9834159999991243,
-          "p95": 2.908167000001413
+          "p50": 2.611417000000074,
+          "p95": 6.793041000000812
         },
         "samples": 20,
         "abstainedOnNegative": 0,
@@ -1819,7 +1835,7 @@ within a row.
               }
             ],
             "durationMs": [
-              9.226957999999286
+              23.993499999996857
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -1853,7 +1869,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.9529159999983676
+              2.453291999998328
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -1882,12 +1898,12 @@ within a row.
                 "score": 0.015625
               },
               {
-                "ref": ".claude/context/cli.md#not-determined",
+                "ref": ".claude/context/plugin.md#what-accompanies-a-new-unit-of-each-kind",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              0.5437500000007276
+              1.3491659999999683
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -1921,7 +1937,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.9900000000016007
+              2.6489159999982803
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -1955,7 +1971,7 @@ within a row.
               }
             ],
             "durationMs": [
-              1.81683300000077
+              3.5946660000008706
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -1989,7 +2005,7 @@ within a row.
               }
             ],
             "durationMs": [
-              2.2168340000025637
+              5.3527920000015
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2014,16 +2030,16 @@ within a row.
                 "score": 0.015873015873015872
               },
               {
-                "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
+                "ref": ".claude/context/plugin.md#registries--a-name-routed-to-an-implementation",
                 "score": 0.015625
               },
               {
-                "ref": ".claude/context/plugin.md#registries--a-name-routed-to-an-implementation",
+                "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              1.0296669999988808
+              2.819374999999127
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2048,16 +2064,16 @@ within a row.
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/development.md#4-userconfig-reserved",
+                "ref": ".claude/context/plugin.md#wires-dispatch-in-return-out",
                 "score": 0.015625
               },
               {
-                "ref": ".claude/context/plugin.md#wires-dispatch-in-return-out",
+                "ref": "docs/development.md",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              0.5817080000015267
+              1.345208000002458
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2091,7 +2107,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.8559999999997672
+              1.8783330000005662
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2116,21 +2132,21 @@ within a row.
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/watcher.md#4-pausing-parking-and-the-usage-gate",
+                "ref": "docs/cli.md#docs-search",
                 "score": 0.015625
               },
               {
-                "ref": "docs/development.md#6-the-roadmap-this-tree-defers-to",
+                "ref": "docs/watcher.md#4-pausing-parking-and-the-usage-gate",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              1.1955830000006245
+              3.2408749999995052
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
-            "rank": 4,
-            "strictRank": 4
+            "rank": 5,
+            "strictRank": 5
           },
           {
             "id": "q-sd-search-abstains",
@@ -2138,11 +2154,11 @@ within a row.
             "abstained": false,
             "hits": [
               {
-                "ref": "docs/cli.md#docs-serve",
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/cli.md#docs-search",
+                "ref": "docs/cli.md#docs-serve",
                 "score": 0.016129032258064516
               },
               {
@@ -2150,21 +2166,21 @@ within a row.
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/retrieval.md#how-it-fits-together",
+                "ref": "docs/cli.md#docs-search",
                 "score": 0.015625
               },
               {
-                "ref": "docs/cli.md#3-the-re-run-contract",
+                "ref": "docs/retrieval.md#how-it-fits-together",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              0.6698340000002645
+              1.9358749999992142
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
-            "rank": 2,
-            "strictRank": 4
+            "rank": 4,
+            "strictRank": 5
           },
           {
             "id": "q-sd-retrieval-network",
@@ -2193,7 +2209,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.5606670000015583
+              1.5866669999995793
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2227,7 +2243,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.9819580000003043
+              2.6708749999997963
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2261,7 +2277,7 @@ within a row.
               }
             ],
             "durationMs": [
-              1.795957999998791
+              4.702750000000378
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2295,7 +2311,7 @@ within a row.
               }
             ],
             "durationMs": [
-              2.908167000001413
+              6.793041000000812
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2320,16 +2336,16 @@ within a row.
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/guard-verification.md#37-the-sweep-behind-the-verdict",
+                "ref": "docs/retrieval-eval-results.md#the-pre-calibration-distributions-quoted",
                 "score": 0.015625
               },
               {
-                "ref": "docs/guard-verification.md#36-fail-closed-conditions",
+                "ref": "docs/guard-verification.md#37-the-sweep-behind-the-verdict",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              1.134249999999156
+              2.679833999998664
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -2340,28 +2356,28 @@ within a row.
             "abstained": false,
             "hits": [
               {
-                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "ref": "docs/retrieval-eval-results.md#the-pre-calibration-distributions-quoted",
                 "score": 0.01639344262295082
               },
               {
-                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
                 "score": 0.016129032258064516
               },
               {
-                "ref": ".claude/context/plugin.md#the-commit-message-policy",
+                "ref": ".claude/context/conventions.md#commit-message-policy",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/cli.md#10-how-this-is-tested",
+                "ref": ".claude/context/plugin.md#the-commit-message-policy",
                 "score": 0.015625
               },
               {
-                "ref": "docs/development.md#4-userconfig-reserved",
+                "ref": "docs/cli.md#10-how-this-is-tested",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              0.9160830000000715
+              2.422167000000627
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -2376,24 +2392,24 @@ within a row.
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/outer-loop-verification.md#0-method-and-fixtures",
+                "ref": "docs/retrieval-eval-results.md#the-pre-calibration-distributions-quoted",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/cli.md#2-init",
+                "ref": ".claude/context/cli.md#naming-and-file-layout",
                 "score": 0.015873015873015872
               },
               {
-                "ref": ".claude/context/cli.md#naming-and-file-layout",
+                "ref": "docs/cli.md#2-init",
                 "score": 0.015625
               },
               {
-                "ref": "docs/development.md#6-the-roadmap-this-tree-defers-to",
+                "ref": "docs/outer-loop-verification.md#0-method-and-fixtures",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              1.0817089999982272
+              2.278999999998632
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -2404,28 +2420,28 @@ within a row.
             "abstained": false,
             "hits": [
               {
-                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "ref": "docs/retrieval.md#how-it-fits-together",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/retrieval.md#how-it-fits-together",
+                "ref": "docs/cli.md#11-docs",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/cli.md#11-docs",
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/cli.md#docs-serve",
+                "ref": "docs/cli.md#9-daemon",
                 "score": 0.015625
               },
               {
-                "ref": "docs/cli.md#9-daemon",
+                "ref": "docs/cli.md#docs-serve",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              0.9834159999991243
+              2.611417000000074
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -2452,12 +2468,12 @@ within a row.
                 "score": 0.015625
               },
               {
-                "ref": "docs/config.md#5-key-reference",
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              0.7301670000015292
+              2.004417000000103
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -2482,9 +2498,9 @@ within a row.
         "recall": {
           "1": 0.5333333333333333,
           "3": 0.5333333333333333,
-          "5": 0.6666666666666666
+          "5": 0.6
         },
-        "mrr": 0.56,
+        "mrr": 0.5466666666666666,
         "strict": {
           "recall": {
             "1": 0.2,
@@ -2494,8 +2510,8 @@ within a row.
           "mrr": 0.24666666666666667
         },
         "latency": {
-          "p50": 3.8538750000006985,
-          "p95": 5.761374999998225
+          "p50": 7.78887499999837,
+          "p95": 9.077084000000468
         },
         "samples": 20,
         "abstainedOnNegative": 0,
@@ -2527,7 +2543,7 @@ within a row.
               }
             ],
             "durationMs": [
-              4.336083000001963
+              8.942042000002402
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2561,7 +2577,7 @@ within a row.
               }
             ],
             "durationMs": [
-              3.7136669999999867
+              8.663791999999376
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2595,7 +2611,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.40520800000013
+              7.604792000001908
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2624,12 +2640,12 @@ within a row.
                 "score": 0.015625
               },
               {
-                "ref": "docs/typecheck-key-decision.md#2-what-depends-on-the-key-existing",
+                "ref": "docs/typecheck-key-decision.md#1-the-bind",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              4.89495800000077
+              14.628708000000188
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2663,7 +2679,7 @@ within a row.
               }
             ],
             "durationMs": [
-              3.5180829999990237
+              8.655665999998746
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2697,7 +2713,7 @@ within a row.
               }
             ],
             "durationMs": [
-              3.6936249999998836
+              8.492207999999664
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2731,7 +2747,7 @@ within a row.
               }
             ],
             "durationMs": [
-              3.6729579999991984
+              7.089417000002868
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2765,7 +2781,7 @@ within a row.
               }
             ],
             "durationMs": [
-              4.553834000002098
+              7.505250000001979
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2799,7 +2815,7 @@ within a row.
               }
             ],
             "durationMs": [
-              3.4534160000002885
+              7.416000000001077
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2833,7 +2849,7 @@ within a row.
               }
             ],
             "durationMs": [
-              3.3919169999971928
+              8.055374999999913
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2850,28 +2866,28 @@ within a row.
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/retrieval.md",
+                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/cli.md#docs-serve",
+                "ref": "docs/retrieval.md",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/cli.md#docs-index",
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
                 "score": 0.015625
               },
               {
-                "ref": "docs/cli.md#docs-search",
+                "ref": "docs/cli.md#docs-serve",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              3.1144160000003467
+              7.524416999996902
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
-            "rank": 5,
+            "rank": 0,
             "strictRank": 0
           },
           {
@@ -2880,28 +2896,28 @@ within a row.
             "abstained": false,
             "hits": [
               {
-                "ref": "docs/cli.md#docs-index",
+                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/retrieval.md#what-this-buys-you",
+                "ref": "docs/cli.md#docs-index",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/retrieval.md#still-open",
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/retrieval.md",
+                "ref": "docs/retrieval.md#what-this-buys-you",
                 "score": 0.015625
               },
               {
-                "ref": "docs/cli.md#docs-serve",
+                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              3.2111670000012964
+              7.710792000001675
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2935,7 +2951,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.176665999999386
+              7.396457999999257
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2969,7 +2985,7 @@ within a row.
               }
             ],
             "durationMs": [
-              4.153167000000394
+              7.79541700000118
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -3003,7 +3019,7 @@ within a row.
               }
             ],
             "durationMs": [
-              4.178500000001804
+              9.077084000000468
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -3037,7 +3053,7 @@ within a row.
               }
             ],
             "durationMs": [
-              3.7262919999993755
+              7.78887499999837
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -3048,7 +3064,7 @@ within a row.
             "abstained": false,
             "hits": [
               {
-                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
+                "ref": "docs/retrieval-eval-results.md#threshold-calibration",
                 "score": 0.01639344262295082
               },
               {
@@ -3056,20 +3072,20 @@ within a row.
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/development.md#3-manifest-facts-a-contributor-must-not-rediscover",
+                "ref": "docs/retrieval-eval-results.md#what-the-move-cost",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/development.md",
+                "ref": "docs/retrieval-eval-results.md#the-two-bounds-that-fixed-the-choice",
                 "score": 0.015625
               },
               {
-                "ref": "docs/outer-loop-verification.md#25-the-usage-gate",
+                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              4.325167000002693
+              7.404709000002185
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -3101,7 +3117,7 @@ within a row.
               }
             ],
             "durationMs": [
-              10.312375000001339
+              7.414582999997947
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -3112,28 +3128,28 @@ within a row.
             "abstained": false,
             "hits": [
               {
-                "ref": "docs/retrieval.md#what-this-buys-you",
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/retrieval-eval-results.md#corpus-fixture-catalog",
+                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "ref": "docs/retrieval.md#what-this-buys-you",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/retrieval.md#still-open",
+                "ref": "docs/retrieval-eval-results.md#corpus-fixture-catalog",
                 "score": 0.015625
               },
               {
-                "ref": "docs/cli.md#11-docs",
+                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              5.761374999998225
+              8.38866699999926
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -3160,12 +3176,12 @@ within a row.
                 "score": 0.015625
               },
               {
-                "ref": "docs/outer-loop-verification.md#26-the-stall-watchdog",
+                "ref": "docs/cli.md#docs-fetch-models",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              3.8538750000006985
+              8.121250000000146
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -3190,20 +3206,20 @@ within a row.
         "recall": {
           "1": 0.5333333333333333,
           "3": 0.8,
-          "5": 0.9333333333333333
+          "5": 0.8666666666666667
         },
-        "mrr": 0.6744444444444445,
+        "mrr": 0.65,
         "strict": {
           "recall": {
             "1": 0.2,
             "3": 0.5333333333333333,
-            "5": 0.7333333333333333
+            "5": 0.6666666666666666
           },
-          "mrr": 0.3688888888888889
+          "mrr": 0.3522222222222222
         },
         "latency": {
-          "p50": 4.288958000001003,
-          "p95": 6.231958000000304
+          "p50": 9.7534169999999,
+          "p95": 12.222083000000566
         },
         "samples": 20,
         "abstainedOnNegative": 0,
@@ -3218,12 +3234,12 @@ within a row.
                 "score": 0.030886196246139225
               },
               {
-                "ref": "docs/typecheck-key-decision.md#3-can-another-family-reach-this-state",
-                "score": 0.03047794966520434
-              },
-              {
                 "ref": "docs/typecheck-key-decision.md#7-recommendation",
                 "score": 0.030330882352941176
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#3-can-another-family-reach-this-state",
+                "score": 0.03028233151183971
               },
               {
                 "ref": "docs/cli.md#8-config",
@@ -3231,11 +3247,11 @@ within a row.
               },
               {
                 "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
-                "score": 0.02804284323271665
+                "score": 0.028205128205128206
               }
             ],
             "durationMs": [
-              4.292292000001908
+              8.021457999999257
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.030886196246139225,
@@ -3269,7 +3285,7 @@ within a row.
               }
             ],
             "durationMs": [
-              3.436541999999463
+              7.51850000000195
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.032266458495966696,
@@ -3299,11 +3315,11 @@ within a row.
               },
               {
                 "ref": ".claude/context/cli.md#what-this-layer-owns-and-what-it-is-not",
-                "score": 0.029138513513513514
+                "score": 0.028958333333333336
               }
             ],
             "durationMs": [
-              4.393165999998018
+              10.601458000001003
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.031544957774465976,
@@ -3317,7 +3333,7 @@ within a row.
             "hits": [
               {
                 "ref": "docs/typecheck-key-decision.md#1-the-bind",
-                "score": 0.031544957774465976
+                "score": 0.03177805800756621
               },
               {
                 "ref": "docs/development.md#5-verifying-a-change",
@@ -3329,18 +3345,18 @@ within a row.
               },
               {
                 "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
-                "score": 0.029709507042253523
+                "score": 0.030117753623188408
               },
               {
                 "ref": "docs/typecheck-key-decision.md#7-recommendation",
-                "score": 0.028985507246376812
+                "score": 0.02919863597612958
               }
             ],
             "durationMs": [
-              6.5338339999980235
+              13.034167000001617
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.031544957774465976,
+            "bestScoreOnPositive": 0.03177805800756621,
             "rank": 2,
             "strictRank": 0
           },
@@ -3351,7 +3367,7 @@ within a row.
             "hits": [
               {
                 "ref": "docs/config.md#3-statedir",
-                "score": 0.03131881575727918
+                "score": 0.031099324975891997
               },
               {
                 "ref": "docs/watcher.md#for-a-consumer-written-in-typescript",
@@ -3362,19 +3378,19 @@ within a row.
                 "score": 0.029116045245077504
               },
               {
-                "ref": "docs/config.md#1-the-three-resolution-classes",
-                "score": 0.028021349599695006
-              },
-              {
                 "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
                 "score": 0.02792120864410021
+              },
+              {
+                "ref": "docs/config.md#1-the-three-resolution-classes",
+                "score": 0.02788769549651404
               }
             ],
             "durationMs": [
-              3.932209000002331
+              10.122458000001643
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.03131881575727918,
+            "bestScoreOnPositive": 0.031099324975891997,
             "rank": 1,
             "strictRank": 1
           },
@@ -3401,11 +3417,11 @@ within a row.
               },
               {
                 "ref": "docs/config.md#5-key-reference",
-                "score": 0.02604430914933198
+                "score": 0.025893752088205813
               }
             ],
             "durationMs": [
-              4.288958000001003
+              10.672667000002548
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -3423,7 +3439,7 @@ within a row.
               },
               {
                 "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
-                "score": 0.03149801587301587
+                "score": 0.03125763125763126
               },
               {
                 "ref": ".claude/context/conventions.md#shell-assets",
@@ -3439,7 +3455,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.550584000000526
+              9.7534169999999
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.0315136476426799,
@@ -3465,15 +3481,15 @@ within a row.
               },
               {
                 "ref": ".claude/context/plugin.md#what-this-layer-is",
-                "score": 0.029571646010002173
+                "score": 0.02976190476190476
               },
               {
                 "ref": "docs/development.md",
-                "score": 0.029437229437229435
+                "score": 0.02967032967032967
               }
             ],
             "durationMs": [
-              5.506374999997206
+              10.579459000000497
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03252247488101534,
@@ -3499,7 +3515,7 @@ within a row.
               },
               {
                 "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
-                "score": 0.02946236559139785
+                "score": 0.02928692699490662
               },
               {
                 "ref": ".claude/context/cli.md#what-done-means-here",
@@ -3507,7 +3523,7 @@ within a row.
               }
             ],
             "durationMs": [
-              3.689249999999447
+              9.592832999998791
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03149801587301587,
@@ -3533,15 +3549,15 @@ within a row.
               },
               {
                 "ref": "docs/watcher.md#4-pausing-parking-and-the-usage-gate",
-                "score": 0.031009615384615385
+                "score": 0.03076923076923077
               },
               {
                 "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
-                "score": 0.02904040404040404
+                "score": 0.028484848484848488
               }
             ],
             "durationMs": [
-              3.97245799999655
+              9.652207999999519
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -3554,33 +3570,33 @@ within a row.
             "abstained": false,
             "hits": [
               {
-                "ref": "docs/cli.md#docs-serve",
-                "score": 0.032266458495966696
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.032018442622950824
               },
               {
-                "ref": "docs/cli.md#docs-search",
+                "ref": "docs/cli.md#docs-serve",
                 "score": 0.0315136476426799
               },
               {
+                "ref": "docs/cli.md#docs-search",
+                "score": 0.030330882352941176
+              },
+              {
                 "ref": "docs/cli.md#11-docs",
-                "score": 0.030679156908665108
+                "score": 0.03028233151183971
               },
               {
                 "ref": "docs/retrieval.md#how-it-fits-together",
-                "score": 0.029709507042253523
-              },
-              {
-                "ref": "docs/retrieval.md#still-open",
-                "score": 0.02904040404040404
+                "score": 0.029083245521601686
               }
             ],
             "durationMs": [
-              3.5870839999988675
+              9.791625000001659
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.032266458495966696,
-            "rank": 2,
-            "strictRank": 4
+            "bestScoreOnPositive": 0.032018442622950824,
+            "rank": 3,
+            "strictRank": 5
           },
           {
             "id": "q-sd-retrieval-network",
@@ -3589,32 +3605,32 @@ within a row.
             "hits": [
               {
                 "ref": "docs/retrieval.md#still-open",
-                "score": 0.03200204813108039
+                "score": 0.03128054740957967
               },
               {
-                "ref": "docs/cli.md#docs-index",
-                "score": 0.030886196246139225
+                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
+                "score": 0.031099324975891997
               },
               {
-                "ref": "docs/retrieval.md#how-it-fits-together",
-                "score": 0.030776515151515152
-              },
-              {
-                "ref": "docs/cli.md#11-docs",
+                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
                 "score": 0.030309988518943745
               },
               {
-                "ref": "docs/cli.md#offline-by-construction",
-                "score": 0.029957522915269395
+                "ref": "docs/cli.md#docs-index",
+                "score": 0.03021353930031804
+              },
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.030117753623188408
               }
             ],
             "durationMs": [
-              3.5722079999977723
+              9.410665999999765
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.03200204813108039,
-            "rank": 5,
-            "strictRank": 5
+            "bestScoreOnPositive": 0.03128054740957967,
+            "rank": 0,
+            "strictRank": 0
           },
           {
             "id": "q-sd-analyze-writes",
@@ -3643,7 +3659,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.153457999997045
+              8.695290999999997
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03252247488101534,
@@ -3677,7 +3693,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.087082999998529
+              12.222083000000566
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.032266458495966696,
@@ -3703,7 +3719,7 @@ within a row.
               },
               {
                 "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
-                "score": 0.029030910609857977
+                "score": 0.02886002886002886
               },
               {
                 "ref": "docs/cli.md#the-interaction-rule",
@@ -3711,7 +3727,7 @@ within a row.
               }
             ],
             "durationMs": [
-              4.547375000001921
+              11.26995800000077
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03225806451612903,
@@ -3725,30 +3741,30 @@ within a row.
             "hits": [
               {
                 "ref": "docs/guard-verification.md#14-two-preconditions-the-whole-set-inherits-from-the-configuration-load",
-                "score": 0.027809742999616416
+                "score": 0.027425373134328357
               },
               {
                 "ref": "docs/config.md#5-key-reference",
-                "score": 0.02749719416386083
+                "score": 0.027346637102734665
               },
               {
                 "ref": "docs/config.md#2-where-configuration-lives",
-                "score": 0.027118043247075507
+                "score": 0.02699859747545582
               },
               {
                 "ref": "docs/config.md",
-                "score": 0.026494565217391304
+                "score": 0.02637768817204301
               },
               {
                 "ref": "docs/config.md#1-the-three-resolution-classes",
-                "score": 0.02565270188221008
+                "score": 0.025567754549556326
               }
             ],
             "durationMs": [
-              6.231958000000304
+              11.269167000002199
             ],
             "warnings": [],
-            "bestScoreOnNegative": 0.027809742999616416
+            "bestScoreOnNegative": 0.027425373134328357
           },
           {
             "id": "q-sd-negative-tungsten",
@@ -3756,31 +3772,31 @@ within a row.
             "abstained": false,
             "hits": [
               {
+                "ref": "docs/retrieval-eval-results.md#the-pre-calibration-distributions-quoted",
+                "score": 0.031099324975891997
+              },
+              {
                 "ref": ".claude/context/plugin.md#sample-fixtures",
-                "score": 0.029411764705882353
+                "score": 0.028381642512077296
               },
               {
                 "ref": ".claude/context/plugin.md#the-commit-message-policy",
-                "score": 0.027777777777777776
+                "score": 0.026988636363636364
               },
               {
                 "ref": ".claude/context/cli.md#dependencies-and-which-way-they-point",
-                "score": 0.02761904761904762
+                "score": 0.02690501986276634
               },
               {
-                "ref": "docs/outer-loop-verification.md#0-method-and-fixtures",
-                "score": 0.027402402402402402
-              },
-              {
-                "ref": ".claude/context/cli.md#one-example--the-shape-a-rule-takes-here",
-                "score": 0.02715098147128967
+                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "score": 0.0265113137453563
               }
             ],
             "durationMs": [
-              4.015708000002633
+              9.615166999999929
             ],
             "warnings": [],
-            "bestScoreOnNegative": 0.029411764705882353
+            "bestScoreOnNegative": 0.031099324975891997
           },
           {
             "id": "q-sd-negative-blog",
@@ -3789,30 +3805,30 @@ within a row.
             "hits": [
               {
                 "ref": "docs/development.md#6-the-roadmap-this-tree-defers-to",
-                "score": 0.031009615384615385
-              },
-              {
-                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
-                "score": 0.03047794966520434
+                "score": 0.030776515151515152
               },
               {
                 "ref": "docs/development.md#1-source-types-and-the-plugin-root",
-                "score": 0.030017921146953404
+                "score": 0.03021353930031804
+              },
+              {
+                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
+                "score": 0.03009207275993712
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#what-the-move-cost",
+                "score": 0.02712049508554787
               },
               {
                 "ref": ".claude/context/conventions.md#documents-of-record",
-                "score": 0.025481764612199396
-              },
-              {
-                "ref": ".claude/context/conventions.md#the-stack-in-the-words-the-rules-below-use",
-                "score": 0.025206087507926443
+                "score": 0.025362318840579712
               }
             ],
             "durationMs": [
-              5.927042000002984
+              10.42779199999859
             ],
             "warnings": [],
-            "bestScoreOnNegative": 0.031009615384615385
+            "bestScoreOnNegative": 0.030776515151515152
           },
           {
             "id": "q-sd-negative-grpc",
@@ -3821,30 +3837,30 @@ within a row.
             "hits": [
               {
                 "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
-                "score": 0.032266458495966696
+                "score": 0.030798389007344232
               },
               {
                 "ref": "docs/cli.md#11-docs",
-                "score": 0.03125763125763126
+                "score": 0.030621785881252923
               },
               {
                 "ref": "docs/cli.md#docs-serve",
-                "score": 0.030330882352941176
+                "score": 0.02946912242686891
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.02889344262295082
               },
               {
                 "ref": "docs/retrieval.md#still-open",
-                "score": 0.029709507042253523
-              },
-              {
-                "ref": "docs/retrieval.md#what-this-buys-you",
-                "score": 0.02938045560996381
+                "score": 0.028850145288501453
               }
             ],
             "durationMs": [
-              3.7186250000013388
+              9.416125000003376
             ],
             "warnings": [],
-            "bestScoreOnNegative": 0.032266458495966696
+            "bestScoreOnNegative": 0.030798389007344232
           },
           {
             "id": "q-sd-negative-migration",
@@ -3857,23 +3873,23 @@ within a row.
               },
               {
                 "ref": ".claude/context/conventions.md#the-stack-in-the-words-the-rules-below-use",
-                "score": 0.02928692699490662
+                "score": 0.029116045245077504
               },
               {
                 "ref": "docs/outer-loop-verification.md#26-the-stall-watchdog",
-                "score": 0.02871794871794872
+                "score": 0.027692895339954164
               },
               {
                 "ref": "docs/config.md#5-key-reference",
-                "score": 0.027730294396961064
+                "score": 0.02749719416386083
               },
               {
                 "ref": "docs/cli.md#3-the-re-run-contract",
-                "score": 0.02639344262295082
+                "score": 0.02619736419157827
               }
             ],
             "durationMs": [
-              3.813750000001164
+              9.268792000002577
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.032266458495966696
@@ -3910,8 +3926,8 @@ within a row.
           "mrr": 0.38333333333333336
         },
         "latency": {
-          "p50": 600.7124999999978,
-          "p95": 748.2279170000002
+          "p50": 1145.3307920000007,
+          "p95": 1263.4789999999994
         },
         "samples": 20,
         "abstainedOnNegative": 5,
@@ -3922,7 +3938,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              748.2279170000002
+              1263.4789999999994
             ],
             "warnings": [],
             "bestScoreOnPositive": null,
@@ -3956,7 +3972,7 @@ within a row.
               }
             ],
             "durationMs": [
-              771.617624999999
+              1287.192541999997
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.8066375851631165,
@@ -3990,7 +4006,7 @@ within a row.
               }
             ],
             "durationMs": [
-              540.9536250000019
+              1063.0152499999967
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9983236789703369,
@@ -4003,7 +4019,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              607.6198750000003
+              1195.0398330000025
             ],
             "warnings": [],
             "bestScoreOnPositive": null,
@@ -4017,30 +4033,30 @@ within a row.
             "hits": [
               {
                 "ref": "docs/config.md#3-statedir",
-                "score": 0.9128396511077881
+                "score": 0.9118165969848633
               },
               {
                 "ref": ".claude/context/plugin.md#a-worked-example",
-                "score": 0.8800132274627686
+                "score": 0.8761773109436035
               },
               {
                 "ref": ".claude/context/plugin.md#the-placeholder-vocabulary",
-                "score": 0.5044143795967102
+                "score": 0.5041606426239014
               },
               {
                 "ref": "docs/config.md#1-the-three-resolution-classes",
-                "score": 0.4423319399356842
+                "score": 0.43399330973625183
               },
               {
                 "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
-                "score": 0.30130723118782043
+                "score": 0.29934847354888916
               }
             ],
             "durationMs": [
-              572.366667000002
+              1120.5922500000015
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.9128396511077881,
+            "bestScoreOnPositive": 0.9118165969848633,
             "rank": 1,
             "strictRank": 1
           },
@@ -4051,30 +4067,30 @@ within a row.
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#commit-message-policy",
-                "score": 0.7014356851577759
+                "score": 0.7265825271606445
               },
               {
                 "ref": ".claude/context/plugin.md#the-commit-message-policy",
-                "score": 0.002652770606800914
+                "score": 0.0030089227948337793
               },
               {
                 "ref": "docs/outer-loop-verification.md#11-commit-on-branchsh--refuses-loudly",
-                "score": 0.0008274426218122244
+                "score": 0.000867422902956605
               },
               {
                 "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
-                "score": 0.00040268019074574113
+                "score": 0.0003935615241061896
               },
               {
                 "ref": "docs/guard-verification.md#35-jurisdiction-and-defaults",
-                "score": 0.000039824437408242375
+                "score": 0.0000389436972909607
               }
             ],
             "durationMs": [
-              621.4848749999983
+              1188.293583000006
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.7014356851577759,
+            "bestScoreOnPositive": 0.7265825271606445,
             "rank": 1,
             "strictRank": 1
           },
@@ -4085,30 +4101,30 @@ within a row.
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#shell-assets",
-                "score": 0.9804458022117615
+                "score": 0.9808194041252136
               },
               {
                 "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
-                "score": 0.9793976545333862
+                "score": 0.9797009825706482
               },
               {
                 "ref": "docs/guard-verification.md",
-                "score": 0.6777825355529785
+                "score": 0.6645653247833252
               },
               {
                 "ref": "docs/guard-verification.md#3-decision-changes-across-the-port",
-                "score": 0.03824503347277641
+                "score": 0.038353826850652695
               },
               {
                 "ref": "docs/outer-loop-verification.md",
-                "score": 0.012248542159795761
+                "score": 0.011228492483496666
               }
             ],
             "durationMs": [
-              613.0555000000022
+              1141.0581660000025
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.9804458022117615,
+            "bestScoreOnPositive": 0.9808194041252136,
             "rank": 1,
             "strictRank": 1
           },
@@ -4139,7 +4155,7 @@ within a row.
               }
             ],
             "durationMs": [
-              552.6027079999985
+              1072.408292
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9992165565490723,
@@ -4153,30 +4169,30 @@ within a row.
             "hits": [
               {
                 "ref": "docs/watcher.md#1-the-loop-in-one-page",
-                "score": 0.9118318557739258
+                "score": 0.9050639271736145
               },
               {
                 "ref": "docs/cli.md#9-daemon",
-                "score": 0.45219185948371887
+                "score": 0.4667190611362457
               },
               {
                 "ref": "docs/outer-loop-verification.md#15-restart-watchersh",
-                "score": 0.03981650248169899
+                "score": 0.03868675231933594
               },
               {
                 "ref": "docs/watcher.md#4-pausing-parking-and-the-usage-gate",
-                "score": 0.02369111403822899
+                "score": 0.025482188910245895
               },
               {
                 "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
-                "score": 0.019104667007923126
+                "score": 0.018250873312354088
               }
             ],
             "durationMs": [
-              588.3287920000002
+              1205.3202910000036
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.9118318557739258,
+            "bestScoreOnPositive": 0.9050639271736145,
             "rank": 2,
             "strictRank": 2
           },
@@ -4187,30 +4203,30 @@ within a row.
             "hits": [
               {
                 "ref": "docs/watcher.md#5-machine-level-usage-lane",
-                "score": 0.9862282872200012
+                "score": 0.9856442213058472
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
+                "score": 0.13560578227043152
               },
               {
                 "ref": "docs/config.md#3-statedir",
-                "score": 0.12589380145072937
+                "score": 0.1288224160671234
               },
               {
                 "ref": "docs/cli.md#offline-by-construction",
-                "score": 0.029976895079016685
-              },
-              {
-                "ref": "docs/outer-loop-verification.md#25-the-usage-gate",
-                "score": 0.017711561173200607
+                "score": 0.032486531883478165
               },
               {
                 "ref": "docs/development.md#5-verifying-a-change",
-                "score": 0.015148887410759926
+                "score": 0.02734939381480217
               }
             ],
             "durationMs": [
-              583.2946249999986
+              1249.4705420000028
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.9862282872200012,
+            "bestScoreOnPositive": 0.9856442213058472,
             "rank": 0,
             "strictRank": 0
           },
@@ -4221,30 +4237,30 @@ within a row.
             "hits": [
               {
                 "ref": "docs/cli.md#docs-serve",
-                "score": 0.5403093695640564
+                "score": 0.5406689643859863
               },
               {
                 "ref": "docs/cli.md#docs-search",
-                "score": 0.44221770763397217
+                "score": 0.44475895166397095
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
+                "score": 0.11128897219896317
               },
               {
                 "ref": "docs/cli.md#11-docs",
-                "score": 0.093300461769104
+                "score": 0.09484846144914627
               },
               {
                 "ref": "docs/cli.md#docs-index",
-                "score": 0.055737048387527466
-              },
-              {
-                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
-                "score": 0.020913545042276382
+                "score": 0.05775439366698265
               }
             ],
             "durationMs": [
-              614.755000000001
+              1145.3307920000007
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.5403093695640564,
+            "bestScoreOnPositive": 0.5406689643859863,
             "rank": 2,
             "strictRank": 0
           },
@@ -4255,30 +4271,30 @@ within a row.
             "hits": [
               {
                 "ref": "docs/cli.md#11-docs",
-                "score": 0.6682106852531433
+                "score": 0.6837828159332275
               },
               {
                 "ref": "docs/cli.md#docs-index",
-                "score": 0.38246089220046997
+                "score": 0.3671532869338989
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
+                "score": 0.3388470709323883
               },
               {
                 "ref": "docs/retrieval-eval-results.md",
-                "score": 0.2793675363063812
+                "score": 0.270835816860199
               },
               {
                 "ref": "docs/retrieval.md#what-this-buys-you",
-                "score": 0.27396267652511597
-              },
-              {
-                "ref": "docs/retrieval.md#how-it-fits-together",
-                "score": 0.10480803996324539
+                "score": 0.26530829071998596
               }
             ],
             "durationMs": [
-              596.3052920000009
+              1152.1687079999974
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.6682106852531433,
+            "bestScoreOnPositive": 0.6837828159332275,
             "rank": 0,
             "strictRank": 0
           },
@@ -4309,7 +4325,7 @@ within a row.
               }
             ],
             "durationMs": [
-              570.9047910000008
+              1089.5891669999983
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.33899036049842834,
@@ -4343,7 +4359,7 @@ within a row.
               }
             ],
             "durationMs": [
-              608.6210420000025
+              1138.463416000006
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9918370842933655,
@@ -4377,7 +4393,7 @@ within a row.
               }
             ],
             "durationMs": [
-              620.1906659999986
+              1166.8789580000011
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9619483947753906,
@@ -4390,7 +4406,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              600.1267079999998
+              1137.974666999995
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -4401,7 +4417,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              621.8845000000001
+              1144.7912499999948
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -4412,7 +4428,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              600.7124999999978
+              1125.1992500000051
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -4423,7 +4439,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              596.7691249999989
+              1199.1624579999989
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -4434,7 +4450,7 @@ within a row.
             "abstained": true,
             "hits": [],
             "durationMs": [
-              630.4464169999992
+              1218.469041999997
             ],
             "warnings": [],
             "bestScoreOnNegative": null
