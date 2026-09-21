@@ -33,6 +33,9 @@ import { PGlite } from '@electric-sql/pglite';
 import { pg_textsearch } from '@electric-sql/pglite-pg_textsearch';
 import { vector } from '@electric-sql/pglite-pgvector';
 
+// `ARM_CANDIDATES` is the limit the lexical arm actually calls with, imported rather than retyped so
+// that moving it in `cli/src/retrieval/search.ts` moves what both cases below measure.
+import { ARM_CANDIDATES } from '../dist/retrieval/search.js';
 import { openPgliteStore } from '../dist/retrieval/store.js';
 
 /** The embedder's width (`docs/retrieval.md` → **Models**); no model is loaded to get it. */
@@ -43,9 +46,6 @@ const PROBE_TERM = 'frobnicator';
 
 /** A term no chunk carries, which an index scan answers with no rows at all. */
 const ABSENT_TERM = 'quantumchromodynamics';
-
-/** `ARM_CANDIDATES` — the limit the lexical arm actually calls with (`cli/src/retrieval/search.ts`). */
-const LIMIT = 50;
 
 /** The filler vocabulary, deliberately free of {@link PROBE_TERM} and of its stems. */
 const VOCAB = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel'];
@@ -128,13 +128,17 @@ test('(a) lexicalSearch returns the matching chunk alone at both committed corpo
   // that the fused arm is then carrying non-matching rows on a corpus this size.
   for (const n of [40, 166, 1024]) {
     const store = await storeOf(t, n);
-    const hits = await store.lexicalSearch(PROBE_TERM, LIMIT);
+    const hits = await store.lexicalSearch(PROBE_TERM, ARM_CANDIDATES);
     assert.deepEqual(
       hits,
       [{ id: n, rank: 1 }],
       `at ${n} rows the lexical arm returned ${hits.length} rows, not the matching chunk alone`,
     );
-    assert.deepEqual(await store.lexicalSearch(ABSENT_TERM, LIMIT), [], `at ${n} rows a term no chunk carries matched`);
+    assert.deepEqual(
+      await store.lexicalSearch(ABSENT_TERM, ARM_CANDIDATES),
+      [],
+      `at ${n} rows a term no chunk carries matched`,
+    );
   }
 });
 
@@ -162,7 +166,7 @@ test('(b) the index-scan crossover, bisected on a stats-informed plan', async (t
     await db.exec("CREATE INDEX chunks_bm25 ON chunks USING bm25 (text) WITH (text_config='english')");
     const result = await db.query("SELECT id FROM chunks ORDER BY text <@> to_bm25query($1, 'chunks_bm25') LIMIT $2", [
       PROBE_TERM,
-      LIMIT,
+      ARM_CANDIDATES,
     ]);
     return result.rows.length === 1;
   };
