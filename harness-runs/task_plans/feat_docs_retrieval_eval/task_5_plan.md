@@ -42,3 +42,26 @@ evidence actually asserts, `[0.30, 0.339]` — `0.30` the censoring bound on eve
 decimals: **`0.32`**. Task 14's `## Threshold calibration` must quote the negatives as censored rather
 than as measured values. The arms were not re-run to uncensor them, per this task's `**Depends on:**`
 clause.
+
+The recall pair this task hands to Task 14 was recorded in the commit body of `51ba982` and nowhere
+durable, so it was re-taken in a follow-up `cli`-layer pass (authorised by the branch's park-3
+clarification, which also makes the commit body unusable as an inter-task hand-off channel: any
+result a later task must read is recorded in the producing task's own `**Deviations from plan:**`
+block, which is what follows). The re-take ran `bash scripts/scratch-run.sh
+harness-runs/scratch/recheck-arm-e.mjs` twice over one tree — once with `ABSTAIN_SCORE_THRESHOLD`
+temporarily back at `0.3`, once at the committed `0.32`, with `npm run build` between them and no
+other edit — and both runs reported the same `snapshot` stamp per corpus, so the two readings are a
+before/after pair:
+
+| Corpus | `snapshot` (both runs) | arm E recall@5 before (`0.3`) | arm E recall@5 after (`0.32`) |
+| --- | --- | --- | --- |
+| `fixture-catalog` | `{ files: 9, chunks: 41 }` | `0.667` (0.6666666666666666) | `0.667` (0.6666666666666666) |
+| `self-docs` | `{ files: 13, chunks: 173 }` | `0.600` (0.6) | `0.600` (0.6) |
+
+The move from `0.3` to `0.32` costs **no** positive: recall@5, recall@3, recall@1 and MRR are
+unchanged on both corpora, and the same positives abstain at both values —
+`q-fc-billable-weight`, `q-fc-surcharge-compounding`, `q-fc-verify-callback` on `fixture-catalog`
+and `q-sd-new-config-key`, `q-sd-run-gates` on `self-docs`, i.e. the 5 already censored at `0.3`.
+The arm abstains on **every** negative query at both values (3 of 3 on `fixture-catalog`, 5 of 5 on
+`self-docs`, `notAbstained` empty in each run). `cli/src/retrieval/search.ts` was restored to `0.32`
+and the tree left byte-identical to `51ba982`.
