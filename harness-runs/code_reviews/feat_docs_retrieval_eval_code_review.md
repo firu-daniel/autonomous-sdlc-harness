@@ -11,7 +11,7 @@
 1. [x] **Finding 1** — Record the arm D versus arm E result in the file of record _(layer: general)_
 2. [x] **Finding 8** — Drop the stray article in the `grade` bullet _(layer: general)_
 3. [x] **Finding 6** — Read arm A's letter off the arm table instead of retyping it _(layer: general)_
-4. [ ] **Finding 4** — Make `--transcript` an explicit case and refuse in `default:` _(layer: general)_
+4. [x] **Finding 4** — Make `--transcript` an explicit case and refuse in `default:` _(layer: general)_
 5. [ ] **Finding 5** — Say which entry point reads `--floor` _(layer: general)_
 6. [ ] **Finding 7** — State the 60-second crossover over the cold-build total _(layer: general)_
 7. [ ] **Finding 11** — ASCII punctuation in the two renderers _(layer: general)_

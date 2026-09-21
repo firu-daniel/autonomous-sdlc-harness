@@ -116,9 +116,13 @@ export function parseArgs(argv) {
       case '--floor':
         raw.floor = value;
         break;
-      default:
+      case '--transcript':
         raw.transcript = value;
         break;
+      // Every flag in FLAGS needs its own case: VALUE_FLAGS above accepts a flag the moment it is
+      // declared, so a declared flag with no case here would take some other flag's slot silently.
+      default:
+        refuse(`${flag} is declared in FLAGS with no case in parseArgs, so its value would be misread`);
     }
   }
 
