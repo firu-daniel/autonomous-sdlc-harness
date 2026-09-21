@@ -20,6 +20,10 @@
  * it from here would need a pty, which Node cannot allocate without a native dependency this package
  * does not carry.
  *
+ * **The real runtime install and model download are not covered.** Both reach the network, which no
+ * test may; every retrieval-on case runs under the stub and a planted model cache, and the setup cases
+ * assert only the skips, the dry-run notes and the stub refusals. Gate 10 covers the real path by hand.
+ *
  * ## Four non-obvious choices, and where each comes from
  *
  * 1. **Every test builds its own fixture and tears it down.** No directory is shared and none is
@@ -63,7 +67,10 @@ import { pathToFileURL } from 'node:url';
 import {
   createFixture,
   ignoredAmong,
+  plantModelFiles,
+  plantRetrievalRuntime,
   readJson,
+  retrievalEnv,
   runBash,
   runCli,
   runCliFrom,
@@ -268,6 +275,7 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'autonomous-notify.sh',
   'autonomous-watcher.sh',
   'restart-watcher.sh',
+  'docs-search-server.sh',
 ];
 
 /** A left-over template token — none may survive into a generated file. */
@@ -1686,6 +1694,326 @@ test("the mobile note's remedy wires both halves, where a plain re-run wires onl
   // profile is recoverable — the cost the note states.
   assert.equal(readJson(join(dir, CONFIG_FILE)).qa.driver, QA_DRIVER_VALUE);
   assert.ok(await exists(dir, `${PROFILE_FILE}.bak`), 'the regenerated profile left no .bak behind');
+});
+
+/** The docs-retrieval server `.mcp.json` declares when retrieval is on, spelled as the contract. */
+const DOCS_SERVER = 'harness-docs';
+const DOCS_SERVER_ENTRY = { type: 'stdio', command: 'bash', args: ['scripts/docs-search-server.sh'], env: {} };
+const DOCS_INDEX_RULE = `${STATE_DIR}/docs_index/`;
+
+/**
+ * A fixture holding a pre-written config with the docs phase on, `docs.retrieval` set by `retrieval`
+ * and the interactive-test phase on with `qaDriver` when one is given — plus the retrieval
+ * environment every retrieval-on `init` runs under: the stub models and a planted runtime in a
+ * throwaway cache, so no case installs or downloads anything.
+ */
+async function retrievalFixture(t, { retrieval, qaDriver } = {}) {
+  const config = {
+    version: 1,
+    projectName: 'fixture-project',
+    defaultBranch: 'main',
+    stateDir: STATE_DIR,
+    layers: [{ name: 'general', path: '.', conventions: SHARED_STUB }],
+    commands: { typecheck: 'echo typecheck', test: 'echo test' },
+    phases: { docs: true, ...(qaDriver === undefined ? {} : { qa: true }) },
+    docs: { root: 'docs', ...(retrieval ? { retrieval: true } : {}) },
+    ...(qaDriver === undefined ? {} : { qa: { driver: qaDriver } }),
+  };
+  const dir = await fixtureFor(t, {
+    files: { ...nodeProjectFiles(), [CONFIG_FILE]: config, 'docs/README.md': '# docs\n' },
+  });
+  const cacheHome = await mkdtemp(join(tmpdir(), 'harness-retrieval-cache-'));
+  t.after(() => rm(cacheHome, { recursive: true, force: true }));
+  await plantModelFiles(cacheHome);
+  await plantRetrievalRuntime(cacheHome);
+  return { dir, env: retrievalEnv(cacheHome) };
+}
+
+/** The managed ignore block's lines, trimmed. */
+function ignoreLines(dir) {
+  return text(dir, GITIGNORE_FILE)
+    .split('\n')
+    .map((line) => line.trim());
+}
+
+test('retrieval on declares the docs server in .mcp.json and ignores the index, and a re-run changes neither', async (t) => {
+  const { dir, env } = await retrievalFixture(t, { retrieval: true });
+
+  await initOk(dir, [], env);
+
+  const mcp = readJson(join(dir, MCP_FILE));
+  assert.deepEqual(Object.keys(mcp.mcpServers), [DOCS_SERVER], `${MCP_FILE} declares a server beyond the docs one`);
+  assert.deepEqual(mcp.mcpServers[DOCS_SERVER], DOCS_SERVER_ENTRY);
+  assert.ok(ignoreLines(dir).includes(DOCS_INDEX_RULE), `${GITIGNORE_FILE} carries no ${DOCS_INDEX_RULE} rule`);
+
+  const mcpBefore = text(dir, MCP_FILE);
+  const ignoreBefore = text(dir, GITIGNORE_FILE);
+  await initOk(dir, [], env);
+  assert.equal(text(dir, MCP_FILE), mcpBefore, `a second init changed ${MCP_FILE}`);
+  assert.equal(text(dir, GITIGNORE_FILE), ignoreBefore, `a second init changed ${GITIGNORE_FILE}`);
+});
+
+test('retrieval absent declares no docs server and no index rule, and with QA off writes no .mcp.json', async (t) => {
+  const { dir, env } = await retrievalFixture(t, { retrieval: false });
+
+  const { stdout } = await initOk(dir, [], env);
+
+  assert.equal(await exists(dir, MCP_FILE), false, `${MCP_FILE} was written with neither QA nor retrieval on`);
+  assert.match(stdout, /no \.mcp\.json was written/, `nothing on stdout says ${MCP_FILE} was left out:\n${stdout}`);
+  assert.ok(
+    !ignoreLines(dir).some((line) => line.includes('docs_index')),
+    `${GITIGNORE_FILE} carries a docs_index rule with retrieval off`,
+  );
+
+  // QA on and retrieval still off: the browser servers alone.
+  const browser = await retrievalFixture(t, { retrieval: false, qaDriver: QA_DRIVER_VALUE });
+  await initOk(browser.dir, [], browser.env);
+  assert.ok(
+    !Object.hasOwn(readJson(join(browser.dir, MCP_FILE)).mcpServers, DOCS_SERVER),
+    `${MCP_FILE} declares ${DOCS_SERVER} with retrieval off`,
+  );
+});
+
+test('.mcp.json declares both halves with a browser driver, and the docs server alone with a mobile one', async (t) => {
+  const both = await retrievalFixture(t, { retrieval: true, qaDriver: QA_DRIVER_VALUE });
+  await initOk(both.dir, [], both.env);
+  assert.deepEqual(
+    Object.keys(readJson(join(both.dir, MCP_FILE)).mcpServers).sort(),
+    ['chrome-devtools', DOCS_SERVER, 'playwright'].sort(),
+  );
+
+  const mobile = await retrievalFixture(t, { retrieval: true, qaDriver: QA_DRIVER_CHOSEN });
+  const { stdout } = await initOk(mobile.dir, [], mobile.env);
+  assert.deepEqual(Object.keys(readJson(join(mobile.dir, MCP_FILE)).mcpServers), [DOCS_SERVER]);
+  // The file exists, so the note may not say it was not written.
+  assert.doesNotMatch(stdout, /no \.mcp\.json was written/, `the note denies a file retrieval wrote:\n${stdout}`);
+  assert.match(stdout, /no browser MCP server was declared in \.mcp\.json/);
+});
+
+/** The note a `--docs` run that could not put the retrieval question prints. */
+const RETRIEVAL_UNASKED_NOTE = 'docs retrieval stays off: this run could not ask';
+
+/** A throwaway retrieval cache holding the stub models and a planted runtime, and the env naming it. */
+async function retrievalCacheEnv(t) {
+  const cacheHome = await mkdtemp(join(tmpdir(), 'harness-retrieval-cache-'));
+  t.after(() => rm(cacheHome, { recursive: true, force: true }));
+  await plantModelFiles(cacheHome);
+  await plantRetrievalRuntime(cacheHome);
+  return retrievalEnv(cacheHome);
+}
+
+/**
+ * `--docs-retrieval`, the flag half of the retrieval question. Every subprocess has a pipe for stdin,
+ * so no prompt is reachable and each unflagged run takes the documented default, off.
+ */
+test('--docs-retrieval turns retrieval on, is refused without --docs, and defaults off', async (t) => {
+  await t.test('--docs --docs-retrieval writes docs.retrieval true', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const env = await retrievalCacheEnv(subtest);
+
+    await initOk(dir, ['--docs', '--docs-retrieval'], env);
+
+    assert.equal(readJson(join(dir, CONFIG_FILE)).docs.retrieval, true);
+  });
+
+  await t.test('--docs alone writes no retrieval key and notes that it could not ask', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { stdout } = await initOk(dir, ['--docs']);
+
+    const { docs } = readJson(join(dir, CONFIG_FILE));
+    assert.equal(Object.hasOwn(docs, 'retrieval'), false, `an unasked run wrote docs.retrieval: ${JSON.stringify(docs)}`);
+    assert.ok(stdout.includes(RETRIEVAL_UNASKED_NOTE), `the unasked run did not say so:\n${stdout}`);
+  });
+
+  await t.test('--docs-retrieval without --docs is refused, leaving the tree byte-identical', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const before = await snapshotTree(dir);
+
+    const result = await runCli(dir, ['init', '--docs-retrieval']);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /--docs-retrieval needs --docs/);
+    assert.deepEqual(await snapshotTree(dir), before, 'a refused run changed the tree');
+  });
+
+  await t.test('--docs-retrieval without --docs under --git-init creates no repository', async (subtest) => {
+    const dir = await fixtureFor(subtest, { git: false, files: nodeProjectFiles() });
+    const before = await snapshotTree(dir);
+
+    const result = await runCli(dir, ['init', '--git-init', '--docs-retrieval']);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /--docs-retrieval needs --docs/);
+    assert.equal(await exists(dir, '.git'), false, 'a refused run created a repository');
+    assert.deepEqual(await snapshotTree(dir), before, 'a refused run changed the tree');
+  });
+
+  await t.test('a kept-config re-run with --docs-retrieval warns that the value went unwritten', async (subtest) => {
+    const { dir, env } = await retrievalFixture(subtest, { retrieval: false });
+    const before = text(dir, CONFIG_FILE);
+
+    const { stderr } = await initOk(dir, ['--docs', '--docs-retrieval'], env);
+
+    const reported = warningLines(stderr).filter((line) => line.includes('was read rather than written on this run'));
+    assert.equal(reported.length, 1, `the dropped flags were not reported once:\n${stderr}`);
+    assert.ok(reported[0].includes('--docs-retrieval'), `the warning does not name the flag:\n${reported[0]}`);
+    assert.ok(
+      reported[0].includes('config set docs.retrieval <value>'),
+      `the warning names no per-key route for docs.retrieval:\n${reported[0]}`,
+    );
+    assert.equal(text(dir, CONFIG_FILE), before, 'a kept config was rewritten from the command line');
+  });
+
+  await t.test('init --help lists --docs-retrieval directly after --docs-root', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { status, stdout } = await runCli(dir, ['init', '--help']);
+
+    assert.equal(status, 0);
+    // The first token of a row, with the comma an aliased row's spelling list puts after it removed.
+    const flags = stdout
+      .split('\n')
+      .map((line) => line.trim().split(/\s+/)[0].replace(/,$/, ''))
+      .filter((flag) => flag.startsWith('--'));
+    const root = flags.indexOf('--docs-root');
+    assert.ok(root >= 0, `--help lists no --docs-root:\n${stdout}`);
+    assert.equal(flags[root + 1], '--docs-retrieval', `--docs-retrieval does not follow --docs-root:\n${stdout}`);
+  });
+});
+
+/**
+ * `--rag`, the second accepted spelling of `--docs-retrieval`. It is carried on that flag's
+ * `INIT_OPTIONS` row rather than at the parse site, so the three consumers of that table — the
+ * parser, the `--help` block and the discarded-flag warning — each have to know about it.
+ */
+test('--rag is accepted wherever --docs-retrieval is, and is named back as it was typed', async (t) => {
+  await t.test('--docs --rag writes docs.retrieval true', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const env = await retrievalCacheEnv(subtest);
+
+    await initOk(dir, ['--docs', '--rag'], env);
+
+    assert.equal(readJson(join(dir, CONFIG_FILE)).docs.retrieval, true);
+  });
+
+  await t.test('--rag without --docs is refused, naming --rag rather than the canonical flag', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const before = await snapshotTree(dir);
+
+    const result = await runCli(dir, ['init', '--rag']);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /--rag needs --docs/);
+    assert.ok(
+      !result.stderr.includes('--docs-retrieval needs'),
+      `the refusal names a flag the run never used:\n${result.stderr}`,
+    );
+    assert.deepEqual(await snapshotTree(dir), before, 'a refused run changed the tree');
+  });
+
+  await t.test('--rag does not take a value', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const result = await runCli(dir, ['init', '--docs', '--rag=true']);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /--rag does not take a value/);
+  });
+
+  await t.test('init --help prints --rag on the --docs-retrieval row', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { status, stdout } = await runCli(dir, ['init', '--help']);
+
+    assert.equal(status, 0);
+    const row = stdout.split('\n').find((line) => line.trim().startsWith('--docs-retrieval'));
+    assert.ok(row !== undefined, `--help lists no --docs-retrieval row:\n${stdout}`);
+    assert.match(row, /--docs-retrieval, --rag\s/);
+  });
+
+  await t.test('a kept-config re-run with --rag names both spellings in the warning', async (subtest) => {
+    const { dir, env } = await retrievalFixture(subtest, { retrieval: false });
+
+    const { stderr } = await initOk(dir, ['--docs', '--rag'], env);
+
+    const reported = warningLines(stderr).filter((line) => line.includes('was read rather than written on this run'));
+    assert.equal(reported.length, 1, `the dropped flags were not reported once:\n${stderr}`);
+    assert.ok(reported[0].includes('--docs-retrieval (or --rag)'), `the warning names no alias:\n${reported[0]}`);
+  });
+});
+
+/** A throwaway cache holding the stub models and no runtime, its runtime directory, and the env naming it. */
+async function retrievalSetupCache(t) {
+  const cacheHome = await mkdtemp(join(tmpdir(), 'harness-retrieval-cache-'));
+  t.after(() => rm(cacheHome, { recursive: true, force: true }));
+  await plantModelFiles(cacheHome);
+  return { cacheHome, runtimeDir: join(cacheHome, 'autonomous-sdlc-harness', 'retrieval', 'runtime'), env: retrievalEnv(cacheHome) };
+}
+
+/** Every file under `dir`, absolute and sorted. */
+async function filesUnder(dir) {
+  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => join(entry.parentPath ?? entry.path, entry.name))
+    .sort();
+}
+
+/**
+ * The setup step `init` runs when retrieval is on: the runtime install and the model download. No case
+ * reaches the network — each either plants the runtime, runs a dry run, or relies on the stub refusal.
+ */
+test('retrieval setup installs nothing when the runtime is planted, names the install on a dry run, and never installs under the stub', async (t) => {
+  const version = readJson(join(PACKAGE_ROOT, 'package.json')).version;
+
+  await t.test('(a) a dry run with no runtime names the npm install and writes nothing', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const { cacheHome, runtimeDir, env } = await retrievalSetupCache(subtest);
+    const before = await snapshotTree(dir);
+
+    const { stdout } = await initOk(dir, ['--docs', '--docs-retrieval', '--dry-run'], env);
+
+    assert.ok(stdout.includes(`npm install --prefix ${runtimeDir} `), `no npm install note names the runtime:\n${stdout}`);
+    assert.ok(stdout.includes(`autonomous-sdlc-harness@${version}`), `the install note names no pinned CLI:\n${stdout}`);
+    assert.match(stdout, /stub models \(.*\) need no download/, `no note says the stub needs no download:\n${stdout}`);
+    assert.deepEqual(await snapshotTree(dir), before, 'a dry run changed the tree');
+    assert.equal(existsSync(runtimeDir), false, 'a dry run created the runtime directory');
+
+    await plantRetrievalRuntime(cacheHome, { version: '0.0.0-other' });
+    const other = await initOk(dir, ['--docs', '--docs-retrieval', '--dry-run'], env);
+    assert.ok(
+      other.stdout.includes(`npm install --prefix ${runtimeDir} `),
+      `a runtime at another version was treated as installed:\n${other.stdout}`,
+    );
+  });
+
+  await t.test('(b) a planted runtime means no install runs', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const { cacheHome, runtimeDir, env } = await retrievalSetupCache(subtest);
+    const planted = await plantRetrievalRuntime(cacheHome);
+
+    const { stdout } = await initOk(dir, ['--docs', '--docs-retrieval'], env);
+
+    assert.match(stdout, /docs retrieval runtime already installed/, `no note says the runtime is installed:\n${stdout}`);
+    assert.deepEqual(await filesUnder(runtimeDir), planted, 'the runtime directory changed');
+  });
+
+  await t.test('(c) a stub run refuses fetch-models and never installs the runtime', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const { runtimeDir, env } = await retrievalSetupCache(subtest);
+
+    const fetch = await runCli(dir, ['docs', 'fetch-models'], env);
+    assert.notEqual(fetch.status, 0, 'docs fetch-models ran under the stub');
+    assert.match(fetch.stderr, /AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB/, `the refusal does not name the stub:\n${fetch.stderr}`);
+
+    const { stderr } = await initOk(dir, ['--docs', '--docs-retrieval'], env);
+    assert.ok(
+      warningLines(stderr).some((line) => line.includes('a stub run') && line.includes('never installs it')),
+      `no warning says a stub run never installs the runtime:\n${stderr}`,
+    );
+    assert.equal(existsSync(runtimeDir), false, 'a stub run created the runtime directory');
+  });
 });
 
 /**

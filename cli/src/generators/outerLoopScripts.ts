@@ -78,7 +78,8 @@ export interface OuterLoopScript {
    * row that must not be agent-runnable needs an entry in
    * that guard's `DENY_SCRIPT_BASENAMES` as well as `agentInvocable: false` here. Only three of
    * the `false` rows carry that entry today — `autonomous-watcher.sh`, `restart-watcher.sh` and
-   * `cleanup-merged-worktrees.sh`. For the worktree scripts, the notifier and the stream formatter
+   * `cleanup-merged-worktrees.sh`. For the worktree scripts, the notifier, the stream formatter and
+   * the docs-retrieval server launcher — which the agent runner starts from `.mcp.json` —
    * `false` is a calling convention rather than a gate: the guard auto-allows them, deliberately.
    *
    * A row is added by the change that adds its template, so this flag can only ever describe a
@@ -108,6 +109,16 @@ export const WATCHER_SCRIPT_NAME = 'autonomous-watcher.sh';
 export const NOTIFY_SCRIPT_NAME = 'autonomous-notify.sh';
 
 /**
+ * The docs-retrieval server launcher's file name, named on its own for the same reason
+ * {@link WATCHER_SCRIPT_NAME} is: `generators/repoRoot.ts` → `retrievalWiring` joins it into
+ * `.mcp.json`'s launcher argument, and that argument and the writer disagreeing would declare a
+ * server whose program was never written.
+ *
+ * The row below is built from it, so the file is renamed here and nowhere else.
+ */
+export const DOCS_SEARCH_SERVER_SCRIPT_NAME = 'docs-search-server.sh';
+
+/**
  * The whole outer-loop set, in the order `init` writes it: the shared library first, because every
  * other row sources it.
  *
@@ -128,6 +139,10 @@ export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze(
   Object.freeze({ file: 'scratch-run.sh', mode: 0o755, agentInvocable: true }),
   Object.freeze({ file: 'create-worktree.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'setup-worktree.sh', mode: 0o755, agentInvocable: false }),
+  // Started by the agent runner from `.mcp.json`, never by a dispatched agent's Bash call, so `false`
+  // is a calling convention. No `DENY_SCRIPT_BASENAMES` entry: the guard auto-allowing it runs
+  // nothing destructive.
+  Object.freeze({ file: DOCS_SEARCH_SERVER_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'cleanup-merged-worktrees.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'autonomous-format-stream.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: NOTIFY_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),

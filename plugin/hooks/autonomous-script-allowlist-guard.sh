@@ -656,11 +656,14 @@ esac
 # entries lower-case for readability — a mixed-case one still matches.
 #
 # LEFT ALLOWED, DELIBERATELY: `create-worktree.sh`, `setup-worktree.sh`,
-# `autonomous-notify.sh`, `autonomous-format-stream.sh` and `scratch-run.sh`.
-# None of them is destructive, and narrowing past a measured need is a change
-# nothing has justified. The last one executes an ARGUMENT, and is allowed on a
-# narrower ground: it runs only a file under the run-artifact tree's `scratch/`
-# directory, which that script enforces rather than this list.
+# `autonomous-notify.sh`, `autonomous-format-stream.sh`, `docs-search-server.sh`
+# and `scratch-run.sh`. None of them is destructive, and narrowing past a
+# measured need is a change nothing has justified. `docs-search-server.sh` is
+# started by the agent runner from `.mcp.json`, not by a dispatched agent, and
+# reaches only the read-only `docs serve`. The last one executes an ARGUMENT,
+# and is allowed on a narrower ground: it runs only a file under the
+# run-artifact tree's `scratch/` directory, which that script enforces rather
+# than this list.
 #
 # WHAT THE LIST DOES NOT COVER, AND WHERE THAT IS HANDLED. `is_denied_script`
 # compares a LITERAL basename, so it cannot hold a path whose basename is a

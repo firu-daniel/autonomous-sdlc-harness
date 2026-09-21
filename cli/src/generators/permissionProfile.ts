@@ -68,6 +68,17 @@
  * print-mode run rather than failing it — which is why {@link assertBrowserWiring} checks the two
  * against each other in both directions.
  *
+ * ## The docs-retrieval half is a fragment too
+ *
+ * {@link RETRIEVAL_TEMPLATE_PATH} is merged on the same terms when `config/model.ts`'s
+ * `retrievalApplies` holds — `phases.docs` and `docs.retrieval` both on, the predicate the
+ * repository's own `.mcp.json` generator reads for its retrieval half. It starts the one docs server
+ * and allows its one tool, after the browser fragment, so the two `enabledMcpjsonServers` lists
+ * concatenate de-duplicated. Its single allow entry must be `retrieval/server.ts`'s
+ * `SEARCH_TOOL_PERMISSION`, and a template that says otherwise exits {@link EXIT.INTERNAL}: the
+ * server registers the tool under that name, so any other entry is a grant for a tool that never
+ * exists. {@link assertBrowserWiring} covers this half without a change of its own.
+ *
  * ## The reference toolchain, and the plugin key that stays reserved
  *
  * When the parity phase is on, the reference implementation's own toolchain usually lives outside
@@ -168,7 +179,7 @@
 
 import { basename, dirname, isAbsolute, join, sep } from 'node:path';
 
-import { browserWiringApplies, CONFIG_FILENAME, DEFAULTS, type HarnessConfig } from '../config/model.js';
+import { browserWiringApplies, CONFIG_FILENAME, DEFAULTS, retrievalApplies, type HarnessConfig } from '../config/model.js';
 import { HarnessError, internal } from '../core/errors.js';
 import { isJsonObject, readJsonFile, type JsonObject, type JsonValue } from '../core/json.js';
 import { defaultProjectName, readTemplate, workRoot as resolveWorkRoot, worktreeGlob } from '../core/paths.js';
@@ -176,6 +187,7 @@ import { normalizeRepoDir } from '../core/repoPaths.js';
 import { containsToken, renderTemplate } from '../core/templating.js';
 import type { WritePlan } from '../core/writer.js';
 import { installedPluginsPath, pluginInstallRoot, pluginRuntimeRoot, SCRIPTS_DIRNAME } from '../machine/plugins.js';
+import { SEARCH_TOOL_PERMISSION } from '../retrieval/server.js';
 import {
   OUTER_LOOP_SCRIPTS,
   outerLoopRelativePath,
@@ -217,6 +229,15 @@ export const TEMPLATE_PATH = 'claude/settings.autonomous.json';
  */
 export const QA_TEMPLATE_PATH = 'claude/settings.autonomous.qa.json';
 
+/**
+ * The docs-retrieval fragment, merged into the base only when `phases.docs` and `docs.retrieval` are
+ * both on — see the module header.
+ *
+ * Exported for the reason {@link QA_TEMPLATE_PATH} is: its `enabledMcpjsonServers` list is the
+ * declaration `generators/repoRoot.ts` checks the retrieval half of `.mcp.json` against.
+ */
+export const RETRIEVAL_TEMPLATE_PATH = 'claude/settings.autonomous.retrieval.json';
+
 /** The adopter-side directory the rendered profile lands in. The dot is added here, at `init` time. */
 const CLAUDE_DIR = '.claude';
 
@@ -232,7 +253,7 @@ export const PROFILE_PATH = `${CLAUDE_DIR}/settings.autonomous.json`;
 /** The profile's rationale block: the array every generated explanation is appended to. */
 const README_KEY = '_README';
 
-/** The key that starts the repository's declared MCP servers for the run. Absent unless QA is on. */
+/** The key that starts the repository's declared MCP servers for the run. Absent unless a fragment adds it. */
 const ENABLED_SERVERS_KEY = 'enabledMcpjsonServers';
 
 /** The prefix every MCP tool entry carries, and the pattern its server name is read out of. */
@@ -458,7 +479,7 @@ function concatUnique(base: readonly JsonValue[], added: readonly JsonValue[]): 
 }
 
 /**
- * Merge the QA fragment into the base profile, in place.
+ * Merge a fragment into the base profile, in place. `label` names that fragment in the refusal.
  *
  * Three rules, and one refusal:
  *
@@ -466,11 +487,11 @@ function concatUnique(base: readonly JsonValue[], added: readonly JsonValue[]): 
  * - two lists are **concatenated**, de-duplicated, base first — so the fragment's `allow` entries
  *   and its rationale lines land after the base's rather than replacing them;
  * - two objects are **merged** recursively, which is what carries `permissions.allow` down;
- * - anything else — a key the base already sets to a scalar — **throws**. The fragment adds the
- *   browser half; it does not get to overrule a decision the base profile made, and a value with two
+ * - anything else — a key the base already sets to a scalar — **throws**. A fragment adds its
+ *   half; it does not get to overrule a decision the base profile made, and a value with two
  *   producers is how the two spellings drift apart.
  */
-function mergeInto(base: JsonObject, fragment: JsonObject, at: string): void {
+function mergeInto(base: JsonObject, fragment: JsonObject, at: string, label: string): void {
   for (const [key, value] of Object.entries(fragment)) {
     const where = at === '' ? key : `${at}.${key}`;
     const existing = base[key];
@@ -480,10 +501,10 @@ function mergeInto(base: JsonObject, fragment: JsonObject, at: string): void {
     } else if (Array.isArray(existing) && Array.isArray(value)) {
       base[key] = concatUnique(existing, value);
     } else if (isJsonObject(existing) && isJsonObject(value)) {
-      mergeInto(existing, value, where);
+      mergeInto(existing, value, where, label);
     } else {
       throw internal(
-        `the interactive-test fragment redeclares \`${where}\`, which the base permission-profile template already sets: the fragment adds the browser half rather than overruling the base, and one entry with two producers is how two spellings of it drift apart`,
+        `the ${label} fragment redeclares \`${where}\`, which the base permission-profile template already sets: the fragment adds its half rather than overruling the base, and one entry with two producers is how two spellings of it drift apart`,
       );
     }
   }
@@ -935,6 +956,20 @@ function assertNoBrowserDeny(profile: JsonObject): void {
   }
 }
 
+/**
+ * The docs-retrieval fragment's allow list has to be exactly {@link SEARCH_TOOL_PERMISSION}, the name
+ * the server registers its one tool under: any other entry allow-lists a tool that never exists, and
+ * a second one widens a half that exists to grant one tool.
+ */
+function assertRetrievalGrant(fragment: JsonObject): void {
+  const allow = entriesOf(permissionsOf(fragment), 'allow');
+  if (allow.length !== 1 || allow[0] !== SEARCH_TOOL_PERMISSION) {
+    throw internal(
+      `the docs-retrieval fragment ${RETRIEVAL_TEMPLATE_PATH} allow-lists ${JSON.stringify(allow)}, where it must allow exactly ${JSON.stringify(SEARCH_TOOL_PERMISSION)}: that is the one tool the docs server registers, so any other entry grants a tool that never exists`,
+    );
+  }
+}
+
 /** The servers the profile starts for the run, or none when it carries no such key. */
 function enabledServers(profile: JsonObject): readonly string[] {
   const value = profile[ENABLED_SERVERS_KEY];
@@ -960,6 +995,9 @@ function enabledServers(profile: JsonObject): readonly string[] {
  * and it is why {@link enabledServers} answers "none" for an absent key rather than refusing one:
  * both loops below then run over empty sets, which is the two sides agreeing that there is no
  * browser wiring, not a check that was skipped.
+ *
+ * **It covers the docs-retrieval half as well**, unchanged: that fragment's server and its one tool
+ * entry are read by the same two loops, so a profile holding either half or both is checked alike.
  */
 function assertBrowserWiring(profile: JsonObject): void {
   const enabled = enabledServers(profile);
@@ -1421,7 +1459,16 @@ export function renderProfile({
   // as an unknown one — rather than shipping unsubstituted.
   if (browserWiringApplies(config)) {
     const fragment = renderValue(readTemplateObject(QA_TEMPLATE_PATH), globals, families, known) as JsonObject;
-    mergeInto(profile, fragment, '');
+    mergeInto(profile, fragment, '', 'interactive-test');
+  }
+
+  // The docs-retrieval half, on `retrievalApplies` — the predicate `.mcp.json`'s retrieval half is
+  // gated on — and after the browser fragment, so a profile carrying both lists the browser servers
+  // first.
+  if (retrievalApplies(config)) {
+    const fragment = renderValue(readTemplateObject(RETRIEVAL_TEMPLATE_PATH), globals, families, known) as JsonObject;
+    assertRetrievalGrant(fragment);
+    mergeInto(profile, fragment, '', 'docs-retrieval');
   }
 
   // Before the toolchain entries and after the fragment, which is the window in which every `.sh`

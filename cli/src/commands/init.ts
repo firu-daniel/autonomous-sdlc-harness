@@ -101,6 +101,7 @@ import {
   DEFAULTS,
   isPlaceholder,
   qaDriverChoices,
+  retrievalApplies,
   STATE_DIR_DOT_PATTERN,
   type HarnessCommands,
   type HarnessConfig,
@@ -169,6 +170,7 @@ import {
   type WrittenWrapper,
 } from '../generators/scripts.js';
 import { writeStateDir } from '../generators/stateDir.js';
+import { setUpRetrieval } from '../retrieval/setup.js';
 import type { CommandContext, Subcommand } from './registry.js';
 
 /** The command's one-line summary, in the usage block and at the head of its own `--help`. */
@@ -315,6 +317,20 @@ const APP_DIR_FLAG = '--app-dir';
 /** The flag that answers the QA-driver question — named in the prompt, the refusal and the note. */
 const QA_DRIVER_FLAG = '--qa-driver';
 
+/** The flag that answers the docs-retrieval question, read by its option row, its refusal and its prompt. */
+const DOCS_RETRIEVAL_FLAG = '--docs-retrieval';
+
+/**
+ * The second accepted spelling of that flag, in the word an adopter arrives with. It sets the same
+ * key; {@link DOCS_RETRIEVAL_FLAG} stays the canonical one the prompt and the documentation name.
+ *
+ * A constant rather than a literal for the reason every flag above is one: the `--help` row, the
+ * parser's lookup and the messages that name it to a reader are one spelling read from one owner,
+ * and it reaches all three through {@link InitOption.aliases} rather than through a second accepted-
+ * token list beside {@link INIT_OPTIONS}.
+ */
+const DOCS_RETRIEVAL_ALIAS_FLAG = '--rag';
+
 /**
  * The two spellings that answer the analyze offer — one accept, one decline, and neither given is
  * the state {@link resolveAnalyzeOffer} answers with the documented default.
@@ -401,7 +417,7 @@ export interface InitFlags extends HarnessConfigFlags, ProjectSettingsFlags {
 }
 
 /**
- * The keys {@link InitFlags} holds a boolean in: the three phase toggles, the two flags whose
+ * The keys {@link InitFlags} holds a boolean in: the three phase toggles, `--docs-retrieval`, the two flags whose
  * subject is the *shape* of this run rather than a value written into the config — `--git-init`,
  * which decides whether there is a repository to wire at all, and `--reset-config`, which decides
  * whether the config in it is read or rebuilt — and the {@link ANALYZE_FLAG} /
@@ -423,6 +439,12 @@ type ValueFlagKey = Exclude<keyof InitFlags, SwitchFlagKey>;
  * alternative is a table that compiles while parsing `--qa` into a key the generators read as a
  * path — which nothing downstream could detect, because both are `undefined` when the flag is
  * absent and the flag is absent on almost every run.
+ *
+ * **`aliases` carries every other accepted spelling of the row's flag, on the row rather than at the
+ * parse site.** No accepted token is matched anywhere outside this table: a spelling added at the
+ * parser alone would parse, appear in no `--help` row and in no re-invocation line, and sit outside
+ * the completeness check {@link initOptions} runs. The three consumers read it through
+ * {@link optionSpellings}.
  *
  * **`configValue` marks the discarded class, on the row rather than in a list beside it.** Its
  * membership test is about where the value is **written**: the flag's value is written to a
@@ -455,6 +477,8 @@ type InitOption =
       readonly key: ValueFlagKey;
       /** The flag as it is typed. */
       readonly flag: string;
+      /** Further accepted spellings of the same flag, canonical one excluded ({@link optionSpellings}). */
+      readonly aliases?: readonly string[];
       readonly kind: 'value';
       /** The value placeholder, for the usage line and for the "requires a value" refusal. */
       readonly placeholder: string;
@@ -467,6 +491,8 @@ type InitOption =
   | {
       readonly key: SwitchFlagKey;
       readonly flag: string;
+      /** Further accepted spellings of the same flag, canonical one excluded ({@link optionSpellings}). */
+      readonly aliases?: readonly string[];
       readonly kind: 'switch';
       readonly summary: string;
       /** Set on a discarded-class row: the config key this flag's value is written to (type header). */
@@ -594,6 +620,14 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
     configValue: 'docs.root',
   },
   {
+    key: 'docsRetrieval',
+    flag: DOCS_RETRIEVAL_FLAG,
+    aliases: [DOCS_RETRIEVAL_ALIAS_FLAG],
+    kind: 'switch',
+    summary: 'Turn RAG (docs retrieval) on: a local search tool over the docs and conventions (with --docs)',
+    configValue: 'docs.retrieval',
+  },
+  {
     key: 'parity',
     flag: '--parity',
     kind: 'switch',
@@ -652,6 +686,15 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
 ] as const);
 
 /**
+ * Every token a row accepts, canonical first: its flag and any {@link InitOption.aliases}. The one
+ * reader of that field, so the parser, the `--help` block and the discarded-flag warning cannot
+ * disagree about which spellings exist.
+ */
+function optionSpellings(option: InitOption): readonly string[] {
+  return [option.flag, ...(option.aliases ?? [])];
+}
+
+/**
  * A flag value as a reader can retype it: quoted only where a shell would otherwise split or expand
  * it, so the remedy below stays copy-pasteable for an ordinary branch name and stays correct for a
  * path with a space in it.
@@ -690,15 +733,18 @@ function discardedConfigFlagsWarning(flags: InitFlags): string | undefined {
     const configKey = option.configValue;
     if (configKey === undefined) continue;
     const steersDetection = option.steersDetection === true;
+    // The naming carries every accepted spelling, so a reader who typed an alias recognises the line
+    // as theirs; the re-invocation stays on the canonical one, because that half is pasted back.
+    const named = option.aliases === undefined ? option.flag : `${option.flag} (or ${option.aliases.join(', ')})`;
     if (option.kind === 'switch') {
       if (flags[option.key] === true) {
-        dropped.push({ flag: option.flag, configKey, invocation: option.flag, steersDetection });
+        dropped.push({ flag: named, configKey, invocation: option.flag, steersDetection });
       }
       continue;
     }
     const value = flags[option.key];
     if (value === undefined) continue;
-    dropped.push({ flag: option.flag, configKey, invocation: `${option.flag} ${retypable(value)}`, steersDetection });
+    dropped.push({ flag: named, configKey, invocation: `${option.flag} ${retypable(value)}`, steersDetection });
   }
   if (dropped.length === 0) return undefined;
 
@@ -712,10 +758,13 @@ function discardedConfigFlagsWarning(flags: InitFlags): string | undefined {
   return `${dropped.map((entry) => entry.flag).join(', ')} ${one ? 'was' : 'were'} given, and ${CONFIG_FILENAME} was read rather than written on this run: ${one ? 'that flag supplies a value' : 'each of those flags supplies a value'} for a key of that file, so no such value was written and the keys in the file are the ones every generator after it read.${steeringClause} Apply ${one ? 'it' : 'them'} by rebuilding the file from detection and this command line with \`${INIT_VERB} --reset-config ${dropped.map((entry) => entry.invocation).join(' ')}\`, which copies the file that is there to a .bak first and is the only route that also re-derives what a value implies — or change ${one ? 'the key' : 'the keys'} alone with ${keyRemedies}`;
 }
 
-/** The command's own `Options:` rows, invocation-aligned, derived from {@link INIT_OPTIONS}. */
+/**
+ * The command's own `Options:` rows, invocation-aligned, derived from {@link INIT_OPTIONS}. A row
+ * with aliases prints every spelling it accepts, so no accepted token is absent from `--help`.
+ */
 function initOptionLines(): readonly string[] {
   const invocations = INIT_OPTIONS.map(
-    (option) => `${option.flag}${option.kind === 'switch' ? '' : ` ${option.placeholder}`}`,
+    (option) => `${optionSpellings(option).join(', ')}${option.kind === 'switch' ? '' : ` ${option.placeholder}`}`,
   );
   const width = Math.max(...invocations.map((invocation) => invocation.length));
   return INIT_OPTIONS.map((option, index) => `  ${(invocations[index] as string).padEnd(width)}  ${option.summary}`);
@@ -764,14 +813,16 @@ function parseQaDriver(value: string): HarnessQaDriver {
 
 function parseInitFlags(argv: readonly string[]): InitFlags {
   const values = new Map<ValueFlagKey, string>();
-  const switches = new Set<SwitchFlagKey>();
+  // The spelling each switch was typed as, not merely that it was given: a row accepting an alias
+  // ({@link InitOption.aliases}) must be named back to the reader in the words they used.
+  const switches = new Map<SwitchFlagKey, string>();
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index] as string;
     const separator = token.startsWith('--') ? token.indexOf('=') : -1;
     const name = separator > 0 ? token.slice(0, separator) : token;
     const inlineValue = separator > 0 ? token.slice(separator + 1) : undefined;
-    const option = INIT_OPTIONS.find((candidate) => candidate.flag === name);
+    const option = INIT_OPTIONS.find((candidate) => optionSpellings(candidate).includes(name));
 
     if (option === undefined) {
       throw new HarnessError(
@@ -783,7 +834,7 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
 
     if (option.kind === 'switch') {
       if (inlineValue !== undefined) throw new HarnessError(`init: ${name} does not take a value`);
-      switches.add(option.key);
+      switches.set(option.key, name);
       continue;
     }
 
@@ -817,6 +868,17 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
       `init: ${ANALYZE_FLAG} and ${NO_ANALYZE_FLAG} answer the same question opposite ways and both were given: pass one, or neither — with neither, the documented default accepts the offer`,
     );
   }
+  // Refused rather than warned, unlike `--qa-driver` without `--qa`: `docs.retrieval: true` without
+  // `phases.docs` is a config-check error, so the generated config would fail the write guard.
+  if (switches.has('docsRetrieval') && !switches.has('docs')) {
+    // Named as it was typed: a run refused for passing the alias is not told about a flag it never
+    // used. The fallback is unreachable while the key is set only from a token, and is here so the
+    // message has a spelling rather than `undefined` if that ever stops holding.
+    const typed = switches.get('docsRetrieval') ?? DOCS_RETRIEVAL_FLAG;
+    throw new HarnessError(
+      `init: ${typed} needs --docs: retrieval searches the documentation corpus the docs phase maintains, so it is legal only with that phase on`,
+    );
+  }
 
   return {
     ...Object.fromEntries([...values]),
@@ -828,6 +890,7 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
     notifications: switches.has('notifications'),
     qa: switches.has('qa'),
     docs: switches.has('docs'),
+    docsRetrieval: switches.has('docsRetrieval'),
     parity: switches.has('parity'),
   } as InitFlags;
 }
@@ -1198,6 +1261,26 @@ function askQaDriver(ctx: CommandContext): string | undefined {
       question: `the detected preset says nothing about how this project's application is reached: which driver should the interactive test phase run? (${qaDriverChoices()})`,
       flag: QA_DRIVER_FLAG,
       defaultValue: DEFAULTS.qa.driver,
+    },
+    promptCtx,
+  );
+}
+
+/**
+ * Ask whether to turn docs retrieval on — or answer `undefined` on every run that cannot be asked, for
+ * {@link askQaDriver}'s reason: the generator notes an unasked run, and must not note a declined one.
+ */
+function askRetrieval(ctx: CommandContext): boolean | undefined {
+  const promptCtx = { flags: ctx.flags, report: ctx.report };
+  if (!canPrompt(promptCtx)) return undefined;
+
+  return askYesNo(
+    {
+      question:
+        'Turn on RAG (docs retrieval)? It adds a local search tool over the docs and conventions for the plan writer and reviewers. Setup installs about 300 MB of local runtime and downloads two small models into a cache shared by every checkout on this machine. Off by default.',
+      defaultAnswer: false,
+      flag: DOCS_RETRIEVAL_FLAG,
+      flagHint: 'to turn it on without being asked',
     },
     promptCtx,
   );
@@ -2069,6 +2152,8 @@ async function run(ctx: CommandContext): Promise<number> {
     // back-references it ({@link askQaDriver}) — "the detected preset" names nothing an adopter who
     // has not read that line can resolve.
     askDriver: () => askQaDriver(ctx),
+    // Lazy for the same reason: asked only while the docs phase is on and `--docs-retrieval` was absent.
+    askRetrieval: () => askRetrieval(ctx),
   });
   // `kept` is known only now, so this is where the four held-back lists are published or dropped —
   // ahead of `config.warnings`, which is the order they printed in before they were gated. A kept
@@ -2232,6 +2317,15 @@ async function run(ctx: CommandContext): Promise<number> {
   const hooksPath = pointHooksPath({ repoRoot, githooksDir: hooks.githooksDir, dryRun: ctx.flags.dryRun });
   warnings.push(...hooksPath.warnings);
   notes.push(...hooksPath.notes);
+
+  // After the plan: this step writes nothing into the repository, and a real install takes minutes, so
+  // it must not delay the plan's own report. Before the commit, which a failure here must not stop.
+  if (retrievalApplies(effective)) {
+    ctx.report.step('docs retrieval setup');
+    const retrieval = setUpRetrieval({ dryRun: ctx.flags.dryRun });
+    warnings.push(...retrieval.warnings);
+    notes.push(...retrieval.notes);
+  }
 
   // The second post-plan step, and after the plan for a reason of its own: the managed `.gitignore`
   // block that decides what `git add -A` may stage arrived with the plan. Before the summary, so the

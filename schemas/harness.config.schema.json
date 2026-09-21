@@ -5,6 +5,13 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "defaultBranch", "stateDir", "layers", "commands"],
+  "allOf": [
+    {
+      "$comment": "Mirrors the cross-field error at path `docs.retrieval` in cli/src/config/check.ts: `docs.retrieval: true` is legal only while `phases.docs` is true. An absent `phases`, or an absent `phases.docs`, fails the `then` on purpose, because that phase defaults to false.",
+      "if": { "required": ["docs"], "properties": { "docs": { "type": "object", "required": ["retrieval"], "properties": { "retrieval": { "const": true } } } } },
+      "then": { "required": ["phases"], "properties": { "phases": { "type": "object", "required": ["docs"], "properties": { "docs": { "const": true } } } } }
+    }
+  ],
   "properties": {
     "$schema": {
       "type": "string",
@@ -268,6 +275,11 @@
           "type": "string",
           "minLength": 1,
           "description": "Repo-relative directory holding the maintained reference documents the phase keeps in step with the code."
+        },
+        "retrieval": {
+          "type": "boolean",
+          "default": false,
+          "description": "Turn on the local docs-retrieval search tool over 'docs.root' and the conventions documents the layers name, served to the plan writer and the reviewers over MCP. Legal only while 'phases.docs' is true. Off by default and opt-in: turning it on installs a local runtime and downloads two models at setup time, and its relevance against index-first navigation is not yet measured."
         }
       }
     },

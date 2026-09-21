@@ -58,7 +58,7 @@ import { lstat } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import test from 'node:test';
 
-import { createFixture, runBash, runCli, snapshotTree, PACKAGE_ROOT } from './helpers/fixture.mjs';
+import { createFixture, plantRetrievalRuntime, runBash, runCli, snapshotTree, PACKAGE_ROOT } from './helpers/fixture.mjs';
 
 /** The default `scriptsDir`, and the library's path under it — the contract, spelled out once. */
 const SCRIPTS_DIR = 'scripts';
@@ -79,6 +79,23 @@ const LIB_MODE = 0o644;
 const SCRATCH_FILE = 'scratch-run.sh';
 const SCRATCH_PATH = `${SCRIPTS_DIR}/${SCRATCH_FILE}`;
 const SCRATCH_MODE = 0o755;
+
+/**
+ * The docs-retrieval server launcher, and the runtime entry it `exec`s under a machine cache
+ * directory, spelled out as the contract.
+ */
+const LAUNCHER_FILE = 'docs-search-server.sh';
+const LAUNCHER_PATH = `${SCRIPTS_DIR}/${LAUNCHER_FILE}`;
+const LAUNCHER_TEMPLATE = join(PACKAGE_ROOT, 'templates', SCRIPTS_DIR, LAUNCHER_FILE);
+const RUNTIME_ENTRY = [
+  'autonomous-sdlc-harness',
+  'retrieval',
+  'runtime',
+  'node_modules',
+  'autonomous-sdlc-harness',
+  'dist',
+  'cli.js',
+];
 
 /** The state directory a default `init` writes, and the one directory a file may be run out of. */
 const STATE_DIR = 'sdlc-harness';
@@ -700,4 +717,69 @@ test('the written watcher starts on a bare environment and lets the caller keep 
     assert.equal(plain.status, 0, `the same run without the decoy directory also failed:\n${plain.stderr}`);
     assert.match(plain.stdout, /^tunables: MAX_PARALLEL_RUNS=/m, `the watcher printed no tunables:\n${plain.stdout}`);
   });
+});
+
+test('the docs-retrieval server launcher is written verbatim, executable, and a re-run leaves it as it is', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+
+  await initOk(dir);
+
+  const first = await snapshotTree(dir);
+  assert.deepEqual(copiesOf(first, LAUNCHER_FILE), [LAUNCHER_PATH], `${LAUNCHER_FILE} was not written into ${SCRIPTS_DIR}/`);
+  assert.equal(text(dir, LAUNCHER_PATH), readFileSync(LAUNCHER_TEMPLATE, 'utf8'), `${LAUNCHER_PATH} is not the template's bytes`);
+  const mode = (await lstat(join(dir, LAUNCHER_PATH))).mode & 0o777;
+  assert.equal(mode, 0o755, `${LAUNCHER_PATH} is mode ${mode.toString(8)}, not 755`);
+
+  await initOk(dir);
+
+  assert.equal((await snapshotTree(dir))[LAUNCHER_PATH], first[LAUNCHER_PATH], 'a second init rewrote the launcher');
+});
+
+test('the docs-retrieval server launcher refuses with an empty stdout when no runtime is installed', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  const cacheHome = join(dir, 'empty-cache');
+  mkdirSync(cacheHome, { recursive: true });
+
+  const { status, stdout, stderr } = await runBash(dir, [join(dir, LAUNCHER_PATH)], { XDG_CACHE_HOME: cacheHome });
+
+  assert.equal(status, 1, `the launcher exited ${status}:\n${stderr}`);
+  // Stdout is the MCP transport: a refusal written there would be a malformed frame.
+  assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
+  assert.match(stderr, /npx autonomous-sdlc-harness init/, `the refusal does not name the remedy:\n${stderr}`);
+  assert.ok(stderr.includes(join(cacheHome, ...RUNTIME_ENTRY)), `the refusal does not name the entry path:\n${stderr}`);
+});
+
+test("the docs-retrieval server launcher execs the runtime's docs serve for its own checkout", async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  const cacheHome = join(dir, 'cache');
+  await plantRetrievalRuntime(cacheHome);
+  // The planted entry replaced by one reporting its argv on stderr, so stdout stays the transport's.
+  writeFileSync(
+    join(cacheHome, ...RUNTIME_ENTRY),
+    'process.stderr.write(JSON.stringify(process.argv.slice(2)));\nprocess.exit(0);\n',
+    'utf8',
+  );
+
+  // Invoked from outside the checkout, so the root is the script's own and not the caller's.
+  const { status, stdout, stderr } = await runBash(cacheHome, [join(dir, LAUNCHER_PATH)], { XDG_CACHE_HOME: cacheHome });
+
+  assert.equal(status, 0, `the launcher exited ${status}:\n${stderr}`);
+  assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
+  assert.deepEqual(JSON.parse(stderr), ['docs', 'serve', '--cwd', dir]);
+});
+
+test('hr_cache_dir resolves the machine cache directory the way machineCacheDir() does', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  const home = join(dir, 'home');
+
+  const empty = await sourceAndCallWithEnv(dir, 'hr_cache_dir', { XDG_CACHE_HOME: '', HOME: home });
+  assert.equal(empty.status, 0, `hr_cache_dir exited ${empty.status}: ${empty.stderr}`);
+  assert.equal(empty.stdout, `${home}/.cache/autonomous-sdlc-harness\n`, 'an empty XDG_CACHE_HOME did not fall back to $HOME/.cache');
+
+  const slashed = await sourceAndCallWithEnv(dir, 'hr_cache_dir', { XDG_CACHE_HOME: '/x/', HOME: home });
+  assert.equal(slashed.status, 0, `hr_cache_dir exited ${slashed.status}: ${slashed.stderr}`);
+  assert.equal(slashed.stdout, '/x/autonomous-sdlc-harness\n', 'one trailing slash was not stripped');
 });
