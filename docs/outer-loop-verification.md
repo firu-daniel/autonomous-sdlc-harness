@@ -146,7 +146,7 @@ Fixture: `feat_gone` (pushed, remote ref deleted, so `[gone]` after prune, with 
 | pre-1.5 `jq` | **0** | same refusal, same effect |
 | registry present but unreadable as a registry | **0** | refuses — it cannot prove nothing is running |
 | `--dryrun` (a misspelling of `--dry-run`) | **1** | usage refusal; nothing read, nothing deleted — the misspelling cannot become a real sweep |
-| `origin` at a path that does not exist | **0** | `fetch --prune failed (offline?); skipping this round` |
+| `origin` at a path that does not exist | **0** | `fetch --prune failed (offline, unreachable or timed out); skipping this round` |
 | **the real sweep**, everything restored | **0** | `feat_gone`'s working copy removed and its branch deleted; `feat_live` untouched (upstream intact); `release/1.0` untouched (protected, though gone); the main checkout's own branch untouched |
 
 The last row is the shared perturbation partner for the seven refusals above it: same command, nothing blocking, and it deletes. Each refusal row was driven with the sweep's own preconditions otherwise satisfied, so "nothing deleted" is a refusal rather than an empty sweep.
