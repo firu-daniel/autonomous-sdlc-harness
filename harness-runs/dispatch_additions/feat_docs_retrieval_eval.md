@@ -49,3 +49,15 @@
 - **added:** `context_notes:`
 - **verbatim:** `context_notes: The standing rule for the rest of this branch, from the user's park-3 answer: wherever a plan file says a figure or a result is carried "in the commit body", read it as naming the producing task's `**Deviations from plan:**` block instead — an implementer cannot write a commit body, so that channel does not exist.`
 - **why the agent could not derive it:** as above.
+
+## [C2 · Item 3 · cli · iter 0] → layer-implementer  (#60)
+- **added:** `outside the sanctioned form`
+- **verbatim:** `This dispatch is the `cli` layer of a two-layer fix (`cli, general`, bottom-up). Implement only the `cli`-layer half; the `general`-layer half follows in its own dispatch.`
+- **why the agent could not derive it:** The finding's `_(layer: cli, general)_` tag is on the skeptic-review index's readiness entry, which the implementer does not read, and the finding file states the two sites without saying that they are dispatched as separate layer halves — so without it the `cli` dispatch would have edited the `general`-layer site too. The text sat in the prompt body rather than on a `context_notes:` line, which is the violation this block discloses.
+
+## [C2 · Item 3 · general · iter 0] → layer-implementer  (#61)
+- **added:** `outside the sanctioned form`
+- **verbatim:** `This dispatch is the `general` layer of a two-layer fix (`cli, general`, bottom-up). The `cli`-layer half has already landed in the working tree — implement only the `general`-layer half.`
+- **why the agent could not derive it:** as above, plus the state of the working tree: the `cli` half was uncommitted at dispatch time, so an implementer reading only the finding file could not tell which of its two sites was already done. Same positional violation as the block above.
+
+_Ordering note, disclosed rather than papered over: these two blocks were written at Phase D's record point rather than at Phase C2's, so they landed **after** that phase's `C2f` flow-progress flip instead of before it. Nothing was lost — the session still held both additions — but a pause between the flip and this write would have lost them, which is exactly what the ordering rule exists to prevent._
