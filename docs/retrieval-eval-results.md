@@ -4565,7 +4565,95 @@ negative distribution instead of bounding it is enough on its own to re-derive t
 
 ## Cold build and index size
 
-_Task 8 fills this section: cold-build wall time and the index's size on disk._
+**The decision this section settles, first.** The standing rule is that a cold build costing more than
+**60 seconds** moves out of the agent's path and into `scripts/setup-worktree.sh`, because the agent
+runner's MCP tool-call timeout defaults to 60 s and an adopter may set their Bash timeouts lower. The
+measured refresh here is **62.51 ms per chunk**, which extrapolates to **93.8 s** at the roughly 1,500
+chunks of a mature docs catalog and crosses 60 s at about **960 chunks** — so **the rule trips, and the
+decision is that the cold build belongs in `setup-worktree.sh`**, not in the first `search_docs` call an
+agent makes. Below that crossover the in-line build is within the budget; this repository's own 177-chunk
+corpus builds in 12.2 s. Task 12 carries the argument into `docs/retrieval.md`; the confirmation on a
+real catalog is `docs/development.md` §5 gate 10's hand run, which replaces the extrapolation with a
+measurement.
+
+**What was measured, and in which sense it was cold.** Three cold builds of the `self-docs` corpus into a
+persisted index, each in its own process, at corpus snapshot `{ files: 13, chunks: 177 }` taken off each
+run's own `RefreshResult` — all three agreed on it. The **index** was cold: the directory was removed in
+process before each build, the removal asserted (`dataDir` must not exist when the store opens) and
+`RefreshResult.embedded` asserted equal to its `chunks`, which is what distinguishes a cold build from an
+incremental refresh over a surviving index. The **model cache was warm** — the weights are installed once
+per machine and nothing on this branch downloads anything, so no figure here includes a model download.
+That leg is gate 10's leg (i) and is out of scope. `modelFilesPresent(retrievalModelCacheDir()).present`
+and `retrievalRuntimeState().installed` were both true before the first run.
+
+**The three runs, kept rather than collapsed.** The phases are timed separately because they scale
+differently: the model load is per process, the store open is per index directory, and only the refresh
+is per chunk.
+
+| Run | Model load ms | Store open ms | Refresh ms | Total ms |
+| --- | --- | --- | --- | --- |
+| 1 | 373.0 | 1054.6 | 11064.0 | 12491.5 |
+| 2 | 191.8 | 853.4 | 11166.3 | 12211.4 |
+| 3 | 192.5 | 875.8 | 11029.6 | 12097.9 |
+| **median** | **192.5** | **875.8** | **11064.0** | **12211.4** |
+
+| Phase | Median ms | ms per chunk (177) | Spread across the three runs |
+| --- | --- | --- | --- |
+| Model load (`resolveModels`) | 192.5 | 1.09 | 181.2 ms, 94% of the median |
+| Store open (`openPgliteStore`) | 875.8 | 4.95 | 201.2 ms, 23% of the median |
+| Refresh (`refreshIndex`, every chunk embedded) | 11064.0 | 62.51 | 136.6 ms, 1.2% of the median |
+| Total | 12211.4 | 68.99 | 393.6 ms, 3.2% of the median |
+
+The total row is the **median of the three totals**, not the sum of the three phase medians (12132.3 ms),
+which no single run produced. No run's refresh differs from the refresh median by more than **0.9%**, so
+the check that a run deviating by more than half is investigated rather than averaged away did not fire.
+The two short phases carry the whole of the visible spread — run 1 is the outlier in both, and it was the
+first process of the session to read the weight files and to create the index directory. They contribute
+about 1.1 s of the 12.2 s total and about 1 s of the 94.8 s extrapolated total, so the decision above does
+not turn on them; only the refresh figure is extrapolated.
+
+**The index on disk.** Sizes are walked in process over the index directory after the store is closed,
+`size` summed for the apparent figure and `blocks * 512` for the allocated one. All three runs produced a
+byte-identical directory.
+
+| Figure | Total | Per chunk (177) | At ~1,500 chunks, linear |
+| --- | --- | --- | --- |
+| Apparent size (sum of `size`) | 43,163,949 B (43.2 MB) | 244 kB | ~366 MB |
+| Allocated size (sum of `blocks * 512`) | 44,433,408 B (44.4 MB) | 251 kB | ~377 MB |
+| Files | 985 | — | — |
+
+**Where the index was built, and why that is the same figure an adopter gets.** Into
+`harness-runs/scratch/docs_index/`, which `.gitignore` excludes by its contents. This repository has no
+ignore rule for `harness-runs/docs_index/` — `init` writes one only for an adopter who turns retrieval on,
+which this repository has not — so building at the configured location would have risked committing a
+derived cache. It is the same store, opened the same way by the same `openPgliteStore` call, so the sizes
+above are the sizes `<stateDir>/docs_index/` would hold for this corpus.
+
+**What these figures do not settle.** One host (`Daniels-MacBook-Air.local`), one macOS, one Node
+(`v20.19.5`), one corpus of 177 chunks, on 2026-09-21. The 1,500-chunk extrapolations are **linear in the
+chunk count**, which the per-chunk embedding cost supports — every chunk is embedded once, in batches —
+and which the rest may not: the store's own index-build cost need not be linear, and the size figure is
+the worse of the two extrapolations, because 985 files of an embedded Postgres data directory carry a
+fixed overhead that a per-chunk division charges to the chunks. Read the size row as an upper bound;
+separating the fixed term from the per-chunk one needs a second measurement at a different chunk count,
+which this pass does not take. A fixture-sized figure does not justify a decision on its own, which is why
+the crossover, the extrapolation and its limits are stated in the same breath as the conclusion: what
+replaces the extrapolation with a measurement is gate 10's hand run against a real catalog, and until it
+is run the 60-second conclusion rests on 177 chunks of this repository's own `docs/`.
+
+**How to reproduce it.** The measurement is `measureColdBuild` in `evals/docs-retrieval/cold-build.mjs`,
+committed so it is re-runnable, driven once per process by a launcher under the run's scratch directory
+that calls it for this corpus and that index directory:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/cold-build.mjs
+```
+
+The removal and the size walk are both in process, deliberately: a shelled-out recursive removal is a
+`deny` floor entry in `.claude/settings.autonomous.json` and `du` has no entry at all, so either would
+have stalled an unattended run. No entry was added to that profile for this pass. Filling this section
+grows the corpus it measures, so a later run over `self-docs` carries a different snapshot stamp and is
+not a before/after pair with the figures above.
 
 ## The query-log pass
 
