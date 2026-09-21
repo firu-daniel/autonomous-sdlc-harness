@@ -66,6 +66,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       echo "pre-push: refusing to push to protected branch '$target' - land the change through a pull request" >&2
       exit 1
       ;;
+    publish)
+      echo "pre-push: refusing to push to 'publish' - it is staged by the publish workflow alone; run publish-main.sh --dry-run to see what would be staged" >&2
+      exit 1
+      ;;
   esac
 done
 

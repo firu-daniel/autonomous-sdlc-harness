@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # publish-main.sh — regenerate `main` from `dev`: take dev's tree, remove this repository's own
-# harness adoption from it, and commit the result onto `main` as ONE ordinary commit. Hand-written
-# for this repository, like run-gates.sh: it is not in the set `init --force` regenerates, and it is
-# itself one of the paths it removes, so it never reaches `main`.
+# harness adoption from it, and stage the result on the `publish` branch as ONE ordinary commit,
+# for a pull request a human merges onto `main`. Hand-written for this repository, like
+# run-gates.sh: it is not in the set `init --force` regenerates, and it is itself one of the paths
+# it removes, so it never reaches `main`.
 #
 # THE BRANCH MODEL IT SERVES. `dev` is the trunk: it carries the product AND the adoption
 # (harness.config.json, .claude/, scripts/, githooks/, harness-runs/), feature branches are cut
@@ -15,7 +16,7 @@
 # WHO RUNS IT. .github/workflows/publish-main.yml, on every push to `dev` — so each feature pull
 # request merged into dev becomes one commit on main. It can be run by hand with --dry-run to see
 # what would be published; a real local run would be refused by githooks/pre-push, which protects
-# main, and that is intended.
+# `publish` alongside main and dev, and that is intended: a publication is staged by CI alone.
 #
 # WHAT A PUBLICATION IS. A commit whose tree is dev's tree minus the removed paths, whose ONLY
 # parent is main's tip, and whose message ends in a `Published-from: <dev sha>` trailer. One parent
@@ -23,6 +24,21 @@
 # committer are taken from dev's tip commit, so main keeps the identity of whoever merged the pull
 # request. If the pruned tree equals main's tree — a push that touched only removed paths — nothing
 # is published.
+#
+# HOW IT REACHES MAIN, AND WHY NOT BY PUSH. `main` is protected by a ruleset that requires a pull
+# request and grants NO bypass actor, deliberately: main is the branch adopters install the plugin
+# from, so nothing automated may write to it — a bypass actor cannot be scoped to one workflow, so
+# granting one would hand every future workflow in this repository a direct write to the
+# distribution branch. This script therefore force-updates the `publish` branch to the publication
+# commit and stops. A human opens the pull request and merges it; the commit's parent is already
+# main's tip, so that pull request is a fast-forward.
+#
+# MERGE IT WITH "REBASE AND MERGE". The guard below finds the last publication by walking main's
+# FIRST-PARENT line for the `Published-from` trailer. A merge commit would put the publication on
+# the second parent and hide the trailer from that walk; a squash rewrites the message and can drop
+# it. Either way the next run reads main as carrying an unaccounted commit and refuses to publish.
+# `main-protection` pins `allowed_merge_methods` to `rebase` for exactly that reason — the trailer
+# stays on the first-parent line, which is the one place the guard reads.
 #
 # THE MESSAGE. dev's tip is read as the pull request that produced it: GitHub's merge commit
 # ("Merge pull request #N from …", PR title in the body) publishes as "<PR title> (#N)"; a squash
@@ -47,6 +63,10 @@
 # Exit: 0 published, or nothing to publish · 1 refused or failed · 2 bad usage
 
 set -uo pipefail
+
+# The staging branch the publication is pushed to, for a pull request onto main. A pointer, not a
+# history: nothing builds on it and each publication replaces it outright.
+publish_branch="publish"
 
 removed_paths=(
   harness.config.json
@@ -200,11 +220,56 @@ commit="$(git commit-tree --no-gpg-sign "$tree" -p "$main_tip" <<<"$message")" \
   || fail "could not create the publication commit"
 
 if [ "$dry_run" -eq 1 ]; then
-  echo "publish-main: [dry-run] would push ${commit:0:12} onto main ${main_tip:0:12}:"
+  echo "publish-main: [dry-run] would stage ${commit:0:12} on ${publish_branch} for a pull request onto main ${main_tip:0:12}:"
   git log -1 --format='%n%B' "$commit"
   git diff --stat "$main_tip" "$commit"
   exit 0
 fi
 
-git push origin "${commit}:refs/heads/main" || fail "could not push the publication to main"
-echo "publish-main: published dev ${dev_tip:0:12} to main as ${commit:0:12} — $title"
+# --force because the staging branch is replaced, not advanced: a "Rebase and merge" rewrites the
+# publication commit onto main under a new sha, so the previous tip of this branch is not an
+# ancestor of the next one and a fast-forward push would be refused. Safe on a ref nothing builds
+# on, and it is never main: the ruleset's non_fast_forward rule still stands over the branch that
+# matters.
+git push --force origin "${commit}:refs/heads/${publish_branch}" \
+  || fail "could not stage the publication on ${publish_branch}"
+
+echo "publish-main: staged dev ${dev_tip:0:12} on ${publish_branch} as ${commit:0:12} — $title"
+
+# --- The pull request ----------------------------------------------------------------------------
+
+# Where the publication is merged from. GITHUB_REPOSITORY is set in Actions; a hand-run falls back
+# to origin, so the printed link is right either way.
+slug="${GITHUB_REPOSITORY:-}"
+if [ -z "$slug" ]; then
+  slug="$(git remote get-url origin 2>/dev/null | sed -E 's#^(git@[^:]+:|ssh://[^/]+/|https://[^/]+/)##; s#\.git$##')"
+fi
+compare_url="https://github.com/${slug}/compare/main...${publish_branch}?expand=1"
+
+pr_body="Publication of dev \`${dev_tip}\` onto main, built by \`scripts/publish-main.sh\`.
+
+Merge this with **Rebase and merge**. The guard that finds the last publication walks main's
+first-parent line for the \`Published-from\` trailer: a merge commit hides it on the second parent
+and a squash can rewrite it away, and either one makes the next publication refuse."
+
+# Opening the pull request is a convenience, never a gate: this repository leaves "Allow GitHub
+# Actions to create and approve pull requests" OFF, so the attempt below is expected to fail under
+# CI and the printed link is what the operator uses. It is attempted anyway so that turning that
+# setting on is the only change needed to have it opened automatically. A failure here is not a
+# failed publication — the commit is already staged.
+if command -v gh >/dev/null 2>&1 && [ -n "$slug" ]; then
+  open_pr="$(gh pr list --repo "$slug" --head "$publish_branch" --base main --state open \
+    --json number --jq '.[0].number' 2>/dev/null || true)"
+  if [ -n "$open_pr" ]; then
+    echo "publish-main: pull request #${open_pr} is open and now carries ${commit:0:12}"
+    exit 0
+  fi
+  if gh pr create --repo "$slug" --base main --head "$publish_branch" \
+       --title "$title" --body "$pr_body" >/dev/null 2>&1; then
+    echo "publish-main: opened the pull request onto main — merge it with 'Rebase and merge'"
+    exit 0
+  fi
+fi
+
+echo "publish-main: open the pull request to publish it, and merge it with 'Rebase and merge':"
+echo "  ${compare_url}"
