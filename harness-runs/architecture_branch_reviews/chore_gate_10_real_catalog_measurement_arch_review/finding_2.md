@@ -1,0 +1,18 @@
+### 2. `docs/development.md`'s gate 10 run stamp carries leg (i)'s measured figure, whose home is `docs/retrieval.md` item (d)
+
+**Site.** `docs/development.md` → `## 5. Verifying a change` → **Gate 10 — docs retrieval with the real models.** → leg **(i) Setup**, the added paragraph *"**The bandwidth caveat travels with the elapsed time.** The recorded cold figure is **128 s** on that host on that date."*, together with the run-stamp paragraph above it beginning *"**This gate has been run.**"*.
+
+**The rule it violates.** `.claude/context/conventions.md` → `## The layers` → `### Where a new responsibility goes`: *"**A responsibility that already has a home does not get a second one.**"* — read with `## Documents of record`, whose measured-fact rule assumes a single stating site (*"A measured fact states what was measured, the command and the exact message"*).
+
+**The problem.** This branch establishes a clean division of homes and states it in the changed text itself. `docs/development.md` → gate 10 → **Where the results go** now says each leg's command and exact output is recorded in `docs/retrieval.md` → `## Measured, and how`, item (d), with leg (iii)'s figures carved out into `docs/retrieval-eval-results.md` → `## Cold build and index size` as *"their one home"*. The run-stamp paragraph in the same gate says of itself: *"this paragraph is the run stamp and not a results record."*
+
+It then records results anyway. **128 s** is leg (i)'s measured elapsed time, and item (d) in `docs/retrieval.md` already carries it as `128.08 s` with its full command, its `13.17s user 7.33s system 16% cpu 2:08.08 total` output, its cold-cache qualification and the same bandwidth caveat. The gate document now holds a rounded second copy with no citation back, so the two can drift and the gate — a *procedure* document, which is what makes it the wrong owner — becomes a results site. The same paragraph also restates the host stamp (M4, 16 GB, macOS 15.7.4, Node `v22.23.2`, Claude Code 2.1.278, `0.2.0`) and the corpus stamp (commit `010c50e`, 156 files / 1,960 chunks) in full, both of which are already written out verbatim in `docs/retrieval.md` item (d) and again in `docs/retrieval-eval-results.md` → `### The real-catalog build — 1,960 chunks, 2026-09-22`, giving three copies of one stamp.
+
+This is graded **Should Fix**, not Must Fix: the layer is right (`docs/`, `general`), the rule invoked is the generic single-home rule rather than a named monopoly, and a run stamp naming the date, the host class and the corpus is legitimately the gate's own record that the gate was executed.
+
+**The fix.** In `docs/development.md`, leg (i):
+
+1. Replace the measured figure with a pointer. Rewrite *"The recorded cold figure is **128 s** on that host on that date."* as *"The 2026-09-22 run's cold figure is recorded with its command and its output in `docs/retrieval.md` → `## Measured, and how`, item (d), which is its home; it is not restated here."* Keep the instruction that follows it — record no single bandwidth number and predict no wall time from one — since that is procedure, which is this document's own subject.
+2. In the **This gate has been run.** paragraph, reduce the host and corpus stamps to what a run stamp needs — the date, the platform family and the chunk count that shows the corpus floor was cleared — and cite item (d) for the full stamps rather than reproducing them. The floor statement (*"cleared by 31%"*) is the gate's own acceptance check and stays.
+
+After the edit, the gate document should state **that** gate 10 was run and **against what class of corpus**, and cite the two result homes for every number; it should state no measured figure of its own.
