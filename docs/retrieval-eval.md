@@ -306,11 +306,13 @@ Three bars. Retrieval has to clear all three.
    a set this size; and index-first navigation is already in every agent's hands, so retrieval has to
    be *better*, not equal.
 2. **Cost.** Arm E's p95 latency is milliseconds of local compute and arm A's is agent wall time per
-   query, so the bar is that arm E's p95 stays inside the agent tool-call budget the cold-build
-   section names while remaining a fraction of arm A's; and that arm E bills **no** tokens against arm
-   A's one agent call per query. The charge against retrieval is its **one-time** cold build, plus the
-   index on disk, both recorded in `docs/retrieval-eval-results.md` → `## Cold build and index size`
-   with the decision about where that build belongs.
+   query, so the bar is the **ratio between them**: arm E's p95 must be a fraction of arm A's per-query
+   wall time, both taken from the same pass. No absolute wall-clock ceiling stands behind that bar, and
+   this bar states no constant of its own — the cold-build section records why there is no such budget
+   to measure against. And arm E bills **no** tokens against arm A's one agent call per query. The
+   charge against retrieval is its **one-time** cold build, plus the index on disk, both recorded in
+   `docs/retrieval-eval-results.md` → `## Cold build and index size` with the decision about where that
+   build belongs.
 3. **Failure.** On negative queries arm E must abstain at least as reliably as arm A answers `none`.
    An arm that answers confidently where the catalog says nothing is worse than one that sends the
    agent to the index, because a wrong pointer is read as an answer.
@@ -334,9 +336,15 @@ there and is not settled here.
 
 **The decision is taken on a real catalog, not on either committed corpus.** Both are far below a
 mature catalog's size, and the standing rule in the lessons ledger is that a figure measured on a
-fixture-sized corpus never justifies a design decision on its own. The step that produces the
-real-shape figure is the hand run in `docs/development.md` §5 → gate 10, against a private real
-catalog; the corpora here fix the *procedure* and the regression floor, not the verdict.
+fixture-sized corpus never justifies a design decision on its own, and that rule binds whatever these
+two corpora measure. The step that produces the real-shape figure has since been taken:
+`docs/development.md` §5 → gate 10 was run by hand on **2026-09-22** against a private real
+documentation catalog held outside this checkout — commit `010c50e`, **156 files / 1,960 chunks** —
+and its figures are recorded in `docs/retrieval-eval-results.md` → `## Cold build and index size`,
+which is their one home. What that run settles is the real-catalog **cost** side — the cold build and
+the index on disk — and not this rule's verdict, which is an arm E against arm A comparison and still
+awaits the arm A hand run `## Running arm A by hand` below describes. The corpora here fix the
+*procedure* and the regression floor, not the verdict.
 
 ## The regression floor
 
@@ -519,6 +527,13 @@ Rename that heading once a number exists; a section still announcing an awaited 
 one is a false record. Read the filled row against `## The decision rule` above, which was written
 before any arm A number existed precisely so this comparison cannot be chosen to fit it.
 
-**This step does not close the roadmap row, and neither did this branch.** Arm A on `fixture-catalog`
-fixes the procedure; the verdict is taken on a real catalog. This hand run plus the private-catalog
-numbers from `docs/development.md` §5 → gate 10 are together what closes it.
+**What gate 10 settled, and why this hand run is still owed.** Arm A on `fixture-catalog` fixes the
+procedure; the verdict is taken on a real catalog. `docs/development.md` §5 → gate 10 has been run — by
+hand, in full, on 2026-09-22 against a private real documentation catalog held outside this checkout,
+commit `010c50e`, 156 files / 1,960 chunks — and what it produced is the real-catalog **cold-build and
+index-size** evidence (`docs/retrieval-eval-results.md` → `## Cold build and index size`) together
+with leg (iv)'s confirmation of the abstention threshold at both ends (that file's `### The limit on
+this calibration`, a confirmation and not a re-calibration). It is **not** the arm A hand run: arm A needs a labelled query
+set and a `docs/INDEX.md`, and neither exists for any catalog outside `fixture-catalog`, so the
+real-catalog arm E against arm A comparison `## The decision rule` above takes its verdict on remains
+unmade.
