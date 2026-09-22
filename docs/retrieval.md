@@ -99,7 +99,7 @@ Both models loaded and ran **outside the stub** on 2026-09-21, host `darwin 24.6
 
 Three legs remain unrun, and none of them is something this repository can supply for itself:
 
-- **The adopter-facing provisioning path, leg (i).** `cli/src/retrieval/setup.ts` installs `<own manifest name>@<own manifest version>` **from the registry**, and `cli/package.json`'s version has not moved off `0.1.0` since the initial commit — which predates every retrieval module — so the published `0.1.0` carries no `dist/retrieval` and the path cannot be exercised until a version carrying retrieval is published. Publishing is its own decision on its own branch: it is neither worked around here nor version-bumped for.
+- **The adopter-facing provisioning path, leg (i).** `cli/src/retrieval/setup.ts` installs `<own manifest name>@<own manifest version>` **from the registry**, so the leg can only be exercised by a published version that carries `dist/retrieval`. The published `0.1.0` — cut before every retrieval module — carries none. `cli/package.json` now declares `0.2.0`, bumped on its own branch for exactly this reason; the leg stays unrun until that version is on the registry, and it is runnable from the moment it is.
 - **The unattended session through `.mcp.json`, leg (v).** Nothing has started the server the way the agent runner does.
 - **Any Linux host.** Every measurement in this document is macOS.
 
