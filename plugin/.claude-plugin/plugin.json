@@ -1,6 +1,6 @@
 {
   "name": "autonomous-sdlc-harness",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "An autonomous SDLC harness for Claude Code: plan, implement, review, QA and ship a branch end to end.",
   "author": { "name": "firu-daniel", "url": "https://github.com/firu-daniel" },
   "homepage": "https://github.com/firu-daniel/autonomous-sdlc-harness",
