@@ -20,7 +20,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/chore_gate_
 
 1. [x] **Task 1** — Record the real-catalog cold build and index size in `docs/retrieval-eval-results.md`, the file of record _(layer: general)_ _(points: 20)_
 2. [x] **Task 2** — Rewrite `docs/retrieval.md`: strike the rule, make the decision standing, restate the cost as the refresh, record gate 10 as run _(layer: general)_ _(points: 20)_
-3. [ ] **Task 3** — Update `docs/development.md`: gate 10's own text records the run and its two command defects, and roadmap item 17 is cancelled _(layer: general)_ _(points: 20)_
+3. [x] **Task 3** — Update `docs/development.md`: gate 10's own text records the run and its two command defects, and roadmap item 17 is cancelled _(layer: general)_ _(points: 20)_
 4. [ ] **Task 4** — Correct `docs/retrieval-eval.md`'s two timeout-dependent claims and sweep the tree for surviving sites _(layer: general)_ _(points: 10)_
 
 ## Scope register
