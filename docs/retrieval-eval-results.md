@@ -4693,9 +4693,12 @@ These are host-side settings in the Claude Code runner. They do not change with 
 
 **What replaces the constant.** A property of the build rather than a number: **the build must not go silent
 for longer than the idle timeout** — a build that reports progress cannot trip anything above. Where the
-build belongs is then a **cost** question, what warming is worth to the worktree that pays it, and not a
-timeout question. `docs/retrieval.md` carries that decision; this section carries the figures it is taken
-on, for two corpora, each with its own host and corpus stamp.
+build belongs is then no longer a timeout question at all. `docs/retrieval.md` carries that decision, and it
+is taken on **coverage** rather than on any figure in this section: the first `search_docs` call is the only
+mechanism that serves every entry point, so the build stays there and roadmap item 17 is cancelled. What the
+figures below bear on is the **cost** side — what warming would be worth to the worktree that pays it —
+which is what would reopen the question rather than what settles it. They are recorded for two corpora, each
+with its own host and corpus stamp.
 
 ### The 177-chunk build — this repository's own `docs/`, 2026-09-21
 
