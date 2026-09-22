@@ -10,7 +10,7 @@ The one architecture conclusion: a **`plugin`-layer registry has acquired a seco
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — `docs/retrieval.md` restates the `search_docs` grant roster that `plugin/agents/README.txt` owns _(layer: general)_
+1. [x] **Finding 1** — `docs/retrieval.md` restates the `search_docs` grant roster that `plugin/agents/README.txt` owns _(layer: general)_
 2. [ ] **Finding 2** — `docs/development.md`'s gate 10 run stamp carries leg (i)'s measured figure, whose home is `docs/retrieval.md` item (d) _(layer: general)_
 
 ## Must Fix
