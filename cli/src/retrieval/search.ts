@@ -4,10 +4,11 @@
  * both read.
  *
  * **The rule this module exists to enforce: only `fused-rerank` abstains, and only below
- * {@link ABSTAIN_SCORE_THRESHOLD}, a provisional constant.** The reranker's score is the one this
- * module treats as calibrated; the `lexical`, `vector` and `fused` scores are rank-derived and
- * uncalibrated, so those modes never abstain. Every store access goes through the {@link DocStore}
- * methods; this module holds no SQL.
+ * {@link ABSTAIN_SCORE_THRESHOLD}, calibrated against the measured reranker distribution** — that
+ * constant's own doc comment carries the value and points at the record of how it was chosen. The
+ * reranker's score is the one this module treats as calibrated; the `lexical`, `vector` and `fused`
+ * scores are rank-derived and uncalibrated, so those modes never abstain. Every store access goes
+ * through the {@link DocStore} methods; this module holds no SQL.
  */
 
 import { HarnessError } from '../core/errors.js';
@@ -33,14 +34,19 @@ export const MAX_RESULTS = 20;
 const SNIPPET_CHARS = 240;
 
 /**
- * PROVISIONAL: the best reranker score below which `fused-rerank` abstains. Set from the fixture
- * corpus of `cli/test/docs-retrieval.test.mjs` under the `stub-overlap` reranker, where it must sit
- * strictly between the matching queries' lowest best score and the no-match query's highest score:
- * `"work without a network"` scored 1.000 at its best hit, and `"quantum chromodynamics lattice"`
- * scored 0.000 on every candidate. The eval branch `feat_docs_retrieval_eval` calibrates it on a real
- * catalog with the real reranker.
+ * The best reranker score below which `fused-rerank` abstains, calibrated at `0.32` against the real
+ * reranker's measured score distribution; `docs/retrieval-eval-results.md` → `## Threshold
+ * calibration` holds how that value was chosen and on what, and is the only record of it.
+ *
+ * This module's own suite bounds the value from outside: the abstention cases of
+ * `cli/test/docs-retrieval.test.mjs` run under the `stub-overlap` reranker, which scores a matching
+ * query's best hit `1.000` and the no-match query `0.000` on every candidate, so any value strictly
+ * inside `(0.000, 1.000)` keeps them passing and a value at or outside either end flips one.
+ *
+ * No other mode gains a score filter from this: the `lexical`, `vector` and `fused` scores are
+ * rank-derived, and a cut-off on them would be an arbitrary number rather than a calibrated one.
  */
-export const ABSTAIN_SCORE_THRESHOLD = 0.3;
+export const ABSTAIN_SCORE_THRESHOLD = 0.32;
 
 /** The whole rendering of an abstention. */
 export const ABSTAIN_MESSAGE = 'no confident match';

@@ -1,0 +1,28 @@
+{
+  "_what_this_is": "A hand-written arm A transcript over three queries of evals/docs-retrieval/queries/fixture-catalog.jsonl. No agent produced it and its usage figures are invented. It exists so evals/docs-retrieval/arm-a/score-transcript.mjs can be exercised without invoking an agent, which is how arm A's scorer is verified on a branch that runs arm A not at all.",
+  "_the_three_cases": "q-fc-verify-callback returns the labelled section first; q-fc-billable-weight returns it third, written with a leading './' and surrounding whitespace so the scorer's normalisation is exercised; q-fc-negative-lattice answers 'none' against a negative query, which is the abstention agent-task.md asks for.",
+  "_it_is_not_a_measurement": "Nothing in docs/retrieval-eval-results.md is taken from this file. A real transcript is produced by evals/docs-retrieval/arm-a/run-arm-a.sh, by hand, per the procedure in docs/retrieval-eval.md.",
+  "records": [
+    {
+      "id": "q-fc-verify-callback",
+      "query": "how do i prove a callback really came from you and not from someone replaying one",
+      "refs": ["docs/webhooks.md#signature-verification", "docs/webhooks.md#delivery-and-retries"],
+      "durationMs": 14000,
+      "usage": { "input_tokens": 9120, "output_tokens": 48, "cache_read_input_tokens": 0 }
+    },
+    {
+      "id": "q-fc-billable-weight",
+      "query": "a big light box costs more than it weighs, how is the charged weight worked out",
+      "refs": ["docs/rates.md#surcharges", "docs/rates.md#fuel-surcharge", "  ./docs/rates.md#volumetric-weight  "],
+      "durationMs": 21000,
+      "usage": { "input_tokens": 11430, "output_tokens": 71, "cache_read_input_tokens": 0 }
+    },
+    {
+      "id": "q-fc-negative-lattice",
+      "query": "quantum chromodynamics lattice spacing",
+      "refs": ["none"],
+      "durationMs": 9000,
+      "usage": { "input_tokens": 7610, "output_tokens": 5, "cache_read_input_tokens": 0 }
+    }
+  ]
+}
