@@ -524,10 +524,10 @@ du -sh <stateDir>/docs_index
 **Not `npx … docs index`, and the reason is a product fact rather than a preference.** The npx copy is a standalone install that does not carry the optional peers, so it refuses by name:
 
 ```
-npx --yes autonomous-sdlc-harness@0.2.0 docs index
+npx --yes autonomous-sdlc-harness@<version> docs index
 ```
 
-→ `autonomous-sdlc-harness: docs retrieval needs the optional package @huggingface/transformers, which this installation cannot load.` The route above is the one `scripts/docs-search-server.sh` itself execs, against the runtime `init` provisioned, and it is the only one that runs this leg.
+On the 2026-09-22 run at `0.2.0` that answered → `autonomous-sdlc-harness: docs retrieval needs the optional package @huggingface/transformers, which this installation cannot load.` The route above is the one `scripts/docs-search-server.sh` itself execs, against the runtime `init` provisioned, and it is the only one that runs this leg.
 
 `<stateDir>` is the value the target repository's own `harness.config.json` carries. Record its `docs index: <files> files, <chunks> chunks; embedded <e>, unchanged <u>, deleted <d>` line, the wall time, and the `du` figure — the on-disk size is the other half of what the feature costs an adopter, and nothing else in the suite reports it. `doctor`'s `retrieval-index` builds in memory and writes nothing, so this is still the first on-disk build.
 

@@ -47,7 +47,7 @@ did not materialise.
 
 1. [x] **Finding 1** — Label the CLI route's per-chunk figure as total wall time, not refresh _(layer: general)_
 2. [x] **Finding 2** — Stop grounding the cancellation on cost in the file of record _(layer: general)_
-3. [ ] **Finding 3** — Write gate 10's leg (iii) refusal example with `@<version>` _(layer: general)_
+3. [x] **Finding 3** — Write gate 10's leg (iii) refusal example with `@<version>` _(layer: general)_
 
 ## Must Fix
 
