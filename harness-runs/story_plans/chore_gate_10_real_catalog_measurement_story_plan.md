@@ -19,7 +19,7 @@ The work is cut as **one task per file**, in citation order: the file of record 
 Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/chore_gate_10_real_catalog_measurement/task_<K>_plan.md` file. Ordered by citation dependency, the file of record first, with the `general` catch-all layer carrying all four because every target is a prose document under `docs/`.
 
 1. [x] **Task 1** — Record the real-catalog cold build and index size in `docs/retrieval-eval-results.md`, the file of record _(layer: general)_ _(points: 20)_
-2. [ ] **Task 2** — Rewrite `docs/retrieval.md`: strike the rule, make the decision standing, restate the cost as the refresh, record gate 10 as run _(layer: general)_ _(points: 20)_
+2. [x] **Task 2** — Rewrite `docs/retrieval.md`: strike the rule, make the decision standing, restate the cost as the refresh, record gate 10 as run _(layer: general)_ _(points: 20)_
 3. [ ] **Task 3** — Update `docs/development.md`: gate 10's own text records the run and its two command defects, and roadmap item 17 is cancelled _(layer: general)_ _(points: 20)_
 4. [ ] **Task 4** — Correct `docs/retrieval-eval.md`'s two timeout-dependent claims and sweep the tree for surviving sites _(layer: general)_ _(points: 10)_
 
