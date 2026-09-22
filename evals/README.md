@@ -1,6 +1,20 @@
 # evals/
 
-The harness's evaluation cases, which are **roadmap item 8**. One case is written: `plan-shape/`.
+**This directory has two tenants, and only one of them answers to a runner.**
+
+- `plan-shape/` — a graded **case** for the native eval runner, which is **roadmap item 8**. It scores
+what a session produced against a written rubric in `plan-shape/graders/`, and it waits: the runner is
+gated behind early access, so the case is committed and unrun.
+- `docs-retrieval/` — the relevance **eval** for the shipped docs-retrieval tool, under the roadmap row
+*Docs-catalog retrieval*. It scores what the code returned against labelled queries a human wrote,
+answers to no runner, and runs today as gate 11 of `docs/development.md` → `## 5. Verifying a change`.
+Its own contract is `evals/docs-retrieval/README.md` and its figures are
+`docs/retrieval-eval-results.md`.
+
+So what separates them is both what is measured and what it waits on: one grades an agent's output
+against a rubric and is gated until the runner ships; the other measures shipped code against labels
+and has its numbers today.
+Every paragraph that follows is `plan-shape/`'s alone, down to the closing one, which is true of both.
 
 **The runner is still unverified.** It is gated behind early access, so its case format is known
 from `--help` output alone and every line of what follows is provisional: cases are discovered at

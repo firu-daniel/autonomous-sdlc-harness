@@ -1,0 +1,13 @@
+{
+  "see": "docs/retrieval-eval.md → ## The regression floor",
+  "floors": [
+    { "corpus": "fixture-catalog", "arm": "B", "metric": "recallAt5", "value": 0.95, "recordedAt": "2026-09-21" },
+    { "corpus": "fixture-catalog", "arm": "B", "metric": "mrr", "value": 0.6, "recordedAt": "2026-09-21" },
+    { "corpus": "fixture-catalog", "arm": "C", "metric": "recallAt5", "value": 0.95, "recordedAt": "2026-09-21" },
+    { "corpus": "fixture-catalog", "arm": "C", "metric": "mrr", "value": 0.83, "recordedAt": "2026-09-21" },
+    { "corpus": "fixture-catalog", "arm": "D", "metric": "recallAt5", "value": 0.95, "recordedAt": "2026-09-21" },
+    { "corpus": "fixture-catalog", "arm": "D", "metric": "mrr", "value": 0.7, "recordedAt": "2026-09-21" },
+    { "corpus": "fixture-catalog", "arm": "E", "metric": "recallAt5", "value": 0.61, "recordedAt": "2026-09-21" },
+    { "corpus": "fixture-catalog", "arm": "E", "metric": "mrr", "value": 0.5, "recordedAt": "2026-09-21" }
+  ]
+}
