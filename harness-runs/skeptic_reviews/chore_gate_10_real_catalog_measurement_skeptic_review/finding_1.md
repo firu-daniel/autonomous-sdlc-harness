@@ -58,7 +58,7 @@ inside this client.
 
 Two edits, both in `docs/retrieval.md`. Neither re-runs anything and neither touches a figure.
 
-- [ ] In the **How the variable reaches the server, since an export does not.** sub-bullet, replace the
+- [x] In the **How the variable reaches the server, since an export does not.** sub-bullet, replace the
   sentence
 
   > Gate 10's leg (v) settled that the agent runner starts this server with the checkout root as its working
@@ -74,7 +74,7 @@ Two edits, both in `docs/retrieval.md`. Neither re-runs anything and neither tou
   > directory or the checkout root — because in that run they were the same directory (`## Still open`). An
   > absolute path is the one form correct either way, and whichever client starts the server.
 
-- [ ] In `## Still open`, restore the entry the branch deleted, narrowed to what leg (v) left open, as the
+- [x] In `## Still open`, restore the entry the branch deleted, narrowed to what leg (v) left open, as the
   **second** bullet (after the Linux one):
 
   > - **Whether the agent runner resolves `.mcp.json`'s relative launcher path against the checkout root or

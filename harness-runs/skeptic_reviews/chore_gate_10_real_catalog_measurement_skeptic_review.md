@@ -40,7 +40,7 @@ record whose size arithmetic does not follow from the byte counts printed in the
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — `docs/retrieval.md` records the `.mcp.json` working-directory question as settled on a leg that could not distinguish it _(layer: general)_
+1. [x] **Finding 1** — `docs/retrieval.md` records the `.mcp.json` working-directory question as settled on a leg that could not distinguish it _(layer: general)_
 2. [ ] **Finding 2** — The size bullet's per-chunk figure and two-anchor fit do not follow from the byte counts the same section records _(layer: general)_
 
 ## Must Fix
