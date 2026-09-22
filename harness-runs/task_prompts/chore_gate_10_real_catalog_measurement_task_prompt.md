@@ -11,8 +11,12 @@ had ever been built.
 > downloads models, it must run against a throwaway repository **outside this checkout**, and no automated route
 > in this repository may perform it. The operator runs the legs and hands in a figures block; the branch's own
 > work is everything that follows from those figures. `## The pre-step` below is the contract for that hand-off.
-> **If the figures block is absent or incomplete when this branch starts, park and ask for it — do not
-> substitute a fixture-sized run, and do not re-derive a figure the block does not carry.**
+>
+> **THE MEASUREMENTS ARE ALL TAKEN.** `## The figures block` below carries gate 10 legs (i)-(vi) **and**
+> acceptance 2a's eval-route cross-check, all against `/Users/daniel/Work/gate10-corpus` on 2026-09-22.
+> **Nothing is owed by the operator, so nothing here is a reason to park.** Do not re-run a leg, do not
+> re-derive a figure the block carries, and do not substitute a fixture-sized run for one. The branch's
+> work is the document work that follows from these figures.
 
 ---
 
@@ -59,11 +63,15 @@ The floor itself stands: the corpus must index to **at least ~1,500 chunks**, re
 data point. Below it the cold build measures process and PGlite start-up rather than the model, which is the
 reason the floor exists and is unaffected by anything settled below.
 
-**The link on the recording host is slow, and leg (i) is where that shows.** Measured at ~1.61 MB/s
-(~12.9 Mbit/s, two 50 MB samples at 1.62 and 1.61 MB/s), which puts leg (i)'s ~590 MB download at roughly six
-minutes on its own. That figure is dominated by the link, not by the software, and it is not comparable to a
-fast-link host. It is recorded with that caveat in the corpus's own `PROVENANCE.md` host block; record leg (i)'s
-elapsed time with the same caveat attached, and do not let it be read as a setup cost an adopter would see.
+**Download throughput on this host is route-dependent, not a single figure — and leg (i) has now been run.**
+An earlier reading of ~1.61 MB/s over `speed.cloudflare.com` was recorded in the corpus's `PROVENANCE.md` as
+*this host's link*, predicting ~six minutes for leg (i). Both halves were wrong and both have been corrected
+in that file: HuggingFace serves ~17.5–19.1 MB/s on the identical connection while Cloudflare and npm serve
+~1.1–1.4 MB/s, so the low number is a CDN route rather than the connection, and npm being Cloudflare-fronted
+is why a Cloudflare speed test happened to predict npm. The measured cold leg (i) is **2:08**, not six
+minutes, because npm ships compressed tarballs in parallel and installed size is not transfer size.
+**Do not reintroduce a single bandwidth number or any wall-clock prediction derived from one** — that error
+is the same shape as the 60 s error this branch exists to correct.
 
 **One corpus, two harnesses over it — do not mistake this for two catalogs.** The real documents are a private
 catalog that is read and never modified. The throwaway repository is a `git init`'d **copy** of that catalog,
@@ -152,6 +160,308 @@ harness runs. What a different model does change is the cold build's own cost, w
 
 ---
 
+## The figures block — gate 10 RUN IN FULL, legs (i)-(vi)
+
+_Recorded in this prompt rather than in a file beside it, so the prompt stays self-contained._
+
+Hand run of `docs/development.md` §5 **gate 10** against `/Users/daniel/Work/gate10-corpus`,
+**2026-09-22**, in a supervised session. All six legs executed. **The branch does not need to
+re-run them** — it consumes what is below.
+
+### Host stamp
+
+| | |
+|---|---|
+| machine / chip | MacBook Air, Apple M4 |
+| cores | 10 (4 performance + 6 efficiency) |
+| memory | 16 GB |
+| OS | macOS 15.7.4 (24G517); `uname -sr` -> `Darwin 24.6.0`; arm64 |
+| node | v22.23.2 |
+| npm | 10.9.8 |
+| claude | 2.1.278 (Claude Code) -- the version leg (v) ran under |
+| package under test | `autonomous-sdlc-harness@0.2.0` from the registry |
+| load at start | `1.92 1.76 1.76`, up 42 days |
+| else running | this Claude Code session only |
+
+Node differs from the existing figures' v20.19.5. Recorded, not reconciled.
+
+### Target repository
+
+`/Users/daniel/Work/gate10-corpus` @ `010c50e`, restored to that commit immediately before the
+cold run. `PROVENANCE.md` (now @ `57a6c25`, see the bandwidth correction) estimated 1,959
+chunks; the indexed count came out **1,960 over 156 files** -- the extra file being
+`.claude/context/conventions.md`, which `init` writes and the corpus adds to `docs.root`.
+Floor of ~1,500 chunks: **cleared by 31%.**
+
+### TWO ENVIRONMENT FAULTS THE BRANCH MUST KNOW ABOUT
+
+**1. `npx autonomous-sdlc-harness` does NOT run the published package on this machine.** A
+global link shadows the registry:
+
+```
+npm ls -g --depth=0
++-- autonomous-sdlc-harness@0.1.0 -> ./../../../Users/daniel/Work/expause/autonomous-sdlc-harness/cli
+npx --yes autonomous-sdlc-harness --version   -> 0.1.0   (no `docs` command at all)
+npx --yes autonomous-sdlc-harness@0.2.0 ...   -> 0.2.0   (what every leg below used)
+```
+
+Gate 10's leg commands are written unpinned. **Taken literally at the time of this run they
+measured a stale 0.1.0 dev link.** Every leg below therefore pinned `@0.2.0`.
+
+**Since resolved:** the global link was a leftover of the harness's extraction from the
+`expause` repository, and both it and the staging directory it pointed at have been removed
+(`npm rm -g autonomous-sdlc-harness`; `expause` branch `chore_remove_extracted_harness_staging`).
+`npx autonomous-sdlc-harness --version` now answers `0.2.0`, so leg (vi)'s recorded `0.1.0`
+line does not reproduce today.
+
+**The gate-text defect stands regardless.** Any adopter with a linked or globally installed
+copy hits the same thing, and the gate gives no way to notice: `docs index` would simply fail,
+or worse, a leg would silently measure the wrong build. Gate 10's text should pin the version,
+or verify what the bare name resolves to before the first leg.
+
+**2. `npx ... docs index` cannot load the optional peers; the runtime entry can.** The pinned
+npx copy is a standalone install without `@huggingface/transformers`:
+
+```
+npx --yes autonomous-sdlc-harness@0.2.0 docs index
+-> autonomous-sdlc-harness: docs retrieval needs the optional package @huggingface/transformers,
+   which this installation cannot load.
+```
+
+The working route is the one `scripts/docs-search-server.sh` itself execs:
+`node "$cache/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js"`. Legs (iii)
+and (iv) used that. **Gate 10's leg (iii) and (iv) commands as written do not run** -- a second
+defect in the gate's text, and the more serious one.
+
+### Leg (i) -- Setup
+
+Run twice. **The first is not a setup time; the second is.**
+
+**Run 1 -- harness cache cold, npm cache WARM -> not a setup time.**
+
+```
+time npx --yes autonomous-sdlc-harness@0.2.0 init --docs --docs-retrieval --non-interactive
+-> 4.85s user 2.30s system 41% cpu  17.107 total
+du -sh .../retrieval/runtime -> 534M      du -sh .../retrieval/models -> 56M
+```
+
+Invalid for the reason gate 10 names: `~/.npm/_cacache` held 222 MB including the retrieval
+peers and `~/.npm/_npx` held 1.2 GB, left by a Sep 21 setup. Kept because the contrast is
+itself useful: **a re-install with npm warm costs 17 s.**
+
+**Run 2 -- everything cold -> THE SETUP TIME.** Teardown first: corpus reset to `010c50e`;
+`retrieval/` moved aside; `npm cache clean --force`; `_npx` moved aside.
+
+```
+time npx --yes autonomous-sdlc-harness@0.2.0 init --docs --docs-retrieval --non-interactive
+-> 13.17s user 7.33s system 16% cpu  2:08.08 total        = 128.08 s
+du -sh .../retrieval/runtime -> 551M      du -sh .../retrieval/models -> 57M
+```
+
+**Cold-cache statement: COLD.** No `_cacache`, no `_npx`, no harness retrieval cache existed.
+
+Wiring confirmed: `phases.docs: true`, `docs.retrieval: true`, `stateDir: "sdlc-harness/"`,
+`.mcp.json` declaring the `harness-docs` stdio server.
+
+Two deviations: run 2 was **piped** to `tail -20`, which gate 10 forbids (`time` measured the
+pipeline; `--non-interactive` was explicit on both runs, so TTY detection could not change
+what `init` did); and the two runs' sizes differ by ~17 MB on the same pinned version, cause
+not established.
+
+### Leg (ii) -- `doctor`
+
+Normal run -- **all three PASS**:
+
+```
+PASS retrieval-dependencies  the RAG runtime is installed at .../retrieval/runtime (version 0.2.0)
+                             with every optional peer, and .mcp.json's launcher docs-search-server.sh
+                             execs that installation's entry
+PASS retrieval-model-cache   every model file RAG loads offline is cached in .../retrieval/models
+PASS retrieval-index         docs index: 156 files, 1960 chunks; embedded 1960, unchanged 0, deleted 0
+Summary: 30 pass, 5 warn, 1 fail - exit 1 (1 check failed)
+```
+
+The one FAIL is `remote` (no remote in a scratch repository) -- gate 5's subject, not this
+leg's, exactly as gate 10 says to expect.
+
+Models-moved-aside run -- **fails the two the gate predicts, and only those**:
+
+```
+PASS retrieval-dependencies  (unchanged)
+FAIL retrieval-model-cache   the model cache at .../retrieval/models is missing
+                             Xenova/bge-small-en-v1.5/config.json, ...tokenizer.json,
+                             ...tokenizer_config.json, ...onnx/model_quantized.onnx,
+                             Xenova/ms-marco-MiniLM-L-6-v2/config.json and 3 more
+FAIL retrieval-index         the RAG index did not build in memory: ... missing [same 8 files]
+Summary: 28 pass, 5 warn, 3 fail - exit 1 (3 checks failed)
+```
+
+**The shared cache was restored in the same command** that moved it, and verified back at 57M.
+
+### Leg (iii) -- Cold build, four runs
+
+Each into a fresh index directory, via the runtime entry (see fault 2).
+
+| run | wall time | seconds | context |
+|---|---|---|---|
+| 1 | `1:51.25` | **111.25** | first, machine rested |
+| 2 | `1:59.30` | **119.30** | immediately after run 1 |
+| 3 | `2:07.58` | **127.58** | immediately after run 2 |
+| 4 | `1:54.47` | **114.47** | after ~10 min of light load |
+
+Summary line identical on all four: `docs index: 156 files, 1960 chunks; embedded 1960,
+unchanged 0, deleted 0`. `du -sh sdlc-harness/docs_index` -> **72M**, identical on all four.
+CPU 452-459% throughout.
+
+**The three-run spread is 16.33 s = 13.7% of the median (119.30 s)**, against the under-1%
+the 177-chunk measurement reported. The rule in
+`## Establish, do not assume` requires this be investigated rather than averaged: runs 1-3 rise
+**monotonically** back-to-back, and run 4, taken after a pause, **returns to baseline**. That is
+thermal behaviour on a fanless M4 Air under 8+ minutes of sustained ~4.5-core load, not variance
+in the software. **The honest figure is ~111-114 s cold on a rested machine, degrading to ~128 s
+when builds run back-to-back**, and the existing section's sub-1% spread is not comparable because
+it was taken at a corpus 11x smaller, where each run is short enough not to heat the machine.
+
+**Against the extrapolation -- time: it HELD.**
+
+| | predicted | measured |
+|---|---|---|
+| per-chunk refresh | 62.51 ms | **60.87 ms** (median; 56.76 min, 65.09 max) |
+
+Within 2.6% of the median. Item 2 of `## What to deliver` asks whether this was
+linear-and-right or linear-and-lucky: with the thermal spread straddling the predicted value,
+**linear-and-lucky is the honest reading** -- the prediction lands inside the noise band of the
+host it was tested on.
+
+**Against the extrapolation -- on-disk size: it MISSED, badly, and the reason is instructive.**
+
+| | predicted | measured |
+|---|---|---|
+| per chunk | 244 kB | **37.6 kB** at 1,960 chunks |
+| at 1,500 chunks | ~366 MB | **~65 MB** by the two-point fit |
+
+Fitting 43.2 MB @ 177 chunks and 72 MB @ 1,960 chunks gives **~40.3 MB fixed overhead plus
+~16.5 kB per chunk**. So the index is fixed-cost dominated, and **244 kB/chunk was a fixed cost
+divided by a small chunk count** -- the same error shape as the 60 s timeout and the six-minute
+download: a constant derived from one measurement and extended past its range. The ~366 MB
+projection overshoots by **5.6x**. Do not publish a new projection on the strength of one more
+data point; publish the fit and its two anchors.
+
+### Leg (iv) -- Search
+
+Default `fused-rerank` mode, so the reranker ran.
+
+Positive -- *"How do I configure a proxy for the Vite dev server?"*:
+
+```
+1. docs/vite/config/server-options.md#serverproxy (score 1.000)
+2. docs/vite/config/server-options.md#servermiddlewaremode (score 0.998)
+3. docs/vite/blog/announcing-vite3.md#improved-websocket-connection-strategy (score 0.995)
+```
+
+First result **names the known section exactly**, at **1.000**.
+
+Negative -- *"What is the recommended marinade time for lamb souvlaki?"*:
+
+```
+no confident match
+```
+
+**Abstained.** The calibration in `docs/retrieval-eval-results.md` -> `## Threshold calibration`
+holds on a real catalog at both ends.
+
+### Leg (v) -- Unattended
+
+```
+claude -p "Call the search_docs tool once with the query \"How do I configure a proxy for the
+  Vite dev server?\", then print its result verbatim." \
+  --settings .claude/settings.autonomous.json --permission-mode acceptEdits \
+  --output-format stream-json --verbose
+```
+
+No permission-bypass flag. From the stream:
+
+- `system/init` -> `mcp_servers: [{"name":"harness-docs","status":"connected","source":"project"}, ...]`
+- `mcp__harness-docs__search_docs` **present in the session's tool list**
+- called once with the leg (iv) query; **no permission denial anywhere in the stream**
+- returned the same ranked list the CLI printed, `#serverproxy` at 1.000 first
+- `result: subtype=success, is_error=false, num_turns=3, duration_ms=9235`, exit 0
+
+**The relative launcher path in `.mcp.json` resolved from the session's working directory** --
+that is what the returned results prove.
+
+One observation the gate does not ask for but which is worth recording: the session reached the
+tool through a `ToolSearch` call first (`select:mcp__harness-docs__search_docs`), because on this
+runner version the MCP tool arrives deferred rather than pre-loaded. It cost one extra turn of
+the three and required no additional grant.
+
+### Leg (vi) -- Platform
+
+```
+uname -sr                             -> Darwin 24.6.0
+node --version                        -> v22.23.2
+claude --version                      -> 2.1.278 (Claude Code)
+npx autonomous-sdlc-harness --version -> 0.1.0   <- the shadowed global link, see fault 1
+node .../runtime/.../dist/cli.js --version -> 0.2.0   <- what was actually measured
+```
+
+### Acceptance 2a -- the eval-route cross-check: TAKEN, and the two routes AGREE
+
+`cold-build.mjs` exports `measureColdBuild` but has **no CLI entry** -- no `--cold` flag on
+`run.mjs`, no npm script -- so this was driven by a throwaway module importing it directly,
+pointed at the same corpus the CLI indexed so the two figures are comparable: `repoRoot` and
+`docsRoot` at `/Users/daniel/Work/gate10-corpus`, `conventions:
+['.claude/context/conventions.md']`, `dataDir` a path removed immediately before the call (the
+module asserts the directory is absent, and asserts `embedded === chunks`, so an incremental
+refresh cannot masquerade as a cold one).
+
+```json
+{ "corpus": "ad-hoc", "host": "darwin 24.6.0", "node": "v22.23.2",
+  "snapshot": { "files": 156, "chunks": 1960 },
+  "cold": { "index": true, "modelCache": false },
+  "timings": { "modelLoadMs": 334.38, "storeOpenMs": 941.54,
+               "refreshMs": 107984.15, "totalMs": 109260.07 },
+  "size": { "apparentBytes": 74195245, "allocatedBytes": 75808768, "files": 986 } }
+```
+
+**Same corpus snapshot as the CLI: 156 files, 1960 chunks.** The comparison acceptance 2a asks
+for, labelled by route:
+
+| | CLI route (leg iii) | eval ad-hoc route |
+|---|---|---|
+| total | 111.25 s rested / 114.47 s run 4 | **109.26 s** |
+| on disk | 72M (`du -sh`) | 75,808,768 allocated = **72.3 MiB**; 74,195,245 apparent |
+| snapshot | 156 files, 1960 chunks | identical |
+
+**No disagreement to investigate: 109.26 s against the CLI's 111.25 s is 1.8% apart**, inside the
+thermal band the four CLI runs already established, and `du -sh`'s 72M is the allocated figure to
+the megabyte. The shipped CLI path and the library the eval drives are measuring the same thing.
+Record both, labelled; do not reconcile by choosing one.
+
+### What the phase breakdown settles, which only this route could show
+
+The CLI prints one wall time; `measureColdBuild` returns three phases, so two of
+`## Establish, do not assume`'s open questions are answered here rather than left open:
+
+- **The store-open phase is still per-index-directory, not per-chunk.** 875.8 ms at 177 chunks,
+  **941.5 ms at 1,960 chunks** -- an 11x corpus for a 7.5% rise. The assumption holds at the first
+  size that could have broken it, and the arithmetic of the recorded section stands.
+- **The model load is flat and is not the cost.** 192.5 ms recorded at 177 chunks, **334.4 ms**
+  here; as a share of the total it *fell* from about 1.6% to **0.31%**. Item 6's claim that the
+  cost of warming is the **refresh** is confirmed by measurement, not merely argued: refresh is
+  107,984 ms of a 109,260 ms total, **98.8%** of it.
+- Refresh per chunk on this route is **55.1 ms**, against the CLI route's 56.8 ms best and the
+  62.51 ms the extrapolation used.
+
+### State left behind
+
+`gate10-corpus` is `init`-ed. The machine-wide model cache is **restored and verified** (57M).
+The teardown copies (`retrieval.aside-precold`, `retrieval.warmnpm-17s`, `_npx.aside-gate10`) and
+the extra index directories have been deleted; `_cacache` was cleaned and has repopulated
+normally.
+
+---
+
 ## What to deliver
 
 1. **The measured figures replace the extrapolation, everywhere it appears.** `docs/retrieval-eval-results.md` →
@@ -166,7 +476,9 @@ harness runs. What a different model does change is the cold build's own cost, w
    refresh cost beside the 62.51 ms the extrapolation used, and the measured total beside the 93.8 s it predicted.
    **If the extrapolation held, say so and say it was linear-and-lucky rather than linear-and-right**; if it did
    not, the recorded figure is the measured one and the extrapolation becomes a documented miss. Both outcomes
-   are results. The same for the on-disk size against 244 kB per chunk and the ~366 MB projection.
+   are results. The same for the on-disk size against 244 kB per chunk and the ~366 MB projection. The figures
+   block above has already done this arithmetic — time held within 2.6%, size missed by 5.6× — so this item is
+   the write-up, not the calculation.
 
 3. **Record roadmap item 17 as CANCELLED, on the reason below — the decision is taken, not open.** Item 17's
    row states a condition in its own terms — a figure under the threshold cancels the item — but the threshold
@@ -236,23 +548,30 @@ harness runs. What a different model does change is the cold build's own cost, w
    (d) and any `## Still open` entry describing a real-model leg as unrun are updated or removed to match — find
    them rather than assuming the two named here are all of them.
 
-## Establish, do not assume
+## Establish, do not assume — three of these are now ANSWERED by the figures block
 
-- **Whether the on-disk size scales linearly.** 244 kB per chunk came from a 41-file corpus of this tree's own
-  documents. A real catalog has different document lengths and a different chunk-size distribution. Report the
-  measured per-chunk figure against the projected one and state whether linear extrapolation survived; do not
-  publish a new projection to a larger size on the strength of one more data point.
-- **Whether leg (iii)'s three runs agree.** The existing 177-chunk measurement recorded a spread of under 1% on
-  the refresh phase and put the whole visible spread in the two short phases. If the real-catalog runs disagree
-  by more than that, the disagreement is the finding — investigate it rather than averaging it away, which is the
-  rule the existing section already states for itself.
-- **Whether the store-open phase still scales the way it did.** It was recorded as per-index-directory rather
-  than per-chunk (875.8 ms, 4.95 ms per chunk at 177). At 1,500 chunks that assumption is testable for the first
-  time, and a per-directory phase that turns out to grow with corpus size changes the arithmetic of the whole
-  section.
-- **What the run does to the shared model cache.** It is machine-wide and every checkout shares it. Gate 10's
-  leg (ii) moves it aside and back; establish that nothing in this branch's work leaves it moved, truncated or
-  pointed somewhere else, and that a failure mid-leg is recoverable.
+These were written as open questions for the branch. The measurements have since been taken, so the
+work is to **write them up from the figures**, not to re-measure. Each is stated here with its answer
+and with what the branch still owes it.
+
+- **Whether the on-disk size scales linearly — IT DOES NOT, and the miss is 5.6×.** 244 kB per chunk
+  came from a 41-file corpus; at 1,960 chunks the measured figure is 37.6 kB per chunk. The two-point
+  fit is ~40.3 MB fixed plus ~16.5 kB per chunk, so the index is fixed-cost dominated and the original
+  per-chunk number was a fixed cost divided by 177. **Owed:** publish the fit and its two anchors, and
+  — as the original bullet already required — **do not publish a new projection to a larger size on the
+  strength of one more data point.**
+- **Whether leg (iii)'s runs agree — THEY DIFFER BY 13.7%, AND THE CAUSE IS THERMAL.** Runs 1–3 rise
+  monotonically back-to-back; run 4, after a pause, returns to baseline. **Owed:** report the spread
+  with that cause, and state that the existing sub-1% figure is not comparable because that corpus is
+  11× smaller. Do not average it away, and do not present the two spreads as a series.
+- **Whether the store-open phase still scales per-directory — IT DOES.** 875.8 ms at 177 chunks,
+  941.5 ms at 1,960: an 11× corpus for a 7.5% rise, measured through the eval route, which is the only
+  route that reports phases separately. **Owed:** record that the assumption held at the first size
+  that could have broken it, so the recorded section's arithmetic stands.
+- **What the run does to the shared model cache — STILL THE BRANCH'S TO CHECK.** It is machine-wide and
+  every checkout shares it. Leg (ii) moved it aside and back and the block records it verified back at
+  57M, but that is one run's statement. Establish that nothing in **this branch's** work leaves it
+  moved, truncated or pointed somewhere else, and that a failure mid-leg is recoverable.
 
 ## Out of scope
 
@@ -280,8 +599,12 @@ harness runs. What a different model does change is the cold build's own cost, w
 
 1. Gate 10 legs (i)–(vi) have been run by hand against a real catalog indexing to at least ~1,500 chunks, outside
    this checkout, and the figures block carries the host stamp and the cold/warm cache statement.
-2. Leg (iii) was run three times into fresh index directories and all three wall times are recorded, with the
-   spread reported the way the existing 177-chunk section reports its own.
+2. Leg (iii) was run **four** times into fresh index directories and all four wall times are recorded. The
+   spread is reported rather than averaged away, and reported with its **cause**: runs 1–3 rise monotonically
+   back-to-back and run 4 returns to baseline after a pause, so the 13.7% spread is thermal behaviour of the
+   recording host under sustained load, not variance in the software. The existing 177-chunk section's sub-1%
+   spread is stated as **not comparable**, because that corpus is 11× smaller and its runs are too short to
+   heat the machine.
 2a. The same cold-build measurement was taken a second time through the eval's ad-hoc corpus route over the
    catalog read in place, both routes' figures are recorded and labelled by route, and any disagreement between
    them is investigated and reported rather than reconciled by choosing one.
@@ -302,9 +625,12 @@ harness runs. What a different model does change is the cold build's own cost, w
 7. Item 17's row and `docs/retrieval.md` no longer state the move's cost as a model load spent on agents that do
    not query; the restated cost names the refresh, and the `search_docs` grant list it rests on was derived from
    the agent allowlists rather than asserted.
-8. Every recorded figure names the machine it was taken on; `docs/retrieval.md` states that every published cost
-   figure is the one measured on the recording host and that a slower host or link pays more; and leg (i)'s
-   elapsed time is recorded with the ~1.61 MB/s bandwidth caveat attached rather than as an adopter's setup cost.
+8. Every recorded figure names the machine it was taken on, and `docs/retrieval.md` states that every published
+   cost figure is the one measured on the recording host and that a slower host or route pays more. **No single
+   bandwidth number appears anywhere**, and no wall-clock figure is derived from one: the corrected position is
+   that throughput here is route-dependent (~1.1–1.4 MB/s Cloudflare and npm, ~17.5–19.1 MB/s HuggingFace on the
+   same link), which is why leg (i)'s measured 128 s replaces the ~six minutes a single-number extrapolation
+   predicted.
 9. `cli/templates/scripts/setup-worktree.sh` and `scripts/setup-worktree.sh` are both byte-identical to their
    state at branch point, and no agent's `tools:` allowlist under `plugin/agents/` changed.
 10. The generated region of `docs/retrieval-eval-results.md` is byte-identical to its state at branch point.
