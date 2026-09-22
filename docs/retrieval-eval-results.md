@@ -4581,8 +4581,21 @@ its own, later snapshot and the threshold in force.
 Both corpora are far below the roughly 1,500 chunks of a mature docs catalog — 41 and 173 — so this
 is a calibration on two small committed corpora rather than on a real catalog, and its standing
 reproduction is gate 11 of `scripts/run-gates.sh`, which re-runs the eval against the recorded floor,
-rather than a remembered run; its confirmation is a hand run against a private real catalog, which
-this branch does not perform. What would move the value is that run: a real-catalog arm E whose
+rather than a remembered run.
+
+**Its confirmation has now been taken, and it held at both ends.** On 2026-09-22, `docs/development.md`
+§5 → gate 10 leg (iv) searched a private real documentation catalog held outside this checkout — commit
+`010c50e`, 156 files / 1,960 chunks, the same corpus `## Cold build and index size` →
+`### The real-catalog build — 1,960 chunks, 2026-09-22` stamps — in the default `fused-rerank` mode, so
+the reranker ran and the threshold applied. The positive query *"How do I configure a proxy for the Vite
+dev server?"* returned the known section **first and exactly**,
+`docs/vite/config/server-options.md#serverproxy` at score **1.000**; the negative query *"What is the
+recommended marinade time for lamb souvlaki?"* returned **`no confident match`** — it abstained. That is
+one confirming run at each end, **not a re-calibration**: `ABSTAIN_SCORE_THRESHOLD` stays at `0.32` and
+`evals/docs-retrieval/floor.json` is untouched, and two queries are a confirmation rather than an
+observed negative distribution.
+
+What would move the value is still a further run: a real-catalog arm E whose
 negative queries return scores at or above `0.32`, or whose positives fall below it, reopens the
 choice — and because every negative here is censored rather than measured, a run that observes the
 negative distribution instead of bounding it is enough on its own to re-derive the number.
@@ -4639,23 +4652,52 @@ threshold, while on `self-docs` it also pays it in two demotions, which is the r
 **What this does not settle.** The same limit `## The limit on this calibration` above states, in the
 same terms: two fixture-sized corpora at 41 and 177 chunks, both far below the roughly 1,500 chunks of
 a mature docs catalog; one host and one Node version; one repetition per query, so no figure here
-carries a spread. The step that would confirm or overturn it is the hand run of
-`docs/development.md` §5 → gate 10 against a private real catalog, which this branch does not perform
-— with the same standing rule in force that a figure measured on a fixture-sized corpus never
-justifies a design decision on its own.
+carries a spread — with the same standing rule in force that a figure measured on a fixture-sized
+corpus never justifies a design decision on its own. The hand run of `docs/development.md` §5 → gate 10
+against a private real catalog **has since been taken**, on 2026-09-22; its figures are in
+`## Cold build and index size` → `### The real-catalog build — 1,960 chunks, 2026-09-22` and its search
+leg in `### The limit on this calibration` above, and neither is a fusion-versus-default comparison. So
+the limit on **this** table is unchanged: what would confirm or overturn it is the same comparison run
+on a real catalog, which no run has taken.
 
 ## Cold build and index size
 
-**The decision this section settles, first.** The standing rule is that a cold build costing more than
-**60 seconds** moves out of the agent's path and into `scripts/setup-worktree.sh`, because the agent
-runner's MCP tool-call timeout defaults to 60 s and an adopter may set their Bash timeouts lower. The
-measured refresh here is **62.51 ms per chunk**, which extrapolates to **93.8 s** at the roughly 1,500
-chunks of a mature docs catalog and crosses 60 s in total at about **940 chunks** (60 s less the 1.07 s
-the two fixed phases cost, divided by 62.51 ms per chunk) — so **the rule trips, and the decision is that
-the cold build belongs in `setup-worktree.sh`**, not in the first `search_docs` call an agent makes. Below that crossover the in-line build is within the budget; this repository's own 177-chunk
-corpus builds in 12.2 s. Task 12 carries the argument into `docs/retrieval.md`; the confirmation on a
-real catalog is `docs/development.md` §5 gate 10's hand run, which replaces the extrapolation with a
-measurement.
+**The rule this section used to state, and why it is struck.** This section carried a standing rule that a
+cold build costing more than **60 seconds** moves out of the agent's path and into
+`scripts/setup-worktree.sh`, on the premise that the agent runner's MCP tool-call timeout defaults to 60 s
+and that an adopter may set their Bash timeouts lower. **That premise is false**, and **no replacement
+constant is stated in its place** — not a larger timeout, not `${MCP_TOOL_TIMEOUT}`, not a fresh crossover
+chunk count — because wall time causes no failure on any path the harness uses. The facts below were read
+out of the installed binary with `strings -a` at `~/.local/share/claude/versions/2.1.278` — Claude Code
+**2.1.278**, macOS arm64, 2026-09-22 — which is bundled JS, so they are source rather than inference from a
+variable's name:
+
+- `MCP_TOOL_TIMEOUT` governs MCP tool-call **execution** and defaults to `1e8` ms, about **27.8 hours**,
+  with a floor of 1,000 ms. A per-server `timeout` in `.mcp.json` overrides it, and values under the floor
+  are ignored.
+- `MCP_TIMEOUT`'s 30,000 ms is a **different setting** — MCP server **startup** — and conflating the two is
+  the likeliest origin of the struck rule.
+- What can end a long MCP call is **silence, not duration**. `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT` is
+  1,800,000 ms for **stdio** servers, which the `harness-docs` server is, and trips only when the tool sends
+  neither a response nor a progress notification. `CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS` (120,000 ms) moves a
+  long call to a background task, which does not fail it. Measured: a stdio MCP tool sleeping 75 s returned
+  `DONE after 75.0s` under `claude -p`.
+- The Bash path does not fail either: `BASH_DEFAULT_TIMEOUT_MS` is 120,000 ms and `BASH_MAX_TIMEOUT_MS`
+  600,000 ms, and a 25 s command given a 5 s timeout was *"moved to the background"* and completed normally.
+  So this section's own *"an adopter may set their Bash timeouts lower"* was true and harmless: the
+  consequence is backgrounding, not failure.
+- The only `60000` anywhere near MCP in that binary is `var pr=60000` in the HTTP transport, used as
+  `Math.max(n,pr)` — a request **floor**, which means the opposite of the ceiling the rule claimed.
+
+These are host-side settings in the Claude Code runner. They do not change with the model the harness runs.
+
+**What replaces the constant.** A property of the build rather than a number: **the build must not go silent
+for longer than the idle timeout** — a build that reports progress cannot trip anything above. Where the
+build belongs is then a **cost** question, what warming is worth to the worktree that pays it, and not a
+timeout question. `docs/retrieval.md` carries that decision; this section carries the figures it is taken
+on, for two corpora, each with its own host and corpus stamp.
+
+### The 177-chunk build — this repository's own `docs/`, 2026-09-21
 
 **What was measured, and in which sense it was cold.** Three cold builds of the `self-docs` corpus into a
 persisted index, each in its own process, at corpus snapshot `{ files: 13, chunks: 177 }` taken off each
@@ -4690,8 +4732,8 @@ which no single run produced. No run's refresh differs from the refresh median b
 the check that a run deviating by more than half is investigated rather than averaged away did not fire.
 The two short phases carry the whole of the visible spread — run 1 is the outlier in both, and it was the
 first process of the session to read the weight files and to create the index directory. They contribute
-about 1.1 s of the 12.2 s total and about 1 s of the 94.8 s extrapolated total, so the decision above does
-not turn on them; only the refresh figure is extrapolated.
+about 1.1 s of the 12.2 s total and about 1 s of the 94.8 s total the extrapolation below predicted at
+~1,500 chunks; only the refresh figure was extrapolated.
 
 **The index on disk.** Sizes are walked in process over the index directory after the store is closed,
 `size` summed for the apparent figure and `blocks * 512` for the allocated one. All three runs produced a
@@ -4702,6 +4744,10 @@ byte-identical directory.
 | Apparent size (sum of `size`) | 43,163,949 B (43.2 MB) | 244 kB | ~366 MB |
 | Allocated size (sum of `blocks * 512`) | 44,433,408 B (44.4 MB) | 251 kB | ~377 MB |
 | Files | 985 | — | — |
+
+The last column is the linear projection this pass published, kept as the record of what was predicted.
+It is **not a current figure**: the real-catalog build below measures the index at a second chunk count
+and replaces that projection with a two-anchor fit.
 
 **Where the index was built, and why that is the same figure an adopter gets.** Into
 `harness-runs/scratch/docs_index/`, which `.gitignore` excludes by its contents. This repository has no
@@ -4715,12 +4761,11 @@ above are the sizes `<stateDir>/docs_index/` would hold for this corpus.
 chunk count**, which the per-chunk embedding cost supports — every chunk is embedded once, in batches —
 and which the rest may not: the store's own index-build cost need not be linear, and the size figure is
 the worse of the two extrapolations, because 985 files of an embedded Postgres data directory carry a
-fixed overhead that a per-chunk division charges to the chunks. Read the size row as an upper bound;
-separating the fixed term from the per-chunk one needs a second measurement at a different chunk count,
-which this pass does not take. A fixture-sized figure does not justify a decision on its own, which is why
-the crossover, the extrapolation and its limits are stated in the same breath as the conclusion: what
-replaces the extrapolation with a measurement is gate 10's hand run against a real catalog, and until it
-is run the 60-second conclusion rests on 177 chunks of this repository's own `docs/`.
+fixed overhead that a per-chunk division charges to the chunks. Read the size row as an upper bound.
+Separating the fixed term from the per-chunk one needed a second measurement at a different chunk count:
+that measurement is the real-catalog build recorded below, and the two-anchor fit it produced is stated
+there. A fixture-sized figure does not justify a decision on its own, which is why the extrapolations and
+their limits were stated in the same breath as the figures they were taken from.
 
 **How to reproduce it.** The measurement is `measureColdBuild` in `evals/docs-retrieval/cold-build.mjs`,
 committed so it is re-runnable, driven once per process by a launcher under the run's scratch directory
@@ -4737,6 +4782,103 @@ The removal and the size walk are both in process, deliberately: a shelled-out r
 have stalled an unattended run. No entry was added to that profile for this pass. Filling this section
 grows the corpus it measures, so a later run over `self-docs` carries a different snapshot stamp and is
 not a before/after pair with the figures above.
+
+### The real-catalog build — 1,960 chunks, 2026-09-22
+
+**The two builds in this section are not a before/after pair.** They are two measurements with different
+stamps: different host (Node `v22.23.2` here against `v20.19.5` above), different corpus (1,960 chunks
+against 177, an 11× difference), different date. Nothing below records the 177-chunk figure as having
+moved. This is `docs/development.md` §5 → gate 10, run by hand in full; legs (i), (ii), (v) and (vi) are
+out of this section's scope, which is leg (iii)'s wall times and the index on disk, plus acceptance 2a's
+eval-route cross-check.
+
+**Host stamp.** MacBook Air, Apple M4, 10 cores (4 performance + 6 efficiency), 16 GB, macOS 15.7.4
+(24G517), `uname -sr` → `Darwin 24.6.0`, arm64, Node `v22.23.2`, npm 10.9.8, Claude Code 2.1.278, the
+package `autonomous-sdlc-harness@0.2.0` installed from the registry, load average `1.92 1.76 1.76`, nothing
+else of consequence running. The Node version differs from the 177-chunk figures' `v20.19.5`: **recorded,
+not reconciled.**
+
+**Corpus stamp.** A private real documentation catalog held outside this checkout, at commit `010c50e`,
+**156 files, 1,960 chunks** — identified by its commit, its size and its character, never by a filesystem
+path. All four runs printed the same summary line, `docs index: 156 files, 1960 chunks; embedded 1960,
+unchanged 0, deleted 0`, so the four are four builds of one snapshot. The corpus clears the roughly
+1,500-chunk floor of a mature docs catalog by 31%.
+
+**In which sense this build was cold.** Each of the four CLI runs went into a **fresh** index directory. The
+eval-route run of the cross-check below had its `dataDir` removed immediately before the call, with the
+module asserting the directory absent when the store opened and `embedded === chunks` on the result, so an
+incremental refresh cannot masquerade as a cold one. The **model cache was warm** on both routes: the
+download is gate 10's leg (i), and it is out of this section's scope.
+
+**The four runs, kept rather than averaged.** CLI route, `docs index` into a fresh index directory each
+time. CPU sat at 452–459% throughout all four, and `du -sh sdlc-harness/docs_index` returned **72M** after
+every one of them.
+
+| Run | Context | Wall time | Seconds |
+| --- | --- | --- | --- |
+| 1 | machine rested | `1:51.25` | 111.25 |
+| 2 | immediately after run 1 | `1:59.30` | 119.30 |
+| 3 | immediately after run 2 | `2:07.58` | 127.58 |
+| 4 | after ~10 min of light load | `1:54.47` | 114.47 |
+
+**The spread, and its cause.** Across runs 1–3 the spread is **16.33 s, 13.7% of the median (119.30 s)** —
+and the cause is legible in the order rather than in the number. Runs 1–3 rise **monotonically** back to
+back, and run 4, taken after a pause, **returns to baseline**: that is thermal behaviour of a fanless M4
+Air under 8+ minutes of sustained ~4.5-core load, not variance in the software. So the honest figure is
+**~111–114 s cold on a rested machine, degrading to ~128 s when builds run back to back**, and the four are
+not collapsed into one average. The 177-chunk section's sub-1% refresh spread is **not comparable**: that
+corpus is 11× smaller and its runs are far too short to heat the machine, so the two spreads are not a
+series.
+
+**What this did to the extrapolation, in both directions.**
+
+- **Time held.** Refresh measured **60.87 ms per chunk** (min 56.76, max 65.09) against the **62.51 ms** the
+  extrapolation used — within **2.6%** of the median. Read that as **linear-and-lucky rather than
+  linear-and-right**: the thermal spread above straddles the predicted value, so the prediction lands inside
+  the noise band of the host it was tested on.
+- **Size missed, by 5.6×.** The index is **37.6 kB per chunk** at 1,960 chunks against the **244 kB** the
+  extrapolation used, and the **~366 MB** it projected at ~1,500 chunks overshoots by **5.6×** — the fit
+  gives ~65 MB there. The two-point fit, over its two anchors **43.2 MB @ 177 chunks** and **72 MB @ 1,960
+  chunks**, is **~40.3 MB fixed overhead plus ~16.5 kB per chunk**: the index is fixed-cost dominated, and
+  the original number was a fixed cost divided by a small chunk count — the same error shape as the struck
+  60-second rule and as the six-minute download prediction leg (i) replaced. **No projection beyond those
+  two anchors is published here**: one further data point buys a fit, not a third extrapolation.
+
+**Acceptance 2a — the eval-route cross-check, both routes labelled.** The same corpus snapshot (156 files,
+1,960 chunks) was built again through `measureColdBuild` with `cold: { index: true, modelCache: false }`,
+which separates the phases the CLI route reports as one wall time.
+
+| Figure | CLI route | Eval route (`measureColdBuild`) |
+| --- | --- | --- |
+| Total | 111.25 s rested (run 1), 114.47 s (run 4) | 109.26 s (`totalMs` 109,260.07) |
+| Refresh per chunk | 60.87 ms median | 55.1 ms |
+| Index size | `du -sh` **72M** | `allocatedBytes` 75,808,768 = **72.3 MiB**; `apparentBytes` 74,195,245 |
+| Files | — | 986 |
+
+**There is no disagreement to investigate, and neither route is chosen over the other.** The totals are
+1.8% apart, which is inside the thermal band the four CLI runs established, and `du -sh`'s figure is the
+allocated one rounded to the megabyte. The shipped CLI path and the library the eval drives are measuring
+the same thing; both are recorded, labelled by route.
+
+**The three things only the phase-separating route could show.**
+
+- **The store-open phase is still per-index-directory, not per-chunk**: 875.8 ms at 177 chunks against
+  941.5 ms at 1,960 — an 11× corpus for a 7.5% rise. The assumption held at the first size that could have
+  broken it, so the 177-chunk arithmetic above stands.
+- **The model load is flat, and it is not the cost**: 192.5 ms at 177 chunks against 334.4 ms here, falling
+  from ~1.6% of the total to **0.31%** of it.
+- **Refresh is 107,984 ms of a 109,260 ms total, 98.8% of it** — the measured confirmation that the cost of
+  warming is the refresh.
+
+**How the cross-check was driven, since it is not a shipped route.** `evals/docs-retrieval/cold-build.mjs`
+exports `measureColdBuild` but has **no CLI entry** — no `--cold` flag on `run.mjs` and no npm script — so a
+throwaway module imported it directly, with `repoRoot` and `docsRoot` pointed at the corpus and
+`conventions: ['.claude/context/conventions.md']`.
+
+**The state left behind on the machine.** The machine-wide model cache was moved aside and restored **in the
+same command** during leg (ii), and verified back at 57M; the teardown copies and the extra index
+directories were deleted; `_cacache` was cleaned and has repopulated normally. **Nothing in this branch's
+work touches that cache**, because no task here runs an index build.
 
 ## The query-log pass
 
@@ -4829,9 +4971,10 @@ five, so its gap against library-level arm E is the narrowest of the five rather
 representative one: every one of the five server-side p50s sat **below** that arm. What the series
 does establish is that the per-call refresh and the MCP round trip are small against a
 reranker-bound call — the round trip is 1.8-3.3 ms of client-side overhead in every one of the five,
-and the refresh re-embeds nothing after the first call. What it does not establish is a stable figure for the gap; that needs repetitions on an
-idle host, which is the same real-catalog hand run `## The limit on this calibration` above already
-names as out of scope here.
+and the refresh re-embeds nothing after the first call. What it does not establish is a stable figure for
+the gap; that needs repetitions on an idle host, and no run recorded in this file has taken them. The
+real-catalog hand run recorded in `## Cold build and index size` is not that run either: it timed cold
+builds and put two queries through the search path, not a repeated latency series.
 
 ## Arm A — awaiting a hand run
 
