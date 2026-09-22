@@ -126,10 +126,16 @@ function a launcher calls directly, filling one hand-written section of
 `docs/retrieval-eval-results.md` — `## Cold build and index size` and `## The query-log pass`. Both
 launchers live under `harness-runs/scratch/` and are run exactly like `eval.mjs` above.
 
-**The cold build.** `measureColdBuild` takes `{ repoRoot, corpus, dataDir }` and returns an object
-rather than printing one, so the launcher resolves the repo root through the eval's own `parseArgs`
-and names the corpus and the index directory the recorded figures were taken with. Create
-`harness-runs/scratch/cold-build.mjs`:
+**The cold build.** `measureColdBuild` takes `{ repoRoot, corpus, dataDir, docsRoot, conventions }`
+and returns an object rather than printing one, so the launcher resolves the repo root through the
+eval's own `parseArgs` and names the corpus and the index directory the recorded figures were taken
+with. The corpus is named the same two ways `corpusConfig` accepts one and the choice is forwarded
+untouched: a built-in id through `corpus`, or an ad-hoc corpus through `docsRoot` plus the repeatable
+`conventions` — the route that reads a documentation directory **in place**, with no
+`harness.config.json` in the target and no `init`, writing nothing into it but the `dataDir` this
+measurement owns and removes. Naming neither is refused by `corpusConfig`, and the returned `corpus`
+field is the id it resolved, so an ad-hoc figure is stamped `ad-hoc` and never passes for a built-in
+one. Create `harness-runs/scratch/cold-build.mjs`:
 
 ```
 import { parseArgs } from '../../evals/docs-retrieval/args.mjs';
@@ -140,6 +146,14 @@ console.log(JSON.stringify(await measureColdBuild({ repoRoot: repo, corpus: 'sel
 
 ```
 bash scripts/scratch-run.sh harness-runs/scratch/cold-build.mjs
+```
+
+The same launcher over a documentation directory outside this checkout names that directory's own
+repository as `repoRoot` and its `docs/` as `docsRoot`, and keeps `dataDir` on a scratch path of this
+checkout so nothing is written into the corpus being read:
+
+```
+await measureColdBuild({ repoRoot: '<the corpus repository>', docsRoot: 'docs', dataDir: `${repo}/harness-runs/scratch/docs_index` });
 ```
 
 **One measurement per process**, which is why the launcher calls it once and why three runs means
