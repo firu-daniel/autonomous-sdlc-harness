@@ -4832,10 +4832,13 @@ series.
 
 **What this did to the extrapolation, in both directions.**
 
-- **Time held.** Refresh measured **60.87 ms per chunk** (min 56.76, max 65.09) against the **62.51 ms** the
-  extrapolation used — within **2.6%** of the median. Read that as **linear-and-lucky rather than
-  linear-and-right**: the thermal spread above straddles the predicted value, so the prediction lands inside
-  the noise band of the host it was tested on.
+- **Time held.** The cold build measured **60.87 ms per chunk of total wall time** (min 56.76, max 65.09)
+  against the **62.51 ms** of per-chunk *refresh* the extrapolation used — within **2.6%** of the median. The
+  two are not the same phase: the CLI route reports one wall time, and the like-for-like refresh figure is the
+  eval route's **55.1 ms**, which runs **11.9%** under the extrapolated one. Both readings are recorded because
+  the prediction was a refresh figure and the shipped route cannot isolate one. Read that as
+  **linear-and-lucky rather than linear-and-right**: the thermal spread above straddles the predicted value, so
+  the prediction lands inside the noise band of the host it was tested on.
 - **Size missed, by 5.6×.** The index is **37.6 kB per chunk** at 1,960 chunks against the **244 kB** the
   extrapolation used, and the **~366 MB** it projected at ~1,500 chunks overshoots by **5.6×** — the fit
   gives ~65 MB there. The two-point fit, over its two anchors **43.2 MB @ 177 chunks** and **72 MB @ 1,960
@@ -4851,14 +4854,17 @@ which separates the phases the CLI route reports as one wall time.
 | Figure | CLI route | Eval route (`measureColdBuild`) |
 | --- | --- | --- |
 | Total | 111.25 s rested (run 1), 114.47 s (run 4) | 109.26 s (`totalMs` 109,260.07) |
-| Refresh per chunk | 60.87 ms median | 55.1 ms |
+| Total per chunk | 60.87 ms median (min 56.76, max 65.09) | 55.7 ms (`totalMs` ÷ 1,960) |
+| Refresh per chunk | — (the CLI route reports one wall time) | 55.1 ms (`refreshMs` ÷ 1,960) |
 | Index size | `du -sh` **72M** | `allocatedBytes` 75,808,768 = **72.3 MiB**; `apparentBytes` 74,195,245 |
 | Files | — | 986 |
 
 **There is no disagreement to investigate, and neither route is chosen over the other.** The totals are
 1.8% apart, which is inside the thermal band the four CLI runs established, and `du -sh`'s figure is the
-allocated one rounded to the megabyte. The shipped CLI path and the library the eval drives are measuring
-the same thing; both are recorded, labelled by route.
+allocated one rounded to the megabyte. The per-chunk rows are the same comparison in per-chunk units — the
+CLI route's figure is its total divided by the chunk count, because that route reports one wall time and no
+phases, so the only like-for-like pair is the two totals. The shipped CLI path and the library the eval drives
+are measuring the same thing; both are recorded, labelled by route.
 
 **The three things only the phase-separating route could show.**
 

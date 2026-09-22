@@ -49,7 +49,7 @@ reading is the prompt's own and is not this finding's to revisit.
 
 ## The fix
 
-- [ ] Relabel the table row so each cell says what its route measured. Replace
+- [x] Relabel the table row so each cell says what its route measured. Replace
 
   ```
   | Refresh per chunk | 60.87 ms median | 55.1 ms |
@@ -62,13 +62,13 @@ reading is the prompt's own and is not this finding's to revisit.
   | Refresh per chunk | — (the CLI route reports one wall time) | 55.1 ms (`refreshMs` ÷ 1,960) |
   ```
 
-- [ ] Add one sentence to the paragraph beginning `**There is no disagreement to investigate…**`, after the
+- [x] Add one sentence to the paragraph beginning `**There is no disagreement to investigate…**`, after the
   sentence about `du -sh`, so the row is accounted for rather than left standing:
 
   > The per-chunk rows are the same comparison in per-chunk units — the CLI route's figure is its total divided by the
   > chunk count, because that route reports one wall time and no phases, so the only like-for-like pair is the two totals.
 
-- [ ] Correct the `**Time held.**` bullet's first clause so it names the quantity it compares. Replace
+- [x] Correct the `**Time held.**` bullet's first clause so it names the quantity it compares. Replace
 
   > **Time held.** Refresh measured **60.87 ms per chunk** (min 56.76, max 65.09) against the **62.51 ms** the
   > extrapolation used — within **2.6%** of the median.
