@@ -1,0 +1,67 @@
+### Task 5 — Calibrate `ABSTAIN_SCORE_THRESHOLD` and retire the provisional marker
+
+**Goal:** Replace `cli/src/retrieval/search.ts` → `ABSTAIN_SCORE_THRESHOLD = 0.3` with a value chosen from the real reranker's measured score distribution, and rewrite the two places in that file that call it provisional so the constant carries the calibrated value, the bound its own suite puts on it, and a pointer to where the measured record lives.
+
+**Depends on:** Task 4, whose results file `docs/retrieval-eval-results.md` carries, inside its `<!-- eval:generated:start -->` / `<!-- eval:generated:end -->` region, a fenced `json` block with a per-query record for arm E on both corpora — each carrying `bestScoreOnPositive` for a query with labels and `bestScoreOnNegative` for a query with an empty `labels` array. Those two distributions are the whole evidence for this task. Read them out of that file; do not re-run the arms to obtain them.
+
+**Where the measured fact lives, and why not here.** `.claude/context/conventions.md` → `### Where a new responsibility goes` sends *a measured fact or a decision of record* to `docs/`, **and nowhere else**, so the record of this calibration — the date, the host, the corpora, the model ids, the two distributions, what the choice costs — is `docs/retrieval-eval-results.md` → `## Threshold calibration`, written by **Task 14**, which ships immediately after this task and is the one general-layer task that owns it. This task is a `cli` task and writes no `docs/` file. The constant's doc comment is therefore not the record and is not a second copy of it: it carries the value, the bound this module's own suite puts on it, and a pointer to that section.
+
+**Where this task stops.** It changes **one file under `cli/`** and nothing else. It does not edit `docs/retrieval-eval-results.md` (Task 14's `## Threshold calibration`), `docs/retrieval.md` or `docs/cli.md` (Task 12's prose sites), or `docs/development.md` §5 (Task 9's).
+
+**What this task hands to Task 14**, so that task derives nothing a second time: the chosen value as committed in `search.ts`; the highest best-score on a negative query and the lowest on a positive one, per corpus and pooled, as read out of Task 4's `json` fence; the positives the choice costs, with the count; and the arm E recall figures before and after the move, **both taken in this task's own pass** by the verification below and both carrying the same corpus `snapshot` stamp — never the *before* figure read out of Task 4's fence, which was taken over a different `self-docs` snapshot. Put all of them in this task's commit body, where Task 14 reads them back — **the commit body is the only record of that recall pair and of the post-move figures**, so state them there completely, with the stamp, rather than relying on the fence. The pre-move evidence is re-checkable in the `json` fence as it stands at this commit, but not permanently: the fence is a pre-move generation and **Task 9 regenerates the region after this move**, and on an abstaining query `searchDocs` returns `{ abstained: true, hits: [] }`, so the regenerated fence cannot carry `bestScoreOnPositive` for the queries the new threshold abstains on. That is why Task 14 **quotes** the pre-move distributions into its hand-written section instead of citing the fence, and why the after figures are traced to this commit body alone.
+
+**The constraint the choice must satisfy, beyond separating the distributions.** `cli/test/docs-retrieval.test.mjs`'s abstention cases run under the `stub-overlap` reranker, where a matching query's best hit scores `1.000` and the no-match query scores `0.000` on every candidate. Any value **strictly inside `(0.000, 1.000)`** keeps those cases passing; a value at or outside either end flips one of them. Check that before choosing. The doc comment states this bound, because it is a property of this module and its suite; the real distribution that bounds the choice from inside is stated in Task 14's `## Threshold calibration`.
+
+### Targets
+
+- `cli/src/retrieval/search.ts` — the constant, its doc comment, and the module header's *"a provisional constant"* clause. The only file this task changes.
+
+**Work:**
+
+- [ ] Read arm E's per-query `bestScoreOnPositive` and `bestScoreOnNegative` values for **both** corpora out of the results file's `json` fence. Write down the highest negative score and the lowest positive score, per corpus and pooled. Choose the value: the midpoint of the pooled gap when the distributions separate cleanly, and — when they overlap — the value that abstains on every negative query while losing the fewest positive ones, with the count it costs stated. Pick a value with at most two decimals, so the constant is a number a reader can hold.
+- [ ] Set `ABSTAIN_SCORE_THRESHOLD` to that value. Change nothing else about the abstention path: `best < ABSTAIN_SCORE_THRESHOLD` keeps its strict `<` comparison, and no score filter is added to any other mode — `harness-runs/code_reviews/feat_docs_catalog_retrieval_code_review/finding_1.md` recorded that as this branch's call and the answer here is *no*, which the doc comment says in one clause.
+- [ ] Rewrite the constant's doc comment to what belongs beside the code, and no more: drop the `PROVISIONAL:` opener; state the calibrated value; state the stub-fixture bound that keeps `cli/test/docs-retrieval.test.mjs`'s abstention cases passing — any value strictly inside `(0.000, 1.000)`, which is a property of this code and its suite — and point at `docs/retrieval-eval-results.md` → `## Threshold calibration` for how the value was chosen and on what. Do **not** restate the date, the host, the corpora, the model ids or the distribution here: that is the measured record and it has one home. Keep the one clause saying no score filter is added to any other mode.
+- [ ] Rewrite the module header's rule sentence: the rule is still *only `fused-rerank` abstains, and only below `ABSTAIN_SCORE_THRESHOLD`* — what changes is that the constant is no longer called provisional. Say instead what it is: calibrated against the measured reranker distribution, with the constant's own doc comment carrying the value and pointing at `docs/retrieval-eval-results.md` → `## Threshold calibration` for the evidence. Per `.claude/context/cli.md` → *"A reviewer holds a change to its module's own header"*, the header and the code must still agree after the edit.
+
+**Verification:**
+
+- `bash scripts/run-gates.sh` passes — in particular gate 2a (`npm run build`, so the new constant compiles) and gate 4 (`npm test`), whose `search (a)-(d)` abstention cases are the stub-bound check above. A gate 4 failure naming an abstention case means the value fell outside `(0.000, 1.000)`.
+- **Take both recall figures in this task's own pass, over one tree, so the constant is the only thing that differs between them.** Run arm E on both corpora through a scratch launcher of this task's own — `bash scripts/scratch-run.sh harness-runs/scratch/recheck-arm-e.mjs`, a file that imports `runEval` and calls it once per corpus **without `--out`**, so it writes nothing and prints the table and the run's `snapshot: { files, chunks }` stamp to stdout (`task_4_plan.md`'s `run.mjs` bullet specifies exactly that behaviour for the no-`--out` case, and `task_9_plan.md`'s `check-floor.mjs` uses the same shape) — **twice: once before editing `ABSTAIN_SCORE_THRESHOLD` and once after**, with no other edit between the two runs. **Do not take the *before* figure out of Task 4's `json` fence.** That fence was generated at entry 4, before this task's own tree existed and — for `self-docs` — over a corpus that has since gained `docs/retrieval-eval-results.md` itself, so the two numbers would differ by corpus as well as by threshold and the comparison could not attribute a drop to the choice, which is the one thing it exists to decide (the story index's `self-docs` snapshot rule: two figures carrying different stamps are not a before/after pair). Confirm both runs report the **same** `snapshot` stamp and record it beside the figures; if they do not, the tree moved between them and the pass is re-taken. **Do not drive either run through `harness-runs/scratch/run-eval.mjs`**, which `task_4_plan.md` defines as the launcher that calls `runEval` with `--out docs/retrieval-eval-results.md`: the pre-move `json` fence in that file's generated region is the only source for the per-query distributions **Task 14 must quote** — that is the fence's sole remaining job — a post-move generation cannot carry `bestScoreOnPositive` for the queries the new threshold abstains on, and **Task 9 is the only task that regenerates that region**, after Task 14 has quoted it. Confirm the arm abstains on every negative query and that recall@5 has not dropped by more than the positives the choice was known to cost. Record the before figure, the after figure and the shared stamp in the commit body, where Task 14 reads them back; Task 9's floor is taken **after** this task for exactly this reason.
+- `grep -n "provisional\|PROVISIONAL" cli/src/retrieval/search.ts` returns nothing.
+- `git diff --stat` shows one file changed. A change reaching `docs/` or `cli/test/` in this commit is out of this task's scope and belongs to its owner.
+- The doc comment is not a measured record: read it back and confirm it carries the value, the stub bound and the pointer, and that no date, host, corpus name, chunk count, model id or distribution figure appears anywhere in `cli/src/retrieval/search.ts`. Those belong to Task 14's `## Threshold calibration`, and two owners of one measured fact is the defect this split exists to prevent.
+- The hand-off is complete: the commit body carries every figure Task 14's `## Threshold calibration` bullet asks for, in the order that bullet lists them.
+
+**Deviations from plan:** The plan reads the choice off two uncensored distributions. The `json` fence
+was generated with the threshold `0.3` in force, and `bestScore` is the top **returned** hit's score,
+so every query that abstained carries `null`: all 8 negative queries (3 on `fixture-catalog`, 5 on
+`self-docs`) and 5 positives are censored, and **no negative score is observable at all** — only the
+fact that each is strictly below `0.30`. The pooled gap was therefore taken as the interval the
+evidence actually asserts, `[0.30, 0.339]` — `0.30` the censoring bound on every negative, `0.33899`
+(`q-sd-analyze-writes`) the lowest observed positive — and its midpoint `0.3195` rounded to two
+decimals: **`0.32`**. Task 14's `## Threshold calibration` must quote the negatives as censored rather
+than as measured values. The arms were not re-run to uncensor them, per this task's `**Depends on:**`
+clause.
+
+The recall pair this task hands to Task 14 was recorded in the commit body of `51ba982` and nowhere
+durable, so it was re-taken in a follow-up `cli`-layer pass (authorised by the branch's park-3
+clarification, which also makes the commit body unusable as an inter-task hand-off channel: any
+result a later task must read is recorded in the producing task's own `**Deviations from plan:**`
+block, which is what follows). The re-take ran `bash scripts/scratch-run.sh
+harness-runs/scratch/recheck-arm-e.mjs` twice over one tree — once with `ABSTAIN_SCORE_THRESHOLD`
+temporarily back at `0.3`, once at the committed `0.32`, with `npm run build` between them and no
+other edit — and both runs reported the same `snapshot` stamp per corpus, so the two readings are a
+before/after pair:
+
+| Corpus | `snapshot` (both runs) | arm E recall@5 before (`0.3`) | arm E recall@5 after (`0.32`) |
+| --- | --- | --- | --- |
+| `fixture-catalog` | `{ files: 9, chunks: 41 }` | `0.667` (0.6666666666666666) | `0.667` (0.6666666666666666) |
+| `self-docs` | `{ files: 13, chunks: 173 }` | `0.600` (0.6) | `0.600` (0.6) |
+
+The move from `0.3` to `0.32` costs **no** positive: recall@5, recall@3, recall@1 and MRR are
+unchanged on both corpora, and the same positives abstain at both values —
+`q-fc-billable-weight`, `q-fc-surcharge-compounding`, `q-fc-verify-callback` on `fixture-catalog`
+and `q-sd-new-config-key`, `q-sd-run-gates` on `self-docs`, i.e. the 5 already censored at `0.3`.
+The arm abstains on **every** negative query at both values (3 of 3 on `fixture-catalog`, 5 of 5 on
+`self-docs`, `notAbstained` empty in each run). `cli/src/retrieval/search.ts` was restored to `0.32`
+and the tree left byte-identical to `51ba982`.
