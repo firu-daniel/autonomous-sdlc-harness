@@ -4842,13 +4842,17 @@ series.
   the prediction was a refresh figure and the shipped route cannot isolate one. Read that as
   **linear-and-lucky rather than linear-and-right**: the thermal spread above straddles the predicted value, so
   the prediction lands inside the noise band of the host it was tested on.
-- **Size missed, by 5.6×.** The index is **37.6 kB per chunk** at 1,960 chunks against the **244 kB** the
-  extrapolation used, and the **~366 MB** it projected at ~1,500 chunks overshoots by **5.6×** — the fit
-  gives ~65 MB there. The two-point fit, over its two anchors **43.2 MB @ 177 chunks** and **72 MB @ 1,960
-  chunks**, is **~40.3 MB fixed overhead plus ~16.5 kB per chunk**: the index is fixed-cost dominated, and
+- **Size missed, by 5.5×.** The index is **37.9 kB per chunk** at 1,960 chunks (`apparentBytes` 74,195,245
+  ÷ 1,960) against the **244 kB** per chunk the extrapolation used — both figures apparent, which is the
+  basis the 177-chunk table's own 244 kB row is on. The **~366 MB** that extrapolation projected at ~1,500
+  chunks overshoots by **5.5×**: the fit gives ~66 MB there. The two-point fit, over its two anchors on that
+  same apparent basis — **43,163,949 B (43.2 MB) @ 177 chunks** and **74,195,245 B (74.2 MB) @ 1,960
+  chunks** — is **~40.1 MB fixed overhead plus ~17.4 kB per chunk**: the index is fixed-cost dominated, and
   the original number was a fixed cost divided by a small chunk count — the same error shape as the struck
-  60-second rule and as the six-minute download prediction leg (i) replaced. **No projection beyond those
-  two anchors is published here**: one further data point buys a fit, not a third extrapolation.
+  60-second rule and as the six-minute download prediction leg (i) replaced. (The `du -sh` **72M** in the
+  runs table is the allocated figure rounded to the megabyte, which is why the fit is stated on the apparent
+  pair rather than on it.) **No projection beyond those two anchors is published here**: one further data
+  point buys a fit, not a third extrapolation.
 
 **Acceptance 2a — the eval-route cross-check, both routes labelled.** The same corpus snapshot (156 files,
 1,960 chunks) was built again through `measureColdBuild` with `cold: { index: true, modelCache: false }`,
