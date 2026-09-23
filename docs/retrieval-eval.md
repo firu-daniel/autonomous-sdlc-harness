@@ -440,9 +440,11 @@ two corpora measure. The step that produces the real-shape figure has since been
 documentation catalog held outside this checkout — commit `010c50e`, **156 files / 1,960 chunks** —
 and its figures are recorded in `docs/retrieval-eval-results.md` → `## Cold build and index size`,
 which is their one home. What that run settles is the real-catalog **cost** side — the cold build and
-the index on disk — and not this rule's verdict, which is an arm E against arm A comparison and still
-awaits the arm A hand run `## Running arm A by hand` below describes. The corpora here fix the
-*procedure* and the regression floor, not the verdict.
+the index on disk — and not this rule's verdict, which is an arm E against arm A comparison. **That
+verdict has since been taken**: the arm A hand run `## Running arm A by hand` below describes was run on
+the same catalog, this rule was applied to it bar by bar, and the outcome is **withdrawn** —
+`docs/retrieval-eval-results.md` → `## The decision, applied to the real catalog` is its record. The
+corpora here fix the *procedure* and the regression floor, not the verdict.
 
 ## The regression floor
 
@@ -785,13 +787,16 @@ Rename that heading once a number exists; a section still announcing an awaited 
 one is a false record. Read the filled row against `## The decision rule` above, which was written
 before any arm A number existed precisely so this comparison cannot be chosen to fit it.
 
-**What gate 10 settled, and why this hand run is still owed.** Arm A on `fixture-catalog` fixes the
+**What gate 10 settled, and the hand run that followed it.** Arm A on `fixture-catalog` fixes the
 procedure; the verdict is taken on a real catalog. `docs/development.md` §5 → gate 10 has been run — by
 hand, in full, on 2026-09-22 against a private real documentation catalog held outside this checkout,
 commit `010c50e`, 156 files / 1,960 chunks — and what it produced is the real-catalog **cold-build and
 index-size** evidence (`docs/retrieval-eval-results.md` → `## Cold build and index size`) together
 with leg (iv)'s confirmation of the abstention threshold at both ends (that file's `### The limit on
-this calibration`, a confirmation and not a re-calibration). It is **not** the arm A hand run: arm A needs a labelled query
-set and a `docs/INDEX.md`, and neither exists for any catalog outside `fixture-catalog`, so the
-real-catalog arm E against arm A comparison `## The decision rule` above takes its verdict on remains
-unmade.
+this calibration`, a confirmation and not a re-calibration). Gate 10 is **not** the arm A hand run.
+That run was taken on **2026-09-23**, on the same catalog at commit `57a6c25` — a later commit whose
+`docs/` is unchanged from `010c50e`'s — against the labelled set `evals/docs-retrieval/queries/gate10-catalog.jsonl`, both variants,
+five repetitions each, by the procedure this section gives. Its record — how it was taken, its
+transcripts and its figures — is `docs/retrieval-eval-results.md` → `## Arm A — the real-catalog hand
+run`, and the verdict `## The decision rule` above takes on it is that file's `## The decision, applied
+to the real catalog`.
