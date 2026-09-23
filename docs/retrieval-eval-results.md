@@ -16876,29 +16876,46 @@ distribution read; the class is each record's `negativeKind`:
 
 ## The shipped default against fusion alone
 
-**What this section records.** On both committed corpora the shipped default mode — arm E,
-`fused-rerank` — scores **below** arm D, `fused`, on every relevance column, at two orders of
-magnitude more latency. E is the default of `docs search` (`cli/src/commands/docs.ts` →
-`DEFAULT_MODE`) and the only mode the MCP server can ask for (`cli/src/retrieval/server.ts`), so D is
+**What this section records.** On both committed corpora and on the real catalog `gate10-catalog`, the
+shipped default mode — arm E, `fused-rerank` — scores **below** arm D, `fused`, on every relevance
+column, at two orders of magnitude more latency. E is the default of `docs search`
+(`cli/src/commands/docs.ts` → `DEFAULT_MODE`) and the only mode the MCP server can ask for (`cli/src/retrieval/server.ts`), so D is
 reachable only by a hand-passed `--mode fused`. This is a **measurement**, not a recommendation:
 whether either of those two defaults should change, and whether the abstention policy should extend to
 `fused`, are decisions this section does not take and no figure here settles.
 
 The figures are read off this file's generated region above — the per-arm tables and the per-query
 records in the same fences — and none is retyped from elsewhere. The `snapshot` stamp belongs to each
-row pair, because the two corpora are two different measurements and not a series.
+row pair, because the three corpora are three different measurements and not a series. All three blocks
+were generated on 2026-09-23 on host `darwin 24.6.0` under Node `v20.19.5`, with the threshold at
+`0.32`: `gate10-catalog` at `2026-09-23T18:49:10.704Z`, `fixture-catalog` at `2026-09-23T19:26:59.227Z`
+and `self-docs` at `2026-09-23T19:27:46.757Z`.
 
 | Corpus | `snapshot` | Arm | recall@1 | recall@3 | recall@5 | MRR | p50 ms |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `fixture-catalog` | `{ files: 9, chunks: 41 }` | D `fused` | 0.556 | 1.000 | 1.000 | 0.759 | 5.9 |
-| `fixture-catalog` | `{ files: 9, chunks: 41 }` | E `fused-rerank` | 0.444 | 0.667 | 0.667 | 0.556 | 652.4 |
-| `self-docs` | `{ files: 13, chunks: 177 }` | D `fused` | 0.533 | 0.800 | 0.867 | 0.650 | 9.8 |
-| `self-docs` | `{ files: 13, chunks: 177 }` | E `fused-rerank` | 0.400 | 0.600 | 0.600 | 0.500 | 1145.3 |
+| `fixture-catalog` | `{ files: 9, chunks: 41 }` | D `fused` | 0.556 | 1.000 | 1.000 | 0.759 | 5.7 |
+| `fixture-catalog` | `{ files: 9, chunks: 41 }` | E `fused-rerank` | 0.444 | 0.667 | 0.667 | 0.556 | 561.7 |
+| `self-docs` | `{ files: 14, chunks: 213 }` — moved, see below | D `fused` | 0.533 | 0.733 | 0.800 | 0.639 | 7.9 |
+| `self-docs` | `{ files: 14, chunks: 213 }` — moved, see below | E `fused-rerank` | 0.467 | 0.600 | 0.600 | 0.533 | 1005.1 |
+| `gate10-catalog` — corpus commit `57a6c25` | `{ files: 156, chunks: 1960 }` | D `fused` | 0.659 | 0.818 | 0.841 | 0.732 | 10.8 |
+| `gate10-catalog` — corpus commit `57a6c25` | `{ files: 156, chunks: 1960 }` | E `fused-rerank` | 0.591 | 0.750 | 0.795 | 0.677 | 1099.7 |
 
-**What the deficit is made of — and the two corpora answer differently.** A positive query E misses is
+**The `self-docs` stamp moved.** This section first recorded its `self-docs` pair at
+`{ files: 13, chunks: 177 }`; the block was regenerated over this checkout's `docs/` after it had grown,
+so the pair above is a **different corpus**, not a later reading of the same one, and nothing here
+compares the two. The `fixture-catalog` block was regenerated at an unchanged stamp.
+
+**What the deficit is made of — and each corpus answers differently.** A positive query E misses is
 either an **abstention**, where the top reranker score fell below `ABSTAIN_SCORE_THRESHOLD` and the
 mode returned nothing at all (`hits: []`), or a **non-abstaining miss**, where it returned five hits
-and no relevant one among them.
+and no relevant one among them. A non-abstaining miss D ranked inside its own top five is a
+**demotion** the cross-encoder caused. Every count below comes from the D and E `perQuery` entries of
+each block, read through `evals/docs-retrieval/results.mjs` → `readCorpusMachineHalf` by one launcher,
+run on 2026-09-23:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/task24_decompose.mjs
+```
 
 - On `fixture-catalog`, **all three** of E's missed positives are abstentions —
   `q-fc-billable-weight`, `q-fc-surcharge-compounding`, `q-fc-verify-callback`. D ranks a relevant hit
@@ -16906,33 +16923,69 @@ and no relevant one among them.
   none of it is the ranking.
 - On `self-docs`, E misses six positives: **two** abstentions (`q-sd-new-config-key`,
   `q-sd-run-gates`) and **four** non-abstaining misses (`q-sd-deny-guard`, `q-sd-usage-limit`,
-  `q-sd-retrieval-network`, `q-sd-analyze-writes`). D misses only two, `q-sd-deny-guard` and
-  `q-sd-retrieval-network`, which E misses as well — so of the four, two are shared with fusion and
-  **two are demotions the cross-encoder caused**: `q-sd-usage-limit` (rank 4 under D) and
-  `q-sd-analyze-writes` (rank 1 under D) were inside the top five that fusion alone produced and were
-  pushed out of it by the rerank.
+  `q-sd-retrieval-network`, `q-sd-analyze-writes`). D misses three — `q-sd-deny-guard` and
+  `q-sd-retrieval-network`, which E misses as well, and `q-sd-search-abstains`, which E ranks first.
+  So of the four, two are shared with fusion and **two are demotions the cross-encoder caused**:
+  `q-sd-usage-limit` (rank 4 under D) and `q-sd-analyze-writes` (rank 1 under D) were inside the top
+  five that fusion alone produced and were pushed out of it by the rerank.
+- On `gate10-catalog`, E misses nine of 44 positives: **six** abstentions and **three** non-abstaining
+  misses. Three of the abstentions are positives D ranked inside its top five —
+  `q-g10-ew-deleted-account-subcollection` (rank 1), `q-g10-ew-hardcoded-padding-colour` (rank 3) and
+  `q-g10-vite-admin-html-entry` (rank 1) — and three are positives D misses too:
+  `q-g10-ew-withdrawal-labels-romanian`, `q-g10-vite-dev-api-forward` and `q-g10-neg-vite-server-mock`
+  (a positive, despite its id). Of the three non-abstaining misses, `q-g10-ew-withdraw-confirm-modal` is
+  shared with D and **two are demotions**: `q-g10-ew-photo-comment-reply` (rank 5 under D) and
+  `q-g10-ew-group-room-agora-token` (rank 1 under D). D misses seven positives, and E **recovers three**
+  of them: `q-g10-ew-gift-community-post` (rank 1 under E), `q-g10-ew-callable-exists-check` (rank 1)
+  and `q-g10-ew-unlock-payload` (rank 5). So against D's 37 hits E loses five — three to the threshold,
+  two to the reranker — and gains three, all to the reranker, for 35: on this corpus the reranker's
+  ranking is **one positive ahead** of fusion's, and the whole net deficit is the threshold.
 
-**The one column E wins.** E abstains on **every** negative query — 3 of 3 on `fixture-catalog` and 5
-of 5 on `self-docs` — where B, C and D abstain on none of either, each answering confidently on a
-query the corpus has no answer for. That is bar 3, **Failure**, of
-`docs/retrieval-eval.md` → `## The decision rule`, and it is the only one of that rule's three bars on
-which E beats D.
+**The one column E wins.** E abstains on **every** negative query of the two committed corpora — 3 of 3
+on `fixture-catalog` (`far` 1 of 1, `near` 2 of 2) and 5 of 5 on `self-docs` (`far` 2 of 2, `near` 3 of
+3) — and on **19 of 25** of `gate10-catalog`'s: all 10 `far` and 9 of 15 `near`. The six it answers are
+all `near` — `q-g10-neg-login-sms-2fa`, `q-g10-neg-chat-voice-message`, `q-g10-neg-callable-app-check`,
+`q-g10-neg-vite-precompress`, `q-g10-neg-vite-sitemap` and `q-g10-neg-vite-image-webp` — at top reranker
+scores from `0.36766234040260315` to `0.9861363768577576`. D abstains on none of any corpus, by
+construction — abstention applies to `fused-rerank` alone — and answers every negative query as if the
+corpus held an answer. That is bar 3, **Failure**, of `docs/retrieval-eval.md` → `## The decision rule`,
+and on all three corpora it is the only one of that rule's three bars on which E beats D.
 
-**So the comparison is a trade, and on these two corpora it runs this way:** E buys a clean refusal on
-every negative query at the price of relevance on positives and of a p50 in the hundreds of
-milliseconds — and on `fixture-catalog` it pays that price *only* in abstentions, which is a
-threshold, while on `self-docs` it also pays it in two demotions, which is the reranker.
+**So the comparison is a trade.** E buys refusal on negative queries at the price of relevance on
+positives and of a p50 of 561.7 to 1099.7 ms against fusion's 5.7 to 10.8. On `fixture-catalog` it
+pays that price *only* in abstentions, which is a threshold; on `self-docs` it also pays it in two
+demotions, which is the reranker; on `gate10-catalog` the reranker's demotions are outweighed by its
+recoveries, and the price is the threshold again.
 
-**What this does not settle.** The same limit `## The limit on this calibration` above states, in the
-same terms: two fixture-sized corpora at 41 and 177 chunks, both far below the roughly 1,500 chunks of
-a mature docs catalog; one host and one Node version; one repetition per query, so no figure here
-carries a spread — with the same standing rule in force that a figure measured on a fixture-sized
-corpus never justifies a design decision on its own. The hand run of `docs/development.md` §5 → gate 10
-against a private real catalog **has since been taken**, on 2026-09-22; its figures are in
-`## Cold build and index size` → `### The real-catalog build — 1,960 chunks, 2026-09-22` and its search
-leg in `### The limit on this calibration` above, and neither is a fusion-versus-default comparison. So
-the limit on **this** table is unchanged: what would confirm or overturn it is the same comparison run
-on a real catalog, which no run has taken.
+**What the real catalog did to the trade: narrowed it from both sides, and reversed neither.** D still
+leads E on every relevance column and E is still the only arm that refuses, but on `gate10-catalog` both
+leads are smaller than on either committed corpus:
+
+- **E's relevance deficit shrank.** D's lead over E is 0.046 of recall@5 (two positives of 44) and
+  0.055 of MRR, against 0.333 and 0.203 on `fixture-catalog` and 0.200 and 0.106 on `self-docs`. The
+  reranker's own net effect on positives, recoveries less demotions, is 0 on `fixture-catalog`, one
+  positive behind fusion on `self-docs` and one ahead on `gate10-catalog`.
+- **E's refusal is no longer clean.** On the two committed corpora E refused every negative, `near`
+  ones included; on the real catalog it answers 6 of 15 `near` negatives, every one scoring above
+  `0.32`, while still refusing every `far` one.
+- **The latency cost stayed at two orders of magnitude.** E's p50 is 98 to 127 times D's across the
+  three corpora, and 102 times on the real catalog.
+
+**What still limits it.** One host and one Node version, every block in one day. One repetition per
+query for arms B–E, so no D or E figure here carries a spread — arm A's five repetitions bound its own
+movement (`## Arm A — the real-catalog hand run` → `### Spread, repetitions and what moved`), and
+nothing bounds these. One real catalog, whose query set is model-authored and agent-shaped where the
+committed sets are natural-language questions (`### The limit on this calibration` above;
+`## The decision, applied to the real catalog` → `### The limits, stated with the verdict`). On that
+one catalog D's lead is two positives of 44.
+
+**What this section does not decide.** This branch records the measurement and changes neither default:
+`DEFAULT_MODE` stays `fused-rerank`, the MCP server still asks for no other mode, and abstention is not
+extended to `fused`. That decision stays open, and it is not taken in this file. While the verdict of
+record in `## The decision, applied to the real catalog` stands, it does not arise: roadmap item 18 in
+`docs/development.md` → `## 6. The roadmap this tree defers to` withdraws the tool with every mode in
+it. A change that reverses that verdict and keeps docs retrieval is where the default mode and the
+scope of abstention would be decided, against this table.
 
 ## Cold build and index size
 
