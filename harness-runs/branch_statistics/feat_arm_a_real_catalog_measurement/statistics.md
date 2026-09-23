@@ -2,11 +2,11 @@
 
 ## Summary
 
-- `success_rate`: **`100%`**, the headline metric.
+- `success_rate`: **`93.7%`**, the headline metric.
 - `story_points_total`: `395`, the denominator: the sum of every task's `_(points: <N>)_` story-point estimate in the story index's `## Phase 2 Readiness — Ordered Fix List`.
-- `issue_cost_total`: `0`, the subtraction: the sum of each user-review observation's severity weight, in story-point units. No user review exists yet.
+- `issue_cost_total`: `25`, the subtraction: the sum of each user-review observation's severity weight, in story-point units.
 - `story_plan_tasks`: `25`, the retained raw count of `## Phase 2 Readiness — Ordered Fix List` task entries.
-- `user_review_issues`: `0`, the retained raw count of observations across all `feat_arm_a_real_catalog_measurement_review*.md` user-review files.
+- `user_review_issues`: `5`, the retained raw count of observations across all `feat_arm_a_real_catalog_measurement_review*.md` user-review files.
 
 Formula:
 
@@ -14,7 +14,7 @@ Formula:
 success_rate = round(clamp((story_points_total - issue_cost_total) / story_points_total, 0, 1) * 100, 1) percent
 ```
 
-Worked example: `round(clamp((395 - 0) / 395, 0, 1) * 100, 1)` = `100%`.
+Worked example: `round(clamp((395 - 25) / 395, 0, 1) * 100, 1)` = `round(93.6708…, 1)` = `93.7%`.
 
 Edge cases (the rate is always computed with the formula, then adjusted by these rules):
 
@@ -56,11 +56,18 @@ Per-source raw numbers and per-issue costs are kept so the metric can be refined
     - Task 24: `15`
     - Task 25: `15`
     - **sum (`story_points_total`)**: `395`
-  - `dispositioned_points`: `0`. No commit in `main..HEAD` (`git log --format='%h %s%n%b' main..HEAD`) carries the `record disposition of ` record, so no unit on this branch was closed without a fix. No tokens matched.
+  - `dispositioned_points`: `0`. No commit in `dev..HEAD` (`git log --format='%h %s%n%b' dev..HEAD`, `dev` being `harness.config.json` → `defaultBranch`) carries the `record disposition of ` record, so no unit on this branch was closed without a fix. No tokens matched.
   - Back-compat fallback: not fired. All 25 entries carry a `_(points: …)_` tag.
-- **User-review source**: `user_review_issues` is `0`, `issue_cost_total` is `0` (counted per user-review file, then summed)
-  - Glob `harness-runs/user_reviews/feat_arm_a_real_catalog_measurement_review*.md` matched no files, because this is the pre-user-review write.
-  - **total**: `0` observations, so `issue_cost_total` is `0`.
+- **User-review source**: `user_review_issues` is `5`, `issue_cost_total` is `25` (counted per user-review file, then summed)
+  - Glob `harness-runs/user_reviews/feat_arm_a_real_catalog_measurement_review*.md` matched one file; no `_fix_plan` file or directory was matched.
+  - `harness-runs/user_reviews/feat_arm_a_real_catalog_measurement_review.md`: `5` observations, cost `25`. Counted by **arm 2, top-level list items**: `grep -cE '^[0-9]+\.|^[-*][[:space:]]' <file>` returns `5`, arm 1 (`grep -cE '^#{2,4} +[0-9]+[.):]' <file>`) having returned `0`. The indented `-` sub-items under items 2 and 5 are not counted. Each observation's assigned weight:
+    1. Record the decision as a maintainer override of the rule's outcome, not a re-reading of the rule (add a subsection after `### The verdict`) → **Minor** `5`
+    2. State the four reasons for keeping retrieval opt-in wherever the decision is recorded → **Minor** `5`
+    3. State the recommendation honestly: scope it to the unmeasured situations and disclose that `lexical` scored above `fused-rerank` on recall@5 → **Minor** `5`
+    4. Replace roadmap item "Withdrawing docs retrieval" in `docs/development.md` with the record of the unexecuted withdrawal → **Minor** `5`
+    5. Correct every statement that says or implies retrieval is withdrawn or to be removed (nine listed sites and any others) → **Minor** `5`
+  - **total**: `5` observations, so `issue_cost_total` is `25`.
+  - Why all five took the Minor default: none carries a `[major]` or `[trivial]` marker, and none, read from the review text alone, describes a broken user-facing flow, a missing authorization gate, data loss or unprotected data, or an absent ported behaviour. They record a maintainer decision and correct documentation statements that follow from it.
   - Each file's observation count comes from the first of four arms that returns a non-zero count. Arms are never summed:
     1. Numbered `##`–`####` headings that require trailing punctuation: `grep -cE '^#{2,4} +[0-9]+[.):]'`.
     2. Top-level numbered or bulleted list items: `grep -cE '^[0-9]+\.|^[-*][[:space:]]'`.
@@ -73,7 +80,7 @@ Per-source raw numbers and per-issue costs are kept so the metric can be refined
 
 ## Status
 
-- status: `pre-user-review`. The file was written after the branch (code) review, with no user review yet (`issue_cost_total` is `0`, so the rate is `100%`).
+- status: `post-user-review`. The file was re-written after the user-review fixes, with the observations in the `feat_arm_a_real_catalog_measurement_review*.md` files counted and weighted.
 - last_updated: `2026-09-24`
 
 ## Notes
