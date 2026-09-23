@@ -18374,6 +18374,37 @@ to` — withdraw docs retrieval: the tool, its optional dependencies and the thr
 withdrawal removes a shipped verb, its optional peer dependencies and the plugin's grants, and none of
 that belongs in the review of a measurement.
 
+### The maintainer's decision
+
+**Recorded 2026-09-24: the withdrawal this verdict names is not executed. Docs retrieval is kept,
+opt-in.** This is a maintainer decision overriding the rule's outcome, not a re-reading of the rule: the
+figures above, the bar-by-bar grading and the verdict — **withdrawn** — stand exactly as recorded, and
+`docs/retrieval-eval.md` → `## The decision rule` is not amended. Roadmap item 18 in
+`docs/development.md` → `## 6. The roadmap this tree defers to` records that the withdrawal was not
+executed and points here. The reasons:
+
+- **It is a real, working system, built and measured.** This measurement is a record of how it performed
+  on one kind of corpus, not a finding that it cannot be useful.
+- **It has not been optimised.** The one real measurement graded the shipped stack as built: the
+  smallest local models — a general-English embedder and a reranker trained on web-search questions.
+  Improving it — a code-aware reranker, a different embedder, BM25 weighting, handling sections longer
+  than the models' window — is open work, not a closed question.
+- **It may have uses beyond the one measured.** This measurement covered one situation: an agent
+  searching a small, well-structured, technical docs catalog with identifier-dense queries — the case
+  where grep is strongest. It did not measure the situations where retrieval is generally expected to
+  pay: a docs catalog far larger than one grep can usefully cover, and a catalog whose vocabulary does
+  not match the queries agents send (docs written for non-developers, product or business
+  documentation, another language).
+- **Whether to enable it is the adopter's decision**, depending on their use case, and it costs an
+  adopter nothing while off: its runtime packages are optional peer dependencies npm does not install,
+  and the runtime install and model download run only when `init` is run with `docs.retrieval` on,
+  which requires `phases.docs`.
+
+**What follows from it.** The `docs` verb and its subcommands, the optional peer dependencies,
+`ABSTAIN_SCORE_THRESHOLD`, the plugin's `search_docs` grants and the `docs.retrieval` key stay as they
+ship, and `DEFAULT_MODE` stays `fused-rerank`. When turning retrieval on is worth it — and that none of
+those situations has been measured — is `docs/retrieval.md` → `## When to turn it on`.
+
 ### Findings about the rule, recorded and not acted on
 
 - **The cost bar did not discriminate**, as `### Two arm A variants, and how they combine` said it would
