@@ -47,7 +47,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_arm_a_
 9. [x] **Task 9** — Give arm A its two variants: the `{{index}}` token, `agent-task-search.md`, and a runner that records tool calls _(layer: general)_ _(points: 20)_
 10. [x] **Task 10** — Rewrite `## Running arm A by hand` for two variants, establish the ad-hoc route's comparability, and record the rejected subagent route _(layer: general)_ _(points: 15)_
 11. [x] **Task 11** — Add `evals/docs-retrieval/arm-a/spread.mjs`: per-repetition, per-half and far/near figures across a variant's transcripts _(layer: general)_ _(points: 20)_
-12. [ ] **Task 12** — Author the `docs/expause-web/` positives of `gate10-catalog.jsonl` by reading the catalog _(layer: general)_ _(points: 20)_
+12. [x] **Task 12** — Author the `docs/expause-web/` positives of `gate10-catalog.jsonl` by reading the catalog _(layer: general)_ _(points: 20)_
 13. [ ] **Task 13** — Author the `docs/vite/` positives of `gate10-catalog.jsonl` by reading the catalog _(layer: general)_ _(points: 15)_
 14. [ ] **Task 14** — Author the negatives, pass the label pre-flight, and record the set in `## The real-catalog query set` _(layer: general)_ _(points: 20)_
 15. [ ] **Task 15** — Park for the operator's approval of the query set, and record it before anything is scored _(layer: general)_ _(points: 10)_
