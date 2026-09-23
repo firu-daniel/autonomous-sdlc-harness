@@ -6,7 +6,7 @@ Source: harness-runs/task_prompts/feat_arm_a_real_catalog_measurement_task_promp
 - phases: parity=false, qa=false, docs=false   (from harness.config.json, read at this write; an unset flag is false)
 
 ## Fix planning
-- [ ] R1. Fix plan written & converged (parity + architecture gates PASS)
+- [x] R1. Fix plan written & converged (parity + architecture gates PASS)
 - [ ] R2. Fix plan + source review committed
 ## Fixing
 - [ ] R3. All fix-plan findings implemented (fix-plan index all [x])
