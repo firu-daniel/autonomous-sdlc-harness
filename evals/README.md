@@ -11,7 +11,8 @@ human for the two committed corpora, and model-authored and operator-approved fo
 answers to no runner, and runs today as gate 11 of `docs/development.md` → `## 5. Verifying a change`.
 Its own contract is `evals/docs-retrieval/README.md` and its figures are
 `docs/retrieval-eval-results.md`, where `## The decision, applied to the real catalog` records its
-verdict against agent navigation: **withdrawn**.
+verdict against agent navigation, **withdrawn**, and the maintainer's decision to keep the tool
+opt-in rather than withdrawing it.
 
 So what separates them is both what is measured and what it waits on: one grades an agent's output
 against a rubric and is gated until the runner ships; the other measures shipped code against labels

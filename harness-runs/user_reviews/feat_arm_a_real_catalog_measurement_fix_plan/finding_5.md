@@ -47,3 +47,5 @@ Sites (j), (k) and the second `ROADMAP.md` site were not in the user's list; the
 **Depends on:** Finding 1 (every pointer cites its record), and Finding 3 for the `## When to turn it on` name cited in (b), (d), (e) and (f).
 
 **Verification.** `git grep -niE "not yet carried out|withdraw it|removes this key|withdrawal itself|came out \*{0,2}withdrawn" -- ':!harness-runs'` returns nothing. `bash scripts/check-llms-txt.sh`; `npm run validate:config` (the schema still validates); `bash scripts/typecheck.sh`; `bash scripts/test.sh`.
+
+**Deviations from plan:** (g) is worded "rather than withdrawing it", not the suggested "rather than withdraw it": the suggested text matches this finding's own `withdraw it` verification probe. The general-layer dispatch edited (a)–(j) only; (k) and (l) were already edited by the `cli`-layer dispatch in the working tree.

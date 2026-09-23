@@ -279,7 +279,7 @@
         "retrieval": {
           "type": "boolean",
           "default": false,
-          "description": "Turn on the local docs-retrieval search tool over 'docs.root' and the conventions documents the layers name, served to the plan writer and the reviewers over MCP. Legal only while 'phases.docs' is true. Off by default and opt-in: turning it on installs a local runtime and downloads two models at setup time, and its relevance, measured against agent navigation on a real catalog, came out withdrawn (docs/retrieval-eval-results.md, 'The decision, applied to the real catalog'); the withdrawal is not yet carried out."
+          "description": "Turn on the local docs-retrieval search tool over 'docs.root' and the conventions documents the layers name, served to the plan writer and the reviewers over MCP. Legal only while 'phases.docs' is true. Off by default and opt-in: turning it on installs a local runtime and downloads two models at setup time. Measured against agent navigation on a real catalog, its verdict was withdrawn, and it is kept opt-in by maintainer decision (docs/retrieval-eval-results.md, 'The decision, applied to the real catalog'); when to turn it on is docs/retrieval.md, 'When to turn it on'."
         }
       }
     },

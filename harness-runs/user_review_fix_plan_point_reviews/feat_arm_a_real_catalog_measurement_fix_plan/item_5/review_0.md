@@ -1,0 +1,6 @@
+# cli review — ### 5. Adopter-facing and contributor surfaces still say retrieval is withdrawn or about to be removed — iteration 0
+
+## Nice to Have
+1. **Cited heading split across a JSDoc line break** — `cli/src/retrieval/queryLog.ts` (module header, "**Why the record shape lives here rather than in its one caller.**") — "`## The\n * decision, applied to the real catalog`"
+   The re-wrap breaks the inline-code heading citation across two comment lines, so the literal `## The decision, applied to the real catalog` no longer sits on one line. A reader or a `grep` that searches for the heading text will not find this citation, and the line-break-plus-`*` falls inside the code span. The pre-edit text kept the whole heading on one line. The target does resolve: `docs/retrieval-eval-results.md` has `## The decision, applied to the real catalog`, confirmed by grep. There is no behaviour change, since this is comment text only.
+   **Fix:** Re-wrap so the backticked heading starts on a new line and stays whole, for example end the previous line at "kept opt-in by maintainer decision (" and start the next with "`docs/retrieval-eval-results.md` → `## The decision, applied to the real catalog`) — and this file …", then re-flow the lines after it.
