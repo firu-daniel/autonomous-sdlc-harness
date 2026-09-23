@@ -327,6 +327,65 @@ The outcomes, each a different change:
 - **Relevance does not clear** → retrieval is **withdrawn**: the tool and its optional dependencies
   come out, and this eval and its numbers stay as the record of why.
 
+### Two arm A variants, and how they combine
+
+**The reading chosen on 2026-09-23, before any real-catalog figure, uncensored score or arm A transcript
+existed**; the commit that adds this subsection precedes every one of them. It applies the rule above and
+amends none of it: the three bars and the three outcomes stand as written.
+
+**The two variants.** An adopter's agents navigate a catalog in two ways, so arm A runs in both:
+
+- **A-index** — told to read the catalog's `INDEX.md` first and follow its links.
+- **A-search** — told only that the catalog is rooted in its working directory, and left to find
+  sections with its tools.
+
+Both carry the same `Read` / `Grep` / `Glob` tool set, so they differ in their instruction alone.
+
+**The combination.** Retrieval has to beat **the stronger alternative an agent has**, so each bar is
+graded against whichever variant does better **on that bar**, and the verdict is the one that comparison
+produces. The verdict is **also recorded against each variant separately**, because an adopter whose
+catalog has no index faces A-search alone.
+
+**The readings the combination leaves open:**
+
+- **"Stronger" is per metric.** Where a bar carries two figures — relevance's recall@5 and MRR — each is
+  graded against whichever variant's figure is higher, even when that makes the comparison a composite no
+  single variant produced.
+- **A variant's figure is the median of its repetitions.** Every repetition is reported; the median is
+  the one a bar grades.
+- **Pooled figures decide.** Relevance is graded on the pooled query set, with the per-half figures
+  reported beside it; failure on all negatives together, with the `far` and `near` figures reported
+  beside it.
+- **The cost bar's *"a fraction"* is any ratio below 1.** The results state that both cost figures clear
+  by construction — local milliseconds and zero billed tokens against an agent session per query — so the
+  cost bar cannot discriminate here and the verdict turns on relevance and failure. The one-time cold
+  build and the index on disk are cited and graded against nothing.
+- **Relevance and cost clear, failure does not** — a combination the three outcomes do not name — reads
+  as **stays opt-in**, with arm E's abstention rate on negatives recorded as the figure a later change
+  must move.
+- **A variant stopped at the cost checkpoint** of its first repetition is graded on the repetitions it
+  has, marked *partial* wherever its figures appear, and its stop is recorded as a cost result of its
+  own. It does not make the rule inapplicable.
+
+**The statistics the rule does not name.** `positives` and `negatives` are the pooled counts of the query
+set used. Arm E's figures come from its generated block; arm A's are taken per repetition, from that
+repetition's transcript as `scoreTranscript` scores it, and a variant's figure is their median.
+
+- **Relevance margins.** One positive query's worth is `1 / positives` of recall@5 and `0.5 / positives`
+  of MRR — what MRR loses when one query moves from rank 1 to rank 2. Arm E's lead over the stronger
+  figure must **exceed** each margin; a lead equal to one does not clear.
+- **Per-query wall time.** Per repetition, the nearest-rank p50 (`## What each metric means`) of that
+  repetition's per-query `durationMs`. The cost ratio is arm E's p95 latency over the stronger variant's
+  median of those — the stronger being the lower.
+- **Token cost per query.** Per repetition, the sum over its records of `input_tokens + output_tokens +
+  cache_creation_input_tokens + cache_read_input_tokens`, divided by the record count; a field absent
+  from a record's `usage` counts as `0`. Every usage field is also reported on its own. The variant's
+  figure is the median; the stronger is the lower.
+- **Failure.** Arm E's `abstainedOnNegative / negatives` against the stronger variant's median share of
+  negatives answered `none` — per repetition, the negatives its records score as `abstained`
+  (`evals/docs-retrieval/arm-a/score-transcript.mjs`: the single answer `none`, or no ref at all) over
+  `negatives`. Arm E's share must be at least as high; an equal share clears.
+
 **The rule compares E to A; the recorded figures also bear on which mode is the default.** This rule
 is silent on arm D, and on both committed corpora arm D `fused` outscores the shipped `fused-rerank`
 default on every relevance column while abstaining on no negative query at all — recorded, with the

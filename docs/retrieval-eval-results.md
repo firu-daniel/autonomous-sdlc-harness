@@ -4600,6 +4600,37 @@ negative queries return scores at or above `0.32`, or whose positives fall below
 choice — and because every negative here is censored rather than measured, a run that observes the
 negative distribution instead of bounding it is enough on its own to re-derive the number.
 
+### The re-calibration method, fixed before the real-catalog run
+
+**Fixed on 2026-09-23, before any real-catalog score or any uncensored score existed**; the commit that
+adds this subsection precedes every one of them. It is applied once, to the pooled observed
+distributions, and is kept as written when the rest of this section is rewritten from its result.
+
+**The score** is `bestRerankScore` — the top reranker score `fused-rerank` compares against
+`ABSTAIN_SCORE_THRESHOLD`, recorded whether or not the query abstained (`cli/src/retrieval/search.ts` →
+`SearchResult.bestRerankScore`). A positive's **best score** is its `bestRerankScore`. A point whose
+`bestRerankScore` is `null` — no candidate to rerank — is excluded and listed by id.
+
+**The pool** is the real catalog **plus** both committed corpora, each committed corpus regenerated with
+the uncensored field first, so every point is observed rather than bounded. The committed sets' negatives
+are classed `far` / `near` by meaning **before** their scores become observable.
+
+**Separable** — every negative's score below every positive's: the new value is the midpoint of the
+highest negative and the lowest positive, rounded half-up to two decimals.
+
+**Overlapping** — otherwise:
+
+- `L` is the lowest best score among the positives carrying a grade-3 label.
+- `N` is the `near` negatives scoring below `L`.
+- The value is the smallest two-decimal number strictly greater than every score in `N`, so
+  `best < ABSTAIN_SCORE_THRESHOLD` abstains on each of them.
+- The **price** is every positive, of any grade, whose score falls below that value — counted over the
+  pooled set and published by id.
+- If `N` is empty, or the price is **more than one positive query**, the finding is that *a threshold
+  cannot separate this catalog*, and the constant is left unchanged.
+
+**On a *withdrawn* verdict** the distributions are recorded here and the constant goes with the tool.
+
 ## The shipped default against fusion alone
 
 **What this section records.** On both committed corpora the shipped default mode — arm E,
