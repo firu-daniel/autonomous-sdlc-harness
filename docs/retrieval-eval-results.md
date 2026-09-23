@@ -16627,132 +16627,208 @@ chosen from, what it costs and the limit on it are written down. The constant's 
 restating its figures: a number that belongs to the calibration is added here and nowhere else.
 
 **The value.** `ABSTAIN_SCORE_THRESHOLD = 0.32` in `cli/src/retrieval/search.ts`, applied as
-`best < ABSTAIN_SCORE_THRESHOLD` to the top reranker score of the `fused-rerank` mode alone.
+`best < ABSTAIN_SCORE_THRESHOLD` to the top reranker score of the `fused-rerank` mode alone. **It is
+unchanged.** The re-calibration method below, run once over the observed distributions, returned
+`cannot-separate`, so the constant is left where it was rather than trading recall silently. The
+decision of record is also **withdrawn** (`## The decision, applied to the real catalog`), so the
+constant goes with the tool under roadmap item 18 in `docs/development.md` →
+`## 6. The roadmap this tree defers to`. What follows records the distributions it was re-tested on.
 
-**What it was calibrated on.** Arm E of the eval, run on 2026-09-21 (`2026-09-21T16:46:12.749Z` for
-`fixture-catalog`, `2026-09-21T16:46:35.978Z` for `self-docs`) on host `darwin 24.6.0`
-under Node `v20.19.5`, with embedder `Xenova/bge-small-en-v1.5:q8:cls:384:v1` and reranker
-`Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` loaded outside the stub, over the two committed corpora
-at the snapshots that run reported: `fixture-catalog` at 9 files / 41 chunks (9 positive and 3
-negative queries) and `self-docs` at 13 files / 173 chunks (15 positive and 5 negative queries).
+**What it was calibrated on.** The value itself dates from the censored run in
+`### The value this replaces`. The re-calibration pooled arm E (`fused-rerank`) of three generated
+blocks in this file, each run on 2026-09-23 on host `darwin 24.6.0` under Node `v20.19.5`, with embedder
+`Xenova/bge-small-en-v1.5:q8:cls:384:v1` and reranker `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`
+loaded outside the stub and the threshold at `0.32`:
 
-### The two bounds that fixed the choice
-
-They come from different places and are not interchangeable.
-
-- **The measured distribution bounds the value from inside**, and is the evidence quoted below. The
-  run was taken with the threshold at `0.3`, and `bestScore` is the top **returned** hit's score, so
-  an abstaining query carries `null`: **no negative score is observable at all**, only that each is
-  strictly below `0.30`. The interval the evidence therefore asserts, pooled over both corpora, is
-  `[0.30, 0.33899036049842834]` — `0.30` the censoring bound on every negative, `0.33899036049842834`
-  (`q-sd-analyze-writes`, `self-docs`) the lowest observed positive. Its midpoint `0.3195`, rounded to
-  two decimals, is `0.32`. Per corpus: the lowest observed positive is `0.5472269654273987`
-  (`q-fc-webhook-retry`) on `fixture-catalog` and `0.33899036049842834` on `self-docs`, and on both
-  every negative is censored at `< 0.30`.
-- **The stub-fixture bound bounds it from outside**, and is a property of the code rather than of any
-  corpus: the abstention cases of `cli/test/docs-retrieval.test.mjs` run under the `stub-overlap`
-  reranker, which scores a matching query's best hit `1.000` and the no-match query `0.000`, so any
-  value strictly inside `(0.000, 1.000)` keeps them passing and a value at or outside either end
-  flips one. The constant's doc comment restates this bound, because that is where it binds.
-
-### The pre-calibration distributions, quoted
-
-These are the per-query best scores of the run above, copied out of this file's generated region as it
-stood at the calibration. They are **quoted here rather than cited** because Task 9 regenerates that
-region under the calibrated threshold, and a regenerated fence cannot carry a `bestScoreOnPositive`
-for the queries the new threshold abstains on — which are exactly the queries the choice was made
-from. `null` means the query abstained at `0.3`, so its score is censored: known only to be `< 0.30`,
-never observed.
-
-| Corpus | Query | Kind | `bestScoreOnPositive` / `bestScoreOnNegative` |
+| Corpus | Snapshot | Queries | Generated at |
 | --- | --- | --- | --- |
-| `fixture-catalog` | `q-fc-route-choice` | positive | `0.9988245368003845` |
-| `fixture-catalog` | `q-fc-late-handin` | positive | `0.9811885952949524` |
-| `fixture-catalog` | `q-fc-barcode-contents` | positive | `0.941379964351654` |
-| `fixture-catalog` | `q-fc-unreadable-label` | positive | `0.9988497495651245` |
-| `fixture-catalog` | `q-fc-billable-weight` | positive | `null` — censored, `< 0.30` |
-| `fixture-catalog` | `q-fc-surcharge-compounding` | positive | `null` — censored, `< 0.30` |
-| `fixture-catalog` | `q-fc-webhook-retry` | positive | `0.5472269654273987` |
-| `fixture-catalog` | `q-fc-verify-callback` | positive | `null` — censored, `< 0.30` |
-| `fixture-catalog` | `q-fc-token-lifetime` | positive | `0.983818769454956` |
-| `fixture-catalog` | `q-fc-negative-recruitment` | negative | `null` — censored, `< 0.30` |
-| `fixture-catalog` | `q-fc-negative-lattice` | negative | `null` — censored, `< 0.30` |
-| `fixture-catalog` | `q-fc-negative-datastore` | negative | `null` — censored, `< 0.30` |
-| `self-docs` | `q-sd-new-config-key` | positive | `null` — censored, `< 0.30` |
-| `self-docs` | `q-sd-deny-guard` | positive | `0.8066375851631165` |
-| `self-docs` | `q-sd-new-subcommand` | positive | `0.9983236789703369` |
-| `self-docs` | `q-sd-run-gates` | positive | `null` — censored, `< 0.30` |
-| `self-docs` | `q-sd-state-dir` | positive | `0.9128396511077881` |
-| `self-docs` | `q-sd-commit-prefix` | positive | `0.7014356851577759` |
-| `self-docs` | `q-sd-guard-shell-options` | positive | `0.9804458022117615` |
-| `self-docs` | `q-sd-cross-asset-reference` | positive | `0.9992165565490723` |
-| `self-docs` | `q-sd-daemon-lifecycle` | positive | `0.9118318557739258` |
-| `self-docs` | `q-sd-usage-limit` | positive | `0.9862282872200012` |
-| `self-docs` | `q-sd-search-abstains` | positive | `0.5403093695640564` |
-| `self-docs` | `q-sd-retrieval-network` | positive | `0.6682106852531433` |
-| `self-docs` | `q-sd-analyze-writes` | positive | `0.33899036049842834` |
-| `self-docs` | `q-sd-stack-detection` | positive | `0.9918370842933655` |
-| `self-docs` | `q-sd-second-init` | positive | `0.9619483947753906` |
-| `self-docs` | `q-sd-negative-ingress` | negative | `null` — censored, `< 0.30` |
-| `self-docs` | `q-sd-negative-tungsten` | negative | `null` — censored, `< 0.30` |
-| `self-docs` | `q-sd-negative-blog` | negative | `null` — censored, `< 0.30` |
-| `self-docs` | `q-sd-negative-grpc` | negative | `null` — censored, `< 0.30` |
-| `self-docs` | `q-sd-negative-migration` | negative | `null` — censored, `< 0.30` |
+| `gate10-catalog` — the real catalog, corpus commit `57a6c25` (`docs/` identical to gate 10's `010c50e`) | `{ files: 156, chunks: 1960 }` | 44 positive, 25 negative (10 `far`, 15 `near`) | `2026-09-23T18:49:10.704Z` |
+| `fixture-catalog` | `{ files: 9, chunks: 41 }` | 9 positive, 3 negative (1 `far`, 2 `near`) | `2026-09-23T19:26:59.227Z` |
+| `self-docs` | `{ files: 14, chunks: 213 }` | 15 positive, 5 negative (2 `far`, 3 `near`) | `2026-09-23T19:27:46.757Z` |
+
+Every one of the 101 points is an **observed** `bestRerankScore` — none censored, none `unclassed`, and
+none excluded (`excluded` is empty). Every positive carries a grade-3 label. The figures in this
+section come from one launcher, run on 2026-09-23 through `bash scripts/scratch-run.sh` over
+`harness-runs/scratch/task23_record.mjs`, which calls `readPerQuery(text, id, armForLetter('E').mode)`
+for each corpus and `calibrateThreshold` over the three, exactly as the launcher that decided the
+constant did.
+
+**The method's case: `cannot-separate`.** The distributions overlap — the highest negative,
+`q-g10-neg-vite-sitemap` (`gate10-catalog`, `near`) at `0.9861363768577576`, is above the lowest
+positive, `q-fc-billable-weight` (`fixture-catalog`) at `0.00004109544534003362` — so the
+**overlapping** branch applies. `L`, the lowest grade-3 positive, is that same query at
+`0.00004109544534003362`. `N`, the `near` negatives scoring below `L`, is **empty**: the lowest `near`
+negative in the pool, `q-fc-negative-recruitment` at `0.00018444025772623718`, already scores above it.
+An empty `N` is the method's `cannot-separate` finding, so no candidate value and no price were computed
+(`price` is empty), and the constant is unchanged rather than trading recall silently.
+
+### The observed distributions, quoted
+
+One row per point, in the launcher's order. `q-g10-neg-coin-promo-code` and
+`q-g10-neg-vite-server-mock` are positives despite their ids: the operator converted them at approval
+(`## The real-catalog query set`).
+
+| Corpus | Query | Kind | Grade 3 | `bestRerankScore` |
+| --- | --- | --- | --- | --- |
+| `gate10-catalog` | `q-g10-ew-gift-community-post` | positive | yes | `0.6507344841957092` |
+| `gate10-catalog` | `q-g10-ew-sendgift-chat-side-effects` | positive | yes | `0.9923399090766907` |
+| `gate10-catalog` | `q-g10-ew-blocked-suggested-creators` | positive | yes | `0.9631325602531433` |
+| `gate10-catalog` | `q-g10-ew-new-notification-tap` | positive | yes | `0.9683910012245178` |
+| `gate10-catalog` | `q-g10-ew-mark-notification-read` | positive | yes | `0.9836937785148621` |
+| `gate10-catalog` | `q-g10-ew-reaction-dislike` | positive | yes | `0.9922598600387573` |
+| `gate10-catalog` | `q-g10-ew-watch-later-feed-signal` | positive | yes | `0.8381525874137878` |
+| `gate10-catalog` | `q-g10-ew-deleted-account-subcollection` | positive | yes | `0.05649895593523979` |
+| `gate10-catalog` | `q-g10-ew-recent-signin-withdraw` | positive | yes | `0.9454734325408936` |
+| `gate10-catalog` | `q-g10-ew-second-browser-login` | positive | yes | `0.9773733019828796` |
+| `gate10-catalog` | `q-g10-ew-video-call-ended-summary` | positive | yes | `0.8328534960746765` |
+| `gate10-catalog` | `q-g10-ew-firestore-to-typed` | positive | yes | `0.5939167141914368` |
+| `gate10-catalog` | `q-g10-ew-tojson-optional-keys` | positive | yes | `0.9826259016990662` |
+| `gate10-catalog` | `q-g10-ew-withdraw-confirm-modal` | positive | yes | `0.7907041907310486` |
+| `gate10-catalog` | `q-g10-ew-withdrawal-labels-romanian` | positive | yes | `0.17887213826179504` |
+| `gate10-catalog` | `q-g10-ew-hardcoded-padding-colour` | positive | yes | `0.0028849972877651453` |
+| `gate10-catalog` | `q-g10-ew-new-page-back-title` | positive | yes | `0.3677458167076111` |
+| `gate10-catalog` | `q-g10-ew-console-error-catch` | positive | yes | `0.7905184626579285` |
+| `gate10-catalog` | `q-g10-ew-new-callable-unwrap` | positive | yes | `0.9806894063949585` |
+| `gate10-catalog` | `q-g10-ew-callable-exists-check` | positive | yes | `0.9702494740486145` |
+| `gate10-catalog` | `q-g10-ew-unlock-payload` | positive | yes | `0.9834010004997253` |
+| `gate10-catalog` | `q-g10-ew-photo-comment-reply` | positive | yes | `0.8553592562675476` |
+| `gate10-catalog` | `q-g10-ew-group-room-agora-token` | positive | yes | `0.9825863242149353` |
+| `gate10-catalog` | `q-g10-vite-staging-build` | positive | yes | `0.9914337992668152` |
+| `gate10-catalog` | `q-g10-vite-dev-api-forward` | positive | yes | `0.11869131028652191` |
+| `gate10-catalog` | `q-g10-vite-github-pages-subpath` | positive | yes | `0.8052747845649719` |
+| `gate10-catalog` | `q-g10-vite-wsl-file-save` | positive | yes | `0.9265260100364685` |
+| `gate10-catalog` | `q-g10-vite-stale-chunk-deploy` | positive | yes | `0.9973997473716736` |
+| `gate10-catalog` | `q-g10-vite-linked-ui-package` | positive | yes | `0.49240702390670776` |
+| `gate10-catalog` | `q-g10-vite-admin-html-entry` | positive | yes | `0.260576456785202` |
+| `gate10-catalog` | `q-g10-vite-plugin-package-name` | positive | yes | `0.9628307819366455` |
+| `gate10-catalog` | `q-g10-vite-virtual-routes` | positive | yes | `0.9980148673057556` |
+| `gate10-catalog` | `q-g10-vite-src-alias` | positive | yes | `0.8835850954055786` |
+| `gate10-catalog` | `q-g10-vite-robots-favicon` | positive | yes | `0.9682046175003052` |
+| `gate10-catalog` | `q-g10-vite-build-only-plugin` | positive | yes | `0.9962415099143982` |
+| `gate10-catalog` | `q-g10-vite-scoped-card-styles` | positive | yes | `0.7495322227478027` |
+| `gate10-catalog` | `q-g10-vite-client-env-undefined` | positive | yes | `0.9657322764396667` |
+| `gate10-catalog` | `q-g10-vite-config-reads-env` | positive | yes | `0.9873639941215515` |
+| `gate10-catalog` | `q-g10-vite-health-middleware` | positive | yes | `0.9949919581413269` |
+| `gate10-catalog` | `q-g10-vite-build-sha-meta` | positive | yes | `0.5703746676445007` |
+| `gate10-catalog` | `q-g10-vite-mock-updated-event` | positive | yes | `0.7016140222549438` |
+| `gate10-catalog` | `q-g10-vite-rails-manifest-tags` | positive | yes | `0.45608168840408325` |
+| `gate10-catalog` | `q-g10-neg-login-sms-2fa` | near | no | `0.7175682783126831` |
+| `gate10-catalog` | `q-g10-neg-chat-typing-indicator` | near | no | `0.1318972110748291` |
+| `gate10-catalog` | `q-g10-neg-chat-voice-message` | near | no | `0.6190884113311768` |
+| `gate10-catalog` | `q-g10-neg-chat-edit-message` | near | no | `0.03189298138022423` |
+| `gate10-catalog` | `q-g10-neg-group-chat` | near | no | `0.03034467250108719` |
+| `gate10-catalog` | `q-g10-neg-playback-speed` | near | no | `0.009558700025081635` |
+| `gate10-catalog` | `q-g10-neg-profile-qr-code` | near | no | `0.029336920008063316` |
+| `gate10-catalog` | `q-g10-neg-coin-promo-code` | positive | yes | `0.7667030096054077` |
+| `gate10-catalog` | `q-g10-neg-expiring-stories` | near | no | `0.007409744430333376` |
+| `gate10-catalog` | `q-g10-neg-pin-comment` | near | no | `0.0735495314002037` |
+| `gate10-catalog` | `q-g10-neg-storybook-stories` | near | no | `0.05188025161623955` |
+| `gate10-catalog` | `q-g10-neg-callable-app-check` | near | no | `0.9142862558364868` |
+| `gate10-catalog` | `q-g10-neg-vite-precompress` | near | no | `0.36766234040260315` |
+| `gate10-catalog` | `q-g10-neg-vite-obfuscate` | near | no | `0.045398589223623276` |
+| `gate10-catalog` | `q-g10-neg-vite-server-mock` | positive | yes | `0.2878953814506531` |
+| `gate10-catalog` | `q-g10-neg-vite-sitemap` | near | no | `0.9861363768577576` |
+| `gate10-catalog` | `q-g10-neg-vite-image-webp` | near | no | `0.8811254501342773` |
+| `gate10-catalog` | `q-g10-neg-terraform-state-lock` | far | no | `0.0006189720588736236` |
+| `gate10-catalog` | `q-g10-neg-postgres-autovacuum` | far | no | `0.00006880000000819564` |
+| `gate10-catalog` | `q-g10-neg-android-keystore` | far | no | `0.004681364633142948` |
+| `gate10-catalog` | `q-g10-neg-kafka-rebalance` | far | no | `0.000022114867533673532` |
+| `gate10-catalog` | `q-g10-neg-k8s-ingress-tls` | far | no | `0.02788946032524109` |
+| `gate10-catalog` | `q-g10-neg-pytest-conftest` | far | no | `0.0047185528092086315` |
+| `gate10-catalog` | `q-g10-neg-go-private-modules` | far | no | `0.00045682076597586274` |
+| `gate10-catalog` | `q-g10-neg-rust-clippy` | far | no | `0.00031986282556317747` |
+| `gate10-catalog` | `q-g10-neg-django-squash` | far | no | `0.001916314009577036` |
+| `gate10-catalog` | `q-g10-neg-celery-retry` | far | no | `0.001845852704718709` |
+| `fixture-catalog` | `q-fc-route-choice` | positive | yes | `0.9988245368003845` |
+| `fixture-catalog` | `q-fc-late-handin` | positive | yes | `0.9811885952949524` |
+| `fixture-catalog` | `q-fc-barcode-contents` | positive | yes | `0.941379964351654` |
+| `fixture-catalog` | `q-fc-unreadable-label` | positive | yes | `0.9988497495651245` |
+| `fixture-catalog` | `q-fc-billable-weight` | positive | yes | `0.00004109544534003362` |
+| `fixture-catalog` | `q-fc-surcharge-compounding` | positive | yes | `0.0007010828121565282` |
+| `fixture-catalog` | `q-fc-webhook-retry` | positive | yes | `0.5472269654273987` |
+| `fixture-catalog` | `q-fc-verify-callback` | positive | yes | `0.07702871412038803` |
+| `fixture-catalog` | `q-fc-token-lifetime` | positive | yes | `0.983818769454956` |
+| `fixture-catalog` | `q-fc-negative-recruitment` | near | no | `0.00018444025772623718` |
+| `fixture-catalog` | `q-fc-negative-lattice` | far | no | `0.00001332825831923401` |
+| `fixture-catalog` | `q-fc-negative-datastore` | near | no | `0.1376960277557373` |
+| `self-docs` | `q-sd-new-config-key` | positive | yes | `0.24328240752220154` |
+| `self-docs` | `q-sd-deny-guard` | positive | yes | `0.8057302832603455` |
+| `self-docs` | `q-sd-new-subcommand` | positive | yes | `0.9983586072921753` |
+| `self-docs` | `q-sd-run-gates` | positive | yes | `0.15524116158485413` |
+| `self-docs` | `q-sd-state-dir` | positive | yes | `0.9111862778663635` |
+| `self-docs` | `q-sd-commit-prefix` | positive | yes | `0.7109293937683105` |
+| `self-docs` | `q-sd-guard-shell-options` | positive | yes | `0.9819909930229187` |
+| `self-docs` | `q-sd-cross-asset-reference` | positive | yes | `0.9992165565490723` |
+| `self-docs` | `q-sd-daemon-lifecycle` | positive | yes | `0.9138407707214355` |
+| `self-docs` | `q-sd-usage-limit` | positive | yes | `0.9861159920692444` |
+| `self-docs` | `q-sd-search-abstains` | positive | yes | `0.7631139755249023` |
+| `self-docs` | `q-sd-retrieval-network` | positive | yes | `0.7951579093933105` |
+| `self-docs` | `q-sd-analyze-writes` | positive | yes | `0.33899036049842834` |
+| `self-docs` | `q-sd-stack-detection` | positive | yes | `0.9918370842933655` |
+| `self-docs` | `q-sd-second-init` | positive | yes | `0.9616067409515381` |
+| `self-docs` | `q-sd-negative-ingress` | far | no | `0.00044672354124486446` |
+| `self-docs` | `q-sd-negative-tungsten` | far | no | `0.000015803376300027594` |
+| `self-docs` | `q-sd-negative-blog` | near | no | `0.00018704720423556864` |
+| `self-docs` | `q-sd-negative-grpc` | near | no | `0.28913185000419617` |
+| `self-docs` | `q-sd-negative-migration` | near | no | `0.00026293908013030887` |
+
+### The value this replaces
+
+`0.32` was chosen on 2026-09-21 from arm E over two committed corpora at earlier snapshots —
+`fixture-catalog` at 9 files / 41 chunks and `self-docs` at 13 files / 173 chunks — run with the
+threshold at `0.3`. That run recorded only the top **returned** hit's score, `null` on an abstention, so
+every negative was censored: known to be below `0.30`, never observed. The interval the evidence
+asserted, pooled, was `[0.30, 0.33899036049842834]` — the censoring bound on every negative, and the
+lowest observed positive, `q-sd-analyze-writes` — and `0.32` is its midpoint `0.3195` rounded to two
+decimals. It could not be re-derived then because no negative score existed to derive it from; the
+uncensored `bestRerankScore` above is what that run lacked. The stub-fixture bound still holds for it:
+the abstention cases of `cli/test/docs-retrieval.test.mjs` run under the `stub-overlap` reranker, which
+scores a match `1.000` and the no-match query `0.000`, so any value strictly inside `(0.000, 1.000)`
+keeps them passing.
 
 ### What the move cost
 
-Arm E was run on both corpora twice in one pass over one tree — once with the constant at `0.3` and
-once at `0.32`, with a rebuild between the two runs and no other edit — through
-`bash scripts/scratch-run.sh` over a launcher that calls `runEval` without `--out`, so it printed the
-table and each corpus's `snapshot` stamp and wrote nothing. Both readings of each corpus reported the
-**same** stamp, which is the only reason the pair below is a before/after rather than two unrelated
-figures.
+**Nothing moved, so nothing changed.** With the value unchanged, no positive newly abstains and no
+negative newly abstains on any corpus. What `0.32` does on the observed scores, counted from
+`bestRerankScore`, which does not depend on the threshold:
 
-| Corpus | `snapshot` (both readings) | arm E recall@5 at `0.3` | arm E recall@5 at `0.32` |
+| Corpus | Positives abstaining at `0.32` | Negatives abstaining at `0.32` | Negatives answered at `0.32` |
 | --- | --- | --- | --- |
-| `fixture-catalog` | `{ files: 9, chunks: 41 }` | `0.667` (0.6666666666666666) | `0.667` (0.6666666666666666) |
-| `self-docs` | `{ files: 13, chunks: 173 }` | `0.600` (0.6) | `0.600` (0.6) |
+| `gate10-catalog` | 6 of 44 — `q-g10-ew-deleted-account-subcollection`, `q-g10-ew-withdrawal-labels-romanian`, `q-g10-ew-hardcoded-padding-colour`, `q-g10-vite-dev-api-forward`, `q-g10-vite-admin-html-entry`, `q-g10-neg-vite-server-mock` | 19 of 25 (`far` 10 of 10, `near` 9 of 15) | 6, all `near` — `q-g10-neg-login-sms-2fa`, `q-g10-neg-chat-voice-message`, `q-g10-neg-callable-app-check`, `q-g10-neg-vite-precompress`, `q-g10-neg-vite-sitemap`, `q-g10-neg-vite-image-webp` |
+| `fixture-catalog` | 3 of 9 — `q-fc-billable-weight`, `q-fc-surcharge-compounding`, `q-fc-verify-callback` | 3 of 3 | none |
+| `self-docs` | 2 of 15 — `q-sd-new-config-key`, `q-sd-run-gates` | 5 of 5 | none |
 
-**The move costs no positive.** recall@5, recall@3, recall@1 and MRR are unchanged on both corpora,
-and the same 5 positives abstain at both values — `q-fc-billable-weight`,
-`q-fc-surcharge-compounding`, `q-fc-verify-callback` on `fixture-catalog`, `q-sd-new-config-key` and
-`q-sd-run-gates` on `self-docs`, the 5 already censored at `0.3`.
+On the two committed corpora the observed scores bear out the censored reading: every negative is below
+`0.30`, the highest `q-sd-negative-grpc` at `0.28913185000419617`, and the positives that abstain are
+the five the censored run already had as `null`. On `gate10-catalog` no single value separates the two
+sides: six `near` negatives score above `0.32` and six positives below it.
 
-**And the move buys no measured negative either.** The arm abstains on every negative query — 3 of 3
-on `fixture-catalog`, 5 of 5 on `self-docs` — and it did so at `0.3` as well, since every negative is
-`null` in the distributions quoted above, which is what abstaining at `0.3` renders as. So on these
-two corpora the move changes no measured outcome at all. What it buys is margin this run could not
-observe: a negative scoring in `[0.30, 0.32)` abstains under the new value, and every negative here
-is censored below `0.30` rather than measured, so none of them is such a query. The case for `0.32`
-over `0.3` is the interval midpoint above and nothing in this subsection.
-
-The figures above are not re-checkable in the generated region as it stands, which is the pre-move
-run; they become re-checkable when Task 9 regenerates that region post-move, whose provenance states
-its own, later snapshot and the threshold in force.
+**The floor and the generated blocks are untouched.** `evals/docs-retrieval/floor.json` is
+byte-identical and the `fixture-catalog` block is not regenerated, because the value did not move;
+the commit that decided the constant ran no gate 11 prediction, the method having returned
+`cannot-separate`, and left gate 11 as it was. The
+`self-docs` and `gate10-catalog` blocks are not regenerated either — each keeps the provenance of the
+threshold it was taken under, `0.32`, which is still the one in force.
 
 ### The limit on this calibration
 
-Both corpora are far below the roughly 1,500 chunks of a mature docs catalog — 41 and 173 — so this
-is a calibration on two small committed corpora rather than on a real catalog, and its standing
-reproduction is gate 11 of `scripts/run-gates.sh`, which re-runs the eval against the recorded floor,
-rather than a remembered run.
+- **One real catalog.** `gate10-catalog` is a single private product-and-framework catalog of 1,960
+  chunks; the other two corpora are small and committed — 41 and 213 chunks.
+- **One host and one query-set author.** Every point was taken on one machine in one day, and every
+  query set was written by one author, the real-catalog set by a model
+  (`## The decision, applied to the real catalog` → `### The limits, stated with the verdict`).
+- **Two query shapes in one pool.** The real-catalog queries are agent-shaped keyword strings; the
+  committed sets' are natural-language questions. The pool mixes them and the method grades them alike.
+- **An earlier confirmation, not a calibration.** On 2026-09-22, `docs/development.md` §5 → gate 10 leg
+  (iv) ran one positive and one negative query against the same catalog at `010c50e` with `0.32` in
+  force; the positive returned the known section first at `1.000` and the negative abstained. Two
+  queries confirm the value at both ends and observe no distribution.
 
-**Its confirmation has now been taken, and it held at both ends.** On 2026-09-22, `docs/development.md`
-§5 → gate 10 leg (iv) searched a private real documentation catalog held outside this checkout — commit
-`010c50e`, 156 files / 1,960 chunks, the same corpus `## Cold build and index size` →
-`### The real-catalog build — 1,960 chunks, 2026-09-22` stamps — in the default `fused-rerank` mode, so
-the reranker ran and the threshold applied. The positive query *"How do I configure a proxy for the Vite
-dev server?"* returned the known section **first and exactly**,
-`docs/vite/config/server-options.md#serverproxy` at score **1.000**; the negative query *"What is the
-recommended marinade time for lamb souvlaki?"* returned **`no confident match`** — it abstained. That is
-one confirming run at each end, **not a re-calibration**: `ABSTAIN_SCORE_THRESHOLD` stays at `0.32` and
-`evals/docs-retrieval/floor.json` is untouched, and two queries are a confirmation rather than an
-observed negative distribution.
-
-What would move the value is still a further run: a real-catalog arm E whose
-negative queries return scores at or above `0.32`, or whose positives fall below it, reopens the
-choice — and because every negative here is censored rather than measured, a run that observes the
-negative distribution instead of bounding it is enough on its own to re-derive the number.
+**What would move the value next.** Nothing on this branch: the withdrawn outcome removes the constant
+with the tool (roadmap item 18). Were that decision reversed, the method returns a value only when some
+`near` negative scores below the lowest grade-3 positive and at most one positive pays for it; on this
+reranker the positive tail reaches `0.00004109544534003362`, so that takes a different reranker or a
+different query set, measured and pooled the same way.
 
 ### The re-calibration method, fixed before the real-catalog run
 
