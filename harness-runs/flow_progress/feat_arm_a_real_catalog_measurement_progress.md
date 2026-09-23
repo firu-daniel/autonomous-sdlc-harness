@@ -7,7 +7,7 @@ Source: harness-runs/task_prompts/feat_arm_a_real_catalog_measurement_task_promp
 
 ## Fix planning
 - [x] R1. Fix plan written & converged (parity + architecture gates PASS)
-- [ ] R2. Fix plan + source review committed
+- [x] R2. Fix plan + source review committed
 ## Fixing
 - [ ] R3. All fix-plan findings implemented (fix-plan index all [x])
 - [-] R4. QA passed (UI-test index all [x] / no_ui / no-op augment)
