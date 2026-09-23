@@ -37,7 +37,7 @@ const DEFAULT_K_VALUES = Object.freeze([1, 3, 5]);
 const RELEVANT_GRADE = 1;
 
 /** The grade a label must carry exactly to count for the strict columns. */
-const STRICT_GRADE = 3;
+export const STRICT_GRADE = 3;
 
 /** The refs of `query`'s labels at or above `minimumGrade`. */
 function relevantRefs(query, minimumGrade) {

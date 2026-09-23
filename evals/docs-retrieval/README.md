@@ -16,6 +16,7 @@ This directory holds the runner for the relevance eval of the shipped docs-retri
 | `arms.mjs` | The arm table, and the runner that drives one arm over one query set. |
 | `metrics.mjs` | The figures: graded recall@k, MRR, latency percentiles, and the two score distributions the abstention threshold was calibrated on. |
 | `results.mjs` | Rendering one run into the generated region of `docs/retrieval-eval-results.md` — the only writer of the bytes between that file's markers. |
+| `calibrate.mjs` | The fixed re-calibration method of `ABSTAIN_SCORE_THRESHOLD`, over the uncensored scores the generated region publishes. |
 | `check-floor.mjs` | The regression gate: this run's figures against the recorded floor, with an exit status per outcome. |
 | `floor.json` | The recorded floor the gate reads — a machine artifact, not prose. What the numbers mean and when one is re-recorded is `docs/retrieval-eval.md` → `## The regression floor`, which the file's own `see` key names. |
 | `cold-build.mjs` | The cold build of a persisted index: its wall time in three phases, and the size on disk of what it leaves behind. |

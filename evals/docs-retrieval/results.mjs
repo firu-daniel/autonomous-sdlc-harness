@@ -275,3 +275,48 @@ export function rewriteGeneratedRegion(text, corpus) {
 
   return `${before}${rewritten.startsWith('\n') ? '' : '\n'}${rewritten}${after}`;
 }
+
+/** The opening and closing fence lines {@link machineSection} wraps its payload in. */
+const JSON_FENCE_OPEN = '```json\n';
+const JSON_FENCE_CLOSE = '\n```';
+
+/**
+ * The parsed fenced-`json` machine half of `corpusId`'s block inside `text`'s generated region — the
+ * payload {@link machineSection} rendered. The one reader of the block {@link renderCorpusBlock}
+ * writes, so the marker spelling and the block layout stay this module's alone.
+ *
+ * Refuses, naming `corpusId`, when the region markers are not each present exactly once, when the
+ * corpus's start or end marker is missing from the region, and when the block carries no fenced
+ * `json` or one that does not parse.
+ */
+export function readCorpusMachineHalf(text, corpusId) {
+  for (const marker of [GENERATED_START, GENERATED_END]) {
+    if (!occursExactlyOnce(text, marker)) {
+      throw new Error(
+        `eval: cannot read corpus ${corpusId}: the results file must carry exactly one ${marker}, ` +
+          'and it is missing or repeated',
+      );
+    }
+  }
+  const region = text.slice(text.indexOf(GENERATED_START) + GENERATED_START.length, text.indexOf(GENERATED_END));
+
+  const start = corpusStart(corpusId);
+  const end = corpusEnd(corpusId);
+  const blockAt = region.indexOf(start);
+  const blockEnd = region.indexOf(end);
+  if (blockAt === -1 || blockEnd === -1 || blockEnd < blockAt) {
+    throw new Error(`eval: the generated region carries no block for corpus ${corpusId} (${start} … ${end})`);
+  }
+  const block = region.slice(blockAt + start.length, blockEnd);
+
+  const openAt = block.indexOf(JSON_FENCE_OPEN);
+  const closeAt = openAt === -1 ? -1 : block.indexOf(JSON_FENCE_CLOSE, openAt + JSON_FENCE_OPEN.length - 1);
+  if (openAt === -1 || closeAt === -1) {
+    throw new Error(`eval: the block for corpus ${corpusId} carries no fenced json machine half`);
+  }
+  try {
+    return JSON.parse(block.slice(openAt + JSON_FENCE_OPEN.length, closeAt));
+  } catch (error) {
+    throw new Error(`eval: the fenced json machine half of corpus ${corpusId} does not parse: ${error.message}`);
+  }
+}
