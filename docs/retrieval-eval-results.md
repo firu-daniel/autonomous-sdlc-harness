@@ -16877,8 +16877,10 @@ distribution read; the class is each record's `negativeKind`:
 ## The shipped default against fusion alone
 
 **What this section records.** On both committed corpora and on the real catalog `gate10-catalog`, the
-shipped default mode — arm E, `fused-rerank` — scores **below** arm D, `fused`, on every relevance
-column, at two orders of magnitude more latency. E is the default of `docs search`
+shipped default mode — arm E, `fused-rerank` — scores **below** arm D, `fused`, on every primary relevance
+column — recall@1, recall@3, recall@5 and MRR — at two orders of magnitude more latency. The strict columns
+are not uniform: E leads D on `gate10-catalog`'s strict recall@5 (0.682 against 0.659) and on `self-docs`'s
+strict MRR (0.383 against 0.363), and trails it on every other strict cell. E is the default of `docs search`
 (`cli/src/commands/docs.ts` → `DEFAULT_MODE`) and the only mode the MCP server can ask for (`cli/src/retrieval/server.ts`), so D is
 reachable only by a hand-passed `--mode fused`. This is a **measurement**, not a recommendation:
 whether either of those two defaults should change, and whether the abstention policy should extend to
@@ -16958,7 +16960,7 @@ demotions, which is the reranker; on `gate10-catalog` the reranker's demotions a
 recoveries, and the price is the threshold again.
 
 **What the real catalog did to the trade: narrowed it from both sides, and reversed neither.** D still
-leads E on every relevance column and E is still the only arm that refuses, but on `gate10-catalog` both
+leads E on every primary relevance column and E is still the only arm that refuses, but on `gate10-catalog` both
 leads are smaller than on either committed corpus:
 
 - **E's relevance deficit shrank.** D's lead over E is 0.046 of recall@5 (two positives of 44) and

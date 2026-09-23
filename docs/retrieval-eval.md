@@ -427,7 +427,7 @@ repetition's transcript as `scoreTranscript` scores it, and a variant's figure i
 
 **The rule compares E to A; the recorded figures also bear on which mode is the default.** This rule
 is silent on arm D, and on both committed corpora arm D `fused` outscores the shipped `fused-rerank`
-default on every relevance column while abstaining on no negative query at all — recorded, with the
+default on every primary relevance column while abstaining on no negative query at all — recorded, with the
 decomposition, in `docs/retrieval-eval-results.md` → `## The shipped default against fusion alone`. It
 is a measurement rather than a second decision rule: what to do about the default mode is not settled
 there and is not settled here.
