@@ -17329,6 +17329,15 @@ what set it was taken over. This section is the one record of what that set is a
 now at commit `57a6c25` — a `PROVENANCE.md`-only commit whose `docs/` the operator verified byte-identical
 to gate 10's `010c50e` — **156 files, 1,960 chunks**. Its eval id is `gate10-catalog`.
 
+**Publication clearance.** The operator cleared this catalog's query-level material for this public
+repository before the run started. **May be committed:** the query set — query text, `ref` labels and
+grades — the per-query records and scores, the arm A transcripts, and every aggregate. **May not:** any
+machine-local filesystem path, so the catalog is named by commit and size and never by location, and
+any credential, token, environment value or account identifier a transcript can carry. Document text
+beyond what a `ref` and a label need is not quoted wholesale: a per-query record names sections and
+does not republish them. Gate 6e (`docs/development.md` → `## 5. Verifying a change`) is the mechanical
+check over what this clearance lets in.
+
 **The counts**, re-derived from the file's own `labels`, `negativeKind`, `intent` and `origin` fields by a
 counting script in the run's scratch directory that reads the file through `loadQueries`
 (`bash scripts/scratch-run.sh harness-runs/scratch/task14_counts.mjs`):
