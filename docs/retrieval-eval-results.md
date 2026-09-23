@@ -4463,6 +4463,12026 @@ within a row.
 ```
 <!-- eval:corpus:self-docs:end -->
 
+<!-- eval:corpus:gate10-catalog:start -->
+### Corpus `gate10-catalog`
+
+| Arm | Mode | recall@1 | recall@3 | recall@5 | MRR | strict recall@5 | strict MRR | p50 ms | p95 ms | cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A-index | — | 0.386 | 0.432 | 0.432 | 0.409 | 0.432 | 0.343 | 9000.0 | 15000.0 | agent hand run over 69 queries — cache_creation_input_tokens 3198348, cache_read_input_tokens 9171364, input_tokens 520, output_tokens 35867 |
+| A-search | — | 0.773 | 0.886 | 0.909 | 0.835 | 0.909 | 0.756 | 11000.0 | 18000.0 | agent hand run over 69 queries — cache_creation_input_tokens 1703099, cache_read_input_tokens 8062476, input_tokens 570, output_tokens 42755 |
+| B | `lexical` | 0.636 | 0.864 | 0.909 | 0.753 | 0.705 | 0.588 | 1.7 | 3.6 | local — no billed tokens (0 embed calls, 0 rerank calls) |
+| C | `vector` | 0.432 | 0.682 | 0.841 | 0.579 | 0.659 | 0.424 | 9.7 | 14.2 | local — no billed tokens (69 embed calls, 0 rerank calls) |
+| D | `fused` | 0.659 | 0.818 | 0.841 | 0.732 | 0.659 | 0.522 | 10.8 | 16.4 | local — no billed tokens (69 embed calls, 0 rerank calls) |
+| E | `fused-rerank` | 0.591 | 0.750 | 0.795 | 0.677 | 0.682 | 0.494 | 1099.7 | 1269.3 | local — no billed tokens (69 embed calls, 69 rerank calls) |
+
+Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its rows are
+filled by re-running the eval with one `--transcript` per variant against a hand-run transcript, per the
+procedure in `docs/retrieval-eval.md` → `## Running arm A by hand`. The arm A rows, when present, are each
+scored from the **first repetition's** transcript of that variant; the spread across repetitions is
+hand-written below the end marker.
+
+The `cost` column is not a score, and **the arms' scores are not comparable across rows**: the non-reranking
+modes report rank-derived reciprocal-rank-fusion values in the `0.004`–`0.033` range, while the reranking mode
+reports calibrated `[0, 1]` cross-encoder scores. Compare recall, MRR and latency across rows; compare scores only
+within a row.
+
+**Provenance.**
+
+- Corpus `gate10-catalog` — snapshot `{ files: 156, chunks: 1960 }`,
+  as the index build of this run reported it. A figure over `gate10-catalog` is read with this stamp beside it;
+  two figures carrying different stamps are not a before/after pair.
+- `docs.root`: `docs`, as the runner set it (the eval owns the retrieval gate and
+  `docs.root` alone).
+- The corpus is *every* `*.md` under that `docs.root`, with no file filtered out, so a document added
+  under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
+  file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
+  taken before such a document existed is therefore a different corpus.
+- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
+  - `ad-hoc-1` (path `.`) → `.claude/context/conventions.md`
+- Query set: `evals/docs-retrieval/queries/gate10-catalog.jsonl` — 44 positive, 25 negative.
+- `k`: 5; repetitions per query: 1.
+- Embedder: `Xenova/bge-small-en-v1.5:q8:cls:384:v1`. Reranker: `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` — loaded and run outside the stub.
+- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
+- The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
+  pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
+  calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —
+  so both variables that moved between the two readings, the threshold and the corpus, are named.
+- Host `darwin 24.6.0`, Node `v20.19.5`, 2026-09-23T18:49:10.704Z.
+
+```json
+{
+  "corpus": "gate10-catalog",
+  "snapshot": {
+    "files": 156,
+    "chunks": 1960
+  },
+  "abstainScoreThreshold": 0.32,
+  "embedder": "Xenova/bge-small-en-v1.5:q8:cls:384:v1",
+  "reranker": "Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1",
+  "k": 5,
+  "repeat": 1,
+  "queries": {
+    "path": "evals/docs-retrieval/queries/gate10-catalog.jsonl",
+    "positives": 44,
+    "negatives": 25
+  },
+  "generatedAt": "2026-09-23T18:49:10.704Z",
+  "host": "darwin 24.6.0",
+  "node": "v20.19.5",
+  "arms": [
+    {
+      "arm": "A",
+      "variant": "index",
+      "mode": null,
+      "ran": true,
+      "embedCalls": 0,
+      "rerankCalls": 0,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 44,
+        "negatives": 25,
+        "recall": {
+          "1": 0.38636363636363635,
+          "3": 0.4318181818181818,
+          "5": 0.4318181818181818
+        },
+        "mrr": 0.4090909090909091,
+        "strict": {
+          "recall": {
+            "1": 0.2727272727272727,
+            "3": 0.4090909090909091,
+            "5": 0.4318181818181818
+          },
+          "mrr": 0.34280303030303033
+        },
+        "latency": {
+          "p50": 9000,
+          "p95": 15000
+        },
+        "samples": 69,
+        "abstainedOnNegative": 25,
+        "perQuery": [
+          {
+            "id": "q-g10-ew-gift-community-post",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              18000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-sendgift-chat-side-effects",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/gifting.md#cloud-functions",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#business-behaviour",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#data",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#domain",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-blocked-suggested-creators",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/latest-users.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#domain",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/latest-users.md#domain",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#flutter-parity-source-of-truth",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              14000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-new-notification-tap",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#presentation",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#business-behaviour",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#flutter-parity-source-of-truth",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-mark-notification-read",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#data",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#data",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#local-state--sync-direction-optimistic-y--for-the-read-flip-only",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#data",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#business-behaviour",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-reaction-dislike",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#presentation",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#domain",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              11000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-watch-later-feed-signal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#business-behaviour",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#cloud-functions",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/saved-content.md#domain",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/features/saved-content.md#cloud-functions",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              14000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-deleted-account-subcollection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#data",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#cloud-functions",
+                "score": 0.5
+              }
+            ],
+            "durationMs": [
+              14000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-recent-signin-withdraw",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#domain",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#flutter-parity-source-of-truth",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#presentation",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#local-state--sync-direction-optimistic-n",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-second-browser-login",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#what-it-is--why",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#how-it-works",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#gotchas--constraints",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#invoked-from",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-video-call-ended-summary",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#presentation",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#domain",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#data",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              14000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-firestore-to-typed",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#remappers",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#data",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#how-it-works",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#domain",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              17000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 4
+          },
+          {
+            "id": "q-g10-ew-tojson-optional-keys",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#tojsondto-jsonobject--the-parity-bound-write-direction",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#gotchas--constraints",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#remappers",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#flutter-parity",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 2,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-withdraw-confirm-modal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#flutter-parity-source-of-truth",
+                "score": 0.5
+              }
+            ],
+            "durationMs": [
+              15000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-withdrawal-labels-romanian",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#how-it-works",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#what-it-is--why",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#gotchas--constraints",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#flutter-parity",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-hardcoded-padding-colour",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#what-it-is--why",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#responsive",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#theme",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#where-its-used",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-new-page-back-title",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#what-it-is--why",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#anatomy--one-box-a-backdrop-three-cells",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#props-expauseappbarprops",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#where-its-used",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-console-error-catch",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#gotchas--constraints",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#log-call--level-routing-the-key-behaviour",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#source-prefix-convention",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-new-callable-unwrap",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              10000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-callable-exists-check",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#the-callable-name-registry--names-must-match-an-export",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#gotchas--constraints",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#web-unreachable-callables-deployed--flutter-callable-but-no-web-caller--20",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#anchor-files",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-unlock-payload",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#cloud-functions",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#data",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#cloud-functions",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#domain",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              14000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-photo-comment-reply",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#cloud-functions",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#business-behaviour",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#data",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-group-room-agora-token",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              15000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-staging-build",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-dev-api-forward",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-github-pages-subpath",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              10000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-wsl-file-save",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-stale-chunk-deploy",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-linked-ui-package",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-admin-html-entry",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              7000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-plugin-package-name",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-virtual-routes",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              7000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-src-alias",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/clean-architecture.md#gotchas--constraints",
+                "score": 1
+              }
+            ],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-robots-favicon",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-build-only-plugin",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              15000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-scoped-card-styles",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              18000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-client-env-undefined",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-config-reads-env",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              7000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-health-middleware",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-build-sha-meta",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-mock-updated-event",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-rails-manifest-tags",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              10000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-login-sms-2fa",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-chat-typing-indicator",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              10000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-chat-voice-message",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-chat-edit-message",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-group-chat",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-playback-speed",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-profile-qr-code",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-coin-promo-code",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              11000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-expiring-stories",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-pin-comment",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              15000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-storybook-stories",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              7000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-callable-app-check",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-vite-precompress",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              7000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-vite-obfuscate",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-vite-server-mock",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              11000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-vite-sitemap",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-vite-image-webp",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-terraform-state-lock",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-postgres-autovacuum",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-android-keystore",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-kafka-rebalance",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              7000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-k8s-ingress-tls",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              6000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-pytest-conftest",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-go-private-modules",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              6000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-rust-clippy",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-django-squash",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-celery-retry",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          }
+        ]
+      }
+    },
+    {
+      "arm": "A",
+      "variant": "search",
+      "mode": null,
+      "ran": true,
+      "embedCalls": 0,
+      "rerankCalls": 0,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 44,
+        "negatives": 25,
+        "recall": {
+          "1": 0.7727272727272727,
+          "3": 0.8863636363636364,
+          "5": 0.9090909090909091
+        },
+        "mrr": 0.8352272727272727,
+        "strict": {
+          "recall": {
+            "1": 0.6363636363636364,
+            "3": 0.8863636363636364,
+            "5": 0.9090909090909091
+          },
+          "mrr": 0.7556818181818182
+        },
+        "latency": {
+          "p50": 11000,
+          "p95": 18000
+        },
+        "samples": 69,
+        "abstainedOnNegative": 25,
+        "perQuery": [
+          {
+            "id": "q-g10-ew-gift-community-post",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/gifting.md#invoked-from",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#technical-implementation",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#business-behaviour",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-sendgift-chat-side-effects",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/gifting.md#cloud-functions",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#cloud-functions",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#data",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#business-behaviour",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#payload-parity",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              10000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-blocked-suggested-creators",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/latest-users.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#business-behaviour",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#domain",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/latest-users.md#domain",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 2,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-new-notification-tap",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#presentation",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#business-behaviour",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#anchor-files",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-mark-notification-read",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#data",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#data",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#local-state--sync-direction-optimistic-y--for-the-read-flip-only",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#local-state--sync-direction-optimistic-partly--success-gated-no-revert-path",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#business-behaviour",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              15000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-reaction-dislike",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/secure-storage-pattern.md#pattern-a--optimistic-write-then-revert",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/roadmap-item-like.md#business-behaviour",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              11000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-watch-later-feed-signal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md#cloud-functions",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/saved-content.md#domain",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/saved-content.md#business-behaviour",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md#presentation",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              14000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-deleted-account-subcollection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#data",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#cloud-functions",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#data",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              18000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-recent-signin-withdraw",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#domain",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#local-state--sync-direction-optimistic-n",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#flutter-parity-source-of-truth",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-second-browser-login",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#what-it-is--why",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#how-it-works",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#business-behaviour",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#gotchas--constraints",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              10000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-video-call-ended-summary",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#presentation",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#domain",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#data",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-firestore-to-typed",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#remappers",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#how-it-works",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#domain",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#where-its-used",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              17000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-tojson-optional-keys",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#tojsondto-jsonobject--the-parity-bound-write-direction",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#gotchas--constraints",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#remappers",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/submit-feedback.md",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              14000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 2,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-withdraw-confirm-modal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#business-behaviour",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#flutter-parity-source-of-truth",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#c-concretely",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#presentation",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              29000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-withdrawal-labels-romanian",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#what-it-is--why",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#how-it-works",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#anchor-files",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#business-behaviour",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#gotchas--constraints",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              15000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-hardcoded-padding-colour",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#what-it-is--why",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#responsive",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#theme",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              16000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-new-page-back-title",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#what-it-is--why",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#anatomy--one-box-a-backdrop-three-cells",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#props-expauseappbarprops",
+                "score": 0.25
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#back-affordance--navigatorgobackorfallback",
+                "score": 0.2
+              }
+            ],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-console-error-catch",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#gotchas--constraints",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#where-its-used",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/analytics-system.md",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-new-callable-unwrap",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-callable-exists-check",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#the-callable-name-registry--names-must-match-an-export",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#flutter-parity",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#cloud-functions",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              18000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-unlock-payload",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#cloud-functions",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#data",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#domain",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#business-behaviour",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              11000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-photo-comment-reply",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#cloud-functions",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#data",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#business-behaviour",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              11000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-group-room-agora-token",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#what-it-is--why",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#2-token-provisioning--the-generatelivestreamtoken-cloud-function",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#where-its-used",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-vite-staging-build",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#modes",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-files",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#node_env-and-modes",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              10000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-dev-api-forward",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#serverproxy",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#servercors",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/config/preview-options.md#previewproxy",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-github-pages-subpath",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/build.md#public-base-path",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#github-pages",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#base",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/vite/guide/build.md#relative-base",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              11000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-wsl-file-save",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#serverwatch",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#vite-does-not-detect-a-file-change",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildwatch",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-stale-chunk-deploy",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#version-skew",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#failed-to-fetch-dynamically-imported-module-error",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/guide/build.md#load-error-handling",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-vite-linked-ui-package",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#outdated-pre-bundled-deps-when-linking-to-a-local-package",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/guide/dep-pre-bundling.md#monorepos-and-linked-dependencies",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#resolve-dedupe",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              11000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-vite-admin-html-entry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#input-noninheritbadge",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildrolldownoptions",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              16000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-plugin-package-name",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#conventions",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#authoring-a-plugin",
+                "score": 0.5
+              }
+            ],
+            "durationMs": [
+              7000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-virtual-routes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#importing-a-virtual-file",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#conventions",
+                "score": 0.5
+              }
+            ],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-src-alias",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/clean-architecture.md#gotchas--constraints",
+                "score": 1
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#-import-guidelines",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#clean-imports-with-barrel-exports",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#resolvealias",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 4,
+            "strictRank": 4
+          },
+          {
+            "id": "q-g10-vite-robots-favicon",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/assets.md#the-public-directory",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#publicdir",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#importing-asset-as-url",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-build-only-plugin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/using-plugins.md#conditional-application",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/guide/using-plugins.md#enforcing-plugin-ordering",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#conditional-application",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#plugin-ordering",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-scoped-card-styles",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/features.md#css-modules",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#cssmodules",
+                "score": 0.5
+              }
+            ],
+            "durationMs": [
+              18000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-client-env-undefined",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-variables",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#envprefix",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-files",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              11000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-config-reads-env",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/index.md#using-environment-variables-in-config",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#loadenv",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-files",
+                "score": 0.3333333333333333
+              }
+            ],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-health-middleware",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configureserver",
+                "score": 1
+              }
+            ],
+            "durationMs": [
+              10000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-build-sha-meta",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#transformindexhtml",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#html-constant-replacement",
+                "score": 0.5
+              }
+            ],
+            "durationMs": [
+              10000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-mock-updated-event",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#server-to-client",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#client-server-communication",
+                "score": 0.5
+              },
+              {
+                "ref": "docs/vite/guide/api-hmr.md#hotonevent-cb",
+                "score": 0.3333333333333333
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#application-plugin-communication",
+                "score": 0.25
+              }
+            ],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-rails-manifest-tags",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/backend-integration.md",
+                "score": 1
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmanifest",
+                "score": 0.5
+              }
+            ],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 1,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-neg-login-sms-2fa",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              14000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-chat-typing-indicator",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-chat-voice-message",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              10000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-chat-edit-message",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              15000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-group-chat",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-playback-speed",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-profile-qr-code",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              13000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-coin-promo-code",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              15000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-expiring-stories",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              12000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-pin-comment",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              15000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-storybook-stories",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              11000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-callable-app-check",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-vite-precompress",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              6000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-vite-obfuscate",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              6000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-vite-server-mock",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              15000
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-vite-sitemap",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              10000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-vite-image-webp",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              11000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-terraform-state-lock",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              6000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-postgres-autovacuum",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              7000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-android-keystore",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              6000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-kafka-rebalance",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              6000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-k8s-ingress-tls",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-pytest-conftest",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              7000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-go-private-modules",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              8000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-rust-clippy",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              4000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-django-squash",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              9000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-celery-retry",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              6000
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          }
+        ]
+      }
+    },
+    {
+      "arm": "B",
+      "mode": "lexical",
+      "ran": true,
+      "embedCalls": 0,
+      "rerankCalls": 0,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 44,
+        "negatives": 25,
+        "recall": {
+          "1": 0.6363636363636364,
+          "3": 0.8636363636363636,
+          "5": 0.9090909090909091
+        },
+        "mrr": 0.7526515151515152,
+        "strict": {
+          "recall": {
+            "1": 0.5227272727272727,
+            "3": 0.6363636363636364,
+            "5": 0.7045454545454546
+          },
+          "mrr": 0.5878787878787879
+        },
+        "latency": {
+          "p50": 1.7179590000014286,
+          "p95": 3.578957999998238
+        },
+        "samples": 69,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-g10-ew-gift-community-post",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/gifting.md#anchor-files",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#communication",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#business-behaviour",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#data",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.91462500000489
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-sendgift-chat-side-effects",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md#cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#cloud-functions",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/community-live-streaming.md#cloud-functions",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#cloud-functions",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#cloud-functions",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.003667000011774
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-blocked-suggested-creators",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/block-user.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/content-management.md#local-state--sync-direction-optimistic-n",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/settings.md#invoked-from",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#anchor-files",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              7.277999999991152
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-new-notification-tap",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#business-behaviour",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#business-behaviour",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#presentation",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#invoked-from",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.578957999998238
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-mark-notification-read",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#business-behaviour",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#business-behaviour",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#anchor-files",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#local-state--sync-direction-optimistic-partly--success-gated-no-revert-path",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#data",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.113707999989856
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 5,
+            "strictRank": 5
+          },
+          {
+            "id": "q-g10-ew-reaction-dislike",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#business-behaviour",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/roadmap-item-like.md#business-behaviour",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/roadmap-item-like.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/roadmap-comments.md#business-behaviour",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.235207999998238
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 4
+          },
+          {
+            "id": "q-g10-ew-watch-later-feed-signal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/INDEX.md#content",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/saved-content.md#related",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/saved-content.md#business-behaviour",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/saved-content.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/saved-content.md#invoked-from",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.0292500000214204
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-deleted-account-subcollection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/saved-users.md#cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/settings.md#data",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#cloud-functions",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#data",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/saved-content.md#data",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.1160839999793097
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 4
+          },
+          {
+            "id": "q-g10-ew-recent-signin-withdraw",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#anchor-files",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#business-behaviour",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#flutter-parity-source-of-truth",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#presentation",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/secure-storage-pattern.md#lifecycle-init--hydrate--clear",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.4424160000053234
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-second-browser-login",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#what-it-is--why",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#business-behaviour",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#business-behaviour",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#anchor-files",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.311874999984866
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-video-call-ended-summary",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md#business-behaviour",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#data",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#where-its-used",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/realtime-firestore-listeners.md#where-its-used",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#anchor-files",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.192917000007583
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-firestore-to-typed",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#remappers",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/clean-architecture.md#flutter-parity",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/realtime-firestore-listeners.md#what-it-is--why",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#firestoreservice-readswrites",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#what-it-is--why",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.03391699999338
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-tojson-optional-keys",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#remappers",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#gotchas--constraints",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#domain",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/community-wall.md#domain",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#flutter-parity",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.1271249999990687
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-withdraw-confirm-modal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/redux-state-slices.md#where-its-used",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#c-concretely",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#business-behaviour",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#money-out--revolut-payment",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/legal-documents.md#business-behaviour",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.7179590000014286
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-withdrawal-labels-romanian",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#what-it-is--why",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#gotchas--constraints",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#flutter-parity",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#anchor-files",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.6974159999808762
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-hardcoded-padding-colour",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#theme",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#what-it-is--why",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#responsive",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/localization-l10n.md#what-it-is--why",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.4688330000208225
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-new-page-back-title",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/architecture/NAVIGATION_LIFECYCLE.md#complete-api-mapping",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#props-expauseappbarprops",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/support-catalog.md#business-behaviour",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/architecture/NAVIGATION_LIFECYCLE.md#complete-event-flow",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#documented-exceptions--do-not-force-the-bar-on-these",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.6205830000108108
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-console-error-catch",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#gotchas--constraints",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#log-call--level-routing-the-key-behaviour",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/CDN_CORS_SETUP.md#verification",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverforwardconsole",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/product/product-decision-free-window.md#36-enforcement-prerequisite-named-and-costed--corrects-cheap-and-verified",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.6494170000078157
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-new-callable-unwrap",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#response-envelopes-are-not-uniform--read-the-cf",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#cloudfunctionsservice-callables",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#anchor-files",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/roadmap.md#cloud-functions",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#the-callfunction-helper-the-oncall-path",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.3917500000097789
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-callable-exists-check",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#the-callable-name-registry--names-must-match-an-export",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#web-unreachable-callables-deployed--flutter-callable-but-no-web-caller--20",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#cloudflare-workers",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/VIDEO_ENCRYPTION_IMPLEMENTATION.md#decryption-errors",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.3908749999827705
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-unlock-payload",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#where-its-used",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#circulation--coin-spends-payment--adjacent",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#cloud-functions",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#invoked-from",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.7427090000128374
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-photo-comment-reply",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#data",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#anchor-files",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#presentation",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.022291999979643
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-group-room-agora-token",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#anchor-files",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#where-its-used",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#cloud-functions",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#what-it-is--why",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.7558330000028946
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 4,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-staging-build",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#modes",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#node_env-and-modes",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#gitlab-pages-and-gitlab-ci",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#building-for-production",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-files",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.913750000006985
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-dev-api-forward",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/static-deploy.md#testing-the-app-locally",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverproxy",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/CDN_CORS_SETUP.md#option-2-cdn-policy-response-headers-alternative-1",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/STORAGE_BUCKET_CORS_SETUP.md#fix",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/STORAGE_BUCKET_CORS_SETUP.md#fix-1",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.830582999973558
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-vite-github-pages-subpath",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/static-deploy.md#github-pages",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#azure-static-web-apps",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/build.md#load-error-handling",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#gitlab-pages-and-gitlab-ci",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#cloudflare-pages",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.9244160000234842
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-wsl-file-save",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#serverwatch",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildwatch",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#handlehotupdate",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#vite-does-not-detect-a-file-change",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#the-hotupdate-hook",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.7999579999886919
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-stale-chunk-deploy",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#failed-to-fetch-dynamically-imported-module-error",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/build.md#load-error-handling",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/features.md#glob-import",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#browser-extensions",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/features.md#dynamic-import",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.318582999985665
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-linked-ui-package",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/dep-pre-bundling.md#monorepos-and-linked-dependencies",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite5-1.md#support-ssrexternal-true-to-externalize-all-ssr-packages",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#ssr-externals",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#outdated-pre-bundled-deps-when-linking-to-a-local-package",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/dep-pre-bundling.md#browser-cache",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.7843330000177957
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-admin-html-entry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/ssr.md#building-for-production",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#input-noninheritbadge-",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/features.md#import-with-query-suffixes",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#importing-script-as-a-worker",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.2336249999934807
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-vite-plugin-package-name",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#conventions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite8-beta.md#migrating-to-vite-8-beta",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/features.md#client-types",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#gradual-migration",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildlib",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.9882919999945443
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-virtual-routes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#importing-a-virtual-file",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-frameworks.md#raw-devenvironment",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#rolldown-hooks",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-instances.md#devenvironment-class",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.7384999999776483
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-src-alias",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/shared-options.md#resolvetsconfigpaths",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#object-format-recordstring-string",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/features.md#glob-import-caveats",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#csspreprocessoroptionsextensionadditionaldata",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#tsconfig",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.318083000020124
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-robots-favicon",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/assets.md#the-public-directory",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#in-javascript",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/product/product-decision-naming.md#36-firu-lineage-audit--promoted-to-the-presstrust-posture-out-of-the-naming-playbook",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#firestore-schema",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/product/product-decision-naming.md#31-screen-expause-formally-now",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.260041999979876
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-build-only-plugin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/using-plugins.md#enforcing-plugin-ordering",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/submit-feedback.md#flutter-parity-source-of-truth",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite8.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#shared-plugins-during-build",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#cloudflare-workers",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.0622909999801777
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-scoped-card-styles",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/features.md#css-modules",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#-file-naming-conventions",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#remappers-data-transformation-layer",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/conventions.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-instances.md#devenvironment-class",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.2470830000238493
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-client-env-undefined",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-variables",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#html-constant-replacement",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#intellisense-for-typescript",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#envprefix",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.5325000000011642
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-config-reads-env",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/index.md#using-environment-variables-in-config",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#loadenv",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#createserver",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-files",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#html-constant-replacement",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.2570419999829028
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-health-middleware",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configureserver",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configurepreviewserver",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#vite-cli",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverproxy",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#closeserver",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.7302920000220183
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-build-sha-meta",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#transformindexhtml",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#setting-up-the-dev-server",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#rolldown-hooks",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite5.md#main-changes",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.5051249999960419
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-mock-updated-event",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#server-to-client",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#client-to-server",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/changes/hotupdate-hook.md#motivation",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#managing-the-application-instances",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/api-environment.md#closing-the-gap-between-build-and-dev",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.885375000012573
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-rails-manifest-tags",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/backend-integration.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/cli.md#vite-build",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/build.md#css-support",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#building-for-production",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.5378339999879245
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-neg-login-sms-2fa",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#presentation",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#business-behaviour",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#domain",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/secure-storage-pattern.md#lifecycle-init--hydrate--clear",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#flutter-parity-source-of-truth",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.079834000003757
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-chat-typing-indicator",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/share.md#flutter-parity-source-of-truth",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#business-behaviour",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/share.md#domain",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#business-behaviour",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/share.md#business-behaviour",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.4055420000222512
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-chat-voice-message",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#business-behaviour",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#business-behaviour",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/share.md#business-behaviour",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#anchor-files",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.3770409999997355
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-chat-edit-message",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-hmr.md#hotacceptcb",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#presentation",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#business-behaviour",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/share.md#data",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.1841249999997672
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-group-chat",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md#what-it-is--why",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#cloud-functions",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#communication",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/video-encryption.md#three-parallel-pipelines-one-crypto-core",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#data",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.9626659999776166
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-playback-speed",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/VIDEO_ENCRYPTION_IMPLEMENTATION.md#3-presentation-layer-srcpresentation",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#presentation-layer",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#whats-next",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite4-3.md#performance-improvements",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/architecture/NAVIGATION_LIFECYCLE.md#1-video-playback-control",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.9808749999792781
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-profile-qr-code",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/share.md#invoked-from",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md#22-anglo-skill-surfaces-self-linked-only--the-sourcing-rule",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/user-subscriptions.md#invoked-from",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#performance-bottlenecks",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/user-profile.md#business-behaviour",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.9628340000053868
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-coin-promo-code",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/product/product-decision-rate-card.md#34-accompanying-mechanics-relabeled-honestly",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/product/launch-todo.md#deliberately-deferred-post-validation-queue--listed-so-nothing-is-silently-dropped",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/product/technical-roadmap.md#21-stripe-on-the-web-plan-c--growth-first-build-when-traffic-warrants",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#business-behaviour",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/product/technical-roadmap.md#22-remaining-deferred-builds-parked-listed-so-nothing-drops-silently",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.8120829999970738
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-neg-expiring-stories",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/product/launch-todo.md#phase-5--day-90-read--decisions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#7-open-questions",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/product/product-definition.md#for-creators--the-two-platform-tax",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#money-in--the-iap-callables-purchases",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/product/product-definition.md#6-competitive-positioning",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.9168749999953434
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-pin-comment",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/virtual-list.md#reversed--chat-mode--usereversedanchorts",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#anchor-files",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#content",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/content-management.md#related",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/search-users-sheet.md#invoked-from",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.8228339999914169
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-storybook-stories",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/blog/announcing-vite8.md#thank-you-to-the-community",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/live.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#what-it-is--why",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/product/product-decision-rate-card.md#4-confidence-medium",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite4.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.8053749999962747
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-callable-app-check",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#what-it-is--why",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/video-transcoding-cdn.md#gotchas--constraints",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#response-envelopes-are-not-uniform--read-the-cf",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/VIDEO_SECURITY_CONSIDERATIONS.md#3-xss-attack-surface",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.0629590000025928
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-vite-precompress",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#output-bundle-metadata",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildemitassets",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildssremitassets",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/build.md#load-error-handling",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#in-css-or-html",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.8367919999873266
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-vite-obfuscate",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/blog/announcing-vite8.md#looking-ahead",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite8-beta.md#looking-ahead",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/product/product-recommendations.md#23-make-the-pause-the-only-ask--hide-the-persistent-unlock-button-p1",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/why.md#where-vite-is-heading",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/why.md#the-origins",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.8056670000078157
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-vite-server-mock",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/static-deploy.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#what-it-is--why",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/index.md#command-line-interface",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#building-for-production",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#cloudflare-workers",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.7947500000009313
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-vite-sitemap",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/features.md#preload-directives-generation",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite3.md#built-asset-paths-fine-grained-control-experimental",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/features.md#license",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/why.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.9886249999981374
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-vite-image-webp",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/assets.md#new-urlurl-importmetaurl",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/image-caching-storage.md#3-download-to-a-blobfile--downloadimageusecase",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#importing-asset-as-url",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/CDN_CORS_SETUP.md#current-cdn-setup-dont-break-this",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/dep-pre-bundling.md#the-why",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.7084580000082497
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-terraform-state-lock",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/architecture/STATE_MANAGEMENT.md#-comparison-table",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/product/product-decision-free-window.md#33-feed",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/route-caching.md#gotchas--constraints",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/product/product-recommendations.md#22-feed-mix--dont-let-the-feed-become-a-wall-of-locks-p1",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/remote-config.md#presentation-wiring",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.6968749999941792
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-postgres-autovacuum",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/product/product-definition.md#6-competitive-positioning",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/secure-storage-pattern.md#the-store--datastoragelocalsecurestoragewebcryptots",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/VIDEO_MANAGEMENT.md#table-of-contents",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/api-hmr.md#hotsendevent-data",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/architecture/STATE_MANAGEMENT.md#-comparison-table",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.7665409999899566
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-android-keystore",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/analytics-system.md#device-detection",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/video-transcoding-cdn.md#flutter-parity",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/STORAGE_BUCKET_CORS_SETUP.md#consequence-if-this-is-skipped",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/releases.md#release-cycle",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/releases.md#pre-releases",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.8499580000061542
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-kafka-rebalance",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/VIRTUAL_LIST.md#-what-was-built",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/VIRTUAL_LIST.md#problem-1-virtuoso-scroll-lag",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/user-feedback.md#domain",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/VIRTUAL_LIST_SCROLL_CONTROL.md#when-to-optimize",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#responsive",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.3934170000138693
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-k8s-ingress-tls",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#network-requests-stop-loading",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/preview-options.md#previewhttps",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#rules-for-each-layer",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#2-token-provisioning--the-generatelivestreamtoken-cloud-function",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverhttps",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.6587090000102762
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-pytest-conftest",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/product/technical-roadmap.md#19-un-authenticated-access--share-landings",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#anchor-files",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/remote-config.md#flutter-parity",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/changes/shared-plugins-during-build.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#presentation",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.9238749999785796
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-go-private-modules",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/static-deploy.md#gitlab-pages-and-gitlab-ci",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/CDN_CORS_SETUP.md#option-1-cors-policy-recommended---dedicated-setting",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#cloudflare-pages",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#vercel-with-git",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite4.md#vite-ecosystem-ci-improvements",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.5812910000095144
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-rust-clippy",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#gotchas--constraints",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverfsdeny",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/changes/per-environment-apis.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite4.md#vite-ecosystem-ci-improvements",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/changes/ssr-using-modulerunner.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.4703750000044238
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-django-squash",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/migration.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/releases.md#deprecations",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/releases.md#supported-versions",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#default-browser-target-change-badge-textnrv-typewarning-migration-from-v7",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite8.md#the-journey-to-stable",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.395541999983834
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-celery-retry",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/react-query-caching.md#one-global-client-configured-for-fresh-on-forward-cached-on-back",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/campaigns.md#cloud-functions",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#gotchas--constraints",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#flutter-parity-source-of-truth",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/product/launch-todo.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.6515000000072177
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          }
+        ]
+      }
+    },
+    {
+      "arm": "C",
+      "mode": "vector",
+      "ran": true,
+      "embedCalls": 69,
+      "rerankCalls": 0,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 44,
+        "negatives": 25,
+        "recall": {
+          "1": 0.4318181818181818,
+          "3": 0.6818181818181818,
+          "5": 0.8409090909090909
+        },
+        "mrr": 0.5791666666666667,
+        "strict": {
+          "recall": {
+            "1": 0.29545454545454547,
+            "3": 0.5,
+            "5": 0.6590909090909091
+          },
+          "mrr": 0.42386363636363633
+        },
+        "latency": {
+          "p50": 9.66745800001081,
+          "p95": 14.179000000003725
+        },
+        "samples": 69,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-g10-ew-gift-community-post",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/gifting.md#related",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#related",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#invoked-from",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#related",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#anchor-files",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.533583999989787
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-sendgift-chat-side-effects",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/gifting.md#cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#circulation--coin-spends-payment--adjacent",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#cloud-functions",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#domain",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#data",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.195458000001963
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-blocked-suggested-creators",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/block-user.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#related",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#anchor-files",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#flutter-parity-source-of-truth",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#business-behaviour",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.044790999992983
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 5,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-new-notification-tap",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#domain",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#invoked-from",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#business-behaviour",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#presentation",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.691791999997804
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 4
+          },
+          {
+            "id": "q-g10-ew-mark-notification-read",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#data",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#local-state--sync-direction-optimistic-y-for-read-only",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#data",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#business-behaviour",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#local-state--sync-direction-optimistic-y--for-the-read-flip-only",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              7.724709000001894
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-reaction-dislike",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#business-behaviour",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#cloud-functions",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#flutter-parity-source-of-truth",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#flutter-parity",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.46937499998603
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 5
+          },
+          {
+            "id": "q-g10-ew-watch-later-feed-signal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md#business-behaviour",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#content",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md#presentation",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md#domain",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.22295799999847
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-deleted-account-subcollection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#related",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#business-behaviour",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#invoked-from",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#cloud-functions",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.022042000025976
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-recent-signin-withdraw",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#business-behaviour",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#domain",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#what-it-is--why",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#users--social-1",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#invoked-from",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.353499999997439
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-second-browser-login",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/INDEX.md#users--social-1",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#flutter-parity-source-of-truth",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#what-it-is--why",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#business-behaviour",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.385500000003958
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 4,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-video-call-ended-summary",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md#data",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#invoked-from",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#related",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#flutter-parity-source-of-truth",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              7.992499999993015
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-firestore-to-typed",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#firestoreservice-readswrites",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#what-it-is--why",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#gotchas--constraints",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#where-its-used",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#remappers",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.053791000013007
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-tojson-optional-keys",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/settings.md#data",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/remote-config.md#versiondefaultsettings--the-settings-rewrite",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/analytics-system.md#firestore-schema",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#data",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/saved-users.md#cloud-functions",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.673833000008017
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-withdraw-confirm-modal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#flutter",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#qa-note",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#cloud-functions-the-bulk",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#the-options",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#7-open-questions",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              7.169374999997672
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-withdrawal-labels-romanian",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/product/product-decision-naming.md#31-screen-expause-formally-now",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#flutter",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#why-c-is-the-right-shape",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/redux-state-slices.md#where-its-used",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#the-three-load-bearing-assumptions-all-unverified",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              6.976458999997703
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-hardcoded-padding-colour",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#qa-note",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/roadmap/stripe-web-payments.md#what-the-commented-stripets-stub-actually-covers-and-doesnt",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#3-why-this-is-not-a-thin-port",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#why-c-is-the-right-shape",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#cloud-functions-the-bulk",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              7.7109159999818075
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-new-page-back-title",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#the-title-cell-has-three-shapes-and-the-nesting-order-is-load-bearing",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#props-expauseappbarprops",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#anchor-files",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#what-it-is--why",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/user-search.md#presentation",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              7.6918339999974705
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 4
+          },
+          {
+            "id": "q-g10-ew-console-error-catch",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#where-its-used",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#log-call--level-routing-the-key-behaviour",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#global-uncaught-error-capture",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#gotchas--constraints",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/analytics-system.md#general-application-logging",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              7.458249999996042
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 4
+          },
+          {
+            "id": "q-g10-ew-new-callable-unwrap",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#response-envelopes-are-not-uniform--read-the-cf",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#gotchas--constraints",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/support-catalog.md#cloud-functions",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/contact-support.md#cloud-functions",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.561709000001429
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-callable-exists-check",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#the-fetch-path-the-one-onrequest-function",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/user-feedback.md#domain",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/support-catalog.md#cloud-functions",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/STORAGE_BUCKET_CORS_SETUP.md#on-the-method-list",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/user-feedback.md#cloud-functions",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.66745800001081
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-unlock-payload",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#business-behaviour",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#invoked-from",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#cloud-functions",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#domain",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.568415999994613
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 4,
+            "strictRank": 4
+          },
+          {
+            "id": "q-g10-ew-photo-comment-reply",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#related",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#cloud-functions",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#domain",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#flutter-parity-source-of-truth",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              14.179000000003725
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-group-room-agora-token",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md#domain",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#anchor-files",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#cloud-functions",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#presentation",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.273291999998037
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 4,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-staging-build",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#modes",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/build.md#advanced-base-options",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/index.md#command-line-interface",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildlicense",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.76395799999591
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-dev-api-forward",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#servercors",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverforwardconsole",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/STORAGE_BUCKET_CORS_SETUP.md#verify",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/STORAGE_BUCKET_CORS_SETUP.md#issue",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/STORAGE_BUCKET_CORS_SETUP.md#fix",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.58445799999754
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-github-pages-subpath",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/static-deploy.md#github-pages",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#cloudflare-pages",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#gitlab-pages-and-gitlab-ci",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#render",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#netlify-with-git",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.737499999988358
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-wsl-file-save",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#serverwatch",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#closepreviewserver",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#built-file-does-not-work-because-of-cors-error",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#devtools",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#vite-does-not-detect-a-file-change",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.559042000008048
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-stale-chunk-deploy",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#failed-to-fetch-dynamically-imported-module-error",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#browser-extensions",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/build.md#load-error-handling",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#module-type-support-and-auto-detection",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#clean-imports-with-barrel-exports",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.173459000012372
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-linked-ui-package",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/dep-pre-bundling.md#monorepos-and-linked-dependencies",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#error-cannot-find-module-cfoobarbazvitebinvitejs",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/acknowledgements.md#bundled-dependency-authors",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#built-file-does-not-work-because-of-cors-error",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/index.md#command-line-interface",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.876709000003757
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-admin-html-entry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/ssr.md#source-structure",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#1-model-separation",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildoutdir",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/index.md#indexhtml-and-project-root",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.113833000010345
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-vite-plugin-package-name",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#conventions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#hook-filters",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#chunk-import-map-information",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#searchforworkspaceroot",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#transformindexhtml",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.713707999995677
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-virtual-routes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#importing-a-virtual-file",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#require-calls-for-externalized-modules",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmodulepreload",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/changes/shared-plugins-during-build.md#migration-guide",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/build.md#library-mode",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.723291000002064
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-src-alias",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/features.md#import-inlining-and-rebasing",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#resolvealias",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/build.md#relative-base",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#importmetaurl-in-umd--iife",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/features.md#glob-import-caveats",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.86295800001244
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-vite-robots-favicon",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/assets.md#the-public-directory",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#-file-naming-conventions",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/content-tags.md#local-state--sync-direction-optimistic-n",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/legal-documents.md#data",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#the-callable-name-registry--names-must-match-an-export",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.703125
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-build-only-plugin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#output-bundle-metadata",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/build.md#rebuild-on-files-changes",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/using-plugins.md#enforcing-plugin-ordering",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.345499999995809
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 4,
+            "strictRank": 4
+          },
+          {
+            "id": "q-g10-vite-scoped-card-styles",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/shared-options.md#cssmodules",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/features.md#css-modules",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#-file-naming-conventions",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#csspreprocessoroptionsextensionadditionaldata",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildlib",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.088874999986729
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-vite-client-env-undefined",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-javascript.md#loadenv",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#importmetaurl-in-umd--iife",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#built-in-constants",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#build-throws-bundleerror",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-variables",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.29662500001723
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 5,
+            "strictRank": 5
+          },
+          {
+            "id": "q-g10-vite-config-reads-env",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/index.md#using-environment-variables-in-config",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#loadenv",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#loadconfigfromfile",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configresolved",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#intellisense-for-typescript",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.044083000015235
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-health-middleware",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configureserver",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configurepreviewserver",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#closeserver",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#servermiddlewaremode",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#closepreviewserver",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.82379199998104
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-build-sha-meta",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#in-css-or-html",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#in-javascript",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#transformindexhtml",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#output-bundle-metadata",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#chunk-import-map-information",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.022417000000132
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-vite-mock-updated-event",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#client-to-server",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#server-to-client",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configurepreviewserver",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#example-usage",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#presentation",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.485207999998238
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-vite-rails-manifest-tags",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/build.md#css-support",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmanifest",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildssrmanifest",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildlib",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/index.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.691874999989523
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-login-sms-2fa",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md#related",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#users--social-1",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md#what-it-is--why",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md#key-provisioning--where-the-keys-are-minted-and-stored-authservicets",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.785499999998137
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-chat-typing-indicator",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/chat.md#invoked-from",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#flutter-parity-source-of-truth",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#communication-1",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#presentation",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.23283399999491
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-chat-voice-message",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#invoked-from",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#cloud-functions",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#data",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#data",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.180166999984067
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-chat-edit-message",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#data",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#data",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#business-behaviour",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#presentation",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#flutter-parity-source-of-truth",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.37995800000499
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-group-chat",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/inbox.md#data",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#data",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#related",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#invoked-from",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#domain",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.439916999981506
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-playback-speed",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/VIDEO_MANAGEMENT.md#component-responsibilities",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#performance",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/VIDEO_MANAGEMENT.md#playpause-flow",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/video-playback.md#business-behaviour",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/architecture/NAVIGATION_LIFECYCLE.md#1-video-playback-control",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              13.130499999999302
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-profile-qr-code",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md#22-anglo-skill-surfaces-self-linked-only--the-sourcing-rule",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md#5-verification-gaps-to-close-manually-1-founder-hour-before-wave-1",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md#4-tracking-sheet--tripwire-dashboard",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md#template-b--music-producer-en-email--beatstars-linked-social",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.025374999997439
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-coin-promo-code",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/product/technical-roadmap.md#21-stripe-on-the-web-plan-c--growth-first-build-when-traffic-warrants",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#the-dormant-stripe-stub",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#related",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#business-behaviour",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#anchor-files",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              17.7515419999836
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 4,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-expiring-stories",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/user-profile.md#cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/user-profile.md#local-state--sync-direction-optimistic-n",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/product/go-to-market.md#6-campaign-1--under-the-ratified-badge-prize-constraints",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md#1-the-funnel-model-and-weekly-operating-rhythm",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/product/technical-roadmap.md#16-video-series",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              16.66699999998673
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-pin-comment",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/content-comments.md#related",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#flutter-parity-source-of-truth",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#flutter-parity-source-of-truth",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#business-behaviour",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.62066699998104
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-storybook-stories",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/publish-content.md#related",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/community-live-streaming.md#presentation",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/community-live-streaming.md#anchor-files",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md#3-outreach-sequences-offer-shaped-120-words-23-follow-ups",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/architecture/NAVIGATION_LIFECYCLE.md#3-real-time-subscriptions",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.145000000018626
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-callable-app-check",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#where-its-used",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#gotchas--constraints",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#how-it-works",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#domain",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#flutter-parity",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              13.405333000002429
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-vite-precompress",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/features.md#preload-directives-generation",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/build.md#advanced-base-options",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#output-bundle-metadata",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              14.460167000012007
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-vite-obfuscate",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/build-options.md#buildwrite",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildchunksizewarninglimit",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildsourcemap",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#build",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#build-throws-bundleerror",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.535000000003492
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-vite-server-mock",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#servercors",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverforwardconsole",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverhmr",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/support-catalog.md#cloud-functions",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#createserver",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.507167000003392
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-vite-sitemap",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/build.md#relative-base",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/build.md#advanced-base-options",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/build.md#public-base-path",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.511874999996508
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-vite-image-webp",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#remappers-data-transformation-layer",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#importing-asset-as-url",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildcsstarget",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#clean-imports-with-barrel-exports",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#explicit-inline-handling",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.998041999991983
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-terraform-state-lock",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/remote-config.md#real-time-push--three-effect-classes",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/secure-storage-pattern.md#the-store--datastoragelocalsecurestoragewebcryptots",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/sync-on-login.md#anchor-files",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/features/settings.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/redux-state-slices.md#two-families-of-slice",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.015125000005355
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-postgres-autovacuum",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/grid-column-count.md#related",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/campaigns.md#cloud-functions",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/grid-column-count.md#gotchas--constraints",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/grid-column-count.md#where-its-used",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/analytics-system.md#memory",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.937707999983104
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-android-keystore",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/submit-feedback.md#cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#local-state--sync-direction-optimistic-n",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/secure-storage-pattern.md#lifecycle-init--hydrate--clear",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#security-notes",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md#related",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.538167000020621
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-kafka-rebalance",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/campaigns.md#cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/product/marketing-viability.md#11-what-would-change-these-verdicts",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/campaigns.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/product/product-decision-free-window.md#33-feed",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/analytics-system.md#batching",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.208999999973457
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-k8s-ingress-tls",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#key-features",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#data-layer",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/video-encryption.md#client-key-decryption-srcdomainservicesvideo",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/analytics-system.md#encryptedhlsloader",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/CDN_CORS_SETUP.md#current-cookie-configuration",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.652125000022352
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-pytest-conftest",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/latest-users.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/share.md#data",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#resolvemainfields-noninheritbadge-",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#concepts-1",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/features/share.md#flutter-parity-source-of-truth",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.88758300000336
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-go-private-modules",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#server-side-cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md#private-key-delivery--local-hydration-on-login",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md#key-provisioning--where-the-keys-are-minted-and-stored-authservicets",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#testing--documentation",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/concepts/secure-storage-pattern.md#gotchas--constraints",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.275875000021188
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-rust-clippy",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#serverfsdeny",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#envprefix",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/config/dep-optimization-options.md#optimizedepsexclude-noninheritbadge-",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#module-externalized-for-browser-compatibility",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/features.md#typescript-compiler-options",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.4213339999842
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-django-squash",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/migration.md#removed-buildrollupoptionswatchchokidar-option",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#removed-object-form-buildrollupoptionsoutputmanualchunks-and-deprecate-function-form-one",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#other-related-deprecations",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#removed-deprecated-features-badge-textnrv-typewarning-migration-from-v7",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#build-throws-bundleerror",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.234958000015467
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-celery-retry",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/support-catalog.md#cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/contact-support.md#cloud-functions",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/contact-support.md#data",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#gotchas--constraints",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md#3-outreach-sequences-offer-shaped-120-words-23-follow-ups",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.248665999999503
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          }
+        ]
+      }
+    },
+    {
+      "arm": "D",
+      "mode": "fused",
+      "ran": true,
+      "embedCalls": 69,
+      "rerankCalls": 0,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 44,
+        "negatives": 25,
+        "recall": {
+          "1": 0.6590909090909091,
+          "3": 0.8181818181818182,
+          "5": 0.8409090909090909
+        },
+        "mrr": 0.7318181818181819,
+        "strict": {
+          "recall": {
+            "1": 0.4318181818181818,
+            "3": 0.6136363636363636,
+            "5": 0.6590909090909091
+          },
+          "mrr": 0.5215909090909091
+        },
+        "latency": {
+          "p50": 10.847500000003492,
+          "p95": 16.386166999989655
+        },
+        "samples": 69,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-g10-ew-gift-community-post",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/gifting.md#anchor-files",
+                "score": 0.03177805800756621
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#related",
+                "score": 0.031544957774465976
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md",
+                "score": 0.029877369007803793
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#related",
+                "score": 0.02928692699490662
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#cloud-functions",
+                "score": 0.028577260665441927
+              }
+            ],
+            "durationMs": [
+              10.579208999988623
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03177805800756621,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-sendgift-chat-side-effects",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/gifting.md#cloud-functions",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#cloud-functions",
+                "score": 0.03149801587301587
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#circulation--coin-spends-payment--adjacent",
+                "score": 0.031054405392392875
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#domain",
+                "score": 0.029709507042253523
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#cloud-functions",
+                "score": 0.02967032967032967
+              }
+            ],
+            "durationMs": [
+              14.47712500000489
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-blocked-suggested-creators",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/block-user.md",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#anchor-files",
+                "score": 0.03125763125763126
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.031054405392392875
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#business-behaviour",
+                "score": 0.029877369007803793
+              },
+              {
+                "ref": "docs/expause-web/features/settings.md#invoked-from",
+                "score": 0.028782894736842105
+              }
+            ],
+            "durationMs": [
+              11.559207999991486
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 3,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-new-notification-tap",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#business-behaviour",
+                "score": 0.032266458495966696
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#invoked-from",
+                "score": 0.031754032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#presentation",
+                "score": 0.03149801587301587
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md",
+                "score": 0.03076923076923077
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#business-behaviour",
+                "score": 0.02964254577157803
+              }
+            ],
+            "durationMs": [
+              10.847500000003492
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032266458495966696,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-mark-notification-read",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#business-behaviour",
+                "score": 0.032018442622950824
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#data",
+                "score": 0.03177805800756621
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#local-state--sync-direction-optimistic-y-for-read-only",
+                "score": 0.0304147465437788
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#cloud-functions",
+                "score": 0.03007688828584351
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#business-behaviour",
+                "score": 0.02919863597612958
+              }
+            ],
+            "durationMs": [
+              10.901958999980707
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032018442622950824,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-reaction-dislike",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#business-behaviour",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/expause-web/features/roadmap-item-like.md#business-behaviour",
+                "score": 0.03128054740957967
+              },
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.031009615384615385
+              },
+              {
+                "ref": "docs/expause-web/concepts/secure-storage-pattern.md#pattern-a--optimistic-write-then-revert",
+                "score": 0.028790389395194696
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#business-behaviour",
+                "score": 0.026875901875901876
+              }
+            ],
+            "durationMs": [
+              11.601708000001963
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-watch-later-feed-signal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/INDEX.md#content",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md#business-behaviour",
+                "score": 0.029906956136464335
+              },
+              {
+                "ref": "docs/expause-web/features/saved-content.md#related",
+                "score": 0.029827662395050816
+              },
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md#anchor-files",
+                "score": 0.029211087420042643
+              },
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md",
+                "score": 0.029030910609857977
+              }
+            ],
+            "durationMs": [
+              10.906041999987792
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-deleted-account-subcollection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#business-behaviour",
+                "score": 0.03128054740957967
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#cloud-functions",
+                "score": 0.03125763125763126
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#data",
+                "score": 0.030776515151515152
+              },
+              {
+                "ref": "docs/expause-web/features/saved-users.md#cloud-functions",
+                "score": 0.030679156908665108
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#invoked-from",
+                "score": 0.03036576949620428
+              }
+            ],
+            "durationMs": [
+              12.550999999977648
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03128054740957967,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-recent-signin-withdraw",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#business-behaviour",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#domain",
+                "score": 0.031054405392392875
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#presentation",
+                "score": 0.029910714285714284
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#business-behaviour",
+                "score": 0.029857397504456328
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#what-it-is--why",
+                "score": 0.02976190476190476
+              }
+            ],
+            "durationMs": [
+              10.781665999995312
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-second-browser-login",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#what-it-is--why",
+                "score": 0.032018442622950824
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#business-behaviour",
+                "score": 0.03125763125763126
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md",
+                "score": 0.030621785881252923
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#flutter-parity-source-of-truth",
+                "score": 0.030158730158730156
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#anchor-files",
+                "score": 0.02946912242686891
+              }
+            ],
+            "durationMs": [
+              10.344666999997571
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032018442622950824,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-video-call-ended-summary",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md#data",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#business-behaviour",
+                "score": 0.031544957774465976
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#invoked-from",
+                "score": 0.030834914611005692
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#domain",
+                "score": 0.029437229437229435
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md",
+                "score": 0.029273504273504274
+              }
+            ],
+            "durationMs": [
+              11.269417000003159
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-firestore-to-typed",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#firestoreservice-readswrites",
+                "score": 0.032018442622950824
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#remappers",
+                "score": 0.03177805800756621
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#what-it-is--why",
+                "score": 0.0315136476426799
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#gotchas--constraints",
+                "score": 0.031024531024531024
+              },
+              {
+                "ref": "docs/expause-web/concepts/realtime-firestore-listeners.md#how-it-works",
+                "score": 0.028381642512077296
+              }
+            ],
+            "durationMs": [
+              11.043834000010975
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032018442622950824,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-tojson-optional-keys",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/content-comments.md#data",
+                "score": 0.029513888888888888
+              },
+              {
+                "ref": "docs/expause-web/features/settings.md#data",
+                "score": 0.02938045560996381
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#gotchas--constraints",
+                "score": 0.02928692699490662
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#firestoreservice-readswrites",
+                "score": 0.028577260665441927
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#gotchas--constraints",
+                "score": 0.02548701298701299
+              }
+            ],
+            "durationMs": [
+              10.523958999983734
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.029513888888888888,
+            "rank": 3,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-withdraw-confirm-modal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#c-concretely",
+                "score": 0.030834914611005692
+              },
+              {
+                "ref": "docs/expause-web/concepts/redux-state-slices.md#where-its-used",
+                "score": 0.029551337359792925
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#business-behaviour",
+                "score": 0.029206349206349208
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#0-decision-2026-07-27",
+                "score": 0.026838432635534086
+              },
+              {
+                "ref": "docs/expause-web/roadmap/stripe-web-payments.md#0-decision-update-2026-07-14",
+                "score": 0.0266900790166813
+              }
+            ],
+            "durationMs": [
+              10.258874999999534
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.030834914611005692,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-withdrawal-labels-romanian",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#the-three-load-bearing-assumptions-all-unverified",
+                "score": 0.030309988518943745
+              },
+              {
+                "ref": "docs/expause-web/product/product-recommendations.md#44-creator-side-friction-to-remove-at-cold-start-p1",
+                "score": 0.028991596638655463
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#web",
+                "score": 0.027071520029266508
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#3-why-this-is-not-a-thin-port",
+                "score": 0.023138297872340424
+              },
+              {
+                "ref": "docs/expause-web/product/funding-grants-research.md#9-open-source-fit-romanian-schemes",
+                "score": 0.023000660938532716
+              }
+            ],
+            "durationMs": [
+              12.170458000007784
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.030309988518943745,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-hardcoded-padding-colour",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#qa-note",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#theme",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/roadmap/stripe-web-payments.md#what-the-commented-stripets-stub-actually-covers-and-doesnt",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#what-it-is--why",
+                "score": 0.015873015873015872
+              }
+            ],
+            "durationMs": [
+              10.260375000012573
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 5
+          },
+          {
+            "id": "q-g10-ew-new-page-back-title",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#props-expauseappbarprops",
+                "score": 0.03225806451612903
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#anchor-files",
+                "score": 0.030798389007344232
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#documented-exceptions--do-not-force-the-bar-on-these",
+                "score": 0.030309988518943745
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#what-it-is--why",
+                "score": 0.028958333333333336
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#the-title-cell-has-three-shapes-and-the-nesting-order-is-load-bearing",
+                "score": 0.028021349599695006
+              }
+            ],
+            "durationMs": [
+              12.042833999992581
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03225806451612903,
+            "rank": 1,
+            "strictRank": 4
+          },
+          {
+            "id": "q-g10-ew-console-error-catch",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#log-call--level-routing-the-key-behaviour",
+                "score": 0.03225806451612903
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#gotchas--constraints",
+                "score": 0.032018442622950824
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#where-its-used",
+                "score": 0.031099324975891997
+              },
+              {
+                "ref": "docs/expause-web/analytics-system.md#general-application-logging",
+                "score": 0.02528560548362529
+              },
+              {
+                "ref": "docs/expause-web/analytics-system.md#expected-log-flow-success",
+                "score": 0.020753512132822477
+              }
+            ],
+            "durationMs": [
+              10.0815419999999
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03225806451612903,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-new-callable-unwrap",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#response-envelopes-are-not-uniform--read-the-cf",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#cloud-functions",
+                "score": 0.031099324975891997
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#gotchas--constraints",
+                "score": 0.02886002886002886
+              },
+              {
+                "ref": "docs/expause-web/features/support-catalog.md#cloud-functions",
+                "score": 0.028283227848101264
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#flutter-parity",
+                "score": 0.027583600982429624
+              }
+            ],
+            "durationMs": [
+              10.220333000004757
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-callable-exists-check",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#flutter-parity",
+                "score": 0.028985507246376812
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#gotchas--constraints",
+                "score": 0.026262626262626265
+              },
+              {
+                "ref": "docs/expause-web/features/user-feedback.md#cloud-functions",
+                "score": 0.025188536953242836
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#anchor-files",
+                "score": 0.023856578204404292
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#what-it-is--why",
+                "score": 0.02333469000135667
+              }
+            ],
+            "durationMs": [
+              12.152499999996508
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.028985507246376812,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-unlock-payload",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md",
+                "score": 0.032018442622950824
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#business-behaviour",
+                "score": 0.03128054740957967
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#invoked-from",
+                "score": 0.03125763125763126
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#cloud-functions",
+                "score": 0.03036576949620428
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#where-its-used",
+                "score": 0.03028233151183971
+              }
+            ],
+            "durationMs": [
+              9.990292000002228
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032018442622950824,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-photo-comment-reply",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#anchor-files",
+                "score": 0.031024531024531024
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.030679156908665108
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md",
+                "score": 0.03009207275993712
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#cloud-functions",
+                "score": 0.029236022193768675
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#data",
+                "score": 0.029116045245077504
+              }
+            ],
+            "durationMs": [
+              10.66920899998513
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.031024531024531024,
+            "rank": 5,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-group-room-agora-token",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md#cloud-functions",
+                "score": 0.03125
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#domain",
+                "score": 0.031099324975891997
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#anchor-files",
+                "score": 0.031054405392392875
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#where-its-used",
+                "score": 0.03036576949620428
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md",
+                "score": 0.03036576949620428
+              }
+            ],
+            "durationMs": [
+              12.118333999998868
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03125,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-staging-build",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#modes",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/vite/guide/index.md#command-line-interface",
+                "score": 0.03055037313432836
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#loadenv",
+                "score": 0.028594771241830064
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#building-for-production",
+                "score": 0.02797067901234568
+              },
+              {
+                "ref": "docs/vite/guide/build.md#advanced-base-options",
+                "score": 0.026625704045058884
+              }
+            ],
+            "durationMs": [
+              10.148875000013504
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-dev-api-forward",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#servercors",
+                "score": 0.031099324975891997
+              },
+              {
+                "ref": "docs/expause-web/STORAGE_BUCKET_CORS_SETUP.md#fix",
+                "score": 0.031009615384615385
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverforwardconsole",
+                "score": 0.0304147465437788
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverorigin",
+                "score": 0.030303030303030304
+              },
+              {
+                "ref": "docs/expause-web/STORAGE_BUCKET_CORS_SETUP.md#verify-1",
+                "score": 0.029631255487269532
+              }
+            ],
+            "durationMs": [
+              10.610665999993216
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.031099324975891997,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-github-pages-subpath",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/static-deploy.md#github-pages",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#cloudflare-pages",
+                "score": 0.0315136476426799
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#gitlab-pages-and-gitlab-ci",
+                "score": 0.03149801587301587
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#netlify-with-git",
+                "score": 0.030536130536130537
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#azure-static-web-apps",
+                "score": 0.03021353930031804
+              }
+            ],
+            "durationMs": [
+              13.181959000008646
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-wsl-file-save",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#serverwatch",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#vite-does-not-detect-a-file-change",
+                "score": 0.031009615384615385
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildwatch",
+                "score": 0.0304147465437788
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#the-hotupdate-hook",
+                "score": 0.029083245521601686
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#requests-are-stalled-forever",
+                "score": 0.028381642512077296
+              }
+            ],
+            "durationMs": [
+              11.218708000000333
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-stale-chunk-deploy",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#failed-to-fetch-dynamically-imported-module-error",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/vite/guide/build.md#load-error-handling",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#browser-extensions",
+                "score": 0.031754032258064516
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-instances.md#fetchresult",
+                "score": 0.028169014084507043
+              },
+              {
+                "ref": "docs/vite/changes/ssr-using-modulerunner.md#motivation",
+                "score": 0.026973565905412694
+              }
+            ],
+            "durationMs": [
+              10.549333000002662
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-linked-ui-package",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/dep-pre-bundling.md#monorepos-and-linked-dependencies",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/vite/guide/index.md#command-line-interface",
+                "score": 0.029877369007803793
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#error-cannot-find-module-cfoobarbazvitebinvitejs",
+                "score": 0.028629032258064516
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#resolvededupe",
+                "score": 0.02749719416386083
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#outdated-pre-bundled-deps-when-linking-to-a-local-package",
+                "score": 0.026988636363636364
+              }
+            ],
+            "durationMs": [
+              12.011375000001863
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-admin-html-entry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.03225806451612903
+              },
+              {
+                "ref": "docs/vite/guide/index.md#indexhtml-and-project-root",
+                "score": 0.030536130536130537
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#source-structure",
+                "score": 0.02921395544346364
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#input-noninheritbadge-",
+                "score": 0.02886002886002886
+              },
+              {
+                "ref": "docs/vite/guide/features.md#import-with-query-suffixes",
+                "score": 0.026860955056179775
+              }
+            ],
+            "durationMs": [
+              10.8314160000009
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03225806451612903,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-plugin-package-name",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#conventions",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildlib",
+                "score": 0.030309988518943745
+              },
+              {
+                "ref": "docs/vite/acknowledgements.md#bundled-dependency-authors",
+                "score": 0.028258706467661692
+              },
+              {
+                "ref": "docs/vite/guide/build.md#css-support",
+                "score": 0.024185517143263623
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#resolvealias",
+                "score": 0.023333333333333334
+              }
+            ],
+            "durationMs": [
+              10.50137499999255
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-virtual-routes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#importing-a-virtual-file",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/vite/guide/build.md#library-mode",
+                "score": 0.030090497737556562
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#rolldown-hooks",
+                "score": 0.029513888888888888
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#require-calls-for-externalized-modules",
+                "score": 0.02749266862170088
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-frameworks.md#raw-devenvironment",
+                "score": 0.02736498731424429
+              }
+            ],
+            "durationMs": [
+              11.072625000000698
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-src-alias",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/shared-options.md#resolvealias",
+                "score": 0.03128054740957967
+              },
+              {
+                "ref": "docs/vite/guide/features.md#glob-import-caveats",
+                "score": 0.03125763125763126
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#object-format-recordstring-string",
+                "score": 0.03021353930031804
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#array-format-array-find-string--regexp-replacement-string-",
+                "score": 0.02821939586645469
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#csspreprocessoroptionsextensionadditionaldata",
+                "score": 0.027673192771084338
+              }
+            ],
+            "durationMs": [
+              11.27424999998766
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03128054740957967,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-robots-favicon",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/assets.md#the-public-directory",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#in-javascript",
+                "score": 0.030017921146953404
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#new-urlurl-importmetaurl",
+                "score": 0.028577260665441927
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmanifest",
+                "score": 0.02786377708978328
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#importing-asset-as-url",
+                "score": 0.027583600982429624
+              }
+            ],
+            "durationMs": [
+              10.63262499999837
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-build-only-plugin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/using-plugins.md#enforcing-plugin-ordering",
+                "score": 0.032018442622950824
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md",
+                "score": 0.029386529386529386
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#output-bundle-metadata",
+                "score": 0.02938045560996381
+              },
+              {
+                "ref": "docs/vite/changes/shared-plugins-during-build.md",
+                "score": 0.028985507246376812
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#shared-plugins-during-build",
+                "score": 0.027820121951219513
+              }
+            ],
+            "durationMs": [
+              10.241749999986496
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032018442622950824,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-scoped-card-styles",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/features.md#css-modules",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#-file-naming-conventions",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#cssmodules",
+                "score": 0.030679156908665108
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildlib",
+                "score": 0.028371628371628373
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#csspreprocessoroptionsextensionadditionaldata",
+                "score": 0.027673192771084338
+              }
+            ],
+            "durationMs": [
+              10.819333999999799
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-client-env-undefined",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-variables",
+                "score": 0.03177805800756621
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#html-constant-replacement",
+                "score": 0.031054405392392875
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#intellisense-for-typescript",
+                "score": 0.03057889822595705
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#envprefix",
+                "score": 0.030117753623188408
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md",
+                "score": 0.029083245521601686
+              }
+            ],
+            "durationMs": [
+              10.741959000006318
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03177805800756621,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-config-reads-env",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/index.md#using-environment-variables-in-config",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#loadenv",
+                "score": 0.03225806451612903
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#config",
+                "score": 0.029418126757516764
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configresolved",
+                "score": 0.02844551282051282
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#html-constant-replacement",
+                "score": 0.027884615384615386
+              }
+            ],
+            "durationMs": [
+              17.149333999986993
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-health-middleware",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configureserver",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configurepreviewserver",
+                "score": 0.03225806451612903
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#closeserver",
+                "score": 0.03125763125763126
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#servermiddlewaremode",
+                "score": 0.029513888888888888
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#setting-up-the-dev-server",
+                "score": 0.029418126757516764
+              }
+            ],
+            "durationMs": [
+              12.263124999997672
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-build-sha-meta",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#transformindexhtml",
+                "score": 0.032266458495966696
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmanifest",
+                "score": 0.029857397504456328
+              },
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.02886002886002886
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#in-css-or-html",
+                "score": 0.028021349599695006
+              },
+              {
+                "ref": "docs/vite/changes/shared-plugins-during-build.md#motivation",
+                "score": 0.027650648360030512
+              }
+            ],
+            "durationMs": [
+              15.225749999983236
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032266458495966696,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-mock-updated-event",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#server-to-client",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#client-to-server",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#the-hotupdate-hook",
+                "score": 0.0264808362369338
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#managing-the-application-instances",
+                "score": 0.026263297872340427
+              },
+              {
+                "ref": "docs/vite/changes/hotupdate-hook.md#migration-guide",
+                "score": 0.026200135226504394
+              }
+            ],
+            "durationMs": [
+              13.902124999993248
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-rails-manifest-tags",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/build.md#css-support",
+                "score": 0.032018442622950824
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmanifest",
+                "score": 0.03021353930031804
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildssrmanifest",
+                "score": 0.029571646010002173
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.029116045245077504
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildlib",
+                "score": 0.026860955056179775
+              }
+            ],
+            "durationMs": [
+              12.622374999977183
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032018442622950824,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-login-sms-2fa",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/login-session.md#flutter-parity-source-of-truth",
+                "score": 0.030536130536130537
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#domain",
+                "score": 0.030158730158730156
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#business-behaviour",
+                "score": 0.02928692699490662
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#users--social-1",
+                "score": 0.028474711270410194
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md",
+                "score": 0.028438886647841874
+              }
+            ],
+            "durationMs": [
+              14.795791999989888
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.030536130536130537
+          },
+          {
+            "id": "q-g10-neg-chat-typing-indicator",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/chat.md#invoked-from",
+                "score": 0.031544957774465976
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#business-behaviour",
+                "score": 0.030017921146953404
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#business-behaviour",
+                "score": 0.029910714285714284
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#communication-1",
+                "score": 0.029030910609857977
+              },
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md#where-its-used",
+                "score": 0.02900988017658188
+              }
+            ],
+            "durationMs": [
+              12.241749999986496
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.031544957774465976
+          },
+          {
+            "id": "q-g10-neg-chat-voice-message",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#data",
+                "score": 0.03055037313432836
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#business-behaviour",
+                "score": 0.030017921146953404
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#data",
+                "score": 0.02854251012145749
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#communication",
+                "score": 0.027972027972027972
+              }
+            ],
+            "durationMs": [
+              14.513334000017494
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03278688524590164
+          },
+          {
+            "id": "q-g10-neg-chat-edit-message",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#presentation",
+                "score": 0.03149801587301587
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#business-behaviour",
+                "score": 0.03149801587301587
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#data",
+                "score": 0.03028233151183971
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#cloud-functions",
+                "score": 0.029051670471052088
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#local-state--sync-direction-optimistic-y-for-send--n-for-receive",
+                "score": 0.027692895339954164
+              }
+            ],
+            "durationMs": [
+              11.225542000000132
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03149801587301587
+          },
+          {
+            "id": "q-g10-neg-group-chat",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/INDEX.md#communication",
+                "score": 0.030798389007344232
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#data",
+                "score": 0.03028233151183971
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#data",
+                "score": 0.029877369007803793
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#related",
+                "score": 0.029571646010002173
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#business-behaviour",
+                "score": 0.02900988017658188
+              }
+            ],
+            "durationMs": [
+              10.12345899999491
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.030798389007344232
+          },
+          {
+            "id": "q-g10-neg-playback-speed",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/VIDEO_MANAGEMENT.md#component-responsibilities",
+                "score": 0.031099324975891997
+              },
+              {
+                "ref": "docs/expause-web/architecture/NAVIGATION_LIFECYCLE.md#1-video-playback-control",
+                "score": 0.03076923076923077
+              },
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#whats-next",
+                "score": 0.02976190476190476
+              },
+              {
+                "ref": "docs/expause-web/features/video-playback.md",
+                "score": 0.029211087420042643
+              },
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#presentation-layer",
+                "score": 0.028949545078577336
+              }
+            ],
+            "durationMs": [
+              16.574583000008715
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.031099324975891997
+          },
+          {
+            "id": "q-g10-neg-profile-qr-code",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md#22-anglo-skill-surfaces-self-linked-only--the-sourcing-rule",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/expause-web/features/user-profile.md#invoked-from",
+                "score": 0.029211087420042643
+              },
+              {
+                "ref": "docs/expause-web/features/user-profile.md#flutter-parity-source-of-truth",
+                "score": 0.027972027972027972
+              },
+              {
+                "ref": "docs/expause-web/features/user-profile.md#presentation",
+                "score": 0.024891774891774892
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#6-money-in-and-money-out-on-web-are-two-surfaces-not-one-profile",
+                "score": 0.02480203197370387
+              }
+            ],
+            "durationMs": [
+              20.859291000000667
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03252247488101534
+          },
+          {
+            "id": "q-g10-neg-coin-promo-code",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/product/technical-roadmap.md#21-stripe-on-the-web-plan-c--growth-first-build-when-traffic-warrants",
+                "score": 0.032266458495966696
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#business-behaviour",
+                "score": 0.03125
+              },
+              {
+                "ref": "docs/expause-web/product/launch-todo.md#deliberately-deferred-post-validation-queue--listed-so-nothing-is-silently-dropped",
+                "score": 0.02946236559139785
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#anchor-files",
+                "score": 0.028371628371628373
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#where-its-used",
+                "score": 0.02821939586645469
+              }
+            ],
+            "durationMs": [
+              13.827667000005022
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032266458495966696,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-expiring-stories",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/product/go-to-market.md#6-campaign-1--under-the-ratified-badge-prize-constraints",
+                "score": 0.03036576949620428
+              },
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md#1-the-funnel-model-and-weekly-operating-rhythm",
+                "score": 0.028958333333333336
+              },
+              {
+                "ref": "docs/expause-web/features/user-subscriptions.md#business-behaviour",
+                "score": 0.027799227799227798
+              },
+              {
+                "ref": "docs/expause-web/product/gtm-recruitment-playbook.md#template-a--fitness-coach-en-email",
+                "score": 0.027479766610201392
+              },
+              {
+                "ref": "docs/expause-web/product/launch-todo.md#phase-5--day-90-read--decisions",
+                "score": 0.02738245361196181
+              }
+            ],
+            "durationMs": [
+              16.386166999989655
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03036576949620428
+          },
+          {
+            "id": "q-g10-neg-pin-comment",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/content-comments.md#business-behaviour",
+                "score": 0.029877369007803793
+              },
+              {
+                "ref": "docs/expause-web/features/content-management.md#related",
+                "score": 0.029513888888888888
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#related",
+                "score": 0.02938045560996381
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md",
+                "score": 0.02878726010616578
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#invoked-from",
+                "score": 0.026132699813337858
+              }
+            ],
+            "durationMs": [
+              10.46249999999418
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.029877369007803793
+          },
+          {
+            "id": "q-g10-neg-storybook-stories",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/community-live-streaming.md#presentation",
+                "score": 0.029827662395050816
+              },
+              {
+                "ref": "docs/expause-web/features/community-wall.md#presentation",
+                "score": 0.029437229437229435
+              },
+              {
+                "ref": "docs/expause-web/features/community-live-streaming.md#flutter-parity-source-of-truth",
+                "score": 0.028594771241830064
+              },
+              {
+                "ref": "docs/expause-web/features/publish-content.md#related",
+                "score": 0.027629397679130595
+              },
+              {
+                "ref": "docs/expause-web/features/share.md#presentation",
+                "score": 0.024184149184149184
+              }
+            ],
+            "durationMs": [
+              10.889750000002095
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.029827662395050816
+          },
+          {
+            "id": "q-g10-neg-callable-app-check",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#gotchas--constraints",
+                "score": 0.030621785881252923
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#flutter-parity",
+                "score": 0.02625418060200669
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#how-it-works",
+                "score": 0.025488400488400488
+              },
+              {
+                "ref": "docs/expause-web/concepts/remote-config.md#web-only-teardown-guard",
+                "score": 0.024925373134328358
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#cloud-functions",
+                "score": 0.024451318309029312
+              }
+            ],
+            "durationMs": [
+              10.659374999988358
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.030621785881252923
+          },
+          {
+            "id": "q-g10-neg-vite-precompress",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#output-bundle-metadata",
+                "score": 0.03177805800756621
+              },
+              {
+                "ref": "docs/vite/guide/build.md#load-error-handling",
+                "score": 0.029910714285714284
+              },
+              {
+                "ref": "docs/vite/guide/build.md#advanced-base-options",
+                "score": 0.02964254577157803
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite5-1.md#buildassetsinlinelimit-now-supports-a-callback",
+                "score": 0.028309409888357256
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.027252906976744186
+              }
+            ],
+            "durationMs": [
+              10.499333000014303
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03177805800756621
+          },
+          {
+            "id": "q-g10-neg-vite-obfuscate",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/blog/announcing-vite8.md#looking-ahead",
+                "score": 0.031544957774465976
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite8-beta.md#a-new-bundler-for-the-web",
+                "score": 0.027799227799227798
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildsourcemap",
+                "score": 0.027777777777777776
+              },
+              {
+                "ref": "docs/vite/guide/build.md#library-mode",
+                "score": 0.026838432635534086
+              },
+              {
+                "ref": "docs/vite/guide/build.md#browser-compatibility",
+                "score": 0.025657894736842105
+              }
+            ],
+            "durationMs": [
+              9.615874999988591
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.031544957774465976
+          },
+          {
+            "id": "q-g10-neg-vite-server-mock",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#servercors",
+                "score": 0.03009207275993712
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#servermiddlewaremode",
+                "score": 0.026190476190476188
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#dev-containers--vs-code-port-forwarding",
+                "score": 0.024527186761229315
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serversourcemapignorelist",
+                "score": 0.024224945926459983
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#testing-the-app-locally",
+                "score": 0.022380595148787197
+              }
+            ],
+            "durationMs": [
+              9.08437500000582
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03009207275993712,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-vite-sitemap",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.031099324975891997
+              },
+              {
+                "ref": "docs/vite/guide/features.md#preload-directives-generation",
+                "score": 0.031054405392392875
+              },
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.03009207275993712
+              },
+              {
+                "ref": "docs/vite/guide/build.md#advanced-base-options",
+                "score": 0.029513888888888888
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildlicense",
+                "score": 0.028814262023217248
+              }
+            ],
+            "durationMs": [
+              9.261457999993581
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.031099324975891997
+          },
+          {
+            "id": "q-g10-neg-vite-image-webp",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/assets.md#importing-asset-as-url",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#new-urlurl-importmetaurl",
+                "score": 0.03131881575727918
+              },
+              {
+                "ref": "docs/vite/guide/features.md#manual-initialization",
+                "score": 0.02690100430416069
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmodulepreload",
+                "score": 0.025904203323558164
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildchunkimportmap",
+                "score": 0.025516795865633074
+              }
+            ],
+            "durationMs": [
+              9.798083999980008
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03200204813108039
+          },
+          {
+            "id": "q-g10-neg-terraform-state-lock",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/remote-config.md#anchor-files",
+                "score": 0.02719970792259949
+              },
+              {
+                "ref": "docs/expause-web/concepts/sync-on-login.md#related",
+                "score": 0.026631393298059962
+              },
+              {
+                "ref": "docs/expause-web/features/settings.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.02582908163265306
+              },
+              {
+                "ref": "docs/expause-web/concepts/remote-config.md#related",
+                "score": 0.02501906941266209
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#local-state--sync-direction-optimistic-y--for-the-read-flip-only",
+                "score": 0.024184149184149184
+              }
+            ],
+            "durationMs": [
+              10.270833999995375
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.02719970792259949
+          },
+          {
+            "id": "q-g10-neg-postgres-autovacuum",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/virtual-list.md#initialindex-deep-link-scroll",
+                "score": 0.021749408983451537
+              },
+              {
+                "ref": "docs/expause-web/product/product-definition.md#6-competitive-positioning",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/grid-column-count.md#related",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/concepts/secure-storage-pattern.md#the-store--datastoragelocalsecurestoragewebcryptots",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/campaigns.md#cloud-functions",
+                "score": 0.016129032258064516
+              }
+            ],
+            "durationMs": [
+              8.98641700000735
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.021749408983451537
+          },
+          {
+            "id": "q-g10-neg-android-keystore",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/video-transcoding-cdn.md#flutter-parity",
+                "score": 0.02803379416282642
+              },
+              {
+                "ref": "docs/expause-web/features/submit-feedback.md#cloud-functions",
+                "score": 0.02548435171385991
+              },
+              {
+                "ref": "docs/expause-web/features/publish-content.md",
+                "score": 0.024016563146997932
+              },
+              {
+                "ref": "docs/expause-web/concepts/video-transcoding-cdn.md#three-storage-buckets",
+                "score": 0.020604395604395608
+              },
+              {
+                "ref": "docs/expause-web/analytics-system.md#device-detection",
+                "score": 0.01639344262295082
+              }
+            ],
+            "durationMs": [
+              11.18954200000735
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.02803379416282642
+          },
+          {
+            "id": "q-g10-neg-kafka-rebalance",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/VIRTUAL_LIST.md#-what-was-built",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/features/campaigns.md#cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/VIRTUAL_LIST.md#problem-1-virtuoso-scroll-lag",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/product/marketing-viability.md#11-what-would-change-these-verdicts",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/expause-web/features/user-feedback.md#domain",
+                "score": 0.015873015873015872
+              }
+            ],
+            "durationMs": [
+              9.5977080000157
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-g10-neg-k8s-ingress-tls",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/VIDEO_ENCRYPTION_IMPLEMENTATION.md#1-data-layer-srcdata",
+                "score": 0.02900988017658188
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverhttps",
+                "score": 0.02871794871794872
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#network-requests-stop-loading",
+                "score": 0.02815814850530376
+              },
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#architecture-overview",
+                "score": 0.024877149877149878
+              },
+              {
+                "ref": "docs/expause-web/VIDEO_ENCRYPTION_IMPLEMENTATION.md#server-side-cloud-functions",
+                "score": 0.023215244229736982
+              }
+            ],
+            "durationMs": [
+              9.999834000016563
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.02900988017658188
+          },
+          {
+            "id": "q-g10-neg-pytest-conftest",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/remote-config.md#flutter-parity",
+                "score": 0.028373015873015873
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#presentation",
+                "score": 0.026373626373626377
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#platform-infra",
+                "score": 0.024624624624624628
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#users--social-1",
+                "score": 0.02371967654986523
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#related",
+                "score": 0.022380595148787197
+              }
+            ],
+            "durationMs": [
+              11.117792000004556
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.028373015873015873
+          },
+          {
+            "id": "q-g10-neg-go-private-modules",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md#private-key-delivery--local-hydration-on-login",
+                "score": 0.02803379416282642
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#gitlab-pages-and-gitlab-ci",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/QUICK_SETUP_VIDEO.md#server-side-cloud-functions",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/expause-web/CDN_CORS_SETUP.md#option-1-cors-policy-recommended---dedicated-setting",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#cloudflare-pages",
+                "score": 0.015873015873015872
+              }
+            ],
+            "durationMs": [
+              8.855249999993248
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.02803379416282642
+          },
+          {
+            "id": "q-g10-neg-rust-clippy",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#serverfsdeny",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/vite/changes/ssr-using-modulerunner.md",
+                "score": 0.028371628371628373
+              },
+              {
+                "ref": "docs/vite/guide/features.md#typescript-compiler-options",
+                "score": 0.026373626373626377
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildchunksizewarninglimit",
+                "score": 0.025252525252525256
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#transformwithoxc",
+                "score": 0.023518469306404464
+              }
+            ],
+            "durationMs": [
+              9.675792000023648
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03252247488101534
+          },
+          {
+            "id": "q-g10-neg-django-squash",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/vite/blog/announcing-vite8.md#the-journey-to-stable",
+                "score": 0.029273504273504274
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite8-beta.md#migrating-to-vite-8-beta",
+                "score": 0.02821939586645469
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#removed-buildrollupoptionswatchchokidar-option",
+                "score": 0.02788769549651404
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite8-beta.md#how-vite-migrated-to-rolldown",
+                "score": 0.027583600982429624
+              },
+              {
+                "ref": "docs/vite/guide/migration.md#removed-deprecated-features-badge-textnrv-typewarning-migration-from-v7",
+                "score": 0.026736111111111113
+              }
+            ],
+            "durationMs": [
+              12.022041999996873
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.029273504273504274
+          },
+          {
+            "id": "q-g10-neg-celery-retry",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#gotchas--constraints",
+                "score": 0.03149801587301587
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#web-parity-gaps",
+                "score": 0.028006267136701922
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#cloud-functions-the-bulk",
+                "score": 0.024868705591597158
+              },
+              {
+                "ref": "docs/expause-web/concepts/text-e2ee.md#wire-format--flutter-byte-compatibility",
+                "score": 0.024444444444444446
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#wired-but-caller-pending-callables-a-third-state--neither--nor-plainly-",
+                "score": 0.02439384979302188
+              }
+            ],
+            "durationMs": [
+              10.258207999984734
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03149801587301587
+          }
+        ]
+      }
+    },
+    {
+      "arm": "E",
+      "mode": "fused-rerank",
+      "ran": true,
+      "embedCalls": 69,
+      "rerankCalls": 69,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 44,
+        "negatives": 25,
+        "recall": {
+          "1": 0.5909090909090909,
+          "3": 0.75,
+          "5": 0.7954545454545454
+        },
+        "mrr": 0.6768939393939394,
+        "strict": {
+          "recall": {
+            "1": 0.38636363636363635,
+            "3": 0.5681818181818182,
+            "5": 0.6818181818181818
+          },
+          "mrr": 0.49356060606060603
+        },
+        "latency": {
+          "p50": 1099.6625000000058,
+          "p95": 1269.2810840000166
+        },
+        "samples": 69,
+        "abstainedOnNegative": 19,
+        "perQuery": [
+          {
+            "id": "q-g10-ew-gift-community-post",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.6507344841957092,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/gifting.md#business-behaviour",
+                "score": 0.6507344841957092
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#flutter-parity-source-of-truth",
+                "score": 0.42348551750183105
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md",
+                "score": 0.24056728184223175
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#domain",
+                "score": 0.1473969668149948
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#cloud-functions",
+                "score": 0.06830006837844849
+              }
+            ],
+            "durationMs": [
+              1272.6357499999867
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.6507344841957092,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-sendgift-chat-side-effects",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9923399090766907,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/gifting.md#cloud-functions",
+                "score": 0.9923399090766907
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#cloud-functions",
+                "score": 0.979432225227356
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#circulation--coin-spends-payment--adjacent",
+                "score": 0.9792184233665466
+              },
+              {
+                "ref": "docs/expause-web/features/gifting.md#invoked-from",
+                "score": 0.9534200429916382
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#cloud-functions",
+                "score": 0.9532334208488464
+              }
+            ],
+            "durationMs": [
+              1286.9566669999913
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9923399090766907,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-blocked-suggested-creators",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9631325602531433,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/block-user.md",
+                "score": 0.9631325602531433
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.6568984985351562
+              },
+              {
+                "ref": "docs/expause-web/features/block-user.md#business-behaviour",
+                "score": 0.6399816870689392
+              },
+              {
+                "ref": "docs/expause-web/features/latest-users.md#business-behaviour",
+                "score": 0.284921795129776
+              },
+              {
+                "ref": "docs/expause-web/features/settings.md#invoked-from",
+                "score": 0.28250840306282043
+              }
+            ],
+            "durationMs": [
+              1138.950582999998
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9631325602531433,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-new-notification-tap",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9683910012245178,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/gifting.md#invoked-from",
+                "score": 0.9683910012245178
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#business-behaviour",
+                "score": 0.9664376378059387
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#invoked-from",
+                "score": 0.9275822043418884
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#anchor-files",
+                "score": 0.926903486251831
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#presentation",
+                "score": 0.9220355749130249
+              }
+            ],
+            "durationMs": [
+              1176.2891250000102
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9683910012245178,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-mark-notification-read",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9836937785148621,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/inbox.md#cloud-functions",
+                "score": 0.9836937785148621
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#data",
+                "score": 0.9830402135848999
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#business-behaviour",
+                "score": 0.969790518283844
+              },
+              {
+                "ref": "docs/expause-web/features/push-notifications.md#invoked-from",
+                "score": 0.9692970514297485
+              },
+              {
+                "ref": "docs/expause-web/features/inbox.md#local-state--sync-direction-optimistic-partly--success-gated-no-revert-path",
+                "score": 0.9313130378723145
+              }
+            ],
+            "durationMs": [
+              1094.3566670000146
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9836937785148621,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-reaction-dislike",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9922598600387573,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#business-behaviour",
+                "score": 0.9922598600387573
+              },
+              {
+                "ref": "docs/expause-web/concepts/secure-storage-pattern.md#pattern-a--optimistic-write-then-revert",
+                "score": 0.7970853447914124
+              },
+              {
+                "ref": "docs/expause-web/features/roadmap-item-like.md#business-behaviour",
+                "score": 0.6072527170181274
+              },
+              {
+                "ref": "docs/expause-web/features/roadmap-comments.md#business-behaviour",
+                "score": 0.4249015748500824
+              },
+              {
+                "ref": "docs/expause-web/features/content-reactions.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.32467541098594666
+              }
+            ],
+            "durationMs": [
+              1156.4515419999952
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9922598600387573,
+            "rank": 1,
+            "strictRank": 5
+          },
+          {
+            "id": "q-g10-ew-watch-later-feed-signal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.8381525874137878,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/saved-content.md#business-behaviour",
+                "score": 0.8381525874137878
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#content",
+                "score": 0.7418469190597534
+              },
+              {
+                "ref": "docs/expause-web/features/saved-content.md#invoked-from",
+                "score": 0.14452330768108368
+              },
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md#business-behaviour",
+                "score": 0.03490264341235161
+              },
+              {
+                "ref": "docs/expause-web/features/feed-discovery.md#domain",
+                "score": 0.03094986267387867
+              }
+            ],
+            "durationMs": [
+              1123.8828749999811
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.8381525874137878,
+            "rank": 4,
+            "strictRank": 4
+          },
+          {
+            "id": "q-g10-ew-deleted-account-subcollection",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.05649895593523979,
+            "hits": [],
+            "durationMs": [
+              1123.8772499999905
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-recent-signin-withdraw",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9454734325408936,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#business-behaviour",
+                "score": 0.9454734325408936
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#domain",
+                "score": 0.544981837272644
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#invoked-from",
+                "score": 0.1179763451218605
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#invoked-from",
+                "score": 0.04702246934175491
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#local-state--sync-direction-optimistic-n",
+                "score": 0.011096208356320858
+              }
+            ],
+            "durationMs": [
+              1091.7896670000046
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9454734325408936,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-second-browser-login",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9773733019828796,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#what-it-is--why",
+                "score": 0.9773733019828796
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#gotchas--constraints",
+                "score": 0.2040785849094391
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#users--social-1",
+                "score": 0.08508507162332535
+              },
+              {
+                "ref": "docs/expause-web/features/account-deletion.md#business-behaviour",
+                "score": 0.05864226818084717
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#business-behaviour",
+                "score": 0.03325442969799042
+              }
+            ],
+            "durationMs": [
+              1105.757083000004
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9773733019828796,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-video-call-ended-summary",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.8328534960746765,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md#data",
+                "score": 0.8328534960746765
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#where-its-used",
+                "score": 0.4995627701282501
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md",
+                "score": 0.13280783593654633
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#presentation",
+                "score": 0.07375437766313553
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#business-behaviour",
+                "score": 0.05323898047208786
+              }
+            ],
+            "durationMs": [
+              1079.6836250000051
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.8328534960746765,
+            "rank": 1,
+            "strictRank": 5
+          },
+          {
+            "id": "q-g10-ew-firestore-to-typed",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.5939167141914368,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/realtime-firestore-listeners.md#how-it-works",
+                "score": 0.5939167141914368
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#remappers",
+                "score": 0.40751489996910095
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#what-it-is--why",
+                "score": 0.37802770733833313
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#data",
+                "score": 0.3111794590950012
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#gotchas--constraints",
+                "score": 0.28935158252716064
+              }
+            ],
+            "durationMs": [
+              1114.6797919999808
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.5939167141914368,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-tojson-optional-keys",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9826259016990662,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/content-comments.md#data",
+                "score": 0.9826259016990662
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#remappers",
+                "score": 0.8411824107170105
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#firestoreservice-readswrites",
+                "score": 0.6134729981422424
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#gotchas--constraints",
+                "score": 0.5171820521354675
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#log-call--level-routing-the-key-behaviour",
+                "score": 0.35185694694519043
+              }
+            ],
+            "durationMs": [
+              1090.9269579999964
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9826259016990662,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-withdraw-confirm-modal",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.7907041907310486,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/redux-state-slices.md#where-its-used",
+                "score": 0.7907041907310486
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#c-concretely",
+                "score": 0.5584657788276672
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#flutter",
+                "score": 0.23248714208602905
+              },
+              {
+                "ref": "docs/expause-web/roadmap/payouts-payout-links.md#the-options",
+                "score": 0.11453504115343094
+              },
+              {
+                "ref": "docs/expause-web/product/technical-roadmap.md#17-stage-2-payout-program-kyc-ledger-weekly-runner-refunds",
+                "score": 0.10703442990779877
+              }
+            ],
+            "durationMs": [
+              1080.8539579999924
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.7907041907310486,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-withdrawal-labels-romanian",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.17887213826179504,
+            "hits": [],
+            "durationMs": [
+              1099.6625000000058
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-hardcoded-padding-colour",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.0028849972877651453,
+            "hits": [],
+            "durationMs": [
+              1073.2125840000226
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-new-page-back-title",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.3677458167076111,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md",
+                "score": 0.3677458167076111
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#what-it-is--why",
+                "score": 0.28139498829841614
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#documented-exceptions--do-not-force-the-bar-on-these",
+                "score": 0.27437278628349304
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#anchor-files",
+                "score": 0.23095820844173431
+              },
+              {
+                "ref": "docs/expause-web/concepts/page-app-bar.md#gotchas--constraints",
+                "score": 0.19681362807750702
+              }
+            ],
+            "durationMs": [
+              1089.2257499999832
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.3677458167076111,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-console-error-catch",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.7905184626579285,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#where-its-used",
+                "score": 0.7905184626579285
+              },
+              {
+                "ref": "docs/expause-web/architecture/NAVIGATION_LIFECYCLE.md#1-video-playback-control",
+                "score": 0.5585330128669739
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#gotchas--constraints",
+                "score": 0.31261634826660156
+              },
+              {
+                "ref": "docs/expause-web/concepts/analytics-logging.md#log-call--level-routing-the-key-behaviour",
+                "score": 0.256475031375885
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverforwardconsole",
+                "score": 0.12588396668434143
+              }
+            ],
+            "durationMs": [
+              1069.9740830000082
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.7905184626579285,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-ew-new-callable-unwrap",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9806894063949585,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#response-envelopes-are-not-uniform--read-the-cf",
+                "score": 0.9806894063949585
+              },
+              {
+                "ref": "docs/expause-web/features/inbox-notification-tap.md#cloud-functions",
+                "score": 0.7805227637290955
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#anchor-files",
+                "score": 0.556029736995697
+              },
+              {
+                "ref": "docs/expause-web/concepts/data-layer-dto-remapper.md#cloudfunctionsservice-callables",
+                "score": 0.5528743863105774
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#flutter-parity",
+                "score": 0.4782731235027313
+              }
+            ],
+            "durationMs": [
+              1164.9422499999928
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9806894063949585,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-ew-callable-exists-check",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9702494740486145,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#web-unreachable-callables-deployed--flutter-callable-but-no-web-caller--20",
+                "score": 0.9702494740486145
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#the-callable-name-registry--names-must-match-an-export",
+                "score": 0.7206255793571472
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#the-fetch-path-the-one-onrequest-function",
+                "score": 0.1232781931757927
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#anchor-files",
+                "score": 0.10192763805389404
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#flutter-parity",
+                "score": 0.07314404845237732
+              }
+            ],
+            "durationMs": [
+              1193.082792000001
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9702494740486145,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-ew-unlock-payload",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9834010004997253,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md",
+                "score": 0.9834010004997253
+              },
+              {
+                "ref": "docs/expause-web/concepts/payments-and-purchases.md#circulation--coin-spends-payment--adjacent",
+                "score": 0.9797785878181458
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#business-behaviour",
+                "score": 0.9599328637123108
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#invoked-from",
+                "score": 0.9152294397354126
+              },
+              {
+                "ref": "docs/expause-web/features/unlock-premium-content.md#data",
+                "score": 0.741050660610199
+              }
+            ],
+            "durationMs": [
+              1222.393041000003
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9834010004997253,
+            "rank": 5,
+            "strictRank": 5
+          },
+          {
+            "id": "q-g10-ew-photo-comment-reply",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.8553592562675476,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/content-comments.md#business-behaviour",
+                "score": 0.8553592562675476
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#cloud-functions",
+                "score": 0.7351483702659607
+              },
+              {
+                "ref": "docs/expause-web/features/content-comments.md#local-state--sync-direction-optimistic-yn",
+                "score": 0.5738564729690552
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md",
+                "score": 0.5605549216270447
+              },
+              {
+                "ref": "docs/expause-web/features/comment-video-reply.md#domain",
+                "score": 0.5495814085006714
+              }
+            ],
+            "durationMs": [
+              1119.3710830000055
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.8553592562675476,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-ew-group-room-agora-token",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9825863242149353,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#what-it-is--why",
+                "score": 0.9825863242149353
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md",
+                "score": 0.965114176273346
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md",
+                "score": 0.9338632822036743
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#where-its-used",
+                "score": 0.9166362881660461
+              },
+              {
+                "ref": "docs/expause-web/concepts/agora-rtc.md#anchor-files",
+                "score": 0.8250126838684082
+              }
+            ],
+            "durationMs": [
+              1124.2476660000102
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9825863242149353,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-staging-build",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9914337992668152,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#modes",
+                "score": 0.9914337992668152
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-files",
+                "score": 0.9438169598579407
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.9247733950614929
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#building-for-production",
+                "score": 0.84883052110672
+              },
+              {
+                "ref": "docs/vite/guide/index.md#command-line-interface",
+                "score": 0.8363175392150879
+              }
+            ],
+            "durationMs": [
+              1075.425332999992
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9914337992668152,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-dev-api-forward",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.11869131028652191,
+            "hits": [],
+            "durationMs": [
+              1121.6839170000167
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-github-pages-subpath",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.8052747845649719,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/static-deploy.md#github-pages",
+                "score": 0.8052747845649719
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#cloudflare-pages",
+                "score": 0.4655163586139679
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#render",
+                "score": 0.43777385354042053
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#gitlab-pages-and-gitlab-ci",
+                "score": 0.3004828095436096
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md#azure-static-web-apps",
+                "score": 0.2854037880897522
+              }
+            ],
+            "durationMs": [
+              1133.73887500001
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.8052747845649719,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-wsl-file-save",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9265260100364685,
+            "hits": [
+              {
+                "ref": "docs/vite/config/server-options.md#serverwatch",
+                "score": 0.9265260100364685
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#vite-does-not-detect-a-file-change",
+                "score": 0.08465905487537384
+              },
+              {
+                "ref": "docs/expause-web/features/user-profile.md#local-state--sync-direction-optimistic-n",
+                "score": 0.06891817599534988
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#the-hotupdate-hook",
+                "score": 0.053275320678949356
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#setting-up-the-dev-server",
+                "score": 0.044559285044670105
+              }
+            ],
+            "durationMs": [
+              1070.3492499999993
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9265260100364685,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-stale-chunk-deploy",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9973997473716736,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#failed-to-fetch-dynamically-imported-module-error",
+                "score": 0.9973997473716736
+              },
+              {
+                "ref": "docs/vite/guide/build.md#load-error-handling",
+                "score": 0.910973072052002
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#browser-extensions",
+                "score": 0.9063370227813721
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-instances.md#fetchresult",
+                "score": 0.36003175377845764
+              },
+              {
+                "ref": "docs/expause-web/concepts/sync-on-login.md#gotchas--constraints",
+                "score": 0.23227137327194214
+              }
+            ],
+            "durationMs": [
+              1074.1201670000155
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9973997473716736,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-linked-ui-package",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.49240702390670776,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/dep-pre-bundling.md#monorepos-and-linked-dependencies",
+                "score": 0.49240702390670776
+              },
+              {
+                "ref": "docs/vite/guide/static-deploy.md",
+                "score": 0.262806236743927
+              },
+              {
+                "ref": "docs/vite/guide/dep-pre-bundling.md#browser-cache",
+                "score": 0.0865519642829895
+              },
+              {
+                "ref": "docs/vite/guide/index.md#command-line-interface",
+                "score": 0.05206746980547905
+              },
+              {
+                "ref": "docs/vite/guide/troubleshooting.md#outdated-pre-bundled-deps-when-linking-to-a-local-package",
+                "score": 0.028929976746439934
+              }
+            ],
+            "durationMs": [
+              1072.826791999978
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.49240702390670776,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-admin-html-entry",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.260576456785202,
+            "hits": [],
+            "durationMs": [
+              1092.8039590000117
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-vite-plugin-package-name",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9628307819366455,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#conventions",
+                "score": 0.9628307819366455
+              },
+              {
+                "ref": "docs/vite/guide/features.md#client-types",
+                "score": 0.45963189005851746
+              },
+              {
+                "ref": "docs/vite/blog/announcing-vite8-beta.md#migrating-to-vite-8-beta",
+                "score": 0.33741843700408936
+              },
+              {
+                "ref": "docs/vite/guide/build.md#css-support",
+                "score": 0.08253433555364609
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildlib",
+                "score": 0.06434805691242218
+              }
+            ],
+            "durationMs": [
+              1072.1946250000037
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9628307819366455,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-virtual-routes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9980148673057556,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#importing-a-virtual-file",
+                "score": 0.9980148673057556
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-frameworks.md#raw-devenvironment",
+                "score": 0.8450517654418945
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#rolldown-hooks",
+                "score": 0.7724257707595825
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.609529972076416
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmodulepreload",
+                "score": 0.4637337327003479
+              }
+            ],
+            "durationMs": [
+              1094.4685419999878
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9980148673057556,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-src-alias",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.8835850954055786,
+            "hits": [
+              {
+                "ref": "docs/vite/config/shared-options.md#resolvetsconfigpaths",
+                "score": 0.8835850954055786
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#importing-asset-as-url",
+                "score": 0.5405991077423096
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#new-urlurl-importmetaurl",
+                "score": 0.16399569809436798
+              },
+              {
+                "ref": "docs/vite/guide/features.md#import-inlining-and-rebasing",
+                "score": 0.061605118215084076
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#resolvealias",
+                "score": 0.049750518053770065
+              }
+            ],
+            "durationMs": [
+              1074.91525000002
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.8835850954055786,
+            "rank": 1,
+            "strictRank": 5
+          },
+          {
+            "id": "q-g10-vite-robots-favicon",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9682046175003052,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/assets.md#the-public-directory",
+                "score": 0.9682046175003052
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#importing-asset-as-url",
+                "score": 0.2815793454647064
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#new-urlurl-importmetaurl",
+                "score": 0.00807689968496561
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#the-callable-name-registry--names-must-match-an-export",
+                "score": 0.005298300180584192
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmanifest",
+                "score": 0.0030724401585757732
+              }
+            ],
+            "durationMs": [
+              1142.6074999999837
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9682046175003052,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-build-only-plugin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9962415099143982,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/using-plugins.md#enforcing-plugin-ordering",
+                "score": 0.9962415099143982
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#shared-plugins-during-build",
+                "score": 0.9769850969314575
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md",
+                "score": 0.9686670303344727
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-frameworks.md#the-buildapp-plugin-hook",
+                "score": 0.9568374752998352
+              },
+              {
+                "ref": "docs/vite/guide/using-plugins.md#conditional-application",
+                "score": 0.9291238188743591
+              }
+            ],
+            "durationMs": [
+              1135.4604159999872
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9962415099143982,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-scoped-card-styles",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.7495322227478027,
+            "hits": [
+              {
+                "ref": "docs/vite/config/shared-options.md#cssmodules",
+                "score": 0.7495322227478027
+              },
+              {
+                "ref": "docs/vite/guide/features.md#css-modules",
+                "score": 0.35205399990081787
+              },
+              {
+                "ref": "docs/expause-web/architecture/ARCHITECTURE.md#-file-naming-conventions",
+                "score": 0.07190018892288208
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildlib",
+                "score": 0.016679149121046066
+              },
+              {
+                "ref": "docs/expause-web/concepts/responsive-theme.md#responsive",
+                "score": 0.011164499446749687
+              }
+            ],
+            "durationMs": [
+              1085.482250000001
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.7495322227478027,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-g10-vite-client-env-undefined",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9657322764396667,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-variables",
+                "score": 0.9657322764396667
+              },
+              {
+                "ref": "docs/vite/config/shared-options.md#envprefix",
+                "score": 0.9111653566360474
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#intellisense-for-typescript",
+                "score": 0.8994305729866028
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#html-constant-replacement",
+                "score": 0.8761593699455261
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#built-in-constants",
+                "score": 0.7449032664299011
+              }
+            ],
+            "durationMs": [
+              1134.38400000002
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9657322764396667,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-config-reads-env",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9873639941215515,
+            "hits": [
+              {
+                "ref": "docs/vite/config/index.md#using-environment-variables-in-config",
+                "score": 0.9873639941215515
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#intellisense-for-typescript",
+                "score": 0.9735799431800842
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#createserver",
+                "score": 0.9698702692985535
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#html-constant-replacement",
+                "score": 0.9500632286071777
+              },
+              {
+                "ref": "docs/vite/guide/env-and-mode.md#env-files",
+                "score": 0.9194387197494507
+              }
+            ],
+            "durationMs": [
+              1164.1300420000043
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9873639941215515,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-health-middleware",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9949919581413269,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configureserver",
+                "score": 0.9949919581413269
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#configurepreviewserver",
+                "score": 0.9854418039321899
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#vite-cli",
+                "score": 0.975874662399292
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#setting-up-the-dev-server",
+                "score": 0.833220899105072
+              },
+              {
+                "ref": "docs/vite/config/server-options.md#serverproxy",
+                "score": 0.8194533586502075
+              }
+            ],
+            "durationMs": [
+              1080.0972499999916
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9949919581413269,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-build-sha-meta",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.5703746676445007,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#transformindexhtml",
+                "score": 0.5703746676445007
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#rolldown-hooks",
+                "score": 0.5352590084075928
+              },
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.4290688931941986
+              },
+              {
+                "ref": "docs/vite/guide/api-environment-plugins.md#shared-plugins-during-build",
+                "score": 0.35922345519065857
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmanifest",
+                "score": 0.11469089984893799
+              }
+            ],
+            "durationMs": [
+              1078.4335000000137
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.5703746676445007,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-mock-updated-event",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.7016140222549438,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/api-plugin.md#server-to-client",
+                "score": 0.7016140222549438
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#client-to-server",
+                "score": 0.4335764944553375
+              },
+              {
+                "ref": "docs/vite/changes/hotupdate-hook.md#motivation",
+                "score": 0.34102120995521545
+              },
+              {
+                "ref": "docs/vite/guide/api-javascript.md#vitedevserver",
+                "score": 0.04888131842017174
+              },
+              {
+                "ref": "docs/vite/guide/api-environment.md#closing-the-gap-between-build-and-dev",
+                "score": 0.024179983884096146
+              }
+            ],
+            "durationMs": [
+              1108.033832999994
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.7016140222549438,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-vite-rails-manifest-tags",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.45608168840408325,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/backend-integration.md",
+                "score": 0.45608168840408325
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.4025861322879791
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildssrmanifest",
+                "score": 0.08439183235168457
+              },
+              {
+                "ref": "docs/vite/guide/build.md#css-support",
+                "score": 0.08008135110139847
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmanifest",
+                "score": 0.06925444304943085
+              }
+            ],
+            "durationMs": [
+              1071.8101669999887
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.45608168840408325,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-g10-neg-login-sms-2fa",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": 0.7175682783126831,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/login-session.md#flutter-parity-source-of-truth",
+                "score": 0.7175682783126831
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#presentation",
+                "score": 0.2783482074737549
+              },
+              {
+                "ref": "docs/expause-web/concepts/secure-storage-pattern.md#lifecycle-init--hydrate--clear",
+                "score": 0.261210560798645
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#users--social-1",
+                "score": 0.13256698846817017
+              },
+              {
+                "ref": "docs/expause-web/features/login-session.md#business-behaviour",
+                "score": 0.05479912459850311
+              }
+            ],
+            "durationMs": [
+              1103.4006660000014
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.7175682783126831
+          },
+          {
+            "id": "q-g10-neg-chat-typing-indicator",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.1318972110748291,
+            "hits": [],
+            "durationMs": [
+              1123.2334579999733
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-chat-voice-message",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": 0.6190884113311768,
+            "hits": [
+              {
+                "ref": "docs/expause-web/features/video-call.md",
+                "score": 0.6190884113311768
+              },
+              {
+                "ref": "docs/expause-web/INDEX.md#communication",
+                "score": 0.04085336625576019
+              },
+              {
+                "ref": "docs/expause-web/features/chat.md#business-behaviour",
+                "score": 0.01061205193400383
+              },
+              {
+                "ref": "docs/expause-web/features/video-call.md#data",
+                "score": 0.007518038619309664
+              },
+              {
+                "ref": "docs/expause-web/features/live-streaming-chat.md#business-behaviour",
+                "score": 0.007111068814992905
+              }
+            ],
+            "durationMs": [
+              1124.397874999995
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.6190884113311768
+          },
+          {
+            "id": "q-g10-neg-chat-edit-message",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.03189298138022423,
+            "hits": [],
+            "durationMs": [
+              1117.3633330000157
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-group-chat",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.03034467250108719,
+            "hits": [],
+            "durationMs": [
+              1076.2620829999796
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-playback-speed",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.009558700025081635,
+            "hits": [],
+            "durationMs": [
+              1090.2685000000056
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-profile-qr-code",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.029336920008063316,
+            "hits": [],
+            "durationMs": [
+              1149.9878749999916
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-coin-promo-code",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.7667030096054077,
+            "hits": [
+              {
+                "ref": "docs/expause-web/product/launch-todo.md#deliberately-deferred-post-validation-queue--listed-so-nothing-is-silently-dropped",
+                "score": 0.7667030096054077
+              },
+              {
+                "ref": "docs/expause-web/product/technical-roadmap.md#21-stripe-on-the-web-plan-c--growth-first-build-when-traffic-warrants",
+                "score": 0.7344700694084167
+              },
+              {
+                "ref": "docs/expause-web/product/product-decision-rate-card.md#34-accompanying-mechanics-relabeled-honestly",
+                "score": 0.5185686945915222
+              },
+              {
+                "ref": "docs/expause-web/features/wallet-coins.md#business-behaviour",
+                "score": 0.31353020668029785
+              },
+              {
+                "ref": "docs/expause-web/product/technical-roadmap.md#22-remaining-deferred-builds-parked-listed-so-nothing-drops-silently",
+                "score": 0.16787664592266083
+              }
+            ],
+            "durationMs": [
+              1297.4605000000156
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.7667030096054077,
+            "rank": 3,
+            "strictRank": 3
+          },
+          {
+            "id": "q-g10-neg-expiring-stories",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.007409744430333376,
+            "hits": [],
+            "durationMs": [
+              1183.5776250000054
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-pin-comment",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.0735495314002037,
+            "hits": [],
+            "durationMs": [
+              1096.3154579999973
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-storybook-stories",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.05188025161623955,
+            "hits": [],
+            "durationMs": [
+              1108.001958000008
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-callable-app-check",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": 0.9142862558364868,
+            "hits": [
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#gotchas--constraints",
+                "score": 0.9142862558364868
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#what-it-is--why",
+                "score": 0.4902108609676361
+              },
+              {
+                "ref": "docs/expause-web/concepts/device-takeover.md#what-it-is--why",
+                "score": 0.1944779008626938
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md#response-envelopes-are-not-uniform--read-the-cf",
+                "score": 0.13145920634269714
+              },
+              {
+                "ref": "docs/expause-web/concepts/cloud-functions-client-surface.md",
+                "score": 0.08270184695720673
+              }
+            ],
+            "durationMs": [
+              1089.536208000005
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.9142862558364868
+          },
+          {
+            "id": "q-g10-neg-vite-precompress",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": 0.36766234040260315,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/build.md#load-error-handling",
+                "score": 0.36766234040260315
+              },
+              {
+                "ref": "docs/vite/guide/index.md#overview",
+                "score": 0.3533238470554352
+              },
+              {
+                "ref": "docs/vite/guide/api-plugin.md#output-bundle-metadata",
+                "score": 0.23989616334438324
+              },
+              {
+                "ref": "docs/vite/guide/backend-integration.md",
+                "score": 0.1726824790239334
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.15944267809391022
+              }
+            ],
+            "durationMs": [
+              1089.4833750000107
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.36766234040260315
+          },
+          {
+            "id": "q-g10-neg-vite-obfuscate",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.045398589223623276,
+            "hits": [],
+            "durationMs": [
+              1126.6906250000175
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-vite-server-mock",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.2878953814506531,
+            "hits": [],
+            "durationMs": [
+              1058.8148339999898
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-g10-neg-vite-sitemap",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": 0.9861363768577576,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/ssr.md#generating-preload-directives",
+                "score": 0.9861363768577576
+              },
+              {
+                "ref": "docs/vite/guide/build.md#multi-page-app",
+                "score": 0.9127194285392761
+              },
+              {
+                "ref": "docs/vite/guide/ssr.md#pre-rendering--ssg",
+                "score": 0.8956217765808105
+              },
+              {
+                "ref": "docs/vite/guide/features.md#preload-directives-generation",
+                "score": 0.8922213315963745
+              },
+              {
+                "ref": "docs/vite/guide/build.md#advanced-base-options",
+                "score": 0.8486735820770264
+              }
+            ],
+            "durationMs": [
+              1095.3961249999993
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.9861363768577576
+          },
+          {
+            "id": "q-g10-neg-vite-image-webp",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": 0.8811254501342773,
+            "hits": [
+              {
+                "ref": "docs/vite/guide/assets.md#new-urlurl-importmetaurl",
+                "score": 0.8811254501342773
+              },
+              {
+                "ref": "docs/vite/guide/assets.md#importing-asset-as-url",
+                "score": 0.8596318364143372
+              },
+              {
+                "ref": "docs/vite/guide/features.md#static-assets",
+                "score": 0.09207592159509659
+              },
+              {
+                "ref": "docs/vite/config/build-options.md#buildmodulepreload",
+                "score": 0.03692534193396568
+              },
+              {
+                "ref": "docs/vite/guide/features.md#manual-initialization",
+                "score": 0.03585171699523926
+              }
+            ],
+            "durationMs": [
+              1093.3775839999726
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.8811254501342773
+          },
+          {
+            "id": "q-g10-neg-terraform-state-lock",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.0006189720588736236,
+            "hits": [],
+            "durationMs": [
+              1147.2990839999984
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-postgres-autovacuum",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.00006880000000819564,
+            "hits": [],
+            "durationMs": [
+              1078.6134160000365
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-android-keystore",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.004681364633142948,
+            "hits": [],
+            "durationMs": [
+              1077.207624999981
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-kafka-rebalance",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.000022114867533673532,
+            "hits": [],
+            "durationMs": [
+              1089.9985410000081
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-k8s-ingress-tls",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.02788946032524109,
+            "hits": [],
+            "durationMs": [
+              1269.2810840000166
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-pytest-conftest",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.0047185528092086315,
+            "hits": [],
+            "durationMs": [
+              1110.891166000045
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-go-private-modules",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.00045682076597586274,
+            "hits": [],
+            "durationMs": [
+              1098.267125000013
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-rust-clippy",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.00031986282556317747,
+            "hits": [],
+            "durationMs": [
+              1113.1820000000298
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-django-squash",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.001916314009577036,
+            "hits": [],
+            "durationMs": [
+              1076.50900000002
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-g10-neg-celery-retry",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.001845852704718709,
+            "hits": [],
+            "durationMs": [
+              1087.1522499999846
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+<!-- eval:corpus:gate10-catalog:end -->
+
 <!-- eval:generated:end -->
 
 ## Threshold calibration

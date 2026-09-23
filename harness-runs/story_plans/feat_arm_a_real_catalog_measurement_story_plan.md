@@ -53,7 +53,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_arm_a_
 15. [x] **Task 15** — Park for the operator's approval of the query set, and record it before anything is scored _(layer: general)_ _(points: 10)_
 16. [x] **Task 16** — Park for the arm A hand run: verify the CLI flags, take the free pre-checks, hand over the commands, and record the run _(layer: general)_ _(points: 15)_
 17. [x] **Task 17** — Read, redact and commit the ten arm A transcripts _(layer: general)_ _(points: 15)_
-18. [ ] **Task 18** — Run arms B–E over `gate10-catalog` at the arm A snapshot and publish its generated block with both arm A rows _(layer: general)_ _(points: 20)_
+18. [x] **Task 18** — Run arms B–E over `gate10-catalog` at the arm A snapshot and publish its generated block with both arm A rows _(layer: general)_ _(points: 20)_
 19. [ ] **Task 19** — Write arm A's real-catalog figures: every repetition, the spread, the halves and what the arm cost _(layer: general)_ _(points: 20)_
 20. [ ] **Task 20** — Apply the decision rule bar by bar, record the outcome, and open the change it names _(layer: general)_ _(points: 20)_
 21. [ ] **Task 21** — Regenerate the `fixture-catalog` and `self-docs` blocks so every calibration point is observed _(layer: general)_ _(points: 10)_
