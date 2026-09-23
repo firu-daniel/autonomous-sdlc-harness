@@ -4,7 +4,7 @@
  * both read.
  *
  * **The rule this module exists to enforce: only `fused-rerank` abstains, and only below
- * {@link ABSTAIN_SCORE_THRESHOLD}, calibrated against the measured reranker distribution** — that
+ * {@link ABSTAIN_SCORE_THRESHOLD}** — that
  * constant's own doc comment carries the value and points at the record of how it was chosen. The
  * reranker's score is the one this module treats as calibrated; the `lexical`, `vector` and `fused`
  * scores are rank-derived and uncalibrated, so those modes never abstain. The score abstention tests
@@ -36,9 +36,9 @@ export const MAX_RESULTS = 20;
 const SNIPPET_CHARS = 240;
 
 /**
- * The best reranker score below which `fused-rerank` abstains, calibrated at `0.32` against the real
- * reranker's measured score distribution; `docs/retrieval-eval-results.md` → `## Threshold
- * calibration` holds how that value was chosen and on what, and is the only record of it.
+ * The best reranker score below which `fused-rerank` abstains. `docs/retrieval-eval-results.md` →
+ * `## Threshold calibration` holds how the value was chosen, the observed distributions it was
+ * re-tested on and what it costs, and is the only record of it.
  *
  * This module's own suite bounds the value from outside: the abstention cases of
  * `cli/test/docs-retrieval.test.mjs` run under the `stub-overlap` reranker, which scores a matching
