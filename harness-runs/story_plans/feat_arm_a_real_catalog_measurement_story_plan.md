@@ -39,7 +39,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_arm_a_
 1. [x] **Task 1** — Give `SearchResult` the uncensored top reranker score, `bestRerankScore`, without changing any rendered answer _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — Add a standing check over the eval's committed query sets and transcripts, as gate 6e _(layer: general)_ _(points: 15)_
 3. [x] **Task 3** — Commit the two-variant combination rule, its readings and the re-calibration method before any figure exists _(layer: general)_ _(points: 10)_
-4. [ ] **Task 4** — Extend the query-set format with optional `situation`, `intent`, `origin` and `negativeKind`, and mark the committed sets' negatives by meaning _(layer: general)_ _(points: 15)_
+4. [x] **Task 4** — Extend the query-set format with optional `situation`, `intent`, `origin` and `negativeKind`, and mark the committed sets' negatives by meaning _(layer: general)_ _(points: 15)_
 5. [ ] **Task 5** — Record `bestRerankScore` on every eval record and every per-query entry _(layer: general)_ _(points: 10)_
 6. [ ] **Task 6** — Encode the fixed re-calibration method in `evals/docs-retrieval/calibrate.mjs` _(layer: general)_ _(points: 18)_
 7. [ ] **Task 7** — Name a corpus held outside this tree with `--corpus-id`, and never render a climbing query-set path _(layer: general)_ _(points: 15)_

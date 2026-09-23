@@ -227,7 +227,10 @@ One JSON object per line, no array wrapper and no commentary:
 
 - **`id`** — unique within the set, and stable: it is the key every per-query record, every quoted
   distribution and every refusal names, so renaming one orphans the history of that query.
-- **`query`** — the words a person would actually type. It is passed to the arms verbatim.
+- **`query`** — the words the consumer would send. It is passed to the arms verbatim. The committed
+  sets carry natural-language questions; a set written for the harness's own agents — the first is
+  `gate10-catalog` — carries short, identifier-dense agent-shaped queries, so a figure over one kind
+  of set and a figure over the other are not over like-phrased sets.
 - **`labels[]`** — the sections that answer it, each `{ ref, grade }`.
 - **`ref`** — `path#anchor`, **exactly as a search hit cites it**: the path relative to the corpus's own
   root, a GitHub-style slug for the heading, and `path` alone for a document's preamble chunk. This is
@@ -241,6 +244,18 @@ One JSON object per line, no array wrapper and no commentary:
   right answer is to find nothing. It enters neither recall nor MRR, where it would score `0` by
   construction and drag every arm down by the share of negatives in the set. It is the other half of
   the abstention calibration: what it measures is whether an arm declines to answer.
+- **`situation`** — optional; a non-empty string: one line of the task prompt, plan step or review
+  finding that would issue the query.
+- **`intent`** — optional; one of `surroundings` (feature surroundings and ripples), `convention`
+  (convention and placement rules), `contract` (backend or contract lookups).
+- **`origin`** — optional; `written` for a query written for the set, `harvested` for one taken from
+  what a consumer actually sent.
+- **`negativeKind`** — optional, and legal only on a negative — on a positive it is refused; `far` or
+  `near`. `near` is a query plausibly adjacent to material the corpus covers, `far` one that is not.
+  The class is judged from the query and the corpus's documents, never from a score.
+- **A real-catalog set carries `situation`, `intent` and `origin` on every record, and `negativeKind`
+  on every negative.** A record carrying none of the four loads exactly as one written before they
+  existed.
 
 **A stale label is a refusal, not a worse score.** Every `ref` is resolved against the chunk keys of
 the index that was just built, **before any arm runs**, so a renamed heading fails the run loudly

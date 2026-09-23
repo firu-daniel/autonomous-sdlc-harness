@@ -4631,6 +4631,19 @@ highest negative and the lowest positive, rounded half-up to two decimals.
 
 **On a *withdrawn* verdict** the distributions are recorded here and the constant goes with the tool.
 
+**How the committed sets' negatives were classed, before their scores were observable.** Judged on
+2026-09-23 from each query's text and its corpus's documents alone — `fixture-catalog`'s `docs/`, and
+this repository's `docs/` plus its conventions documents for `self-docs` — with no score and no quoted
+distribution read; the class is each record's `negativeKind`:
+`q-fc-negative-recruitment` **near** — couriers, delivery attempts and handover are covered, hiring is not;
+`q-fc-negative-lattice` **far** — no physics anywhere in a parcel-routing catalog;
+`q-fc-negative-datastore` **near** — the shipment record is cited throughout, its storage engine never;
+`q-sd-negative-ingress` **far** — nothing covers Kubernetes, ingress or cluster networking;
+`q-sd-negative-tungsten` **far** — materials science, unrelated to anything indexed;
+`q-sd-negative-blog` **near** — publishing `main`, `llms.txt` and the package is covered, a blog or website is not;
+`q-sd-negative-grpc` **near** — the retrieval index and the stdio MCP server that serves it are covered, gRPC is not;
+`q-sd-negative-migration` **near** — the PGlite index store and the config `version` migration are covered, a production database rollback is not.
+
 ## The shipped default against fusion alone
 
 **What this section records.** On both committed corpora the shipped default mode — arm E,
