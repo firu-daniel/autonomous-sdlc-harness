@@ -5049,15 +5049,15 @@ counting script in the run's scratch directory that reads the file through `load
 
 | Slice | Count |
 | --- | --- |
-| Records | 71 |
-| Positives | 42 — 23 answered under `docs/expause-web/`, 19 under `docs/vite/`; none spans both halves |
-| Negatives | 29 — 19 `near` (13 about Expause, 6 about Vite), 10 `far` |
-| Intent, all records | `surroundings` 33 · `contract` 19 · `convention` 19 |
-| Intent, positives | `surroundings` 16 · `contract` 13 · `convention` 13 |
-| Intent, negatives | `surroundings` 17 · `contract` 6 · `convention` 6 |
-| Origin | `written` 71 · `harvested` 0 |
+| Records | 69 |
+| Positives | 44 — 24 answered under `docs/expause-web/`, 20 under `docs/vite/`; none spans both halves |
+| Negatives | 25 — 15 `near` (11 about Expause, 4 about Vite), 10 `far` |
+| Intent, all records | `surroundings` 33 · `contract` 17 · `convention` 19 |
+| Intent, positives | `surroundings` 17 · `contract` 14 · `convention` 13 |
+| Intent, negatives | `surroundings` 16 · `contract` 3 · `convention` 6 |
+| Origin | `written` 69 · `harvested` 0 |
 
-**`1 / positives` for this set is `1 / 42 = 0.0238`** — one positive query is worth 2.38 percentage points
+**`1 / positives` for this set is `1 / 44 = 0.0227`** — one positive query is worth 2.27 percentage points
 of recall@5.
 
 **No harvested query.** The task prompt's optional query-log harvest (operator checklist row 8) read `Open`
@@ -5093,16 +5093,17 @@ when authoring started, so every record is written.
 **The label pre-flight.** A launcher in the run's scratch directory reads `HARNESS_EVAL_CORPUS_ROOT`, reads
 the conventions documents the catalog's own `harness.config.json` `layers[]` names, and calls
 `corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' })` → `buildIndex` in
-memory → `loadQueries` → `assertLabelsResolve`, and nothing else. Run on 2026-09-23 over the complete set:
+memory → `loadQueries` → `assertLabelsResolve`, and nothing else. Run on 2026-09-23 over the complete set,
+and re-run the same day after the operator's corrections below:
 
 ```
 bash scripts/scratch-run.sh harness-runs/scratch/task12_preflight.mjs
 ```
 
-It printed:
+The re-run printed:
 
 ```
-loaded 71 queries
+loaded 69 queries
 snapshot: { files: 156, chunks: 1960 }
 labels resolve
 ```
@@ -5111,7 +5112,32 @@ That snapshot **equals** gate 10's `{ files: 156, chunks: 1960 }`: the compositi
 `docs/expause-web/`, the 57 under `docs/vite/` and the catalog's one conventions document, which its
 `layers[]` names — the file count gate 10 stamped.
 
-**Status: awaits the operator's approval.** Nothing is scored against this set until it is recorded here.
+**Operator approval.** Approved with corrections on 2026-09-23. The operator spot-checked the grade-3
+labels and the negatives and returned the corrections below, each applied to the named record only; every
+other record is byte-identical to the set submitted. The counts, `1 / positives` and the pre-flight output
+above are the ones taken after them. **No arm had scored this set when it was approved.** Refs below
+omit their prefix: `docs/vite/` for the records whose id carries `vite`, `docs/expause-web/` for the rest.
+
+- Labels added: `q-g10-ew-mark-notification-read` ← `features/inbox.md#data` grade 3;
+  `q-g10-vite-mock-updated-event` ← `guide/api-plugin.md#handlehotupdate` grade 3;
+  `q-g10-ew-watch-later-feed-signal` ← `features/saved-content.md#domain` grade 2;
+  `q-g10-ew-new-notification-tap` ← `features/inbox.md#presentation` grade 2;
+  `q-g10-ew-group-room-agora-token` ← `features/community-live-streaming.md#cloud-functions` grade 2.
+- Grades changed: `q-g10-ew-unlock-payload` → `features/unlock-premium-content.md#cloud-functions` 2 to 3;
+  `q-g10-vite-wsl-file-save` → `guide/troubleshooting.md#vite-does-not-detect-a-file-change` 3 to 2.
+- Label removed: `q-g10-vite-dev-api-forward` → `config/server-options.md#servercors`.
+- Negatives converted to positives, `negativeKind` removed: `q-g10-neg-vite-server-mock` →
+  `guide/api-plugin.md#configureserver` grade 3, `config/server-options.md#serverproxy` grade 1;
+  `q-g10-neg-coin-promo-code` → `product/product-decision-rate-card.md#34-accompanying-mechanics-relabeled-honestly`
+  grade 3, `features/wallet-coins.md#business-behaviour` grade 1.
+- Negatives deleted: `q-g10-neg-sendgift-rate-limit`, `q-g10-neg-vite-dev-basic-auth`.
+- Situations reworded: `q-g10-neg-storybook-stories`, `q-g10-neg-group-chat`.
+
+**What the corrections say about the method.** The operator found two of the `near` negatives answered by
+the catalog and dropped two more, so four of the negatives the reading-only check had passed did not
+survive review — a measured instance of *the set is not neutral* above: the same reader that judged them
+uncovered is a model. The two converted records keep their `q-g10-neg-` ids, because an id is a stable key;
+their `labels` and missing `negativeKind`, not their ids, make them positives.
 
 ## Arm A — awaiting a hand run
 
