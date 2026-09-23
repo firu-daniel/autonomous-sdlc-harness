@@ -42,7 +42,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_arm_a_
 4. [x] **Task 4** — Extend the query-set format with optional `situation`, `intent`, `origin` and `negativeKind`, and mark the committed sets' negatives by meaning _(layer: general)_ _(points: 15)_
 5. [x] **Task 5** — Record `bestRerankScore` on every eval record and every per-query entry _(layer: general)_ _(points: 10)_
 6. [x] **Task 6** — Encode the fixed re-calibration method in `evals/docs-retrieval/calibrate.mjs` _(layer: general)_ _(points: 18)_
-7. [ ] **Task 7** — Name a corpus held outside this tree with `--corpus-id`, and never render a climbing query-set path _(layer: general)_ _(points: 15)_
+7. [x] **Task 7** — Name a corpus held outside this tree with `--corpus-id`, and never render a climbing query-set path _(layer: general)_ _(points: 15)_
 8. [ ] **Task 8** — Teach the generated table one arm A row per variant through a repeatable `--transcript` _(layer: general)_ _(points: 15)_
 9. [ ] **Task 9** — Give arm A its two variants: the `{{index}}` token, `agent-task-search.md`, and a runner that records tool calls _(layer: general)_ _(points: 20)_
 10. [ ] **Task 10** — Rewrite `## Running arm A by hand` for two variants, establish the ad-hoc route's comparability, and record the rejected subagent route _(layer: general)_ _(points: 15)_

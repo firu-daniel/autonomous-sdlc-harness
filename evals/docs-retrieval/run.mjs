@@ -29,7 +29,7 @@
 
 import { writeFileSync, readFileSync } from 'node:fs';
 import { platform, release } from 'node:os';
-import { relative, sep } from 'node:path';
+import { basename, isAbsolute, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ARMS, runArm, selectArms } from './arms.mjs';
@@ -71,6 +71,20 @@ function transcriptRecords(scored) {
 }
 
 /**
+ * The query set's path as the provenance renders it: relative to `checkout` when the set lies inside
+ * it, else to `repo` when it lies inside that; `undefined` when neither holds, because a path that
+ * begins with `..` or is absolute names where this checkout or the corpus sits on the machine.
+ */
+function queriesProvenancePath({ checkout, repo, queries }) {
+  for (const root of [checkout, repo]) {
+    if (root === undefined) continue;
+    const path = relative(root, queries);
+    if (path !== '' && !path.startsWith('..') && !isAbsolute(path)) return path.split(sep).join('/');
+  }
+  return undefined;
+}
+
+/**
  * One eval pass. `options` is `evals/docs-retrieval/args.mjs` → `parseArgs`'s shape.
  *
  * Returns the corpus result object every downstream reader takes its figures from — the arms with
@@ -82,11 +96,21 @@ function transcriptRecords(scored) {
  * nothing at all and prints the arm table and the labelled snapshot stamp to stdout.
  */
 export async function runEval(options) {
+  const queriesPath = queriesProvenancePath(options);
+  if (queriesPath === undefined && options.out !== undefined) {
+    throw new Error(
+      `eval: --out refused: the query set ${basename(options.queries)} lies inside neither this checkout nor ` +
+        '--repo, so its provenance path would climb out of both or be absolute; commit the set under ' +
+        'evals/docs-retrieval/queries/ and pass that path',
+    );
+  }
+
   const { id, config, repoRoot } = corpusConfig({
     repoRoot: options.repo,
     corpus: options.corpus,
     docsRoot: options.docsRoot,
     conventions: options.conventions,
+    corpusId: options.corpusId,
   });
 
   const session = await buildIndex({ repoRoot, config, dataDir: options.dataDir });
@@ -123,8 +147,9 @@ export async function runEval(options) {
       warnings: session.warnings,
       queries: {
         // Repo-relative, because the rendered provenance is committed and nothing in this tree may
-        // name a location on the machine that wrote it (`scripts/run-gates.sh` gate 6a).
-        path: relative(options.repo, options.queries).split(sep).join('/'),
+        // name a location on the machine that wrote it (`scripts/run-gates.sh` gate 6a) — so a path
+        // climbing out of both roots is refused above, and a stdout-only run prints the basename.
+        path: queriesPath ?? basename(options.queries),
         positives: queries.filter((query) => query.labels.length > 0).length,
         negatives: queries.filter((query) => query.labels.length === 0).length,
       },

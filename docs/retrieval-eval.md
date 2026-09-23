@@ -80,19 +80,23 @@ Each prints the arm table and the corpus's `{ files, chunks }` snapshot stamp, a
 repository has never seen:
 
 ```
-bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo <checkout> --docs-root <dir> --conventions <file> --queries <file>
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo <checkout> --docs-root <dir> --conventions <file> --corpus-id <id> --queries <file>
 ```
 
 `--repo` is the root every other path is resolved against, and every path in the two documentation
 flags is relative to it. `--conventions` is repeatable, once per conventions document, and may be
-omitted. `--queries` is **required** for an ad-hoc corpus, which has no query set of its own; for a
-built-in id it defaults to `evals/docs-retrieval/queries/<corpus-id>.jsonl`.
+omitted. `--corpus-id` names the corpus: its results block, its query set's file name and every
+citation of it carry that id, where an unnamed one reports itself as `ad-hoc`. `--queries` is
+**required** for an unnamed ad-hoc corpus, which has no query set of its own; for a built-in id it
+defaults to `evals/docs-retrieval/queries/<corpus-id>.jsonl`, and for a named one to that same path
+in **this** checkout, never under `--repo`.
 
 The rest of the surface, which `evals/docs-retrieval/args.mjs` owns and refuses an unknown flag
 against:
 
 | Flag | What it does |
 | --- | --- |
+| `--corpus-id <id>` | Names an ad-hoc corpus, and is legal only with `--docs-root`. The id matches `^[a-z0-9]+(-[a-z0-9]+)*$` and is neither a built-in id nor `ad-hoc`. With `--out`, the query set must lie inside this checkout or `--repo`: a provenance path that would begin with `..` or be absolute is refused rather than written. |
 | `--arms <letters>` | Which arms to run, run together or separated; the default is every arm that has a search mode. The legal letters are the arm table's, in `evals/docs-retrieval/arms.mjs`. |
 | `--k <n>` | How many hits each arm returns; the default is the CLI's own `DEFAULT_RESULTS`. Every recall@k column with `k` above this is measured over a short list, so leave it at the default when comparing against a recorded figure. |
 | `--repeat <n>` | How many times each query is run. Every repetition contributes a latency sample; the **first** repetition is the one scored, and a later repetition returning different refs is recorded as a non-determinism warning rather than averaged away. |
