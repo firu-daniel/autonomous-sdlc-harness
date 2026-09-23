@@ -16630,9 +16630,10 @@ restating its figures: a number that belongs to the calibration is added here an
 `best < ABSTAIN_SCORE_THRESHOLD` to the top reranker score of the `fused-rerank` mode alone. **It is
 unchanged.** The re-calibration method below, run once over the observed distributions, returned
 `cannot-separate`, so the constant is left where it was rather than trading recall silently. The
-decision of record is also **withdrawn** (`## The decision, applied to the real catalog`), so the
-constant goes with the tool under roadmap item 18 in `docs/development.md` →
-`## 6. The roadmap this tree defers to`. What follows records the distributions it was re-tested on.
+decision of record is **withdrawn** (`## The decision, applied to the real catalog`), and the
+maintainer kept retrieval opt-in rather than execute it (`### The maintainer's decision` there), so the
+method's *On a withdrawn verdict* clause below was not acted on: the constant stays, at this value,
+until a re-calibration moves it. What follows records the distributions it was re-tested on.
 
 **What it was calibrated on.** The value itself dates from the censored run in
 `### The value this replaces`. The re-calibration pooled arm E (`fused-rerank`) of three generated
@@ -16877,8 +16878,9 @@ threshold it was taken under, `0.32`, which is still the one in force.
   force; the positive returned the known section first at `1.000` and the negative abstained. Two
   queries confirm the value at both ends and observe no distribution.
 
-**What would move the value next.** Nothing on this branch: the withdrawn outcome removes the constant
-with the tool (roadmap item 18). Were that decision reversed, the method returns a value only when some
+**What would move the value next.** A re-calibration, not a removal — retrieval is kept opt-in
+(`## The decision, applied to the real catalog` → `### The maintainer's decision`), so the constant
+stays with the tool. The method returns a value only when some
 `near` negative scores below the lowest grade-3 positive and at most one positive pays for it; on this
 reranker the positive tail reaches `0.00004109544534003362`, so that takes a different reranker or a
 different query set, measured and pooled the same way.
@@ -17090,11 +17092,10 @@ one catalog D's lead is two positives of 44.
 
 **What this section does not decide.** This branch records the measurement and changes neither default:
 `DEFAULT_MODE` stays `fused-rerank`, the MCP server still asks for no other mode, and abstention is not
-extended to `fused`. That decision stays open, and it is not taken in this file. While the verdict of
-record in `## The decision, applied to the real catalog` stands, it does not arise: roadmap item 18 in
-`docs/development.md` → `## 6. The roadmap this tree defers to` withdraws the tool with every mode in
-it. A change that reverses that verdict and keeps docs retrieval is where the default mode and the
-scope of abstention would be decided, against this table.
+extended to `fused`. That decision stays open, and it is not taken in this file. The verdict of record
+is withdrawn and the maintainer kept retrieval opt-in (`## The decision, applied to the real catalog` →
+`### The maintainer's decision`), so the decision is open rather than moot: a later change that takes it
+decides the default mode and the scope of abstention, against this table.
 
 ## Cold build and index size
 
