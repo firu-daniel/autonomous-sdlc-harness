@@ -37,7 +37,7 @@ This branch runs **arm A** of the docs-retrieval eval — navigation by an agent
 Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_arm_a_real_catalog_measurement/task_<K>_plan.md` file. Ordered by ship sequence: the library field first (`cli`), then the eval plumbing, the query set and its park, the arm A park, the measurement, the decision, and the re-calibration — whose `cli` constant move is ordered after the measurement it consumes — with the catch-all close-out last.
 
 1. [x] **Task 1** — Give `SearchResult` the uncensored top reranker score, `bestRerankScore`, without changing any rendered answer _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Add a standing check over the eval's committed query sets and transcripts, as gate 6e _(layer: general)_ _(points: 15)_
+2. [x] **Task 2** — Add a standing check over the eval's committed query sets and transcripts, as gate 6e _(layer: general)_ _(points: 15)_
 3. [ ] **Task 3** — Commit the two-variant combination rule, its readings and the re-calibration method before any figure exists _(layer: general)_ _(points: 10)_
 4. [ ] **Task 4** — Extend the query-set format with optional `situation`, `intent`, `origin` and `negativeKind`, and mark the committed sets' negatives by meaning _(layer: general)_ _(points: 15)_
 5. [ ] **Task 5** — Record `bestRerankScore` on every eval record and every per-query entry _(layer: general)_ _(points: 10)_
