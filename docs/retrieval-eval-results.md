@@ -20,16 +20,18 @@ mean: `docs/retrieval-eval.md` owns that, and `docs/retrieval.md` owns how the t
 | Arm | Mode | recall@1 | recall@3 | recall@5 | MRR | strict recall@5 | strict MRR | p50 ms | p95 ms | cost |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | A | — | — | — | — | — | — | — | — | — | awaiting hand run |
-| B | `lexical` | 0.444 | 0.889 | 1.000 | 0.657 | 1.000 | 0.606 | 0.6 | 4.2 | local — no billed tokens (0 embed calls, 0 rerank calls) |
-| C | `vector` | 0.778 | 1.000 | 1.000 | 0.889 | 1.000 | 0.806 | 5.8 | 6.5 | local — no billed tokens (12 embed calls, 0 rerank calls) |
-| D | `fused` | 0.556 | 1.000 | 1.000 | 0.759 | 1.000 | 0.685 | 5.9 | 7.7 | local — no billed tokens (12 embed calls, 0 rerank calls) |
-| E | `fused-rerank` | 0.444 | 0.667 | 0.667 | 0.556 | 0.667 | 0.556 | 652.4 | 799.4 | local — no billed tokens (12 embed calls, 12 rerank calls) |
+| B | `lexical` | 0.444 | 0.889 | 1.000 | 0.657 | 1.000 | 0.606 | 0.5 | 4.1 | local — no billed tokens (0 embed calls, 0 rerank calls) |
+| C | `vector` | 0.778 | 1.000 | 1.000 | 0.889 | 1.000 | 0.806 | 5.4 | 6.3 | local — no billed tokens (12 embed calls, 0 rerank calls) |
+| D | `fused` | 0.556 | 1.000 | 1.000 | 0.759 | 1.000 | 0.685 | 5.7 | 6.7 | local — no billed tokens (12 embed calls, 0 rerank calls) |
+| E | `fused-rerank` | 0.444 | 0.667 | 0.667 | 0.556 | 0.667 | 0.556 | 561.7 | 636.3 | local — no billed tokens (12 embed calls, 12 rerank calls) |
 
-Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its row is
-filled by re-running the eval with `--transcript` against a hand-run transcript, per the procedure in
-`docs/retrieval-eval.md` → `## Running arm A by hand`.
+Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its rows are
+filled by re-running the eval with one `--transcript` per variant against a hand-run transcript, per the
+procedure in `docs/retrieval-eval.md` → `## Running arm A by hand`. The arm A rows, when present, are each
+scored from the **first repetition's** transcript of that variant; the spread across repetitions is
+hand-written below the end marker.
 
-The `cost` column is not a score, and **the arms’ scores are not comparable across rows**: the non-reranking
+The `cost` column is not a score, and **the arms' scores are not comparable across rows**: the non-reranking
 modes report rank-derived reciprocal-rank-fusion values in the `0.004`–`0.033` range, while the reranking mode
 reports calibrated `[0, 1]` cross-encoder scores. Compare recall, MRR and latency across rows; compare scores only
 within a row.
@@ -42,7 +44,7 @@ within a row.
 - `docs.root`: `docs`, as the runner set it (the eval owns the retrieval gate and
   `docs.root` alone).
 - The corpus is *every* `*.md` under that `docs.root`, with no file filtered out, so a document added
-  under it joins the corpus that measures it — and where that root is this checkout’s own `docs/`, this
+  under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
   file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
   taken before such a document existed is therefore a different corpus.
 - `layers[]`: none — this corpus is read as a repository of its own and carries no conventions documents.
@@ -55,7 +57,7 @@ within a row.
   pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
   calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —
   so both variables that moved between the two readings, the threshold and the corpus, are named.
-- Host `darwin 24.6.0`, Node `v20.19.5`, 2026-09-21T18:59:36.311Z.
+- Host `darwin 24.6.0`, Node `v20.19.5`, 2026-09-23T19:26:59.227Z.
 
 ```json
 {
@@ -74,12 +76,13 @@ within a row.
     "positives": 9,
     "negatives": 3
   },
-  "generatedAt": "2026-09-21T18:59:36.311Z",
+  "generatedAt": "2026-09-23T19:26:59.227Z",
   "host": "darwin 24.6.0",
   "node": "v20.19.5",
   "arms": [
     {
       "arm": "A",
+      "variant": null,
       "mode": null,
       "ran": false
     },
@@ -112,8 +115,8 @@ within a row.
           "mrr": 0.6055555555555556
         },
         "latency": {
-          "p50": 0.6111659999996846,
-          "p95": 4.170292000000245
+          "p50": 0.547874999999749,
+          "p95": 4.059624999999869
         },
         "samples": 12,
         "abstainedOnNegative": 0,
@@ -122,6 +125,7 @@ within a row.
             "id": "q-fc-route-choice",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/routing.md",
@@ -145,7 +149,7 @@ within a row.
               }
             ],
             "durationMs": [
-              4.170292000000245
+              4.059624999999869
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -156,6 +160,7 @@ within a row.
             "id": "q-fc-late-handin",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/routing.md#cut-off-times",
@@ -179,7 +184,7 @@ within a row.
               }
             ],
             "durationMs": [
-              1.2911659999999756
+              0.816124999999829
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -190,6 +195,7 @@ within a row.
             "id": "q-fc-barcode-contents",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/labels.md#the-routing-barcode",
@@ -213,7 +219,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.6478750000001128
+              0.5768339999999625
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -224,6 +230,7 @@ within a row.
             "id": "q-fc-unreadable-label",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/labels.md",
@@ -247,7 +254,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.6638750000001892
+              0.6013749999997344
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -258,6 +265,7 @@ within a row.
             "id": "q-fc-billable-weight",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/rates.md",
@@ -281,7 +289,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.6084999999998217
+              0.5461669999999685
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -292,6 +300,7 @@ within a row.
             "id": "q-fc-surcharge-compounding",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/labels.md#label-anatomy",
@@ -315,7 +324,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.572624999999789
+              0.5002500000000509
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -326,6 +335,7 @@ within a row.
             "id": "q-fc-webhook-retry",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/webhooks.md#delivery-and-retries",
@@ -349,7 +359,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.6077499999996689
+              0.547874999999749
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -360,6 +370,7 @@ within a row.
             "id": "q-fc-verify-callback",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/webhooks.md#replaying-missed-events",
@@ -383,7 +394,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.6143749999996544
+              0.5315000000000509
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -394,6 +405,7 @@ within a row.
             "id": "q-fc-token-lifetime",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/api-auth.md#token-exchange",
@@ -417,7 +429,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.6111659999996846
+              0.5357500000000073
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -428,6 +440,7 @@ within a row.
             "id": "q-fc-negative-recruitment",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/rates.md",
@@ -451,7 +464,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.6481250000001637
+              0.5872089999998025
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -460,9 +473,10 @@ within a row.
             "id": "q-fc-negative-lattice",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [],
             "durationMs": [
-              0.23050000000012005
+              0.2072920000000522
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -471,6 +485,7 @@ within a row.
             "id": "q-fc-negative-datastore",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/api-auth.md#api-keys",
@@ -494,7 +509,7 @@ within a row.
               }
             ],
             "durationMs": [
-              0.5816250000002583
+              0.5613329999996495
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -531,8 +546,8 @@ within a row.
           "mrr": 0.8055555555555556
         },
         "latency": {
-          "p50": 5.762374999999793,
-          "p95": 6.468499999999949
+          "p50": 5.411375000000135,
+          "p95": 6.339042000000063
         },
         "samples": 12,
         "abstainedOnNegative": 0,
@@ -541,6 +556,7 @@ within a row.
             "id": "q-fc-route-choice",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/routing.md",
@@ -564,7 +580,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.236041000000114
+              5.081625000000258
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -575,6 +591,7 @@ within a row.
             "id": "q-fc-late-handin",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/routing.md#cut-off-times",
@@ -598,7 +615,7 @@ within a row.
               }
             ],
             "durationMs": [
-              6.090416000000005
+              6.033166000000165
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -609,6 +626,7 @@ within a row.
             "id": "q-fc-barcode-contents",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/labels.md#the-routing-barcode",
@@ -632,7 +650,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.823041999999987
+              4.906500000000051
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -643,6 +661,7 @@ within a row.
             "id": "q-fc-unreadable-label",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/labels.md#when-a-label-is-rejected",
@@ -666,7 +685,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.762374999999793
+              5.683708000000024
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -677,6 +696,7 @@ within a row.
             "id": "q-fc-billable-weight",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/rates.md#volumetric-weight",
@@ -700,7 +720,7 @@ within a row.
               }
             ],
             "durationMs": [
-              6.468499999999949
+              5.78933300000017
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -711,6 +731,7 @@ within a row.
             "id": "q-fc-surcharge-compounding",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/rates.md#remote-area-surcharge",
@@ -734,7 +755,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.545375000000149
+              5.411375000000135
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -745,6 +766,7 @@ within a row.
             "id": "q-fc-webhook-retry",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/webhooks.md#delivery-and-retries",
@@ -768,7 +790,7 @@ within a row.
               }
             ],
             "durationMs": [
-              6.308958000000075
+              6.339042000000063
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -779,6 +801,7 @@ within a row.
             "id": "q-fc-verify-callback",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/webhooks.md#replaying-missed-events",
@@ -802,7 +825,7 @@ within a row.
               }
             ],
             "durationMs": [
-              6.218708000000333
+              5.949249999999665
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -813,6 +836,7 @@ within a row.
             "id": "q-fc-token-lifetime",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/api-auth.md#token-exchange",
@@ -836,7 +860,7 @@ within a row.
               }
             ],
             "durationMs": [
-              6.016415999999936
+              5.928000000000338
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -847,6 +871,7 @@ within a row.
             "id": "q-fc-negative-recruitment",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/depot-operations.md#handover-to-a-courier",
@@ -870,7 +895,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.5448749999995925
+              4.454833000000235
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -879,6 +904,7 @@ within a row.
             "id": "q-fc-negative-lattice",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/labels.md#label-anatomy",
@@ -902,7 +928,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.361292000000049
+              5.226709000000028
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -911,6 +937,7 @@ within a row.
             "id": "q-fc-negative-datastore",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/tracking.md",
@@ -934,7 +961,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.386332999999922
+              5.3737500000002
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -971,8 +998,8 @@ within a row.
           "mrr": 0.6851851851851851
         },
         "latency": {
-          "p50": 5.865124999999807,
-          "p95": 7.719375000000127
+          "p50": 5.734709000000294,
+          "p95": 6.682625000000371
         },
         "samples": 12,
         "abstainedOnNegative": 0,
@@ -981,6 +1008,7 @@ within a row.
             "id": "q-fc-route-choice",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/routing.md",
@@ -1004,7 +1032,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.9692919999997684
+              6.267917000000125
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1015,6 +1043,7 @@ within a row.
             "id": "q-fc-late-handin",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/routing.md#cut-off-times",
@@ -1038,7 +1067,7 @@ within a row.
               }
             ],
             "durationMs": [
-              6.116167000000132
+              6.682625000000371
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1049,6 +1078,7 @@ within a row.
             "id": "q-fc-barcode-contents",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/labels.md#the-routing-barcode",
@@ -1072,7 +1102,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.574083000000428
+              5.530875000000378
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1083,6 +1113,7 @@ within a row.
             "id": "q-fc-unreadable-label",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/labels.md",
@@ -1106,7 +1137,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.865124999999807
+              5.734709000000294
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.032266458495966696,
@@ -1117,6 +1148,7 @@ within a row.
             "id": "q-fc-billable-weight",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/rates.md",
@@ -1140,7 +1172,7 @@ within a row.
               }
             ],
             "durationMs": [
-              7.719375000000127
+              5.924207999999908
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.032266458495966696,
@@ -1151,6 +1183,7 @@ within a row.
             "id": "q-fc-surcharge-compounding",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/rates.md#remote-area-surcharge",
@@ -1174,7 +1207,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.504707999999937
+              5.483750000000327
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03252247488101534,
@@ -1185,6 +1218,7 @@ within a row.
             "id": "q-fc-webhook-retry",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/webhooks.md#delivery-and-retries",
@@ -1208,7 +1242,7 @@ within a row.
               }
             ],
             "durationMs": [
-              7.628374999999778
+              5.881582999999864
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1219,6 +1253,7 @@ within a row.
             "id": "q-fc-verify-callback",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/webhooks.md#replaying-missed-events",
@@ -1242,7 +1277,7 @@ within a row.
               }
             ],
             "durationMs": [
-              6.04024999999956
+              5.91537500000004
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1253,6 +1288,7 @@ within a row.
             "id": "q-fc-token-lifetime",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/api-auth.md#token-exchange",
@@ -1276,7 +1312,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.955583999999817
+              5.749459000000115
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -1287,6 +1323,7 @@ within a row.
             "id": "q-fc-negative-recruitment",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/exceptions.md#redelivery-attempts",
@@ -1310,7 +1347,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.528875000000426
+              5.361541000000216
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.03076923076923077
@@ -1319,6 +1356,7 @@ within a row.
             "id": "q-fc-negative-lattice",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/labels.md#label-anatomy",
@@ -1342,7 +1380,7 @@ within a row.
               }
             ],
             "durationMs": [
-              4.708000000000084
+              5.161833000000115
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -1351,6 +1389,7 @@ within a row.
             "id": "q-fc-negative-datastore",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/tracking.md",
@@ -1374,7 +1413,7 @@ within a row.
               }
             ],
             "durationMs": [
-              5.266958000000159
+              5.322624999999789
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.032266458495966696
@@ -1411,8 +1450,8 @@ within a row.
           "mrr": 0.5555555555555556
         },
         "latency": {
-          "p50": 652.4469169999998,
-          "p95": 799.3642080000009
+          "p50": 561.7407920000005,
+          "p95": 636.2764169999991
         },
         "samples": 12,
         "abstainedOnNegative": 3,
@@ -1421,6 +1460,7 @@ within a row.
             "id": "q-fc-route-choice",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.9988245368003845,
             "hits": [
               {
                 "ref": "docs/routing.md",
@@ -1444,7 +1484,7 @@ within a row.
               }
             ],
             "durationMs": [
-              517.770583
+              516.178375
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9988245368003845,
@@ -1455,6 +1495,7 @@ within a row.
             "id": "q-fc-late-handin",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.9811885952949524,
             "hits": [
               {
                 "ref": "docs/routing.md#cut-off-times",
@@ -1478,7 +1519,7 @@ within a row.
               }
             ],
             "durationMs": [
-              545.5106249999999
+              483.60612500000025
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9811885952949524,
@@ -1489,6 +1530,7 @@ within a row.
             "id": "q-fc-barcode-contents",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.941379964351654,
             "hits": [
               {
                 "ref": "docs/labels.md#the-routing-barcode",
@@ -1512,7 +1554,7 @@ within a row.
               }
             ],
             "durationMs": [
-              652.4469169999998
+              583.0760419999997
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.941379964351654,
@@ -1523,6 +1565,7 @@ within a row.
             "id": "q-fc-unreadable-label",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.9988497495651245,
             "hits": [
               {
                 "ref": "docs/labels.md#when-a-label-is-rejected",
@@ -1546,7 +1589,7 @@ within a row.
               }
             ],
             "durationMs": [
-              607.866
+              525.4331669999992
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9988497495651245,
@@ -1557,9 +1600,10 @@ within a row.
             "id": "q-fc-billable-weight",
             "negative": false,
             "abstained": true,
+            "bestRerankScore": 0.00004109544534003362,
             "hits": [],
             "durationMs": [
-              629.0243339999997
+              561.7407920000005
             ],
             "warnings": [],
             "bestScoreOnPositive": null,
@@ -1570,9 +1614,10 @@ within a row.
             "id": "q-fc-surcharge-compounding",
             "negative": false,
             "abstained": true,
+            "bestRerankScore": 0.0007010828121565282,
             "hits": [],
             "durationMs": [
-              678.095875
+              533.0116669999998
             ],
             "warnings": [],
             "bestScoreOnPositive": null,
@@ -1583,6 +1628,7 @@ within a row.
             "id": "q-fc-webhook-retry",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.5472269654273987,
             "hits": [
               {
                 "ref": "docs/api-auth.md#token-exchange",
@@ -1606,7 +1652,7 @@ within a row.
               }
             ],
             "durationMs": [
-              703.5496669999993
+              606.0804579999995
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.5472269654273987,
@@ -1617,9 +1663,10 @@ within a row.
             "id": "q-fc-verify-callback",
             "negative": false,
             "abstained": true,
+            "bestRerankScore": 0.07702871412038803,
             "hits": [],
             "durationMs": [
-              754.9446669999998
+              612.6759579999998
             ],
             "warnings": [],
             "bestScoreOnPositive": null,
@@ -1630,6 +1677,7 @@ within a row.
             "id": "q-fc-token-lifetime",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.983818769454956,
             "hits": [
               {
                 "ref": "docs/api-auth.md#token-exchange",
@@ -1653,7 +1701,7 @@ within a row.
               }
             ],
             "durationMs": [
-              782.9009169999999
+              636.2764169999991
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.983818769454956,
@@ -1664,9 +1712,10 @@ within a row.
             "id": "q-fc-negative-recruitment",
             "negative": true,
             "abstained": true,
+            "bestRerankScore": 0.00018444025772623718,
             "hits": [],
             "durationMs": [
-              776.3848749999997
+              626.1063330000006
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -1675,9 +1724,10 @@ within a row.
             "id": "q-fc-negative-lattice",
             "negative": true,
             "abstained": true,
+            "bestRerankScore": 0.00001332825831923401,
             "hits": [],
             "durationMs": [
-              799.3642080000009
+              625.3889170000002
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -1686,9 +1736,10 @@ within a row.
             "id": "q-fc-negative-datastore",
             "negative": true,
             "abstained": true,
+            "bestRerankScore": 0.1376960277557373,
             "hits": [],
             "durationMs": [
-              331.1431670000002
+              240.04858400000012
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -1707,32 +1758,34 @@ within a row.
 | Arm | Mode | recall@1 | recall@3 | recall@5 | MRR | strict recall@5 | strict MRR | p50 ms | p95 ms | cost |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | A | — | — | — | — | — | — | — | — | — | awaiting hand run |
-| B | `lexical` | 0.333 | 0.667 | 0.933 | 0.534 | 0.733 | 0.344 | 2.6 | 6.8 | local — no billed tokens (0 embed calls, 0 rerank calls) |
-| C | `vector` | 0.533 | 0.533 | 0.600 | 0.547 | 0.333 | 0.247 | 7.8 | 9.1 | local — no billed tokens (20 embed calls, 0 rerank calls) |
-| D | `fused` | 0.533 | 0.800 | 0.867 | 0.650 | 0.667 | 0.352 | 9.8 | 12.2 | local — no billed tokens (20 embed calls, 0 rerank calls) |
-| E | `fused-rerank` | 0.400 | 0.600 | 0.600 | 0.500 | 0.533 | 0.383 | 1145.3 | 1263.5 | local — no billed tokens (20 embed calls, 20 rerank calls) |
+| B | `lexical` | 0.333 | 0.600 | 0.867 | 0.501 | 0.600 | 0.301 | 2.1 | 5.2 | local — no billed tokens (0 embed calls, 0 rerank calls) |
+| C | `vector` | 0.533 | 0.600 | 0.667 | 0.569 | 0.333 | 0.247 | 7.4 | 8.7 | local — no billed tokens (20 embed calls, 0 rerank calls) |
+| D | `fused` | 0.533 | 0.733 | 0.800 | 0.639 | 0.667 | 0.363 | 7.9 | 10.6 | local — no billed tokens (20 embed calls, 0 rerank calls) |
+| E | `fused-rerank` | 0.467 | 0.600 | 0.600 | 0.533 | 0.533 | 0.383 | 1005.1 | 1225.7 | local — no billed tokens (20 embed calls, 20 rerank calls) |
 
-Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its row is
-filled by re-running the eval with `--transcript` against a hand-run transcript, per the procedure in
-`docs/retrieval-eval.md` → `## Running arm A by hand`.
+Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its rows are
+filled by re-running the eval with one `--transcript` per variant against a hand-run transcript, per the
+procedure in `docs/retrieval-eval.md` → `## Running arm A by hand`. The arm A rows, when present, are each
+scored from the **first repetition's** transcript of that variant; the spread across repetitions is
+hand-written below the end marker.
 
-The `cost` column is not a score, and **the arms’ scores are not comparable across rows**: the non-reranking
+The `cost` column is not a score, and **the arms' scores are not comparable across rows**: the non-reranking
 modes report rank-derived reciprocal-rank-fusion values in the `0.004`–`0.033` range, while the reranking mode
 reports calibrated `[0, 1]` cross-encoder scores. Compare recall, MRR and latency across rows; compare scores only
 within a row.
 
 **Provenance.**
 
-- Corpus `self-docs` — snapshot `{ files: 13, chunks: 177 }`,
+- Corpus `self-docs` — snapshot `{ files: 14, chunks: 213 }`,
   as the index build of this run reported it. A figure over `self-docs` is read with this stamp beside it;
   two figures carrying different stamps are not a before/after pair.
 - `docs.root`: `docs`, as the runner set it (the eval owns the retrieval gate and
   `docs.root` alone).
 - The corpus is *every* `*.md` under that `docs.root`, with no file filtered out, so a document added
-  under it joins the corpus that measures it — and where that root is this checkout’s own `docs/`, this
+  under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
   file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
   taken before such a document existed is therefore a different corpus.
-- `layers[]`, read out of the resolved checkout’s `harness.config.json` and never composed here:
+- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
   - `cli` (path `cli`) → `.claude/context/cli.md`
   - `plugin` (path `plugin`) → `.claude/context/plugin.md`
   - `general` (path `.`) → `.claude/context/conventions.md`
@@ -1745,14 +1798,14 @@ within a row.
   pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
   calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —
   so both variables that moved between the two readings, the threshold and the corpus, are named.
-- Host `darwin 24.6.0`, Node `v20.19.5`, 2026-09-21T19:00:20.828Z.
+- Host `darwin 24.6.0`, Node `v20.19.5`, 2026-09-23T19:27:46.757Z.
 
 ```json
 {
   "corpus": "self-docs",
   "snapshot": {
-    "files": 13,
-    "chunks": 177
+    "files": 14,
+    "chunks": 213
   },
   "abstainScoreThreshold": 0.32,
   "embedder": "Xenova/bge-small-en-v1.5:q8:cls:384:v1",
@@ -1764,12 +1817,13 @@ within a row.
     "positives": 15,
     "negatives": 5
   },
-  "generatedAt": "2026-09-21T19:00:20.828Z",
+  "generatedAt": "2026-09-23T19:27:46.757Z",
   "host": "darwin 24.6.0",
   "node": "v20.19.5",
   "arms": [
     {
       "arm": "A",
+      "variant": null,
       "mode": null,
       "ran": false
     },
@@ -1789,21 +1843,21 @@ within a row.
         "negatives": 5,
         "recall": {
           "1": 0.3333333333333333,
-          "3": 0.6666666666666666,
-          "5": 0.9333333333333333
+          "3": 0.6,
+          "5": 0.8666666666666667
         },
-        "mrr": 0.5344444444444444,
+        "mrr": 0.5011111111111111,
         "strict": {
           "recall": {
             "1": 0.2,
-            "3": 0.4,
-            "5": 0.7333333333333333
+            "3": 0.3333333333333333,
+            "5": 0.6
           },
-          "mrr": 0.34444444444444444
+          "mrr": 0.30111111111111116
         },
         "latency": {
-          "p50": 2.611417000000074,
-          "p95": 6.793041000000812
+          "p50": 2.0999159999992116,
+          "p95": 5.244708999998693
         },
         "samples": 20,
         "abstainedOnNegative": 0,
@@ -1812,6 +1866,7 @@ within a row.
             "id": "q-sd-new-config-key",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/typecheck-key-decision.md#3-can-another-family-reach-this-state",
@@ -1822,41 +1877,42 @@ within a row.
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/cli.md#4-stack-detection",
+                "ref": "docs/retrieval.md#how-it-fits-together",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/retrieval.md#how-it-fits-together",
+                "ref": "docs/cli.md#4-stack-detection",
                 "score": 0.015625
               },
               {
-                "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
+                "ref": "docs/config.md#5-key-reference",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              23.993499999996857
+              10.977875000000495
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
-            "rank": 0,
+            "rank": 5,
             "strictRank": 0
           },
           {
             "id": "q-sd-deny-guard",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/watcher.md#2-the-scripts",
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
                 "score": 0.01639344262295082
               },
               {
-                "ref": ".claude/context/conventions.md#output-logging-and-errors",
+                "ref": "docs/watcher.md#2-the-scripts",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "ref": ".claude/context/conventions.md#output-logging-and-errors",
                 "score": 0.015873015873015872
               },
               {
@@ -1869,17 +1925,18 @@ within a row.
               }
             ],
             "durationMs": [
-              2.453291999998328
+              2.179374999999709
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
-            "rank": 2,
-            "strictRank": 2
+            "rank": 3,
+            "strictRank": 3
           },
           {
             "id": "q-sd-new-subcommand",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
@@ -1890,20 +1947,20 @@ within a row.
                 "score": 0.016129032258064516
               },
               {
-                "ref": ".claude/context/cli.md#what-done-means-here",
+                "ref": ".claude/context/cli.md#one-example--the-shape-a-rule-takes-here",
                 "score": 0.015873015873015872
               },
               {
-                "ref": ".claude/context/cli.md#one-example--the-shape-a-rule-takes-here",
+                "ref": ".claude/context/cli.md#what-done-means-here",
                 "score": 0.015625
               },
               {
-                "ref": ".claude/context/plugin.md#what-accompanies-a-new-unit-of-each-kind",
+                "ref": ".claude/context/cli.md#not-determined",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              1.3491659999999683
+              1.2333749999997963
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -1914,13 +1971,14 @@ within a row.
             "id": "q-sd-run-gates",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/typecheck-key-decision.md#1-the-bind",
+                "ref": "docs/config.md#5-key-reference",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/config.md#5-key-reference",
+                "ref": "docs/typecheck-key-decision.md#1-the-bind",
                 "score": 0.016129032258064516
               },
               {
@@ -1937,7 +1995,7 @@ within a row.
               }
             ],
             "durationMs": [
-              2.6489159999982803
+              2.0999159999992116
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -1948,6 +2006,7 @@ within a row.
             "id": "q-sd-state-dir",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/config.md#1-the-three-resolution-classes",
@@ -1971,7 +2030,7 @@ within a row.
               }
             ],
             "durationMs": [
-              3.5946660000008706
+              2.799250000000029
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -1982,6 +2041,7 @@ within a row.
             "id": "q-sd-commit-prefix",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#commit-message-policy",
@@ -2000,12 +2060,12 @@ within a row.
                 "score": 0.015625
               },
               {
-                "ref": "docs/retrieval.md#how-it-fits-together",
+                "ref": "docs/retrieval-eval-results.md#the-real-catalog-query-set",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              5.3527920000015
+              4.224792000000889
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2016,6 +2076,7 @@ within a row.
             "id": "q-sd-guard-shell-options",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#shell-assets",
@@ -2026,20 +2087,20 @@ within a row.
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/guard-verification.md#24-disclosed-residuals-re-confirmed",
+                "ref": ".claude/context/plugin.md#registries--a-name-routed-to-an-implementation",
                 "score": 0.015873015873015872
               },
               {
-                "ref": ".claude/context/plugin.md#registries--a-name-routed-to-an-implementation",
+                "ref": "docs/guard-verification.md#24-disclosed-residuals-re-confirmed",
                 "score": 0.015625
               },
               {
-                "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
+                "ref": ".claude/context/conventions.md#output-logging-and-errors",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              2.819374999999127
+              2.0766660000008414
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2050,6 +2111,7 @@ within a row.
             "id": "q-sd-cross-asset-reference",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
@@ -2068,12 +2130,12 @@ within a row.
                 "score": 0.015625
               },
               {
-                "ref": "docs/development.md",
+                "ref": "docs/development.md#4-userconfig-reserved",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              1.345208000002458
+              1.1824169999999867
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2084,6 +2146,7 @@ within a row.
             "id": "q-sd-daemon-lifecycle",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": ".claude/context/cli.md#what-done-means-here",
@@ -2098,50 +2161,121 @@ within a row.
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/outer-loop-verification.md#23-the-recorded-pid-and-what-signalling-it-actually-does",
+                "ref": "docs/cli.md#9-daemon",
                 "score": 0.015625
               },
               {
-                "ref": "docs/cli.md#9-daemon",
+                "ref": "docs/outer-loop-verification.md#23-the-recorded-pid-and-what-signalling-it-actually-does",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              1.8783330000005662
+              2.463958000000275
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
-            "rank": 5,
-            "strictRank": 5
+            "rank": 4,
+            "strictRank": 4
           },
           {
             "id": "q-sd-usage-limit",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/watcher.md#5-machine-level-usage-lane",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "ref": "docs/retrieval-eval-results.md#the-shipped-default-against-fusion-alone",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/outer-loop-verification.md#25-the-usage-gate",
+                "ref": "docs/retrieval-eval.md#running-arm-a-by-hand",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/cli.md#docs-search",
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
                 "score": 0.015625
               },
               {
-                "ref": "docs/watcher.md#4-pausing-parking-and-the-usage-gate",
+                "ref": "docs/outer-loop-verification.md#25-the-usage-gate",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              3.2408749999995052
+              2.8849999999983993
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-search-abstains",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#arm-a--the-real-catalog-hand-run",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval.md#what-to-do-with-the-result",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.608250000001135
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-retrieval-network",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#10-how-this-is-tested",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#offline-by-construction",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.2160829999993439
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2149,77 +2283,10 @@ within a row.
             "strictRank": 5
           },
           {
-            "id": "q-sd-search-abstains",
-            "negative": false,
-            "abstained": false,
-            "hits": [
-              {
-                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
-                "score": 0.01639344262295082
-              },
-              {
-                "ref": "docs/cli.md#docs-serve",
-                "score": 0.016129032258064516
-              },
-              {
-                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
-                "score": 0.015873015873015872
-              },
-              {
-                "ref": "docs/cli.md#docs-search",
-                "score": 0.015625
-              },
-              {
-                "ref": "docs/retrieval.md#how-it-fits-together",
-                "score": 0.015384615384615385
-              }
-            ],
-            "durationMs": [
-              1.9358749999992142
-            ],
-            "warnings": [],
-            "bestScoreOnPositive": 0.01639344262295082,
-            "rank": 4,
-            "strictRank": 5
-          },
-          {
-            "id": "q-sd-retrieval-network",
-            "negative": false,
-            "abstained": false,
-            "hits": [
-              {
-                "ref": "docs/cli.md#10-how-this-is-tested",
-                "score": 0.01639344262295082
-              },
-              {
-                "ref": "docs/retrieval.md#still-open",
-                "score": 0.016129032258064516
-              },
-              {
-                "ref": "docs/cli.md#offline-by-construction",
-                "score": 0.015873015873015872
-              },
-              {
-                "ref": "docs/retrieval.md#how-it-fits-together",
-                "score": 0.015625
-              },
-              {
-                "ref": "docs/cli.md#11-docs",
-                "score": 0.015384615384615385
-              }
-            ],
-            "durationMs": [
-              1.5866669999995793
-            ],
-            "warnings": [],
-            "bestScoreOnPositive": 0.01639344262295082,
-            "rank": 3,
-            "strictRank": 3
-          },
-          {
             "id": "q-sd-analyze-writes",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/cli.md#3-the-re-run-contract",
@@ -2243,7 +2310,7 @@ within a row.
               }
             ],
             "durationMs": [
-              2.6708749999997963
+              2.062292000002344
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2254,6 +2321,7 @@ within a row.
             "id": "q-sd-stack-detection",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/config.md#5-key-reference",
@@ -2277,7 +2345,7 @@ within a row.
               }
             ],
             "durationMs": [
-              4.702750000000378
+              3.5649579999990237
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2288,6 +2356,7 @@ within a row.
             "id": "q-sd-second-init",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/typecheck-key-decision.md#6-option-c--a-composer-family-fallback",
@@ -2311,7 +2380,7 @@ within a row.
               }
             ],
             "durationMs": [
-              6.793041000000812
+              5.244708999998693
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2322,21 +2391,22 @@ within a row.
             "id": "q-sd-negative-ingress",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/guard-verification.md#2-standing-decision-matrices",
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/retrieval-eval-results.md#the-pre-calibration-distributions-quoted",
+                "ref": "docs/guard-verification.md#2-standing-decision-matrices",
                 "score": 0.015625
               },
               {
@@ -2345,7 +2415,7 @@ within a row.
               }
             ],
             "durationMs": [
-              2.679833999998664
+              2.1165000000000873
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -2354,30 +2424,31 @@ within a row.
             "id": "q-sd-negative-tungsten",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/retrieval-eval-results.md#the-pre-calibration-distributions-quoted",
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "ref": "docs/retrieval-eval-results.md#the-pre-calibration-distributions-quoted",
                 "score": 0.016129032258064516
               },
               {
-                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
                 "score": 0.015873015873015872
               },
               {
-                "ref": ".claude/context/plugin.md#the-commit-message-policy",
+                "ref": ".claude/context/conventions.md#commit-message-policy",
                 "score": 0.015625
               },
               {
-                "ref": "docs/cli.md#10-how-this-is-tested",
+                "ref": ".claude/context/plugin.md#the-commit-message-policy",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              2.422167000000627
+              1.7653750000026776
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -2386,17 +2457,18 @@ within a row.
             "id": "q-sd-negative-blog",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/retrieval-eval-results.md#the-pre-calibration-distributions-quoted",
+                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
                 "score": 0.016129032258064516
               },
               {
-                "ref": ".claude/context/cli.md#naming-and-file-layout",
+                "ref": "docs/retrieval.md#what-it-costs",
                 "score": 0.015873015873015872
               },
               {
@@ -2409,7 +2481,7 @@ within a row.
               }
             ],
             "durationMs": [
-              2.278999999998632
+              2.361457999999402
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -2418,13 +2490,14 @@ within a row.
             "id": "q-sd-negative-grpc",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/retrieval.md#how-it-fits-together",
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/cli.md#11-docs",
+                "ref": "docs/cli.md#9-daemon",
                 "score": 0.016129032258064516
               },
               {
@@ -2432,16 +2505,16 @@ within a row.
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/cli.md#9-daemon",
+                "ref": "docs/cli.md#docs-serve",
                 "score": 0.015625
               },
               {
-                "ref": "docs/cli.md#docs-serve",
+                "ref": "docs/cli.md#11-docs",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              2.611417000000074
+              1.85241600000154
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -2450,30 +2523,31 @@ within a row.
             "id": "q-sd-negative-migration",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/retrieval.md#what-this-buys-you",
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
                 "score": 0.01639344262295082
               },
               {
-                "ref": ".claude/context/conventions.md#the-stack-in-the-words-the-rules-below-use",
+                "ref": "docs/retrieval.md#what-this-buys-you",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/analyze.md#6-what-it-could-not-determine",
+                "ref": ".claude/context/conventions.md#the-stack-in-the-words-the-rules-below-use",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/guard-verification.md#3-decision-changes-across-the-port",
+                "ref": "docs/analyze.md#6-what-it-could-not-determine",
                 "score": 0.015625
               },
               {
-                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "ref": "docs/guard-verification.md#3-decision-changes-across-the-port",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              2.004417000000103
+              1.1239580000001297
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -2497,10 +2571,10 @@ within a row.
         "negatives": 5,
         "recall": {
           "1": 0.5333333333333333,
-          "3": 0.5333333333333333,
-          "5": 0.6
+          "3": 0.6,
+          "5": 0.6666666666666666
         },
-        "mrr": 0.5466666666666666,
+        "mrr": 0.5688888888888889,
         "strict": {
           "recall": {
             "1": 0.2,
@@ -2510,8 +2584,8 @@ within a row.
           "mrr": 0.24666666666666667
         },
         "latency": {
-          "p50": 7.78887499999837,
-          "p95": 9.077084000000468
+          "p50": 7.354125000001659,
+          "p95": 8.662374999999884
         },
         "samples": 20,
         "abstainedOnNegative": 0,
@@ -2520,6 +2594,7 @@ within a row.
             "id": "q-sd-new-config-key",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/config.md#5-key-reference",
@@ -2543,7 +2618,7 @@ within a row.
               }
             ],
             "durationMs": [
-              8.942042000002402
+              7.7019579999978305
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2554,6 +2629,7 @@ within a row.
             "id": "q-sd-deny-guard",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
@@ -2577,7 +2653,7 @@ within a row.
               }
             ],
             "durationMs": [
-              8.663791999999376
+              7.840250000001106
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2588,6 +2664,7 @@ within a row.
             "id": "q-sd-new-subcommand",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/cli.md",
@@ -2611,7 +2688,7 @@ within a row.
               }
             ],
             "durationMs": [
-              7.604792000001908
+              7.037124999998923
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2622,6 +2699,7 @@ within a row.
             "id": "q-sd-run-gates",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/development.md#5-verifying-a-change",
@@ -2640,12 +2718,12 @@ within a row.
                 "score": 0.015625
               },
               {
-                "ref": "docs/typecheck-key-decision.md#1-the-bind",
+                "ref": "docs/typecheck-key-decision.md#2-what-depends-on-the-key-existing",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              14.628708000000188
+              9.858125000002474
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2656,30 +2734,31 @@ within a row.
             "id": "q-sd-state-dir",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/config.md#3-statedir",
                 "score": 0.01639344262295082
               },
               {
-                "ref": ".claude/context/plugin.md#a-worked-example",
+                "ref": "docs/retrieval-eval.md#how-to-run-it",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/watcher.md#the-path",
+                "ref": ".claude/context/plugin.md#a-worked-example",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/watcher.md#for-a-consumer-written-in-typescript",
+                "ref": "docs/watcher.md#the-path",
                 "score": 0.015625
               },
               {
-                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "ref": "docs/watcher.md#for-a-consumer-written-in-typescript",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              8.655665999998746
+              6.772709000000759
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2690,6 +2769,7 @@ within a row.
             "id": "q-sd-commit-prefix",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#commit-message-policy",
@@ -2713,7 +2793,7 @@ within a row.
               }
             ],
             "durationMs": [
-              8.492207999999664
+              6.919666999998299
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2724,6 +2804,7 @@ within a row.
             "id": "q-sd-guard-shell-options",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/guard-verification.md",
@@ -2747,7 +2828,7 @@ within a row.
               }
             ],
             "durationMs": [
-              7.089417000002868
+              7.0552500000012515
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2758,6 +2839,7 @@ within a row.
             "id": "q-sd-cross-asset-reference",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#plugin-asset-authoring",
@@ -2781,7 +2863,7 @@ within a row.
               }
             ],
             "durationMs": [
-              7.505250000001979
+              7.268374999999651
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2792,6 +2874,7 @@ within a row.
             "id": "q-sd-daemon-lifecycle",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/outer-loop-verification.md#21-exit-classification",
@@ -2815,7 +2898,7 @@ within a row.
               }
             ],
             "durationMs": [
-              7.416000000001077
+              6.8723749999990105
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2826,6 +2909,7 @@ within a row.
             "id": "q-sd-usage-limit",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/watcher.md#5-machine-level-usage-lane",
@@ -2849,7 +2933,7 @@ within a row.
               }
             ],
             "durationMs": [
-              8.055374999999913
+              7.354125000001659
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2860,64 +2944,66 @@ within a row.
             "id": "q-sd-search-abstains",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/cli.md#11-docs",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
+                "ref": "docs/retrieval-eval-results.md#the-verdict",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/retrieval.md",
+                "ref": "docs/retrieval.md#still-open",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "ref": "docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict",
                 "score": 0.015625
               },
               {
-                "ref": "docs/cli.md#docs-serve",
+                "ref": "docs/retrieval-eval-results.md#findings-about-the-rule-recorded-and-not-acted-on",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              7.524416999996902
+              7.7665000000015425
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
-            "rank": 0,
+            "rank": 3,
             "strictRank": 0
           },
           {
             "id": "q-sd-retrieval-network",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/cli.md#docs-index",
+                "ref": "docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "ref": "docs/retrieval-eval-results.md#arm-a--the-real-catalog-hand-run",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/retrieval.md#what-this-buys-you",
+                "ref": "docs/cli.md#docs-index",
                 "score": 0.015625
               },
               {
-                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              7.710792000001675
+              7.269792000002781
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2928,6 +3014,7 @@ within a row.
             "id": "q-sd-analyze-writes",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind",
@@ -2951,7 +3038,7 @@ within a row.
               }
             ],
             "durationMs": [
-              7.396457999999257
+              7.307084000000032
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2962,6 +3049,7 @@ within a row.
             "id": "q-sd-stack-detection",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/cli.md#2-init",
@@ -2985,7 +3073,7 @@ within a row.
               }
             ],
             "durationMs": [
-              7.79541700000118
+              8.006291999998211
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -2996,6 +3084,7 @@ within a row.
             "id": "q-sd-second-init",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/cli.md#3-the-re-run-contract",
@@ -3019,7 +3108,7 @@ within a row.
               }
             ],
             "durationMs": [
-              9.077084000000468
+              8.662374999999884
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.01639344262295082,
@@ -3030,6 +3119,7 @@ within a row.
             "id": "q-sd-negative-ingress",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/config.md#1-the-three-resolution-classes",
@@ -3040,11 +3130,11 @@ within a row.
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/config.md#4-token--class--home",
+                "ref": "docs/config.md",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/config.md",
+                "ref": "docs/config.md#4-token--class--home",
                 "score": 0.015625
               },
               {
@@ -3053,7 +3143,7 @@ within a row.
               }
             ],
             "durationMs": [
-              7.78887499999837
+              7.807791999999608
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -3062,6 +3152,7 @@ within a row.
             "id": "q-sd-negative-tungsten",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/retrieval-eval-results.md#threshold-calibration",
@@ -3072,7 +3163,7 @@ within a row.
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/retrieval-eval-results.md#what-the-move-cost",
+                "ref": "docs/retrieval-eval-results.md#the-177-chunk-build--this-repositorys-own-docs-2026-09-21",
                 "score": 0.015873015873015872
               },
               {
@@ -3080,12 +3171,12 @@ within a row.
                 "score": 0.015625
               },
               {
-                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
+                "ref": "docs/development.md#3-manifest-facts-a-contributor-must-not-rediscover",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              7.404709000002185
+              7.344375000000582
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -3094,17 +3185,18 @@ within a row.
             "id": "q-sd-negative-blog",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/development.md",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/development.md#1-source-types-and-the-plugin-root",
+                "ref": ".claude/context/conventions.md#commit-message-policy",
                 "score": 0.016129032258064516
               },
               {
-                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "ref": "docs/development.md#1-source-types-and-the-plugin-root",
                 "score": 0.015873015873015872
               },
               {
@@ -3112,12 +3204,12 @@ within a row.
                 "score": 0.015625
               },
               {
-                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "ref": "docs/retrieval-eval.md#the-cold-build-and-query-log-launchers",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              7.414582999997947
+              7.84270800000013
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -3126,30 +3218,31 @@ within a row.
             "id": "q-sd-negative-grpc",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "ref": "docs/retrieval-eval-results.md#how-arm-a-navigated-a-156-file-catalog",
                 "score": 0.01639344262295082
               },
               {
-                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
                 "score": 0.016129032258064516
               },
               {
-                "ref": "docs/retrieval.md#what-this-buys-you",
+                "ref": "docs/retrieval-eval.md#the-command",
                 "score": 0.015873015873015872
               },
               {
-                "ref": "docs/retrieval-eval-results.md#corpus-fixture-catalog",
+                "ref": "docs/retrieval-eval-results.md#cost",
                 "score": 0.015625
               },
               {
-                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
+                "ref": "docs/retrieval-eval-results.md#arm-a--the-real-catalog-hand-run",
                 "score": 0.015384615384615385
               }
             ],
             "durationMs": [
-              8.38866699999926
+              8.216334000000643
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -3158,6 +3251,7 @@ within a row.
             "id": "q-sd-negative-migration",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/cli.md#3-the-re-run-contract",
@@ -3181,7 +3275,7 @@ within a row.
               }
             ],
             "durationMs": [
-              8.121250000000146
+              8.381083000000217
             ],
             "warnings": [],
             "bestScoreOnNegative": 0.01639344262295082
@@ -3205,21 +3299,21 @@ within a row.
         "negatives": 5,
         "recall": {
           "1": 0.5333333333333333,
-          "3": 0.8,
-          "5": 0.8666666666666667
+          "3": 0.7333333333333333,
+          "5": 0.8
         },
-        "mrr": 0.65,
+        "mrr": 0.6388888888888888,
         "strict": {
           "recall": {
             "1": 0.2,
             "3": 0.5333333333333333,
             "5": 0.6666666666666666
           },
-          "mrr": 0.3522222222222222
+          "mrr": 0.36333333333333334
         },
         "latency": {
-          "p50": 9.7534169999999,
-          "p95": 12.222083000000566
+          "p50": 7.948208000001614,
+          "p95": 10.603707999998733
         },
         "samples": 20,
         "abstainedOnNegative": 0,
@@ -3228,18 +3322,19 @@ within a row.
             "id": "q-sd-new-config-key",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/config.md#5-key-reference",
-                "score": 0.030886196246139225
+                "score": 0.03177805800756621
               },
               {
                 "ref": "docs/typecheck-key-decision.md#7-recommendation",
-                "score": 0.030330882352941176
+                "score": 0.030776515151515152
               },
               {
                 "ref": "docs/typecheck-key-decision.md#3-can-another-family-reach-this-state",
-                "score": 0.03028233151183971
+                "score": 0.03009207275993712
               },
               {
                 "ref": "docs/cli.md#8-config",
@@ -3247,14 +3342,14 @@ within a row.
               },
               {
                 "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
-                "score": 0.028205128205128206
+                "score": 0.027745885954841176
               }
             ],
             "durationMs": [
-              8.021457999999257
+              8.711875000000873
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.030886196246139225,
+            "bestScoreOnPositive": 0.03177805800756621,
             "rank": 1,
             "strictRank": 0
           },
@@ -3262,10 +3357,11 @@ within a row.
             "id": "q-sd-deny-guard",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
-                "score": 0.032266458495966696
+                "score": 0.03278688524590164
               },
               {
                 "ref": "docs/guard-verification.md#35-jurisdiction-and-defaults",
@@ -3281,14 +3377,14 @@ within a row.
               },
               {
                 "ref": "docs/guard-verification.md#37-the-sweep-behind-the-verdict",
-                "score": 0.028991596638655463
+                "score": 0.028790389395194696
               }
             ],
             "durationMs": [
-              7.51850000000195
+              7.598375000001397
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.032266458495966696,
+            "bestScoreOnPositive": 0.03278688524590164,
             "rank": 0,
             "strictRank": 0
           },
@@ -3296,6 +3392,7 @@ within a row.
             "id": "q-sd-new-subcommand",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
@@ -3303,7 +3400,7 @@ within a row.
               },
               {
                 "ref": ".claude/context/cli.md#what-done-means-here",
-                "score": 0.03057889822595705
+                "score": 0.030330882352941176
               },
               {
                 "ref": "docs/cli.md#1-global-flags-and-exit-codes",
@@ -3319,7 +3416,7 @@ within a row.
               }
             ],
             "durationMs": [
-              10.601458000001003
+              8.897874999998749
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.031544957774465976,
@@ -3330,10 +3427,11 @@ within a row.
             "id": "q-sd-run-gates",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/typecheck-key-decision.md#1-the-bind",
-                "score": 0.03177805800756621
+                "score": 0.03128054740957967
               },
               {
                 "ref": "docs/development.md#5-verifying-a-change",
@@ -3341,22 +3439,22 @@ within a row.
               },
               {
                 "ref": "docs/typecheck-key-decision.md#4-option-a--make-the-key-optional",
-                "score": 0.03057889822595705
+                "score": 0.03036576949620428
               },
               {
                 "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
-                "score": 0.030117753623188408
+                "score": 0.029709507042253523
               },
               {
                 "ref": "docs/typecheck-key-decision.md#7-recommendation",
-                "score": 0.02919863597612958
+                "score": 0.029411764705882353
               }
             ],
             "durationMs": [
-              13.034167000001617
+              10.995542000000569
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.03177805800756621,
+            "bestScoreOnPositive": 0.03128054740957967,
             "rank": 2,
             "strictRank": 0
           },
@@ -3364,6 +3462,7 @@ within a row.
             "id": "q-sd-state-dir",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/config.md#3-statedir",
@@ -3371,23 +3470,23 @@ within a row.
               },
               {
                 "ref": "docs/watcher.md#for-a-consumer-written-in-typescript",
-                "score": 0.030776515151515152
+                "score": 0.030536130536130537
               },
               {
                 "ref": ".claude/context/plugin.md#a-worked-example",
-                "score": 0.029116045245077504
-              },
-              {
-                "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
-                "score": 0.02792120864410021
+                "score": 0.028693528693528692
               },
               {
                 "ref": "docs/config.md#1-the-three-resolution-classes",
-                "score": 0.02788769549651404
+                "score": 0.02681010928961749
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
+                "score": 0.026625704045058884
               }
             ],
             "durationMs": [
-              10.122458000001643
+              7.936750000000757
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.031099324975891997,
@@ -3398,30 +3497,31 @@ within a row.
             "id": "q-sd-commit-prefix",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#commit-message-policy",
                 "score": 0.03278688524590164
               },
               {
-                "ref": ".claude/context/plugin.md#the-commit-message-policy",
-                "score": 0.03021353930031804
-              },
-              {
                 "ref": ".claude/context/plugin.md#what-this-layer-is",
-                "score": 0.02964426877470356
+                "score": 0.02904040404040404
               },
               {
-                "ref": "docs/guard-verification.md#21-helper-call-order-composition",
-                "score": 0.026547116736990152
+                "ref": ".claude/context/plugin.md#the-commit-message-policy",
+                "score": 0.028949545078577336
               },
               {
-                "ref": "docs/config.md#5-key-reference",
-                "score": 0.025893752088205813
+                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
+                "score": 0.028006267136701922
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#7-recommendation",
+                "score": 0.02637768817204301
               }
             ],
             "durationMs": [
-              10.672667000002548
+              8.12445800000205
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -3432,6 +3532,7 @@ within a row.
             "id": "q-sd-guard-shell-options",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/development.md#3-manifest-facts-a-contributor-must-not-rediscover",
@@ -3439,7 +3540,7 @@ within a row.
               },
               {
                 "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
-                "score": 0.03125763125763126
+                "score": 0.030158730158730156
               },
               {
                 "ref": ".claude/context/conventions.md#shell-assets",
@@ -3447,15 +3548,15 @@ within a row.
               },
               {
                 "ref": "docs/guard-verification.md",
-                "score": 0.028298204527712725
+                "score": 0.02815814850530376
               },
               {
                 "ref": "docs/guard-verification.md#24-disclosed-residuals-re-confirmed",
-                "score": 0.02736726874657909
+                "score": 0.027119252873563218
               }
             ],
             "durationMs": [
-              9.7534169999999
+              7.994749999998021
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.0315136476426799,
@@ -3466,6 +3567,7 @@ within a row.
             "id": "q-sd-cross-asset-reference",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#plugin-asset-authoring",
@@ -3481,15 +3583,15 @@ within a row.
               },
               {
                 "ref": ".claude/context/plugin.md#what-this-layer-is",
-                "score": 0.02976190476190476
+                "score": 0.029571646010002173
               },
               {
                 "ref": "docs/development.md",
-                "score": 0.02967032967032967
+                "score": 0.029437229437229435
               }
             ],
             "durationMs": [
-              10.579459000000497
+              7.393457999998645
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03252247488101534,
@@ -3500,18 +3602,19 @@ within a row.
             "id": "q-sd-daemon-lifecycle",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/outer-loop-verification.md#23-the-recorded-pid-and-what-signalling-it-actually-does",
-                "score": 0.03149801587301587
-              },
-              {
-                "ref": "docs/outer-loop-verification.md#15-restart-watchersh",
-                "score": 0.03007688828584351
+                "score": 0.03125763125763126
               },
               {
                 "ref": "docs/cli.md#9-daemon",
-                "score": 0.029877369007803793
+                "score": 0.030117753623188408
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#15-restart-watchersh",
+                "score": 0.02964426877470356
               },
               {
                 "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
@@ -3519,21 +3622,22 @@ within a row.
               },
               {
                 "ref": ".claude/context/cli.md#what-done-means-here",
-                "score": 0.02750455373406193
+                "score": 0.027263007840342125
               }
             ],
             "durationMs": [
-              9.592832999998791
+              7.521958000001177
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.03149801587301587,
-            "rank": 3,
-            "strictRank": 3
+            "bestScoreOnPositive": 0.03125763125763126,
+            "rank": 2,
+            "strictRank": 2
           },
           {
             "id": "q-sd-usage-limit",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/watcher.md#5-machine-level-usage-lane",
@@ -3541,23 +3645,23 @@ within a row.
               },
               {
                 "ref": "docs/outer-loop-verification.md#25-the-usage-gate",
-                "score": 0.031746031746031744
+                "score": 0.03125763125763126
               },
               {
                 "ref": "docs/watcher.md#the-policy-a-coordinating-record-and-an-opt-in-lock",
-                "score": 0.031054405392392875
+                "score": 0.03021353930031804
               },
               {
                 "ref": "docs/watcher.md#4-pausing-parking-and-the-usage-gate",
-                "score": 0.03076923076923077
+                "score": 0.029877369007803793
               },
               {
                 "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
-                "score": 0.028484848484848488
+                "score": 0.027972027972027972
               }
             ],
             "durationMs": [
-              9.652207999999519
+              7.948208000001614
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03278688524590164,
@@ -3568,67 +3672,69 @@ within a row.
             "id": "q-sd-search-abstains",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
+                "ref": "docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict",
+                "score": 0.031754032258064516
+              },
+              {
                 "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
-                "score": 0.032018442622950824
+                "score": 0.03055037313432836
               },
               {
-                "ref": "docs/cli.md#docs-serve",
-                "score": 0.0315136476426799
+                "ref": "docs/retrieval-eval-results.md#arm-a--the-real-catalog-hand-run",
+                "score": 0.029726775956284153
               },
               {
-                "ref": "docs/cli.md#docs-search",
-                "score": 0.030330882352941176
+                "ref": "docs/retrieval-eval-results.md#the-decision-applied-to-the-real-catalog",
+                "score": 0.029437229437229435
               },
               {
-                "ref": "docs/cli.md#11-docs",
-                "score": 0.03028233151183971
-              },
-              {
-                "ref": "docs/retrieval.md#how-it-fits-together",
-                "score": 0.029083245521601686
+                "ref": "docs/retrieval-eval-results.md#the-verdict",
+                "score": 0.02724014336917563
               }
             ],
             "durationMs": [
-              9.791625000001659
+              7.387541000000056
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.032018442622950824,
-            "rank": 3,
-            "strictRank": 5
+            "bestScoreOnPositive": 0.031754032258064516,
+            "rank": 0,
+            "strictRank": 0
           },
           {
             "id": "q-sd-retrieval-network",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/retrieval.md#still-open",
-                "score": 0.03128054740957967
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
+                "score": 0.03278688524590164
               },
               {
-                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
-                "score": 0.031099324975891997
-              },
-              {
-                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
-                "score": 0.030309988518943745
-              },
-              {
-                "ref": "docs/cli.md#docs-index",
-                "score": 0.03021353930031804
+                "ref": "docs/retrieval-eval.md#running-arm-a-by-hand",
+                "score": 0.02877846790890269
               },
               {
                 "ref": "docs/retrieval.md#how-it-fits-together",
-                "score": 0.030117753623188408
+                "score": 0.027364110201042444
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-decision-rule",
+                "score": 0.027346637102734665
+              },
+              {
+                "ref": "docs/cli.md#docs-index",
+                "score": 0.027252906976744186
               }
             ],
             "durationMs": [
-              9.410665999999765
+              7.801290999999765
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.03128054740957967,
+            "bestScoreOnPositive": 0.03278688524590164,
             "rank": 0,
             "strictRank": 0
           },
@@ -3636,6 +3742,7 @@ within a row.
             "id": "q-sd-analyze-writes",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind",
@@ -3643,7 +3750,7 @@ within a row.
               },
               {
                 "ref": "docs/analyze.md",
-                "score": 0.029857397504456328
+                "score": 0.02964426877470356
               },
               {
                 "ref": "docs/analyze.md#1-the-target-vocabulary",
@@ -3651,25 +3758,26 @@ within a row.
               },
               {
                 "ref": "docs/analyze.md#10-what-the-skeletons-say-now-the-offer-exists",
-                "score": 0.02919863597612958
+                "score": 0.028991596638655463
               },
               {
-                "ref": "docs/analyze.md#6-what-it-could-not-determine",
-                "score": 0.02871794871794872
+                "ref": "docs/analyze.md#3-what-it-may-write",
+                "score": 0.028577260665441927
               }
             ],
             "durationMs": [
-              8.695290999999997
+              7.458000000002357
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03252247488101534,
             "rank": 1,
-            "strictRank": 0
+            "strictRank": 5
           },
           {
             "id": "q-sd-stack-detection",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/cli.md#2-init",
@@ -3681,11 +3789,11 @@ within a row.
               },
               {
                 "ref": "docs/typecheck-key-decision.md#7-recommendation",
-                "score": 0.027820121951219513
+                "score": 0.02797067901234568
               },
               {
                 "ref": ".claude/context/cli.md#how-a-module-in-this-layer-is-written",
-                "score": 0.027051561365286855
+                "score": 0.027205882352941177
               },
               {
                 "ref": "docs/watcher.md#2-the-scripts",
@@ -3693,7 +3801,7 @@ within a row.
               }
             ],
             "durationMs": [
-              12.222083000000566
+              10.603707999998733
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.032266458495966696,
@@ -3704,6 +3812,7 @@ within a row.
             "id": "q-sd-second-init",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/cli.md#2-init",
@@ -3711,23 +3820,23 @@ within a row.
               },
               {
                 "ref": "docs/outer-loop-verification.md",
-                "score": 0.03055037313432836
+                "score": 0.030776515151515152
               },
               {
                 "ref": "docs/cli.md#3-the-re-run-contract",
-                "score": 0.029726775956284153
+                "score": 0.029906956136464335
               },
               {
                 "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
-                "score": 0.02886002886002886
+                "score": 0.029030910609857977
               },
               {
                 "ref": "docs/cli.md#the-interaction-rule",
-                "score": 0.028790389395194696
+                "score": 0.02803921568627451
               }
             ],
             "durationMs": [
-              11.26995800000077
+              9.00787499999933
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.03225806451612903,
@@ -3738,161 +3847,166 @@ within a row.
             "id": "q-sd-negative-ingress",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/guard-verification.md#14-two-preconditions-the-whole-set-inherits-from-the-configuration-load",
-                "score": 0.027425373134328357
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.02719970792259949
               },
               {
-                "ref": "docs/config.md#5-key-reference",
-                "score": 0.027346637102734665
+                "ref": "docs/guard-verification.md#14-two-preconditions-the-whole-set-inherits-from-the-configuration-load",
+                "score": 0.02712049508554787
               },
               {
                 "ref": "docs/config.md#2-where-configuration-lives",
-                "score": 0.02699859747545582
+                "score": 0.026767330130404943
               },
               {
                 "ref": "docs/config.md",
-                "score": 0.02637768817204301
+                "score": 0.026182294223531334
               },
               {
-                "ref": "docs/config.md#1-the-three-resolution-classes",
-                "score": 0.025567754549556326
+                "ref": "docs/config.md#3-statedir",
+                "score": 0.024696835255841466
               }
             ],
             "durationMs": [
-              11.269167000002199
+              8.388874999996915
             ],
             "warnings": [],
-            "bestScoreOnNegative": 0.027425373134328357
+            "bestScoreOnNegative": 0.02719970792259949
           },
           {
             "id": "q-sd-negative-tungsten",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/retrieval-eval-results.md#the-pre-calibration-distributions-quoted",
-                "score": 0.031099324975891997
+                "score": 0.03021353930031804
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.029551337359792925
               },
               {
                 "ref": ".claude/context/plugin.md#sample-fixtures",
-                "score": 0.028381642512077296
-              },
-              {
-                "ref": ".claude/context/plugin.md#the-commit-message-policy",
-                "score": 0.026988636363636364
+                "score": 0.027417840375586856
               },
               {
                 "ref": ".claude/context/cli.md#dependencies-and-which-way-they-point",
-                "score": 0.02690501986276634
+                "score": 0.02574682290807064
               },
               {
-                "ref": ".claude/context/conventions.md#commit-message-policy",
-                "score": 0.0265113137453563
+                "ref": "docs/outer-loop-verification.md#0-method-and-fixtures",
+                "score": 0.025679012345679014
               }
             ],
             "durationMs": [
-              9.615166999999929
+              7.059708000000683
             ],
             "warnings": [],
-            "bestScoreOnNegative": 0.031099324975891997
+            "bestScoreOnNegative": 0.03021353930031804
           },
           {
             "id": "q-sd-negative-blog",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/development.md#6-the-roadmap-this-tree-defers-to",
-                "score": 0.030776515151515152
+                "score": 0.029910714285714284
               },
               {
                 "ref": "docs/development.md#1-source-types-and-the-plugin-root",
-                "score": 0.03021353930031804
+                "score": 0.029030910609857977
               },
               {
                 "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
-                "score": 0.03009207275993712
+                "score": 0.028629032258064516
               },
               {
-                "ref": "docs/retrieval-eval-results.md#what-the-move-cost",
-                "score": 0.02712049508554787
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.02546333601933924
               },
               {
-                "ref": ".claude/context/conventions.md#documents-of-record",
-                "score": 0.025362318840579712
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.024449182658137884
               }
             ],
             "durationMs": [
-              10.42779199999859
+              8.20350000000326
             ],
             "warnings": [],
-            "bestScoreOnNegative": 0.030776515151515152
+            "bestScoreOnNegative": 0.029910714285714284
           },
           {
             "id": "q-sd-negative-grpc",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
-                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
-                "score": 0.030798389007344232
-              },
-              {
-                "ref": "docs/cli.md#11-docs",
-                "score": 0.030621785881252923
-              },
-              {
-                "ref": "docs/cli.md#docs-serve",
-                "score": 0.02946912242686891
+                "ref": "docs/retrieval-eval-results.md#arm-a--the-real-catalog-hand-run",
+                "score": 0.02967032967032967
               },
               {
                 "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
-                "score": 0.02889344262295082
+                "score": 0.02964254577157803
               },
               {
-                "ref": "docs/retrieval.md#still-open",
-                "score": 0.028850145288501453
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "score": 0.02886002886002886
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-command",
+                "score": 0.027637721755368813
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-decision-rule",
+                "score": 0.02715098147128967
               }
             ],
             "durationMs": [
-              9.416125000003376
+              7.76129199999923
             ],
             "warnings": [],
-            "bestScoreOnNegative": 0.030798389007344232
+            "bestScoreOnNegative": 0.02967032967032967
           },
           {
             "id": "q-sd-negative-migration",
             "negative": true,
             "abstained": false,
+            "bestRerankScore": null,
             "hits": [
               {
                 "ref": "docs/retrieval.md#what-this-buys-you",
-                "score": 0.032266458495966696
+                "score": 0.03200204813108039
               },
               {
                 "ref": ".claude/context/conventions.md#the-stack-in-the-words-the-rules-below-use",
-                "score": 0.029116045245077504
+                "score": 0.02886002886002886
               },
               {
                 "ref": "docs/outer-loop-verification.md#26-the-stall-watchdog",
-                "score": 0.027692895339954164
+                "score": 0.027346637102734665
               },
               {
                 "ref": "docs/config.md#5-key-reference",
-                "score": 0.02749719416386083
+                "score": 0.027271052146674038
               },
               {
-                "ref": "docs/cli.md#3-the-re-run-contract",
-                "score": 0.02619736419157827
+                "ref": "docs/cli.md#2-init",
+                "score": 0.02574441687344913
               }
             ],
             "durationMs": [
-              9.268792000002577
+              8.214374999999563
             ],
             "warnings": [],
-            "bestScoreOnNegative": 0.032266458495966696
+            "bestScoreOnNegative": 0.03200204813108039
           }
         ]
       }
@@ -3912,11 +4026,11 @@ within a row.
         "positives": 15,
         "negatives": 5,
         "recall": {
-          "1": 0.4,
+          "1": 0.4666666666666667,
           "3": 0.6,
           "5": 0.6
         },
-        "mrr": 0.5,
+        "mrr": 0.5333333333333333,
         "strict": {
           "recall": {
             "1": 0.26666666666666666,
@@ -3926,8 +4040,8 @@ within a row.
           "mrr": 0.38333333333333336
         },
         "latency": {
-          "p50": 1145.3307920000007,
-          "p95": 1263.4789999999994
+          "p50": 1005.1416669999999,
+          "p95": 1225.719041999997
         },
         "samples": 20,
         "abstainedOnNegative": 5,
@@ -3936,9 +4050,10 @@ within a row.
             "id": "q-sd-new-config-key",
             "negative": false,
             "abstained": true,
+            "bestRerankScore": 0.24328240752220154,
             "hits": [],
             "durationMs": [
-              1263.4789999999994
+              1373.8354580000014
             ],
             "warnings": [],
             "bestScoreOnPositive": null,
@@ -3949,33 +4064,34 @@ within a row.
             "id": "q-sd-deny-guard",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.8057302832603455,
             "hits": [
               {
                 "ref": "docs/outer-loop-verification.md#3-the-allowdeny-surface",
-                "score": 0.8066375851631165
+                "score": 0.8057302832603455
               },
               {
                 "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
-                "score": 0.7561017274856567
+                "score": 0.7180002927780151
               },
               {
                 "ref": "docs/guard-verification.md#32-tightened--silent--deny",
-                "score": 0.5888859033584595
+                "score": 0.6071503162384033
               },
               {
                 "ref": "docs/guard-verification.md#37-the-sweep-behind-the-verdict",
-                "score": 0.5314047336578369
+                "score": 0.518258273601532
               },
               {
                 "ref": "docs/guard-verification.md#24-disclosed-residuals-re-confirmed",
-                "score": 0.3608555197715759
+                "score": 0.3597424030303955
               }
             ],
             "durationMs": [
-              1287.192541999997
+              1225.719041999997
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.8066375851631165,
+            "bestScoreOnPositive": 0.8057302832603455,
             "rank": 0,
             "strictRank": 0
           },
@@ -3983,33 +4099,34 @@ within a row.
             "id": "q-sd-new-subcommand",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.9983586072921753,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
-                "score": 0.9983236789703369
+                "score": 0.9983586072921753
               },
               {
                 "ref": ".claude/context/cli.md#naming-and-file-layout",
-                "score": 0.94883793592453
+                "score": 0.9492279291152954
               },
               {
                 "ref": ".claude/context/cli.md#not-determined",
-                "score": 0.8381896018981934
+                "score": 0.8436465263366699
               },
               {
                 "ref": ".claude/context/cli.md#what-done-means-here",
-                "score": 0.7049463391304016
+                "score": 0.6837409138679504
               },
               {
                 "ref": ".claude/context/plugin.md#what-accompanies-a-new-unit-of-each-kind",
-                "score": 0.6496245265007019
+                "score": 0.6426020860671997
               }
             ],
             "durationMs": [
-              1063.0152499999967
+              936.8634580000034
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.9983236789703369,
+            "bestScoreOnPositive": 0.9983586072921753,
             "rank": 1,
             "strictRank": 1
           },
@@ -4017,9 +4134,10 @@ within a row.
             "id": "q-sd-run-gates",
             "negative": false,
             "abstained": true,
+            "bestRerankScore": 0.15524116158485413,
             "hits": [],
             "durationMs": [
-              1195.0398330000025
+              1042.9682090000024
             ],
             "warnings": [],
             "bestScoreOnPositive": null,
@@ -4030,33 +4148,34 @@ within a row.
             "id": "q-sd-state-dir",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.9111862778663635,
             "hits": [
               {
                 "ref": "docs/config.md#3-statedir",
-                "score": 0.9118165969848633
+                "score": 0.9111862778663635
               },
               {
                 "ref": ".claude/context/plugin.md#a-worked-example",
-                "score": 0.8761773109436035
+                "score": 0.8781256675720215
               },
               {
-                "ref": ".claude/context/plugin.md#the-placeholder-vocabulary",
-                "score": 0.5041606426239014
+                "ref": "docs/retrieval-eval.md#how-to-run-it",
+                "score": 0.5213450193405151
               },
               {
                 "ref": "docs/config.md#1-the-three-resolution-classes",
-                "score": 0.43399330973625183
+                "score": 0.4460771083831787
               },
               {
                 "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
-                "score": 0.29934847354888916
+                "score": 0.30296963453292847
               }
             ],
             "durationMs": [
-              1120.5922500000015
+              930.338291
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.9118165969848633,
+            "bestScoreOnPositive": 0.9111862778663635,
             "rank": 1,
             "strictRank": 1
           },
@@ -4064,33 +4183,34 @@ within a row.
             "id": "q-sd-commit-prefix",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.7109293937683105,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#commit-message-policy",
-                "score": 0.7265825271606445
+                "score": 0.7109293937683105
               },
               {
                 "ref": ".claude/context/plugin.md#the-commit-message-policy",
-                "score": 0.0030089227948337793
+                "score": 0.0029896805062890053
               },
               {
                 "ref": "docs/outer-loop-verification.md#11-commit-on-branchsh--refuses-loudly",
-                "score": 0.000867422902956605
+                "score": 0.000785926531534642
               },
               {
                 "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
-                "score": 0.0003935615241061896
+                "score": 0.00040577547042630613
               },
               {
-                "ref": "docs/guard-verification.md#35-jurisdiction-and-defaults",
-                "score": 0.0000389436972909607
+                "ref": "docs/retrieval-eval-results.md#the-real-catalog-query-set",
+                "score": 0.00024948405916802585
               }
             ],
             "durationMs": [
-              1188.293583000006
+              1000.4068340000013
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.7265825271606445,
+            "bestScoreOnPositive": 0.7109293937683105,
             "rank": 1,
             "strictRank": 1
           },
@@ -4098,33 +4218,34 @@ within a row.
             "id": "q-sd-guard-shell-options",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.9819909930229187,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#shell-assets",
-                "score": 0.9808194041252136
+                "score": 0.9819909930229187
               },
               {
                 "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
-                "score": 0.9797009825706482
+                "score": 0.9790743589401245
               },
               {
                 "ref": "docs/guard-verification.md",
-                "score": 0.6645653247833252
+                "score": 0.6797285079956055
               },
               {
                 "ref": "docs/guard-verification.md#3-decision-changes-across-the-port",
-                "score": 0.038353826850652695
+                "score": 0.037053581327199936
               },
               {
                 "ref": "docs/outer-loop-verification.md",
-                "score": 0.011228492483496666
+                "score": 0.012145236134529114
               }
             ],
             "durationMs": [
-              1141.0581660000025
+              989.5380409999998
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.9808194041252136,
+            "bestScoreOnPositive": 0.9819909930229187,
             "rank": 1,
             "strictRank": 1
           },
@@ -4132,6 +4253,7 @@ within a row.
             "id": "q-sd-cross-asset-reference",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.9992165565490723,
             "hits": [
               {
                 "ref": ".claude/context/conventions.md#plugin-asset-authoring",
@@ -4155,7 +4277,7 @@ within a row.
               }
             ],
             "durationMs": [
-              1072.408292
+              911.4661669999987
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9992165565490723,
@@ -4166,33 +4288,34 @@ within a row.
             "id": "q-sd-daemon-lifecycle",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.9138407707214355,
             "hits": [
               {
                 "ref": "docs/watcher.md#1-the-loop-in-one-page",
-                "score": 0.9050639271736145
+                "score": 0.9138407707214355
               },
               {
                 "ref": "docs/cli.md#9-daemon",
-                "score": 0.4667190611362457
+                "score": 0.4520930349826813
               },
               {
                 "ref": "docs/outer-loop-verification.md#15-restart-watchersh",
-                "score": 0.03868675231933594
+                "score": 0.04150214418768883
               },
               {
                 "ref": "docs/watcher.md#4-pausing-parking-and-the-usage-gate",
-                "score": 0.025482188910245895
+                "score": 0.026958728209137917
               },
               {
                 "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
-                "score": 0.018250873312354088
+                "score": 0.01880623959004879
               }
             ],
             "durationMs": [
-              1205.3202910000036
+              1005.1416669999999
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.9050639271736145,
+            "bestScoreOnPositive": 0.9138407707214355,
             "rank": 2,
             "strictRank": 2
           },
@@ -4200,33 +4323,34 @@ within a row.
             "id": "q-sd-usage-limit",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.9861159920692444,
             "hits": [
               {
                 "ref": "docs/watcher.md#5-machine-level-usage-lane",
-                "score": 0.9856442213058472
+                "score": 0.9861159920692444
               },
               {
-                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
-                "score": 0.13560578227043152
+                "ref": "docs/retrieval-eval.md#running-arm-a-by-hand",
+                "score": 0.2905900180339813
               },
               {
-                "ref": "docs/config.md#3-statedir",
-                "score": 0.1288224160671234
+                "ref": "docs/retrieval-eval-results.md#arm-a--the-real-catalog-hand-run",
+                "score": 0.054613836109638214
               },
               {
                 "ref": "docs/cli.md#offline-by-construction",
-                "score": 0.032486531883478165
+                "score": 0.03134392574429512
               },
               {
                 "ref": "docs/development.md#5-verifying-a-change",
-                "score": 0.02734939381480217
+                "score": 0.02898281067609787
               }
             ],
             "durationMs": [
-              1249.4705420000028
+              1043.0520830000023
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.9856442213058472,
+            "bestScoreOnPositive": 0.9861159920692444,
             "rank": 0,
             "strictRank": 0
           },
@@ -4234,67 +4358,69 @@ within a row.
             "id": "q-sd-search-abstains",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.7631139755249023,
             "hits": [
               {
-                "ref": "docs/cli.md#docs-serve",
-                "score": 0.5406689643859863
-              },
-              {
                 "ref": "docs/cli.md#docs-search",
-                "score": 0.44475895166397095
+                "score": 0.7631139755249023
               },
               {
-                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
-                "score": 0.11128897219896317
+                "ref": "docs/cli.md#docs-serve",
+                "score": 0.526432991027832
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-decision-applied-to-the-real-catalog",
+                "score": 0.09138792008161545
               },
               {
                 "ref": "docs/cli.md#11-docs",
-                "score": 0.09484846144914627
+                "score": 0.07652298361063004
               },
               {
-                "ref": "docs/cli.md#docs-index",
-                "score": 0.05775439366698265
+                "ref": "docs/retrieval-eval.md#the-regression-floor",
+                "score": 0.0535120852291584
               }
             ],
             "durationMs": [
-              1145.3307920000007
+              964.9970829999984
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.5406689643859863,
-            "rank": 2,
+            "bestScoreOnPositive": 0.7631139755249023,
+            "rank": 1,
             "strictRank": 0
           },
           {
             "id": "q-sd-retrieval-network",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.7951579093933105,
             "hits": [
               {
                 "ref": "docs/cli.md#11-docs",
-                "score": 0.6837828159332275
+                "score": 0.7951579093933105
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
+                "score": 0.6725423336029053
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-decision-rule",
+                "score": 0.4319179356098175
               },
               {
                 "ref": "docs/cli.md#docs-index",
-                "score": 0.3671532869338989
-              },
-              {
-                "ref": "docs/retrieval-eval-results.md#arm-a--awaiting-a-hand-run",
-                "score": 0.3388470709323883
-              },
-              {
-                "ref": "docs/retrieval-eval-results.md",
-                "score": 0.270835816860199
+                "score": 0.37600526213645935
               },
               {
                 "ref": "docs/retrieval.md#what-this-buys-you",
-                "score": 0.26530829071998596
+                "score": 0.2824769616127014
               }
             ],
             "durationMs": [
-              1152.1687079999974
+              1018.970916000002
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.6837828159332275,
+            "bestScoreOnPositive": 0.7951579093933105,
             "rank": 0,
             "strictRank": 0
           },
@@ -4302,6 +4428,7 @@ within a row.
             "id": "q-sd-analyze-writes",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.33899036049842834,
             "hits": [
               {
                 "ref": ".claude/context/cli.md#how-a-module-in-this-layer-is-written",
@@ -4325,7 +4452,7 @@ within a row.
               }
             ],
             "durationMs": [
-              1089.5891669999983
+              1024.2666669999999
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.33899036049842834,
@@ -4336,6 +4463,7 @@ within a row.
             "id": "q-sd-stack-detection",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.9918370842933655,
             "hits": [
               {
                 "ref": "docs/cli.md#2-init",
@@ -4359,7 +4487,7 @@ within a row.
               }
             ],
             "durationMs": [
-              1138.463416000006
+              1040.5277080000014
             ],
             "warnings": [],
             "bestScoreOnPositive": 0.9918370842933655,
@@ -4370,33 +4498,34 @@ within a row.
             "id": "q-sd-second-init",
             "negative": false,
             "abstained": false,
+            "bestRerankScore": 0.9616067409515381,
             "hits": [
               {
                 "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
-                "score": 0.9619483947753906
+                "score": 0.9616067409515381
               },
               {
                 "ref": "docs/cli.md#3-the-re-run-contract",
-                "score": 0.9537369608879089
+                "score": 0.9535205364227295
               },
               {
                 "ref": "docs/cli.md#2-init",
-                "score": 0.45984140038490295
+                "score": 0.45493796467781067
               },
               {
                 "ref": "docs/outer-loop-verification.md#0-method-and-fixtures",
-                "score": 0.06278954446315765
+                "score": 0.06281641870737076
               },
               {
                 "ref": "docs/config.md#5-key-reference",
-                "score": 0.050347305834293365
+                "score": 0.05283895507454872
               }
             ],
             "durationMs": [
-              1166.8789580000011
+              1003.6414169999989
             ],
             "warnings": [],
-            "bestScoreOnPositive": 0.9619483947753906,
+            "bestScoreOnPositive": 0.9616067409515381,
             "rank": 2,
             "strictRank": 2
           },
@@ -4404,9 +4533,10 @@ within a row.
             "id": "q-sd-negative-ingress",
             "negative": true,
             "abstained": true,
+            "bestRerankScore": 0.00044672354124486446,
             "hits": [],
             "durationMs": [
-              1137.974666999995
+              1070.6860410000008
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -4415,9 +4545,10 @@ within a row.
             "id": "q-sd-negative-tungsten",
             "negative": true,
             "abstained": true,
+            "bestRerankScore": 0.000015803376300027594,
             "hits": [],
             "durationMs": [
-              1144.7912499999948
+              998.2851659999942
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -4426,9 +4557,10 @@ within a row.
             "id": "q-sd-negative-blog",
             "negative": true,
             "abstained": true,
+            "bestRerankScore": 0.00018704720423556864,
             "hits": [],
             "durationMs": [
-              1125.1992500000051
+              971.2930830000041
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -4437,9 +4569,10 @@ within a row.
             "id": "q-sd-negative-grpc",
             "negative": true,
             "abstained": true,
+            "bestRerankScore": 0.28913185000419617,
             "hits": [],
             "durationMs": [
-              1199.1624579999989
+              1010.2905420000025
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -4448,9 +4581,10 @@ within a row.
             "id": "q-sd-negative-migration",
             "negative": true,
             "abstained": true,
+            "bestRerankScore": 0.00026293908013030887,
             "hits": [],
             "durationMs": [
-              1218.469041999997
+              1073.9271249999947
             ],
             "warnings": [],
             "bestScoreOnNegative": null
@@ -16998,7 +17132,8 @@ read out of this file's generated region for the same corpus.
 | --- | --- | --- |
 | Server-side `durationMs`, from the log | 819.0 | 956.0 |
 | Client-side MCP round trip | 822.3 | 959.2 |
-| Library-level arm E (`fused-rerank`), `docs/retrieval-eval-results.md` generated region | 1145.3 | 1263.5 |
+| Library-level arm E (`fused-rerank`), `docs/retrieval-eval-results.md` generated region, at `{ files: 14, chunks: 213 }` (2026-09-23T19:27:46.757Z) — a different corpus from this pass's | 1005.1 | 1225.7 |
+| Library-level arm E at `{ files: 13, chunks: 177 }` (2026-09-21T19:00:20.828Z), since regenerated — the row the gap and provenance below are read against | 1145.3 | 1263.5 |
 | Library-level arm E as the region stood when this pass ran, since regenerated | 600.7 | 748.2 |
 | Client-side round trip of the `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG` unset leg, for comparison | 873.2 | 908.8 |
 
@@ -17026,7 +17161,7 @@ the corpus walk and the hash comparison alone.
 the real embedder `Xenova/bge-small-en-v1.5` and the real reranker `Xenova/ms-marco-MiniLM-L-6-v2`;
 the abstention threshold in force is the one this checkout's `search.js` carries. This pass ran at
 its own corpus snapshot `{ files: 13, chunks: 177 }`, off the cold build's own counts, while
-library-level arm E above was taken at `{ files: 13, chunks: 177 }` under threshold `0.32`
+the library-level arm E row it is read against was taken at `{ files: 13, chunks: 177 }` under threshold `0.32`
 (2026-09-21T19:00:20.828Z) — the same stamp as this pass, but a separate run of a reranker-bound
 call, so the two latency rows are read as server-side against library-level and never as a
 before/after pair. Host `darwin 24.6.0`, Node
