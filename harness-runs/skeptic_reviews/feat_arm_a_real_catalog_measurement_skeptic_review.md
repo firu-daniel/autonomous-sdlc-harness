@@ -32,7 +32,7 @@
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 2** — Replace `docs/retrieval.md`'s claim that the threshold calibration holds on a real catalog, and its "calibrated abstention threshold" item, with what the record shows _(layer: general)_
-2. [ ] **Finding 1** — Publish the six cited scratch launchers' source verbatim beside their commands in `docs/retrieval-eval-results.md` _(layer: general)_
+2. [x] **Finding 1** — Publish the six cited scratch launchers' source verbatim beside their commands in `docs/retrieval-eval-results.md` _(layer: general)_
 
 ---
 

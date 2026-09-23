@@ -16653,6 +16653,59 @@ section come from one launcher, run on 2026-09-23 through `bash scripts/scratch-
 for each corpus and `calibrateThreshold` over the three, exactly as the launcher that decided the
 constant did.
 
+The launcher, `harness-runs/scratch/task23_record.mjs`:
+
+```js
+import { readFileSync } from 'node:fs';
+import { calibrateThreshold, readPerQuery } from '../../evals/docs-retrieval/calibrate.mjs';
+import { armForLetter } from '../../evals/docs-retrieval/arms.mjs';
+import { loadQueries } from '../../evals/docs-retrieval/queries.mjs';
+
+const root = new URL('../../', import.meta.url);
+const text = readFileSync(new URL('docs/retrieval-eval-results.md', root), 'utf8');
+const mode = armForLetter('E').mode;
+const ids = ['gate10-catalog', 'fixture-catalog', 'self-docs'];
+const pool = ids.map((corpus) => ({
+  corpus,
+  queries: loadQueries(new URL(`evals/docs-retrieval/queries/${corpus}.jsonl`, root).pathname),
+  perQuery: readPerQuery(text, corpus, mode),
+}));
+const result = calibrateThreshold(pool);
+const { points, ...rest } = result;
+console.log(JSON.stringify({ mode, ...rest, pointCount: points.length }, null, 2));
+
+const T = 0.32;
+for (const corpus of ids) {
+  const own = points.filter((p) => p.corpus === corpus);
+  const pos = own.filter((p) => p.kind === 'positive');
+  const neg = own.filter((p) => p.kind !== 'positive');
+  const posBelow = pos.filter((p) => p.score < T).map((p) => p.id);
+  const negBelow = neg.filter((p) => p.score < T);
+  const negAbove = neg.filter((p) => p.score >= T).map((p) => `${p.id}(${p.kind})`);
+  const kinds = (k) => neg.filter((p) => p.kind === k);
+  console.log(
+    JSON.stringify({
+      corpus,
+      positives: pos.length,
+      negatives: neg.length,
+      far: kinds('far').length,
+      near: kinds('near').length,
+      unclassed: kinds('unclassed').length,
+      positivesBelowT: posBelow,
+      negativesAbstainAtT: negBelow.length,
+      farAbstain: negBelow.filter((p) => p.kind === 'far').length,
+      nearAbstain: negBelow.filter((p) => p.kind === 'near').length,
+      negativesAnsweredAtT: negAbove,
+    }),
+  );
+}
+console.log('| Corpus | Query | Kind | Grade 3 | `bestRerankScore` |');
+console.log('| --- | --- | --- | --- | --- |');
+for (const p of points) {
+  console.log(`| \`${p.corpus}\` | \`${p.id}\` | ${p.kind} | ${p.grade3 ? 'yes' : 'no'} | \`${p.score}\` |`);
+}
+```
+
 **The method's case: `cannot-separate`.** The distributions overlap — the highest negative,
 `q-g10-neg-vite-sitemap` (`gate10-catalog`, `near`) at `0.9861363768577576`, is above the lowest
 positive, `q-fc-billable-weight` (`fixture-catalog`) at `0.00004109544534003362` — so the
@@ -16914,6 +16967,60 @@ and no relevant one among them. A non-abstaining miss D ranked inside its own to
 **demotion** the cross-encoder caused. Every count below comes from the D and E `perQuery` entries of
 each block, read through `evals/docs-retrieval/results.mjs` → `readCorpusMachineHalf` by one launcher,
 run on 2026-09-23:
+
+The launcher, `harness-runs/scratch/task24_decompose.mjs`:
+
+```js
+// Task 24: D-versus-E rows and E's deficit decomposition, read off the generated region.
+import { readFileSync } from 'node:fs';
+import { readCorpusMachineHalf } from '../../evals/docs-retrieval/results.mjs';
+import { loadQueries } from '../../evals/docs-retrieval/queries.mjs';
+
+const text = readFileSync(new URL('../../docs/retrieval-eval-results.md', import.meta.url), 'utf8');
+const f3 = (x) => x.toFixed(3);
+for (const id of ['fixture-catalog', 'self-docs', 'gate10-catalog']) {
+  const payload = readCorpusMachineHalf(text, id);
+  const queries = loadQueries(new URL(`../../${payload.queries.path}`, import.meta.url));
+  const kind = new Map(queries.map((q) => [q.id, q.negativeKind]));
+  const arm = (mode) => payload.arms.find((a) => a.mode === mode);
+  const D = arm('fused');
+  const E = arm('fused-rerank');
+  console.log(`\n== ${id} snapshot ${JSON.stringify(payload.snapshot)} generatedAt ${payload.generatedAt} threshold ${payload.abstainScoreThreshold}`);
+  for (const [name, a] of [['D', D], ['E', E]]) {
+    const m = a.metrics;
+    console.log(name, a.mode, f3(m.recall['1']), f3(m.recall['3']), f3(m.recall['5']), f3(m.mrr), m.latency.p50.toFixed(1), 'abstainedOnNegative', m.abstainedOnNegative, 'of', m.negatives);
+  }
+  const dBy = new Map(D.metrics.perQuery.map((e) => [e.id, e]));
+  const ePos = E.metrics.perQuery.filter((e) => !e.negative);
+  const eMiss = ePos.filter((e) => e.rank === 0 || e.rank > 5);
+  const abst = eMiss.filter((e) => e.hits.length === 0);
+  const nonAbst = eMiss.filter((e) => e.hits.length > 0);
+  const dMiss = D.metrics.perQuery.filter((e) => !e.negative && (e.rank === 0 || e.rank > 5));
+  console.log('positives', ePos.length, 'E misses', eMiss.length);
+  console.log(' abstentions', abst.length, JSON.stringify(abst.map((e) => `${e.id}(D rank ${dBy.get(e.id).rank}, best ${e.bestRerankScore})`)));
+  console.log(' abstained flag check', abst.every((e) => e.abstained === true), 'nonAbst any abstained', nonAbst.some((e) => e.abstained));
+  console.log(' non-abstaining misses', nonAbst.length, JSON.stringify(nonAbst.map((e) => `${e.id}(D rank ${dBy.get(e.id).rank})`)));
+  const demote = nonAbst.filter((e) => dBy.get(e.id).rank > 0 && dBy.get(e.id).rank <= 5);
+  console.log(' demotions', demote.length, JSON.stringify(demote.map((e) => `${e.id}(D rank ${dBy.get(e.id).rank})`)));
+  console.log(' abstentions D had in top5', abst.filter((e) => dBy.get(e.id).rank > 0).length);
+  console.log('D misses', dMiss.length, JSON.stringify(dMiss.map((e) => `${e.id}(E rank ${E.metrics.perQuery.find((x) => x.id === e.id).rank}, E abst ${E.metrics.perQuery.find((x) => x.id === e.id).abstained})`)));
+  const eOnlyGain = ePos.filter((e) => e.rank > 0 && dBy.get(e.id).rank === 0);
+  console.log('E hits where D misses', eOnlyGain.length, JSON.stringify(eOnlyGain.map((e) => e.id)));
+  // Positive abstentions whose hits were right under D, too: E positive abstains total (hit or not).
+  console.log('E positive abstentions total', ePos.filter((e) => e.abstained).length);
+  for (const [name, a] of [['D', D], ['E', E]]) {
+    const neg = a.metrics.perQuery.filter((e) => e.negative);
+    const split = { far: [0, 0], near: [0, 0], none: [0, 0] };
+    for (const e of neg) {
+      const k = kind.get(e.id) ?? 'none';
+      split[k][1] += 1;
+      if (e.abstained) split[k][0] += 1;
+    }
+    console.log(name, 'negatives abstained', neg.filter((e) => e.abstained).length, 'of', neg.length, 'split', JSON.stringify(split));
+    if (name === 'E') console.log('  E non-abstained negatives', JSON.stringify(neg.filter((e) => !e.abstained).map((e) => `${e.id}(${kind.get(e.id)}, best ${e.bestRerankScore})`)));
+  }
+}
+```
 
 ```
 bash scripts/scratch-run.sh harness-runs/scratch/task24_decompose.mjs
@@ -17342,6 +17449,51 @@ check over what this clearance lets in.
 counting script in the run's scratch directory that reads the file through `loadQueries`
 (`bash scripts/scratch-run.sh harness-runs/scratch/task14_counts.mjs`):
 
+The launcher, `harness-runs/scratch/task14_counts.mjs`:
+
+```js
+// Task 14: every count `## The real-catalog query set` publishes, re-derived from the file's own fields,
+// plus the structural checks the plan's verification names. Goes through loadQueries so the loader accepts it.
+import { readFileSync } from 'node:fs';
+import { loadQueries } from '../../evals/docs-retrieval/queries.mjs';
+
+const path = 'evals/docs-retrieval/queries/gate10-catalog.jsonl';
+const loaded = loadQueries(path);
+const rows = readFileSync(path, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+const tally = (list, key) => list.reduce((acc, r) => ((acc[r[key]] = (acc[r[key]] ?? 0) + 1), acc), {});
+const pos = rows.filter((r) => r.labels.length > 0);
+const neg = rows.filter((r) => r.labels.length === 0);
+const half = (r) => {
+  const halves = new Set(r.labels.map((l) => l.ref.split('/')[1]));
+  return halves.size === 1 ? [...halves][0] : 'mixed';
+};
+const perHalf = pos.reduce((acc, r) => ((acc[half(r)] = (acc[half(r)] ?? 0) + 1), acc), {});
+const negHalfById = neg.reduce((acc, r) => {
+  const k = r.id.startsWith('q-g10-neg-vite-') ? 'vite-shaped' : r.negativeKind === 'far' ? 'far' : 'expause-shaped';
+  acc[k] = (acc[k] ?? 0) + 1;
+  return acc;
+}, {});
+console.log({
+  loaded: loaded.length,
+  records: rows.length,
+  uniqueIds: new Set(rows.map((r) => r.id)).size,
+  positives: pos.length,
+  positivesPerHalf: perHalf,
+  negatives: neg.length,
+  negativeKind: tally(neg, 'negativeKind'),
+  nearBySubject: negHalfById,
+  intentAll: tally(rows, 'intent'),
+  intentPositives: tally(pos, 'intent'),
+  intentNegatives: tally(neg, 'intent'),
+  origin: tally(rows, 'origin'),
+  missingSituationIntentOrigin: rows.filter((r) => !r.situation || !r.intent || !r.origin).length,
+  negativesWithoutKind: neg.filter((r) => !r.negativeKind).length,
+  positivesWithKind: pos.filter((r) => r.negativeKind !== undefined).length,
+  positivesWithoutGrade3: pos.filter((r) => !r.labels.some((l) => l.grade === 3)).length,
+  onePerPositive: 1 / pos.length,
+});
+```
+
 | Slice | Count |
 | --- | --- |
 | Records | 69 |
@@ -17390,6 +17542,44 @@ the conventions documents the catalog's own `harness.config.json` `layers[]` nam
 `corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' })` → `buildIndex` in
 memory → `loadQueries` → `assertLabelsResolve`, and nothing else. Run on 2026-09-23 over the complete set,
 and re-run the same day after the operator's corrections below:
+
+The launcher, `harness-runs/scratch/task12_preflight.mjs`:
+
+```js
+// Task 12 label pre-flight: builds the gate10-catalog index in memory and checks every label resolves.
+// Runs no arm and no search. Pass --keys-only to list unresolved labels from the chunker alone first.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { chunkMarkdown } from '../../cli/dist/retrieval/chunk.js';
+import { corpusFiles } from '../../cli/dist/retrieval/corpus.js';
+import { corpusConfig } from '../../evals/docs-retrieval/corpora.mjs';
+import { buildIndex } from '../../evals/docs-retrieval/index-build.mjs';
+import { assertLabelsResolve, loadQueries } from '../../evals/docs-retrieval/queries.mjs';
+
+const repoRoot = process.env.HARNESS_EVAL_CORPUS_ROOT;
+if (!repoRoot) throw new Error('HARNESS_EVAL_CORPUS_ROOT is not set');
+const harness = JSON.parse(readFileSync(join(repoRoot, 'harness.config.json'), 'utf8'));
+const conventions = harness.layers.map((layer) => layer.conventions);
+const { id, config, repoRoot: root } = corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' });
+const queries = loadQueries('evals/docs-retrieval/queries/gate10-catalog.jsonl');
+console.log(`loaded ${queries.length} queries`);
+
+if (process.argv.includes('--keys-only')) {
+  const files = corpusFiles(root, config).files;
+  const keys = new Set(files.flatMap((p) => chunkMarkdown(p, readFileSync(join(root, p), 'utf8')).map((c) => c.key)));
+  console.log(`files ${files.length}, chunk keys ${keys.size}`);
+  for (const q of queries) for (const l of q.labels) if (!keys.has(l.ref)) console.log('MISS', q.id, l.ref);
+} else {
+  const session = await buildIndex({ repoRoot: root, config });
+  try {
+    console.log(`snapshot: { files: ${session.snapshot.files}, chunks: ${session.snapshot.chunks} }`);
+    assertLabelsResolve(queries, session.chunkKeys, id);
+    console.log('labels resolve');
+  } finally {
+    await session.close();
+  }
+}
+```
 
 ```
 bash scripts/scratch-run.sh harness-runs/scratch/task12_preflight.mjs
@@ -17550,6 +17740,201 @@ record.
 
 **How the figures below were computed.** Every figure in the four sub-sections that follow comes from
 one launcher in the run's scratch directory, run on 2026-09-23:
+
+The launcher, `harness-runs/scratch/task19_figures.mjs`:
+
+```js
+// Task 19: arm A's real-catalog figures from the committed transcripts, via spread.mjs → summarizeVariant.
+// Builds the gate10-catalog index in memory once for its chunkKeys; root from HARNESS_EVAL_CORPUS_ROOT only.
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const checkout = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const { corpusConfig } = await import(join(checkout, 'evals/docs-retrieval/corpora.mjs'));
+const { buildIndex } = await import(join(checkout, 'evals/docs-retrieval/index-build.mjs'));
+const { loadQueries } = await import(join(checkout, 'evals/docs-retrieval/queries.mjs'));
+const { summarizeVariant } = await import(join(checkout, 'evals/docs-retrieval/arm-a/spread.mjs'));
+const { scoreTranscript, readTranscript } = await import(join(checkout, 'evals/docs-retrieval/arm-a/score-transcript.mjs'));
+const { percentile } = await import(join(checkout, 'evals/docs-retrieval/metrics.mjs'));
+
+const repoRoot = process.env.HARNESS_EVAL_CORPUS_ROOT;
+if (!repoRoot) throw new Error('HARNESS_EVAL_CORPUS_ROOT is not set');
+const harness = JSON.parse(readFileSync(join(repoRoot, 'harness.config.json'), 'utf8'));
+const conventions = harness.layers.map((layer) => layer.conventions).filter(Boolean);
+const { config, repoRoot: root } = corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' });
+const queries = loadQueries(join(checkout, 'evals/docs-retrieval/queries/gate10-catalog.jsonl'));
+
+const session = await buildIndex({ repoRoot: root, config });
+let chunkKeys;
+let snapshot;
+try {
+  chunkKeys = session.chunkKeys;
+  snapshot = session.snapshot;
+} finally {
+  await session.close();
+}
+
+const dir = join(checkout, 'evals/docs-retrieval/transcripts/gate10-catalog');
+const positives = new Set(queries.filter((q) => q.labels.length > 0).map((q) => q.id));
+const kindOf = new Map(queries.map((q) => [q.id, q.labels.length > 0 ? 'positive' : q.negativeKind ?? 'unclassed']));
+const round = (x) => (x === null ? null : Math.round(x * 1000) / 1000);
+
+const doc = readFileSync(join(checkout, 'docs/retrieval-eval-results.md'), 'utf8');
+const block = doc.slice(doc.indexOf('<!-- eval:corpus:gate10-catalog:start -->'), doc.indexOf('<!-- eval:corpus:gate10-catalog:end -->'));
+const generated = JSON.parse(block.slice(block.indexOf('```json\n') + 8, block.lastIndexOf('```'))).arms;
+
+const out = { snapshot, variants: {} };
+const billedByPair = [];
+for (const variant of ['index', 'search']) {
+  const transcripts = [1, 2, 3, 4, 5].map((n) => join(dir, `${variant}-rep${n}.jsonl`));
+  const summary = summarizeVariant({ transcripts, queries, chunkKeys });
+
+  const reps = summary.repetitions.map((rep, i) => {
+    const { records } = scoreTranscript({ transcript: transcripts[i], queries });
+    const raw = readTranscript(transcripts[i]);
+    const n = records.length;
+    const gaveUp = records.filter((r) => positives.has(r.id) && r.abstained).map((r) => r.id);
+    const guessedQueries = records.filter((r) => r.hits.some((h) => !chunkKeys.has(h.ref))).map((r) => r.id);
+    const answeredPositives = records.filter((r) => positives.has(r.id) && !r.abstained).length;
+    const negAnswered = records.filter((r) => !positives.has(r.id) && !r.abstained).map((r) => `${r.id} (${kindOf.get(r.id)})`);
+    const billed = rep.perQueryTokens.map((e) => e.billed);
+    const noneAmongRefs = raw
+      .filter((e) => e.refs.length > 1 && e.refs.some((ref) => String(ref).trim().toLowerCase() === 'none'))
+      .map((e) => e.id);
+    const withProse = raw
+      .filter((e) => e.refs.some((ref) => /\s/.test(String(ref).trim())))
+      .map((e) => {
+        const r = records.find((x) => x.id === e.id);
+        return { id: e.id, kind: kindOf.get(e.id), rawRefCount: e.refs.length, abstained: r.abstained, hits: r.hits.length };
+      });
+    const durations = raw.map((e) => e.durationMs);
+    return {
+      rep: i + 1,
+      recallAt5: round(rep.breakdown.pooled.recallAt5),
+      mrr: round(rep.breakdown.pooled.mrr),
+      strictRecallAt5: round(rep.breakdown.pooled.strictRecallAt5),
+      strictMrr: round(rep.breakdown.pooled.strictMrr),
+      byPartition: Object.fromEntries(
+        Object.entries(rep.breakdown.byPartition).map(([k, v]) => [
+          k,
+          { positives: v.positives, recallAt5: round(v.recallAt5), mrr: round(v.mrr), strictRecallAt5: round(v.strictRecallAt5), strictMrr: round(v.strictMrr) },
+        ]),
+      ),
+      negatives: rep.breakdown.negatives,
+      latency: rep.latency,
+      durationsAllWholeSeconds: durations.every((d) => d % 1000 === 0),
+      tokens: { perField: rep.tokens.perField, billedTotal: rep.tokens.billedTotal, billedPerQuery: Math.round(rep.tokens.billedPerQuery) },
+      perQueryBilled: { p50: percentile(billed, 50), p95: percentile(billed, 95), max: Math.max(...billed) },
+      toolCalls: rep.toolCalls,
+      toolCallsPerQuery: Object.fromEntries(Object.entries(rep.toolCalls).map(([k, v]) => [k, round(v / n)])),
+      queriesUsingTool: rep.queriesUsingTool,
+      unresolvedRefs: rep.unresolvedRefs,
+      guessedQueries,
+      gaveUp,
+      answeredPositives,
+      negativesAnswered: negAnswered,
+      noneAmongRefs,
+      withProse,
+    };
+  });
+
+  const { scoreArm } = await import(join(checkout, 'evals/docs-retrieval/metrics.mjs'));
+  const { partitionOf } = await import(join(checkout, 'evals/docs-retrieval/arm-a/spread.mjs'));
+  const perRepRank = transcripts.map((t) => {
+    const m = scoreArm(scoreTranscript({ transcript: t, queries }).records, queries, { kValues: [5] });
+    return new Map(m.perQuery.map((e) => [e.id, { rank: e.rank ?? null, abstained: e.abstained, answered: e.hits.length > 0 }]));
+  });
+  const moving = { rankMoved: [], top5Moved: [], abstentionMoved: [] };
+  for (const d of summary.disagreements) {
+    const rows = perRepRank.map((m) => m.get(d.id));
+    if (new Set(rows.map((x) => x.rank)).size > 1) moving.rankMoved.push(d.id);
+    if (new Set(rows.map((x) => x.rank !== null && x.rank > 0 && x.rank <= 5)).size > 1) moving.top5Moved.push(d.id);
+    if (new Set(rows.map((x) => x.abstained)).size > 1) moving.abstentionMoved.push(d.id);
+  }
+  const gaveUpByPartition = reps.map((rep) => {
+    const counts = {};
+    for (const id of rep.gaveUp) {
+      const p = partitionOf(queries.find((q) => q.id === id));
+      counts[p] = (counts[p] ?? 0) + 1;
+    }
+    return counts;
+  });
+  const viteAnswered = reps.map((rep, i) => {
+    const { records } = scoreTranscript({ transcript: transcripts[i], queries });
+    return records
+      .filter((r) => !r.abstained && positives.has(r.id) && partitionOf(queries.find((q) => q.id === r.id)) === 'docs/vite')
+      .map((r) => ({ id: r.id, refs: r.hits.map((h) => h.ref) }));
+  });
+  const refPartitions = reps.map((rep, i) => {
+    const { records } = scoreTranscript({ transcript: transcripts[i], queries });
+    const counts = {};
+    for (const r of records) for (const h of r.hits) {
+      const p = h.ref.startsWith('docs/vite/') ? 'docs/vite' : h.ref.startsWith('docs/expause-web/') ? 'docs/expause-web' : 'other';
+      counts[p] = (counts[p] ?? 0) + 1;
+    }
+    return counts;
+  });
+
+  const perQuerySum = new Map();
+  for (const rep of summary.repetitions) for (const e of rep.perQueryTokens) perQuerySum.set(e.id, (perQuerySum.get(e.id) ?? 0) + e.billed);
+  const costliest = [...perQuerySum].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, billed]) => ({ id, kind: kindOf.get(id), billedOverFiveReps: billed }));
+
+  summary.repetitions.forEach((rep, i) => {
+    billedByPair[i] ??= {};
+    billedByPair[i][variant] = rep.tokens.billedTotal;
+  });
+
+  const r = (s) => ({ values: s.values.map(round), median: round(s.median), p95: round(s.p95) });
+  const totalBilled = summary.repetitions.reduce((s, rep) => s + rep.tokens.billedTotal, 0);
+  const gen = generated.find((a) => a.arm === 'A' && a.variant === variant);
+  out.variants[variant] = {
+    partial: summary.partial,
+    reps,
+    across: {
+      recallAt5: r(summary.across.recallAt5),
+      mrr: r(summary.across.mrr),
+      byPartition: Object.fromEntries(Object.entries(summary.across.byPartition).map(([k, v]) => [k, { recallAt5: r(v.recallAt5), mrr: r(v.mrr) }])),
+      answeredNoneShare: r(summary.across.answeredNoneShare),
+      latencyP50: summary.across.latencyP50,
+      latencyP95: summary.across.latencyP95,
+      billedPerQuery: { values: summary.across.billedPerQuery.values.map(Math.round), median: Math.round(summary.across.billedPerQuery.median), p95: Math.round(summary.across.billedPerQuery.p95) },
+    },
+    disagreements: { count: summary.disagreements.length, ids: summary.disagreements.map((d) => d.id), moving: { rankMoved: moving.rankMoved.length, top5Moved: moving.top5Moved, abstentionMoved: moving.abstentionMoved } },
+    gaveUpByPartition,
+    closingRows: Object.fromEntries(
+      Object.entries({
+        strictRecallAt5: reps.map((x) => x.strictRecallAt5),
+        strictMrr: reps.map((x) => x.strictMrr),
+        farNone: reps.map((x) => x.negatives.far.answeredNone),
+        nearNone: reps.map((x) => x.negatives.near.answeredNone),
+      }).map(([k, v]) => [k, { values: v, median: percentile(v, 50), p95: percentile(v, 95) }]),
+    ),
+    viteAnswered,
+    refPartitions,
+    costliest,
+    totalBilledFiveReps: totalBilled,
+    rep1MatchesGenerated: gen
+      ? {
+          recallAt5: round(gen.metrics.recall[5]) === reps[0].recallAt5,
+          mrr: round(gen.metrics.mrr) === reps[0].mrr,
+          strictRecallAt5: round(gen.metrics.strict.recall[5]) === reps[0].strictRecallAt5,
+          strictMrr: round(gen.metrics.strict.mrr) === reps[0].strictMrr,
+          generated: { recallAt5: round(gen.metrics.recall[5]), mrr: round(gen.metrics.mrr), strictRecallAt5: round(gen.metrics.strict.recall[5]), strictMrr: round(gen.metrics.strict.mrr) },
+        }
+      : 'no generated row found',
+  };
+}
+out.billedSplitByPair = billedByPair.map((p, i) => ({
+  rep: i + 1,
+  index: p.index,
+  search: p.search,
+  indexShare: round(p.index / (p.index + p.search)),
+  searchShare: round(p.search / (p.index + p.search)),
+}));
+out.totalBilledBothVariants = out.variants.index.totalBilledFiveReps + out.variants.search.totalBilledFiveReps;
+console.log(JSON.stringify(out, null, 1));
+```
 
 ```
 bash scripts/scratch-run.sh harness-runs/scratch/task19_figures.mjs
@@ -17830,6 +18215,65 @@ the `gate10-catalog` generated block's; its per-half and `far` / `near` figures 
 `perQuery` entries, read through `evals/docs-retrieval/results.mjs` → `readCorpusMachineHalf`. Arm A's
 figures are the medians of `### The figures, per variant` above, every repetition cited from there. The
 arithmetic was checked by one launcher in the run's scratch directory, run on 2026-09-23:
+
+The launcher, `harness-runs/scratch/task20_bars.mjs`:
+
+```js
+// Task 20: arm E's pooled, per-half and far/near figures off the gate10-catalog block, via spread.mjs → breakdown,
+// and the three bars' arithmetic against arm A's medians as Task 19 published them.
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const checkout = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const { readCorpusMachineHalf } = await import(join(checkout, 'evals/docs-retrieval/results.mjs'));
+const { loadQueries } = await import(join(checkout, 'evals/docs-retrieval/queries.mjs'));
+const { breakdown } = await import(join(checkout, 'evals/docs-retrieval/arm-a/spread.mjs'));
+
+const machine = readCorpusMachineHalf(readFileSync(join(checkout, 'docs/retrieval-eval-results.md'), 'utf8'), 'gate10-catalog');
+const queries = loadQueries(join(checkout, 'evals/docs-retrieval/queries/gate10-catalog.jsonl'));
+const e = machine.arms.find((arm) => arm.arm === 'E');
+const m = e.metrics;
+const b = breakdown({ records: m.perQuery, queries });
+
+const positives = m.positives;
+const negatives = m.negatives;
+const out = {
+  snapshot: machine.snapshot,
+  generatedAt: machine.generatedAt,
+  queries: machine.queries,
+  armE: {
+    mode: e.mode,
+    recallAt5: m.recall[5],
+    mrr: m.mrr,
+    p50: m.latency.p50,
+    p95: m.latency.p95,
+    abstainedOnNegative: m.abstainedOnNegative,
+    negatives,
+    positives,
+    abstentionRate: m.abstainedOnNegative / negatives,
+    breakdown: b,
+    abstainedOnPositive: m.perQuery.filter((q) => !q.negative && q.abstained).length,
+  },
+  margins: { recall: 1 / positives, mrr: 0.5 / positives },
+};
+
+// Arm A medians, quoted from docs/retrieval-eval-results.md → ### The figures, per variant.
+const A = {
+  index: { recallAt5: 0.455, mrr: 0.432, p50: 10000, billed: 183261, none: 1 },
+  search: { recallAt5: 0.932, mrr: 0.866, p50: 11000, billed: 139463, none: 1 },
+};
+out.bars = {};
+for (const [name, a] of Object.entries(A)) {
+  out.bars[name] = {
+    recallLead: m.recall[5] - a.recallAt5,
+    mrrLead: m.mrr - a.mrr,
+    costRatio: m.latency.p95 / a.p50,
+    failureGap: out.armE.abstentionRate - a.none,
+  };
+}
+console.log(JSON.stringify(out, null, 2));
+```
 
 ```
 bash scripts/scratch-run.sh harness-runs/scratch/task20_bars.mjs
