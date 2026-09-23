@@ -6,7 +6,9 @@
  * set and the refusal of an illegal letter belong to `evals/docs-retrieval/arms.mjs`, which owns the
  * single declared arm table. A default list or a legal-letter check here would be a second copy of
  * that table, and the two would drift. The boundary is drawn here rather than inferred: the
- * `--arms` line of the refusal below says so too.
+ * `--arms` line of the refusal below says so too. `--transcript`'s variant label is carried through
+ * raw on the same terms, its legality deferred to `evals/docs-retrieval/arms.mjs` →
+ * `navigationVariant`; only the refusals that need no variant vocabulary are made here.
  *
  * `--repo <path>` is what lets the eval be pointed at any adopter's checkout; it defaults to the
  * checkout this file sits in, from a bare `git rev-parse --show-toplevel`
@@ -50,8 +52,34 @@ const FLAGS = Object.freeze([
   ['--out <path>', 'where to write the results; absent means nothing is written'],
   ['--data-dir <path>', 'where the index is stored; absent means in memory, and nothing is written'],
   ['--floor <path>', 'the recorded regression floor; read by check-floor.mjs alone, not by a run'],
-  ['--transcript <path>', "an arm A hand-run transcript, scored by run.mjs and by nothing in this module"],
+  ['--transcript <path>', 'an arm A hand-run transcript, bare or as <variant>=<path>; repeatable, once per variant, and scored by run.mjs'],
 ]);
+
+/** A `--transcript` value's `<variant>=` prefix: a bare lower-case word before the first `=`. */
+const TRANSCRIPT_LABEL = /^([a-z]+)=(.*)$/su;
+
+/** One `--transcript` value as `{ variant, path }`, `variant` the raw label or `null` for a bare path. */
+function transcriptEntry(value) {
+  const labelled = TRANSCRIPT_LABEL.exec(value);
+  return labelled === null ? { variant: null, path: value } : { variant: labelled[1], path: labelled[2] };
+}
+
+/** Refuses the `--transcript` combinations that name no single row per transcript. */
+function checkTranscripts(entries) {
+  const bare = entries.filter((entry) => entry.variant === null);
+  if (bare.length > 1) {
+    refuse('--transcript was given two bare paths, which render one arm A row; label each as <variant>=<path>');
+  }
+  if (bare.length === 1 && entries.length > 1) {
+    refuse('--transcript was given a bare path together with a labelled one; label every transcript, or give one bare path alone');
+  }
+  const seen = new Set();
+  for (const { variant } of entries) {
+    if (variant === null) continue;
+    if (seen.has(variant)) refuse(`--transcript was given two transcripts for variant ${variant}; give one per variant`);
+    seen.add(variant);
+  }
+}
 
 /** Flags taking a value, by name. */
 const VALUE_FLAGS = new Set(FLAGS.map(([spec]) => spec.split(' ')[0]));
@@ -77,11 +105,12 @@ function ownCheckout() {
  * The parsed argument surface. `argv` is the flags alone — `process.argv.slice(2)`.
  *
  * `corpus` is `undefined` for an ad-hoc corpus, which `--docs-root` selects, and `corpusId` is that
- * corpus's `--corpus-id`, or `undefined`; `arms` is the raw letters as given, or `undefined`; every
+ * corpus's `--corpus-id`, or `undefined`; `arms` is the raw letters as given, or `undefined`;
+ * `transcripts` is `[{ variant, path }]` in the order given, `variant` the raw label or `null`; every
  * path is absolute by the time it is returned.
  */
 export function parseArgs(argv) {
-  const raw = { conventions: [] };
+  const raw = { conventions: [], transcripts: [] };
 
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -128,7 +157,7 @@ export function parseArgs(argv) {
         raw.floor = value;
         break;
       case '--transcript':
-        raw.transcript = value;
+        raw.transcripts.push(transcriptEntry(value));
         break;
       // Every flag in FLAGS needs its own case: VALUE_FLAGS above accepts a flag the moment it is
       // declared, so a declared flag with no case here would take some other flag's slot silently.
@@ -136,6 +165,7 @@ export function parseArgs(argv) {
         refuse(`${flag} is declared in FLAGS with no case in parseArgs, so its value would be misread`);
     }
   }
+  checkTranscripts(raw.transcripts);
 
   const checkout = ownCheckout();
   const repo = raw.repo === undefined ? checkout : resolve(checkout, raw.repo);
@@ -185,6 +215,6 @@ export function parseArgs(argv) {
     out: against(raw.out),
     dataDir: against(raw.dataDir),
     floor: against(raw.floor),
-    transcript: against(raw.transcript),
+    transcripts: raw.transcripts.map(({ variant, path }) => ({ variant, path: against(path) })),
   };
 }

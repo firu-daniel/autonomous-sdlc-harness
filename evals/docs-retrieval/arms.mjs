@@ -14,8 +14,12 @@
  * load** by name rather than silently dropping the mode.
  *
  * **Arm A is in the table and is not run by this module.** It is index-first navigation by an agent,
- * has no `SearchMode`, and carries `mode: null`. Its row is rendered from the records
- * `evals/docs-retrieval/run.mjs` scores out of a `--transcript`, and from nothing else.
+ * has no `SearchMode`, and carries `mode: null`. Its rows are rendered from the records
+ * `evals/docs-retrieval/run.mjs` scores out of each `--transcript`, and from nothing else — one row
+ * per {@link NAVIGATION_VARIANTS} entry a transcript is labelled with, or a single row for one
+ * unlabelled transcript. The variant vocabulary is declared here for the reason the letters are:
+ * `evals/docs-retrieval/args.mjs` carries a label through raw and defers its legality to
+ * {@link navigationVariant}.
  *
  * **`session` in {@link runArm} is the object `evals/docs-retrieval/index-build.mjs` → `buildIndex`
  * returned**, never `cli/src/retrieval/session.ts` → `openRetrieval`'s, which this eval deliberately
@@ -26,6 +30,20 @@ import { SEARCH_MODES, searchDocs } from '../../cli/dist/retrieval/search.js';
 
 /** The index-first navigation arm: declared so its row exists, with no mode because it runs no search. */
 const NAVIGATION_ARM = Object.freeze({ letter: 'A', mode: null });
+
+/** The arm A variants a `--transcript` may be labelled with, in the order their rows render. */
+export const NAVIGATION_VARIANTS = Object.freeze(['index', 'search']);
+
+/** `label` as a {@link NAVIGATION_VARIANTS} entry, refused by name against that list. */
+export function navigationVariant(label) {
+  if (!NAVIGATION_VARIANTS.includes(label)) {
+    throw new Error(
+      `eval: --transcript names unknown arm A variant ${JSON.stringify(label)}; ` +
+        `the variants are ${NAVIGATION_VARIANTS.join(', ')}`,
+    );
+  }
+  return label;
+}
 
 /**
  * The letters the library arms take, in `SEARCH_MODES` order. `A` is {@link NAVIGATION_ARM}'s, so

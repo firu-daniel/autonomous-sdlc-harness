@@ -12,9 +12,10 @@
  *
  * **The table is a walk over `evals/docs-retrieval/arms.mjs` → `ARMS`, in its declared order**, one
  * row per entry, with the `Arm` and `Mode` cells read off the entry. No arm letter and no mode
- * string is written here, so a fifth mode added to `SEARCH_MODES` gains a row for free. Arm A's row
- * is part of that same walk: it renders from the records `evals/docs-retrieval/run.mjs` scored out
- * of a `--transcript`, and from a `—` placeholder when there are none.
+ * string is written here, so a fifth mode added to `SEARCH_MODES` gains a row for free. Arm A's rows
+ * are part of that same walk: one per result `evals/docs-retrieval/run.mjs` scored out of a
+ * `--transcript`, its `Arm` cell carrying the result's `variant` where it has one, and a single `—`
+ * placeholder row when there are none.
  *
  * **The write is bounded by markers.** {@link GENERATED_START} and {@link GENERATED_END} fence the
  * only bytes {@link rewriteGeneratedRegion} touches; everything outside them — the hand-written
@@ -94,7 +95,12 @@ function costCell(arm, result) {
   return `local — no billed tokens (${result.embedCalls} embed calls, ${result.rerankCalls} rerank calls)`;
 }
 
-/** One table row per {@link ARMS} entry, in declared order, whether or not that arm ran. */
+/** The `Arm` cell: the entry's letter, suffixed with the result's variant when it carries one. */
+function armLabel(arm, result) {
+  return result?.variant ? `${arm.letter}-${result.variant}` : arm.letter;
+}
+
+/** One table row per result of an {@link ARMS} entry, or per entry when that arm did not run. */
 function armRow(arm, result) {
   const mode = arm.mode === null ? EMPTY_CELL : `\`${arm.mode}\``;
   if (result === undefined) {
@@ -114,7 +120,7 @@ function armRow(arm, result) {
   }
   const { metrics } = result;
   return row([
-    arm.letter,
+    armLabel(arm, result),
     mode,
     rate(metrics.recall[1]),
     rate(metrics.recall[3]),
@@ -128,22 +134,29 @@ function armRow(arm, result) {
   ]);
 }
 
-/** The arm result for a letter, or `undefined` when that arm did not run in this pass. */
-function resultFor(corpus, letter) {
-  return corpus.arms.find((entry) => entry.letter === letter);
+/**
+ * The results of `arm` in this pass, in the order `run.mjs` pushed them: one per library arm that ran,
+ * one per scored transcript for arm A, and `[undefined]` when the arm did not run, so the walk still
+ * renders its one placeholder row.
+ */
+function resultsFor(corpus, arm) {
+  const results = corpus.arms.filter((entry) => entry.letter === arm.letter);
+  return results.length === 0 ? [undefined] : results;
 }
 
 /** The human half: the arm table, its footnote, and the comparability sentence. */
 function tableSection(corpus) {
   const header = [row(COLUMNS), row(COLUMNS.map(() => '---'))];
-  const body = ARMS.map((arm) => armRow(arm, resultFor(corpus, arm.letter)));
+  const body = ARMS.flatMap((arm) => resultsFor(corpus, arm).map((result) => armRow(arm, result)));
   return [
     ...header,
     ...body,
     '',
-    `Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its row is`,
-    `filled by re-running the eval with \`--transcript\` against a hand-run transcript, per the procedure in`,
-    '`docs/retrieval-eval.md` → `## Running arm A by hand`.',
+    `Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its rows are`,
+    `filled by re-running the eval with one \`--transcript\` per variant against a hand-run transcript, per the`,
+    'procedure in `docs/retrieval-eval.md` → `## Running arm A by hand`. The arm A rows, when present, are each',
+    "scored from the **first repetition's** transcript of that variant; the spread across repetitions is",
+    'hand-written below the end marker.',
     '',
     "The `cost` column is not a score, and **the arms' scores are not comparable across rows**: the non-reranking",
     'modes report rank-derived reciprocal-rank-fusion values in the `0.004`–`0.033` range, while the reranking mode',
@@ -189,7 +202,10 @@ function provenanceSection(corpus) {
   ].join('\n');
 }
 
-/** The machine half: every per-query record of every arm that ran, plus the stamp beside them. */
+/**
+ * The machine half: every per-query record of every arm that ran, plus the stamp beside them. Each
+ * arm A entry carries `variant`, `null` for an unlabelled transcript or for no transcript at all.
+ */
 function machineSection(corpus) {
   const payload = {
     corpus: corpus.id,
@@ -203,18 +219,21 @@ function machineSection(corpus) {
     generatedAt: corpus.generatedAt,
     host: corpus.host,
     node: corpus.node,
-    arms: ARMS.map((arm) => {
-      const result = resultFor(corpus, arm.letter);
-      if (result === undefined) return { arm: arm.letter, mode: arm.mode, ran: false };
-      return {
-        arm: arm.letter,
-        mode: arm.mode,
-        ran: true,
-        embedCalls: result.embedCalls,
-        rerankCalls: result.rerankCalls,
-        metrics: result.metrics,
-      };
-    }),
+    arms: ARMS.flatMap((arm) =>
+      resultsFor(corpus, arm).map((result) => {
+        const variant = arm.mode === null ? { variant: result?.variant ?? null } : {};
+        if (result === undefined) return { arm: arm.letter, ...variant, mode: arm.mode, ran: false };
+        return {
+          arm: arm.letter,
+          ...variant,
+          mode: arm.mode,
+          ran: true,
+          embedCalls: result.embedCalls,
+          rerankCalls: result.rerankCalls,
+          metrics: result.metrics,
+        };
+      }),
+    ),
   };
   return ['```json', JSON.stringify(payload, null, 2), '```'].join('\n');
 }

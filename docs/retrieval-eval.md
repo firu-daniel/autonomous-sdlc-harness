@@ -103,7 +103,7 @@ against:
 | `--data-dir <path>` | Where the index is persisted. Absent, the store is held in memory and nothing is written into any tree. |
 | `--floor <path>` | The recorded floor `evals/docs-retrieval/check-floor.mjs` grades against — read by that module alone and not by a launcher run; see `## The regression floor`. |
 | `--out <path>` | Where the results are written. Absent, nothing is written and the table goes to stdout. |
-| `--transcript <path>` | An arm A hand-run transcript — see below. |
+| `--transcript <path>` | An arm A hand-run transcript, given bare or as `<variant>=<path>`; repeatable, once per variant — see below. |
 
 ### Writing the results, and the corpus that grows when you do
 
@@ -193,11 +193,24 @@ writer, and the next `--out` run destroys anything else put there.
 `--transcript <path>` names an arm A transcript produced by a hand run. `evals/docs-retrieval/run.mjs`
 reads it, scores it through `evals/docs-retrieval/arm-a/score-transcript.mjs` → `scoreTranscript`, and
 renders arm A's row in the same walk, through the same `scoreArm` call, as every other arm. So a hand
-run is published by **re-running the eval** with both flags:
+run is published by **re-running the eval** with both flags. One bare path renders the single `A` row:
 
 ```
 bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --out docs/retrieval-eval-results.md --transcript <transcript>
 ```
+
+The flag is repeatable in its labelled form, `<variant>=<path>`, once per variant of
+`## The decision rule` → `### Two arm A variants, and how they combine`; each renders its own row, `A-index` and `A-search`, in
+that order:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --out docs/retrieval-eval-results.md --transcript index=<index transcript> --transcript search=<search transcript>
+```
+
+The variants are `evals/docs-retrieval/arms.mjs` → `NAVIGATION_VARIANTS`. A label is read only where
+the text before the first `=` is a bare lower-case word: `/tmp/a=b.jsonl` is a bare path, while
+`other=b.jsonl` names the variant `other`. Refused by name: an unknown label, two transcripts for one variant, two bare paths, and a
+bare path together with a labelled one.
 
 Never by typing numbers between the markers: the generated region has exactly one writer, and the next
 `--out` run destroys anything hand-edited there. `## Running arm A by hand` below is the procedure that
