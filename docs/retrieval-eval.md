@@ -586,8 +586,10 @@ apart from the pooled figure, and no root index is written to close the gap.
 claude --help
 ```
 
-The script carries them as the documented surface and **has never been run**, so a renamed flag shows
-up as a failed first query rather than as a refusal. Then the checks the script's own `REPRO` header
+The script carries them as the documented surface. They were confirmed against Claude Code `2.1.280`'s
+own `--help` before the real-catalog run (`docs/retrieval-eval-results.md` → `## Arm A — the
+real-catalog hand run`), and a flag renamed in a later version still shows up as a failed first query
+rather than as a refusal. Then the checks the script's own `REPRO` header
 block lists — each task file's token counts, which must print `1`, `1`, `1` and `0` in this order:
 
 ```
