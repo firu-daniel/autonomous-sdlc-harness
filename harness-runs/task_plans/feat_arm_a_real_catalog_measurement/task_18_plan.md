@@ -1,0 +1,22 @@
+### Task 18 — Run arms B–E over `gate10-catalog` at the arm A snapshot and publish its generated block with both arm A rows
+
+**Goal:** Take the run's own measurement — arms B–E over the real catalog through the ad-hoc corpus route, at the same corpus snapshot the arm A transcripts were taken at, with arm E's uncensored top reranker score on every query — and publish it, together with both arm A rows scored from repetition 1 of each variant, as one `gate10-catalog` block in the generated region of `docs/retrieval-eval-results.md`, written by the eval's own writer.
+
+**Depends on:** Task 17, which commits the transcripts at `evals/docs-retrieval/transcripts/gate10-catalog/index-rep1.jsonl` and `search-rep1.jsonl` (plus later repetitions); Task 16, which recorded the catalog's commit in `## Arm A — the real-catalog hand run`; Task 8's repeatable `--transcript index=<path> --transcript search=<path>`, rendering rows `A-index` and `A-search`; Task 7's `--corpus-id <id>`, whose query set defaults to `evals/docs-retrieval/queries/<id>.jsonl` in this checkout and whose provenance never renders a climbing path; and Task 5, after which every arm E per-query entry carries `bestRerankScore: number | null` (from Task 1's `SearchResult.bestRerankScore`, `null` only when no candidate was reranked).
+
+### Targets
+
+- `docs/retrieval-eval-results.md` — the generated region only, through `--out`; a new `<!-- eval:corpus:gate10-catalog:start -->` … `end` block. No hand edit anywhere in the file.
+
+**Work:**
+
+- [ ] **Same snapshot, checked first.** Re-run Task 16's `git` launcher (catalog `HEAD` and `diff --quiet 57a6c25 -- docs`, the root from `process.env.HARNESS_EVAL_CORPUS_ROOT`) and compare with the commit `## Arm A — the real-catalog hand run` records. Different → stop and return a blocker: the decision rule requires one snapshot, and the results must say the two are not a comparison rather than publish one.
+- [ ] **The launcher.** `harness-runs/scratch/gate10-eval.mjs` reads `process.env.HARNESS_EVAL_CORPUS_ROOT`, reads the catalog's own `harness.config.json` `layers[]` conventions paths, and calls `main([...])` from `evals/docs-retrieval/run.mjs` with `--repo <that root> --corpus-id gate10-catalog --docs-root docs`, one `--conventions` per conventions document, `--out <this checkout>/docs/retrieval-eval-results.md`, and `--transcript index=<this checkout>/evals/docs-retrieval/transcripts/gate10-catalog/index-rep1.jsonl --transcript search=<…>/search-rep1.jsonl` — every path in this checkout built from `import.meta.url`, never typed. Omit a variant's `--transcript` only if that variant has no repetition 1. Run it with `bash scripts/scratch-run.sh harness-runs/scratch/gate10-eval.mjs`; default `--k` and `--repeat`.
+- [ ] **Check what was written, before committing.** The new block's provenance reports corpus `gate10-catalog`, the same snapshot `## The real-catalog query set` records for the label pre-flight (a different one means the composition changed between the two — stop and report, do not commit), the query set as `evals/docs-retrieval/queries/gate10-catalog.jsonl` with the approved positive and negative counts, threshold `0.32`, and the host. Its table carries rows `A-index`, `A-search`, `B`, `C`, `D`, `E`. In its fenced `json`, arm E's `perQuery` carries a numeric `bestRerankScore` on every query — list by id any `null` (a query with no candidate) in the return. The `fixture-catalog` and `self-docs` blocks are byte-identical to before.
+- [ ] **Nothing leaks.** `git diff docs/retrieval-eval-results.md` contains no `..`-prefixed path, no absolute path and no value of the environment variable; `bash scripts/check-eval-artifacts.sh` prints nothing.
+
+**Verification:**
+
+- `git diff --stat` for this task lists `docs/retrieval-eval-results.md` alone, and every changed line lies between `<!-- eval:corpus:gate10-catalog:start -->` and its end marker.
+- The `A-index` row's recall@5 and MRR equal what a launcher computing `scoreArm(scoreTranscript({ transcript: index-rep1, queries }).records, queries)` returns, and likewise for `A-search` — the rows are the transcripts' repetition 1, generated.
+- The catalog commit checked in the first bullet is the one recorded at Task 16. Report in the return whether the block's snapshot equals gate 10's `{ files: 156, chunks: 1960 }` — Task 20 reads the block's own provenance to say whether `### The real-catalog build — 1,960 chunks, 2026-09-22` is the same snapshot.
