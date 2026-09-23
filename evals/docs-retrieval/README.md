@@ -27,6 +27,7 @@ This directory holds the runner for the relevance eval of the shipped docs-retri
 | `arm-a/agent-task-search.md` | The task text of arm A's **A-search** variant, which names no index: `agent-task.md` with only its opening comment and its navigation paragraph changed. |
 | `arm-a/run-arm-a.sh` | The mechanism of the arm A hand run, for either variant (`--variant index` or `search`) — **the one thing here that is never run from this directory.** It sits outside the configured scripts directory so that no agent invoking it obtains an automatic permit, and its own header states the prohibition that does the real work. |
 | `arm-a/score-transcript.mjs` | Turning an arm A hand-run transcript into the records `run.mjs` scores every arm by, so arm A's row is generated rather than typed. |
+| `arm-a/spread.mjs` | A variant's figures across its repetitions — per-repetition recall@5 and MRR pooled and per half, the median and p95 of latency and billed tokens, negatives answered `none` split by `negativeKind`, and the queries whose refs moved — plus the same per-half breakdown for any arm's records. |
 | `arm-a/sample-transcript.json` | A hand-written transcript, with invented usage figures, so the scorer can be exercised without invoking an agent. |
 
 ## The two corpora
