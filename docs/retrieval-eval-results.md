@@ -17272,3 +17272,260 @@ above included. The `usage` blocks carry token counts and four non-identifying s
 **The figures follow.** Arm A's `gate10-catalog` rows are generated from the committed transcripts inside
 the generated region, never typed; the spread, navigation and cost figures are recorded below this
 record.
+
+**How the figures below were computed.** Every figure in the four sub-sections that follow comes from
+one launcher in the run's scratch directory, run on 2026-09-23:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/task19_figures.mjs
+```
+
+It reads `HARNESS_EVAL_CORPUS_ROOT`, loads the approved set with `loadQueries`, builds the
+`gate10-catalog` index in memory once for its chunk keys — the build reported
+`{ files: 156, chunks: 1960 }`, the snapshot above — and calls `evals/docs-retrieval/arm-a/spread.mjs` →
+`summarizeVariant` for each variant over its five committed transcripts in repetition order, then prints
+the result as JSON. The counts it adds beside that summary — give-ups, refs naming no chunk, the costliest
+queries, the billed split per pair — are taken from the same `scoreTranscript` records and `usage` blocks.
+The window readings and operator times are quoted from the run record above, not computed.
+
+### The figures, per variant
+
+**Neither variant is partial**: `summarizeVariant` returned `partial: false` for both. Recall and MRR are
+over the 44 positives, pooled and per half — 24 under `docs/expause-web/`, 20 under `docs/vite/`; strict
+counts grade-3 labels only. `none` counts the negatives a repetition answered `none`, out of 10 `far` and
+15 `near`. Latency is per-query `durationMs`, nearest-rank; every duration in all ten transcripts is a
+whole number of seconds, so latency is resolved to 1 s. Billed tokens per query are
+`input + output + cache_creation_input + cache_read_input` over the 69 records. The closing rows are the
+nearest-rank median and p95 across the five repetitions — **with five values the p95 is the maximum**.
+
+**A-index**
+
+| Rep | recall@5 | MRR | expause-web recall@5 / MRR | vite recall@5 / MRR | strict recall@5 | strict MRR | `none`, far | `none`, near | p50 ms | p95 ms | billed tokens / query |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.432 | 0.409 | 0.792 / 0.750 | 0 / 0 | 0.432 | 0.343 | 10 / 10 | 15 / 15 | 9000 | 15000 | 179,799 |
+| 2 | 0.432 | 0.409 | 0.792 / 0.750 | 0 / 0 | 0.432 | 0.347 | 10 / 10 | 15 / 15 | 10000 | 16000 | 185,002 |
+| 3 | 0.455 | 0.432 | 0.833 / 0.792 | 0 / 0 | 0.432 | 0.369 | 10 / 10 | 15 / 15 | 10000 | 17000 | 183,261 |
+| 4 | 0.455 | 0.432 | 0.833 / 0.792 | 0 / 0 | 0.432 | 0.357 | 10 / 10 | 15 / 15 | 10000 | 16000 | 185,264 |
+| 5 | 0.455 | 0.432 | 0.833 / 0.792 | 0 / 0 | 0.455 | 0.375 | 10 / 10 | 15 / 15 | 10000 | 15000 | 180,794 |
+| **median** | 0.455 | 0.432 | 0.833 / 0.792 | 0 / 0 | 0.432 | 0.357 | 10 | 15 | 10000 | 16000 | 183,261 |
+| **p95 (max)** | 0.455 | 0.432 | 0.833 / 0.792 | 0 / 0 | 0.455 | 0.375 | 10 | 15 | 10000 | 17000 | 185,264 |
+
+**A-search**
+
+| Rep | recall@5 | MRR | expause-web recall@5 / MRR | vite recall@5 / MRR | strict recall@5 | strict MRR | `none`, far | `none`, near | p50 ms | p95 ms | billed tokens / query |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.909 | 0.835 | 0.875 / 0.792 | 0.950 / 0.888 | 0.909 | 0.756 | 10 / 10 | 15 / 15 | 11000 | 18000 | 142,158 |
+| 2 | 0.909 | 0.847 | 0.833 / 0.771 | 1 / 0.938 | 0.886 | 0.773 | 10 / 10 | 15 / 15 | 10000 | 19000 | 136,641 |
+| 3 | 0.932 | 0.881 | 0.875 / 0.833 | 1 / 0.938 | 0.886 | 0.801 | 10 / 10 | 15 / 15 | 11000 | 16000 | 139,463 |
+| 4 | 0.955 | 0.866 | 0.917 / 0.806 | 1 / 0.938 | 0.909 | 0.782 | 10 / 10 | 15 / 15 | 11000 | 17000 | 139,636 |
+| 5 | 0.932 | 0.881 | 0.875 / 0.833 | 1 / 0.938 | 0.909 | 0.797 | 9 / 10 | 15 / 15 | 10000 | 17000 | 137,766 |
+| **median** | 0.932 | 0.866 | 0.875 / 0.806 | 1 / 0.938 | 0.909 | 0.782 | 10 | 15 | 11000 | 17000 | 139,463 |
+| **p95 (max)** | 0.955 | 0.881 | 0.917 / 0.833 | 1 / 0.938 | 0.909 | 0.801 | 10 | 15 | 11000 | 19000 | 142,158 |
+
+The share of all negatives answered `none` is **1** in every repetition of A-index, and **1, 1, 1, 1,
+0.96** for A-search — median 1, p95 1.
+
+**The generated `A-index` and `A-search` rows of the `gate10-catalog` block are repetition 1**, and the
+launcher checked each against it: recall@5, MRR, strict recall@5 and strict MRR all equal. **The median
+row is what `docs/retrieval-eval.md` → `### Two arm A variants, and how they combine` grades**, not the
+generated row. For A-index the two differ — repetition 1 ties for its lowest, 0.432 recall@5 against a median
+of 0.455 — and for A-search repetition 1 is below the median on recall@5 (0.909 against 0.932) and MRR
+(0.835 against 0.866).
+
+### Spread, repetitions and what moved
+
+**Every repetition is kept**, the odd ones included: A-search's repetition 5, the one with a negative
+not answered `none`, and A-index's repetition 1, its lowest strict MRR.
+
+**The scored figures barely move.** Across five repetitions, A-index's recall@5 spans 0.432–0.455 and
+A-search's 0.909–0.955; MRR spans 0.409–0.432 and 0.835–0.881. One positive is worth `1 / 44 = 0.0227`
+of recall@5 (`## The real-catalog query set`), so A-index moved by one positive and A-search by two.
+
+**The answers move a great deal.** `summarizeVariant`'s `disagreements` — queries whose ordered refs are
+not identical in all five repetitions — number **22 of 69 for A-index** and **41 of 69 for A-search**:
+
+- A-index: `q-g10-ew-gift-community-post`, `q-g10-ew-sendgift-chat-side-effects`,
+  `q-g10-ew-blocked-suggested-creators`, `q-g10-ew-new-notification-tap`,
+  `q-g10-ew-mark-notification-read`, `q-g10-ew-reaction-dislike`, `q-g10-ew-watch-later-feed-signal`,
+  `q-g10-ew-deleted-account-subcollection`, `q-g10-ew-recent-signin-withdraw`,
+  `q-g10-ew-second-browser-login`, `q-g10-ew-video-call-ended-summary`, `q-g10-ew-firestore-to-typed`,
+  `q-g10-ew-tojson-optional-keys`, `q-g10-ew-withdrawal-labels-romanian`,
+  `q-g10-ew-hardcoded-padding-colour`, `q-g10-ew-new-page-back-title`, `q-g10-ew-console-error-catch`,
+  `q-g10-ew-callable-exists-check`, `q-g10-ew-unlock-payload`, `q-g10-ew-photo-comment-reply`,
+  `q-g10-vite-health-middleware`, `q-g10-vite-mock-updated-event`.
+- A-search: `q-g10-ew-gift-community-post`, `q-g10-ew-sendgift-chat-side-effects`,
+  `q-g10-ew-blocked-suggested-creators`, `q-g10-ew-new-notification-tap`,
+  `q-g10-ew-mark-notification-read`, `q-g10-ew-reaction-dislike`, `q-g10-ew-watch-later-feed-signal`,
+  `q-g10-ew-deleted-account-subcollection`, `q-g10-ew-recent-signin-withdraw`,
+  `q-g10-ew-second-browser-login`, `q-g10-ew-video-call-ended-summary`, `q-g10-ew-firestore-to-typed`,
+  `q-g10-ew-tojson-optional-keys`, `q-g10-ew-withdraw-confirm-modal`,
+  `q-g10-ew-withdrawal-labels-romanian`, `q-g10-ew-hardcoded-padding-colour`,
+  `q-g10-ew-new-page-back-title`, `q-g10-ew-console-error-catch`, `q-g10-ew-callable-exists-check`,
+  `q-g10-ew-unlock-payload`, `q-g10-ew-photo-comment-reply`, `q-g10-ew-group-room-agora-token`,
+  `q-g10-vite-staging-build`, `q-g10-vite-dev-api-forward`, `q-g10-vite-github-pages-subpath`,
+  `q-g10-vite-stale-chunk-deploy`, `q-g10-vite-linked-ui-package`, `q-g10-vite-admin-html-entry`,
+  `q-g10-vite-plugin-package-name`, `q-g10-vite-virtual-routes`, `q-g10-vite-src-alias`,
+  `q-g10-vite-robots-favicon`, `q-g10-vite-build-only-plugin`, `q-g10-vite-scoped-card-styles`,
+  `q-g10-vite-config-reads-env`, `q-g10-vite-health-middleware`, `q-g10-vite-build-sha-meta`,
+  `q-g10-vite-mock-updated-event`, `q-g10-vite-rails-manifest-tags`, `q-g10-neg-vite-server-mock`,
+  `q-g10-neg-android-keystore`.
+
+**Few of those disagreements reach a score.** Scoring each repetition through `metrics.mjs` → `scoreArm`
+and comparing per query: the rank of the first relevant ref moved on **2** of A-index's 22 and **7** of
+A-search's 41; whether that ref sat in the top 5 moved on 2 — `q-g10-ew-gift-community-post`,
+`q-g10-ew-deleted-account-subcollection` — and 3 — `q-g10-ew-withdraw-confirm-modal`,
+`q-g10-ew-group-room-agora-token`, `q-g10-neg-vite-server-mock`. Whether the answer was an abstention
+moved on 4 for A-index (`q-g10-ew-gift-community-post`, `q-g10-ew-deleted-account-subcollection`,
+`q-g10-vite-health-middleware`, `q-g10-vite-mock-updated-event`) and 3 for A-search
+(`q-g10-ew-group-room-agora-token`, `q-g10-neg-vite-server-mock`, `q-g10-neg-android-keystore`). The
+rest of the disagreement is order and extra refs below the first relevant one.
+
+**Five repetitions are enough for the figures the decision rule reads, within a stated bound.** The
+observed recall@5 range is at most two positives for either variant, MRR stays inside the ranges above,
+and latency p50 moved by one 1-second step. A margin between arm A and another arm that is wider than that
+range is not a repetition artefact at five; a margin inside it — within two positives — is not settled by
+five repetitions of this arm on this set, and more repetitions would narrow the median's uncertainty
+without changing the observed range, which is what a reader should hold such a margin against. Read at
+the level of returned refs rather than scores, arm A is plainly non-deterministic — a third of A-index's
+answers and more than half of A-search's differ somewhere across five runs — and that is a result in
+itself, not noise to be averaged away.
+
+### How arm A navigated a 156-file catalog
+
+**Tool calls per query, by tool** (per repetition, 1 → 5; each is that tool's calls over the 69 queries):
+
+| Variant | `Read` per query | `Grep` per query | `Glob` per query | Queries using `Grep` | Queries using `Glob` |
+| --- | --- | --- | --- | --- | --- |
+| A-index | 1.783, 1.768, 1.739, 1.754, 1.754 | 1.29, 1.42, 1.42, 1.406, 1.333 | 0 | 50, 52, 52, 54, 51 | 0 |
+| A-search | 0.435, 0.464, 0.507, 0.565, 0.391 | 3.087, 2.942, 3, 3.029, 3.072 | 0.072, 0.014, 0.058, 0.029, 0.043 | 69 in every repetition | 5, 1, 4, 2, 3 |
+
+**A-index did grep — on 50 to 54 of its 69 queries in each repetition** — although it was told to read
+`INDEX.md` first; it read on 68 or 69 queries and never used `Glob`. A-search is a grep-first navigator:
+`Grep` on every query, about three calls each, and a `Read` on 26 to 31 queries. **No tool outside the
+fence was used**: `toolCalls` names only `Read`, `Grep` and `Glob` in all ten transcripts, as the
+redaction record above states.
+
+**Given up — `none` on a positive.** Per repetition, 1 → 5:
+
+- **A-index: 23, 22, 22, 22, 21** of 44 — by half, `docs/expause-web/` 4, 4, 3, 3, 3 and `docs/vite/`
+  19, 18, 19, 19, 18. The `docs/expause-web/` give-ups are `q-g10-ew-new-callable-unwrap`,
+  `q-g10-ew-group-room-agora-token` and `q-g10-neg-coin-promo-code` in every repetition, plus
+  `q-g10-ew-gift-community-post` in repetition 1 and `q-g10-ew-deleted-account-subcollection` in
+  repetition 2.
+- **A-search: 3, 3, 2, 2, 2** — `q-g10-ew-new-callable-unwrap` and `q-g10-neg-coin-promo-code` in every
+  repetition, plus `q-g10-neg-vite-server-mock` in repetition 1 and `q-g10-ew-group-room-agora-token` in
+  repetition 2.
+
+Both variants abstained in every repetition on `q-g10-neg-coin-promo-code`, and A-index on
+`q-g10-neg-vite-server-mock` — the two negatives the operator converted to positives at approval.
+
+**Guessed — refs naming no chunk** (`unresolvedRefs`, counted against the in-memory build's chunk keys):
+A-index **2, 3, 1, 2, 3** refs, on 2, 2, 1, 2, 2 queries; A-search **7, 5, 4, 6, 6** refs, on 7, 5, 4,
+5, 5 queries. Those counts include the two non-chunk refs of each prose record below. The one guess both
+variants make in every repetition is on `q-g10-ew-tojson-optional-keys`.
+
+**Answered.** Positives answered with at least one ref: A-index 21, 22, 22, 22, 23; A-search 41, 41, 42,
+42, 42. Negatives answered with anything but `none`: none, except A-search's
+`q-g10-neg-android-keystore` in repetition 5.
+
+**The three records with a prose sentence beside `none`**, as `score-transcript.mjs` scored each — the
+launcher found them as the only records whose refs carry whitespace, and each scored `abstained: false`
+with two hits:
+
+| Pass | Query id | Kind | Scored as |
+| --- | --- | --- | --- |
+| `index-rep2` | `q-g10-vite-health-middleware` | positive | answered miss — two hits, neither a label |
+| `index-rep5` | `q-g10-vite-mock-updated-event` | positive | answered miss — two hits, neither a label |
+| `search-rep5` | `q-g10-neg-android-keystore` | `far` negative | answered — not an abstention |
+
+**The operator's reading is confirmed**: a `none` among other refs scores as an answered miss, so
+`q-g10-neg-android-keystore` costs A-search one `far` abstention on repetition 5 — its `far` count reads 9
+of 10 there, and its share of negatives answered `none` 0.96. Both A-index sentences say in words that
+the index does not reach Vite.
+
+**The per-half result is A-index's index, not its navigation.** `docs/expause-web/INDEX.md` links no
+`docs/vite/` file, and A-index returned **no `docs/vite/` ref in any repetition** — 81 or 82 refs per
+repetition, every one under `docs/expause-web/` apart from the prose records' two. On the 20
+`docs/vite/` positives it gave up on 18 or 19, answered `q-g10-vite-src-alias` with a
+`docs/expause-web/` ref in every repetition, and wrote a prose `none` on the remaining one in repetitions
+2 and 5: `docs/vite/` recall@5 is 0 in all five. On `docs/expause-web/`, which its index does cover,
+A-index's median recall@5 is 0.833 against A-search's 0.875, and its MRR 0.792 against 0.806. This is the
+variant's real behaviour on a mixed catalog with a partial index, reported and not corrected: no root
+index was written and the catalog was not edited.
+
+### What arm A cost to run
+
+**Billed tokens per field, per repetition** (the per-query `usage` blocks are the committed transcripts
+under `evals/docs-retrieval/transcripts/gate10-catalog/`):
+
+| Variant | Rep | `input_tokens` | `output_tokens` | `cache_creation_input_tokens` | `cache_read_input_tokens` | Billed total |
+| --- | --- | --- | --- | --- | --- | --- |
+| A-index | 1 | 520 | 35,867 | 3,198,348 | 9,171,364 | 12,406,099 |
+| A-index | 2 | 532 | 36,806 | 1,159,877 | 11,567,944 | 12,765,159 |
+| A-index | 3 | 530 | 36,940 | 1,145,134 | 11,462,430 | 12,645,034 |
+| A-index | 4 | 532 | 37,685 | 1,357,514 | 11,387,462 | 12,783,193 |
+| A-index | 5 | 522 | 35,722 | 1,345,480 | 11,093,072 | 12,474,796 |
+| A-search | 1 | 570 | 42,755 | 1,703,099 | 8,062,476 | 9,808,900 |
+| A-search | 2 | 548 | 41,337 | 372,653 | 9,013,681 | 9,428,219 |
+| A-search | 3 | 560 | 41,253 | 355,588 | 9,225,573 | 9,622,974 |
+| A-search | 4 | 560 | 41,691 | 337,903 | 9,254,705 | 9,634,859 |
+| A-search | 5 | 556 | 40,292 | 302,858 | 9,162,168 | 9,505,874 |
+
+Over all five repetitions: **A-index 63,074,281** billed tokens, **A-search 48,000,826**.
+
+**Per query.** Across repetitions, billed tokens per query are A-index median **183,261**, p95 185,264,
+and A-search median **139,463**, p95 142,158. Within a repetition the per-query distribution is wider —
+nearest-rank p50 / p95 / max:
+
+| Rep | A-index p50 / p95 / max | A-search p50 / p95 / max |
+| --- | --- | --- |
+| 1 | 180,200 / 262,567 / 376,706 | 134,877 / 223,629 / 252,654 |
+| 2 | 181,235 / 312,939 / 366,709 | 131,611 / 218,734 / 252,290 |
+| 3 | 182,963 / 284,817 / 292,943 | 133,157 / 211,884 / 261,208 |
+| 4 | 183,990 / 276,465 / 347,922 | 133,370 / 224,864 / 298,200 |
+| 5 | 180,993 / 288,320 / 379,713 | 130,850 / 227,943 / 279,927 |
+
+**The five costliest queries**, by billed tokens summed over the five repetitions:
+
+| Variant | Query id | Kind | Billed tokens, five repetitions |
+| --- | --- | --- | --- |
+| A-index | `q-g10-neg-pin-comment` | `near` negative | 1,667,325 |
+| A-index | `q-g10-ew-hardcoded-padding-colour` | positive | 1,441,322 |
+| A-index | `q-g10-vite-stale-chunk-deploy` | positive | 1,344,694 |
+| A-index | `q-g10-ew-deleted-account-subcollection` | positive | 1,319,838 |
+| A-index | `q-g10-ew-callable-exists-check` | positive | 1,315,572 |
+| A-search | `q-g10-ew-hardcoded-padding-colour` | positive | 1,224,189 |
+| A-search | `q-g10-ew-firestore-to-typed` | positive | 1,178,461 |
+| A-search | `q-g10-neg-pin-comment` | `near` negative | 1,105,579 |
+| A-search | `q-g10-ew-callable-exists-check` | positive | 1,103,155 |
+| A-search | `q-g10-ew-blocked-suggested-creators` | positive | 1,054,863 |
+
+**The usage windows, per repetition pair.** The operator read the 5-hour and 7-day windows before and
+after each pair — A-index then A-search — in whole percentage points, not per variant (the run record
+above). No pair's rise is apportioned to one variant as a measured figure:
+
+| Rep pair | 5-hour window rise | 7-day window rise | Billed tokens, A-index / A-search | Billed-token share, A-index / A-search |
+| --- | --- | --- | --- | --- |
+| 1 | +15 | +1 | 12,406,099 / 9,808,900 | 0.558 / 0.442 |
+| 2 | +6 | +1 | 12,765,159 / 9,428,219 | 0.575 / 0.425 |
+| 3 | +6 | +1 | 12,645,034 / 9,622,974 | 0.568 / 0.432 |
+| 4 | +6 | +1 | 12,783,193 / 9,634,859 | 0.570 / 0.430 |
+| 5 | +6 | +0 | 12,474,796 / 9,505,874 | 0.568 / 0.432 |
+
+Repetition 1's **~63% / ~37%** split is the operator's **estimate**, weighted by relative token price;
+the billed-token split the transcripts give for the same pair is **0.558 / 0.442**, unweighted, so the
+two measure different things and neither is a window reading.
+
+**The warm-cache drop.** The 5-hour window rose **+15** on repetition 1's pair and **+6** on each later
+pair. Billed tokens did not fall with it — each variant's total stays within the range in the table
+above — but their make-up did: `cache_creation_input_tokens` fell from 3,198,348 to 1,145,134–1,357,514
+for A-index and from 1,703,099 to 302,858–372,653 for A-search, and `cache_read_input_tokens` rose in its
+place. That is consistent with the operator's reading that the prompt cache stayed warm between passes;
+the window drop itself is the operator's reading, not a figure the transcripts carry.
+
+**Operator time**, from the run record: 2, 2, 1–2, 2 and 2 minutes for the five pairs — the commands
+handed over, each pair started and its windows read. For that, the run settled all ten passes, both
+variants complete, with no stop at the checkpoint. Whoever weighs re-running arm A on another catalog has
+that price: the operator minutes above at the terminal, **111,075,107** billed tokens across ten passes
+on a 156-file catalog, and a 5-hour window taken from 4% to 43% — with the first pair costing most. No
+money figure is given: the transcripts carry tokens, not a charge.
