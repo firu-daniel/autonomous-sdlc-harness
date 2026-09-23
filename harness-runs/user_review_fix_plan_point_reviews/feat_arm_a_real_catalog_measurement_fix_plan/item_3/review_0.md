@@ -1,0 +1,8 @@
+# general review — ### 3. `docs/retrieval.md` announces a pending withdrawal and never says when turning retrieval on pays — iteration 0
+
+Checked: every heading the changed text cites resolves (`docs/retrieval-eval-results.md` → `## The decision, applied to the real catalog`, `### The maintainer's decision`, `### Corpus \`gate10-catalog\``, `## The shipped default against fusion alone`; `docs/development.md` → `## 6. The roadmap this tree defers to`, row 18 now reading "NOT EXECUTED, by maintainer decision"; `docs/cli.md` → `## 2. \`init\``, whose after-adoption fenced block is the cited route; `docs/retrieval.md` → `## When to turn it on`). The figures 0.909 / 0.795 match arms B and E of the `gate10-catalog` table, and `DEFAULT_MODE` in `cli/src/commands/docs.ts` is `'fused-rerank'`. Confirmed by `grep` over those files; no probe was needed. The remaining "not yet carried out" wording in `docs/config.md`, `docs/cli.md` §11 and `README.md` is Finding 5's scope, not this unit's.
+
+## Nice to Have
+1. **The "not measured" caveat is stated twice in one bullet** — `docs/retrieval.md` (`## When to turn it on`) — "**For a catalog grep serves badly — and none of those cases is measured.**"
+   The bold lead already says none of those cases is measured, and the bullet's own body repeats it three sentences later in bold: "**None of those situations has been measured.**" A reader gets the same caveat twice within one bullet. This is wording only; the plan asked for the caveat to be stated plainly, and it is.
+   **Fix:** Shorten the lead to "**For a catalog grep serves badly.**" and keep the body's bold sentence, or keep the lead and drop the body's repeat sentence.
