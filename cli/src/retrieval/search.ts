@@ -7,8 +7,10 @@
  * {@link ABSTAIN_SCORE_THRESHOLD}, calibrated against the measured reranker distribution** — that
  * constant's own doc comment carries the value and points at the record of how it was chosen. The
  * reranker's score is the one this module treats as calibrated; the `lexical`, `vector` and `fused`
- * scores are rank-derived and uncalibrated, so those modes never abstain. Every store access goes
- * through the {@link DocStore} methods; this module holds no SQL.
+ * scores are rank-derived and uncalibrated, so those modes never abstain. The score abstention tests
+ * is reported on the result whether or not it abstained, so the calibration can observe the
+ * distribution it cuts. Every store access goes through the {@link DocStore} methods; this module
+ * holds no SQL.
  */
 
 import { HarnessError } from '../core/errors.js';
@@ -73,6 +75,8 @@ export interface SearchHit {
 export interface SearchResult {
   readonly abstained: boolean;
   readonly hits: readonly SearchHit[];
+  /** The top reranker score `fused-rerank` compared against ABSTAIN_SCORE_THRESHOLD; null in every other mode, and when there were no candidates to rerank. */
+  readonly bestRerankScore: number | null;
 }
 
 /** Adds each hit's RRF term to `scores`, keeping first-seen order. */
@@ -104,6 +108,7 @@ function hitOf(chunk: StoredChunk, score: number): SearchHit {
  * Answers `query` in `mode`. `k` is clamped to `[1, MAX_RESULTS]`; an empty or whitespace-only query
  * is refused. Only `fused-rerank` abstains — on no candidates, or a best reranker score below
  * {@link ABSTAIN_SCORE_THRESHOLD}; the other modes' scores are uncalibrated and never abstain.
+ * `bestRerankScore` carries the score that comparison read, abstention or not, and no renderer reads it.
  */
 export async function searchDocs(options: {
   store: DocStore;
@@ -125,11 +130,15 @@ export async function searchDocs(options: {
   if (mode !== 'fused-rerank') {
     const top = fused.slice(0, k);
     const chunks = await store.getChunks(top.map(([id]) => id));
-    return { abstained: false, hits: chunks.map((chunk) => hitOf(chunk, scores.get(chunk.id) ?? 0)) };
+    return {
+      abstained: false,
+      hits: chunks.map((chunk) => hitOf(chunk, scores.get(chunk.id) ?? 0)),
+      bestRerankScore: null,
+    };
   }
 
   const candidates = await store.getChunks(fused.slice(0, RERANK_CANDIDATES).map(([id]) => id));
-  if (candidates.length === 0) return { abstained: true, hits: [] };
+  if (candidates.length === 0) return { abstained: true, hits: [], bestRerankScore: null };
   const rerankScores = await reranker.score(
     query,
     candidates.map((chunk) => (chunk.heading === '' ? chunk.body : `${chunk.heading}\n${chunk.body}`)),
@@ -138,8 +147,12 @@ export async function searchDocs(options: {
     .map((chunk, index) => ({ chunk, score: rerankScores[index] ?? 0 }))
     .sort((a, b) => b.score - a.score);
   const best = reranked[0]?.score ?? 0;
-  if (best < ABSTAIN_SCORE_THRESHOLD) return { abstained: true, hits: [] };
-  return { abstained: false, hits: reranked.slice(0, k).map(({ chunk, score }) => hitOf(chunk, score)) };
+  if (best < ABSTAIN_SCORE_THRESHOLD) return { abstained: true, hits: [], bestRerankScore: best };
+  return {
+    abstained: false,
+    hits: reranked.slice(0, k).map(({ chunk, score }) => hitOf(chunk, score)),
+    bestRerankScore: best,
+  };
 }
 
 /**
