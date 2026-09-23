@@ -49,7 +49,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_arm_a_
 11. [x] **Task 11** — Add `evals/docs-retrieval/arm-a/spread.mjs`: per-repetition, per-half and far/near figures across a variant's transcripts _(layer: general)_ _(points: 20)_
 12. [x] **Task 12** — Author the `docs/expause-web/` positives of `gate10-catalog.jsonl` by reading the catalog _(layer: general)_ _(points: 20)_
 13. [x] **Task 13** — Author the `docs/vite/` positives of `gate10-catalog.jsonl` by reading the catalog _(layer: general)_ _(points: 15)_
-14. [ ] **Task 14** — Author the negatives, pass the label pre-flight, and record the set in `## The real-catalog query set` _(layer: general)_ _(points: 20)_
+14. [x] **Task 14** — Author the negatives, pass the label pre-flight, and record the set in `## The real-catalog query set` _(layer: general)_ _(points: 20)_
 15. [ ] **Task 15** — Park for the operator's approval of the query set, and record it before anything is scored _(layer: general)_ _(points: 10)_
 16. [ ] **Task 16** — Park for the arm A hand run: verify the CLI flags, take the free pre-checks, hand over the commands, and record the run _(layer: general)_ _(points: 15)_
 17. [ ] **Task 17** — Read, redact and commit the ten arm A transcripts _(layer: general)_ _(points: 15)_

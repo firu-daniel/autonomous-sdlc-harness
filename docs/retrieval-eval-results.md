@@ -5033,6 +5033,86 @@ the gap; that needs repetitions on an idle host, and no run recorded in this fil
 real-catalog hand run recorded in `## Cold build and index size` is not that run either: it timed cold
 builds and put two queries through the search path, not a repeated latency series.
 
+## The real-catalog query set
+
+**Who reads this, and what it owns.** The operator approving `evals/docs-retrieval/queries/gate10-catalog.jsonl`
+before anything is scored against it, and whoever later reads a `gate10-catalog` figure and needs to know
+what set it was taken over. This section is the one record of what that set is and how it was made.
+
+**The catalog.** The private real catalog `### The real-catalog build — 1,960 chunks, 2026-09-22` measured,
+now at commit `57a6c25` — a `PROVENANCE.md`-only commit whose `docs/` the operator verified byte-identical
+to gate 10's `010c50e` — **156 files, 1,960 chunks**. Its eval id is `gate10-catalog`.
+
+**The counts**, re-derived from the file's own `labels`, `negativeKind`, `intent` and `origin` fields by a
+counting script in the run's scratch directory that reads the file through `loadQueries`
+(`bash scripts/scratch-run.sh harness-runs/scratch/task14_counts.mjs`):
+
+| Slice | Count |
+| --- | --- |
+| Records | 71 |
+| Positives | 42 — 23 answered under `docs/expause-web/`, 19 under `docs/vite/`; none spans both halves |
+| Negatives | 29 — 19 `near` (13 about Expause, 6 about Vite), 10 `far` |
+| Intent, all records | `surroundings` 33 · `contract` 19 · `convention` 19 |
+| Intent, positives | `surroundings` 16 · `contract` 13 · `convention` 13 |
+| Intent, negatives | `surroundings` 17 · `contract` 6 · `convention` 6 |
+| Origin | `written` 71 · `harvested` 0 |
+
+**`1 / positives` for this set is `1 / 42 = 0.0238`** — one positive query is worth 2.38 percentage points
+of recall@5.
+
+**No harvested query.** The task prompt's optional query-log harvest (operator checklist row 8) read `Open`
+when authoring started, so every record is written.
+
+**How it was made.**
+
+- **Situation first.** Each record's `situation` — one line of a plausible Expause or Vite task prompt,
+  plan step or review finding — was written before its query, and is committed beside it.
+- **Query from the situation alone.** Short, identifier-dense phrases of the kind the plan writer and the
+  reviewers send; a feature, function or option name the situation carries is fair, a term only the target
+  section uses is not, and no heading was copied in.
+- **Labels by reading.** Every `ref` was found by reading the catalog, never by searching it. Every positive
+  carries at least one grade-3 label; grades 2 and 1 were assigned deliberately, for a section more than
+  related and a section related and useful.
+- **Negatives confirmed uncovered by reading.** Each negative was checked against the documents its subject
+  would live in, read until no section answered it; a term with no match was where that reading started,
+  never the proof. `near` — a feature Expause plausibly has but does not document, a Vite option that does
+  not exist, a topic adjacent to a documented one — and `far` — plausible in a software project, off this
+  catalog's subject — were judged by meaning before any score existed.
+- **Nothing searched or scored while authoring.** The method forbids `docs search`, the MCP tool and every
+  eval arm from the first positive until the operator's approval; what executes against the catalog is the
+  label pre-flight below, which builds an index and checks chunk keys.
+
+**Limits, disclosed rather than harmonised.**
+
+- **The set is not neutral.** Its author is a model and so is arm A's navigator: queries, labels and the
+  `near` / `far` judgement share a reader with one of the arms they grade.
+- **Its phrasing differs from the committed sets'.** This set is agent-shaped; `fixture-catalog` and
+  `self-docs` carry natural-language questions, so a `gate10-catalog` figure beside a committed-corpus figure
+  is not a comparison over like-phrased sets.
+
+**The label pre-flight.** A launcher in the run's scratch directory reads `HARNESS_EVAL_CORPUS_ROOT`, reads
+the conventions documents the catalog's own `harness.config.json` `layers[]` names, and calls
+`corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' })` → `buildIndex` in
+memory → `loadQueries` → `assertLabelsResolve`, and nothing else. Run on 2026-09-23 over the complete set:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/task12_preflight.mjs
+```
+
+It printed:
+
+```
+loaded 71 queries
+snapshot: { files: 156, chunks: 1960 }
+labels resolve
+```
+
+That snapshot **equals** gate 10's `{ files: 156, chunks: 1960 }`: the composition is the 98 files under
+`docs/expause-web/`, the 57 under `docs/vite/` and the catalog's one conventions document, which its
+`layers[]` names — the file count gate 10 stamped.
+
+**Status: awaits the operator's approval.** Nothing is scored against this set until it is recorded here.
+
 ## Arm A — awaiting a hand run
 
 **What arm A measures.** Index-first navigation by an agent: the alternative the docs-retrieval tool
