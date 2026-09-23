@@ -57,7 +57,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_arm_a_
 19. [x] **Task 19** — Write arm A's real-catalog figures: every repetition, the spread, the halves and what the arm cost _(layer: general)_ _(points: 20)_
 20. [x] **Task 20** — Apply the decision rule bar by bar, record the outcome, and open the change it names _(layer: general)_ _(points: 20)_
 21. [x] **Task 21** — Regenerate the `fixture-catalog` and `self-docs` blocks so every calibration point is observed _(layer: general)_ _(points: 10)_
-22. [ ] **Task 22** — Move `ABSTAIN_SCORE_THRESHOLD` to the value the fixed method gives, or record why it stays, and correct the package's own "not yet measured" statements _(layer: cli)_ _(points: 12)_
+22. [x] **Task 22** — Move `ABSTAIN_SCORE_THRESHOLD` to the value the fixed method gives, or record why it stays, and correct the package's own "not yet measured" statements _(layer: cli)_ _(points: 12)_
 23. [ ] **Task 23** — Rewrite `## Threshold calibration` on the observed distributions and re-run the abstention tests and the floor _(layer: general)_ _(points: 20)_
 24. [ ] **Task 24** — Add the real catalog's D-versus-E pair to `## The shipped default against fusion alone` _(layer: general)_ _(points: 15)_
 25. [ ] **Task 25** — Correct every statement the run made false, move the roadmap row, and re-derive the scope register _(layer: general)_ _(points: 15)_
