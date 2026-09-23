@@ -21,7 +21,7 @@ One ownership defect remains: the `unclassed` negative bucket is retyped as a lo
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Declare the `unclassed` negative bucket once beside `NEGATIVE_KINDS` and import it in `calibrate.mjs` and `spread.mjs` _(layer: general)_
+1. [x] **Finding 1** — Declare the `unclassed` negative bucket once beside `NEGATIVE_KINDS` and import it in `calibrate.mjs` and `spread.mjs` _(layer: general)_
 
 ## Must Fix
 

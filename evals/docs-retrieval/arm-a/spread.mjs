@@ -17,7 +17,7 @@
  */
 
 import { percentile, scoreArm } from '../metrics.mjs';
-import { NEGATIVE_KINDS } from '../queries.mjs';
+import { NEGATIVE_KINDS, UNCLASSED_NEGATIVE } from '../queries.mjs';
 import { readTranscript, scoreTranscript } from './score-transcript.mjs';
 
 /** The recall cutoff every bar grades (`docs/retrieval-eval.md` → `### Two arm A variants, and how they combine`). */
@@ -33,9 +33,6 @@ const BILLED_FIELDS = Object.freeze([
   'cache_creation_input_tokens',
   'cache_read_input_tokens',
 ]);
-
-/** This module's bucket for a negative that carries no `negativeKind`. */
-const UNCLASSED = 'unclassed';
 
 /** The partition of one ref: its first two directory segments, or its one directory for a file directly under it. */
 function partitionOfRef(ref) {
@@ -82,10 +79,10 @@ export function breakdown({ records, queries }) {
   }
 
   const negatives = { total: 0, answeredNone: 0 };
-  for (const kind of [...Object.values(NEGATIVE_KINDS), UNCLASSED]) negatives[kind] = { total: 0, answeredNone: 0 };
+  for (const kind of [...Object.values(NEGATIVE_KINDS), UNCLASSED_NEGATIVE]) negatives[kind] = { total: 0, answeredNone: 0 };
   for (const query of queries) {
     if (query.labels.length > 0) continue;
-    const bucket = negatives[query.negativeKind ?? UNCLASSED];
+    const bucket = negatives[query.negativeKind ?? UNCLASSED_NEGATIVE];
     const answeredNone = byId.get(query.id).abstained === true ? 1 : 0;
     for (const counter of [negatives, bucket]) {
       counter.total += 1;

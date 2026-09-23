@@ -24,6 +24,13 @@ const GRADE_MAX = 3;
 /** The one declaration of `negativeKind`'s closed value set; a consumer imports it, never retypes it. */
 export const NEGATIVE_KINDS = Object.freeze({ far: 'far', near: 'near' });
 
+/**
+ * The class a consumer reports for a negative that carries no `negativeKind`; a consumer imports it,
+ * never retypes it. Deliberately not a member of {@link NEGATIVE_KINDS}: a query set may not carry it,
+ * so `loadQueries` still refuses it through `refuseOutsideSet`.
+ */
+export const UNCLASSED_NEGATIVE = 'unclassed';
+
 const INTENTS = Object.freeze(['surroundings', 'convention', 'contract']);
 const ORIGINS = Object.freeze(['written', 'harvested']);
 

@@ -17,12 +17,11 @@
 
 import { SEARCH_MODES } from '../../cli/dist/retrieval/search.js';
 import { STRICT_GRADE } from './metrics.mjs';
-import { NEGATIVE_KINDS } from './queries.mjs';
+import { NEGATIVE_KINDS, UNCLASSED_NEGATIVE } from './queries.mjs';
 import { readCorpusMachineHalf } from './results.mjs';
 
-/** This module's own point kinds; the negative classes beside them are {@link NEGATIVE_KINDS}'. */
+/** This module's one own point kind; every negative class beside it is imported from `queries.mjs`. */
 const POSITIVE = 'positive';
-const UNCLASSED = 'unclassed';
 
 const METHOD = Object.freeze({ separable: 'separable', overlapping: 'overlapping', cannotSeparate: 'cannot-separate' });
 
@@ -104,7 +103,7 @@ export function readPerQuery(resultsText, corpusId, mode) {
 /** The point kind of `query`: a positive, a negative's `negativeKind`, or `unclassed`. */
 function kindOf(query) {
   if (query.labels.length > 0) return POSITIVE;
-  return Object.values(NEGATIVE_KINDS).includes(query.negativeKind) ? query.negativeKind : UNCLASSED;
+  return Object.values(NEGATIVE_KINDS).includes(query.negativeKind) ? query.negativeKind : UNCLASSED_NEGATIVE;
 }
 
 /** One corpus's scored points and excluded ids, joined on `id` and refused on any mismatch. */
