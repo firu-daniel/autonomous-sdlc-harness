@@ -17529,3 +17529,158 @@ variants complete, with no stop at the checkpoint. Whoever weighs re-running arm
 that price: the operator minutes above at the terminal, **111,075,107** billed tokens across ten passes
 on a 156-file catalog, and a 5-hour window taken from 4% to 43% — with the first pair costing most. No
 money figure is given: the transcripts carry tokens, not a charge.
+
+## The decision, applied to the real catalog
+
+**Who reads this, and what it decides.** Whoever has to act on whether docs retrieval stays in this
+harness: the rule in `docs/retrieval-eval.md` → `## The decision rule`, with the readings its
+`### Two arm A variants, and how they combine` committed before any figure existed, applied bar by bar
+to `gate10-catalog`. The rule is applied here and not amended.
+
+**The outcome: withdrawn.** Arm E (`fused-rerank`) does not clear the relevance bar against the stronger
+arm A figure — A-search's — on either metric, and a relevance bar that does not clear names
+**withdrawn** whatever the other two bars say. The change it names is roadmap item 18 in
+`docs/development.md` → `## 6. The roadmap this tree defers to`; this branch takes the decision and
+does not execute it.
+
+| Graded against | Relevance | Cost | Failure | Outcome |
+| --- | --- | --- | --- | --- |
+| The stronger variant on each bar (the verdict) | does not clear | clears | does not clear | **withdrawn** |
+| A-index alone | clears | clears | does not clear | stays opt-in |
+| A-search alone | does not clear | clears | does not clear | withdrawn |
+
+**Where each figure comes from.** Arm E's recall@5, MRR, p95, `abstainedOnNegative` and `negatives` are
+the `gate10-catalog` generated block's; its per-half and `far` / `near` figures are
+`evals/docs-retrieval/arm-a/spread.mjs` → `breakdown({ records, queries })` over that block's arm E
+`perQuery` entries, read through `evals/docs-retrieval/results.mjs` → `readCorpusMachineHalf`. Arm A's
+figures are the medians of `### The figures, per variant` above, every repetition cited from there. The
+arithmetic was checked by one launcher in the run's scratch directory, run on 2026-09-23:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/task20_bars.mjs
+```
+
+### Relevance
+
+**The margins.** `positives` = **44**, so one positive query's worth is `1 / 44` = **0.0227** of recall@5
+and `0.5 / 44` = **0.0114** of MRR. A lead must exceed each.
+
+| Figure | recall@5 | MRR |
+| --- | --- | --- |
+| Arm E, pooled | 0.795 (35 of 44) | 0.677 |
+| A-index, repetitions 1 → 5 | 0.432, 0.432, 0.455, 0.455, 0.455 | 0.409, 0.409, 0.432, 0.432, 0.432 |
+| A-index, median | 0.455 (20 of 44) | 0.432 |
+| A-search, repetitions 1 → 5 | 0.909, 0.909, 0.932, 0.955, 0.932 | 0.835, 0.847, 0.881, 0.866, 0.881 |
+| A-search, median | 0.932 (41 of 44) | 0.866 |
+| **The stronger figure** | **0.932, A-search** | **0.866, A-search** |
+
+**Against the stronger figure** — A-search on both metrics, so the composite is one variant:
+
+- recall@5: 0.795 − 0.932 = 35/44 − 41/44 = **−6/44 = −0.136**. A lead of −0.136 does not exceed 0.0227.
+- MRR: 0.677 − 0.866 = **−0.189**. A lead of −0.189 does not exceed 0.0114.
+- **Relevance does not clear.** Arm E trails by six positives. `### Spread, repetitions and what moved`
+  bounds A-search's own movement across five repetitions at two positives, so this deficit is wider than
+  anything repetition could account for.
+
+**Against A-index alone:** recall@5 0.795 − 0.455 = 35/44 − 20/44 = **+15/44 = +0.341** > 0.0227; MRR
+0.677 − 0.432 = **+0.245** > 0.0114. **Clears.** **Against A-search alone:** the stronger-figure
+comparison above, since A-search is the stronger on both metrics. **Does not clear.**
+
+**The per-half figures, reported beside the pooled grade** (arm A medians; the pooled figure decides,
+per the committed reading):
+
+| Half | Positives | Arm E recall@5 / MRR | A-index median | A-search median | E's lead over A-index | E's lead over A-search |
+| --- | --- | --- | --- | --- | --- | --- |
+| `docs/expause-web/` | 24 | 0.750 / 0.533 | 0.833 / 0.792 | 0.875 / 0.806 | −0.083 / −0.259 | −0.125 / −0.273 |
+| `docs/vite/` | 20 | 0.850 / 0.850 | 0 / 0 | 1 / 0.938 | +0.850 / +0.850 | −0.150 / −0.088 |
+
+**Arm E's lead over A-index is all `docs/vite/`.** On `docs/expause-web/`, the half A-index's index
+covers, arm E trails A-index on both metrics; the pooled lead exists because `docs/expause-web/INDEX.md`
+links no `docs/vite/` file and A-index returned no `docs/vite/` ref in any repetition
+(`### How arm A navigated a 156-file catalog`). Arm E trails A-search on both halves.
+
+### Cost
+
+**Per-query wall time.** Arm E's p95 is **1269.3 ms**. Arm A's per-query wall time is each variant's
+median per-repetition p50: A-index **10000 ms**, A-search **11000 ms**, both resolved to whole seconds.
+
+- Against A-index: 1269.3 / 10000 = **0.127**.
+- Against A-search: 1269.3 / 11000 = **0.115**.
+- Against the stronger — the lower, A-index: **0.127**, below 1. **Clears.**
+
+**Token cost per query.** Arm E bills **0** tokens (`local — no billed tokens`, 69 embed and 69 rerank
+calls). A-index's median is **183,261** billed tokens per query and A-search's **139,463**; the stronger
+is the lower, A-search. 0 against 139,463: **clears**, and against 183,261 as well.
+
+**Both clear by construction**, as the committed reading states they would: local milliseconds and zero
+billed tokens against an agent session per lookup. This bar cannot discriminate here, and the verdict
+turns on relevance and failure.
+
+**The one-time charge**, cited and graded against nothing: `## Cold build and index size` →
+`### The real-catalog build — 1,960 chunks, 2026-09-22` — about 111–114 s cold on a rested machine, and
+72 MiB of index on disk. Not re-measured. **It is the same snapshot of `docs/`, at a later commit.** The
+`gate10-catalog` block's own provenance stamp is `{ files: 156, chunks: 1960 }`, equal to that build's
+156 files and 1,960 chunks. The catalog stood at `57a6c25` for arm A and arms B–E (`## Arm A — the
+real-catalog hand run`), against gate 10's `010c50e`; `57a6c25` is a `PROVENANCE.md`-only commit whose
+`docs/` the operator verified identical to `010c50e`'s (`## The real-catalog query set`).
+
+### Failure
+
+| Figure | All negatives | `far` | `near` |
+| --- | --- | --- | --- |
+| Arm E abstained | 19 / 25 = **0.76** | 10 / 10 = 1.00 | 9 / 15 = 0.60 |
+| A-index, `none` share per repetition 1 → 5 | 1, 1, 1, 1, 1 | 10 / 10 in every repetition | 15 / 15 in every repetition |
+| A-index, median | **1.00** | 10 / 10 | 15 / 15 |
+| A-search, `none` share per repetition 1 → 5 | 1, 1, 1, 1, 0.96 | 10, 10, 10, 10, 9 of 10 | 15 / 15 in every repetition |
+| A-search, median | **1.00** | 10 / 10 | 15 / 15 |
+
+The stronger variant's median share is **1.00** (both variants). Arm E's 0.76 against 1.00: 0.76 − 1.00
+= **−0.24**, six negatives, all six `near`. Arm E must be at least as high. **Does not clear** — against
+the stronger, against A-index alone and against A-search alone.
+
+### The verdict
+
+- **Relevance** — graded against A-search, the stronger on both metrics: does not clear.
+- **Cost** — graded against A-index for wall time and A-search for tokens, the lower of each: clears.
+- **Failure** — graded against either variant, tied at 1.00: does not clear.
+
+**Combined: relevance does not clear, so the outcome is withdrawn.** Against **A-index alone** the bars
+read relevance and cost clearing with failure not, which the committed reading resolves as **stays
+opt-in**, with arm E's negative-abstention rate, **0.76** (`near` 0.60), the figure to move. Against
+**A-search alone** relevance does not clear: **withdrawn**. The verdict is the combined one, because the
+rule grades against the stronger alternative an agent has.
+
+**The change it names: roadmap item 18**, `docs/development.md` → `## 6. The roadmap this tree defers
+to` — withdraw docs retrieval: the tool, its optional dependencies and the threshold constant with it. This branch records the decision and deliberately does not execute it: a
+withdrawal removes a shipped verb, its optional peer dependencies and the plugin's grants, and none of
+that belongs in the review of a measurement.
+
+### Findings about the rule, recorded and not acted on
+
+- **The cost bar did not discriminate**, as `### Two arm A variants, and how they combine` said it would
+  not: the ratios are 0.115–0.127 and arm E bills no tokens, so the bar could only ever clear here.
+- **The failure bar reads negatives alone.** A-index scores 1.00 on it while giving up — `none` on a
+  positive — on 21 to 23 of its 44 positives per repetition (`### How arm A navigated a 156-file
+  catalog`); arm E abstained on 6 of the 44. An arm that answers `none` freely is graded perfect on this
+  bar. At these values it does not move the verdict, which relevance already decides.
+- **The rule grades arm E alone, and its withdrawn outcome removes every mode.** At these values that
+  discards no mode the relevance bar would have kept: in the same block, B `lexical` reads 0.909 / 0.753,
+  C `vector` 0.841 / 0.579 and D `fused` 0.841 / 0.732, each below A-search's median 0.932 / 0.866 on both
+  metrics. Those are single-repetition figures, and the rule is silent on them.
+
+### The limits, stated with the verdict
+
+- **The set is model-authored, and arm A's navigator is a model.** The queries, labels and `near` / `far`
+  judgement share a reader with the arm they grade (`## The real-catalog query set`).
+- **The variants' reach is not the same as arms B–E's.** Arms B–E index `docs/` plus the catalog's one
+  conventions document; neither arm A variant is pointed at that document, though both can read it. No
+  label lands in it. A-index's index does not link `docs/vite/`. Both limits come from
+  `docs/retrieval-eval.md` → `## Running arm A by hand` → *What the comparison does not cover*, and
+  neither is corrected: no root index was written and the catalog was not edited.
+- **Whether agents would search the docs at all is not measured here, and cannot be on this corpus.**
+  The operator's observation is that agents with a catalog and no retrieval almost never navigate from
+  `INDEX.md` and go to the code instead, so the realistic alternative to retrieval is often *not
+  consulting the docs*, and not arm A. This eval hands every arm the query and grades only where it
+  looks. What would measure it: the query log switched on in a repository that has both code and a
+  catalog, over real branches, counting `search_docs` calls per planning and review dispatch. This
+  branch does not take that measurement.
