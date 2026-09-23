@@ -452,49 +452,98 @@ Read each match rather than counting them — `grep -rln '{{' cli/templates` is 
 
 **Gate 10 — docs retrieval with the real models.** Every retrieval case in gate 4 runs under the hash stub and never loads a model (`docs/cli.md` → *"Docs retrieval is tested without a model and without a network"*), so no gate above shows the real embedder and reranker working, the `.mcp.json` launcher starting, or an unattended session reaching `search_docs`. It is hand-run because leg (i) installs a runtime and downloads models into the machine-wide cache every checkout shares. Run it against a throwaway git repository **outside this checkout** holding a `docs/` of real documents and at least one commit — never a fixture, and never this repository, for the reason gate 2 gives. That `docs/` must be large enough to index to **at least ~1,500 chunks**: below that the cold build measures process and PGlite start-up rather than the model, which is the whole subject of leg (iii). The chunk count is read off leg (iii)'s own `docs index: <files> files, <chunks> chunks` summary line, and a run whose count falls under the floor is invalid — enlarge the corpus and re-run rather than recording the figure. Run each command **without a pipe**, from that repository's root. Only leg (i) needs network access for retrieval; leg (v)'s session reaches the model service as any session does. Six legs.
 
+**This gate has been run.** By hand, in full, all six legs, on **2026-09-22**, in a supervised session, on an **Apple-silicon macOS host** against **a private real documentation catalog held outside this checkout** — identified by its commit, its size and its character, never by a filesystem path, which is gate 6's rule applied to this gate's own record. It indexed to **1,960 chunks**, so the ~1,500-chunk floor is cleared by **31%**. The full host and corpus stamps — machine, OS, Node, runner and package versions, the corpus commit and its file count — and the record of what each leg printed are all `docs/retrieval.md` → `## Measured, and how`, item (d), and leg (iii)'s figures are in `docs/retrieval-eval-results.md` → `## Cold build and index size`, which is their one home; this paragraph is the run stamp and not a results record. That run exposed two defects in the leg commands as they were then written, both now fixed below and both stated where they bite: the unpinned package name, and legs (iii) and (iv) not running at all.
+
+**Before the first leg: pin the version, or find out what the bare name resolves to.** `npx autonomous-sdlc-harness` is not guaranteed to run the published package. A `npm link`ed or globally installed copy shadows the registry silently, and the leg then measures the wrong build — or fails in a way that reads as a product defect. On the recording host it did exactly that:
+
+```
+npm ls -g --depth=0
+```
+
+reported `autonomous-sdlc-harness@0.1.0 -> ...` (a link left by this harness's own extraction), and the two names answered differently:
+
+```
+npx --yes autonomous-sdlc-harness --version
+npx --yes autonomous-sdlc-harness@<version> --version
+```
+
+The bare name answered `0.1.0`, which carries no `docs` command at all; the pinned name answered `0.2.0`. That particular link has since been removed, so the bare name answers `0.2.0` on that host today — the hazard is not the link, it is that nothing in the gate would have told the operator. **Every leg below is therefore written pinned**, and `<version>` throughout is the version under test; the 2026-09-22 run used `0.2.0`. Run the two commands above first and record both answers: a bare name and a pinned name that disagree means the unpinned form would have measured something other than the package.
+
 **(i) Setup.**
 
 ```
-time npx autonomous-sdlc-harness init --docs --docs-retrieval --non-interactive
+time npx --yes autonomous-sdlc-harness@<version> init --docs --docs-retrieval --non-interactive
 du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/runtime"
 du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models"
 ```
 
-Record the elapsed time and both sizes. Setup skips each step that is already satisfied, so also record whether the cache was cold: a warm cache's elapsed time is not a setup time.
+Record the elapsed time and both sizes. Setup skips each step that is already satisfied, so also record whether the cache was cold: a warm cache's elapsed time is not a setup time. A cold run means no `~/.npm/_cacache`, no `~/.npm/_npx` and no harness retrieval cache — state which of the three you cleared, because a warm npm cache alone changes the figure by an order of magnitude.
+
+**Two things the 2026-09-22 run recorded against its own procedure, kept here as what to avoid.** Its timed run was **piped** to `tail -20`, which this gate forbids — `time` then measures the pipeline rather than the command, and the figure is only usable because `--non-interactive` was explicit, so TTY detection could not have changed what `init` did. And the two setup runs' cache sizes differ by ~17 MB on the same pinned version, cause not established; record both `du` figures rather than one.
+
+**The bandwidth caveat travels with the elapsed time.** The 2026-09-22 run's cold figure is recorded with its command and its output in `docs/retrieval.md` → `## Measured, and how`, item (d), which is its home; it is not restated here. Throughput on any host is route-dependent, so **record no single bandwidth number and predict no wall time from one**: the elapsed time describes the host and the link that produced it and nothing else.
 
 **(ii) `doctor`.**
 
 ```
-npx autonomous-sdlc-harness doctor
+npx --yes autonomous-sdlc-harness@<version> doctor
 ```
 
 `retrieval-dependencies`, `retrieval-model-cache` and `retrieval-index` all report `PASS`. Read those three lines rather than the exit status: a scratch repository with no remote fails `remote` (gate 5), which is not this leg's subject. Then move the model directory aside, re-run, and move it back:
 
 ```
 mv "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models" "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models.aside"
-npx autonomous-sdlc-harness doctor
+npx --yes autonomous-sdlc-harness@<version> doctor
 mv "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models.aside" "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models"
 ```
 
-The middle run reports `retrieval-model-cache` and `retrieval-index` failing. The cache is shared by every checkout on the machine, so move it back before anything else uses it.
+The middle run reports `retrieval-model-cache` and `retrieval-index` failing.
+
+**Recovering the cache if this leg is interrupted.** That directory is the machine-wide model cache **every checkout on the machine shares**, so between the move aside and the move back no other checkout has one — and a session that ends, a `doctor` run that aborts or any other interruption in that window leaves it that way with nothing recording why. The repair is the third command above, on its own:
+
+```
+mv "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models.aside" "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models"
+```
+
+That single `mv` is the whole repair. It is safe to run at any later time and from any checkout, and it is the **first** thing to run if any leg of this gate fails after the move aside — before re-running anything. Confirm it landed: the directory is back at its own path, and
+
+```
+npx --yes autonomous-sdlc-harness@<version> doctor
+```
+
+reports `retrieval-model-cache` `PASS` again. Nothing else in this gate, and nothing in this repository's tooling, moves or re-points that cache, so a `…/retrieval/models.aside` found on a machine is always this leg and is always fixed this way.
 
 **(iii) Cold build.**
 
 ```
-time npx autonomous-sdlc-harness docs index
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness"
+time node "$cache/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js" docs index
 du -sh <stateDir>/docs_index
 ```
 
-`<stateDir>` is the value the target repository's own `harness.config.json` carries. Record its `docs index: <files> files, <chunks> chunks; embedded <e>, unchanged <u>, deleted <d>` line, the wall time, and the `du` figure — the on-disk size is the other half of what the feature costs an adopter, and nothing else in the suite reports it. `doctor`'s `retrieval-index` builds in memory and writes nothing, so this is still the first on-disk build: the real-model cold build `docs/retrieval.md` compares against the stub's. That comparison decides one thing — `docs/retrieval.md` → **Why `setup-worktree.sh` does not warm the index.** states that warming is not worth a model load per worktree, and its stated revisit condition is a real-model cold build long enough that a first `search_docs` call risks the agent runner's tool-call timeout. This wall time is the number that condition is judged against; if it is met, warming in `setup-worktree.sh` is the move.
+**Not `npx … docs index`, and the reason is a product fact rather than a preference.** The npx copy is a standalone install that does not carry the optional peers, so it refuses by name:
+
+```
+npx --yes autonomous-sdlc-harness@<version> docs index
+```
+
+On the 2026-09-22 run at `0.2.0` that answered → `autonomous-sdlc-harness: docs retrieval needs the optional package @huggingface/transformers, which this installation cannot load.` The route above is the one `scripts/docs-search-server.sh` itself execs, against the runtime `init` provisioned, and it is the only one that runs this leg.
+
+`<stateDir>` is the value the target repository's own `harness.config.json` carries. Record its `docs index: <files> files, <chunks> chunks; embedded <e>, unchanged <u>, deleted <d>` line, the wall time, and the `du` figure — the on-disk size is the other half of what the feature costs an adopter, and nothing else in the suite reports it. `doctor`'s `retrieval-index` builds in memory and writes nothing, so this is still the first on-disk build.
+
+**What this leg is for.** It is the real-catalog **cost** figure — what a cold build costs on a stated host, at a stated corpus size — and it is recorded in `docs/retrieval-eval-results.md` → `## Cold build and index size`, which is that figure's one home. It arbitrates **nothing** about where the build belongs: that decision is taken, and it is `docs/retrieval.md` → **Why `setup-worktree.sh` does not warm the index.**
+
+**Run it more than once, into a fresh index directory each time.** A single build is an anecdote. Record every wall time and report the **spread with its cause**: the 2026-09-22 run took four, and their spread was thermal rather than software — it is written up under the section of record named above.
 
 **(iv) Search.**
 
 ```
-npx autonomous-sdlc-harness docs search "<a question one known section of docs/ answers>"
-npx autonomous-sdlc-harness docs search "<a question nothing in docs/ answers>"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness"
+node "$cache/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js" docs search "<a question one known section of docs/ answers>"
+node "$cache/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js" docs search "<a question nothing in docs/ answers>"
 ```
 
-Both run in the default `fused-rerank` mode, which is where the reranker is shown to run. Record the first query's first result and its score, and whether it names the known section. Record whether the second prints `no confident match`, and if it does not, its first score. These scores are the real-catalog check on the calibration recorded in `docs/retrieval-eval-results.md` → `## Threshold calibration`, which is that fact's one home (`cli/src/retrieval/search.ts` carries the constant and points there).
+The runtime entry for the same reason leg (iii) gives: the npx copy refuses both queries before it searches. Both run in the default `fused-rerank` mode, which is where the reranker is shown to run. Record the first query's first result and its score, and whether it names the known section. Record whether the second prints `no confident match`, and if it does not, its first score. These scores are the real-catalog check on the calibration recorded in `docs/retrieval-eval-results.md` → `## Threshold calibration`, which is that fact's one home (`cli/src/retrieval/search.ts` carries the constant and points there).
 
 **(v) Unattended.**
 
@@ -502,7 +551,7 @@ Both run in the default `fused-rerank` mode, which is where the reranker is show
 claude -p "Call the search_docs tool once with the query <the first question from leg (iv)>, then print its result verbatim." --settings .claude/settings.autonomous.json --permission-mode acceptEdits --output-format stream-json --verbose
 ```
 
-Never add a permission-bypass flag: the leg measures what the generated profile grants. Record whether `mcp__harness-docs__search_docs` was available and called with no approval prompt — `-p` puts no prompt, so an ungranted call shows in the stream as a permission denial — and whether the call returned results. A call that returned results is the evidence that the relative launcher path in `.mcp.json` resolved from the session's working directory.
+Never add a permission-bypass flag: the leg measures what the generated profile grants. Record whether `mcp__harness-docs__search_docs` was available and called with no approval prompt — `-p` puts no prompt, so an ungranted call shows in the stream as a permission denial — and whether the call returned results. A call that returned results is the evidence that the relative launcher path in `.mcp.json` resolved from the session's working directory. The 2026-09-22 run exited 0 with no permission denial anywhere in the stream.
 
 **(vi) Platform.**
 
@@ -510,12 +559,12 @@ Never add a permission-bypass flag: the leg measures what the generated profile 
 uname -sr
 node --version
 claude --version
-npx autonomous-sdlc-harness --version
+npx --yes autonomous-sdlc-harness@<version> --version
 ```
 
-Record all four, the `claude` line being the version leg (v) ran under.
+Record all four, the `claude` line being the version leg (v) ran under. Record the bare `npx autonomous-sdlc-harness --version` answer too if it differed from the pinned one in the pre-leg check above — that difference is what the leg commands would have measured unpinned.
 
-**Where the results go.** Each leg's command and exact output is recorded in `docs/retrieval.md` → `## Measured, and how`, item (d), replacing its placeholder, dated and carrying leg (vi)'s platform. Item (d) carries leg (iii)'s **chunk count** and its **`du` figure** by name alongside the wall time: the chunk count is what shows the corpus floor was met, and the `du` figure is reported nowhere else. A Linux run also settles that document's Linux question under `## Still open`. A run that could not execute this gate says so in its Done summary, naming the legs it could not run and why, rather than leaving the placeholder unexplained.
+**Where the results go.** Each leg's command and exact output is recorded in `docs/retrieval.md` → `## Measured, and how`, item (d), dated and carrying leg (vi)'s platform; the placeholder that item once held is filled by the 2026-09-22 run. Leg (iii)'s figures are the one exception and do **not** live in item (d): the wall times, their spread and cause, the per-chunk and per-phase breakdown and the `du` figure are in `docs/retrieval-eval-results.md` → `## Cold build and index size`, under their own host and corpus stamp, and item (d) cites them there. What item (d) carries by name from leg (iii) is the **chunk count**, because that is what shows the corpus floor was met. A Linux run also settles `docs/retrieval.md`'s Linux question under `## Still open`. A run that could not execute this gate says so in its Done summary, naming the legs it could not run and why.
 
 **Gate 11 — docs-retrieval relevance floor.** `scripts/run-gates.sh` runs it as `node evals/docs-retrieval/check-floor.mjs`, which drives the docs-retrieval eval over the committed **`fixture-catalog`** corpus — that corpus alone — for every arm the eval's arm table has a search mode for, and grades each arm's recall@5 and MRR against the values recorded in `evals/docs-retrieval/floor.json`. It loads the **real** embedder and reranker: `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` is set nowhere on that path and the eval refuses to produce a number while it is set, so unlike every retrieval case in gate 4 this gate exercises the models gate 10 installs. **A failure means retrieval got worse**: a measured figure below a recorded floor, on a corpus that moves only when this eval moves, so the change is a property of the retrieval code rather than of the documents. **An empty model cache is reported, not counted as a failure** — the module exits with a status reserved for that case, the script prints it as `BLOCKED` and lists it with the gates it cannot run, and it pushes the gate onto neither the passes nor the failures, so a machine without the hand-provisioned cache still reads a true green. A shortfall is not exempt: it fails the script. The floor policy itself — the margin between a measured figure and its recorded floor, why the graded corpus is `fixture-catalog` alone, and when a floor is re-recorded — is stated in `docs/retrieval-eval.md` → `## The regression floor`, which `floor.json`'s own `see` field names.
 
@@ -541,11 +590,11 @@ Directory READMEs, the reference documents beside this one and the CLI's own war
 | 14 | The permission-profile generator those commands call |
 | 15 | **Shipped.** The `/autonomous-sdlc-harness:harness-analyze` command that refines the conventions stubs against real code — its decisions of record in `docs/analyze.md`, the `<!-- harness:unfilled -->` marker and the commit-policy section the stubs carry so the command and `doctor` recognise the same states, `init`'s default-yes offer and the setup-pending block in the generated `.claude/CLAUDE.md` that records the answer for the first session to read, and `doctor`'s `setup-analysis` check standing over what is still unfilled |
 | 16 | **Shipped.** The machine lane's second half. The lane ships as one published usage assessment **and** one advisory lock that makes exactly one repository the active one; this item keeps the assessment, which is coordination, and makes the lock opt-in and off by default, which is serialization a machine only sometimes wants. `USAGE_LANE_ENABLED` gated both the publish path and the acquire path, so the setting that keeps the shared reading while allowing two repositories to run did not exist; it is split into `USAGE_LANE_STATE_ENABLED` (default `1`, publishes and consults the shared assessment) and `USAGE_LANE_LOCK_ENABLED` (default `0`, the advisory lock, whose behaviour under the non-default setting is exactly what it was). The old name is retired outright rather than aliased, with one startup notice when it is still set in the environment. With the lock off by default the superseded policy — *"one repository runs at a time; the others queue"* — is no longer what the shipped configuration does, and this row is the only site in this tree that still states it. The machine-local registry of armed repositories moves from an artifact nothing consults into the surface a machine's configured burn is read from: `autonomous-watcher.sh status` and a new `machine-footprint` `doctor` check render it and only render it — per entry the slug, project name, root, state, model, effort, live-run count and per-repository cap, then an armed / stale / live summary — graded by `inspect()`'s existing `EntryState` rather than a second grading, read-only and fail-soft, so a deleted, truncated or corrupt registry leaves every run start unaffected and degrades `doctor` to a warning. The burn-rate statement lands where an adopter meets it, the root `README.md`'s scope-and-limits **Single-machine** bullet and `docs/watcher.md` §4: the per-repository cap, the model and the effort level multiply, and the lane bounds none of it. Three limits this row states rather than leave to be discovered. Nothing spans two hosts — no shared queue, no scheduler, no remote executor. There is no fairness, no priority and no machine-wide cap: `MAX_PARALLEL_RUNS` is per repository, so the machine's ceiling is the sum of the caps of whatever is running at once. And what the footprint report states is **configured intent** — cap × model × effort — while actual token burn is not measured |
-| 17 | Warming the docs index at worktree setup — moving the cold build out of an agent's first `search_docs` call and into `cli/templates/scripts/setup-worktree.sh`, so the build's wall time is spent by the setup script rather than inside an MCP tool call whose runner timeout defaults to 60 s. `docs/retrieval.md` → **Why `setup-worktree.sh` does not warm the index.** is the decision of record this item implements, and the branch that recorded it changed no script, so what ships is still the in-line build. Three limits this row states rather than leave to be discovered. **The rule's trip is an extrapolation, not a measured catalog:** it comes from the per-chunk refresh cost of 62.51 ms measured at 177 chunks (`docs/retrieval-eval-results.md` → `## Cold build and index size`), extended to a hypothetical ~1,500-chunk catalog — 93.8 s of refresh, 94.8 s in total, crossing 60 s in total at about 940 chunks — and no catalog of that size has been built. **The measurement that settles it is owed by a different gate:** §5 gate 10's leg (iii) hand run against a real catalog, whose wall time replaces the extrapolation; a figure that comes back under 60 s at a real catalog's chunk count **cancels this item** rather than deferring it, and `docs/retrieval.md`'s lead-in is then already correct as written. **And the cost the move accepts is a model load per worktree, spent on agents that do not query** — which is why the shipped script does not warm today; this item's work includes stating what that per-worktree cost measures at, not only making the move |
+| 17 | **CANCELLED.** Warming the docs index at worktree setup — moving the cold build out of an agent's first `search_docs` call and into `cli/templates/scripts/setup-worktree.sh` — is not done here and is not deferred: it is closed. **The reason is not a measurement.** The item's stated trip was a cold build long enough to risk a wall-clock limit inside an MCP call, and no such limit exists on any path this harness uses; the condition could therefore never be evaluated, and no figure was needed to cancel the item. What settles where the build belongs is a property of the mechanism rather than of a clock: **the cold build stays inside the first `search_docs` call because that call is the only mechanism serving every entry point.** A plain interactive session in the main checkout never runs `setup-worktree.sh` and still gets a built index; a warm performed by a script on the autonomous path would serve the worktrees that path creates and nothing else. `docs/retrieval.md` → **Why `setup-worktree.sh` does not warm the index.** is therefore the **standing decision** rather than the deferral this row used to point at, and it carries the settings that do exist with their defaults and the source they were read from. **This branch does not make the move and no later branch does either.** Two corrections to what this row previously said the move would cost, both of which weaken the case for it rather than strengthen it. **The index is built once per worktree and shared by every dispatch in it**, so the question was never which agents hold the `search_docs` grant — it is only whether the worktree queries at all, and the build is paid the moment any one dispatch does. **And the model load is not the cost**: it is a fraction of a percent of the cold build, while the refresh is almost all of it, and the refresh is paid at first query if it is not paid at setup — the measured breakdown is `docs/retrieval-eval-results.md` → `## Cold build and index size`, which is its one home and is not restated here. The honest statement is therefore that the move would have been close to free rather than a trade: it is cancelled because it buys nothing the in-line build does not already give every entry point, not because it costs too much. The row keeps its number and its place — a citation written before the item closed still has to resolve to something |
 
 Items 1 and 2 — the extraction manifest and this layout — are omitted because nothing defers to them; they are already delivered.
 
-**Items 3, 4, 13 and 14 have shipped** — as have items 5, 6, 7, 8, 9, 10, 11, 12, 15 and 16, whose rows say so in their own text — and their rows stay for the same reason the numbers stay in the tree: a citation written before they landed still has to resolve to something. Read those rows as what the item *delivered* rather than as what is still owed; everything not named in this paragraph or marked in its own row is still owed. **Items 11 and 12 are the two that close at publication, and their rows are written from the far side of it** — the pass has run and its findings were fixed here, and the extraction is what produced the repository this table ships in. In the repository the harness was developed in, before the move, item 12's row is the one line in this table describing a step still to run: check it immediately before running that step, not after. Note also that item 13 never promised the outer-loop shell assets. It writes the daemon unit templates and the wrapper-script files; the run watcher, its restart wrapper, the notifier and the commit / push / worktree wrappers came with item 6, which is why the missing-watcher messages in `daemon install` and `doctor` now describe a file `init` writes rather than one that has not shipped.
+**Items 3, 4, 13 and 14 have shipped** — as have items 5, 6, 7, 8, 9, 10, 11, 12, 15 and 16, whose rows say so in their own text — and their rows stay for the same reason the numbers stay in the tree: a citation written before they landed still has to resolve to something. Read those rows as what the item *delivered* rather than as what is still owed; everything not named in this paragraph or marked in its own row is still owed. **Item 17 is neither shipped nor owed:** it is **cancelled**, and its own row states on what reason. **Items 11 and 12 are the two that close at publication, and their rows are written from the far side of it** — the pass has run and its findings were fixed here, and the extraction is what produced the repository this table ships in. In the repository the harness was developed in, before the move, item 12's row is the one line in this table describing a step still to run: check it immediately before running that step, not after. Note also that item 13 never promised the outer-loop shell assets. It writes the daemon unit templates and the wrapper-script files; the run watcher, its restart wrapper, the notifier and the commit / push / worktree wrappers came with item 6, which is why the missing-watcher messages in `daemon install` and `doctor` now describe a file `init` writes rather than one that has not shipped.
 
 **Item 6 owed two things its row did not name; one shipped with it and the other turned out not to be its.** The first was **the permission-profile coverage for the outer-loop trio** — `commit-on-branch.sh`, `push-branch.sh`, `autonomous-watcher.sh` — which had to land in the same change that ships them: the profile generator derived its script entries from the wrappers written under `scriptsDir` alone, so the trio would have got none, and a missing entry is a silent stall rather than a refusal. It landed. The shipped outer-loop table marks each row agent-invocable or not, and the profile generator emits the three literal forms only for a row that is. That coverage could not have been written earlier because the trio's destination was itself unsettled — `cli/scripts/README.md` had these scripts executing from the installed package while the shipped instruction corpus invoked them from `scriptsDir`. The resolution taken is `scriptsDir`, and that README now records it, the mechanism that was not chosen, and the cost of the one that was.
 
