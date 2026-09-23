@@ -43,7 +43,7 @@
 2. [x] **Finding 4** — Replace the stale "has never been run" sentence in `## Running arm A by hand` _(layer: general)_
 3. [x] **Finding 2** — Record the publication clearance's terms in `## The real-catalog query set` and repoint `docs/development.md` and `evals/docs-retrieval/README.md` at it _(layer: general)_
 4. [x] **Finding 6** — Name the arm A run and the decision in `llms.txt`'s entry for `docs/retrieval-eval-results.md` _(layer: general)_
-5. [ ] **Finding 5** — Make `machineSection` write the machine-half fence through `JSON_FENCE_OPEN` / `JSON_FENCE_CLOSE` _(layer: general)_
+5. [x] **Finding 5** — Make `machineSection` write the machine-half fence through `JSON_FENCE_OPEN` / `JSON_FENCE_CLOSE` _(layer: general)_
 6. [ ] **Finding 3** — Stop describing `ABSTAIN_SCORE_THRESHOLD` as calibrated against the measured distribution; cite `## Threshold calibration` instead _(layer: cli, general)_
 
 ---

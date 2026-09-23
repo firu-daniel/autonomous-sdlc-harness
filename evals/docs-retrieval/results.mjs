@@ -202,6 +202,10 @@ function provenanceSection(corpus) {
   ].join('\n');
 }
 
+/** The opening and closing fence lines {@link machineSection} wraps its payload in. */
+const JSON_FENCE_OPEN = '```json\n';
+const JSON_FENCE_CLOSE = '\n```';
+
 /**
  * The machine half: every per-query record of every arm that ran, plus the stamp beside them. Each
  * arm A entry carries `variant`, `null` for an unlabelled transcript or for no transcript at all.
@@ -235,7 +239,7 @@ function machineSection(corpus) {
       }),
     ),
   };
-  return ['```json', JSON.stringify(payload, null, 2), '```'].join('\n');
+  return `${JSON_FENCE_OPEN}${JSON.stringify(payload, null, 2)}${JSON_FENCE_CLOSE}`;
 }
 
 /** One corpus's whole block: heading, table, provenance, machine half, between its own markers. */
@@ -294,10 +298,6 @@ export function rewriteGeneratedRegion(text, corpus) {
 
   return `${before}${rewritten.startsWith('\n') ? '' : '\n'}${rewritten}${after}`;
 }
-
-/** The opening and closing fence lines {@link machineSection} wraps its payload in. */
-const JSON_FENCE_OPEN = '```json\n';
-const JSON_FENCE_CLOSE = '\n```';
 
 /**
  * The parsed fenced-`json` machine half of `corpusId`'s block inside `text`'s generated region — the
