@@ -5241,6 +5241,14 @@ abstention. For the two positives that is a miss; for the `far` negative it cost
 on repetition 5. That matches the operator's reading, and was checked by scoring all three files through
 `scoreTranscript`.
 
+**Redactions and out-of-fence tool use.** *None.* All ten transcripts are committed byte-for-byte under
+`evals/docs-retrieval/transcripts/gate10-catalog/`. Every record was read: keys exactly `id`, `query`,
+`refs`, `durationMs`, `usage`, `variant`, `toolCalls`, with `id` and `query` matching the approved set in
+order. No ref is absolute, climbs with `../` or names a machine-local directory — the three prose sentences
+above included. The `usage` blocks carry token counts and four non-identifying strings (`service_tier`,
+`inference_geo`, `speed`, `iterations[].type`) and no identifier. `toolCalls` names only `Read`, `Grep` and
+`Glob`. Scoring each committed file through `scoreTranscript` gives records identical to the scratch copy's.
+
 **The figures follow.** Arm A's `gate10-catalog` rows are generated from the committed transcripts inside
 the generated region, never typed; the spread, navigation and cost figures are recorded below this
 record.
