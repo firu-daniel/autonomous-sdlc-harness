@@ -500,7 +500,7 @@ this repository may start one: the unattended permission profile carries no gran
 and an unmatched tool call stalls in print mode rather than refusing, while the `scratch-run.sh` route
 to the same subprocess is declined on purpose rather than unavailable — it would put an unsupervised
 agent session with its own auth and no token cap inside an unattended run. So an operator at a terminal
-runs arm A, and nobody else. `docs/retrieval-eval-results.md` → `## Arm A — awaiting a hand run` is the
+runs arm A, and nobody else. `docs/retrieval-eval-results.md` → `## Arm A — the real-catalog hand run` is the
 record of that decision; the mechanism is `evals/docs-retrieval/arm-a/run-arm-a.sh`, and the task
 texts it sends are `evals/docs-retrieval/arm-a/agent-task.md` for A-index and
 `evals/docs-retrieval/arm-a/agent-task-search.md` for A-search — those names, not `prompt.md`, for the
@@ -779,8 +779,8 @@ bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo "$HARNESS_EVAL_
 `<!-- eval:generated:end -->` region, which has exactly one writer, so numbers typed there are
 destroyed by the next `--out` run without a word.
 
-**The spread is hand-written**, and goes under `docs/retrieval-eval-results.md` → `## Arm A — awaiting
-a hand run` — **below the end marker**, which is hand-written territory the runner never rewrites.
+**The spread is hand-written**, and goes under `docs/retrieval-eval-results.md` → `## Arm A — the
+real-catalog hand run` — **below the end marker**, which is hand-written territory the runner never rewrites.
 Rename that heading once a number exists; a section still announcing an awaited run above a recorded
 one is a false record. Read the filled row against `## The decision rule` above, which was written
 before any arm A number existed precisely so this comparison cannot be chosen to fit it.

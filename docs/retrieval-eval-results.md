@@ -5139,46 +5139,108 @@ survive review — a measured instance of *the set is not neutral* above: the sa
 uncovered is a model. The two converted records keep their `q-g10-neg-` ids, because an id is a stable key;
 their `labels` and missing `negativeKind`, not their ids, make them positives.
 
-## Arm A — awaiting a hand run
+## Arm A — the real-catalog hand run
 
-**What arm A measures.** Index-first navigation by an agent: the alternative the docs-retrieval tool
-has to beat. An agent is started in a documentation catalog with a read-only tool set, told to read
-that catalog's `INDEX.md` first and to answer with nothing but the `path#heading` references of the
-sections it would use — the same `ref` spelling the query sets label and the other arms return — so
-recall, MRR and latency are computed over its answer by the same code that scores arms B–E. Its cost
-column is the one that is not `local`: an arm A run bills agent tokens, and the transcript carries
-each invocation's usage block.
+**Who reads this, and what it owns.** Whoever reads an arm A figure for `gate10-catalog` and needs to know
+how the run behind it was taken — on what, by whom, at what cost and with what in each session's context.
+The figures themselves follow this record.
 
-**No arm A number is recorded on this branch, and the run that built its harness made no `claude -p`
-call at all.** Arm A needs a nested agent subprocess, and the unattended permission profile carries
-no grant for the agent binary; per that profile's own `_README` a tool call matching neither `allow`
-nor `deny` stalls in print mode rather than prompting, so an unattended attempt would hang the run
-instead of reporting a refusal. The scratch-runner route to the same subprocess was technically open
-and was declined on purpose: it would have put an unsupervised nested agent session, with its own
-auth and no token cap, inside an unattended run in order to take a measurement. The arm's row above
-therefore reads *awaiting hand run* rather than carrying a zero.
+**What arm A measures.** Navigation by an agent: the alternative the docs-retrieval tool has to beat. An
+agent is started in a documentation catalog with a read-only tool set — `Read`, `Grep`, `Glob` — and
+answers with nothing but the `path#heading` references of the sections it would use, the same `ref`
+spelling the query sets label and the other arms return, so recall, MRR and latency are computed over its
+answer by the same code that scores arms B–E. It runs in two variants that differ in their instruction
+alone: **A-index** is told to read the catalog's `INDEX.md` first and follow its links, **A-search** is
+told only that the catalog is rooted in its working directory (`docs/retrieval-eval.md` →
+`## The decision rule` → `### Two arm A variants, and how they combine`). Its cost column is the one that
+is not `local`: each session bills agent tokens, and the transcript carries its usage block.
 
-**What is committed, and what fills the row.** The harness is built and exercised:
+**Why an operator ran it.** Arm A needs a nested agent session, and no automated route in this repository
+may start one: the unattended permission profile carries no grant for the agent binary, and an unmatched
+tool call stalls in print mode rather than refusing; the scratch-runner route to the same subprocess is
+declined on purpose, because it would put an unsupervised agent session with its own auth and no token
+cap inside an unattended run. So the operator ran both variants at a terminal, by the procedure in
+`docs/retrieval-eval.md` → `## Running arm A by hand`, and the run recorded here only what the operator
+reported and what the transcripts carry.
 
-- `evals/docs-retrieval/arm-a/agent-task.md` — the task text the agent is given, with one
-  substitution token for the query.
-- `evals/docs-retrieval/arm-a/run-arm-a.sh` — the invocation an operator runs by hand, one agent call
-  per query, appending one transcript record each.
-- `evals/docs-retrieval/arm-a/score-transcript.mjs` — transcript to arm A records, which the eval
-  runner scores through the same `scoreArm` call every other arm goes through.
-- `evals/docs-retrieval/arm-a/sample-transcript.json` — a hand-written three-record transcript, with
-  invented usage figures, that the scorer is exercised against without an agent. Nothing in this file
-  is taken from it.
+**The run.**
 
-The row is filled by re-running the eval with `--out` and `--transcript` against a real transcript,
-which regenerates the table from the same rendering path as every other row. It is never hand-edited:
-the generated region has one writer, and the next `--out` run destroys anything typed into it.
+- **Catalog:** `gate10-catalog`, the private real catalog of `## The real-catalog query set`, at commit
+  `57a6c25` — **156 files, 1,960 chunks** — over that section's 69-record set,
+  `evals/docs-retrieval/queries/gate10-catalog.jsonl`.
+- **Date:** 2026-09-23. **Host:** `darwin 24.6.0`, `Mac16,12` (arm64). **Agent CLI:** Claude Code
+  `2.1.280`. **Model:** `claude-opus-5-5`, requested as `--model opus`; the operator checked that every
+  assistant turn of all 690 sessions reports `claude-opus-5-5`.
+- **Passes:** both variants, five repetitions each — **all ten passes done, none stopped**, no variant
+  partial. Ten transcripts of 69 records each, one per query id in the set's own order: **690 agent
+  sessions**.
+- **Sequential:** strictly one session at a time, so each record's `durationMs` is uncontended wall time.
+- **Snapshot held:** the operator checked after every pass that the catalog stayed at `57a6c25` with
+  `docs/` unchanged, and the run re-checked it after the answer — catalog `HEAD` `57a6c25`,
+  `git diff --quiet 57a6c25 -- docs` exit 0.
 
-**One corpus, and one reason for it.** Arm A is defined over `fixture-catalog` alone: it navigates
-from an `INDEX.md`, that corpus carries its own, and this repository's `docs/` has none. The
-`self-docs` table renders an arm A row because the table walks the declared arms for every corpus;
-that row stays empty after a hand run too, and awaits a catalog with an index rather than a run.
+**Per repetition, as the operator read it.** Each repetition ran as one pair, A-index then A-search back
+to back, and the operator read the 5-hour and 7-day usage windows before and after **each pair**, not each
+variant. So a window rise below belongs to the pair; no per-variant rise was measured, and none is
+recorded here. Times are the operator's local time.
 
-**The procedure is its companion document's.** `docs/retrieval-eval.md` → `## Running arm A by hand`
-owns how to produce that transcript: the preconditions, the commands and what to do with the output.
-It is not restated here.
+| Rep | A-index | A-search | 5-hour window, before → after | 7-day window, before → after | Operator time |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 18:24:30–18:36:15 | 18:36:27–18:49:15 | 4% → 19% | 8% → 9% | 2 min |
+| 2 | 18:58:07–19:10:08 | 19:10:22–19:22:48 | 19% → 25% | 9% → 10% | 2 min |
+| 3 | 19:32:05–19:43:52 | 19:44:03–19:56:17 | 25% → 31% | 10% → 11% | 1–2 min |
+| 4 | 20:13:39–20:25:31 | 20:25:45–20:37:57 | 31% → 37% | 11% → 12% | 2 min |
+| 5 | 20:40:41–20:52:33 | 20:52:46–21:04:44 | 37% → 43% | 12% → 12% | 2 min |
+
+**The cost checkpoint passed.** Repetition 1 was the checkpoint: its pair rose **+15 points** on the
+5-hour window, and five repetitions projected under ~90% of the window for each variant, so the run
+continued. The operator's **estimate** of how that +15 splits — ~63% A-index, ~37% A-search — comes from
+token usage weighted by relative price; it is not a window reading. Repetitions 2–5 rose **+6 each**. The
+operator puts the drop down to the prompt cache staying warm between passes, and observed cache writes
+falling from 3.20 M tokens (A-index) and 1.70 M (A-search) in repetition 1 to about 1.1–1.4 M and 0.35 M
+after; those are per-pass totals over a pass's 69 sessions. The measured record of cost is each
+transcript's per-query `usage` block, and the figures that follow are computed from those.
+
+**Flags verified before any token was spent.** The agent CLI's own `--help` — the only agent-CLI call the
+run made — lists all seven flags `evals/docs-retrieval/arm-a/run-arm-a.sh` passes: `-p`,
+`--output-format` (listing `stream-json`), `--verbose`, `--allowed-tools`, `--disallowed-tools`,
+`--strict-mcp-config` and `--model`. The script needed no change.
+
+**What each session loaded.** The catalog's root carries `.claude/CLAUDE.md`, `.claude/settings.json`,
+`.claude/settings.autonomous.json` and `.mcp.json`, and no root `CLAUDE.md`. A session started there:
+
+- ran with the catalog's `autonomous-sdlc-harness` plugin enabled and its `.claude/CLAUDE.md` loaded —
+  the realistic setup for an agent navigating a harness-adopted repository, accepted as such by the
+  operator;
+- fired **no hook**: the plugin's only hook is a `PreToolUse` hook matching `Bash`, which the runner
+  disallows;
+- had **no MCP server** from the plugin, which declares none, and none from the catalog: its own
+  docs-search server in `.mcp.json` was kept out by `--strict-mcp-config`;
+- carried, from the plugin, its **agent, command and skill listings in the system prompt** — that is
+  what it added.
+
+The plugin is also enabled in the operator's user-level settings, so disabling it in the catalog alone
+would not have removed it.
+
+**What the transcripts show without scoring.** The operator checked each file's first record — bare
+`path#anchor` refs or the bare `none` token — and saw only `Read`, `Grep` and `Glob` calls; the run's own
+read of all ten files found no ref carrying a code fence in any record, and `toolCalls` naming `Read` and
+`Grep` in every A-index pass and `Read`, `Grep` and `Glob` in every A-search pass.
+
+**Three records carry a prose sentence beside `none`**, left verbatim by the operator and not repaired:
+
+| Pass | Query id | Kind |
+| --- | --- | --- |
+| `index-rep2` | `q-g10-vite-health-middleware` | positive |
+| `index-rep5` | `q-g10-vite-mock-updated-event` | positive |
+| `search-rep5` | `q-g10-neg-android-keystore` | `far` negative |
+
+`evals/docs-retrieval/arm-a/score-transcript.mjs` abstains only on a lone `none` or no refs, so each of
+the three scores as an **answered miss** with two hits — the sentence and `none` — and none as an
+abstention. For the two positives that is a miss; for the `far` negative it costs A-search one abstention
+on repetition 5. That matches the operator's reading, and was checked by scoring all three files through
+`scoreTranscript`.
+
+**The figures follow.** Arm A's `gate10-catalog` rows are generated from the committed transcripts inside
+the generated region, never typed; the spread, navigation and cost figures are recorded below this
+record.
