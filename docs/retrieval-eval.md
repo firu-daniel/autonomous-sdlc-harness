@@ -295,10 +295,17 @@ score `grade == 3` alone. Negative queries are excluded from all four.
   where `docs/retrieval-eval-results.md` → `## Cold build and index size` puts it.
 - **Abstention** — over negative queries, and **in the machine half rather than the table**: each
   corpus's trailing fenced `json` block carries `abstainedOnNegative` per arm, and a per-query
-  `abstained` flag with `bestScoreOnNegative` beside every positive query's `bestScoreOnPositive`.
-  Those are per-query values rather than a summary because the abstention threshold is chosen by
-  separating the two distributions. Only the reranking mode abstains at all; the arms that cannot
-  report `0`, taken off their own records rather than from a letter test.
+  `abstained` flag with `bestScoreOnNegative` beside every positive query's `bestScoreOnPositive`,
+  and `bestRerankScore` on every query, positive and negative. The pair is **censored**: the top
+  **returned** hit's score, `null` on an abstention. `bestRerankScore` is **uncensored**: the top
+  reranker score the abstention test compared against the threshold, present whether or not the
+  query abstained, and `null` for every arm that does not rerank, for arm A, and for a query that
+  found no candidate to rerank. The threshold is
+  calibrated on `bestRerankScore`, because the censored pair has already dropped every score that
+  fell below it; the pair stays because it is what a caller actually received. All three are
+  per-query values rather than a summary because the threshold is chosen by separating the positive
+  and negative distributions. Only the reranking mode abstains at all; the arms that cannot report
+  `0`, taken off their own records rather than from a letter test.
 
 **The score columns are not comparable across arms, and the tables carry no score column for that
 reason.** The non-reranking modes report rank-derived reciprocal-rank-fusion values in the

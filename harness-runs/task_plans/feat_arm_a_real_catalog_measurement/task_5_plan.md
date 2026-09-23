@@ -20,9 +20,9 @@ readonly bestRerankScore: number | null;   // on SearchResult
 
 **Work:**
 
-- [ ] `arms.mjs` → `runArm`: on repetition 0, set `record.bestRerankScore = result.bestRerankScore ?? null` beside `hits` and `abstained`; initialise it `null` in the record map. Update the doc comment's record shape to name it.
-- [ ] `metrics.mjs` → `scoreArm`: add `bestRerankScore: typeof record.bestRerankScore === 'number' ? record.bestRerankScore : null` to every `perQuery` entry, leaving `bestScoreOnPositive` / `bestScoreOnNegative`, `recall`, `mrr`, `strict`, `latency` and `abstainedOnNegative` computed exactly as today. Keep the module's rule — no arm letter, no `SearchMode` — and extend the header's calibration paragraph: the censored pair describes what was **returned**, the uncensored field describes what abstention **tested**.
-- [ ] `## What each metric means` → **Abstention**: name `bestRerankScore` beside the censored pair in the machine half, and say which one the threshold is calibrated on and why the censored pair stays (it is what a caller received).
+- [x] `arms.mjs` → `runArm`: on repetition 0, set `record.bestRerankScore = result.bestRerankScore ?? null` beside `hits` and `abstained`; initialise it `null` in the record map. Update the doc comment's record shape to name it.
+- [x] `metrics.mjs` → `scoreArm`: add `bestRerankScore: typeof record.bestRerankScore === 'number' ? record.bestRerankScore : null` to every `perQuery` entry, leaving `bestScoreOnPositive` / `bestScoreOnNegative`, `recall`, `mrr`, `strict`, `latency` and `abstainedOnNegative` computed exactly as today. Keep the module's rule — no arm letter, no `SearchMode` — and extend the header's calibration paragraph: the censored pair describes what was **returned**, the uncensored field describes what abstention **tested**.
+- [x] `## What each metric means` → **Abstention**: name `bestRerankScore` beside the censored pair in the machine half, and say which one the threshold is calibrated on and why the censored pair stays (it is what a caller received).
 
 **Verification:**
 

@@ -134,9 +134,11 @@ function refsOf(result) {
  * Runs one arm over `queries` and returns `{ letter, mode, embedCalls, rerankCalls, records }`.
  *
  * `arm` is a {@link ARMS} entry and its `mode` is read off that entry — there is no letter test in
- * this module's run path. Each record is `{ id, arm, hits: [{ ref, score }], abstained, durationMs }`
- * plus `warnings`, where `durationMs` is one entry per repetition and `hits` and `abstained` are the
- * **first** repetition's, which is the one scored.
+ * this module's run path. Each record is `{ id, arm, hits: [{ ref, score }], abstained,
+ * bestRerankScore, durationMs }` plus `warnings`, where `durationMs` is one entry per repetition and
+ * `hits`, `abstained` and `bestRerankScore` are the **first** repetition's, which is the one scored.
+ * `bestRerankScore` is `SearchResult.bestRerankScore` carried through: the score abstention tested,
+ * present whether or not it abstained, and `null` in every mode that does not rerank.
  *
  * With `repeat > 1` every query is run once per repetition, in query order, and every duration is
  * kept. A repetition whose ordered refs differ from the first repetition's is recorded as a
@@ -153,7 +155,15 @@ export async function runArm({ session, arm, queries, k, repeat = 1 }) {
   const records = new Map(
     queries.map((query) => [
       query.id,
-      { id: query.id, arm: arm.letter, hits: [], abstained: false, durationMs: [], warnings: [] },
+      {
+        id: query.id,
+        arm: arm.letter,
+        hits: [],
+        abstained: false,
+        bestRerankScore: null,
+        durationMs: [],
+        warnings: [],
+      },
     ]),
   );
 
@@ -175,6 +185,7 @@ export async function runArm({ session, arm, queries, k, repeat = 1 }) {
       if (repetition === 0) {
         record.hits = result.hits.map((hit) => ({ ref: hit.ref, score: hit.score }));
         record.abstained = result.abstained;
+        record.bestRerankScore = result.bestRerankScore ?? null;
       } else if (refs.join('\u0000') !== record.hits.map((hit) => hit.ref).join('\u0000')) {
         record.warnings.push(
           `repetition ${repetition + 1} returned [${refs.join(', ')}], ` +

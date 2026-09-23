@@ -21,6 +21,13 @@
  * `abstainedOnNegative`, and a per-query `bestScoreOnNegative` beside every positive query's
  * `bestScoreOnPositive`. Those two distributions are per-query values rather than summaries, because
  * the threshold is chosen by separating them.
+ *
+ * **Two score fields, two questions.** `bestScoreOnPositive` / `bestScoreOnNegative` are censored: the
+ * top **returned** hit's score, `null` on an abstention, so they describe what a caller received.
+ * `bestRerankScore`, on every entry, is uncensored: the top reranker score abstention **tested**,
+ * present whether or not the query abstained, and `null` where the record carries none. The threshold
+ * is calibrated on the uncensored field, because the censored pair has already lost every score that
+ * fell below it.
  */
 
 /** The `k` values `scoreArm` reports recall at when its caller names none. */
@@ -90,14 +97,14 @@ function gradedColumns(pairs, minimumGrade, kValues) {
 /**
  * Every figure one arm's run produces, from that arm's `records` and the `queries` they answer.
  *
- * `records` are `{ id, arm, hits, abstained, durationMs }` — the shape
- * `evals/docs-retrieval/arms.mjs` → `runArm` returns and the shape
- * `evals/docs-retrieval/arm-a/score-transcript.mjs` → `scoreTranscript` hands over for arm A, so both
- * are scored by this one function.
+ * `records` are `{ id, arm, hits, abstained, durationMs }`, optionally with `bestRerankScore` — the
+ * shape `evals/docs-retrieval/arms.mjs` → `runArm` returns and the shape
+ * `evals/docs-retrieval/arm-a/score-transcript.mjs` → `scoreTranscript` hands over for arm A, which
+ * carries no `bestRerankScore`, so both are scored by this one function.
  *
  * Returns `{ kValues, positives, negatives, recall, mrr, strict: { recall, mrr }, latency, samples,
- * abstainedOnNegative, perQuery }`, where `perQuery` carries each query's rank, abstention and best
- * score under `bestScoreOnPositive` or `bestScoreOnNegative`.
+ * abstainedOnNegative, perQuery }`, where `perQuery` carries each query's rank, abstention, best
+ * returned score under `bestScoreOnPositive` or `bestScoreOnNegative`, and `bestRerankScore`.
  *
  * Refuses by name on a record whose `id` is in no query, and on a query with no record: a metric over
  * a half-answered set is worse than a stop.
@@ -131,6 +138,7 @@ export function scoreArm(records, queries, { kValues = DEFAULT_K_VALUES } = {}) 
       id: query.id,
       negative,
       abstained: record.abstained === true,
+      bestRerankScore: typeof record.bestRerankScore === 'number' ? record.bestRerankScore : null,
       hits: record.hits.map((hit) => ({ ref: hit.ref, score: hit.score })),
       durationMs: durationsOf(record),
       warnings: Array.isArray(record.warnings) ? record.warnings : [],
