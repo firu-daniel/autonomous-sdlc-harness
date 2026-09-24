@@ -54,10 +54,10 @@ A LangGraph node calls the model API directly, so every run is billed per token.
 | `chore_plugin_prefix_command_sweep` | 41.66 |
 | `feat_docs_catalog_retrieval` | 3.91, 38.91, 35.77 |
 
-**Where every figure comes from.** Each figure is the `total_cost_usd` field of one session's `result` envelope. That field is Claude Code's API-equivalent price, not an amount billed. The sessions are those in `harness-runs/autonomous_logs/*.stream.jsonl` that dispatched only planning agents: the writer and the reviewers, and no `layer-implementer`. The figures were read on 2026-09-24, one session log at a time, with:
+**Where every figure comes from.** Each figure is the `total_cost_usd` field of one session's `result` envelope. That field is Claude Code's API-equivalent price, not an amount billed. The sessions are those in `harness-runs/autonomous_logs/*.stream.jsonl` that dispatched only planning agents: the writer and the reviewers, and no `layer-implementer`. Each run's log holds one `result` envelope per session. The figures were read on 2026-09-24, one run log at a time. The command keeps a session only when it dispatched at least one agent and every agent it dispatched was a planning writer or reviewer. It then prints that session's `total_cost_usd`:
 
 ```
-jq -c 'select(.type=="result") | .total_cost_usd' harness-runs/autonomous_logs/<run>.stream.jsonl
+jq -s -c 'group_by(.session_id) | map({cost: ([.[] | select(.type=="result") | .total_cost_usd] | first), agents: ([.[] | select(.type=="assistant") | .message.content[]? | select(.type=="tool_use") | .input.subagent_type? // empty] | unique)}) | map(select(.cost != null and .agents != [] and all(.agents[]; test("(task-plan|ui-tests-plan)-(writer|reviewer)$|(architecture|business-parity)-reviewer$")))) | map(.cost)' harness-runs/autonomous_logs/<run>.stream.jsonl
 ```
 
 **The figures cannot be re-checked from a clone.** The logs are git-ignored (`.gitignore` → `harness-runs/autonomous_logs/*`) and exist only on the machine that ran the sessions, and `scripts/publish-main.sh` removes `harness-runs/` from the published `main`. The figures are recorded here as read.

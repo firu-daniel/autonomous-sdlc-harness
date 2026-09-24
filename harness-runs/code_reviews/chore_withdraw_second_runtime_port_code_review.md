@@ -22,7 +22,7 @@ The three findings below are all in the decision record. None of them changes th
 
 1. [x] **Finding 2** — Cite `## Override 5` beside `## Override 2` as the source of the park-and-resume row _(layer: general)_
 2. [x] **Finding 3** — State in §5 that the `dispatch_additions` record and its example are not in the published tree _(layer: general)_
-3. [ ] **Finding 1** — Make the cost-figure read command select the planning-only sessions it claims to report _(layer: general)_
+3. [x] **Finding 1** — Make the cost-figure read command select the planning-only sessions it claims to report _(layer: general)_
 
 ---
 
