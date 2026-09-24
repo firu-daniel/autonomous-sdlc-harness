@@ -14,7 +14,7 @@ Source: harness-runs/task_prompts/fix_plan_loop_resume_from_walker_state_task_pr
 - [x] A.      Tasks implemented (story-index readiness all [x])
 - [-] A1.5g.  Branch parity review resolved (index committed — or PASS with no findings, no file written)
 - [-] A1.5f.  Parity findings fixed (findings index all [x] — or no index, the review having passed clean)
-- [ ] A2g.    Branch architecture review resolved (index committed — or PASS with no findings, no file written)
+- [x] A2g.    Branch architecture review resolved (index committed — or PASS with no findings, no file written)
 - [ ] A2f.    Architecture findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [ ] Bg.     Branch review generated & committed
 - [ ] Bm.     Review-plan meta-review PASS (B.2)
