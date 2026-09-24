@@ -43,7 +43,7 @@ The five findings below are all prose or data out of step with the code or with 
 1. [x] **Finding 3** — State in the flow-graph schema that `roundCounts` names dispatch nodes, not report slots _(layer: general)_
 2. [x] **Finding 2** — Move the `no_ui` short-circuit and the `phases.qa` gate to the planning graph in both planning forks' "does NOT redefine" lists _(layer: plugin)_
 3. [x] **Finding 1** — Repoint the core's `## Setup` step 2 "reached only when" parentheticals at the graph's skip gates _(layer: plugin)_
-4. [ ] **Finding 5** — Drop `## Loop` steps 2 and 3 from the `<escalate>` sites in the core's bindings table and the autonomous fork's `<escalate>` row _(layer: plugin)_
+4. [x] **Finding 5** — Drop `## Loop` steps 2 and 3 from the `<escalate>` sites in the core's bindings table and the autonomous fork's `<escalate>` row _(layer: plugin)_
 5. [ ] **Finding 4** — Cite the planning core as `${CLAUDE_PLUGIN_ROOT}/…` in the shipped graph's `description`, and in its mirror and fixture copies _(layer: cli, general)_
 
 ---

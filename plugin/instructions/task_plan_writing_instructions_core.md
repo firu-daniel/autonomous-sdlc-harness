@@ -29,7 +29,7 @@ The `Used at` column is load-bearing, not documentation. All five bindings below
 
 | Binding | Used at | Meaning (short) |
 |---|---|---|
-| `<escalate>` | `## Setup` step 2 (task prompt missing); `## The walker` (a non-zero exit); the walker's `binding: <escalate>` line, acted on in `## Loop` steps 2, 3 and 5 and in `## UI-test-plan write loop` step 3; `## Stop conditions` entries 4–5 | This flow's path for halting and reporting an **agent/flow blocker**. Never used for a `<state_dir>/STOP` halt or the dispatch-cap halt — see `## Setup` step 3 and `## Safety contract`. |
+| `<escalate>` | `## Setup` step 2 (task prompt missing); `## The walker` (a non-zero exit); the walker's `binding: <escalate>` line, acted on in `## Loop` step 5 and in `## UI-test-plan write loop` step 3; `## Stop conditions` entries 4–5 | This flow's path for halting and reporting an **agent/flow blocker**. Never used for a `<state_dir>/STOP` halt or the dispatch-cap halt — see `## Setup` step 3 and `## Safety contract`. |
 | `<ask>` | the walker's `binding: <ask>` line, acted on in `## Loop` step 1 and `## UI-test-plan write loop` step 1 (a writer returns `## Questions`); `## Stop conditions` entry 3 | This flow's clarification path — what to do when the flow **needs an answer before it can continue**. Distinct from `<escalate>`: an answer can bring the flow back. |
 | `<terminal_handoff>` | the walker's `binding: <terminal_handoff>` line, acted on in `## Convergence` | What happens when both loops converge — present-and-stop, or emit-a-summary-and-fall-through. |
 | `<existing_artifact_decision>` | `## Setup` step 5 | How this flow decides what to do when a story index already exists on (re-)entry. |
