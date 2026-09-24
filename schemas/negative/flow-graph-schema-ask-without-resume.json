@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "flow": "task_plan_writing",
-  "description": "The routing of plugin/instructions/task_plan_writing_instructions_core.md as data: the task-plan loop, the UI-test-plan loop and convergence, with the values the walker resolves (counters, path templates, heartbeats, findings folders, skip gates, cap summaries). The dispatch blocks each agent receives are not here; they stay in that core. Copied verbatim into the adopter's scripts directory, never rendered.",
+  "description": "The routing of ${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_core.md as data: the task-plan loop, the UI-test-plan loop and convergence, with the values the walker resolves (counters, path templates, heartbeats, findings folders, skip gates, cap summaries). The dispatch blocks each agent receives are not here; they stay in that core. Copied verbatim into the adopter's scripts directory, never rendered.",
   "start": "plan_writer",
   "entries": ["plan_writer", "ui_writer", "convergence"],
   "counters": {
