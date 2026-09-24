@@ -50,9 +50,9 @@ Every **other** `<…>` name in this file is **not** a binding. `<branch>` and `
    | Story index output | `<state_dir>/story_plans/<branch>_story_plan.md` |
    | Per-task files output dir | `<state_dir>/task_plans/<branch>/` (holds one `task_<N>_plan.md` per readiness entry) |
    | Plan-review findings folder | `<state_dir>/task_plan_reviews/<branch>/` |
-   | Business-parity-review findings folder | `<state_dir>/business_parity_reviews/<branch>/` (reached only when `phases.parity` is `true` — see `## Loop` step 2) |
+   | Business-parity-review findings folder | `<state_dir>/business_parity_reviews/<branch>/` (reached only when `phases.parity` is `true` — the planning graph's `skipped` gate on `business_parity_review`, which `## The walker` applies) |
    | Architecture-review findings folder | `<state_dir>/architecture_reviews/<branch>/` |
-   | UI-test plan index output | `<state_dir>/ui_test_plans/<branch>_ui_test_plan.md` (reached only when `phases.qa` is `true` — see `## UI-test-plan write loop`) |
+   | UI-test plan index output | `<state_dir>/ui_test_plans/<branch>_ui_test_plan.md` (reached only when `phases.qa` is `true` — the planning graph's `skipped` gate on `ui_writer`, which `## The walker` applies) |
    | UI-test per-test files output dir | `<state_dir>/ui_test_plans/<branch>/` (holds one `ui_test_<N>.md` per readiness entry) |
    | UI-test plan-review findings folder | `<state_dir>/ui_test_plan_reviews/<branch>/` |
 
