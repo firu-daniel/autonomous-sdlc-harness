@@ -48,7 +48,7 @@ The tasks run in the configured layer order, `cli` → `plugin` → `general`. T
 12. [x] **Task 12** — Flow-graph schema, its negative fixtures and the static-check fixtures _(layer: general)_ _(points: 20)_
 13. [x] **Task 13** — Static checker `scripts/check-flow-graph.sh` _(layer: general)_ _(points: 18)_
 14. [x] **Task 14** — Wire the flow-graph checks into `scripts/run-gates.sh` and `docs/development.md` §5 _(layer: general)_ _(points: 10)_
-15. [ ] **Task 15** — Mirror the walker into this checkout's `scripts/` and ignore its state _(layer: general)_ _(points: 8)_
+15. [x] **Task 15** — Mirror the walker into this checkout's `scripts/` and ignore its state _(layer: general)_ _(points: 8)_
 16. [ ] **Task 16** — Record the pilot's decisions and measurements in `docs/flow-graph-walker.md` _(layer: general)_ _(points: 15)_
 17. [ ] **Task 17** — Add the walker, its gate library and its graph to `docs/watcher.md` §2 _(layer: general)_ _(points: 10)_
 
