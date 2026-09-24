@@ -26,7 +26,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/chore_withdraw_second_runtime_po
 1. [x] **Task 1** — Write the decision record `docs/second-runtime-port-decision.md` _(layer: general)_ _(points: 15)_
 2. [x] **Task 2** — Withdraw the row in `ROADMAP.md`, add `Withdrawn` to the legend and renumber the index _(layer: general)_ _(points: 10)_
 3. [x] **Task 3** — Amend `ARCHITECTURE.md` → `### Why no candidate is named here` for the record's named frameworks _(layer: general)_ _(points: 5)_
-4. [ ] **Task 4** — List the decision record in `README.md`'s reference documents and in `llms.txt` _(layer: general)_ _(points: 5)_
+4. [x] **Task 4** — List the decision record in `README.md`'s reference documents and in `llms.txt` _(layer: general)_ _(points: 5)_
 
 ## Scope register
 
