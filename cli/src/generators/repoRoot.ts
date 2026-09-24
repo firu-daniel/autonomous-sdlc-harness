@@ -195,8 +195,9 @@ const CONTENTS_IGNORED_DIRS: readonly ContentsIgnoredRow[] = Object.freeze([
 ]);
 
 /**
- * The unattended loop's stop, pause and dispatch-count control files, written **flat** at the root
- * of the run-artifact tree while a run is in flight.
+ * The unattended loop's stop, pause and dispatch-count control files, and the flow walker's
+ * machine-local state file, written **flat** at the root of the run-artifact tree while a run is in
+ * flight.
  *
  * They must never be committed, and the tree around them is what makes that easy to get wrong: it is
  * otherwise a committed tree, so a single `git add <stateDir>/` takes whichever of these happen to
@@ -209,6 +210,7 @@ const CONTENTS_IGNORED_DIRS: readonly ContentsIgnoredRow[] = Object.freeze([
  */
 const RUN_CONTROL_ARTIFACTS: readonly string[] = Object.freeze([
   '.dispatch_counter',
+  '.flow_walker_state',
   'STOP',
   'AUTONOMOUS_STOP',
   'PAUSE',

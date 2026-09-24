@@ -128,8 +128,8 @@ const QA_SCENARIOS_HEADING = /^# QA test scenarios$/m;
 const GITIGNORE_MARKER = '>>> autonomous-sdlc-harness (managed block';
 
 /**
- * The unattended loop's stop, pause and dispatch-count files, written flat at the root of the
- * run-artifact tree while a run is in flight and never committed.
+ * The unattended loop's stop, pause and dispatch-count files and the flow walker's state file,
+ * written flat at the root of the run-artifact tree while a run is in flight and never committed.
  *
  * Spelled out here rather than imported from the generator that emits them — choice 3 in the module
  * header — so a name dropped from the generated block fails an assertion instead of quietly
@@ -137,6 +137,7 @@ const GITIGNORE_MARKER = '>>> autonomous-sdlc-harness (managed block';
  */
 const RUN_CONTROL_ARTIFACTS = [
   '.dispatch_counter',
+  '.flow_walker_state',
   'STOP',
   'AUTONOMOUS_STOP',
   'PAUSE',
@@ -276,6 +277,7 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'autonomous-watcher.sh',
   'restart-watcher.sh',
   'docs-search-server.sh',
+  'flow-walker.sh',
 ];
 
 /** A left-over template token — none may survive into a generated file. */
