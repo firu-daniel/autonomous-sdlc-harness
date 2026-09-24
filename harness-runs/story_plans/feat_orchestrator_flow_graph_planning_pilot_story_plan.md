@@ -34,7 +34,7 @@ The tasks run in the configured layer order, `cli` → `plugin` → `general`. T
 
 **Only the committing role flips a marker `[ ]` → `[x]`:** the `committer` agent in every flow that dispatches one, or the orchestrator itself in the supervised flow, which dispatches none. No implementer changes a marker here, or edits any other line of this section, while a run is iterating this index. `[ ]` markers anywhere else, such as the sub-step bullets inside the per-task files, are informational only. The committer never touches them.
 
-1. [ ] **Task 1** — Declare the task-plan-writing flow graph beside the walker _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — Declare the task-plan-writing flow graph beside the walker _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 2** — Add a `phases.*` reader to the outer-loop library _(layer: cli)_ _(points: 8)_
 3. [ ] **Task 3** — Add the walker's gate library `lib/flow-walker-gates.sh` _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Add the walker `flow-walker.sh` _(layer: cli)_ _(points: 20)_
