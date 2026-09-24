@@ -18,7 +18,7 @@ Source: harness-runs/task_prompts/feat_orchestrator_flow_graph_planning_pilot_ta
 - [x] A2f.    Architecture findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [x] Bg.     Branch review generated & committed
 - [x] Bm.     Review-plan meta-review PASS (B.2)
-- [ ] C.      Code-review findings fixed
+- [x] C.      Code-review findings fixed
 - [ ] C2g.    Skeptic review resolved (index committed — or PASS with no net-new findings, no file written)
 - [ ] C2m.    Skeptic meta-review PASS — or not owed (C2.1 returned PASS, so C2.2 never ran)
 - [ ] C2f.    Skeptic findings fixed (findings index all [x] — or no index, the review having passed clean)
