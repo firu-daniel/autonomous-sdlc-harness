@@ -32,4 +32,6 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **A feature that ships as "not yet measured" ships the seam that will measure it — opt-in, off by default, behind an environment variable rather than a configuration key, so the follow-up evaluation has data to start from and an adopter who declines gains no new surface.** _(taught by: feat_docs_catalog_retrieval)_
 
+- **A decision rule's outcome is a proposal to the maintainer, not a settled future: record the verdict and the change it names, but never write the change into other documents as pending work until the maintainer has decided to execute it.** _(taught by: feat_arm_a_real_catalog_measurement)_
+
 _Written by `autonomous-sdlc-harness init`, and yours from there on: a re-run never touches a ledger that already exists._

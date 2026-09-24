@@ -8,17 +8,19 @@ not one: it is the task text for a hand-run measurement that answers to no runne
 discovery glob. Do not resolve the collision the other way by restating or widening the discovery
 pattern in `evals/README.md`; that statement has one home.
 
-This file carries exactly ONE substitution token — the placeholder standing alone below the words
-"The question:", written as `query` inside doubled braces — and that count is checked. The runner
-replaces it and nothing else, so a second doubled brace anywhere here, this comment included, would
-be handed to the agent verbatim. Everything in this file is the prompt: the runner substitutes and
-sends it whole, comment and all.
+This file is the A-index task text, and it carries exactly TWO substitution tokens: the placeholder
+standing alone below the words "The question:", written as `query` inside doubled braces, and the
+placeholder naming the file to read first, written as `index` inside doubled braces, which the runner
+fills from its `--index` option. Each is checked to occur exactly once before any agent call. The
+runner replaces those two and nothing else, so any other doubled brace anywhere here, this comment
+included, would be handed to the agent verbatim. Everything in this file is the prompt: the runner
+substitutes and sends it whole, comment and all.
 -->
 
 You are answering a documentation-retrieval question against the documentation catalog rooted in the
 working directory you were started in. That catalog is the only material you may use.
 
-Read `docs/INDEX.md` first. It is the catalog's index and the navigation surface you are given: a
+Read `{{index}}` first. It is the catalog's index and the navigation surface you are given: a
 document missing from it is a document you cannot reach. Follow its links to the documents that look
 relevant, and read the sections you need.
 

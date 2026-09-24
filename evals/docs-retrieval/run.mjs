@@ -3,11 +3,11 @@
  * other reader of this eval takes its figures from.
  *
  * **The rule this module exists to enforce: the generated region of
- * `docs/retrieval-eval-results.md` has exactly one writer, and arm A's row is generated like every
+ * `docs/retrieval-eval-results.md` has exactly one writer, and arm A's rows are generated like every
  * other row.** `.claude/context/conventions.md` → `### Where a new responsibility goes`: *"A
  * responsibility that already has a home does not get a second one."* A hand run of arm A is
- * published by re-running the eval with `--out … --transcript …`, never by typing numbers between
- * the markers — the next `--out` run destroys anything hand-edited there.
+ * published by re-running the eval with `--out …` and one `--transcript …` per variant, never by
+ * typing numbers between the markers — the next `--out` run destroys anything hand-edited there.
  *
  * This module is orchestration only: the corpus is resolved by `evals/docs-retrieval/corpora.mjs`,
  * the index built by `evals/docs-retrieval/index-build.mjs`, the labels checked by
@@ -29,10 +29,10 @@
 
 import { writeFileSync, readFileSync } from 'node:fs';
 import { platform, release } from 'node:os';
-import { relative, sep } from 'node:path';
+import { basename, isAbsolute, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ARMS, runArm, selectArms } from './arms.mjs';
+import { ARMS, NAVIGATION_VARIANTS, navigationVariant, runArm, selectArms } from './arms.mjs';
 import { corpusConfig } from './corpora.mjs';
 import { buildIndex } from './index-build.mjs';
 import { scoreArm } from './metrics.mjs';
@@ -71,6 +71,33 @@ function transcriptRecords(scored) {
 }
 
 /**
+ * `parseArgs`'s `transcripts` with every label checked by `navigationVariant`, in
+ * `NAVIGATION_VARIANTS` order. Run before the index is built, so an unknown label costs a refusal
+ * and not a build.
+ */
+function orderedTranscripts(transcripts) {
+  const checked = transcripts.map(({ variant, path }) => ({
+    variant: variant === null ? null : navigationVariant(variant),
+    path,
+  }));
+  return checked.sort((a, b) => NAVIGATION_VARIANTS.indexOf(a.variant) - NAVIGATION_VARIANTS.indexOf(b.variant));
+}
+
+/**
+ * The query set's path as the provenance renders it: relative to `checkout` when the set lies inside
+ * it, else to `repo` when it lies inside that; `undefined` when neither holds, because a path that
+ * begins with `..` or is absolute names where this checkout or the corpus sits on the machine.
+ */
+function queriesProvenancePath({ checkout, repo, queries }) {
+  for (const root of [checkout, repo]) {
+    if (root === undefined) continue;
+    const path = relative(root, queries);
+    if (path !== '' && !path.startsWith('..') && !isAbsolute(path)) return path.split(sep).join('/');
+  }
+  return undefined;
+}
+
+/**
  * One eval pass. `options` is `evals/docs-retrieval/args.mjs` → `parseArgs`'s shape.
  *
  * Returns the corpus result object every downstream reader takes its figures from — the arms with
@@ -82,11 +109,22 @@ function transcriptRecords(scored) {
  * nothing at all and prints the arm table and the labelled snapshot stamp to stdout.
  */
 export async function runEval(options) {
+  const transcripts = orderedTranscripts(options.transcripts);
+  const queriesPath = queriesProvenancePath(options);
+  if (queriesPath === undefined && options.out !== undefined) {
+    throw new Error(
+      `eval: --out refused: the query set ${basename(options.queries)} lies inside neither this checkout nor ` +
+        '--repo, so its provenance path would climb out of both or be absolute; commit the set under ' +
+        'evals/docs-retrieval/queries/ and pass that path',
+    );
+  }
+
   const { id, config, repoRoot } = corpusConfig({
     repoRoot: options.repo,
     corpus: options.corpus,
     docsRoot: options.docsRoot,
     conventions: options.conventions,
+    corpusId: options.corpusId,
   });
 
   const session = await buildIndex({ repoRoot, config, dataDir: options.dataDir });
@@ -100,19 +138,22 @@ export async function runEval(options) {
       arms.push({ ...run, metrics: scoreArm(run.records, queries) });
     }
 
-    if (options.transcript !== undefined) {
+    if (transcripts.length > 0) {
       const scoreTranscript = await loadTranscriptScorer();
-      const { records, cost } = transcriptRecords(await scoreTranscript({ transcript: options.transcript, queries }));
       const arm = navigationArm();
-      arms.push({
-        letter: arm.letter,
-        mode: arm.mode,
-        embedCalls: 0,
-        rerankCalls: 0,
-        cost,
-        records,
-        metrics: scoreArm(records, queries),
-      });
+      for (const { variant, path } of transcripts) {
+        const { records, cost } = transcriptRecords(await scoreTranscript({ transcript: path, queries }));
+        arms.push({
+          letter: arm.letter,
+          variant,
+          mode: arm.mode,
+          embedCalls: 0,
+          rerankCalls: 0,
+          cost,
+          records,
+          metrics: scoreArm(records, queries),
+        });
+      }
     }
 
     const corpus = {
@@ -123,8 +164,9 @@ export async function runEval(options) {
       warnings: session.warnings,
       queries: {
         // Repo-relative, because the rendered provenance is committed and nothing in this tree may
-        // name a location on the machine that wrote it (`scripts/run-gates.sh` gate 6a).
-        path: relative(options.repo, options.queries).split(sep).join('/'),
+        // name a location on the machine that wrote it (`scripts/run-gates.sh` gate 6a) — so a path
+        // climbing out of both roots is refused above, and a stdout-only run prints the basename.
+        path: queriesPath ?? basename(options.queries),
         positives: queries.filter((query) => query.labels.length > 0).length,
         negatives: queries.filter((query) => query.labels.length === 0).length,
       },

@@ -6,12 +6,17 @@
  * set and the refusal of an illegal letter belong to `evals/docs-retrieval/arms.mjs`, which owns the
  * single declared arm table. A default list or a legal-letter check here would be a second copy of
  * that table, and the two would drift. The boundary is drawn here rather than inferred: the
- * `--arms` line of the refusal below says so too.
+ * `--arms` line of the refusal below says so too. `--transcript`'s variant label is carried through
+ * raw on the same terms, its legality deferred to `evals/docs-retrieval/arms.mjs` →
+ * `navigationVariant`; only the refusals that need no variant vocabulary are made here.
  *
  * `--repo <path>` is what lets the eval be pointed at any adopter's checkout; it defaults to the
  * checkout this file sits in, from a bare `git rev-parse --show-toplevel`
  * (`.claude/context/conventions.md` → `## Configuration is the source of truth…`). Every other path
- * is resolved against it unless it is already absolute.
+ * is resolved against it unless it is already absolute. The two roots are returned apart, as `repo`
+ * and `checkout`, because they differ whenever `--repo` names a catalog held outside this tree: that
+ * catalog's query set is still committed here, so a named ad-hoc corpus's default set resolves
+ * against `checkout`, never against `repo`.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -19,7 +24,7 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { DEFAULT_RESULTS } from '../../cli/dist/retrieval/search.js';
-import { BUILT_IN_CORPORA } from './corpora.mjs';
+import { AD_HOC_CORPUS, BUILT_IN_CORPORA } from './corpora.mjs';
 
 /** One run of each query, unless the operator asks for more. */
 const DEFAULT_REPEAT = 1;
@@ -27,8 +32,11 @@ const DEFAULT_REPEAT = 1;
 /** The corpus an invocation naming no `--corpus` and no `--docs-root` runs: the committed, stationary one. */
 const DEFAULT_CORPUS = 'fixture-catalog';
 
-/** Where a built-in corpus's query set lives, one set per corpus id (`evals/docs-retrieval/queries/README.md`). */
+/** Where a corpus's query set lives, one set per corpus id (`evals/docs-retrieval/queries/README.md`). */
 const QUERIES_DIR = 'evals/docs-retrieval/queries';
+
+/** The shape a `--corpus-id` must take: lowercase words joined by single hyphens, as a query-set file name. */
+const CORPUS_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 /** The legal flags, in the order the refusal lists them, each with the line that explains it there. */
 const FLAGS = Object.freeze([
@@ -36,15 +44,42 @@ const FLAGS = Object.freeze([
   ['--corpus <id>', `a built-in corpus id: ${BUILT_IN_CORPORA.join(' or ')}`],
   ['--docs-root <path>', 'compose an ad-hoc corpus from this documentation directory instead'],
   ['--conventions <path>', 'a conventions document of the ad-hoc corpus; repeatable'],
-  ['--queries <path>', `the query set; defaults to ${QUERIES_DIR}/<corpus-id>.jsonl for a built-in id`],
+  ['--corpus-id <id>', `name the ad-hoc corpus; needs --docs-root, and is neither a built-in id nor ${AD_HOC_CORPUS}`],
+  ['--queries <path>', `the query set; defaults to ${QUERIES_DIR}/<corpus-id>.jsonl in this checkout for a named corpus`],
   ['--arms <letters>', 'which arms to run; the legal letters and the default set belong to arms.mjs, not here'],
   ['--k <n>', `how many hits each arm returns (default ${DEFAULT_RESULTS})`],
   ['--repeat <n>', `how many times each query is run (default ${DEFAULT_REPEAT})`],
   ['--out <path>', 'where to write the results; absent means nothing is written'],
   ['--data-dir <path>', 'where the index is stored; absent means in memory, and nothing is written'],
   ['--floor <path>', 'the recorded regression floor; read by check-floor.mjs alone, not by a run'],
-  ['--transcript <path>', "an arm A hand-run transcript, scored by run.mjs and by nothing in this module"],
+  ['--transcript <path>', 'an arm A hand-run transcript, bare or as <variant>=<path>; repeatable, once per variant, and scored by run.mjs'],
 ]);
+
+/** A `--transcript` value's `<variant>=` prefix: a bare lower-case word before the first `=`. */
+const TRANSCRIPT_LABEL = /^([a-z]+)=(.*)$/su;
+
+/** One `--transcript` value as `{ variant, path }`, `variant` the raw label or `null` for a bare path. */
+function transcriptEntry(value) {
+  const labelled = TRANSCRIPT_LABEL.exec(value);
+  return labelled === null ? { variant: null, path: value } : { variant: labelled[1], path: labelled[2] };
+}
+
+/** Refuses the `--transcript` combinations that name no single row per transcript. */
+function checkTranscripts(entries) {
+  const bare = entries.filter((entry) => entry.variant === null);
+  if (bare.length > 1) {
+    refuse('--transcript was given two bare paths, which render one arm A row; label each as <variant>=<path>');
+  }
+  if (bare.length === 1 && entries.length > 1) {
+    refuse('--transcript was given a bare path together with a labelled one; label every transcript, or give one bare path alone');
+  }
+  const seen = new Set();
+  for (const { variant } of entries) {
+    if (variant === null) continue;
+    if (seen.has(variant)) refuse(`--transcript was given two transcripts for variant ${variant}; give one per variant`);
+    seen.add(variant);
+  }
+}
 
 /** Flags taking a value, by name. */
 const VALUE_FLAGS = new Set(FLAGS.map(([spec]) => spec.split(' ')[0]));
@@ -69,11 +104,13 @@ function ownCheckout() {
 /**
  * The parsed argument surface. `argv` is the flags alone — `process.argv.slice(2)`.
  *
- * `corpus` is `undefined` for an ad-hoc corpus, which `--docs-root` selects; `arms` is the raw
- * letters as given, or `undefined`; every path is absolute by the time it is returned.
+ * `corpus` is `undefined` for an ad-hoc corpus, which `--docs-root` selects, and `corpusId` is that
+ * corpus's `--corpus-id`, or `undefined`; `arms` is the raw letters as given, or `undefined`;
+ * `transcripts` is `[{ variant, path }]` in the order given, `variant` the raw label or `null`; every
+ * path is absolute by the time it is returned.
  */
 export function parseArgs(argv) {
-  const raw = { conventions: [] };
+  const raw = { conventions: [], transcripts: [] };
 
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -94,6 +131,9 @@ export function parseArgs(argv) {
         break;
       case '--docs-root':
         raw.docsRoot = value;
+        break;
+      case '--corpus-id':
+        raw.corpusId = value;
         break;
       case '--queries':
         raw.queries = value;
@@ -117,7 +157,7 @@ export function parseArgs(argv) {
         raw.floor = value;
         break;
       case '--transcript':
-        raw.transcript = value;
+        raw.transcripts.push(transcriptEntry(value));
         break;
       // Every flag in FLAGS needs its own case: VALUE_FLAGS above accepts a flag the moment it is
       // declared, so a declared flag with no case here would take some other flag's slot silently.
@@ -125,8 +165,10 @@ export function parseArgs(argv) {
         refuse(`${flag} is declared in FLAGS with no case in parseArgs, so its value would be misread`);
     }
   }
+  checkTranscripts(raw.transcripts);
 
-  const repo = raw.repo === undefined ? ownCheckout() : resolve(ownCheckout(), raw.repo);
+  const checkout = ownCheckout();
+  const repo = raw.repo === undefined ? checkout : resolve(checkout, raw.repo);
   const against = (path) => (path === undefined ? undefined : isAbsolute(path) ? path : resolve(repo, path));
 
   const corpus = raw.corpus ?? (raw.docsRoot === undefined ? DEFAULT_CORPUS : undefined);
@@ -136,12 +178,34 @@ export function parseArgs(argv) {
   if (corpus !== undefined && raw.docsRoot !== undefined) {
     refuse(`--corpus ${corpus} and --docs-root name two different corpora; give one or the other`);
   }
-  const queries = against(raw.queries) ?? (corpus === undefined ? undefined : resolve(repo, QUERIES_DIR, `${corpus}.jsonl`));
-  if (queries === undefined) refuse('an ad-hoc corpus has no query set of its own; name one with --queries');
+  const corpusId = raw.corpusId;
+  if (corpusId !== undefined) {
+    if (raw.docsRoot === undefined) refuse('--corpus-id names an ad-hoc corpus, so it is legal only together with --docs-root');
+    if (!CORPUS_ID_PATTERN.test(corpusId)) {
+      refuse(`--corpus-id ${JSON.stringify(corpusId)} must match ${CORPUS_ID_PATTERN.source}`);
+    }
+    if (BUILT_IN_CORPORA.includes(corpusId) || corpusId === AD_HOC_CORPUS) {
+      refuse(
+        `--corpus-id ${corpusId} is reserved: it may be neither a built-in id (${BUILT_IN_CORPORA.join(', ')}) nor ${AD_HOC_CORPUS}`,
+      );
+    }
+  }
+  const queries =
+    against(raw.queries) ??
+    (corpus !== undefined
+      ? resolve(repo, QUERIES_DIR, `${corpus}.jsonl`)
+      : corpusId !== undefined
+        ? resolve(checkout, QUERIES_DIR, `${corpusId}.jsonl`)
+        : undefined);
+  if (queries === undefined) {
+    refuse('an unnamed ad-hoc corpus has no query set of its own; name one with --queries, or name the corpus with --corpus-id');
+  }
 
   return {
     repo,
+    checkout,
     corpus,
+    corpusId,
     docsRoot: against(raw.docsRoot),
     conventions: raw.conventions.map((path) => against(path)),
     queries,
@@ -151,6 +215,6 @@ export function parseArgs(argv) {
     out: against(raw.out),
     dataDir: against(raw.dataDir),
     floor: against(raw.floor),
-    transcript: against(raw.transcript),
+    transcripts: raw.transcripts.map(({ variant, path }) => ({ variant, path: against(path) })),
   };
 }

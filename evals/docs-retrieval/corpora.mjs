@@ -34,7 +34,10 @@ import { CONFIG_FILENAME, DEFAULTS } from '../../cli/dist/config/model.js';
 /** The corpus ids this module composes without an operator naming any path. Every message lists these. */
 export const BUILT_IN_CORPORA = Object.freeze(['fixture-catalog', 'self-docs']);
 
-/** The id an operator-composed corpus reports itself under; it mirrors nothing in this repository. */
+/**
+ * The id an **unnamed** operator-composed corpus reports itself under; it mirrors nothing in this
+ * repository. A corpus named with `--corpus-id` reports that id instead.
+ */
 export const AD_HOC_CORPUS = 'ad-hoc';
 
 /**
@@ -82,14 +85,15 @@ function adoptedConfig(repoRoot) {
  *
  * `corpus` names a built-in id, or is absent when `docsRoot` composes an ad-hoc corpus from an
  * operator's own paths — which is how the eval runs against an adopter's checkout. `conventions` is
- * the conventions documents that ad-hoc corpus carries, zero or more.
+ * the conventions documents that ad-hoc corpus carries, zero or more, and `corpusId` its name, or
+ * `undefined` for an unnamed one.
  *
  * The returned `repoRoot` is what `corpusFiles` and `refreshIndex` are called with, and it is the
  * `repoRoot` argument for every corpus but `fixture-catalog`, which is read as its own repository —
  * see {@link FIXTURE_CATALOG_ROOT}. Pass it on rather than re-deriving it, or every rendered `ref`
  * carries the wrong prefix.
  */
-export function corpusConfig({ repoRoot, corpus, docsRoot, conventions = [] }) {
+export function corpusConfig({ repoRoot, corpus, docsRoot, conventions = [], corpusId }) {
   if (corpus === 'self-docs') {
     const adopted = adoptedConfig(repoRoot);
     return { id: corpus, config: gated(DOCS_ROOT, adopted.layers, adopted.stateDir), repoRoot };
@@ -115,7 +119,7 @@ export function corpusConfig({ repoRoot, corpus, docsRoot, conventions = [] }) {
     conventions: repoRelative(repoRoot, path),
   }));
   return {
-    id: AD_HOC_CORPUS,
+    id: corpusId ?? AD_HOC_CORPUS,
     config: gated(repoRelative(repoRoot, docsRoot), layers, DEFAULTS.stateDir),
     repoRoot,
   };

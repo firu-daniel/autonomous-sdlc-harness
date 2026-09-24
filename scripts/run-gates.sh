@@ -113,6 +113,10 @@ gate_silent "6b no template in the dot-namespace" \
   -not -path './node_modules/*'
 gate "6c llms.txt links resolve on main" bash scripts/check-llms-txt.sh
 gate "6d plugin command spellings carry the prefix" bash scripts/check-command-spelling.sh
+# 6a greps for the running user's `$HOME` only, so a transcript ref under /tmp, /private/var or
+# another user's home, a `..`-climbing path, or a credential passes it; and 6a is red in a
+# self-adopted checkout by design, so a new hit there is invisible to a "no new failure" reading.
+gate_silent "6e no machine-local or credential material in eval artifacts" bash scripts/check-eval-artifacts.sh
 
 echo "== gate 11 — docs-retrieval relevance floor"
 # Written by hand rather than handed to `gate`, the way gate 2e is, because this gate has THREE

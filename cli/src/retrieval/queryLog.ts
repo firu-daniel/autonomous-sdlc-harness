@@ -10,10 +10,12 @@
  *
  * **Why the record shape lives here rather than in its one caller.** {@link QueryLogRecord} and
  * {@link QueryOutcome} are the input contract the `feat_docs_retrieval_eval` branch reads: the feature
- * ships opt-in and not yet measured against the index-first navigation agents use today, and this file
- * is what distinguishes a tool no agent reaches for from one agents reach for and get nothing from. A
- * contract inlined into its first caller has no owner file a later reader can find, so `server.ts`
- * holds no field list, no outcome spelling and no `fs` call of its own.
+ * ships opt-in — measured once against agent navigation on a real 1,960-chunk catalog, verdict
+ * *withdrawn*, kept opt-in by maintainer decision (`docs/retrieval-eval-results.md` → `## The
+ * decision, applied to the real catalog`) — and this file is what distinguishes a tool no agent
+ * reaches for from one agents reach for and get nothing from. A contract inlined into its first
+ * caller has no owner file a later reader can find, so `server.ts` holds no field list, no outcome
+ * spelling and no `fs` call of its own.
  *
  * **One key set, always.** Every record carries every key, the outcome included; a field a failed exit
  * cannot fill is `null` rather than absent, so a consumer never infers the outcome from which other

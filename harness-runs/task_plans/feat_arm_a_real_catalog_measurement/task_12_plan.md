@@ -1,0 +1,26 @@
+### Task 12 — Author the `docs/expause-web/` positives of `gate10-catalog.jsonl` by reading the catalog
+
+**Goal:** Create `evals/docs-retrieval/queries/gate10-catalog.jsonl` with **at least 18 positive queries answered in `docs/expause-web/`**, each built situation-first the way the harness's own agents issue `search_docs` calls, and labelled by reading the catalog — never by searching it.
+
+**Depends on:** Task 4, whose record contract this file follows: `{ id, query, labels: [{ ref, grade }], situation, intent, origin }` on every record, `intent` one of `surroundings` / `convention` / `contract`, `origin` one of `written` / `harvested`, `ref` spelled exactly as `SearchHit.ref` renders it (`path#anchor`, the path relative to the catalog root, the anchor the chunker's GitHub-style slug — `cli/src/retrieval/chunk.ts` → `headingSlug`, which numbers a repeated heading `-1`, `-2`), `grade` 1–3 with **3 answering the query** (`docs/retrieval-eval.md` → `## The query-set format`). **Also depends on Task 7**, which makes `--corpus-id gate10-catalog` default its set to this file.
+
+### Targets
+
+- `evals/docs-retrieval/queries/gate10-catalog.jsonl` (new) — this task creates it; Tasks 13 and 14 append to it.
+
+**How the catalog is reached.** `printenv HARNESS_EVAL_CORPUS_ROOT` gives the catalog's root; read `PROVENANCE.md` there first, then `docs/expause-web/INDEX.md` and the documents under `docs/expause-web/`, with the `Read`, `Grep` and `Glob` tools. The value is never written into any file, commit message or return.
+
+**Work:**
+
+- [ ] **Harvest first, if and only if** the task prompt's `## Operator checklist` row 8 reads `Done` when this task is dispatched (it read `Open` at planning time). Then each logged `query` is a candidate, its situation the task prompt that produced it, marked `"origin": "harvested"`, labelled by reading like any other; **the log's `bestScore`, `abstained` and `hits` are never read** while choosing, keeping or classing a query. Otherwise every record here is `"origin": "written"`.
+- [ ] **Situation, then query, then labels — in that order, per record.** Write the `situation` first: one line of a plausible Expause task prompt, plan step or review finding. Then write the `query` **from the situation alone** — a short, keyword- and identifier-dense phrase of the kind the plan writer and reviewers send (*"content reactions like optimistic toggle Firestore likes"*, *"sendGift unlockContent payload"*, *"where do DTO remappers live"*), carrying terms the situation would carry (a feature, function or collection name the task names) and **no term only the target section uses**, never a copied heading. Then find the answering section by reading, and label it: at least one grade-3 label per query, plus grade-2 / grade-1 labels for sections that are more than related or related and useful. Every label of a positive sits under `docs/expause-web/` — no positive here spans the two halves.
+- [ ] **Cover the three intents** — `surroundings` (a feature's surroundings and ripples), `convention` (where something goes and how it is named), `contract` (a backend or API contract lookup) — in roughly the proportion a branch produces them, and count them. Ids are `q-g10-ew-<slug>`, unique and stable. One JSON object per line, no blank line.
+- [ ] **Pass the label pre-flight, and run nothing else.** A launcher under `harness-runs/scratch/`, run through `bash scripts/scratch-run.sh`, reads `process.env.HARNESS_EVAL_CORPUS_ROOT`, reads the conventions documents the catalog's own `harness.config.json` `layers[]` names, and calls `corpusConfig({ repoRoot, docsRoot: 'docs', conventions, corpusId: 'gate10-catalog' })` → `buildIndex({ repoRoot, config })` (in memory — no `dataDir`) → `loadQueries` → `assertLabelsResolve`, prints the `snapshot` and `labels resolve`, and closes the session. It runs **no arm and no search** — `runEval`, `docs search` and the MCP tool are never called while this set is authored (story index `## Context`, prohibition 1). Fix every label it refuses by reading the heading again. Expect the snapshot `{ files: 156, chunks: 1960 }`, gate 10's stamp; if it differs, establish which files the composition adds or leaves out against gate 10's (the conventions documents are the likely difference) and report it in the return — Task 14 records it with the set.
+
+**Verification:**
+
+- The pre-flight launcher prints `labels resolve` and a snapshot, reported against gate 10's; `loadQueries` accepts the file.
+- The file holds at least 18 positives, every one with `situation`, `intent`, `origin` and at least one grade-3 label, every label under `docs/expause-web/`, and no negative (negatives are Task 14's).
+- For a sample of five records, the query shares no word with its grade-3 label's heading that its situation does not also carry — the leak test the task prompt's `## The query set` states, applied by reading.
+- `bash scripts/check-eval-artifacts.sh` prints nothing, and `git grep -n "HARNESS_EVAL_CORPUS_ROOT=" -- evals` returns nothing.
+- Report in the return the positive count and the per-intent counts. Task 14 re-derives every count from the file's own `intent`, `origin` and label fields when it records the set, so nothing depends on this return.
