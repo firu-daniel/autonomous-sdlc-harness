@@ -13,8 +13,8 @@
 {"id":"q-sd-analyze-writes","query":"which files may the analyze command create or overwrite","labels":[{"ref":"docs/analyze.md#3-what-it-may-write","grade":3},{"ref":"docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind","grade":2}]}
 {"id":"q-sd-stack-detection","query":"how does init work out which stack a repository uses","labels":[{"ref":"docs/cli.md#4-stack-detection","grade":3},{"ref":"docs/cli.md#2-init","grade":2}]}
 {"id":"q-sd-second-init","query":"what does a second init do to files i have edited since the first one","labels":[{"ref":"docs/cli.md#3-the-re-run-contract","grade":3},{"ref":"docs/cli.md#2-init","grade":1}]}
-{"id":"q-sd-negative-ingress","query":"how do i configure the kubernetes ingress controller","labels":[]}
-{"id":"q-sd-negative-tungsten","query":"what is the melting point of tungsten carbide","labels":[]}
-{"id":"q-sd-negative-blog","query":"how do i publish a blog post to the project website","labels":[]}
-{"id":"q-sd-negative-grpc","query":"which grpc service serves the retrieval index","labels":[]}
-{"id":"q-sd-negative-migration","query":"how do i roll back a production database migration","labels":[]}
+{"id":"q-sd-negative-ingress","query":"how do i configure the kubernetes ingress controller","labels":[],"negativeKind":"far"}
+{"id":"q-sd-negative-tungsten","query":"what is the melting point of tungsten carbide","labels":[],"negativeKind":"far"}
+{"id":"q-sd-negative-blog","query":"how do i publish a blog post to the project website","labels":[],"negativeKind":"near"}
+{"id":"q-sd-negative-grpc","query":"which grpc service serves the retrieval index","labels":[],"negativeKind":"near"}
+{"id":"q-sd-negative-migration","query":"how do i roll back a production database migration","labels":[],"negativeKind":"near"}

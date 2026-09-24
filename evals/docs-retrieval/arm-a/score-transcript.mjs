@@ -58,8 +58,11 @@ function normalizeRef(raw) {
  * array**, or an object carrying that array under `records` — which is the form
  * `evals/docs-retrieval/arm-a/sample-transcript.json` takes, because JSON has no comment syntax and
  * that file has to say in itself what it is for. Each record is identical in all three.
+ *
+ * Exported for `evals/docs-retrieval/arm-a/spread.mjs`, which needs each record's `usage` and
+ * `toolCalls` beside the scored records and must not parse the three shapes a second time.
  */
-function readTranscript(path) {
+export function readTranscript(path) {
   const text = readFileSync(path, 'utf8');
   try {
     const parsed = JSON.parse(text);

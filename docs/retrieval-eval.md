@@ -80,26 +80,30 @@ Each prints the arm table and the corpus's `{ files, chunks }` snapshot stamp, a
 repository has never seen:
 
 ```
-bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo <checkout> --docs-root <dir> --conventions <file> --queries <file>
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo <checkout> --docs-root <dir> --conventions <file> --corpus-id <id> --queries <file>
 ```
 
 `--repo` is the root every other path is resolved against, and every path in the two documentation
 flags is relative to it. `--conventions` is repeatable, once per conventions document, and may be
-omitted. `--queries` is **required** for an ad-hoc corpus, which has no query set of its own; for a
-built-in id it defaults to `evals/docs-retrieval/queries/<corpus-id>.jsonl`.
+omitted. `--corpus-id` names the corpus: its results block, its query set's file name and every
+citation of it carry that id, where an unnamed one reports itself as `ad-hoc`. `--queries` is
+**required** for an unnamed ad-hoc corpus, which has no query set of its own; for a built-in id it
+defaults to `evals/docs-retrieval/queries/<corpus-id>.jsonl`, and for a named one to that same path
+in **this** checkout, never under `--repo`.
 
 The rest of the surface, which `evals/docs-retrieval/args.mjs` owns and refuses an unknown flag
 against:
 
 | Flag | What it does |
 | --- | --- |
+| `--corpus-id <id>` | Names an ad-hoc corpus, and is legal only with `--docs-root`. The id matches `^[a-z0-9]+(-[a-z0-9]+)*$` and is neither a built-in id nor `ad-hoc`. With `--out`, the query set must lie inside this checkout or `--repo`: a provenance path that would begin with `..` or be absolute is refused rather than written. |
 | `--arms <letters>` | Which arms to run, run together or separated; the default is every arm that has a search mode. The legal letters are the arm table's, in `evals/docs-retrieval/arms.mjs`. |
 | `--k <n>` | How many hits each arm returns; the default is the CLI's own `DEFAULT_RESULTS`. Every recall@k column with `k` above this is measured over a short list, so leave it at the default when comparing against a recorded figure. |
 | `--repeat <n>` | How many times each query is run. Every repetition contributes a latency sample; the **first** repetition is the one scored, and a later repetition returning different refs is recorded as a non-determinism warning rather than averaged away. |
 | `--data-dir <path>` | Where the index is persisted. Absent, the store is held in memory and nothing is written into any tree. |
 | `--floor <path>` | The recorded floor `evals/docs-retrieval/check-floor.mjs` grades against — read by that module alone and not by a launcher run; see `## The regression floor`. |
 | `--out <path>` | Where the results are written. Absent, nothing is written and the table goes to stdout. |
-| `--transcript <path>` | An arm A hand-run transcript — see below. |
+| `--transcript <path>` | An arm A hand-run transcript, given bare or as `<variant>=<path>`; repeatable, once per variant — see below. |
 
 ### Writing the results, and the corpus that grows when you do
 
@@ -126,10 +130,16 @@ function a launcher calls directly, filling one hand-written section of
 `docs/retrieval-eval-results.md` — `## Cold build and index size` and `## The query-log pass`. Both
 launchers live under `harness-runs/scratch/` and are run exactly like `eval.mjs` above.
 
-**The cold build.** `measureColdBuild` takes `{ repoRoot, corpus, dataDir }` and returns an object
-rather than printing one, so the launcher resolves the repo root through the eval's own `parseArgs`
-and names the corpus and the index directory the recorded figures were taken with. Create
-`harness-runs/scratch/cold-build.mjs`:
+**The cold build.** `measureColdBuild` takes `{ repoRoot, corpus, dataDir, docsRoot, conventions }`
+and returns an object rather than printing one, so the launcher resolves the repo root through the
+eval's own `parseArgs` and names the corpus and the index directory the recorded figures were taken
+with. The corpus is named the same two ways `corpusConfig` accepts one and the choice is forwarded
+untouched: a built-in id through `corpus`, or an ad-hoc corpus through `docsRoot` plus the repeatable
+`conventions` — the route that reads a documentation directory **in place**, with no
+`harness.config.json` in the target and no `init`, writing nothing into it but the `dataDir` this
+measurement owns and removes. Naming neither is refused by `corpusConfig`, and the returned `corpus`
+field is the id it resolved, so an ad-hoc figure is stamped `ad-hoc` and never passes for a built-in
+one. Create `harness-runs/scratch/cold-build.mjs`:
 
 ```
 import { parseArgs } from '../../evals/docs-retrieval/args.mjs';
@@ -140,6 +150,14 @@ console.log(JSON.stringify(await measureColdBuild({ repoRoot: repo, corpus: 'sel
 
 ```
 bash scripts/scratch-run.sh harness-runs/scratch/cold-build.mjs
+```
+
+The same launcher over a documentation directory outside this checkout names that directory's own
+repository as `repoRoot` and its `docs/` as `docsRoot`, and keeps `dataDir` on a scratch path of this
+checkout so nothing is written into the corpus being read:
+
+```
+await measureColdBuild({ repoRoot: '<the corpus repository>', docsRoot: 'docs', dataDir: `${repo}/harness-runs/scratch/docs_index` });
 ```
 
 **One measurement per process**, which is why the launcher calls it once and why three runs means
@@ -175,11 +193,24 @@ writer, and the next `--out` run destroys anything else put there.
 `--transcript <path>` names an arm A transcript produced by a hand run. `evals/docs-retrieval/run.mjs`
 reads it, scores it through `evals/docs-retrieval/arm-a/score-transcript.mjs` → `scoreTranscript`, and
 renders arm A's row in the same walk, through the same `scoreArm` call, as every other arm. So a hand
-run is published by **re-running the eval** with both flags:
+run is published by **re-running the eval** with both flags. One bare path renders the single `A` row:
 
 ```
 bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --out docs/retrieval-eval-results.md --transcript <transcript>
 ```
+
+The flag is repeatable in its labelled form, `<variant>=<path>`, once per variant of
+`## The decision rule` → `### Two arm A variants, and how they combine`; each renders its own row, `A-index` and `A-search`, in
+that order:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --out docs/retrieval-eval-results.md --transcript index=<index transcript> --transcript search=<search transcript>
+```
+
+The variants are `evals/docs-retrieval/arms.mjs` → `NAVIGATION_VARIANTS`. A label is read only where
+the text before the first `=` is a bare lower-case word: `/tmp/a=b.jsonl` is a bare path, while
+`other=b.jsonl` names the variant `other`. Refused by name: an unknown label, two transcripts for one variant, two bare paths, and a
+bare path together with a labelled one.
 
 Never by typing numbers between the markers: the generated region has exactly one writer, and the next
 `--out` run destroys anything hand-edited there. `## Running arm A by hand` below is the procedure that
@@ -213,7 +244,10 @@ One JSON object per line, no array wrapper and no commentary:
 
 - **`id`** — unique within the set, and stable: it is the key every per-query record, every quoted
   distribution and every refusal names, so renaming one orphans the history of that query.
-- **`query`** — the words a person would actually type. It is passed to the arms verbatim.
+- **`query`** — the words the consumer would send. It is passed to the arms verbatim. The committed
+  sets carry natural-language questions; a set written for the harness's own agents — the first is
+  `gate10-catalog` — carries short, identifier-dense agent-shaped queries, so a figure over one kind
+  of set and a figure over the other are not over like-phrased sets.
 - **`labels[]`** — the sections that answer it, each `{ ref, grade }`.
 - **`ref`** — `path#anchor`, **exactly as a search hit cites it**: the path relative to the corpus's own
   root, a GitHub-style slug for the heading, and `path` alone for a document's preamble chunk. This is
@@ -227,6 +261,18 @@ One JSON object per line, no array wrapper and no commentary:
   right answer is to find nothing. It enters neither recall nor MRR, where it would score `0` by
   construction and drag every arm down by the share of negatives in the set. It is the other half of
   the abstention calibration: what it measures is whether an arm declines to answer.
+- **`situation`** — optional; a non-empty string: one line of the task prompt, plan step or review
+  finding that would issue the query.
+- **`intent`** — optional; one of `surroundings` (feature surroundings and ripples), `convention`
+  (convention and placement rules), `contract` (backend or contract lookups).
+- **`origin`** — optional; `written` for a query written for the set, `harvested` for one taken from
+  what a consumer actually sent.
+- **`negativeKind`** — optional, and legal only on a negative — on a positive it is refused; `far` or
+  `near`. `near` is a query plausibly adjacent to material the corpus covers, `far` one that is not.
+  The class is judged from the query and the corpus's documents, never from a score.
+- **A real-catalog set carries `situation`, `intent` and `origin` on every record, and `negativeKind`
+  on every negative.** A record carrying none of the four loads exactly as one written before they
+  existed.
 
 **A stale label is a refusal, not a worse score.** Every `ref` is resolved against the chunk keys of
 the index that was just built, **before any arm runs**, so a renamed heading fails the run loudly
@@ -266,10 +312,17 @@ score `grade == 3` alone. Negative queries are excluded from all four.
   where `docs/retrieval-eval-results.md` → `## Cold build and index size` puts it.
 - **Abstention** — over negative queries, and **in the machine half rather than the table**: each
   corpus's trailing fenced `json` block carries `abstainedOnNegative` per arm, and a per-query
-  `abstained` flag with `bestScoreOnNegative` beside every positive query's `bestScoreOnPositive`.
-  Those are per-query values rather than a summary because the abstention threshold is chosen by
-  separating the two distributions. Only the reranking mode abstains at all; the arms that cannot
-  report `0`, taken off their own records rather than from a letter test.
+  `abstained` flag with `bestScoreOnNegative` beside every positive query's `bestScoreOnPositive`,
+  and `bestRerankScore` on every query, positive and negative. The pair is **censored**: the top
+  **returned** hit's score, `null` on an abstention. `bestRerankScore` is **uncensored**: the top
+  reranker score the abstention test compared against the threshold, present whether or not the
+  query abstained, and `null` for every arm that does not rerank, for arm A, and for a query that
+  found no candidate to rerank. The threshold is
+  calibrated on `bestRerankScore`, because the censored pair has already dropped every score that
+  fell below it; the pair stays because it is what a caller actually received. All three are
+  per-query values rather than a summary because the threshold is chosen by separating the positive
+  and negative distributions. Only the reranking mode abstains at all; the arms that cannot report
+  `0`, taken off their own records rather than from a letter test.
 
 **The score columns are not comparable across arms, and the tables carry no score column for that
 reason.** The non-reranking modes report rank-derived reciprocal-rank-fusion values in the
@@ -292,11 +345,13 @@ Three bars. Retrieval has to clear all three.
    a set this size; and index-first navigation is already in every agent's hands, so retrieval has to
    be *better*, not equal.
 2. **Cost.** Arm E's p95 latency is milliseconds of local compute and arm A's is agent wall time per
-   query, so the bar is that arm E's p95 stays inside the agent tool-call budget the cold-build
-   section names while remaining a fraction of arm A's; and that arm E bills **no** tokens against arm
-   A's one agent call per query. The charge against retrieval is its **one-time** cold build, plus the
-   index on disk, both recorded in `docs/retrieval-eval-results.md` → `## Cold build and index size`
-   with the decision about where that build belongs.
+   query, so the bar is the **ratio between them**: arm E's p95 must be a fraction of arm A's per-query
+   wall time, both taken from the same pass. No absolute wall-clock ceiling stands behind that bar, and
+   this bar states no constant of its own — the cold-build section records why there is no such budget
+   to measure against. And arm E bills **no** tokens against arm A's one agent call per query. The
+   charge against retrieval is its **one-time** cold build, plus the index on disk, both recorded in
+   `docs/retrieval-eval-results.md` → `## Cold build and index size` with the decision about where that
+   build belongs.
 3. **Failure.** On negative queries arm E must abstain at least as reliably as arm A answers `none`.
    An arm that answers confidently where the catalog says nothing is worse than one that sends the
    agent to the index, because a wrong pointer is read as an answer.
@@ -311,18 +366,85 @@ The outcomes, each a different change:
 - **Relevance does not clear** → retrieval is **withdrawn**: the tool and its optional dependencies
   come out, and this eval and its numbers stay as the record of why.
 
+### Two arm A variants, and how they combine
+
+**The reading chosen on 2026-09-23, before any real-catalog figure, uncensored score or arm A transcript
+existed**; the commit that adds this subsection precedes every one of them. It applies the rule above and
+amends none of it: the three bars and the three outcomes stand as written.
+
+**The two variants.** An adopter's agents navigate a catalog in two ways, so arm A runs in both:
+
+- **A-index** — told to read the catalog's `INDEX.md` first and follow its links.
+- **A-search** — told only that the catalog is rooted in its working directory, and left to find
+  sections with its tools.
+
+Both carry the same `Read` / `Grep` / `Glob` tool set, so they differ in their instruction alone.
+
+**The combination.** Retrieval has to beat **the stronger alternative an agent has**, so each bar is
+graded against whichever variant does better **on that bar**, and the verdict is the one that comparison
+produces. The verdict is **also recorded against each variant separately**, because an adopter whose
+catalog has no index faces A-search alone.
+
+**The readings the combination leaves open:**
+
+- **"Stronger" is per metric.** Where a bar carries two figures — relevance's recall@5 and MRR — each is
+  graded against whichever variant's figure is higher, even when that makes the comparison a composite no
+  single variant produced.
+- **A variant's figure is the median of its repetitions.** Every repetition is reported; the median is
+  the one a bar grades.
+- **Pooled figures decide.** Relevance is graded on the pooled query set, with the per-half figures
+  reported beside it; failure on all negatives together, with the `far` and `near` figures reported
+  beside it.
+- **The cost bar's *"a fraction"* is any ratio below 1.** The results state that both cost figures clear
+  by construction — local milliseconds and zero billed tokens against an agent session per query — so the
+  cost bar cannot discriminate here and the verdict turns on relevance and failure. The one-time cold
+  build and the index on disk are cited and graded against nothing.
+- **Relevance and cost clear, failure does not** — a combination the three outcomes do not name — reads
+  as **stays opt-in**, with arm E's abstention rate on negatives recorded as the figure a later change
+  must move.
+- **A variant stopped at the cost checkpoint** of its first repetition is graded on the repetitions it
+  has, marked *partial* wherever its figures appear, and its stop is recorded as a cost result of its
+  own. It does not make the rule inapplicable.
+
+**The statistics the rule does not name.** `positives` and `negatives` are the pooled counts of the query
+set used. Arm E's figures come from its generated block; arm A's are taken per repetition, from that
+repetition's transcript as `scoreTranscript` scores it, and a variant's figure is their median.
+
+- **Relevance margins.** One positive query's worth is `1 / positives` of recall@5 and `0.5 / positives`
+  of MRR — what MRR loses when one query moves from rank 1 to rank 2. Arm E's lead over the stronger
+  figure must **exceed** each margin; a lead equal to one does not clear.
+- **Per-query wall time.** Per repetition, the nearest-rank p50 (`## What each metric means`) of that
+  repetition's per-query `durationMs`. The cost ratio is arm E's p95 latency over the stronger variant's
+  median of those — the stronger being the lower.
+- **Token cost per query.** Per repetition, the sum over its records of `input_tokens + output_tokens +
+  cache_creation_input_tokens + cache_read_input_tokens`, divided by the record count; a field absent
+  from a record's `usage` counts as `0`. Every usage field is also reported on its own. The variant's
+  figure is the median; the stronger is the lower.
+- **Failure.** Arm E's `abstainedOnNegative / negatives` against the stronger variant's median share of
+  negatives answered `none` — per repetition, the negatives its records score as `abstained`
+  (`evals/docs-retrieval/arm-a/score-transcript.mjs`: the single answer `none`, or no ref at all) over
+  `negatives`. Arm E's share must be at least as high; an equal share clears.
+
 **The rule compares E to A; the recorded figures also bear on which mode is the default.** This rule
 is silent on arm D, and on both committed corpora arm D `fused` outscores the shipped `fused-rerank`
-default on every relevance column while abstaining on no negative query at all — recorded, with the
+default on every primary relevance column while abstaining on no negative query at all — recorded, with the
 decomposition, in `docs/retrieval-eval-results.md` → `## The shipped default against fusion alone`. It
 is a measurement rather than a second decision rule: what to do about the default mode is not settled
 there and is not settled here.
 
 **The decision is taken on a real catalog, not on either committed corpus.** Both are far below a
 mature catalog's size, and the standing rule in the lessons ledger is that a figure measured on a
-fixture-sized corpus never justifies a design decision on its own. The step that produces the
-real-shape figure is the hand run in `docs/development.md` §5 → gate 10, against a private real
-catalog; the corpora here fix the *procedure* and the regression floor, not the verdict.
+fixture-sized corpus never justifies a design decision on its own, and that rule binds whatever these
+two corpora measure. The step that produces the real-shape figure has since been taken:
+`docs/development.md` §5 → gate 10 was run by hand on **2026-09-22** against a private real
+documentation catalog held outside this checkout — commit `010c50e`, **156 files / 1,960 chunks** —
+and its figures are recorded in `docs/retrieval-eval-results.md` → `## Cold build and index size`,
+which is their one home. What that run settles is the real-catalog **cost** side — the cold build and
+the index on disk — and not this rule's verdict, which is an arm E against arm A comparison. **That
+verdict has since been taken**: the arm A hand run `## Running arm A by hand` below describes was run on
+the same catalog, this rule was applied to it bar by bar, and the outcome is **withdrawn** —
+`docs/retrieval-eval-results.md` → `## The decision, applied to the real catalog` is its record. The
+corpora here fix the *procedure* and the regression floor, not the verdict.
 
 ## The regression floor
 
@@ -380,19 +502,120 @@ this repository may start one: the unattended permission profile carries no gran
 and an unmatched tool call stalls in print mode rather than refusing, while the `scratch-run.sh` route
 to the same subprocess is declined on purpose rather than unavailable — it would put an unsupervised
 agent session with its own auth and no token cap inside an unattended run. So an operator at a terminal
-runs arm A, and nobody else. `docs/retrieval-eval-results.md` → `## Arm A — awaiting a hand run` is the
-record of that decision; the mechanism is `evals/docs-retrieval/arm-a/run-arm-a.sh` and the task text
-it sends is `evals/docs-retrieval/arm-a/agent-task.md` — that name, not `prompt.md`, for the reason the
-file's own opening comment gives.
+runs arm A, and nobody else. `docs/retrieval-eval-results.md` → `## Arm A — the real-catalog hand run` is the
+record of that decision; the mechanism is `evals/docs-retrieval/arm-a/run-arm-a.sh`, and the task
+texts it sends are `evals/docs-retrieval/arm-a/agent-task.md` for A-index and
+`evals/docs-retrieval/arm-a/agent-task-search.md` for A-search — those names, not `prompt.md`, for the
+reason `agent-task.md`'s own opening comment gives. What the two variants are, and how their figures
+are graded, is `## The decision rule` → `### Two arm A variants, and how they combine`.
 
-**Before spending tokens.** Confirm the agent CLI's print-mode flag spellings — `-p`,
-`--output-format`, `--allowed-tools`, `--disallowed-tools` — against its own `--help`. The script
-carries them as the documented surface and **has never been run**, so a renamed flag shows up as a
-failed first query rather than as a refusal. Then the three cheap checks the script's own `REPRO`
-header block lists: the task text holds exactly one `{{query}}` token, the query set's ids parse, and
-the corpus root carries `docs/INDEX.md`. One further check costs the first query alone and is worth
-it: that the transcript's first record carries bare `path#anchor` strings in its `refs` array and no
-`` ``` `` entry — a fenced answer is scored as references and silently costs every rank.
+**A third route, a dispatched subagent, is rejected as well, and nothing is built for it.** Each of
+its three differences from the script would change what is measured. It returns its answer and no
+`usage` block, so the cost column — the one column arm A has and arms B–E cannot — would be empty. It
+inherits the parent session's working directory and context instead of starting clean in the corpus
+root, so its `ref`s are not relative to the corpus and its answers carry whatever the parent had
+already read. And its tools are fenced by the static allowlist of its agent definition, not by the
+per-invocation `--allowed-tools`, `--disallowed-tools` and `--strict-mcp-config` the script passes on
+every query.
+
+**Before spending tokens.** Two things are settled first: that the route can score at all, and that
+the invocation is right.
+
+*The route is comparable — measured, not assumed.* Arms B–E reach a catalog outside this checkout
+through the ad-hoc corpus route (`--repo`, `--docs-root`, `--corpus-id`), while arm A is handed a
+corpus root on its command line. The comparison rests on a `ref` arm A writes being string-comparable
+to a label and to a B–E hit when the catalog is read that way. Measured on 2026-09-23 by reading the
+fixture catalog both ways in one process: as the built-in `--corpus fixture-catalog`, and copied to
+`harness-runs/scratch/throwaway-catalog/docs/` and read as a repository of its own through
+`--repo harness-runs/scratch/throwaway-catalog --docs-root docs --corpus-id throwaway-catalog`. Both
+passes ran over the three queries `evals/docs-retrieval/arm-a/sample-transcript.json` answers, and
+both scored that transcript as arm A. The launcher, `harness-runs/scratch/comparability.mjs`:
+
+```js
+import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { parseArgs } from '../../evals/docs-retrieval/args.mjs';
+import { runEval } from '../../evals/docs-retrieval/run.mjs';
+const { checkout } = parseArgs([]);
+const at = (path) => `${checkout}/${path}`;
+const sample = at('evals/docs-retrieval/arm-a/sample-transcript.json');
+const cut = at('harness-runs/scratch/comparability.jsonl');
+const ids = JSON.parse(readFileSync(sample, 'utf8')).records.map((record) => record.id);
+writeFileSync(cut, readFileSync(at('evals/docs-retrieval/queries/fixture-catalog.jsonl'), 'utf8').split('\n').filter((line) => line && ids.includes(JSON.parse(line).id)).join('\n'));
+cpSync(at('evals/docs-retrieval/corpora/fixture-catalog/docs'), at('harness-runs/scratch/throwaway-catalog/docs'), { recursive: true });
+const shape = (corpus) => JSON.stringify([corpus.snapshot, corpus.arms.map(({ letter, metrics }) => [letter, metrics.recall[5], metrics.mrr, metrics.perQuery.map((query) => [query.id, query.hits.map((hit) => hit.ref), query.bestRerankScore])])]);
+try {
+  const builtIn = await runEval(parseArgs(['--corpus', 'fixture-catalog', '--queries', cut, '--transcript', sample]));
+  const adHoc = await runEval(parseArgs(['--repo', 'harness-runs/scratch/throwaway-catalog', '--docs-root', 'docs', '--corpus-id', 'throwaway-catalog', '--queries', cut, '--transcript', sample]));
+  console.log(shape(builtIn) === shape(adHoc) ? `comparable: ${shape(adHoc)}` : `NOT comparable:\n${shape(builtIn)}\n${shape(adHoc)}`);
+} finally {
+  rmSync(at('harness-runs/scratch/throwaway-catalog'), { recursive: true, force: true });
+  rmSync(cut, { force: true });
+}
+```
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/comparability.mjs
+```
+
+Both passes resolved every label, and the launcher printed a line opening
+`comparable: [{"files":9,"chunks":41},[["B",1,0.41666666666666663,` — the same snapshot, and every
+arm's recall@5, MRR, per-query `hits[].ref` list and `bestRerankScore` identical across the two routes.
+Arm A's refs were `docs/rates.md#surcharges`, `docs/rates.md#fuel-surcharge` and
+`docs/rates.md#volumetric-weight` for `q-fc-billable-weight` on both, the transcript's
+`./`-prefixed third ref normalised the same way each time. Arms B–D matched on full five-hit lists.
+Arm E abstained on all three queries on both routes, so its ref lists are empty on each side and its
+agreement rests on the three uncensored `bestRerankScore` values, which matched to every digit. The
+copy and the cut query set are removed in process. The query set and the transcript are passed
+**absolute** because every path argument after `--repo` is resolved against `--repo` — which is why
+`--out` and `--transcript` are given as `"$PWD/…"` in `### What to do with the result` below.
+
+*What the comparison does not cover, settled rather than hidden.* Arms B–E index `docs.root` **plus
+every conventions document** — for a catalog read through `--docs-root`, the ones passed as
+`--conventions`, which are the ones the catalog's own `harness.config.json` → `layers[].conventions`
+names. Neither arm A variant is pointed at them, though both can read them from the corpus root. And
+A-index's index need not link every half of a mixed catalog. Both are limits of the comparison, not
+defects to correct: the results report each half, and the labels that land in a conventions document,
+apart from the pooled figure, and no root index is written to close the gap.
+
+*The invocation.* None of these spends a token. Confirm the agent CLI's print-mode flags — `-p`,
+`--output-format stream-json`, `--verbose`, `--allowed-tools`, `--disallowed-tools`,
+`--strict-mcp-config` and `--model` — against its own help, naming the binary the way
+`HARNESS_AGENT_CLI` below does if it is not `claude`:
+
+```
+claude --help
+```
+
+The script carries them as the documented surface. They were confirmed against Claude Code `2.1.280`'s
+own `--help` before the real-catalog run (`docs/retrieval-eval-results.md` → `## Arm A — the
+real-catalog hand run`), and a flag renamed in a later version still shows up as a failed first query
+rather than as a refusal. Then the checks the script's own `REPRO` header
+block lists — each task file's token counts, which must print `1`, `1`, `1` and `0` in this order:
+
+```
+grep -c '{{query}}' evals/docs-retrieval/arm-a/agent-task.md
+grep -c '{{index}}' evals/docs-retrieval/arm-a/agent-task.md
+grep -c '{{query}}' evals/docs-retrieval/arm-a/agent-task-search.md
+grep -c '{{index}}' evals/docs-retrieval/arm-a/agent-task-search.md
+```
+
+the query set's ids parse:
+
+```
+jq -r .id evals/docs-retrieval/queries/<corpus-id>.jsonl
+```
+
+and, for A-index, the index exists under the corpus root:
+
+```
+ls "$HARNESS_EVAL_CORPUS_ROOT/<index>"
+```
+
+The script refuses the first and the last on its own before any agent call — exit 65 for a wrong token
+count, 66 for a missing index — so these checks find the fault before a pass is launched rather than
+after. One further check costs the first query alone and is worth it: that the transcript's first
+record carries bare `path#anchor` strings in its `refs` array and no `` ``` `` entry — a fenced answer
+is scored as references and silently costs every rank.
 
 ### The command
 
@@ -411,7 +634,38 @@ script resolves before it changes directory — and are never prefixed with a de
 They are, in order: the **corpus root**, the directory holding the catalog's `docs/`, which becomes the
 agent's own working directory so it cannot read past the corpus and every `ref` it writes is relative
 to it; the **query set**, a labelled set from `evals/docs-retrieval/queries/`; and the **output path**,
-appended to one JSON record per query as each finishes, created if absent.
+appended to one JSON record per query as each finishes, created if absent — its directory is not.
+With no option the variant is A-index and the index is `docs/INDEX.md`, which is what the fixture
+carries.
+
+**The real catalog**, one command per variant and repetition, with `<N>` running `1` to `5`. The
+catalog is named by `HARNESS_EVAL_CORPUS_ROOT` alone — its repository root, exported machine-locally,
+the same value the eval's `--repo` takes — so no command and no committed file carries its location.
+The query set is the one committed for the corpus under its id, and the outputs go to a gitignored
+scratch directory, which exists first:
+
+```
+mkdir -p harness-runs/scratch/arm-a/<corpus-id>
+```
+
+A-index, with `--index` naming the index relative to the corpus root:
+
+```
+bash evals/docs-retrieval/arm-a/run-arm-a.sh --variant index --index <index> --model <name> "$HARNESS_EVAL_CORPUS_ROOT" evals/docs-retrieval/queries/<corpus-id>.jsonl harness-runs/scratch/arm-a/<corpus-id>/index-rep<N>.jsonl
+```
+
+A-search, which takes no `--index`:
+
+```
+bash evals/docs-retrieval/arm-a/run-arm-a.sh --variant search --model <name> "$HARNESS_EVAL_CORPUS_ROOT" evals/docs-retrieval/queries/<corpus-id>.jsonl harness-runs/scratch/arm-a/<corpus-id>/search-rep<N>.jsonl
+```
+
+**What each session starts with.** No MCP server: `--strict-mcp-config` keeps a catalog's own
+docs-search server from handing the agent a retrieval tool outside the fence. A harness-initialised
+catalog's own `CLAUDE.md` **is** still loaded, because the corpus root is the working directory — the
+realistic adopter case, since an adopter's agents navigate with it loaded too. And every record carries
+`toolCalls`, the session's tool calls counted by name: it is how a reader later tells whether A-index
+grepped instead of following its index, and whether any session used a tool outside the fence.
 
 The agent binary is reached through `${HARNESS_AGENT_CLI:-claude}` — set `HARNESS_AGENT_CLI` to name it
 if `claude` is not what is on your PATH. That single indirection is the place the engine binary is
@@ -442,14 +696,16 @@ material outside the corpus.
 
 ### Reading the token cost out of the run
 
-The script requests `--output-format json` and keeps two fields of the result object: `.result`, the
-answer, split into the record's `refs` in the order the agent gave them with nothing repaired; and
-`.usage`, **verbatim**, as the record's `usage`. Token counts live in that block's own fields. One
-record, with invented numbers, in the shape
-`evals/docs-retrieval/arm-a/sample-transcript.json` commits:
+The script requests `--output-format stream-json --verbose` and keeps two fields of the stream's final
+`result` event: `.result`, the answer, split into the record's `refs` in the order the agent gave them
+with nothing repaired; and `.usage`, **verbatim**, as the record's `usage`. Token counts live in that
+block's own fields. From the rest of the stream it keeps only the `tool_use` names, counted into
+`toolCalls` — no tool input, which carries absolute paths. One record, with invented numbers, in the
+shape the script writes (`evals/docs-retrieval/arm-a/sample-transcript.json` commits the same shape
+without `variant` and `toolCalls`):
 
 ```json
-{"id":"q-fc-verify-callback","query":"how do i prove a callback really came from you and not from someone replaying one","refs":["docs/webhooks.md#signature-verification","docs/webhooks.md#delivery-and-retries"],"durationMs":14000,"usage":{"input_tokens":9120,"output_tokens":48,"cache_read_input_tokens":0}}
+{"id":"q-fc-verify-callback","query":"how do i prove a callback really came from you and not from someone replaying one","refs":["docs/webhooks.md#signature-verification","docs/webhooks.md#delivery-and-retries"],"durationMs":14000,"usage":{"input_tokens":9120,"output_tokens":48,"cache_read_input_tokens":0},"variant":"index","toolCalls":{"Read":3}}
 ```
 
 `durationMs` has **whole-second resolution**: the `bash` floor in this tree is 3.2 and BSD `date` has
@@ -467,12 +723,24 @@ charge is done outside it, at your own rates, and is not part of the recorded ro
 
 ### Five repetitions, and what is recorded
 
-Take **five** repetitions of the whole query set, each to its own output path, and **record every
-one**. An agent arm is not deterministic, so a single run has no spread to report, and a spread is the
-difference between a result and an anecdote. What goes in the record:
+Take **five** repetitions of the whole query set **per variant**, each to its own output path, and
+**record every one**. An agent arm is not deterministic, so a single run has no spread to report, and
+a spread is the difference between a result and an anecdote. What goes in the record, for each of
+A-index and A-search:
 
 - The **median** and the **p95** across the five repetitions, for latency and for token cost.
-- The **per-repetition** recall@5 and MRR — five values each, not their mean alone.
+- The **per-repetition** recall@5 and MRR — five values each, not their mean alone — pooled and per
+  half of a mixed catalog.
+- The **per-query `usage` blocks**, which are the committed transcripts themselves.
+- The **host stamp**, in the shape every other figure in `docs/retrieval-eval-results.md` carries
+  (host, Node version, timestamp), plus the agent CLI's version and the model the sessions ran
+  against — latency and token cost both move with the model, so a figure that does not name it is
+  unreadable.
+- The account's **5-hour and 7-day usage-window utilisation**, read before and after each pass.
+
+How these figures are graded — which repetition statistic a bar reads, and how the two variants
+combine — is `## The decision rule` → `### Two arm A variants, and how they combine`, and is not
+restated here.
 
 **A repetition whose returned refs differ from the others is kept and reported, never discarded.** The
 spread is itself a result: an arm whose answers move between runs is a different proposition from one
@@ -481,30 +749,56 @@ figures for the first arm's behaviour.
 
 ### What to do with the result
 
-Score each repetition on its own, which prints the table and writes nothing:
+Score each repetition on its own, which prints the table and writes nothing. On the fixture:
 
 ```
 bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --transcript /tmp/arm-a-fixture-catalog-rep1.jsonl
 ```
 
-That hands the transcript to `scoreTranscript({ transcript, queries })`, whose records go into the same
+On the real catalog, one repetition of both variants per run, with one `--conventions` per document
+the catalog's own `harness.config.json` names — the checkout-side paths given as `"$PWD/…"` from this
+repository's root, because every relative path after `--repo` resolves inside the catalog:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo "$HARNESS_EVAL_CORPUS_ROOT" --docs-root <docs-root> --conventions <file> --corpus-id <corpus-id> --transcript index="$PWD/harness-runs/scratch/arm-a/<corpus-id>/index-rep<N>.jsonl" --transcript search="$PWD/harness-runs/scratch/arm-a/<corpus-id>/search-rep<N>.jsonl"
+```
+
+The query set is not named: for a corpus named by `--corpus-id` it defaults to
+`evals/docs-retrieval/queries/<corpus-id>.jsonl` in this checkout. Inside a harness run the variable is
+not expanded on a command line, which is not reliably auto-allowed there; the same arguments go into a
+launcher under `harness-runs/scratch/` that reads `process.env.HARNESS_EVAL_CORPUS_ROOT` itself.
+
+Each transcript goes to `scoreTranscript({ transcript, queries })`, whose records go into the same
 `scoreArm` call as arms B–E, so arm A's metrics come from the same metric code and are comparable to
-theirs by construction. Then **publish by re-running the eval** — `--out
-docs/retrieval-eval-results.md --transcript <path>`, through the launcher route `## How to run it`
-above names — and let the results renderer regenerate arm A's row in the same walk that renders every
-other row. `--transcript` takes one path, so the run that publishes carries the **first**
-repetition's transcript, matching `--repeat`'s own rule that the first repetition is the scored one.
+theirs by construction. Then **publish by re-running the eval** with `--out` and **repetition 1** of
+each variant, matching `--repeat`'s own rule that the first repetition is the scored one, and let the
+results renderer regenerate the `A-index` and `A-search` rows in the same walk that renders every
+other row:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --repo "$HARNESS_EVAL_CORPUS_ROOT" --docs-root <docs-root> --conventions <file> --corpus-id <corpus-id> --out "$PWD/docs/retrieval-eval-results.md" --transcript index="$PWD/<index rep 1>" --transcript search="$PWD/<search rep 1>"
+```
 
 **The row is never hand-edited.** It sits inside the `<!-- eval:generated:start -->` /
 `<!-- eval:generated:end -->` region, which has exactly one writer, so numbers typed there are
 destroyed by the next `--out` run without a word.
 
-**The spread is hand-written**, and goes under `docs/retrieval-eval-results.md` → `## Arm A — awaiting
-a hand run` — **below the end marker**, which is hand-written territory the runner never rewrites.
+**The spread is hand-written**, and goes under `docs/retrieval-eval-results.md` → `## Arm A — the
+real-catalog hand run` — **below the end marker**, which is hand-written territory the runner never rewrites.
 Rename that heading once a number exists; a section still announcing an awaited run above a recorded
 one is a false record. Read the filled row against `## The decision rule` above, which was written
 before any arm A number existed precisely so this comparison cannot be chosen to fit it.
 
-**This step does not close the roadmap row, and neither did this branch.** Arm A on `fixture-catalog`
-fixes the procedure; the verdict is taken on a real catalog. This hand run plus the private-catalog
-numbers from `docs/development.md` §5 → gate 10 are together what closes it.
+**What gate 10 settled, and the hand run that followed it.** Arm A on `fixture-catalog` fixes the
+procedure; the verdict is taken on a real catalog. `docs/development.md` §5 → gate 10 has been run — by
+hand, in full, on 2026-09-22 against a private real documentation catalog held outside this checkout,
+commit `010c50e`, 156 files / 1,960 chunks — and what it produced is the real-catalog **cold-build and
+index-size** evidence (`docs/retrieval-eval-results.md` → `## Cold build and index size`) together
+with leg (iv)'s confirmation of the abstention threshold at both ends (that file's `### The limit on
+this calibration`, a confirmation and not a re-calibration). Gate 10 is **not** the arm A hand run.
+That run was taken on **2026-09-23**, on the same catalog at commit `57a6c25` — a later commit whose
+`docs/` is unchanged from `010c50e`'s — against the labelled set `evals/docs-retrieval/queries/gate10-catalog.jsonl`, both variants,
+five repetitions each, by the procedure this section gives. Its record — how it was taken, its
+transcripts and its figures — is `docs/retrieval-eval-results.md` → `## Arm A — the real-catalog hand
+run`, and the verdict `## The decision rule` above takes on it is that file's `## The decision, applied
+to the real catalog`.

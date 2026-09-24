@@ -6,10 +6,13 @@
 what a session produced against a written rubric in `plan-shape/graders/`, and it waits: the runner is
 gated behind early access, so the case is committed and unrun.
 - `docs-retrieval/` — the relevance **eval** for the shipped docs-retrieval tool, under the roadmap row
-*Docs-catalog retrieval*. It scores what the code returned against labelled queries a human wrote,
+*Docs-catalog retrieval*. It scores what the code returned against labelled queries — written by a
+human for the two committed corpora, and model-authored and operator-approved for the real catalog —
 answers to no runner, and runs today as gate 11 of `docs/development.md` → `## 5. Verifying a change`.
 Its own contract is `evals/docs-retrieval/README.md` and its figures are
-`docs/retrieval-eval-results.md`.
+`docs/retrieval-eval-results.md`, where `## The decision, applied to the real catalog` records its
+verdict against agent navigation, **withdrawn**, and the maintainer's decision to keep the tool
+opt-in rather than withdrawing it.
 
 So what separates them is both what is measured and what it waits on: one grades an agent's output
 against a rubric and is gated until the runner ships; the other measures shipped code against labels
