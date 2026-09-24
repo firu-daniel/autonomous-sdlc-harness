@@ -38,7 +38,7 @@ This branch closes a resume hole in autonomous planning. A planning run that pau
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_plan_loop_resume_from_walker_state/task_<K>_plan.md`. Ordered bottom-up in the configured layer order — `cli`, `plugin`, then the catch-all `general` last.
 
-1. [ ] **Task 1** — Graph entries for the review re-entry, and the walker header's re-entry contract _(layer: cli)_ _(points: 8)_
+1. [x] **Task 1** — Graph entries for the review re-entry, and the walker header's re-entry contract _(layer: cli)_ _(points: 8)_
 2. [ ] **Task 2** — Tests: a resumed planning walk continues where it stopped, and falls back only when nothing is pending _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Re-label the existing re-entry suite: `start` resets the counter, a continued walk does not _(layer: cli)_ _(points: 5)_
 4. [ ] **Task 4** — Planning core: continue a saved walk, and the **review** and **continue** outcomes _(layer: plugin)_ _(points: 20)_

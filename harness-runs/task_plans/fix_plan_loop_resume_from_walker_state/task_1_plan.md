@@ -30,3 +30,8 @@
 - `git diff -U0 cli/templates/scripts/flow-walker.sh` shows changed lines only above `set -uo pipefail`, which is the header. `git diff -U0 cli/templates/scripts/flows/task_plan_writing.graph.json` shows exactly one changed line, the `entries` line.
 - `bash scripts/test.sh` exits 0. `cli/test/outer-loop-scripts.test.mjs` still finds the fixture's walker and graph byte-identical to these templates. `cli/test/flow-walker-ui-and-reentry.test.mjs` → case `(9)` still refuses `--entry plan_review`.
 - The header's `REPRO` walk, run by hand in a throwaway fixture as its own lines state, still prints the actions it lists. Then `bash s/flow-walker.sh start --flow task_plan_writing --branch feat_x --entry ui_review --skipped none` prints `action: dispatch` / `node: ui_review`.
+
+**Deviations from plan:**
+
+- `bash scripts/test.sh` exited 1, not 0: gates `1a plugin manifest` (validator warnings on `plugin/hooks/hooks.json`) and `6a no machine paths` (pre-existing hits in `harness-runs/` and the worktree's `.git` pointer) failed; neither reads a file this task changed. Gate `4 npm test`, which runs `cli/test/outer-loop-scripts.test.mjs` and `cli/test/flow-walker-ui-and-reentry.test.mjs`, passed.
+- The `REPRO` walk ran from a Python probe via `scripts/scratch-run.sh` in a `mktemp` fixture, not as hand-typed shell lines (the compound shell command was refused). It printed every action the header lists, plus: `current` before `start` exit 1 with the `no walk in progress` refusal; `current` after the finish re-printed `<terminal_handoff>`; `next` after the finish exit 1; `--entry ui_review` and `--entry business_parity_review` dispatched their node at `arg.iteration: 0`; `--entry plan_review` exit 1.
