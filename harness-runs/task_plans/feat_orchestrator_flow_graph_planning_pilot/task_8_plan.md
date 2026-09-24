@@ -21,3 +21,7 @@
 - `node -e "JSON.parse(require('fs').readFileSync('cli/templates/claude/settings.autonomous.json','utf8'))"` exits 0: the template still parses.
 - `bash scripts/test.sh` exits 0. `cli/test/profile.test.mjs` renders this template, and a stray `{{` in the new text would fail its every-token-has-a-value check (`cli/src/core/templating.ts`).
 - `git grep -n "flow-walker" cli/README.md cli/templates/scripts/README.md cli/templates/claude/settings.autonomous.json` reaches all three files. Each command an adopter is meant to run in the new text sits in a fenced block, one command per line, per the lessons ledger's *Adopter-facing documentation* rule.
+
+**Deviations from plan:**
+- `bash scripts/test.sh` exited 1, not 0: gate 4 (`npm test`, which includes `cli/test/profile.test.mjs`) passed, and the only failing gates were `1a plugin manifest` (unquoted `${CLAUDE_PLUGIN_ROOT}` in `plugin/hooks/hooks.json` commands, under `--strict`) and `6a no machine paths` (hits only in `harness-runs/` artifacts and the worktree's `.git` pointer file). No file this task touches shows up in either gate's output. So the "exits 0" claim rests on gate 4 passing, not on the whole script exiting 0.
+- The new text names files and does not give an adopter any command to run, so it needs no fenced block.
