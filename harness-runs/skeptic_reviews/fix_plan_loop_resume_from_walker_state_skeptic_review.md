@@ -21,7 +21,7 @@
 Each entry resolves to `harness-runs/skeptic_reviews/fix_plan_loop_resume_from_walker_state_skeptic_review/finding_<K>.md`. Both are single-sentence prose edits in one layer. They are ordered smallest blast radius first.
 
 1. [x] **Finding 2** — Correct `mode_contract.md` class (i) *Reason:* now that §1.7 step 4 cites the planner's Override 2 by file and heading _(layer: plugin)_
-2. [ ] **Finding 1** — Treat a saved walk pending at a `ui_writer` `initial` dispatch as unusable when the story index is absent _(layer: plugin)_
+2. [x] **Finding 1** — Treat a saved walk pending at a `ui_writer` `initial` dispatch as unusable when the story index is absent _(layer: plugin)_
 
 ---
 
