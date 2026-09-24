@@ -39,3 +39,8 @@ Each answer then has one definition, which the walker (**Task 4**) calls and the
 
 - Run each `REPRO` line in a throwaway `git init` fixture with a `harness.config.json`. The gapped-folder line prints `4` and `2`. A ledger whose block reads `- skipped: parity, qa` beats a `--skipped none` flag value. An index with one rebutted `… call stands) — …` entry and one open entry prints exactly one `evidence.open:` line.
 - `bash -n cli/templates/scripts/lib/flow-walker-gates.sh` exits 0. Grep the file for `declare -A`, `mapfile` and `set -` and find none.
+
+**Deviations from plan:**
+- The header's bash-3.2 line says "no associative array, no array-reading builtin" rather than spelling `declare -A` / `mapfile`, and the `set -f` note reads "pathname expansion off": the Work bullet asked for the literals, the Verification grep requires none in the file; the grep wins.
+- `fw_run_mode_skipped` returns 2 (prints nothing) when the ledger exists but its `## Run mode` block carries no `- skipped: ` line — the plan named no outcome for a ledger that is the record yet unreadable, and falling back to `<flag_value>` would contradict the Tie-break.
+- The findings-folder functions read `ls -1` through a pipeline rather than a glob, so a caller with pathname expansion off gets the same answer.
