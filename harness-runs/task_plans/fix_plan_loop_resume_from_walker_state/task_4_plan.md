@@ -79,3 +79,5 @@
 - `bash scripts/check-flow-graph.sh` exits 0. `findings-folder-in-core` still finds every findings folder in `## Setup` step 2's table, and `cap-matches-core` still reads `5` from step 4 and `## Safety contract` step 2, both of which this task leaves byte-identical.
 - Walk the chain by hand. A draft on disk with no saved walk, for which the fork selects **review**, reaches `start --entry business_parity_review` through step 7. A saved `plan_review` dispatch reaches a re-dispatch of `task-plan-reviewer` with no `start`. A saved `<escalate>` is not acted on. Each path is read off this file's text alone, with the fork's choice taken as given.
 - `claude plugin validate --strict plugin` behaves as it did before this branch. It is gate `1a`, which already fails on this branch for a reason outside it; name it if it still does, and confirm no new message is added.
+
+**Deviations from plan:** The `<existing_artifact_decision>` row's `Used at` cell also names `## The walker` → **Continuing a saved walk.**, because the new paragraph consumes that binding and the core states that column is load-bearing; the plan changed only the meaning cell.
