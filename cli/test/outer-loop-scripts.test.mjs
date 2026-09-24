@@ -346,6 +346,53 @@ test('the scratch runner is written directly in scriptsDir, executable, and a re
 });
 
 /**
+ * The flow walker and the two files it reads from its own directory, as paths under `scriptsDir`
+ * with the mode each must land with: the walker is run, the gate library is sourced and the graph
+ * is data.
+ */
+const WALKER_FILES = [
+  ['flow-walker.sh', 0o755],
+  ['lib/flow-walker-gates.sh', 0o644],
+  ['flows/task_plan_writing.graph.json', 0o644],
+];
+
+test('the flow walker, its gate library and its graph land verbatim under scriptsDir, and a re-run keeps them', async (t) => {
+  for (const [name, scriptsDir, config] of [
+    ['the default scriptsDir', SCRIPTS_DIR, undefined],
+    ['a relocated scriptsDir', RELOCATED_SCRIPTS_DIR, seededConfig({ scriptsDir: RELOCATED_SCRIPTS_DIR })],
+  ]) {
+    await t.test(name, async (subtest) => {
+      const files = config === undefined ? nodeProjectFiles() : { ...nodeProjectFiles(), 'harness.config.json': config };
+      const dir = await fixtureFor(subtest, { files });
+
+      await initOk(dir);
+      const first = await snapshotTree(dir);
+
+      for (const [relative, expectedMode] of WALKER_FILES) {
+        const path = `${scriptsDir}/${relative}`;
+        const template = readFileSync(join(PACKAGE_ROOT, 'templates', SCRIPTS_DIR, ...relative.split('/')), 'utf8');
+        assert.equal(text(dir, path), template, `${path} is not the template's bytes`);
+        assert.deepEqual(
+          copiesOf(first, relative.split('/').pop()),
+          [path],
+          `${relative} was written somewhere other than ${scriptsDir}/`,
+        );
+        const mode = (await lstat(join(dir, path))).mode & 0o777;
+        assert.equal(mode, expectedMode, `${path} is mode ${mode.toString(8)}, not ${expectedMode.toString(8)}`);
+      }
+
+      await initOk(dir);
+
+      const second = await snapshotTree(dir);
+      for (const [relative] of WALKER_FILES) {
+        const path = `${scriptsDir}/${relative}`;
+        assert.equal(second[path], first[path], `a second init rewrote ${path}`);
+      }
+    });
+  }
+});
+
+/**
  * A wired repository holding the paths the refusal cases below need to **exist**: a file in another
  * state directory, a sibling directory whose name is a prefix of `scratch`, a file inside the
  * scratch directory whose extension the interpreter table does not carry, and the two symlinks the

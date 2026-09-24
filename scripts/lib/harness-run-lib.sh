@@ -52,8 +52,8 @@
 # an `hr_lane_*` function still gets a library that only reads. The lane's
 # ceilings are the only environment values here that carry policy, because the
 # lane is machine-scoped and has no configuration key to carry them; each is
-# named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `HOME` and `PWD`
-# are also read, as location anchors only, and `PATH` is read by
+# named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
+# `HOME` and `PWD` are also read, as location anchors only, and `PATH` is read by
 # `hr_path_with_fallbacks` alone — as that function's input, which it prints back
 # transformed and never assigns.
 #
@@ -84,8 +84,10 @@
 # and return 2 when the configuration could not be read. A caller must be able
 # to tell "the key is empty" from "the file could not be read", because the
 # first is an ordinary project and the second is a repository this script has no
-# business acting in. A reader that wants the finer distinction between "no
-# `harness.config.json` at all" and "one that would not parse" calls
+# business acting in. `hr_phase_enabled` answers through the same three
+# statuses and prints nothing: 0 is `true`, 1 is `false` or unset, and 2 also
+# covers an unknown phase name or a non-boolean value. A reader that wants the
+# finer distinction between "no `harness.config.json` at all" and "one that would not parse" calls
 # `hr_config_load` directly, which returns 1 for the first and 2 for the second.
 #
 # THE PROTECTED SET. It is *(`protectedBranches` if present, else that key's
@@ -186,6 +188,13 @@
 #                     hr_branch_is_protected "$root" "$(hr_current_branch "$root")"; echo $?
 #                     -> the resolved set, then 0 or 1
 #                     hr_state_dir "$root"; hr_command "$root" test
+#   phase toggles     each against its own fresh fixture, so the cache is cold:
+#                     {"defaultBranch":"main","phases":{"qa":true}}
+#                     hr_phase_enabled "$root" qa; echo $?  -> 0, prints nothing
+#                     {"defaultBranch":"main"}
+#                     hr_phase_enabled "$root" qa; echo $?  -> 1
+#                     {"defaultBranch":"main","phases":{"qa":"yes"}}
+#                     hr_phase_enabled "$root" qa; echo $?  -> 2
 #   adopted + broken  printf 'x' > "$root/harness.config.json"
 #                     hr_branch_is_protected "$root" <branch>; echo $?  -> 2
 #                     hr_state_dir "$root"; echo $?                     -> 2, prints nothing
@@ -196,6 +205,8 @@
 #   anchors           hr_main_repo "$root"; hr_work_root "$root"
 #                     hr_worktree_dir "$root" feat/x; hr_repo_slug "$root"
 #                     hr_state_path "$root" autonomous_logs/registry.json
+#   machine dirs      ( XDG_CACHE_HOME= hr_cache_dir )     -> $HOME/.cache/autonomous-sdlc-harness
+#                     ( XDG_CACHE_HOME=/x/ hr_cache_dir )  -> /x/autonomous-sdlc-harness
 #   the PATH policy   run each in a SUBSHELL, so your own PATH is untouched:
 #                     ( PATH="$HOME/.rbenv/shims:/usr/bin:/bin"
 #                       hr_path_with_fallbacks )
@@ -520,6 +531,10 @@ hr_config_load() {
   # `protectedBranches.present` records that the key was there AS AN ARRAY,
   # which is what lets an explicitly EMPTY list read as a configured set rather
   # than as an absent one.
+  #
+  # A `phases.*` value that is not a boolean is emitted as `invalid`, so the
+  # string `"true"` — which `tostring` would otherwise make indistinguishable
+  # from `true` — reaches `hr_phase_enabled` as a value it refuses (2).
   out=$(jq -n -r '
     def s($k; $v):
       if $v == null then empty
@@ -550,6 +565,9 @@ hr_config_load() {
       s("commands.build";        try .commands.build       catch null),
       s("commands.devServer";    try .commands.devServer   catch null),
       s("commands.depInstall";   try .commands.depInstall  catch null),
+      s("phases.parity";         try (.phases.parity | if type == "boolean" or . == null then . else "invalid" end) catch null),
+      s("phases.qa";             try (.phases.qa     | if type == "boolean" or . == null then . else "invalid" end) catch null),
+      s("phases.docs";           try (.phases.docs   | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("protectedBranches.present";
         try (if (.protectedBranches | type) == "array" then "1" else null end) catch null),
       l("protectedBranches";     try .protectedBranches    catch null)
@@ -773,6 +791,27 @@ hr_command() {
   hr_config_scalar "$root" "commands.$key" ""
 }
 
+# `phases.<phase>` — whether one optional phase runs. THE ONE TYPED READER THAT
+# PRINTS NOTHING: the answer is the status. 0 = `true`; 1 = `false` or unset (an
+# unset flag is false, as the flow-progress ledger's `phases:` line records it);
+# 2 = the configuration is unresolvable, <phase> is not `parity` / `qa` /
+# `docs`, or the stored value is not a boolean — a value the schema forbids,
+# which this refuses rather than guesses about.
+hr_phase_enabled() {
+  local root="${1-}" phase="${2-}"
+  case "$phase" in
+    parity|qa|docs) ;;
+    *) return 2 ;;
+  esac
+  hr_config_load "$root" || return 2
+  hr_cfg_scalar_var "phases.$phase" || return 1
+  case "$HR_CFG_VALUE" in
+    true) return 0 ;;
+    false) return 1 ;;
+  esac
+  return 2
+}
+
 # ---------------------------------------------------------------------------
 # The protected-branch trichotomy.
 # ---------------------------------------------------------------------------
@@ -966,6 +1005,20 @@ hr_machine_config_dir() {
   printf '%s/autonomous-sdlc-harness\n' "${base%/}"
 }
 
+# The machine-local cache directory, holding the shared docs-retrieval runtime.
+# Mirrors `machineCacheDir()` in `cli/src/machine/paths.ts`: the variable when
+# set and non-empty, else `$HOME/.cache`, one trailing slash stripped. Return 1
+# when there is no home to anchor it to.
+hr_cache_dir() {
+  local base="${XDG_CACHE_HOME-}"
+  [ -n "$base" ] || base="${HOME-}/.cache"
+  case "$base" in
+    /.cache) return 1 ;;
+  esac
+  [ -n "$base" ] || return 1
+  printf '%s/autonomous-sdlc-harness\n' "${base%/}"
+}
+
 # The push-notification credential files, in RESOLUTION ORDER, one per line and
 # whether or not each exists — the caller sources the first that does:
 #
@@ -1068,7 +1121,7 @@ hr_push_env_files() {
 # THE THREE CEILINGS ARE THE ONLY ENVIRONMENT VALUES THAT CARRY POLICY HERE. The
 # file's other environment reads are location anchors, not policy:
 # `XDG_STATE_HOME` and `HOME` in `hr_lane_dir`, `XDG_CONFIG_HOME` and `HOME` in
-# `hr_machine_config_dir`, `PWD` in `hr_repo_root` and `hr_main_repo`. The
+# `hr_machine_config_dir`, `XDG_CACHE_HOME` and `HOME` in `hr_cache_dir`, `PWD` in `hr_repo_root` and `hr_main_repo`. The
 # ceilings are machine-scoped policy with no configuration key:
 #
 #   HR_LANE_STATE_MAX_AGE_SECS   21600  when a PUBLISHED RECORD THAT NAMED NO

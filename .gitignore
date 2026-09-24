@@ -33,6 +33,7 @@ harness-runs/autonomous_logs/*
 # `git add` of it would take whichever exist at that moment - and a committed STOP halts every run
 # for everyone who clones, at a step whose own instruction forbids deleting the file.
 harness-runs/.dispatch_counter
+harness-runs/.flow_walker_state
 harness-runs/STOP
 harness-runs/AUTONOMOUS_STOP
 harness-runs/PAUSE

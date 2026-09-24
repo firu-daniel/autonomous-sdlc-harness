@@ -25,7 +25,7 @@ One row per binding declared in `task_plan_writing_instructions_core.md` → `##
 
 | Binding | Value for this flow |
 |---|---|
-| `<escalate>` | Stop and surface the blocker, plus whatever path(s) the core's site names, to the user in your text output, then wait for direction. Do not continue. (For an `iteration >= 5` stop — the common case — that is the latest findings path plus the one-paragraph non-convergence summary the core's site words. Sites that name neither, such as the missing task prompt at `## Setup` step 2 or an agent returning `error:` / `blocker:`, report the blocker alone.) |
+| `<escalate>` | Stop and surface the blocker, plus whatever path(s) the core's site names, to the user in your text output, then wait for direction. Do not continue. (For an `iteration >= 5` stop — the common case — that is the latest findings path plus the one-paragraph non-convergence summary the walker prints on the `summary:` line of its `binding: <escalate>` action. Sites that name neither, such as the missing task prompt at `## Setup` step 2 or an agent returning `error:` / `blocker:`, report the blocker alone.) |
 | `<ask>` | Surface the writer's `## Questions` section to the user in your text output and wait for their answer — the flow resumes in this same session, which is what distinguishes `<ask>` from `<escalate>`. (The verbatim-relay requirement, the re-dispatch-with-the-answers-appended rule and the do-not-invent prohibition are the core's, on its `## Loop` step 1 / `## UI-test-plan write loop` step 1 sites — not restated here.) |
 | `<existing_artifact_decision>` | Ask the user which of **extend it / rewrite from scratch / stop (the existing plan is good)**. Their answer selects one of the three outcomes the core's Setup step 5 names: "extend" → **extend**, "rewrite from scratch" → **proceed fresh**, "stop" → **skip**, which here ends the session. (What each outcome does, and the do-not-silently-overwrite / do-not-pick-one-yourself prohibitions, are the core's on that same step — not restated here.) |
 | `<reentry_command>` | `/autonomous-sdlc-harness:branch-start-plan-semi-autonomous` |
@@ -47,10 +47,11 @@ Then stop. Do not auto-proceed to implementation — the user must approve the p
 
 ## What this fork does NOT redefine
 
-- `## Setup (once per session)` — its six steps and the `Artifact | Path` table that resolves every path this flow reads or writes. Canonical in the core.
-- `## Safety contract — applies before EVERY Agent dispatch` — the `<state_dir>/STOP` check, the `.dispatch_counter` increment, `MAX_TOTAL_DISPATCHES`, the heartbeat format, and the compose-the-prompt step. Canonical in the core.
-- `## Loop` — the task-plan writer/reviewer loop, steps 1–5 (`task-plan-writer`, the business-parity gate, the architecture gate, `task-plan-reviewer`, the verdict parse), including every prompt and dispatch block. Canonical in the core.
-- `## UI-test-plan write loop` — steps 1–3, including the `no_ui: true` short-circuit and the `phases.qa` gate. Canonical in the core.
+- `## Setup (once per session)` — its steps and the `Artifact | Path` table that resolves every path this flow reads or writes. Canonical in the core.
+- `## The walker — routing is its, judgement is yours` — the walker's forms, the outcome table and how its output is acted on. Canonical in the core.
+- `## Safety contract — applies before EVERY Agent dispatch` — the `<state_dir>/STOP` check, the `.dispatch_counter` increment, `MAX_TOTAL_DISPATCHES` and the compose-the-prompt step, canonical in the core; the heartbeat format, canonical in the planning graph.
+- `## Loop` — the task-plan writer/reviewer loop, steps 1–5 (`task-plan-writer`, the business-parity gate, the architecture gate, `task-plan-reviewer`, the verdict parse), including every prompt and dispatch block, canonical in the core, and every `iteration >= 5` cap, canonical in the planning graph the walker walks.
+- `## UI-test-plan write loop` — steps 1–3, including every prompt, every dispatch block and the `no_ui: true` hand-off note, canonical in the core; the `no_ui: true` short-circuit, the `phases.qa` gate and the `qa` run-mode skip, canonical in the planning graph the walker walks.
 - `## Convergence` — the condition both loops must meet, and the **owner** of the fact set the hand-off carries. Canonical in the core. `<terminal_handoff>` above carries a deliberate verbatim copy of those facts, because its value *is* the five-step body that delivers them (it names a slash command and states a gate the autonomous fork removes, so the core cannot hold it): a change to the core's fact list must be mirrored in that subsection.
 - `## Stop conditions` and `## What you must NOT do`. Canonical in the core.
 

@@ -1,0 +1,297 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "flow graph",
+  "description": "The routing of one harness flow as data: which agent each node dispatches, where each of its outcomes routes, which counter a revision loop increments and what fires when that counter reaches its cap. The walker resolves the values here; the dispatch prompts stay in the flow's instruction core. This schema checks shape only: reachability, capped FAIL cycles, known run-mode and ledger ids, and agreement with the core are checked by scripts/check-flow-graph.sh, because JSON Schema cannot express them. Every <…> binding is named here and resolved by the flow's mode fork, never by this file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formatVersion", "flow", "description", "start", "entries", "counters", "paths", "reports", "nodes"],
+  "properties": {
+    "formatVersion": {
+      "const": 1,
+      "description": "Version of this graph format. A change to the key set raises it, so a walker never routes on a graph whose shape it does not know."
+    },
+    "flow": {
+      "$ref": "#/definitions/identifier",
+      "description": "The flow this graph routes, named as its instruction family (task_plan_writing for plugin/instructions/task_plan_writing_instructions_core.md)."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What the graph routes and what it leaves in the instruction core."
+    },
+    "start": {
+      "$ref": "#/definitions/nodeId",
+      "description": "The node a fresh run enters at."
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/nodeId" },
+      "description": "Every node a run may be entered or resumed at, start included. A resume names one of these; any other node is not a legal re-entry point."
+    },
+    "counters": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/definitions/identifier" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cap"],
+        "properties": {
+          "cap": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The value at which an incrementing edge stops routing and takes its onCap edge instead. Agreement with the cap the instruction core states is checked by scripts/check-flow-graph.sh, not here."
+          }
+        }
+      },
+      "description": "The loop counters, by name. An edge's increment and reset name one of these; the heartbeat's {iteration} is the counter of that name."
+    },
+    "paths": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/definitions/identifier" },
+      "additionalProperties": { "type": "string", "minLength": 1 },
+      "description": "Named run-artifact path templates, with {state_dir} and {branch} resolved by the walker. An escalation's evidence names one of these as the file the operator is pointed at."
+    },
+    "reports": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/identifier" },
+      "description": "The report slots a run fills in. An edge's report names slots from this list; the walker prints one report: line per slot recorded, in this order, at the terminal node."
+    },
+    "nodes": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/definitions/nodeId" },
+      "additionalProperties": { "$ref": "#/definitions/node" },
+      "description": "Every node of the flow, by id. A dispatch node sends one agent out and routes on what it returns; a terminal node ends the graph by handing off to its binding."
+    }
+  },
+  "definitions": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "nodeId": {
+      "$ref": "#/definitions/identifier",
+      "description": "A key of nodes."
+    },
+    "bindingName": {
+      "type": "string",
+      "enum": ["<ask>", "<escalate>", "<terminal_handoff>"],
+      "description": "A mode-contract binding, named and never resolved here: <ask> puts a question to the operator and resumes at a named node, <escalate> stops the run and reports why, <terminal_handoff> ends the graph and hands the run to what follows the flow."
+    },
+    "node": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "enum": ["dispatch", "terminal"],
+          "description": "dispatch sends an agent and routes on its outcome; terminal ends the graph."
+        }
+      },
+      "if": { "properties": { "kind": { "const": "terminal" } } },
+      "then": { "$ref": "#/definitions/terminalNode" },
+      "else": { "$ref": "#/definitions/dispatchNode" }
+    },
+    "terminalNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "binding"],
+      "properties": {
+        "kind": { "const": "terminal" },
+        "binding": { "$ref": "#/definitions/bindingName" }
+      }
+    },
+    "dispatchNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "agent", "heartbeat", "outcomes"],
+      "properties": {
+        "kind": { "const": "dispatch" },
+        "agent": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "The agent definition this node dispatches, by its name: field."
+        },
+        "heartbeat": {
+          "type": "string",
+          "pattern": "\\{iteration\\}",
+          "description": "The line printed before every dispatch of this node. It carries {iteration}, so a stalled loop is visible from the heartbeat alone."
+        },
+        "prompts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/identifier" },
+          "description": "The dispatch prompt variants this node has in the instruction core. An edge's prompt selects one of them for the next dispatch."
+        },
+        "findingsFolder": {
+          "type": "string",
+          "pattern": "^\\{state_dir\\}/.+/$",
+          "description": "The folder this reviewer's findings are written to. Agreement with the folder the instruction core names is checked by scripts/check-flow-graph.sh, not here."
+        },
+        "skip": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/skipEntry" },
+          "description": "Evaluated in order before the node dispatches; the first entry whose condition holds routes to its to without dispatching."
+        },
+        "outcomes": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": ["returned", "PASS", "FAIL", "questions", "no_ui", "error", "blocker"],
+            "description": "What the dispatched agent returned: returned (a writer finished), PASS / FAIL (a reviewer's verdict), questions (it needs an answer), no_ui (nothing to test), error / blocker (it could not proceed)."
+          },
+          "additionalProperties": { "$ref": "#/definitions/edge" },
+          "description": "Where each outcome routes. An outcome the agent returns that is not listed here is a fault in the graph, never a fallthrough."
+        }
+      }
+    },
+    "skipEntry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["construct", "phase", "to"],
+          "properties": {
+            "construct": {
+              "const": "skipped",
+              "description": "The phase is off in the adopter's configuration: the node never runs and its report slot records a skip."
+            },
+            "phase": {
+              "enum": ["parity", "qa", "docs"],
+              "description": "The phases toggle whose false value skips this node."
+            },
+            "to": { "$ref": "#/definitions/nodeId" },
+            "report": { "$ref": "#/definitions/report" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["construct", "runModeId", "to"],
+          "properties": {
+            "construct": {
+              "const": "passedByExclusion",
+              "description": "The run mode excludes this node: it is treated as passed, not skipped, and its report slot says so."
+            },
+            "runModeId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]*$",
+              "description": "The run-mode directive id that excludes this node. Its vocabulary is owned by plugin/instructions/run_mode_instructions.md and checked by scripts/check-flow-graph.sh, not enumerated here."
+            },
+            "to": { "$ref": "#/definitions/nodeId" },
+            "report": { "$ref": "#/definitions/report" }
+          }
+        }
+      ]
+    },
+    "report": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/definitions/identifier" },
+      "additionalProperties": { "type": "string", "pattern": "^[a-z][a-z_-]*$" },
+      "description": "The report slots this route fills, each with the status it records."
+    },
+    "edge": {
+      "type": "object",
+      "if": { "required": ["binding"] },
+      "then": { "$ref": "#/definitions/bindingEdge" },
+      "else": { "$ref": "#/definitions/ordinaryEdge" }
+    },
+    "ordinaryEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["to"],
+      "dependencies": {
+        "increment": ["onCap"],
+        "onCap": ["increment"]
+      },
+      "properties": {
+        "to": {
+          "$ref": "#/definitions/nodeId",
+          "description": "The node this outcome routes to."
+        },
+        "increment": {
+          "$ref": "#/definitions/identifier",
+          "description": "The counter this route increments. It requires onCap, so every incrementing route says what happens at the cap."
+        },
+        "reset": {
+          "$ref": "#/definitions/identifier",
+          "description": "The counter this route resets to its start value."
+        },
+        "prompt": {
+          "$ref": "#/definitions/identifier",
+          "description": "The prompt variant the target node is dispatched with."
+        },
+        "ledger": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9.]*$",
+          "description": "The flow-progress ledger entry this route records. Its vocabulary is owned by plugin/instructions/autonomous_pause_and_ledger.md and checked by scripts/check-flow-graph.sh, not enumerated here."
+        },
+        "report": { "$ref": "#/definitions/report" },
+        "onCap": {
+          "allOf": [
+            { "$ref": "#/definitions/escalateEdge" },
+            { "type": "object", "properties": { "reason": { "const": "cap" } } }
+          ],
+          "description": "The escalation taken instead of routing when the incremented counter has reached its cap."
+        }
+      }
+    },
+    "bindingEdge": {
+      "type": "object",
+      "required": ["binding"],
+      "properties": {
+        "binding": {
+          "enum": ["<ask>", "<escalate>"],
+          "description": "The binding this outcome hands the run to instead of routing to a node."
+        }
+      },
+      "if": { "properties": { "binding": { "const": "<ask>" } } },
+      "then": { "$ref": "#/definitions/askEdge" },
+      "else": { "$ref": "#/definitions/escalateEdge" }
+    },
+    "askEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "resume"],
+      "properties": {
+        "binding": { "const": "<ask>" },
+        "resume": {
+          "$ref": "#/definitions/nodeId",
+          "description": "The node the run resumes at once the question is answered. Required: an ask with nowhere to resume strands the run."
+        }
+      }
+    },
+    "escalateEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "reason"],
+      "properties": {
+        "binding": { "const": "<escalate>" },
+        "reason": {
+          "enum": ["cap", "error", "blocker"],
+          "description": "Why the run stops: a counter reached its cap, the agent errored, or it returned a blocker."
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The operator-facing sentence, with {cap} resolved to the counter's cap."
+        },
+        "roundCounts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/identifier" },
+          "description": "The dispatch nodes, by node id, whose findings-folder round counts a cap escalation reports. The walker reads each one's findingsFolder, so each must name a dispatch node that carries one; a node the walk recorded as skipped is omitted."
+        },
+        "evidence": {
+          "$ref": "#/definitions/identifier",
+          "description": "The paths entry naming the file the operator is pointed at."
+        }
+      }
+    }
+  }
+}

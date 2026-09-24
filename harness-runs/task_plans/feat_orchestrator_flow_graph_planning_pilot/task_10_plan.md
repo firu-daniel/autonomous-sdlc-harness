@@ -1,0 +1,45 @@
+### Task 10 — Repoint the two planning forks at the rewritten core
+
+**Goal:** `plugin/instructions/task_plan_writing_instructions_autonomous.md` and `plugin/instructions/task_plan_writing_instructions_semi_autonomous.md` keep their binding behaviour and every override. Each changes **only** where it states something about the core that Task 9 makes false: that a thing is canonical in the core which Task 9 moved to the walker and its graph (the `>= 5` caps, the heartbeat formats, the gate-skip mechanics, the non-convergence summary), the core's `## Setup` step count, and the core's `## Stop conditions` entry numbers. Nothing else in the forks moves.
+
+**Depends on:** Task 9. After that task, the core:
+
+- keeps every section heading and `## Setup` steps 1–6 byte-identical;
+- adds `## Setup` step 7 (start the walker with `--entry plan_writer|ui_writer|convergence`) and a `## The walker — routing is its, judgement is yours` section;
+- leaves the Safety contract's STOP, counter and PAUSE-slot order unchanged;
+- takes the heartbeat text from the walker's `heartbeat:` line;
+- escalates on the walker's `binding: <escalate>` action, printed at the `## Loop` steps 2, 3 and 5 and UI step 3 node sections;
+- no longer words the non-convergence summary at those sites: the one-paragraph summary moves into the graph's `onCap.summary` (Task 1), and the walker prints it as the `summary:` line of its `binding: <escalate>` action;
+- collapses `## Stop conditions` from seven entries to **five**: 1 STOP file, 2 `MAX_TOTAL_DISPATCHES`, 3 `## Questions` → `<ask>`, 4 the walker's `binding: <escalate>`, 5 `error:` / `blocker:` → `<escalate>`. Its own Mode-contract `<escalate>` cell now cites *"`## Stop conditions` entries 4–5"* (was 4–7); entries 1, 2 and 3 keep their numbers;
+- carries its convergence condition as the walker's `binding: <terminal_handoff>`.
+
+The `iteration >= 5` cap itself now lives in `<scripts_dir>/flows/task_plan_writing.graph.json` (`counters.iteration.cap`), walked by `<scripts_dir>/flow-walker.sh`.
+
+**Where this task stops.** It changes no binding's behaviour, no override behaviour and no anchor these forks own. Two binding-table cells are reworded, each only to re-point a citation Task 9 falsifies: the autonomous `<escalate>` row's entry range, and the semi-autonomous `<escalate>` row's source of the summary. `## Override 2 — resumability`, `## Clarification channel — file format (canonical, single source of truth)` and `## Ask-vs-assume policy` are resolved by name from outside, and their headings are not touched. The commands and the flow overview are **Task 11**'s.
+
+### Targets
+
+- `plugin/instructions/task_plan_writing_instructions_autonomous.md`
+- `plugin/instructions/task_plan_writing_instructions_semi_autonomous.md`
+
+**Work:**
+
+- [ ] **Autonomous fork, opening paragraph.** Today it says the iteration caps (`>= 5` per loop) and the heartbeat formats are identical to the core and not duplicated. Restate that they are now **the planning graph's**: walked by `<scripts_dir>/flow-walker.sh`, not duplicated here, with the `<state_dir>/PAUSE` fold-in after the STOP check unchanged. In its `## Mode contract — bindings` table, **always** change the `<escalate>` row's *"and `## Stop conditions` entries 4–7"* to *"and `## Stop conditions` entries 4–5"*, the range Task 9's collapse leaves. The rest of that row (the `## Setup` step 2 site and the `## Loop` steps 2, 3 and 5 / UI step 3 node sections) stays as written, because Task 9 keeps those sites. The `<ask>` row's *"`## Stop conditions` entry 3"* and the closing paragraph's *"`## Stop conditions` entries 1 and 2"* stay as written.
+- [ ] **Autonomous fork, `## Override 5`.** In the self-pause-on-API-overload paragraph, add that a dispatch that died on `529` / `500` / `503` is **not** an outcome passed to the walker: it is re-issued from `bash <scripts_dir>/flow-walker.sh current …`, which keeps the existing *"does **not** advance the `>= 5` convergence cap"* true by construction. In the resume-from-ledger paragraph, add one clause mapping *"skip the task-plan loop"* / *"fall straight through"* onto the core's `## Setup` step 7 `--entry ui_writer` / `--entry convergence`. The `P1` / `P2` flip bullets stay as written, and may add that the walker prints the matching `ledger:` line.
+- [ ] **Autonomous fork, `## What this file does NOT redefine`.** In the `## Loop` bullet (*"including every prompt, every dispatch block and every `iteration >= 5` cap. Canonical in the core."*) and the `## Safety contract` bullet (*"… and the heartbeat format …"*), say that the caps and heartbeat formats are canonical in the planning graph and the dispatch blocks and prompts in the core. Add the new core section `## The walker — routing is its, judgement is yours` to the list. In the `## Setup (once per session)` bullet, change *"its six steps"* to the count-free *"its steps"*, because Task 9 appends step 7 and a count would go stale again on the next append.
+- [ ] **Semi-autonomous fork, `## What this fork does NOT redefine` and its `<escalate>` binding.** Make the same two corrections, change *"its six steps"* to *"its steps"* in the `## Setup (once per session)` bullet, and name the new core section. In `## Mode contract — bindings`, reword the `<escalate>` row's parenthetical: *"that is the latest findings path plus the one-paragraph non-convergence summary the core's site words"* becomes *"that is the latest findings path plus the one-paragraph non-convergence summary the walker prints on the `summary:` line of its `binding: <escalate>` action"*. The rest of that cell, including *"Sites that name neither, such as the missing task prompt at `## Setup` step 2 or an agent returning `error:` / `blocker:`, report the blocker alone"*, stays as written. Name the cap's home as **"the planning graph"** and the router as **"the walker"** in words only, **without** the `<scripts_dir>/…` path spelling the autonomous fork uses: this fork's `## Resolved values` table declares only `<state_dir>` and `<parity_vocabulary>` and has no `<scripts_dir>` row (`.claude/context/plugin.md` → `## The sections an asset carries`), and the core's `## The walker` section, which this fork cites by name, is where both paths are spelled. So `## Resolved values` stays untouched and is not a target. In the binding table, the `<escalate>` cell reworded above is the only change: no other value quotes an anchor Task 9 moves.
+
+**Verification:**
+
+- `grep -n "iteration >= 5\|heartbeat format" plugin/instructions/task_plan_writing_instructions_autonomous.md plugin/instructions/task_plan_writing_instructions_semi_autonomous.md`: every hit names the planning graph or the walker as the cap's home, not the core.
+- `grep -n '<scripts_dir>' plugin/instructions/task_plan_writing_instructions_semi_autonomous.md` has no hit: the semi-autonomous fork names the planning graph and the walker in words only, so its `## Resolved values` table needs no new row. (The autonomous fork's hits are covered by the `<scripts_dir>` row its table already carries.)
+- `git diff --stat` touches exactly these two files. In each `## Mode contract — bindings` table, the `<escalate>` row is the only changed row: the autonomous one's entry range, the semi-autonomous one's summary source.
+- `grep -n "six steps" plugin/instructions/task_plan_writing_instructions_autonomous.md plugin/instructions/task_plan_writing_instructions_semi_autonomous.md` has no hit.
+- `grep -n "the core's site words" plugin/instructions/task_plan_writing_instructions_semi_autonomous.md` has no hit, and `grep -n "summary:" plugin/instructions/task_plan_writing_instructions_semi_autonomous.md` hits the `<escalate>` row.
+- The autonomous fork's entry range agrees with the core. `grep -n 'Stop conditions` entries' plugin/instructions/task_plan_writing_instructions_autonomous.md plugin/instructions/task_plan_writing_instructions_core.md` shows the same range in the fork's `<escalate>` row and in the core's `<escalate>` `Used at` cell, and `awk '/^## Stop conditions/{f=1;next} /^## /{f=0} f && /^- /{n++} END{print n}' plugin/instructions/task_plan_writing_instructions_core.md` prints that range's upper bound.
+- Re-run the anchor sweeps `plugin/instructions/mode_contract.md` → `### Sanctioned cross-fork anchors` prescribes: `git grep -in "override 2"`, `git grep -in "clarification channel"` and `git grep -in "ask-vs-assume"`. Their hit sets are unchanged from before this task.
+
+**Deviations from plan:**
+
+- Verification bullet 1 vs. Work bullet 1: the autonomous `<escalate>` row still hits `iteration >= 5` without naming the planning graph or the walker, because Work bullet 1 keeps that row as written apart from the entry range. The hit names the sites the stop is acted on, not a home for the cap, so it does not name the core as the cap's home.
+- Work bullet 2 (optional `ledger:` clause): scoped to `P1` and `P2`. `cli/templates/scripts/flows/task_plan_writing.graph.json` has `ledger` values for those two only; `P3` flips after Overrides 3 and 4, outside the graph.

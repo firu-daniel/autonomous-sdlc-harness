@@ -84,8 +84,10 @@
 # and return 2 when the configuration could not be read. A caller must be able
 # to tell "the key is empty" from "the file could not be read", because the
 # first is an ordinary project and the second is a repository this script has no
-# business acting in. A reader that wants the finer distinction between "no
-# `harness.config.json` at all" and "one that would not parse" calls
+# business acting in. `hr_phase_enabled` answers through the same three
+# statuses and prints nothing: 0 is `true`, 1 is `false` or unset, and 2 also
+# covers an unknown phase name or a non-boolean value. A reader that wants the
+# finer distinction between "no `harness.config.json` at all" and "one that would not parse" calls
 # `hr_config_load` directly, which returns 1 for the first and 2 for the second.
 #
 # THE PROTECTED SET. It is *(`protectedBranches` if present, else that key's
@@ -186,6 +188,13 @@
 #                     hr_branch_is_protected "$root" "$(hr_current_branch "$root")"; echo $?
 #                     -> the resolved set, then 0 or 1
 #                     hr_state_dir "$root"; hr_command "$root" test
+#   phase toggles     each against its own fresh fixture, so the cache is cold:
+#                     {"defaultBranch":"main","phases":{"qa":true}}
+#                     hr_phase_enabled "$root" qa; echo $?  -> 0, prints nothing
+#                     {"defaultBranch":"main"}
+#                     hr_phase_enabled "$root" qa; echo $?  -> 1
+#                     {"defaultBranch":"main","phases":{"qa":"yes"}}
+#                     hr_phase_enabled "$root" qa; echo $?  -> 2
 #   adopted + broken  printf 'x' > "$root/harness.config.json"
 #                     hr_branch_is_protected "$root" <branch>; echo $?  -> 2
 #                     hr_state_dir "$root"; echo $?                     -> 2, prints nothing
@@ -522,6 +531,10 @@ hr_config_load() {
   # `protectedBranches.present` records that the key was there AS AN ARRAY,
   # which is what lets an explicitly EMPTY list read as a configured set rather
   # than as an absent one.
+  #
+  # A `phases.*` value that is not a boolean is emitted as `invalid`, so the
+  # string `"true"` — which `tostring` would otherwise make indistinguishable
+  # from `true` — reaches `hr_phase_enabled` as a value it refuses (2).
   out=$(jq -n -r '
     def s($k; $v):
       if $v == null then empty
@@ -552,6 +565,9 @@ hr_config_load() {
       s("commands.build";        try .commands.build       catch null),
       s("commands.devServer";    try .commands.devServer   catch null),
       s("commands.depInstall";   try .commands.depInstall  catch null),
+      s("phases.parity";         try (.phases.parity | if type == "boolean" or . == null then . else "invalid" end) catch null),
+      s("phases.qa";             try (.phases.qa     | if type == "boolean" or . == null then . else "invalid" end) catch null),
+      s("phases.docs";           try (.phases.docs   | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("protectedBranches.present";
         try (if (.protectedBranches | type) == "array" then "1" else null end) catch null),
       l("protectedBranches";     try .protectedBranches    catch null)
@@ -773,6 +789,27 @@ hr_command() {
   done
   [ "$known" -eq 0 ] || return 1
   hr_config_scalar "$root" "commands.$key" ""
+}
+
+# `phases.<phase>` — whether one optional phase runs. THE ONE TYPED READER THAT
+# PRINTS NOTHING: the answer is the status. 0 = `true`; 1 = `false` or unset (an
+# unset flag is false, as the flow-progress ledger's `phases:` line records it);
+# 2 = the configuration is unresolvable, <phase> is not `parity` / `qa` /
+# `docs`, or the stored value is not a boolean — a value the schema forbids,
+# which this refuses rather than guesses about.
+hr_phase_enabled() {
+  local root="${1-}" phase="${2-}"
+  case "$phase" in
+    parity|qa|docs) ;;
+    *) return 2 ;;
+  esac
+  hr_config_load "$root" || return 2
+  hr_cfg_scalar_var "phases.$phase" || return 1
+  case "$HR_CFG_VALUE" in
+    true) return 0 ;;
+    false) return 1 ;;
+  esac
+  return 2
 }
 
 # ---------------------------------------------------------------------------
