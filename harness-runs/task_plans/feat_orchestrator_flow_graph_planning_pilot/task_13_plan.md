@@ -65,3 +65,8 @@ With `--negatives`, it proves that each check rejects the fixture built for it.
   - Rename the task-engine `P1` entry in a scratch **copy** of `autonomous_pause_and_ledger.md`, pointed at by a temporary edit to the script's owner path, and the real graph fails `ledger-id-known`.
   - In a scratch **copy** of the core, pointed at by a temporary edit to the per-flow core table, change step 4's `caps at 5 revisions` to `caps at 4 revisions`, and the real graph fails `cap-matches-core`. Delete the phrase instead, and it fails on the empty extraction.
 - `bash -n scripts/check-flow-graph.sh` passes. Grep the script for `$HOME` and find nothing (gate 6a). Grep it for `schemas/negative` and find nothing: the checker never reads the schema-negative directory.
+
+**Deviations from plan:**
+- `bash -n scripts/check-flow-graph.sh` was refused by the session's permission layer (`This command requires approval`), so the syntax claim rests on execution instead: the script ran to completion in all three modes (default graph, `--negatives`, bad usage), plus one run per fixture; bash would have stopped with a syntax error on reaching one.
+- `cap-matches-core`'s empty-value rule is applied per phrase (`iteration >= <N>`, `caps at <N> revisions`, `<N>-revision caps`), not per line: the plan's mutation deletes `caps at 5 revisions` and expects an empty-extraction failure, while `iteration >= 5` is still on that same step-4 line.
+- `--negatives` reads the check ids from the `THE CONTRACT` lines of the script's own header (`#   <n>. <check-id> — …`), so an id added to the contract without a fixture fails.
