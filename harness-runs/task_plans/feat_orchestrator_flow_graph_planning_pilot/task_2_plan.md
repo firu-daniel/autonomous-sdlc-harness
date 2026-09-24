@@ -24,3 +24,8 @@
 - Source the library in a throwaway `git init` fixture carrying a `harness.config.json` (never this checkout), and run each `REPRO` line added above. Each exit status matches the line's own stated answer.
 - `bash cli/test/…` is not the gate here, because no suite calls the reader yet. `npm test` stays green, since `cli/test/outer-loop-scripts.test.mjs` executes the library directly (its header's choice 3: *"running it directly must define its functions and do nothing else"*).
 - Grep the file for a second `jq -n` invocation and find exactly the existing one.
+
+**Deviations from plan:**
+
+- The three `phases.*` keys use the `s("<key>"; try … catch null)` form, but the inner expression folds a non-boolean, non-null value to the string `invalid` before `s()`'s `tostring`. Without it the string `"true"` would emit as `true` and read as enabled, contradicting the plan's own "neither `true` nor `false` → 2" rule. Verified: `"phases": {"qa": "true"}` → 2.
+- Verification ran the REPRO cases (plus false, null, `"true"`, unknown phase, `"phases": "x"`, no config, broken config) under `/bin/bash` 3.2.57 with jq 1.8.2 via a scratch probe; the jq 1.5 floor was checked by reading (no new construct beyond `type` and `elif`), not executed, because no jq 1.5 is installed.
