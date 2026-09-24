@@ -36,7 +36,8 @@ floor_blocked=0
 
 # Run one command and grade it by its EXIT STATUS. Output goes to a file rather than through a
 # pipe: §5's opening rule is that piping a gate into a pager or into `head` returns the *pager's*
-# status, so a failing gate reads as a passing one. Nothing here pipes.
+# status, so a failing gate reads as a passing one. No status-graded gate pipes; gate 6a pipes
+# inside `gate_silent`, which reads no exit status.
 gate() {
   local name="$1"; shift
   if "$@" >"$log" 2>&1; then
@@ -101,7 +102,21 @@ gate "4 npm test" npm test
 echo "== gate 6 — self-containment"
 # `$HOME` expands to the home of whoever runs this, which is what makes it a pre-commit self-check
 # rather than an audit — §5 says so, and it is why a clean clone passes it unconditionally.
-gate_silent "6a no machine paths" grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git
+# In a linked worktree `.git` is a one-line FILE, `gitdir: <main checkout>/.git/worktrees/<name>`,
+# which `--exclude-dir=.git` does not skip because it skips directories only. The second stage
+# drops output lines whose path is exactly `./.git` and nothing else, so a nested `.git` file and a
+# file that quotes a `gitdir:` line are still printed. In a main checkout `.git` is the directory
+# the first stage already skips, so the second stage never matches and the command is the same in
+# both. Not `--exclude=.git`: GNU and BSD grep both match it against a file's base name, so it
+# would also skip every nested file named `.git`. Not `--exclude=./.git`: GNU grep matches a
+# recursive subfile's base name only, so it would exclude nothing on Linux.
+# The pipe is safe here and only here: `gate_silent` grades OUTPUT, so the second stage's exit
+# status (1 when it filters everything) is never read, and grep's own `grep: …` error lines do not
+# begin `./.git:` and still reach the log.
+machine_path_hits() {
+  grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git | grep -v '^\./\.git:[0-9][0-9]*:'
+}
+gate_silent "6a no machine paths" machine_path_hits
 # Two exclusions, not one. `examples/notes-app/.claude` is an adopted repository's own generated
 # output; `./.claude` is THIS repository's, once it adopts the harness itself. Neither is a
 # template committed into the namespace `init` generates, which is the breach this gate is for —

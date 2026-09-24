@@ -23,7 +23,7 @@
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_gate_6a_worktree_git_file/task_<K>_plan.md`. All three tasks are in the catch-all layer, ordered so that the command exists before it is quoted and the closing acceptance run happens after every edit has landed.
 
-1. [ ] **Task 1** — Make gate 6a drop only the worktree `.git` pointer line, identically in every checkout _(layer: general)_ _(points: 10)_
+1. [x] **Task 1** — Make gate 6a drop only the worktree `.git` pointer line, identically in every checkout _(layer: general)_ _(points: 10)_
 2. [ ] **Task 2** — Quote the new 6a command in `docs/development.md` gate 6 and state the exclusion in one clause _(layer: general)_ _(points: 5)_
 3. [ ] **Task 3** — Replace the committed home-rooted paths under `harness-runs/` and close on a green 6a in this worktree _(layer: general)_ _(points: 10)_
 
