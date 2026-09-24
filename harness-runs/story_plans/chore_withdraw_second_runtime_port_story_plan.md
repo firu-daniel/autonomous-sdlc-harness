@@ -23,7 +23,7 @@ Four constraints hold across the branch:
 
 Each entry maps 1:1 to `harness-runs/task_plans/chore_withdraw_second_runtime_port/task_<K>_plan.md`. The entries are in ship order, and every task is in the catch-all layer.
 
-1. [ ] **Task 1** — Write the decision record `docs/second-runtime-port-decision.md` _(layer: general)_ _(points: 15)_
+1. [x] **Task 1** — Write the decision record `docs/second-runtime-port-decision.md` _(layer: general)_ _(points: 15)_
 2. [ ] **Task 2** — Withdraw the row in `ROADMAP.md`, add `Withdrawn` to the legend and renumber the index _(layer: general)_ _(points: 10)_
 3. [ ] **Task 3** — Amend `ARCHITECTURE.md` → `### Why no candidate is named here` for the record's named frameworks _(layer: general)_ _(points: 5)_
 4. [ ] **Task 4** — List the decision record in `README.md`'s reference documents and in `llms.txt` _(layer: general)_ _(points: 5)_
