@@ -38,3 +38,8 @@ The `iteration >= 5` cap itself now lives in `<scripts_dir>/flows/task_plan_writ
 - `grep -n "the core's site words" plugin/instructions/task_plan_writing_instructions_semi_autonomous.md` has no hit, and `grep -n "summary:" plugin/instructions/task_plan_writing_instructions_semi_autonomous.md` hits the `<escalate>` row.
 - The autonomous fork's entry range agrees with the core. `grep -n 'Stop conditions` entries' plugin/instructions/task_plan_writing_instructions_autonomous.md plugin/instructions/task_plan_writing_instructions_core.md` shows the same range in the fork's `<escalate>` row and in the core's `<escalate>` `Used at` cell, and `awk '/^## Stop conditions/{f=1;next} /^## /{f=0} f && /^- /{n++} END{print n}' plugin/instructions/task_plan_writing_instructions_core.md` prints that range's upper bound.
 - Re-run the anchor sweeps `plugin/instructions/mode_contract.md` → `### Sanctioned cross-fork anchors` prescribes: `git grep -in "override 2"`, `git grep -in "clarification channel"` and `git grep -in "ask-vs-assume"`. Their hit sets are unchanged from before this task.
+
+**Deviations from plan:**
+
+- Verification bullet 1 vs. Work bullet 1: the autonomous `<escalate>` row still hits `iteration >= 5` without naming the planning graph or the walker, because Work bullet 1 keeps that row as written apart from the entry range. The hit names the sites the stop is acted on, not a home for the cap, so it does not name the core as the cap's home.
+- Work bullet 2 (optional `ledger:` clause): scoped to `P1` and `P2`. `cli/templates/scripts/flows/task_plan_writing.graph.json` has `ledger` values for those two only; `P3` flips after Overrides 3 and 4, outside the graph.
