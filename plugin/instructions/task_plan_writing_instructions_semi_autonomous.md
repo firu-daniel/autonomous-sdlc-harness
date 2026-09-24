@@ -51,7 +51,7 @@ Then stop. Do not auto-proceed to implementation — the user must approve the p
 - `## The walker — routing is its, judgement is yours` — the walker's forms, the outcome table and how its output is acted on. Canonical in the core.
 - `## Safety contract — applies before EVERY Agent dispatch` — the `<state_dir>/STOP` check, the `.dispatch_counter` increment, `MAX_TOTAL_DISPATCHES` and the compose-the-prompt step, canonical in the core; the heartbeat format, canonical in the planning graph.
 - `## Loop` — the task-plan writer/reviewer loop, steps 1–5 (`task-plan-writer`, the business-parity gate, the architecture gate, `task-plan-reviewer`, the verdict parse), including every prompt and dispatch block, canonical in the core, and every `iteration >= 5` cap, canonical in the planning graph the walker walks.
-- `## UI-test-plan write loop` — steps 1–3, including the `no_ui: true` short-circuit and the `phases.qa` gate. Canonical in the core.
+- `## UI-test-plan write loop` — steps 1–3, including every prompt, every dispatch block and the `no_ui: true` hand-off note, canonical in the core; the `no_ui: true` short-circuit, the `phases.qa` gate and the `qa` run-mode skip, canonical in the planning graph the walker walks.
 - `## Convergence` — the condition both loops must meet, and the **owner** of the fact set the hand-off carries. Canonical in the core. `<terminal_handoff>` above carries a deliberate verbatim copy of those facts, because its value *is* the five-step body that delivers them (it names a slash command and states a gate the autonomous fork removes, so the core cannot hold it): a change to the core's fact list must be mirrored in that subsection.
 - `## Stop conditions` and `## What you must NOT do`. Canonical in the core.
 
