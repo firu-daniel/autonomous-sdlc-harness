@@ -12,7 +12,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — State after the §1 table that the UI-test-plan loop has its own counter and its own FAIL edge _(layer: general)_
+1. [x] **Finding 2** — State after the §1 table that the UI-test-plan loop has its own counter and its own FAIL edge _(layer: general)_
 2. [ ] **Finding 1** — State in §4 that each run's phase total is a lower bound, because the selector drops the session where planning converged _(layer: general)_
 
 ---

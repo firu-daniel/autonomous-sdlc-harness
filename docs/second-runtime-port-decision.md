@@ -22,6 +22,8 @@
 | The cap fires, or the writer returns `## Questions` → `<escalate>` / `<ask>` → a live question, or a park with `question_<n>.md` that the watcher resumes once answered | `interrupt()`, then resume with `Command(resume=…)` |
 | Park and resume rebuilt from the story index, the clarification answers and the flow-progress ledger (the autonomous fork's `## Override 2 — resumability`) | a checkpointer keyed by `thread_id` |
 
+The UI-test-plan loop in the first row is the exception to the next two rows. It is its own section, `## UI-test-plan write loop`, which runs only after `task-plan-reviewer` returns `verdict: PASS`, resets `iteration` to 0, and sends its reviewer's `verdict: FAIL` back to `ui-tests-plan-writer` rather than to the task-plan writer. In graph terms it is a second subgraph with its own counter and its own FAIL edge.
+
 LangGraph could express all of it, and nothing is missing. It also adds nothing the harness needs. What it would add is routing enforced by code rather than by an agent following prose.
 
 ## 2. LangChain and LangGraph are one stack, not alternatives
