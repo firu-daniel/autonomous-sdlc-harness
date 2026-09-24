@@ -28,3 +28,8 @@
 - Every file this task writes `<scripts_dir>` into declares it: for each of `plugin/commands/branch-start-plan-autonomous.md`, `plugin/commands/branch-start-plan-semi-autonomous.md` and `plugin/docs/AUTONOMOUS_FLOW.md`, `grep -c '<scripts_dir>' <file>` is non-zero only if `grep -n '^| `<scripts_dir>`' <file>` finds a row in that file's `## Resolved values` table. Read each such row: it names every outer-loop script or data file the body names, and says which it invokes (none, in the two commands).
 - `claude plugin validate --strict plugin` exits 0 (gate 1a): the command frontmatter is untouched.
 - `grep -n "agent-invocable" plugin/docs/AUTONOMOUS_FLOW.md`: no hit says or implies that the git wrappers are the only rows marked agent-invocable, and the walker's row says it is one.
+
+**Deviations from plan:**
+
+- The walker row names `flow-walker.sh` as the agent-invocable row and the graph as the data it reads, because `OUTER_LOOP_SCRIPTS` marks `task_plan_writing.graph.json` `agentInvocable: false`.
+- Evidence downgrade, gate 1a: a direct `claude plugin validate --strict plugin` call was refused by the permission layer. The gate ran inside `bash scripts/test.sh` and failed there. The only findings were six `hooks.PreToolUse` warnings about an unquoted `${CLAUDE_PLUGIN_ROOT}` in `plugin/hooks/hooks.json`, a file this task does not touch. No command frontmatter was changed, so the claim that frontmatter is untouched is backed by `git diff --stat`, not by a clean gate. Gate 6a also failed, only on files outside this diff: the worktree's `.git` pointer file and older `harness-runs/` artifacts.

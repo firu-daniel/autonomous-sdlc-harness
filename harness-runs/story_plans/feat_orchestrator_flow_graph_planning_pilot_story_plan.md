@@ -44,7 +44,7 @@ The tasks run in the configured layer order, `cli` → `plugin` → `general`. T
 8. [x] **Task 8** — Name the walker in the cli package's adopter-facing text _(layer: cli)_ _(points: 8)_
 9. [x] **Task 9** — Rewrite the planning core around the walker _(layer: plugin)_ _(points: 20)_
 10. [x] **Task 10** — Repoint the two planning forks at the rewritten core _(layer: plugin)_ _(points: 12)_
-11. [ ] **Task 11** — Repoint the planning commands and the flow overview _(layer: plugin)_ _(points: 12)_
+11. [x] **Task 11** — Repoint the planning commands and the flow overview _(layer: plugin)_ _(points: 12)_
 12. [ ] **Task 12** — Flow-graph schema, its negative fixtures and the static-check fixtures _(layer: general)_ _(points: 20)_
 13. [ ] **Task 13** — Static checker `scripts/check-flow-graph.sh` _(layer: general)_ _(points: 18)_
 14. [ ] **Task 14** — Wire the flow-graph checks into `scripts/run-gates.sh` and `docs/development.md` §5 _(layer: general)_ _(points: 10)_
