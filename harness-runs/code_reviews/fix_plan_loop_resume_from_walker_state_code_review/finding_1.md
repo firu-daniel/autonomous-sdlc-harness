@@ -1,0 +1,18 @@
+### 1. A continued walk dispatches the writer without the answered pairs a pause left unconsumed, and the watcher then archives them
+
+**File:** `plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Override 2 — resumability` → the paragraph after the **Saved walk first.** bullets, the sentence beginning "A walk parked at `<ask>` is continued only with case (a)'s answered pairs"
+
+**The problem.** Override 2 now reads "Take the first that applies: the saved walk, then (a), (b), (d), (c)." The saved walk takes precedence over case (a), which is the only rule that appends pending answered pairs to a writer dispatch. The fork makes one exception, for a walk parked at `binding: <ask>`. It makes none for a walk whose pending action is the **writer's own dispatch**, the one issued with the answers. That dispatch is the state the walk is in after:
+
+- the resumed session passed `next --outcome answered`, and the walker printed `action: dispatch` / `node: plan_writer` (or `ui_writer`); or
+- the resumed session took **extend** and issued `start --entry plan_writer` (or `ui_writer`).
+
+In both cases the core's `## Safety contract` runs before that writer dispatch, and Override 5 puts the PAUSE check right after the STOP check. So an operator `PAUSE`, or the watcher's usage-limit `PAUSE`, can be honoured at exactly that point. The run then pauses with the answered pairs still at the top level of `<state_dir>/clarifications/<branch>/`. The watcher keeps them there on purpose: `cli/templates/scripts/autonomous-watcher.sh` → `classify_run_exit` checks the pause "BEFORE the resume-pair archival", and the paused-run resume "deliberately" leaves `resumed_for_index` alone, "if this run was paused mid park-resume its still-unconsumed pairs must stay recorded".
+
+On the resumed session, `current` prints `action: dispatch` for the writer. The fork chooses **continue**, and the core's **Continuing a saved walk.** → `action: dispatch` bullet says to act "on the printed action exactly as **`action: dispatch`** above states". That rule appends nothing. Case (a) never runs, because the saved walk was taken first. So the writer is dispatched without the human's answers. The next non-pause exit then archives the pairs, which were recorded in `resumed_for_index`, into `answered/` as though they had been consumed. The answers are lost silently. Before this branch the same resume went through case (a) or (b), and neither dropped them this way.
+
+**Fix.** In `## Override 2 — resumability`, change the sentence that begins "A walk parked at `<ask>` is continued only with case (a)'s answered pairs" so that it covers a pending writer dispatch as well. Replace it with:
+
+> A walk parked at `<ask>` is continued only with case (a)'s answered pairs, consumed exactly as (a) states, every pair appended to the dispatch the walker prints after `answered` — **whether or not a story index exists**, because a writer may park before writing one. A walk continued at a writer's `action: dispatch` — `node:` `plan_writer` or `ui_writer` — while case (a)'s answered pairs sit at the top level carries every such pair appended to that dispatch in the same way: a pause honoured between `answered` (or an **extend** `start`) and the writer's dispatch leaves them unconsumed, and the watcher archives them after this session's next non-pause exit whether or not they reached the writer.
+
+Leave everything else in the paragraph as it is, including the "never deleted or edited" clause. Nothing in the core changes: which pairs are pending, and how they are consumed, is already case (a)'s to state.
