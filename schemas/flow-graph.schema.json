@@ -57,7 +57,7 @@
       "type": "array",
       "uniqueItems": true,
       "items": { "$ref": "#/definitions/identifier" },
-      "description": "The report slots a run fills in. An edge's report and an escalation's roundCounts name slots from this list."
+      "description": "The report slots a run fills in. An edge's report names slots from this list; the walker prints one report: line per slot recorded, in this order, at the terminal node."
     },
     "nodes": {
       "type": "object",
@@ -285,7 +285,7 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": { "$ref": "#/definitions/identifier" },
-          "description": "The report slots whose round counts the escalation reports."
+          "description": "The dispatch nodes, by node id, whose findings-folder round counts a cap escalation reports. The walker reads each one's findingsFolder, so each must name a dispatch node that carries one; a node the walk recorded as skipped is omitted."
         },
         "evidence": {
           "$ref": "#/definitions/identifier",
