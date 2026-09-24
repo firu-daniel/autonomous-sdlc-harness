@@ -62,6 +62,7 @@ The quick start, in five steps:
 - [docs/outer-loop-verification.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/outer-loop-verification.md): what the outer-loop scripts do when driven, and which paths ship unexercised.
 - [docs/guard-verification.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/guard-verification.md): the composed `PreToolUse` guard set's decision matrices and its per-call cost.
 - [docs/typecheck-key-decision.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/typecheck-key-decision.md): whether `commands.typecheck` stays a required key, with the explicit `none` sentinel ratified and implemented.
+- [docs/second-runtime-port-decision.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/second-runtime-port-decision.md): why the second-runtime reference port was withdrawn, and the graph, framework, checkpointer and cost reasoning behind it.
 - [plugin/docs/AUTONOMOUS_FLOW.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/plugin/docs/AUTONOMOUS_FLOW.md): the canonical statement of the inner loop.
 - [plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md): the narrative companion to the inner-loop statement.
 - [schemas/README.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/schemas/README.md): the JSON Schema for `harness.config.json`, and what belongs in that committed file.

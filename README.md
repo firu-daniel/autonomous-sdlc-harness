@@ -232,6 +232,7 @@ What this harness does not do, in three groups: the shape of the system as desig
 - [`docs/outer-loop-verification.md`](docs/outer-loop-verification.md) — what the outer-loop scripts do when driven, and which paths ship unexercised.
 - [`docs/guard-verification.md`](docs/guard-verification.md) — the composed `PreToolUse` guard set's decision matrices and its per-call cost.
 - [`docs/typecheck-key-decision.md`](docs/typecheck-key-decision.md) — whether `commands.typecheck` stays a required key, with option (b), the explicit `none` sentinel, ratified and implemented.
+- [`docs/second-runtime-port-decision.md`](docs/second-runtime-port-decision.md) — why the second-runtime reference port was withdrawn: the planning loop as a graph the orchestrator already walks, the frameworks considered, the checkpointer and cost reasoning, and the maintainer's arguments.
 - [`plugin/docs/AUTONOMOUS_FLOW.md`](plugin/docs/AUTONOMOUS_FLOW.md) — the canonical statement of the inner loop, with [`plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md`](plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md) as its narrative companion.
 - [`schemas/README.md`](schemas/README.md) — the JSON Schema for `harness.config.json`, and what belongs in that committed file versus machine-local configuration.
 - [`evals/README.md`](evals/README.md) — the evaluation corpus, with one case written and its runner still unverified.

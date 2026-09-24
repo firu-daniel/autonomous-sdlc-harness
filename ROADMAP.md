@@ -2,9 +2,9 @@
 
 What is planned beyond the current release. For what ships today, see [`README.md`](README.md).
 
-Nothing here is a schedule or a promise. **The index below is the intended order of outstanding work**; the tables under it group every item by area, carry the detail and the status, and include what is already done. Each index entry links to the section its row lives in. Where a feature already has a declared config key with nothing behind it yet, the description says **seam declared**.
+Nothing here is a schedule or a promise. **The index below is the intended order of outstanding work**; the tables under it group every item by area, carry the detail and the status, and include what is already done and what was withdrawn. Each index entry links to the section its row lives in. Where a feature already has a declared config key with nothing behind it yet, the description says **seam declared**.
 
-**Status:** `Open` · `In progress` · `Done`
+**Status:** `Open` · `In progress` · `Done` · `Withdrawn`
 
 ## Index
 
@@ -17,45 +17,44 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | 5 | [Trace export](#planning-artifacts-and-reporting) |
 | 6 | [Cost per feature](#planning-artifacts-and-reporting) |
 | 7 | [Latency tracking](#planning-artifacts-and-reporting) |
-| 8 | [Second-runtime reference port](#engines-environments-and-integrations) |
-| 9 | [Engine / provider abstraction](#engines-environments-and-integrations) |
-| 10 | [Model-change drift gate](#quality-and-testing) |
-| 11 | [Budget governor](#engines-environments-and-integrations) |
-| 12 | [Cloud / CI execution](#engines-environments-and-integrations) |
-| 13 | [First published eval result](#evidence-and-adoption) |
-| 14 | [Outcome-graded eval case](#evidence-and-adoption) |
-| 15 | [Measuring the lessons ledger](#evidence-and-adoption) |
-| 16 | [MCP servers](#engines-environments-and-integrations) |
-| 17 | [Ultra-fast mode](#flow-and-orchestration) |
-| 18 | [Parallel dispatch in waves](#flow-and-orchestration) |
-| 19 | [Task researcher](#flow-and-orchestration) |
-| 20 | [Multi-plan programs](#flow-and-orchestration) |
-| 21 | [Cross-repo tasks](#flow-and-orchestration) |
-| 22 | [Watcher settings surface](#flow-and-orchestration) |
-| 23 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
-| 24 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
-| 25 | [User flow diagram](#planning-artifacts-and-reporting) |
-| 26 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
-| 27 | [Integration tests](#quality-and-testing) |
-| 28 | [Regression tests](#quality-and-testing) |
-| 29 | [Fix-plan structure review](#quality-and-testing) |
-| 30 | [Performance and security review](#quality-and-testing) |
-| 31 | [Deploy to a test environment](#engines-environments-and-integrations) |
-| 32 | [Cloud QA](#engines-environments-and-integrations) |
-| 33 | [Mobile QA drivers](#engines-environments-and-integrations) |
-| 34 | [Design-source ingestion](#engines-environments-and-integrations) |
-| 35 | [Second end-to-end capture](#evidence-and-adoption) |
-| 36 | [Interactive session vs harness run](#evidence-and-adoption) |
-| 37 | [`init` warns when there is no remote](#evidence-and-adoption) |
-| 38 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
-| 39 | [`doctor` sandbox checks](#security-and-containment) |
-| 40 | [`doctor` flags unverified branch protection](#security-and-containment) |
-| 41 | [Threat model](#documentation) |
-| 42 | [Per-run base branch](#flow-and-orchestration) |
-| 43 | [Suggested protected branches at `init`](#security-and-containment) |
-| 44 | [Guided default-branch change](#evidence-and-adoption) |
-| 45 | [Release tags in the protected set](#security-and-containment) |
-| 46 | [Notifications settings command](#flow-and-orchestration) |
+| 8 | [Engine / provider abstraction](#engines-environments-and-integrations) |
+| 9 | [Model-change drift gate](#quality-and-testing) |
+| 10 | [Budget governor](#engines-environments-and-integrations) |
+| 11 | [Cloud / CI execution](#engines-environments-and-integrations) |
+| 12 | [First published eval result](#evidence-and-adoption) |
+| 13 | [Outcome-graded eval case](#evidence-and-adoption) |
+| 14 | [Measuring the lessons ledger](#evidence-and-adoption) |
+| 15 | [MCP servers](#engines-environments-and-integrations) |
+| 16 | [Ultra-fast mode](#flow-and-orchestration) |
+| 17 | [Parallel dispatch in waves](#flow-and-orchestration) |
+| 18 | [Task researcher](#flow-and-orchestration) |
+| 19 | [Multi-plan programs](#flow-and-orchestration) |
+| 20 | [Cross-repo tasks](#flow-and-orchestration) |
+| 21 | [Watcher settings surface](#flow-and-orchestration) |
+| 22 | [`branch-summary.md`](#planning-artifacts-and-reporting) |
+| 23 | [Task breakdown and estimates file](#planning-artifacts-and-reporting) |
+| 24 | [User flow diagram](#planning-artifacts-and-reporting) |
+| 25 | [Business (data) flow diagram](#planning-artifacts-and-reporting) |
+| 26 | [Integration tests](#quality-and-testing) |
+| 27 | [Regression tests](#quality-and-testing) |
+| 28 | [Fix-plan structure review](#quality-and-testing) |
+| 29 | [Performance and security review](#quality-and-testing) |
+| 30 | [Deploy to a test environment](#engines-environments-and-integrations) |
+| 31 | [Cloud QA](#engines-environments-and-integrations) |
+| 32 | [Mobile QA drivers](#engines-environments-and-integrations) |
+| 33 | [Design-source ingestion](#engines-environments-and-integrations) |
+| 34 | [Second end-to-end capture](#evidence-and-adoption) |
+| 35 | [Interactive session vs harness run](#evidence-and-adoption) |
+| 36 | [`init` warns when there is no remote](#evidence-and-adoption) |
+| 37 | [OS-level sandbox in the autonomous profile](#security-and-containment) |
+| 38 | [`doctor` sandbox checks](#security-and-containment) |
+| 39 | [`doctor` flags unverified branch protection](#security-and-containment) |
+| 40 | [Threat model](#documentation) |
+| 41 | [Per-run base branch](#flow-and-orchestration) |
+| 42 | [Suggested protected branches at `init`](#security-and-containment) |
+| 43 | [Guided default-branch change](#evidence-and-adoption) |
+| 44 | [Release tags in the protected set](#security-and-containment) |
+| 45 | [Notifications settings command](#flow-and-orchestration) |
 
 ## Flow and orchestration
 
@@ -101,7 +100,7 @@ Nothing here is a schedule or a promise. **The index below is the intended order
 | Feature | What it is | Status |
 |---|---|---|
 | Docs-catalog retrieval | Agentic retrieval over the "second brain" — the docs catalog and the conventions documents — exposed as a read-only MCP search tool for the plan writer and the reviewers. The Markdown documents stay the source of truth; the index is a derived, uncommitted cache refreshed incrementally from content hashes, so a merged branch needs no retrieval edit. An ingestion pipeline chunks each document at its headings; hybrid lexical (BM25) and vector (pgvector) indexes in an embedded Postgres (PGlite), built on local embeddings, are fused and reranked, results cite `path#heading`, and a query with no confident match abstains rather than returning noise. A measured relevance eval (recall@k, MRR, plus per-arm cost and latency, runnable as a regression check) decides it against the navigation agents use today rather than assuming retrieval wins — and has measured it once: on a real 1,960-chunk catalog, agent navigation outscored retrieval and the verdict is **withdrawn**; the maintainer did not execute the withdrawal and keeps retrieval opt-in ([`docs/retrieval-eval-results.md`](docs/retrieval-eval-results.md) → *The decision, applied to the real catalog*). Retrieved text is navigation, never evidence: the code still wins. What holds this row `Open` is the work that decision leaves open: improving the stack as built — a code-aware reranker, a different embedder, BM25 weighting, sections longer than the models' window — and measuring the situations where retrieval is expected to pay and no run has covered, a catalog far larger than one grep can cover and one whose vocabulary does not match the queries. Item 18 of [`docs/development.md`](docs/development.md) → *6. The roadmap this tree defers to*, a numbering separate from this file's priorities, records that the withdrawal was not executed. | Open |
-| Second-runtime reference port | One flow stage — the plan-writer and plan-reviewer approval loop — reimplemented on an open-source agent runtime (LangGraph is the suggested candidate) as a standalone service, to prove the engine seam against a runtime that is not Claude Code before the abstraction above settles on a shape. | Open |
+| Second-runtime reference port | **Withdrawn** by maintainer decision on 2026-09-24: the planning loop is already an orchestrator-walked graph whose committed progress ledgers are its durable state, and a port would add code-enforced routing no run has needed while moving the planning phase onto per-token API billing ([`docs/second-runtime-port-decision.md`](docs/second-runtime-port-decision.md)). | Withdrawn |
 | Engine / provider abstraction | The engine seam built and proven against at least one open-source runtime, with runtime and model as separate settings. | Open |
 | Budget governor | Token and cost caps for API-billed accounts. Today the usage gate only pauses on plan windows, so an API-billed account has no cap. | Open |
 | Cloud / CI execution | Runs as a chain of bounded CI jobs that resume from the ledger, with draft-PR output. Seam declared (`forge`). Docs-retrieval provisioning is a known sub-problem of this row: the machine-shared runtime and model cache at `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/` is empty at the start of every ephemeral job, so installing once per machine becomes installing once per job. `retrievalRuntimeState()` decides installed-ness by file-existence tests over that directory plus a version match against this CLI's own version, so a cache restored from a job that ran the same CLI version satisfies it with no code change — CI cache restore is the whole mechanism. | Open |
