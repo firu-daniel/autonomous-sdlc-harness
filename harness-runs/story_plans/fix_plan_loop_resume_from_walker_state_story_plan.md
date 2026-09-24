@@ -42,7 +42,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_plan_loop_resume_from_wa
 2. [x] **Task 2** — Tests: a resumed planning walk continues where it stopped, and falls back only when nothing is pending _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — Re-label the existing re-entry suite: `start` resets the counter, a continued walk does not _(layer: cli)_ _(points: 5)_
 4. [x] **Task 4** — Planning core: continue a saved walk, and the **review** and **continue** outcomes _(layer: plugin)_ _(points: 20)_
-5. [ ] **Task 5** — Autonomous planning fork: the ledger wins over a saved walk, (b) needs `P1` `[x]`, and (d) reviews a draft, and §1.7 step 4 names the saved walk as the planning position _(layer: plugin)_ _(points: 20)_
+5. [x] **Task 5** — Autonomous planning fork: the ledger wins over a saved walk, (b) needs `P1` `[x]`, and (d) reviews a draft, and §1.7 step 4 names the saved walk as the planning position _(layer: plugin)_ _(points: 20)_
 6. [ ] **Task 6** — Semi-autonomous binding row and the autonomous flow document _(layer: plugin)_ _(points: 8)_
 7. [ ] **Task 7** — Record the reversed decision in `docs/flow-graph-walker.md` → `### Item 3a` _(layer: general)_ _(points: 10)_
 8. [ ] **Task 8** — Mirror the walker and graph into this checkout, sync the graph fixtures, and restate the schema's `entries` _(layer: general)_ _(points: 8)_
