@@ -64,7 +64,7 @@ On **(re-)entry**, before dispatching the writer, detect prior state and continu
 - `P2` is `[x]` or `[-]` and the pending `node:` is `ui_writer` or `ui_review`;
 - `P1` is `[ ]` and the pending `node:` is `ui_writer` or `ui_review`, **unless** the printed action carries `ledger: P1` — the last session ended between the walker's print and the flip: re-apply it as Override 5 states, then continue.
 
-A walk that is not used falls through to (a)–(d) exactly as if none were saved; it is never deleted or edited, because it is the walker's (the core's `## What you must NOT do`). A walk parked at `<ask>` is continued only with case (a)'s answered pairs, consumed exactly as (a) states, every pair appended to the dispatch the walker prints after `answered` — **whether or not a story index exists**, because a writer may park before writing one.
+A walk that is not used falls through to (a)–(d) exactly as if none were saved; it is never deleted or edited, because it is the walker's (the core's `## What you must NOT do`). A walk parked at `<ask>` is continued only with case (a)'s answered pairs, consumed exactly as (a) states, every pair appended to the dispatch the walker prints after `answered` — **whether or not a story index exists**, because a writer may park before writing one. A walk continued at a writer's `action: dispatch` — `node:` `plan_writer` or `ui_writer` — while case (a)'s answered pairs sit at the top level carries every such pair appended to that dispatch in the same way: a pause honoured between `answered` (or an **extend** `start`) and the writer's dispatch leaves them unconsumed, and the watcher archives them after this session's next non-pause exit whether or not they reached the writer.
 
 Decide as follows:
 
