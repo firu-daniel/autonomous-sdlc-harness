@@ -245,7 +245,7 @@ Each item is a property of a candidate runtime, not a restatement of the operati
 
 ### Why no candidate is named here
 
-**[shipped]** No audit of any candidate runtime's source exists in this tree or behind this document, and no file in it names a candidate. Four reasons hold that position, and it is a decision rather than an omission.
+**[shipped]** No audit of any candidate runtime's source exists in this tree or behind this document. **[shipped]** One file names agent frameworks — [`docs/second-runtime-port-decision.md`](docs/second-runtime-port-decision.md), as the ones considered for a withdrawn port of one flow stage — and it selects none of them as a backend and judges none against the requirement set above. Four reasons hold that position, and it is a decision rather than an omission.
 
 - **[external]** Everything currently known about the leading candidate is a read of its published documentation rather than an audit of its source, and a working note held outside this repository already lists five specific claims a source read would have to settle before any of them is published. **[shipped]** Nothing of that note is in this tree, which is why the claim carries the `**[external]**` marker §2 defines rather than a `**[shipped]**` one a reader could check here.
 - **[designed]** A public architecture document is durable text, so a third project named in it is a standing claim about that project rather than a working note that ages privately — and an absence claimed from documentation and contradicted by the source is the most damaging error a document of this kind can carry.
