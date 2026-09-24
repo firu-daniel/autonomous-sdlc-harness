@@ -30,7 +30,7 @@
 
 Each entry resolves to `harness-runs/code_reviews/fix_plan_loop_resume_from_walker_state_code_review/finding_<K>.md`. The list is sorted so the smallest, safest fixes come first.
 
-1. [ ] **Finding 4** — Drop "exactly as the task planner's does" from the fix-plan fork's **Resume-from-ledger.** _(layer: plugin)_
+1. [x] **Finding 4** — Drop "exactly as the task planner's does" from the fix-plan fork's **Resume-from-ledger.** _(layer: plugin)_
 2. [ ] **Finding 2** — Make Override 5's skip mapping name `--entry ui_review` for a UI-test draft with `P2` `[ ]` _(layer: plugin)_
 3. [ ] **Finding 3** — Widen `## Setup` step 5's trigger to a decision that weighs a saved walk _(layer: plugin)_
 4. [ ] **Finding 1** — Append pending answered pairs when a continued walk re-dispatches a writer _(layer: plugin)_
