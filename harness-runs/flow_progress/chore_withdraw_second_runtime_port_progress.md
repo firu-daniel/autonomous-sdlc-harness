@@ -16,7 +16,7 @@ Source: harness-runs/task_prompts/chore_withdraw_second_runtime_port_task_prompt
 - [-] A1.5f.  Parity findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [x] A2g.    Branch architecture review resolved (index committed — or PASS with no findings, no file written)
 - [x] A2f.    Architecture findings fixed (findings index all [x] — or no index, the review having passed clean)
-- [ ] Bg.     Branch review generated & committed
+- [x] Bg.     Branch review generated & committed
 - [ ] Bm.     Review-plan meta-review PASS (B.2)
 - [ ] C.      Code-review findings fixed
 - [ ] C2g.    Skeptic review resolved (index committed — or PASS with no net-new findings, no file written)
