@@ -39,7 +39,7 @@ The tasks run in the configured layer order, `cli` → `plugin` → `general`. T
 3. [x] **Task 3** — Add the walker's gate library `lib/flow-walker-gates.sh` _(layer: cli)_ _(points: 15)_
 4. [x] **Task 4** — Add the walker `flow-walker.sh` _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Ship the walker and its graph through `init`: table rows, run-control ignore rule, profile entries _(layer: cli)_ _(points: 15)_
-6. [ ] **Task 6** — Walker tests: the task-plan loop, derived from the pre-change core _(layer: cli)_ _(points: 20)_
+6. [x] **Task 6** — Walker tests: the task-plan loop, derived from the pre-change core _(layer: cli)_ _(points: 20)_
 7. [ ] **Task 7** — Walker tests: the UI-test loop, re-entry and the re-print subcommand _(layer: cli)_ _(points: 15)_
 8. [ ] **Task 8** — Name the walker in the cli package's adopter-facing text _(layer: cli)_ _(points: 8)_
 9. [ ] **Task 9** — Rewrite the planning core around the walker _(layer: plugin)_ _(points: 20)_

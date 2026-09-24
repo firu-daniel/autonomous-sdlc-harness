@@ -21,16 +21,16 @@
 
 **Work:**
 
-- [ ] Header. Open the suite with the rule it enforces: *the walker reproduces the pre-change core's routing, and every expectation cites the pre-change sentence it comes from, by heading and quoted substring*. Also state:
+- [x] Header. Open the suite with the rule it enforces: *the walker reproduces the pre-change core's routing, and every expectation cites the pre-change sentence it comes from, by heading and quoted substring*. Also state:
   - which documented behaviours are deliberately not covered here: the UI loop, re-entry and `current`, which are Task 7's;
   - that the fixture repository lives under the system temp directory and the test is never aimed at this checkout (`.claude/context/conventions.md` → `## The testing bar`).
-- [ ] Write the helper above. Use `cli/test/helpers/fixture.mjs`'s `createFixture` / `runCli` / `runBash` rather than a second fixture builder. Plant a review file **before** feeding the `FAIL` it stands for, so `arg.iteration` is asserted against real folder contents.
-- [ ] Cases, each with its expected action list as a literal array:
+- [x] Write the helper above. Use `cli/test/helpers/fixture.mjs`'s `createFixture` / `runCli` / `runBash` rather than a second fixture builder. Plant a review file **before** feeding the `FAIL` it stands for, so `arg.iteration` is asserted against real folder contents.
+- [x] Cases, each with its expected action list as a literal array:
   - (1) **All gates pass first time** (`parity: true`, `qa: false`). writer → parity (`arg.iteration: 0`) → architecture (0) → plan review (0) → `<terminal_handoff>` with `ledger: P1`, `skip: ui_writer skipped`, `report: … passed` for the three gates and `report: ui_test qa-phase-off`.
   - (2) **Parity FAIL once, then PASS; every gate re-runs.** writer → parity FAIL → writer `prompt: revision` carrying that `arg.findings_file`, heartbeat `iter 1` → parity (`arg.iteration: 1`) → architecture → plan review. This comes from step 2's *"then re-run the parity review (then the architecture review, then the structural reviewer) on the revised plan"*.
   - (3) **Architecture FAIL until the cap.** Five architecture FAILs (the counter reaches 5, per *"increment `iteration`. If `>= 5`, `<escalate>`"*) end in `binding: <escalate>`, `reason: cap`, the fifth `findings_file`, `rounds: business_parity_review 0`, `rounds: architecture_review 5`, `rounds: plan_review 0` and the summary *"the plan loop reached its 5-revision cap; the architecture gate was open when it fired"*.
   - (4) **`phases.parity: false`.** No parity dispatch at all, `skip: business_parity_review skipped` on the architecture dispatch, and **no** `report: business_parity_review passed` at convergence. The pre-change sentence is *"A skipped gate is **not** a converged gate … records no pass for it, and reports none"*.
-- [ ] More cases:
+- [x] More cases:
   - (5) **Run-mode `parity` skip**, via `plantLedger(…, 'parity')` with `phases.parity: true`. No parity dispatch, `skip: business_parity_review passed-by-exclusion` and `report: business_parity_review passed-by-exclusion`: *"fall through to step 3 exactly as a `verdict: PASS` does"*.
   - (6) **Both parity switches at once**, pinning the core's textual order: `passed-by-exclusion` wins, because *"Before anything else in this step"* puts the run-mode gate first.
   - (7) **Writer `## Questions`.** `questions` → `binding: <ask>`, `resume: plan_writer` → `answered` → the writer is re-dispatched with the **same** prompt variant it had.
