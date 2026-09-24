@@ -10,7 +10,7 @@
 
 ## 1. The planning loop is already a graph
 
-[`plugin/instructions/task_plan_writing_instructions_core.md`](../plugin/instructions/task_plan_writing_instructions_core.md) → `## Loop` is a state machine with typed edges, and every feature of it maps onto a LangGraph primitive. The park-and-resume row is sourced from `plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Override 2 — resumability`.
+[`plugin/instructions/task_plan_writing_instructions_core.md`](../plugin/instructions/task_plan_writing_instructions_core.md) → `## Loop` is a state machine with typed edges, and every feature of it maps onto a LangGraph primitive. The park-and-resume row is sourced from `plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Override 2 — resumability`, which resumes from the story index and the clarification answers, and `## Override 5 — pause/resume + flow-progress ledger (planning half)`, which resumes from the flow-progress ledger.
 
 | The harness's planning loop | LangGraph equivalent |
 |---|---|
