@@ -13,7 +13,7 @@ had ever been built.
 > work is everything that follows from those figures. `## The pre-step` below is the contract for that hand-off.
 >
 > **THE MEASUREMENTS ARE ALL TAKEN.** `## The figures block` below carries gate 10 legs (i)-(vi) **and**
-> acceptance 2a's eval-route cross-check, all against `/Users/daniel/Work/gate10-corpus` on 2026-09-22.
+> acceptance 2a's eval-route cross-check, all against `<home>/Work/gate10-corpus` on 2026-09-22.
 > **Nothing is owed by the operator, so nothing here is a reason to park.** Do not re-run a leg, do not
 > re-derive a figure the block carries, and do not substitute a fixture-sized run for one. The branch's
 > work is the document work that follows from these figures.
@@ -48,7 +48,7 @@ conditions are `docs/development.md` → `## 5. …` **Gate 10 — docs retrieva
 does not restate them and the operator follows that document, not this one. What this prompt adds is what the
 block must carry for the branch to be able to use it.
 
-**The target repository — ALREADY BUILT, do not build another.** `/Users/daniel/Work/gate10-corpus`, assembled
+**The target repository — ALREADY BUILT, do not build another.** `<home>/Work/gate10-corpus`, assembled
 2026-09-22 by a hand run of `gate_10_throwaway_corpus_prep_prompt.md` in a supervised session. It is a git
 repository outside this checkout holding a `docs/` of real documents in two halves — `docs/expause-web/` (98
 Markdown files, 1,358 chunks) and `docs/vite/` (57 Markdown files, 601 chunks) — **1,959 chunks combined, 2.8 MB
@@ -164,7 +164,7 @@ harness runs. What a different model does change is the cold build's own cost, w
 
 _Recorded in this prompt rather than in a file beside it, so the prompt stays self-contained._
 
-Hand run of `docs/development.md` §5 **gate 10** against `/Users/daniel/Work/gate10-corpus`,
+Hand run of `docs/development.md` §5 **gate 10** against `<home>/Work/gate10-corpus`,
 **2026-09-22**, in a supervised session. All six legs executed. **The branch does not need to
 re-run them** — it consumes what is below.
 
@@ -187,7 +187,7 @@ Node differs from the existing figures' v20.19.5. Recorded, not reconciled.
 
 ### Target repository
 
-`/Users/daniel/Work/gate10-corpus` @ `010c50e`, restored to that commit immediately before the
+`<home>/Work/gate10-corpus` @ `010c50e`, restored to that commit immediately before the
 cold run. `PROVENANCE.md` (now @ `57a6c25`, see the bandwidth correction) estimated 1,959
 chunks; the indexed count came out **1,960 over 156 files** -- the extra file being
 `.claude/context/conventions.md`, which `init` writes and the corpus adds to `docs.root`.
@@ -200,7 +200,7 @@ global link shadows the registry:
 
 ```
 npm ls -g --depth=0
-+-- autonomous-sdlc-harness@0.1.0 -> ./../../../Users/daniel/Work/expause/autonomous-sdlc-harness/cli
++-- autonomous-sdlc-harness@0.1.0 -> ./../../../<home>/Work/expause/autonomous-sdlc-harness/cli
 npx --yes autonomous-sdlc-harness --version   -> 0.1.0   (no `docs` command at all)
 npx --yes autonomous-sdlc-harness@0.2.0 ...   -> 0.2.0   (what every leg below used)
 ```
@@ -410,7 +410,7 @@ node .../runtime/.../dist/cli.js --version -> 0.2.0   <- what was actually measu
 `cold-build.mjs` exports `measureColdBuild` but has **no CLI entry** -- no `--cold` flag on
 `run.mjs`, no npm script -- so this was driven by a throwaway module importing it directly,
 pointed at the same corpus the CLI indexed so the two figures are comparable: `repoRoot` and
-`docsRoot` at `/Users/daniel/Work/gate10-corpus`, `conventions:
+`docsRoot` at `<home>/Work/gate10-corpus`, `conventions:
 ['.claude/context/conventions.md']`, `dataDir` a path removed immediately before the call (the
 module asserts the directory is absent, and asserts `embedded === chunks`, so an incremental
 refresh cannot masquerade as a cold one).

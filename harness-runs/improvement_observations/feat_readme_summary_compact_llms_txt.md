@@ -1,6 +1,6 @@
 ## `commands.test` gate 6a fails on every run inside a git worktree
 - **category:** tooling-gap
-- **evidence:** all 16 `layer-implementer` dispatches this run (Tasks 1–10, code-review Findings 1–5, skeptic Finding 1) reported `bash scripts/test.sh` exit 1 with `6a no machine paths` as the sole failure, its only hit `./.git:1:gitdir: /Users/daniel/Work/autonomous-sdlc-harness/.git/worktrees/autonomous-sdlc-harness-feat_readme_summary_compact_llms_txt` — the worktree's untracked `.git` pointer file. Every other automated gate passed on each run.
+- **evidence:** all 16 `layer-implementer` dispatches this run (Tasks 1–10, code-review Findings 1–5, skeptic Finding 1) reported `bash scripts/test.sh` exit 1 with `6a no machine paths` as the sole failure, its only hit `./.git:1:gitdir: <main checkout>/.git/worktrees/autonomous-sdlc-harness-feat_readme_summary_compact_llms_txt` — the worktree's untracked `.git` pointer file. Every other automated gate passed on each run.
 - **cost this run:** no unit on this branch was verified by a passing `commands.test`; each implementer reported a red gate and the run proceeded on its per-hit reading.
 - **hypothesis:** (guess) the 6a grep's `--exclude-dir=.git` does not skip `.git` when it is a file, as one implementer reported.
 

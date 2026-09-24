@@ -6,7 +6,7 @@
 
 ## Gate `6a no machine paths` fails on every `bash scripts/test.sh` run inside a worktree
 - **category:** tooling-gap
-- **evidence:** all 13 Phase-A and 5 Phase-C `layer-implementer` returns report `bash scripts/test.sh` exit 1 with 13 gates passed and only `6a` failing; the hits are the worktree's untracked `.git` pointer file (`gitdir: /Users/daniel/Work/autonomous-sdlc-harness/.git/worktrees/…`), `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md` quoting it, and (later) `harness-runs/scratch/t13_test.log`.
+- **evidence:** all 13 Phase-A and 5 Phase-C `layer-implementer` returns report `bash scripts/test.sh` exit 1 with 13 gates passed and only `6a` failing; the hits are the worktree's untracked `.git` pointer file (`gitdir: <main checkout>/.git/worktrees/…`), `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md` quoting it, and (later) `harness-runs/scratch/t13_test.log`.
 - **cost this run:** the configured test gate could not pass on any unit; every implementer had to argue the failure was pre-existing instead of reporting a clean gate
 - **hypothesis:** the gate's file walk does not exclude a `.git` that is a file rather than a directory.
 
