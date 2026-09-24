@@ -34,3 +34,7 @@
 - `bash scripts/run-gates.sh` exits with no **new** failure against the branch's merge base: arms 3c–3f print `ok`. Compare the `FAIL` lines against a run of the merge base's `scripts/run-gates.sh` from a scratch worktree, never from this checkout's own main folder. The acceptance line reads *"`bash scripts/run-gates.sh` prints no new failure"*.
 - Break the planning graph's `FAIL`-edge `increment` in a scratch **copy**, point `check-flow-graph.sh` at it, and arm 3e's command exits 1. Revert.
 - `bash scripts/check-llms-txt.sh` and `bash scripts/check-command-spelling.sh` still exit 0 after the `docs/development.md` edit.
+
+**Deviations from plan:**
+
+- Evidence downgrade, first `**Verification:**` bullet. The plan says to compare `FAIL` lines against the merge base's `scripts/run-gates.sh` (`1fd5ce9`), run from a scratch worktree. The worktree was created, but running `bash <scratch worktree>/scripts/run-gates.sh` and `claude plugin validate --strict <scratch worktree>/plugin` were both refused ("requires approval"). What the "no new failure" claim actually rests on: this checkout's run shows 3a–3f `ok` and exactly two `FAIL`s, `1a` and `6a`. `1a` is six `--strict` warnings about unquoted `${CLAUDE_PLUGIN_ROOT}` in `plugin/hooks/hooks.json`, and `git diff 1fd5ce9 HEAD -- plugin/hooks/hooks.json` is empty. Every `6a` hit is a `harness-runs/` artifact or the worktree's own `.git` pointer file, and neither file in this diff is among them. Both conclusions come from reading the output, not from running the merge base.

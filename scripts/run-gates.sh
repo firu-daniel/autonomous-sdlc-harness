@@ -91,9 +91,13 @@ else
   echo "  ok    2e unknown command is refused"
 fi
 
-echo "== gate 3 — configuration schema"
+echo "== gate 3 — configuration and flow-graph schemas"
 gate "3a example validates" npm run validate:config
 gate "3b negative fixtures are refused" npm run validate:config:negative
+gate "3c flow graph validates" npm run validate:flow-graph
+gate "3d flow-graph negative fixtures are refused" npm run validate:flow-graph:negative
+gate "3e flow graph static checks" bash scripts/check-flow-graph.sh
+gate "3f each flow-graph check refuses its fixture" bash scripts/check-flow-graph.sh --negatives
 
 echo "== gate 4 — init against a throwaway fixture"
 gate "4 npm test" npm test

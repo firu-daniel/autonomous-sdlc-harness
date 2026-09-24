@@ -163,14 +163,20 @@ npm unlink                    # from cli/, removes the global link again
 
 The middle line must print the version and exit 0. Measured on 2026-08-26 against `0.1.0`: it printed `0.1.0`. `npm link` writes outside this checkout — a global link and a `node_modules` symlink — so the third line is part of the leg rather than cleanup a reader may skip.
 
-**Gate 3 — configuration schema.** From the repository root:
+**Gate 3 — configuration and flow-graph schemas.** From the repository root:
 
 ```
 npm run validate:config
 npm run validate:config:negative
+npm run validate:flow-graph
+npm run validate:flow-graph:negative
+bash scripts/check-flow-graph.sh
+bash scripts/check-flow-graph.sh --negatives
 ```
 
 The first validates the worked example against the schema. The second asserts the inverse case once per fixture, one chained assertion for each document `schemas/negative/` wires into it: `ajv test … --invalid` passes only when a fixture is read *and* rejected, so a green run means **every** wired fixture was still refused — not merely that something exited non-zero — and each assertion prints the keyword path that rejected its own fixture, naming the constraint that fixture proves. A red one means either the schema started accepting a fixture or a fixture could not be loaded, and the message says which: `<file> failed test` and exit 1 for the first, `Cannot find data file …` and exit 2 for the second. Neither red case prints a keyword path — do not go looking for one.
+
+The last four lines cover the flow graph, `cli/templates/scripts/flows/task_plan_writing.graph.json`. `npm run validate:flow-graph` validates that graph and every check fixture against `schemas/flow-graph.schema.json`; `npm run validate:flow-graph:negative` asserts, with the same `ajv test … --invalid` form as above, that each schema negative is read and rejected. `bash scripts/check-flow-graph.sh` runs the checks the schema cannot express against the graph and exits 1 with one stderr line per finding; `--negatives` runs them against each check fixture and exits 1 when a fixture passes every check **or** fails only on another check's id, and when a check has no fixture. The check ids are that script's header block `THE CONTRACT` and are not restated here. The two fixture families live apart on purpose: the schema negatives are the `flow-graph-schema-*.json` files in `schemas/negative/`, which the schema rejects; the check fixtures are in `schemas/flow-graph-check/`, schema-valid by design and rejected by the checker, one check each. The checker reads the plugin documents it compares against at run time rather than copying any of them: the closed directive set in `plugin/instructions/run_mode_instructions.md`, the task-engine template in `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3 Templates`, and the planning core's `## Setup (once per session)` table and cap sentences.
 
 **Gate 4 — `init` against a throwaway fixture.** From the repository root:
 
