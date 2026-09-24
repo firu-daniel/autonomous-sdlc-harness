@@ -7,6 +7,6 @@
 {"id":"q-fc-webhook-retry","query":"my endpoint was down, how many times will you retry and what happens after that","labels":[{"ref":"docs/webhooks.md#delivery-and-retries","grade":3},{"ref":"docs/webhooks.md#replaying-missed-events","grade":1}]}
 {"id":"q-fc-verify-callback","query":"how do i prove a callback really came from you and not from someone replaying one","labels":[{"ref":"docs/webhooks.md#signature-verification","grade":3}]}
 {"id":"q-fc-token-lifetime","query":"how long is a token good for and when should my client get a new one","labels":[{"ref":"docs/api-auth.md#token-exchange","grade":3},{"ref":"docs/api-auth.md#api-keys","grade":1}]}
-{"id":"q-fc-negative-recruitment","query":"how do i apply for a job as a delivery driver","labels":[]}
-{"id":"q-fc-negative-lattice","query":"quantum chromodynamics lattice spacing","labels":[]}
-{"id":"q-fc-negative-datastore","query":"which database engine stores the shipment records","labels":[]}
+{"id":"q-fc-negative-recruitment","query":"how do i apply for a job as a delivery driver","labels":[],"negativeKind":"near"}
+{"id":"q-fc-negative-lattice","query":"quantum chromodynamics lattice spacing","labels":[],"negativeKind":"far"}
+{"id":"q-fc-negative-datastore","query":"which database engine stores the shipment records","labels":[],"negativeKind":"near"}

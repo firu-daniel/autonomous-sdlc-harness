@@ -6,8 +6,8 @@
  * `docs/` moves the anchor a `ref` is written against, so an unchecked set silently reports every
  * arm as worse; {@link assertLabelsResolve} is what turns that into a refusal naming the label.
  *
- * The record format — `id`, `query`, `labels: [{ ref, grade }]`, and an empty `labels` array
- * meaning a negative query — is stated in `docs/retrieval-eval.md` → `## The query-set format`, and
+ * The record format — `id`, `query`, `labels: [{ ref, grade }]`, an empty `labels` array meaning
+ * a negative query, and the optional `situation`, `intent`, `origin` and `negativeKind` — is stated in `docs/retrieval-eval.md` → `## The query-set format`, and
  * checked here. A negative query is *skipped* by the label check rather than exempted from it by a
  * flag: it has no labels, so there is nothing to resolve.
  *
@@ -21,16 +21,36 @@ import { readFileSync } from 'node:fs';
 const GRADE_MIN = 1;
 const GRADE_MAX = 3;
 
+/** The one declaration of `negativeKind`'s closed value set; a consumer imports it, never retypes it. */
+export const NEGATIVE_KINDS = Object.freeze({ far: 'far', near: 'near' });
+
+/**
+ * The class a consumer reports for a negative that carries no `negativeKind`; a consumer imports it,
+ * never retypes it. Deliberately not a member of {@link NEGATIVE_KINDS}: a query set may not carry it,
+ * so `loadQueries` still refuses it through `refuseOutsideSet`.
+ */
+export const UNCLASSED_NEGATIVE = 'unclassed';
+
+const INTENTS = Object.freeze(['surroundings', 'convention', 'contract']);
+const ORIGINS = Object.freeze(['written', 'harvested']);
+
 function refuse(file, line, message) {
   throw new Error(`eval: ${file}:${line} ${message}`);
+}
+
+function refuseOutsideSet(file, line, record, field, legal) {
+  const value = record[field];
+  if (value === undefined || legal.includes(value)) return;
+  refuse(file, line, `field ${field}: ${JSON.stringify(value)} is not one of ${legal.join(', ')} (id ${record.id})`);
 }
 
 /**
  * Every record of the JSONL query set at `path`, in file order.
  *
  * Refuses a malformed line, a duplicate `id`, a missing `query`, a malformed `labels` array, a
- * missing `ref` and a `grade` that is not an integer in `1`–`3`, each naming the file, the line
- * number and the field.
+ * missing `ref`, a `grade` that is not an integer in `1`–`3`, an optional field outside its legal
+ * values and a `negativeKind` on a positive, each naming the file, the line number and the field.
+ * An absent optional field loads as `undefined`.
  */
 export function loadQueries(path) {
   const text = readFileSync(path, 'utf8');
@@ -79,8 +99,31 @@ export function loadQueries(path) {
       }
     }
 
+    if (
+      record.situation !== undefined &&
+      (typeof record.situation !== 'string' || record.situation.trim() === '')
+    ) {
+      refuse(path, line, `field situation: not a non-empty string (id ${record.id})`);
+    }
+    refuseOutsideSet(path, line, record, 'intent', INTENTS);
+    refuseOutsideSet(path, line, record, 'origin', ORIGINS);
+    refuseOutsideSet(path, line, record, 'negativeKind', Object.values(NEGATIVE_KINDS));
+    if (record.negativeKind !== undefined && record.labels.length > 0) {
+      refuse(path, line, `field negativeKind: set on a positive query (id ${record.id})`);
+    }
+
     seen.set(record.id, line);
-    queries.push({ id: record.id, query: record.query, labels: record.labels, line, source: path });
+    queries.push({
+      id: record.id,
+      query: record.query,
+      labels: record.labels,
+      line,
+      source: path,
+      situation: record.situation,
+      intent: record.intent,
+      origin: record.origin,
+      negativeKind: record.negativeKind,
+    });
   });
 
   return queries;

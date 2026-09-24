@@ -1,28 +1,24 @@
 <!--
-This file is named `agent-task.md` and must not be renamed to `prompt.md`. `evals/README.md` states
-that the native eval runner discovers its cases at `evals/**/case.yaml` or `evals/**/prompt.md`
-alongside `graders/*.md`, so any `prompt.md` under `evals/` is by that pattern a runner case. This is
-not one: it is the task text for a hand-run measurement that answers to no runner, driven by
-`evals/docs-retrieval/arm-a/run-arm-a.sh` and scored by
-`evals/docs-retrieval/arm-a/score-transcript.mjs`. Keeping this name keeps the file off that
-discovery glob. Do not resolve the collision the other way by restating or widening the discovery
-pattern in `evals/README.md`; that statement has one home.
+This file is the A-search task text: what `evals/docs-retrieval/arm-a/run-arm-a.sh --variant search`
+sends, where the A-index variant sends `agent-task.md`. It must not be renamed to `prompt.md`, for the
+reason `agent-task.md`'s own opening comment gives. Outside this comment and the paragraph that tells
+the agent how to navigate, every line is byte-identical to `agent-task.md`, so the two variants differ
+in that instruction alone.
 
-This file is the A-index task text, and it carries exactly TWO substitution tokens: the placeholder
-standing alone below the words "The question:", written as `query` inside doubled braces, and the
-placeholder naming the file to read first, written as `index` inside doubled braces, which the runner
-fills from its `--index` option. Each is checked to occur exactly once before any agent call. The
-runner replaces those two and nothing else, so any other doubled brace anywhere here, this comment
-included, would be handed to the agent verbatim. Everything in this file is the prompt: the runner
-substitutes and sends it whole, comment and all.
+This file carries exactly ONE substitution token — the placeholder standing alone below the words
+"The question:", written as `query` inside doubled braces — and names no index, so it carries no
+`index` token; both counts are checked before any agent call. The runner replaces that token and
+nothing else, so any other doubled brace anywhere here, this comment included, would be handed to the
+agent verbatim. Everything in this file is the prompt: the runner substitutes and sends it whole,
+comment and all.
 -->
 
 You are answering a documentation-retrieval question against the documentation catalog rooted in the
 working directory you were started in. That catalog is the only material you may use.
 
-Read `{{index}}` first. It is the catalog's index and the navigation surface you are given: a
-document missing from it is a document you cannot reach. Follow its links to the documents that look
-relevant, and read the sections you need.
+The catalog is the set of Markdown documents under that working directory. No index is given: find
+the sections that answer the question yourself, with your read-only tools — search the documents, list
+them, and read the sections you need.
 
 The question:
 
