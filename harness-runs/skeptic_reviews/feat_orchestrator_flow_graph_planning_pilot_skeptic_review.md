@@ -32,7 +32,7 @@ No branch parity review exists, because `phases.parity` is `false`. No branch ar
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 3** — Put the `questions` row first in the walker's `<outcome>` table and state first-match precedence _(layer: plugin)_
-2. [ ] **Finding 2** — Map **extend** to `ui_writer` in `## Setup` step 7 when the resumed answers were raised in the UI-test-plan loop _(layer: plugin)_
+2. [x] **Finding 2** — Map **extend** to `ui_writer` in `## Setup` step 7 when the resumed answers were raised in the UI-test-plan loop _(layer: plugin)_
 3. [ ] **Finding 1** — Refuse a stale `lib/harness-run-lib.sh` at walker start with a line naming it, and record the cost _(layer: cli, general)_
 
 ---
