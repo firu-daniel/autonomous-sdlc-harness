@@ -54,7 +54,7 @@
 #      branch other than the state's, unknown flow, formatVersion not 1, FAIL
 #      without --findings, no run-mode record, an unresolvable phase flag
 #   2  the configuration, the graph or the state file cannot be resolved or
-#      written
+#      written, or lib/harness-run-lib.sh predates this walker
 #   Every non-zero exit prints one `flow-walker: <cause>` line on stderr and
 #   leaves the state file byte-identical.
 #
@@ -100,6 +100,12 @@ for fw_lib in "$fw_dir/lib/harness-run-lib.sh" "$fw_dir/lib/flow-walker-gates.sh
   # shellcheck source=/dev/null
   . "$fw_lib"
 done
+# An older `init` keeps an existing lib/harness-run-lib.sh (create-if-absent), and one written
+# before this walker shipped lacks the phase reader every `skipped` gate calls.
+if ! declare -F hr_phase_enabled >/dev/null; then
+  printf 'flow-walker: %s predates this walker (it defines no hr_phase_enabled): delete that file and re-run autonomous-sdlc-harness init, which writes the current copy\n' "$fw_dir/lib/harness-run-lib.sh" >&2
+  exit 2
+fi
 
 NL='
 '

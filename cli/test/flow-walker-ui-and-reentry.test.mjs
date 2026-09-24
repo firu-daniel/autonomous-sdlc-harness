@@ -20,7 +20,9 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import { run, walk, walkerFixture, walkerStatePath, walkerUnavailable, WALKER_FLOW } from './helpers/walker.mjs';
@@ -336,6 +338,21 @@ test('(11) next for a branch other than the one started is refused and changes n
     await walk(dir, ['next', '--flow', WALKER_FLOW, '--branch', 'feat_y', '--outcome', 'returned', '--skipped', 'none']),
   );
   assert.deepEqual(readFileSync(walkerStatePath(dir)), before);
+});
+
+test('(12) a lib/harness-run-lib.sh older than the walker is refused at start, naming the file', { skip: SKIP }, async (t) => {
+  const dir = await fixture(t, { parity: false, qa: false });
+  // `init` writes the library create-if-absent, so an adoption from before the walker keeps a copy
+  // with no `hr_phase_enabled`.
+  const lib = join(dir, 'scripts', 'lib', 'harness-run-lib.sh');
+  await writeFile(lib, readFileSync(lib, 'utf8').replace('hr_phase_enabled() {', 'hr_phase_enabled_absent() {'));
+
+  const result = await walk(dir, ['start', ...flags('--skipped', 'none')]);
+
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /^flow-walker: .*harness-run-lib\.sh predates this walker/);
+  assert.ok(!existsSync(walkerStatePath(dir)), 'a refused start wrote the walker state');
 });
 
 /*

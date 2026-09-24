@@ -87,7 +87,7 @@ Each one restates an outcome the tasks that built it settled, with its reason an
 
 **Reason.** Every invocation stays one plain literal command, which the permission profile can grant and the script-allowlist guard does not withhold. And the orchestrator never has to resolve the plugin root, which `docs/development.md` → `## 2. The one authoring rule that follows` records a real orchestrator doing by hand, with `find`, after its own `${CLAUDE_PLUGIN_ROOT}` citations were refused.
 
-**Cost.** An adopter's copies are written `create-if-absent` (`outerLoopScripts.ts` → the re-run contract), so they lag a plugin upgrade until `init` is re-run. A missing walker is a loud non-zero exit, which the core's `## The walker` routes to `<escalate>` with `bash`'s own line.
+**Cost.** An adopter's copies are written `create-if-absent` (`outerLoopScripts.ts` → the re-run contract), so they lag a plugin upgrade until `init` is re-run. A missing walker is a loud non-zero exit, which the core's `## The walker` routes to `<escalate>` with `bash`'s own line. A `lib/harness-run-lib.sh` kept from an `init` that predates the walker is kept by that same `create-if-absent` contract. The walker refuses it at `start` with a line naming the file and the remedy: delete it and re-run `init`.
 
 ### The iteration cap — the graph owns it, the core keeps two descriptions held by a check
 
