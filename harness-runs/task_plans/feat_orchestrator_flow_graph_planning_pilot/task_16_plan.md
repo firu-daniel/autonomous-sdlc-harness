@@ -59,3 +59,8 @@ The facts this document records are these tasks' facts. It restates their outcom
 - `bash scripts/check-command-spelling.sh` exits 0, with every slash command in its prefixed form. Gate 6a finds no machine path in the new document.
 - Every figure in the document carries its command and output, and every decision cites the file and anchor it rests on.
 - `git grep -n "second flow" docs/development.md ROADMAP.md` finds nothing this task added: the proposal stays in its own document.
+
+**Deviations from plan:**
+
+- `bash scripts/check-llms-txt.sh` was run before commit and exited 1 with `'docs/flow-graph-walker.md' is not a tracked file` (the same finding as gate 6c in `bash scripts/test.sh`); the implementer does not stage files, so the exit-0 claim rests on the check's own tracked-file rule and is met only once the committer stages the new file. Re-run it after the commit.
+- The honest-split paragraph publishes a per-heading byte table measured by an `awk` command stated in the document, in addition to the two whole-file figures the plan names.
