@@ -42,7 +42,7 @@ The tasks run in the configured layer order, `cli` → `plugin` → `general`. T
 6. [x] **Task 6** — Walker tests: the task-plan loop, derived from the pre-change core _(layer: cli)_ _(points: 20)_
 7. [x] **Task 7** — Walker tests: the UI-test loop, re-entry and the re-print subcommand _(layer: cli)_ _(points: 15)_
 8. [x] **Task 8** — Name the walker in the cli package's adopter-facing text _(layer: cli)_ _(points: 8)_
-9. [ ] **Task 9** — Rewrite the planning core around the walker _(layer: plugin)_ _(points: 20)_
+9. [x] **Task 9** — Rewrite the planning core around the walker _(layer: plugin)_ _(points: 20)_
 10. [ ] **Task 10** — Repoint the two planning forks at the rewritten core _(layer: plugin)_ _(points: 12)_
 11. [ ] **Task 11** — Repoint the planning commands and the flow overview _(layer: plugin)_ _(points: 12)_
 12. [ ] **Task 12** — Flow-graph schema, its negative fixtures and the static-check fixtures _(layer: general)_ _(points: 20)_
