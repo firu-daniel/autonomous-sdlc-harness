@@ -198,11 +198,11 @@ It **exits 0** against a freshly wired repository **that has a remote**, warning
 **Gate 6 — self-containment.** Nothing in this tree may name a location on the machine that wrote it, and no generator template may have been committed into the adopter's own dot-namespace. Run this **before committing, on the machine you are committing from**. From the tree root:
 
 ```
-grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist
+grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git | grep -v '^\./\.git:[0-9][0-9]*:'
 find . -name '.claude' -type d -not -path './examples/notes-app/.claude' -not -path './.claude'
 ```
 
-Those two must print nothing — and this is the one gate read from its **output** rather than its exit status, because `grep` exits 1 precisely when it finds nothing, which is the passing case here.
+Those two must print nothing — and this is the one gate read from its **output** rather than its exit status, because `grep` exits 1 precisely when it finds nothing, which is the passing case here — and why the first command may carry a pipe despite §5's opening rule: its anchored `grep -v` drops only the line of the root `.git`, which in a linked worktree is a one-line `gitdir:` pointer **file** naming `<main checkout>` that `--exclude-dir=.git` does not skip, so a nested `.git` file, or any file quoting a `gitdir:` line, is still printed.
 
 `$HOME` is inside double quotes and so is expanded by the shell: the first command searches for the home path of **the user running it**, which is why it is a pre-commit self-check rather than an audit of the tree. Run against a clean clone by anyone else it passes unconditionally, because another author's home path is not theirs — it says nothing about what is committed. To sweep a tree you did not write, widen it to the general shapes, `grep -rnE '/(Users|home)/[a-z]' . --exclude-dir=node_modules --exclude-dir=dist`, and read the hits by eye: that form has legitimate matches — the fictional `/Users/me` and `/home/ada` paths in `docs/watcher.md`, `cli/test/daemon.test.mjs` and `cli/src/daemon/units.ts` — so it is not a print-nothing gate.
 
