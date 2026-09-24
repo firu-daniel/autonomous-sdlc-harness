@@ -86,14 +86,16 @@ Pass `--findings` only with `--outcome FAIL`. **Pass `--skipped` only when no fl
 
 | The return carries | `--outcome` |
 |---|---|
-| a writer's `story_file` / `ui_test_index` | `returned` |
 | a `## Questions` section | `questions` |
+| a writer's `story_file` / `ui_test_index` | `returned` |
 | `verdict: PASS` | `PASS` |
 | `verdict: FAIL` | `FAIL`, with the reviewer's `findings_file:` as `<findings_file>` |
 | `no_ui: true` | `no_ui` |
 | `error:` | `error` |
 | `blocker:` | `blocker` |
 | an answer that came back through `<ask>` | `answered` |
+
+Take the first row whose left cell the return matches: a writer that returns `## Questions` beside its summary block — or beside `no_ui: true` — passes `questions`.
 
 **Acting on what it prints:**
 
