@@ -51,4 +51,10 @@ This task cites each of these by file and heading and restates none.
 - Every file and heading the rewritten item cites resolves in the tree as Tasks 1–6 left it. Open each one: `flow-walker.sh` → `STATE`, the core's **Continuing a saved walk.**, the autonomous fork's `## Override 2 — resumability` and `## Override 5 — pause/resume + flow-progress ledger (planning half)`, the semi-autonomous row, and both test suites' case titles.
 - `git grep -n "re-entry mid-loop restarts the counter" -- cli/test docs` prints both the case `(6)` test line and this document's **Evidence.** line.
 - The document still opens with its **Who reads this:** statement and its **What it owns.** paragraph, unchanged (`.claude/context/conventions.md` → `## What accompanies a new unit of each kind`, the `docs/` row).
-- `bash scripts/check-llms-txt.sh` exits as it did before this branch. The `llms.txt` line for this document still describes it truly: *"the decisions, the core's measured size, and what a second flow would need"*.
+- `bash scripts/check-llms-txt.sh` exits as it did before this branch.
+
+**Deviations from plan:**
+
+- The §3 bullet says the schema's `entries` description *"is restated"*, but at this commit `schemas/flow-graph.schema.json` → `properties.entries.description` is unchanged; Task 8 makes that edit. The sentence is true once Task 8 lands, and was checked against `task_8_plan.md`, not against the tree.
+- The **Cost.** bullet's "skeptic Finding 2" is anchored to `harness-runs/skeptic_reviews/feat_orchestrator_flow_graph_planning_pilot_skeptic_review/finding_2.md`, so the citation resolves.
+- `bash scripts/test.sh` exits 1 on two gates this task does not touch: `1a plugin manifest` (the validator's unquoted `${CLAUDE_PLUGIN_ROOT}` warning on `plugin/hooks/hooks.json`) and `6a no machine paths` (the worktree's `.git` pointer file). The `llms.txt` line for this document still describes it truly: *"the decisions, the core's measured size, and what a second flow would need"*.
