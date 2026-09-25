@@ -42,7 +42,10 @@
 # RESUME sentinel has landed. Both re-launch the SAME engine in the run's
 # EXISTING working copy — they never create one — through `spawn_engine`'s 4th
 # and 5th arguments, and they are what makes yielding a session cost nothing
-# while a run waits. ONE OTHER PATH brings a run back, and only inside a job
+# while a run waits. For a record whose `execution` is `github-actions` each
+# pass instead DISPATCHES (`remote-run.sh dispatch … --resume answer|pause`)
+# rather than re-launching through `spawn_engine`, and it neither consults the
+# lane nor holds a cap slot — see REMOTE DISPATCH. ONE OTHER PATH brings a run back, and only inside a job
 # (HARNESS_JOB_MODE=1): job mode's BOUNDED AUTO-RESUME, which relaunches a
 # `failed` or overload-`paused` run through the same `spawn_engine` 5th
 # argument at most REMOTE_AUTO_RESUME_MAX times per run — see JOB MODE. The park resume is bounded by THE PARK-LOOP GUARD: a run
@@ -130,7 +133,8 @@
 # and the three passes that START work (a fresh inbox drop, a park resume, a
 # pause resume) CONSULT that record before acting — and, only when
 # USAGE_LANE_LOCK_ENABLED=1, also acquire a single machine-level lane. A remote
-# drop consults neither (see REMOTE DISPATCH). Both live
+# drop, a remote park resume and a remote pause resume consult neither (see
+# REMOTE DISPATCH). Both live
 # under
 #
 #   ${XDG_STATE_HOME:-$HOME/.local/state}/autonomous-sdlc-harness/
@@ -197,6 +201,21 @@
 #     identical re-drop still skips the commit, but its push must still land —
 #     the earlier drop's push may be the one that failed. push-branch.sh exits
 #     0 on every path, so "landed" is read as `origin/<branch>` equal to HEAD.
+#   * NOTHING LOCAL WATCHES, GATES, RESTARTS OR RESUMES A REMOTE RUN ON ITS
+#     OWN. Skipped for such a record: the vanished-process reconcile, the cap
+#     count, the stall watchdog, both halves of the usage gate, and the lane's
+#     idle release.
+#   * THE RELAYS — EVERY ONE A USER'S ACTION RELAYED, never a decision of this
+#     script. The files a user's command writes into the mirror become
+#     dispatches: a fully answered park -> `dispatch --resume answer
+#     --answers-from <clar_dir> --indexes "<set>"` (plus `--park-loop-clear`
+#     after a PARK_LOOP_CLEAR); a RESUME -> `dispatch --resume pause`; a PAUSE on
+#     a `running` record -> `remote-run.sh pause`. Each is chain 0, takes no cap
+#     slot and consults no lane; only a sent dispatch changes the record or
+#     removes a file, so a refusal or a `gh` failure is one log line and the
+#     next pass retries. The kill switch defers the two resumes; the pause relay
+#     runs ahead of it, the one action that still runs under the brake, because
+#     it starts nothing.
 #
 # A remote run's local working copy is a MIRROR that `remote-run.sh sync`
 # fills; it is stopped through `remote-run.sh stop`.
@@ -277,9 +296,10 @@
 # THE KILL SWITCH IS THE OPERATOR'S, AND THIS SCRIPT NEVER DELETES IT.
 # `<state_dir>/AUTONOMOUS_STOP` in the main checkout stops the watcher from
 # launching or resuming ANY run, and it is removed by hand — a watcher that
-# cleared its own brake would restart the very runs it was told to stop. It is
-# distinct from the per-run `<state_dir>/STOP` inside one working copy, which
-# halts one run.
+# cleared its own brake would restart the very runs it was told to stop.
+# Relaying a remote run's pause is the one action that still runs under the
+# brake, because it starts nothing (see REMOTE DISPATCH). It is distinct from
+# the per-run `<state_dir>/STOP` inside one working copy, which halts one run.
 #
 # WHO RUNS IT. The service manager (`daemon install` renders the unit), or a
 # person by hand for a single `tick` or a `status` — and one other runner, the
@@ -659,6 +679,22 @@
 #                    `git -C "$w/demo-feat_x" log -1 --format=%s` is
 #                    `chore: add user review for feat_x`, pushed, and ONE
 #                    `-f engine=user_review` dispatch recorded
+#   remote skips  that record `running` with an empty pid -> tick after tick it
+#                 stays `running` with no `failed` notification, a local drop in
+#                 the same tick still launches under MAX_PARALLEL_RUNS=1, its
+#                 back-dated mirror logs draw no stall line, and a `rejected`
+#                 event in its stream drops no PAUSE
+#   remote relays from that record: `parked` with question_1.md and answer_1.md
+#                 in the mirror's clarifications/feat_x/ -> ONE `-f resume=answer`
+#                 dispatch whose `answers` carries answer_1.md's bytes, the stub
+#                 NOT launched, the record `running`; `park_loop` plus
+#                 PARK_LOOP_CLEAR -> the same, with `-f park_loop_clear=true`;
+#                 `paused` with the mirror's RESUME -> ONE `-f resume=pause`
+#                 dispatch and PAUSE / RESUME / PAUSE_ACK gone; `running` with
+#                 the mirror's PAUSE -> ONE `-f action=pause` dispatch, PAUSE
+#                 gone and pause_relayed_at set. With AUTONOMOUS_STOP present
+#                 only the pause is sent; with a recorder exiting non-zero
+#                 every file and status stays
 #   unresolvable  printf 'x' > "$d/harness.config.json"
 #                 -> one line on stderr, exit 1, nothing under "$d/sdlc-harness"
 
@@ -1233,6 +1269,12 @@ notify() {
 #   remote_dispatched_at
 #                       the epoch second launch_remote_run's `remote-run.sh
 #                       dispatch` returned 0; empty after a failed dispatch
+#   park_loop_clear_pending
+#                       `1` on a remote record clear_park_loops returned to
+#                       `parked`, so the next answer relay sends
+#                       `--park-loop-clear`; cleared once that relay is sent
+#   pause_relayed_at    the epoch second the pause relay sent a remote record's
+#                       `remote-run.sh pause`
 # -----------------------------------------------------------------------------
 # The bodies are lib/harness-run-lib.sh's THE RUN REGISTRY, shared with every
 # script that reads or writes this file; these wrappers bind them to $REGISTRY.
@@ -1241,6 +1283,13 @@ registry_init() { hr_registry_init "$REGISTRY"; }
 registry_set() { hr_registry_set "$REGISTRY" "$@"; }
 registry_get() { hr_registry_get "$REGISTRY" "$@"; }
 registry_branches() { hr_registry_branches "$REGISTRY"; }
+
+# True iff <branch>'s record carries `execution: github-actions` — the record's
+# field, never `execution.target` (see REMOTE DISPATCH). Silent: running_count
+# calls it inside a command substitution.
+record_is_remote() {
+  [ "$(registry_get "$1" execution)" = "github-actions" ]
+}
 
 # Self-healing pass: a record still marked `running` whose process is gone is
 # reconciled to `failed` and notified. Run ONCE per pass, before anything reads
@@ -1251,6 +1300,9 @@ reconcile_stale_runs() {
   local b pid
   while IFS= read -r b; do
     [ -n "$b" ] || continue
+    # A remote run has no local process to vanish; `remote-run.sh sync` owns
+    # its status.
+    record_is_remote "$b" && continue
     pid="$(registry_get "$b" pid)"
     if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
       if [ "$(registry_get "$b" status)" = "running" ]; then
@@ -1271,6 +1323,8 @@ running_count() {
   local n=0 b pid
   while IFS= read -r b; do
     [ -n "$b" ] || continue
+    # A remote run holds no local slot: the job gates itself.
+    record_is_remote "$b" && continue
     pid="$(registry_get "$b" pid)"
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
       n=$((n + 1))
@@ -1459,7 +1513,8 @@ print_status() {
     .runs
     | to_entries
     | if length == 0 then "  (no runs recorded)"
-      else (.[] | "  \(.value.status // "?")\t\(.key)\tpid=\(.value.pid // "-")\t\(.value.log_path // "-")")
+      else (.[] | "  \(.value.status // "?")\t\(.key)\tpid=\(.value.pid // "-")\t\(.value.log_path // "-")"
+                  + (if (.value.execution // "") != "" then "\texecution=\(.value.execution)" else "" end))
       end
   ' "$REGISTRY"
   # The resolved tunables, names and values only — the override channel made
@@ -1471,7 +1526,8 @@ print_status() {
 }
 
 # The global kill switch — checked before every launch and at the top of every
-# pass. NEVER removed here; see the header.
+# pass, after the remote-pause relay, which starts nothing (see REMOTE DISPATCH).
+# NEVER removed here; see the header.
 kill_switch_active() {
   [ -f "$GLOBAL_STOP" ]
 }
@@ -1591,7 +1647,8 @@ lane_blocks_start() {
 # watcher that is idle for its own reasons (the kill switch, an empty inbox)
 # never sits on the machine. Called from `tick` only.
 #
-# `running_count` is the same liveness test every capacity decision here makes.
+# `running_count` is the same liveness test every capacity decision here makes,
+# and it skips remote records, so a live remote run never holds the lane.
 # Nothing is logged unless a release actually happened: this runs on every pass.
 lane_release_if_idle() {
   # Lock only: with it off nothing is ever held, so nothing is ever released.
@@ -2285,7 +2342,7 @@ begin_park_resume() {
 # Returns 0 when it resumed, 1 when there was nothing to do, 10 when it deferred
 # for the cap and 11 when it deferred for the kill switch — the same three-way
 # vocabulary the inbox pass returns, so a caller that already distinguishes them
-# needs no second one.
+# needs no second one. A remote record returns relay_remote_answers' code.
 #
 # THE PARK IS THE UNIT. A partly answered park is not resumed, and a resume
 # consumes every answered pair at once: resuming on a subset would leave pairs
@@ -2330,6 +2387,16 @@ resume_parked_run() {
     log "global kill switch present ($GLOBAL_STOP) — deferring resume of '$branch'"
     return 11
   fi
+
+  [ -n "$log_path" ] || log_path="$LOGS_DIR/$branch.log"
+
+  # A remote run is relayed, not re-launched: no cap slot, no lane (REMOTE
+  # DISPATCH). The pairs stay in the mirror, which the next `sync` replaces.
+  if record_is_remote "$branch"; then
+    relay_remote_answers "$branch" "$clar_dir" "$log_path" "$answered_set"
+    return
+  fi
+
   local current
   current="$(running_count)"
   if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
@@ -2345,8 +2412,6 @@ resume_parked_run() {
     return 10
   fi
 
-  [ -n "$log_path" ] || log_path="$LOGS_DIR/$branch.log"
-
   # Re-launch the SAME engine in the SAME working copy, LEAVING every answered
   # pair at the TOP LEVEL so the engine can self-detect and consume them — the
   # re-entering fork keys off the top-level answer_<n>.md files. The whole set
@@ -2358,6 +2423,48 @@ resume_parked_run() {
   notify resumed "$branch" "$log_path" "answered clarification(s) #$answered_set"
   open_log_terminal "$branch" "$log_path"
   spawn_engine "$branch" "$worktree" "$log_path" "$answered_set"
+  return 0
+}
+
+# remote_relay_call <log_path> <remote-run.sh argument>...
+#
+# One relay's `remote-run.sh` call, from the main checkout, its output appended
+# to <log_path>. Returns the script's exit code (0 sent, 2 refused, 3 `gh`
+# failed) and leaves its first output line in REMOTE_RELAY_FIRST for the
+# caller's one log line.
+remote_relay_call() {
+  local log_path="$1" out rc
+  shift
+  out="$(bash "$REMOTE_RUN" "$@" --repo "$MAIN_REPO" 2>&1)"
+  rc=$?
+  [ -z "$out" ] || printf '%s\n' "$out" >>"$log_path"
+  REMOTE_RELAY_FIRST="$(printf '%s\n' "$out" | sed -n '1p')"
+  return "$rc"
+}
+
+# relay_remote_answers <branch> <clar_dir> <log_path> <answered_set>
+#
+# resume_parked_run's remote arm: the answered set sent as a chain-0 `--resume
+# answer` dispatch, with `--park-loop-clear` while clear_park_loops has left
+# `park_loop_clear_pending` set. 0 dispatched; 1 refused or `gh` failed, the
+# record left `parked` and every file where it is, so the next pass retries.
+relay_remote_answers() {
+  local branch="$1" clar_dir="$2" log_path="$3" answered_set="$4" rc
+  local -a plc=()
+  [ "$(registry_get "$branch" park_loop_clear_pending)" = "1" ] && plc=(--park-loop-clear)
+  remote_relay_call "$log_path" dispatch "$branch" --engine "$(registry_get "$branch" engine)" \
+    --resume answer --answers-from "$clar_dir" --indexes "$answered_set" ${plc[@]+"${plc[@]}"} --chain 0
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    log "remote-run.sh dispatch --resume answer for '$branch' failed (exit $rc): ${REMOTE_RELAY_FIRST:-no output} — leaving it parked"
+    return 1
+  fi
+  log "relayed the answers ($answered_set) of parked remote run '$branch' to GitHub Actions"
+  registry_set "$branch" status running
+  registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
+  registry_set "$branch" resume_kind answer
+  registry_set "$branch" park_loop_clear_pending ""
+  notify resumed "$branch" "$log_path" "answered clarification(s) #$answered_set, dispatched"
   return 0
 }
 
@@ -2385,7 +2492,9 @@ EOF
 # `parked`, with its count reset, once <clar_dir>/PARK_LOOP_CLEAR exists in the
 # run's working copy; the file is removed so the clear is spent once. Answering a
 # question never releases the hold — only this file does. A missing working copy
-# or an unresolvable state directory leaves the record held.
+# or an unresolvable state directory leaves the record held. A remote record is
+# also marked `park_loop_clear_pending`, because the count that matters lives in
+# the job's bundle: the answer relay carries the clear to it.
 clear_park_loops() {
   registry_init
   local b worktree state_rel clear_file
@@ -2407,6 +2516,7 @@ clear_park_loops() {
     rm -f "$clear_file"
     registry_set "$b" park_loop_cycles 0
     registry_set "$b" status parked
+    record_is_remote "$b" && registry_set "$b" park_loop_clear_pending 1
     log "park loop cleared for '$b' (PARK_LOOP_CLEAR found) — back to parked"
   done <<EOF
 $(registry_branches)
@@ -2458,7 +2568,9 @@ begin_pause_resume() {
 #
 # Resume one paused run if a RESUME trigger has landed in its working copy.
 # Return codes, the missing-working-copy outcome and the kill-switch/cap ordering
-# are resume_parked_run's, for the same reasons.
+# are resume_parked_run's, for the same reasons. A remote record is relayed as a
+# chain-0 `--resume pause` dispatch: 0 sent, 1 refused or `gh` failed with
+# nothing removed.
 resume_paused_run() {
   local branch="$1"
   local worktree log_path
@@ -2489,6 +2601,26 @@ resume_paused_run() {
     log "global kill switch present ($GLOBAL_STOP) — deferring pause-resume of '$branch'"
     return 11
   fi
+
+  [ -n "$log_path" ] || log_path="$LOGS_DIR/$branch.log"
+
+  # A remote run is relayed, not re-launched: no cap slot, no lane (REMOTE
+  # DISPATCH). The sentinels go only once the dispatch was sent.
+  if record_is_remote "$branch"; then
+    local rc
+    remote_relay_call "$log_path" dispatch "$branch" --engine "$(registry_get "$branch" engine)" \
+      --resume pause --chain 0
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      log "remote-run.sh dispatch --resume pause for '$branch' failed (exit $rc): ${REMOTE_RELAY_FIRST:-no output} — leaving it paused"
+      return 1
+    fi
+    log "relayed the RESUME of paused remote run '$branch' to GitHub Actions"
+    begin_pause_resume "$branch" "$state_abs"
+    notify resumed "$branch" "$log_path" "after pause, dispatched"
+    return 0
+  fi
+
   local current
   current="$(running_count)"
   if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
@@ -2503,8 +2635,6 @@ resume_paused_run() {
   if lane_blocks_start "$branch" "the resume of the paused run"; then
     return 10
   fi
-
-  [ -n "$log_path" ] || log_path="$LOGS_DIR/$branch.log"
 
   # Re-launch the SAME engine in the SAME working copy with the pause-resume
   # clause (spawn_engine's 5th argument).
@@ -2528,6 +2658,39 @@ resume_paused_runs() {
     [ -n "$b" ] || continue
     [ "$(registry_get "$b" status)" = "paused" ] || continue
     resume_paused_run "$b" || true
+  done <<EOF
+$(registry_branches)
+EOF
+}
+
+# THE PAUSE RELAY (REMOTE DISPATCH). A `running` remote record whose mirror
+# holds `<state_dir>/PAUSE` — a user's pause — is sent `remote-run.sh pause`;
+# on exit 0 the mirror's PAUSE goes and `pause_relayed_at` is stamped, and on
+# any other exit both stay for the next pass. Called from `tick` ahead of the
+# kill switch, because a pause starts nothing; it consults neither the cap nor
+# the lane.
+relay_remote_pauses() {
+  registry_init
+  local b wt state_rel rc log_path
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    record_is_remote "$b" || continue
+    [ "$(registry_get "$b" status)" = "running" ] || continue
+    wt="$(registry_get "$b" worktree)"
+    [ -n "$wt" ] && [ -d "$wt" ] || continue
+    state_rel="$(run_state_dir "$wt")" || continue
+    [ -f "$wt/$state_rel/PAUSE" ] || continue
+    log_path="$(registry_get "$b" log_path)"
+    [ -n "$log_path" ] || log_path="$LOGS_DIR/$b.log"
+    remote_relay_call "$log_path" pause "$b"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      log "remote-run.sh pause for '$b' failed (exit $rc): ${REMOTE_RELAY_FIRST:-no output} — PAUSE left in the mirror"
+      continue
+    fi
+    rm -f "$wt/$state_rel/PAUSE"
+    registry_set "$b" pause_relayed_at "$(date +%s)"
+    log "relayed the PAUSE of remote run '$b' to GitHub Actions"
   done <<EOF
 $(registry_branches)
 EOF
@@ -2606,6 +2769,9 @@ check_stalled_runs() {
   now="$(date +%s)"
   while IFS= read -r b; do
     [ -n "$b" ] || continue
+    # A remote run's mirror logs are not its liveness, and its job runs its own
+    # watchdog.
+    record_is_remote "$b" && continue
     [ "$(registry_get "$b" status)" = "running" ] || continue
     pid="$(registry_get "$b" pid)"
     # A vanished process is the reconcile pass's business; only alive-but-stuck
@@ -3360,6 +3526,8 @@ usage_assess() {
   now="$(date +%s)"
   while IFS= read -r b; do
     [ -n "$b" ] || continue
+    # The pause side skips a remote run: its job gates itself.
+    record_is_remote "$b" && continue
     usage_running_alive "$b" || continue
     # One line per window, each assessed on its own: a five_hour window that has
     # reset must not mask a seven_day window at its cap, or the reverse. The
@@ -3460,6 +3628,9 @@ usage_gate() {
   local b status pb ra wt state_rel="" state_abs=""
   while IFS= read -r b; do
     [ -n "$b" ] || continue
+    # The auto-resume side skips a remote run: its job gates itself, and
+    # resume_paused_run relays only a user's RESUME.
+    record_is_remote "$b" && continue
     status="$(registry_get "$b" status)"
     pb="$(registry_get "$b" paused_by)"
     # A run with no tag is not this gate's: a hand-dropped pause has no
@@ -3581,6 +3752,8 @@ EOF
     [ "$resume_at" -le 0 ] && resume_at=$((now + 3600))
     while IFS= read -r b; do
       [ -n "$b" ] || continue
+      # The pause side skips a remote run: its job gates itself.
+      record_is_remote "$b" && continue
       usage_running_alive "$b" || continue
       # Already requested on an earlier pass — the engine is still walking to its
       # boundary. Re-dropping PAUSE would be harmless; overwriting the recorded
@@ -3623,8 +3796,11 @@ EOF
 }
 
 # -----------------------------------------------------------------------------
-# One pass. The kill switch first, so an operator's brake beats everything else,
-# then the reconcile that frees capacity for the passes that read the cap.
+# One pass. The relay of a remote run's pause first, then the kill switch, so an
+# operator's brake beats everything else — relaying a remote run's pause is the
+# one action that still runs under the brake, because it starts nothing (see
+# REMOTE DISPATCH) — then the reconcile that frees capacity for the passes that
+# read the cap.
 # -----------------------------------------------------------------------------
 tick() {
   # Drop the library's per-process cache so an edit to `harness.config.json` is
@@ -3633,6 +3809,8 @@ tick() {
   # directory under a live watcher needs a restart, by design.
   hr_config_reset
   hr_config_load "$MAIN_REPO" || :
+
+  relay_remote_pauses
 
   if kill_switch_active; then
     log "global kill switch active — not launching or resuming runs this pass"
