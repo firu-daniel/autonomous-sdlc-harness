@@ -27,7 +27,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_observations_repo_relati
 2. [x] **Task 2** — Add the repo-relative path rule, quoted command output included, to `## The entry format` _(layer: plugin)_ _(points: 10)_
 3. [x] **Task 3** — Add the machine-path check before the commit wrapper in `## Commit mechanics` _(layer: plugin)_ _(points: 15)_
 4. [x] **Task 4** — Bring the forks' Override I and commit-point paraphrases and `AUTONOMOUS_FLOW.md` in line with the check _(layer: plugin)_ _(points: 10)_
-5. [ ] **Task 5** — Re-copy the intake README template into this repository's own run-artifact tree and run the full gate suite _(layer: general)_ _(points: 5)_
+5. [x] **Task 5** — Re-copy the intake README template into this repository's own run-artifact tree and run the full gate suite _(layer: general)_ _(points: 5)_
 
 ## Scope register
 

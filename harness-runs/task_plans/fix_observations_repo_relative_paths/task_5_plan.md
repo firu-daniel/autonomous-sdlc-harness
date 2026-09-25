@@ -19,4 +19,5 @@
 
 - `git diff --no-index --exit-code cli/templates/state-dir/improvement_observations/README.md harness-runs/improvement_observations/README.md` exits 0.
 - `git diff --name-only dev...HEAD -- harness-runs/improvement_observations/` lists `harness-runs/improvement_observations/README.md` and nothing else.
+  - **Deviations from plan:** `git diff --name-only dev...HEAD` reads committed history, so before the commit it lists nothing; the implementer ran `git diff --name-only dev -- harness-runs/improvement_observations/` (working tree against `dev`) instead, which listed `harness-runs/improvement_observations/README.md` alone. The `dev...HEAD` form holds only once the committer has landed the file.
 - `bash scripts/run-gates.sh` fails exactly the baseline the story index `## Context` records — `1a plugin manifest` and `11 docs-retrieval relevance floor` — and no other gate; `6a no machine paths` passes, which is also the check that no acceptance sample from Task 3 was left in the tree.
