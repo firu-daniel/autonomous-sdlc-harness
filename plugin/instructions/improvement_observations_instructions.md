@@ -132,12 +132,14 @@ Each observation is one block in this shape:
 ```markdown
 ## <one-line problem statement>
 - **category:** tooling-gap | silent-failure | flow-efficiency | optimization | agent-contract | shared-state | convention
-- **evidence:** what actually happened — the command / dispatch / file, or the count and the artifacts backing it
+- **evidence:** what actually happened — the command / dispatch / file, or the count and the artifacts backing it — every path repo-relative (below)
 - **cost this run:** e.g. "QA phase skipped silently", "task 4 re-implemented after resume", "~20 min stall"
 - **hypothesis:** (optional, one line, explicitly a guess — never a structural proposal)
 ```
 
 Keep `evidence` and `hypothesis` **strictly separate.** Triage must be able to trust the first without inheriting the uncertainty of the second: `evidence` is what the artifacts on disk actually show and is falsifiable, while `hypothesis` is one optional line explicitly labelled as a guess — and rule 8 above still binds it, so it is never a structural proposal.
+
+**Every path in an entry is repo-relative.** It binds every field and every heading, `evidence:` above all. A path under the run's own checkout is written from that checkout's root (`<state_dir>/improvement_observations/<branch>.md`, `.git`). A path in **another checkout of the same repository** — the main checkout, or a sibling worktree — is written from that checkout's root with its machine prefix dropped, followed by a parenthesised label naming the checkout: `(main checkout)` or `(worktree of <other branch>)`. A location outside every checkout is named by what it is — *"the session transcript"*, *"the user-level settings file"* — never by its path. The home directory, any checkout's root and any other absolute location on the machine never appear. **Quoted command output is rewritten by the same rule, and the rewrite does not count as changing the evidence:** it replaces the machine prefix and adds the label, and the path still names the same file, so rule 2 (*"Encountered, not imagined."*) and the falsifiability `evidence` rests on both still hold. The class: a linked worktree's `.git` pointer quoted as `gitdir: <main checkout root>/.git/worktrees/<name>` is written `gitdir: .git/worktrees/<name> (main checkout)` — `<main checkout root>`, `<name>` and `<other branch>` in this paragraph are illustrative text, not tokens. The file is committed and merged into `<default_branch>`, where a path from one machine means nothing to any other reader and discloses that machine's layout; `## Commit mechanics` → **Machine-path check — before every wrapper call.** is where the rule is checked. The absolute `$REPO_ROOT`-anchored path `## Where it is written` → **Write mechanics — absolute write, repo-relative commit.** gives is the file tool's **argument**, never the file's **content**: what this intake file says is bound by this rule.
 
 **The seven categories**, glossed with a concrete, countable gap each so assignment is not guesswork:
 
