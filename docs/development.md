@@ -70,6 +70,58 @@ Five measured behaviours and one shipped contract, each of which costs a round i
 
 - **`hooks/hooks.json` needs the `{"hooks": { … }}` wrapper.** A bare event map — `{"PreToolUse": [ … ]}` — fails validation with `hooks: Invalid input: expected record, received undefined`. The event names go one level down, inside `hooks`.
 - **Plugin hooks append to an adopter's own hooks; they do not override them.** A hook declared by this plugin composes with whatever the adopter has in their own settings, so the CLI never needs to write guard hooks into user settings to make them take effect. Related and easy to get backwards: `${CLAUDE_PLUGIN_ROOT}` **expands** inside a hook `command` string declared here, and **does not** expand in a settings-file-defined hook — which is the reason the guards live in `hooks.json` rather than in generated settings.
+
+  **The token sits inside double quotes together with the path it prefixes: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/<guard>.sh"`.** Measured against `claude` **2.1.282** on 2026-09-25. The unquoted form, `bash ${CLAUDE_PLUGIN_ROOT}/hooks/<guard>.sh`, was validated from a copy of `plugin/` at `<tmp>/plugin` with that `hooks.json` restored:
+
+  ```
+  claude plugin validate --strict <tmp>/plugin
+  ```
+
+  It exited 1 with six warnings, one per guard, and `--strict` turned them into the failure of gate `1a`:
+
+  ```
+  Validating plugin manifest: <tmp>/plugin/.claude-plugin/plugin.json
+
+  Validating hooks: <tmp>/plugin/hooks/hooks.json
+
+  ⚠ Found 6 warnings:
+
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/autonomous-protected-branch-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/git-commit-branch-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/git-rewrite-branch-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/autonomous-script-allowlist-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/allow-safe-compounds.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/allow-qa-credentials-read.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+
+  ✘ Validation failed (--strict treats warnings as errors)
+  ```
+
+  With the quoted form, `claude plugin validate --strict plugin` exits 0 and prints, with the checkout root written as `<checkout>`:
+
+  ```
+  Validating plugin manifest: <checkout>/plugin/.claude-plugin/plugin.json
+
+  ✔ Validation passed
+  ```
+
+  **Shell form was kept over exec form.** Quoting changes only word boundaries, it is correct whether the runtime substitutes the token or the shell expands it, and it needs no field beyond the `matcher` / `type` / `command` set `plugin/hooks/README.md` allows; exec form adds `args`. What exec form would change was read, not run: from the hooks documentation the CLI's own schema tip links to (`/hooks#exec-form-and-shell-form`, read 2026-09-25), the CLI changelog, and the hook runner inside the 2.1.282 binary:
+  - **Invocation.** With `args` present, `command` is resolved on `PATH` and spawned with `args` as its argument vector and no shell; without it, the string goes to `sh -c` on macOS and Linux (the documentation).
+  - **Stdin, exit status and stdout.** The runner writes the hook payload to the child's stdin, and reads its stdout and exit status, on one code path after either spawn (the binary). No exec-form hook was run to confirm it.
+  - **Versions.** `args` was added in 2.1.139 (changelog: *"Added hook `args: string[]` field (exec form)"*). What an earlier `claude` does with a hook entry carrying `args` was not established.
+
+  **A plugin loaded from a path containing a space still refuses what the guard exists to refuse.** A copy of `plugin/` at `<tmp>/harness plugin copy/plugin` was loaded into a `claude -p` session run from `<fixture>`, a throwaway repository on `main` with a `harness.config.json` and a branch `feat_x`. The installed plugin was switched off for that session, so the session's `init` record listed the copy as the only `autonomous-sdlc-harness` plugin (`"source":"autonomous-sdlc-harness@inline"`):
+
+  ```
+  claude -p --plugin-dir "<tmp>/harness plugin copy/plugin" --settings '{"enabledPlugins":{"autonomous-sdlc-harness@autonomous-sdlc-harness":false}}' --permission-mode default --allowedTools 'Bash(git merge:*)' --output-format stream-json --verbose --include-hook-events '<prompt: run git merge feat_x and nothing else>'
+  ```
+
+  Ten `PreToolUse` hooks started on `git merge feat_x`. One answered `deny`, and the tool result was:
+
+  ```
+  PreToolUse:Bash hook error: Blocked: push/merge/rebase while HEAD is on protected branch 'main' (protected set: main). The autonomous flow never operates on a protected branch.
+  ```
+
+  `main` did not move. The same session without `--plugin-dir` started four `PreToolUse` hooks, none of which returned a decision, so the six extra hooks and the `deny` came from the spaced-path copy.
 - **A `permissions.allow` entry was not able to pre-approve a command whose script path is written `${CLAUDE_PLUGIN_ROOT}/scripts/<name>.sh`.** Measured against `claude` **2.1.227**, on a session that could **not** be isolated from the measuring machine's own hooks — read the hook caveat that follows the runs below before treating this as a property of `claude` itself. The runs used a throwaway fixture outside this tree — `<scratch>/plugin-root/scripts/probe.sh`, two lines, printing `PROBE OK` — and settings files differing only in their `permissions.allow` list. Each run was `env CLAUDE_PLUGIN_ROOT=<scratch>/plugin-root claude -p --permission-mode default --settings <scratch>/<name>.json '<prompt>'`, the prompt instructing one verbatim Bash command and nothing else:
   - `allow: ["Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/:*)"]`, command `bash ${CLAUDE_PLUGIN_ROOT}/scripts/probe.sh` — **blocked; the script never ran.** On its own this attributes nothing: the entry is a directory prefix, and the by-product below records that form missing even as a literal path, so this run and the next are consistent with the entry form alone. The attribution is the fourth run's.
   - `allow: []`, same command — **blocked.** The entry bought nothing.
@@ -133,7 +185,7 @@ claude plugin validate --strict plugin
 claude plugin validate --strict .
 ```
 
-Both must report `Validation passed` with zero warnings. The first checks the plugin manifest, its hooks file and its components; the second checks the marketplace manifest and the entry it declares.
+Both must report `Validation passed` with zero warnings. The first checks the plugin manifest, its hooks file and its components; the second checks the marketplace manifest and the entry it declares. Only the first grades the command strings in `hooks/hooks.json`: on `claude` 2.1.282, `claude plugin validate --strict .` prints only `Validating marketplace manifest: …` and `✔ Validation passed`, both with the unquoted `hooks.json` of §3 and with the quoted one.
 
 **Gate 2 — CLI build and run.** From the repository root:
 
