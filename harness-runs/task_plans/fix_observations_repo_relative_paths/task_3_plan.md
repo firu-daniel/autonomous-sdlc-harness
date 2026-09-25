@@ -31,3 +31,8 @@
 - The exit-code paragraph, which `clarification_digest_instructions.md` → `## Commit mechanics` imports, is unchanged: `git diff -- plugin/instructions/improvement_observations_instructions.md` shows no line changed inside the **Wrapper exit status (surface the error).** paragraph.
 - `grep -rn 'Machine-path check — before every wrapper call' plugin/` has no hit outside this file at this commit; `grep -nE '/(Users|home)/' plugin/instructions/improvement_observations_instructions.md` prints nothing.
 - After the sample is removed, `bash scripts/run-gates.sh` fails no gate beyond the baseline the story index `## Context` records; gate `6a no machine paths` passes.
+
+**Deviations from plan:**
+
+- The paragraph's fenced `grep` names (`<home directory>`, `<checkout root>`, `<absolute path of the intake file>`) are spaced, not `<snake_case>` as `.claude/context/plugin.md` → `## The placeholder vocabulary` requires of a token; the paragraph marks them illustrative text, not tokens, the same device Task 2's rule uses.
+- Acceptance run: the `grep` was issued as written, but the Bash tool does not surface a status of `1`, so each run appended `; echo "status=$?"` to read the status; the second (post-rewrite) run was also issued bare, printing nothing. The status evidence rests on that appended echo.
