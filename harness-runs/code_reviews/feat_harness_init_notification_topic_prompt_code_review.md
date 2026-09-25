@@ -16,7 +16,7 @@ The main things the plan and the task prompt required all hold. There is one gra
 
 1. [x] **Finding 1** — Drop the `export` from `NTFY_TOPIC_PATTERN`, which nothing outside `notifications.ts` imports. _(layer: cli)_
 2. [x] **Finding 3** — Name the `http://` / `https://` scheme in the `--push-url` `--help` summary. _(layer: cli)_
-3. [ ] **Finding 2** — Reword `REPROMPT_LIMIT`'s doc comment so it states each re-ask loop's end state. _(layer: cli)_
+3. [x] **Finding 2** — Reword `REPROMPT_LIMIT`'s doc comment so it states each re-ask loop's end state. _(layer: cli)_
 
 ---
 

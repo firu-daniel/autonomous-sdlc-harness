@@ -80,9 +80,9 @@ const STDIN_FD = 0;
 const STDOUT_FD = 1;
 
 /**
- * How many times an unrecognised answer is re-asked before the default is taken. `init`'s
- * push-destination re-ask loops over {@link askLine} with this same bound, so the two re-ask loops
- * cannot drift apart.
+ * How many times an unrecognised answer is re-asked before asking stops. `askYesNo` then takes
+ * its default; `init`'s push-destination re-ask, which loops over {@link askLine} with this same
+ * bound so the two loops cannot drift apart, hands the last answer on for its generator to refuse.
  */
 export const REPROMPT_LIMIT = 2;
 
