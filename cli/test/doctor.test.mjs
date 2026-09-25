@@ -5119,3 +5119,196 @@ test('Acceptance 6 (e): a passing index check quotes the coverage warning the bu
   assert.ok(line.includes('docs index: 1 files'), line);
   assert.ok(line.includes('docs.root docs is not a directory'), line);
 });
+
+/**
+ * The `remote-execution` check, and `daemon-path`'s conditional `gh` member.
+ *
+ * **The rule these cases enforce: remote setup is graded from local evidence, and exactly the two
+ * conditions that stop a remote run from being dispatched move the exit status.** Every case points
+ * `HARNESS_GH_CLI` at a stub that records any invocation, so the machine's own `gh` is never reached
+ * and a run that spawned one is caught; the literals are the shipped contract's
+ * (`remote/githubActions.ts`, `cli/templates/github/workflows/`), for the reason the unit directories
+ * above are spelled out.
+ */
+const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';
+const FIXTURE_GH_CLI = 'harness-fixture-gh';
+const REMOTE_RUN_WORKFLOW = '.github/workflows/harness-run.yml';
+const REMOTE_RESUME_WORKFLOW = '.github/workflows/harness-resume.yml';
+
+const { CHECKS } = await loadCompiled('doctor/checks.js');
+
+/** A `gh` stub that appends its argv to a log and fails — a default `doctor` must never run it. */
+async function ghStub(t) {
+  const dir = await mkdtemp(join(tmpdir(), 'harness-gh-stub-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const log = join(dir, 'invocations.log');
+  const path = join(dir, FIXTURE_GH_CLI);
+  writeFileSync(path, `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(log)}\nexit 1\n`, { mode: 0o755 });
+  return { dir, path, log };
+}
+
+/** Turn remote execution on through `config set`, then let `init` write the two workflows. */
+async function remoteFixture(t) {
+  const dir = await wiredFixture(t);
+  for (const args of [['config', 'set', 'execution.target', 'github-actions'], ['init']]) {
+    const result = await runCli(dir, args);
+    assert.equal(result.status, 0, `${args.join(' ')} exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+  }
+  assert.ok(existsSync(join(dir, REMOTE_RUN_WORKFLOW)), 'init did not write harness-run.yml with remote execution on');
+  return dir;
+}
+
+/**
+ * Commit the workflows and push them, so `origin/<defaultBranch>` carries them. Forced, because the
+ * fixture's origin was seeded with a commit unrelated to the one `init` made (`helpers/fixture.mjs`),
+ * and `--no-verify`, because the pre-push guard `init` installed refuses the default branch.
+ */
+async function pushWorkflows(dir) {
+  const branch = readJson(join(dir, CONFIG_FILE)).defaultBranch;
+  await runGit(dir, ['add', '--', '.github']);
+  await runGit(dir, ['commit', '--quiet', '-m', 'Add the harness workflows']);
+  await runGit(dir, ['push', '--quiet', '--no-verify', 'origin', `+HEAD:refs/heads/${branch}`]);
+  await runGit(dir, ['fetch', '--quiet', 'origin']);
+}
+
+/** Run `doctor` with the stub as `gh`, and assert the stub was never run. */
+async function doctorWithStub(dir, stub, gh = stub.path) {
+  const result = await runCli(dir, ['doctor'], { [GH_CLI_VARIABLE]: gh });
+  assert.ok(!existsSync(stub.log), `doctor ran gh:\n${existsSync(stub.log) ? readFileSync(stub.log, 'utf8') : ''}`);
+  return result;
+}
+
+/** How many checks failed, from the report lines. */
+function failCount(stderr) {
+  return stderr.split('\n').filter((line) => line.startsWith('!! FAIL')).length;
+}
+
+test('the remote-execution check grades local evidence and fails only what stops a dispatch', async (t) => {
+  await t.test('it is listed directly after daemon-path', () => {
+    const ids = CHECKS.map((check) => check.id);
+    assert.equal(ids[ids.indexOf('daemon-path') + 1], 'remote-execution', ids.join(', '));
+  });
+
+  await t.test('with the key absent it reports local execution and the exit status is unchanged', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const stub = await ghStub(subtest);
+    assert.equal(readJson(join(dir, CONFIG_FILE)).execution?.target, undefined, 'the fixture sets execution.target');
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.match(stdout, CLEAN_SUMMARY);
+    const line = reportLine(stdout, 'pass', 'remote-execution');
+    assert.ok(line?.includes('local execution; remote execution is off (`execution.target`)'), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('local with a workflow present passes and names the command that turns it on', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    const stub = await ghStub(subtest);
+    const edit = await runCli(dir, ['config', 'set', 'execution.target', 'local']);
+    assert.equal(edit.status, 0, edit.stderr);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'remote-execution');
+    assert.ok(line?.includes('the watcher dispatches nothing while the key is local'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('config set execution.target github-actions'), line);
+  });
+
+  await t.test('on, with everything present and pushed, passes and points at --check-github', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'remote-execution');
+    assert.ok(line?.includes('doctor --check-github'), `${stdout}\n${stderr}`);
+    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'HARNESS_RUNNER']) {
+      assert.ok(line.includes(name), `the pass does not name ${name}:\n${line}`);
+    }
+  });
+
+  await t.test('on, with harness-run.yml absent, fails with init as the remedy', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    await rm(join(dir, REMOTE_RUN_WORKFLOW));
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 1, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.equal(failCount(stderr), 1, stderr);
+    const line = reportLine(stderr, 'fail', 'remote-execution');
+    assert.ok(line?.includes('no remote run can be dispatched'), stderr);
+    assert.ok(line.includes('init'), line);
+  });
+
+  await t.test('on, with gh unresolvable, fails and names the install step', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub, `${FIXTURE_GH_CLI}-absent`);
+
+    assert.equal(status, 1, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.equal(failCount(stderr), 1, stderr);
+    const line = reportLine(stderr, 'fail', 'remote-execution');
+    assert.ok(line?.includes(`${FIXTURE_GH_CLI}-absent does not resolve on this shell's PATH`), stderr);
+    assert.ok(line.includes('install the GitHub CLI'), line);
+  });
+
+  await t.test('on, with harness-resume.yml absent, warns about branch-resume', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    await rm(join(dir, REMOTE_RESUME_WORKFLOW));
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-execution');
+    assert.ok(line?.includes('/autonomous-sdlc-harness:branch-resume'), stderr);
+  });
+
+  await t.test('on, with harness-run.yml not on origin/<defaultBranch>, warns to commit and push it', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-execution');
+    assert.ok(line?.includes('GitHub dispatches only a workflow its default branch carries'), stderr);
+  });
+});
+
+test('daemon-path names gh when remote execution is on, and not when it is off', { skip: NO_BACKEND }, async (t) => {
+  const dir = await wiredFixture(t);
+  const stub = await ghStub(t);
+  const toolchain = await toolchainDir(t, [DEFAULT_AGENT_CLI]);
+  // The unit reaches the agent but not the unit's own `gh`, which only the shell's PATH carries.
+  const { home, unit } = await installUnitCarrying(t, dir, `${toolchain}${delimiter}${process.env.PATH ?? ''}`);
+  writeFileSync(
+    unit.targetPath,
+    withUnitVariable(BACKEND.kind, readFileSync(unit.targetPath, 'utf8'), GH_CLI_VARIABLE, FIXTURE_GH_CLI),
+    'utf8',
+  );
+  const shellPath = [stub.dir, toolchain, process.env.PATH ?? ''].join(delimiter);
+  const env = { HOME: home, PATH: shellPath, [GH_CLI_VARIABLE]: stub.path };
+
+  const off = await runCli(dir, ['doctor'], env);
+  const offLine = reportLine(off.stdout, 'pass', 'daemon-path');
+  assert.ok(offLine, `daemon-path did not pass with remote execution off\n${off.stdout}\n${off.stderr}`);
+  assert.ok(!offLine.includes(FIXTURE_GH_CLI), offLine);
+
+  const edit = await runCli(dir, ['config', 'set', 'execution.target', 'github-actions']);
+  assert.equal(edit.status, 0, edit.stderr);
+  const on = await runCli(dir, ['doctor'], env);
+  const onLine = reportLine(on.stderr, 'warn', 'daemon-path');
+  assert.ok(onLine?.includes(FIXTURE_GH_CLI), `daemon-path did not name the unit's gh\n${on.stdout}\n${on.stderr}`);
+  assert.ok(onLine.includes('remote-run.sh'), onLine);
+  assert.ok(!existsSync(stub.log), 'doctor ran gh');
+});

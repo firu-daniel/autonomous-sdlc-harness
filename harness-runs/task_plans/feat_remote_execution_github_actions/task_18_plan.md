@@ -45,3 +45,10 @@
 - No case in the new tests reaches the network: every `gh` the check could touch is the stub, and the check itself spawns none.
 - `doctor --help` and the report order list `remote-execution` after `daemon-path`.
 - `git ls-files cli/src/doctor` lists no `remoteExecution.ts`, and `grep -n -E "function (resolvesOnPath|locateOnPath|pass|warn|fail|unevaluated)\b" -r cli/src` hits only `cli/src/doctor/checks.ts` — no second copy.
+
+**Deviations from plan:**
+
+- `cli/src/remote/githubActions.ts` gains `DEFAULT_GH_CLI = 'gh'`, which `ghCli()` now returns, so `requiredBinaries`' fallback imports the name from its owner rather than retyping `'gh'` (that module's rule: every remote-execution name has one owner). The file is not in `### Targets`.
+- `doctor --help` lists no check ids at all, so the Verification bullet's "`doctor --help` … list `remote-execution` after `daemon-path`" is satisfied through the report order only: the new case asserts `CHECKS` places `remote-execution` directly after `daemon-path`.
+- With several table rows true at once, the check reports every finding in one detail and grades the worst. It asks the origin row only when `harness-run.yml` exists locally, and leaves it ungraded, saying so in the detail, when `origin/<defaultBranch>` is absent or `defaultBranch` is unusable — `remote` and `config` own those failures.
+- The fixture's `pushWorkflows` pushes with `--no-verify` and forces the push, because `init`'s pre-push guard refuses the default branch and the fixture's origin seed commit is unrelated to `init`'s commit.

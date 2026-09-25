@@ -58,6 +58,9 @@ export const GIT_TOKEN_SECRET = 'HARNESS_GIT_TOKEN';
 /** The environment variable naming the binary run as `gh`: `${HARNESS_GH_CLI:-gh}`. */
 export const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';
 
+/** The binary run as `gh` when {@link GH_CLI_VARIABLE} is unset or empty. */
+export const DEFAULT_GH_CLI = 'gh';
+
 /**
  * A bound rather than a deadline: a `gh` call is a network round trip that normally answers in
  * seconds, and a hung one must cost this bound instead of the command an operator ran to find out
@@ -75,7 +78,7 @@ export interface GhResult {
 /** The binary run as `gh`: the {@link GH_CLI_VARIABLE} value when non-empty, else `gh`. */
 export function ghCli(): string {
   const configured = process.env[GH_CLI_VARIABLE];
-  return configured !== undefined && configured !== '' ? configured : 'gh';
+  return configured !== undefined && configured !== '' ? configured : DEFAULT_GH_CLI;
 }
 
 /**

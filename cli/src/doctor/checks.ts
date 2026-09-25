@@ -21,7 +21,11 @@
  *    that module's {@link GITIGNORE_BLOCK_HEADER}, the line the write engine itself matches on, the
  *    push-settings precedence is `generators/notifications.ts`'s {@link pushEnvCandidates}, the
  *    repository registry's location, reader and staleness grading are `machine/registry.ts`'s {@link registryPath},
- *    {@link readRegistry} and {@link inspect} — the same three `daemon list` enumerates through — and
+ *    {@link readRegistry} and {@link inspect} — the same three `daemon list` enumerates through — the
+ *    remote-execution switch is `config/model.ts`'s {@link remoteExecutionApplies}, the workflow
+ *    paths and the binary run as `gh` are `remote/githubActions.ts`'s ({@link WORKFLOW_RUN_PATH},
+ *    {@link WORKFLOW_RESUME_PATH}, {@link GH_CLI_VARIABLE}, {@link ghCli}), whether a ref carries a
+ *    file is `core/git.ts`'s {@link pathAtRef}, and
  *    the writability probe is the write engine's {@link probeWritable}. A
  *    check that wanted a slightly different answer would be a second definition of the thing being
  *    checked, which is how a green `doctor` starts disagreeing with the run it is supposed to
@@ -53,6 +57,10 @@
  *    reaches no network, so it answers the same in CI, in an `&&` chain and offline — and the run that
  *    did not ask says so, rather than leaving an adopter to read a pass as a promise the packages can
  *    be fetched.
+ *
+ *    **Remote setup keeps the same line: it is graded from local evidence by default and asks GitHub
+ *    only under `--check-github`.** {@link REMOTE_EXECUTION_CHECK} reads files, refs and `PATH`, and
+ *    spawns no `gh` subcommand.
  *
  *    **The three docs-retrieval checks keep that line.** `retrieval-dependencies` and
  *    `retrieval-model-cache` are file tests answered by `retrieval/runtime.ts`'s
@@ -86,6 +94,7 @@ import {
   FALLBACK_PRESET,
   isPlaceholder,
   LAYER_CATCH_ALL_PATH,
+  remoteExecutionApplies,
   retrievalApplies,
   STATE_DIR_DOT_PATTERN,
   STATE_DIR_PATTERN,
@@ -98,6 +107,7 @@ import {
   commitsAhead,
   configuredRemotes,
   hasCommits,
+  pathAtRef,
   pathIsIgnored,
   remoteTrackingBranchResolves,
   resolveRepoRoot,
@@ -192,6 +202,19 @@ import {
   pluginScriptsDir,
 } from '../machine/plugins.js';
 import { inspect, readRegistry, registryPath, type EntryState, type InspectedEntry } from '../machine/registry.js';
+import {
+  API_KEY_SECRET,
+  DEFAULT_GH_CLI,
+  GH_CLI_VARIABLE,
+  ghCli,
+  GIT_TOKEN_SECRET,
+  OAUTH_TOKEN_SECRET,
+  PUSH_URL_SECRET,
+  REMOTE_STOP_VARIABLE,
+  RUNNER_VARIABLE,
+  WORKFLOW_RESUME_PATH,
+  WORKFLOW_RUN_PATH,
+} from '../remote/githubActions.js';
 import { modelFilesPresent } from '../retrieval/models.js';
 import {
   retrievalCliEntry,
@@ -222,6 +245,13 @@ const WORKTREE_SCRIPT = 'create-worktree.sh';
  * `bash <scriptsDir>/<file>` — so nothing here formats that shape a second time.
  */
 const REFRESH_SCRIPT = 'refresh-branch.sh';
+
+/**
+ * The outer-loop script the watcher dispatches a remote run through, named in {@link requiredBinaries}'
+ * and {@link REMOTE_EXECUTION_CHECK}'s sentences on {@link WORKTREE_SCRIPT}'s terms: a file in a
+ * sentence, never resolved or read here.
+ */
+const REMOTE_RUN_SCRIPT = 'remote-run.sh';
 
 /**
  * How a check answers.
@@ -2008,7 +2038,10 @@ function commandHeads(config: HarnessConfig, repoRoot: string): CommandHeads {
  * configuration through and which {@link JQ_CHECK} already treats as a hard floor; and the agent CLI
  * above, whose name arrives as the installed unit's value — `undefined` or empty when the unit does
  * not set it, which is the default case because `${HARNESS_AGENT_CLI:-claude}` reads an empty value
- * as unset too.
+ * as unset too. **A conditional fourth joins them only when {@link remoteExecutionApplies}:** the
+ * binary run as `gh`, which `remote-run.sh` dispatches every remote run through. Its name is the
+ * unit's own {@link GH_CLI_VARIABLE} value when set and non-empty, else {@link DEFAULT_GH_CLI}, on
+ * the agent CLI's terms. With remote execution off the list is exactly the three and the derived.
  *
  * **The unit of comparison is the head of a command line**, over the two places such a line lives, and
  * deriving it is {@link commandHeads}' — this check classifies nothing itself, so it and its sibling
@@ -2038,6 +2071,7 @@ function requiredBinaries(
   config: HarnessConfig,
   repoRoot: string,
   unitAgentCli: string | undefined,
+  unitGhCli: string | undefined,
 ): {
   readonly binaries: readonly RequiredBinary[];
   readonly ungraded: readonly string[];
@@ -2064,6 +2098,13 @@ function requiredBinaries(
       ? `the watcher's agent binary (${AGENT_CLI_VARIABLE} unset in the unit, so the watcher's default)`
       : `the watcher's agent binary (${AGENT_CLI_VARIABLE}, as the unit sets it)`,
   );
+  if (remoteExecutionApplies(config)) {
+    const gh = unitGhCli?.trim() ?? '';
+    add(
+      gh === '' ? DEFAULT_GH_CLI : gh,
+      `${REMOTE_RUN_SCRIPT}, which the watcher dispatches every run through while execution.target is github-actions (${GH_CLI_VARIABLE} ${gh === '' ? 'unset in the unit, so the default' : 'as the unit sets it'})`,
+    );
+  }
 
   // `deploy` is this check's to skip, on both arms: its command line lives on `deploy.command`
   // rather than in `commands`, and no daemon-launched run deploys. {@link commandHeads} derives it
@@ -2220,6 +2261,7 @@ const DAEMON_PATH_CHECK: Check = {
       ctx.config,
       ctx.repoRoot,
       unitEnvValue(backend.kind, text, AGENT_CLI_VARIABLE),
+      unitEnvValue(backend.kind, text, GH_CLI_VARIABLE),
     );
     const envPath = unitEnvValue(backend.kind, text, 'PATH');
     if (envPath === undefined) {
@@ -2237,6 +2279,99 @@ const DAEMON_PATH_CHECK: Check = {
 
     return pass(
       `the ${backend.kind} unit for ${unit.label} at ${unit.targetPath} carries a PATH reaching every binary an unattended run invokes by name${ungraded.length + absent.length > 0 ? ' that could be derived here' : ''}, each with what requires it: ${nameList(required.map((binary) => `${binary.name} (${binary.sources.join(', ')})`))}. This grades that file rather than this machine — the shell doctor runs in resolves what a service manager's environment does not${describeUngraded(ungraded, absent)}`,
+    );
+  },
+};
+
+/**
+ * The configured execution target, and whether this repository has what a remote run needs locally.
+ *
+ * **Remote setup is graded from local evidence by default and asks GitHub only under
+ * `--check-github`** (the module header's choice 3). This reads the two workflow files, one git ref
+ * and `PATH`, and spawns no `gh` subcommand: resolving the binary {@link ghCli} names is the whole of
+ * its `gh` question. What only GitHub can answer — the secrets, the variables, whether GitHub knows
+ * the workflow — the pass text names and leaves to that flag.
+ *
+ * **Every finding is reported, and the grade is the worst of them.** Two `fail`s: no
+ * `harness-run.yml`, because no remote run can be dispatched; and no `gh`, because the watcher
+ * dispatches through it. Two `warn`s: no `harness-resume.yml`, because a usage-paused hosted run then
+ * waits for `/autonomous-sdlc-harness:branch-resume`; and a `harness-run.yml` that
+ * `origin/<defaultBranch>` does not carry, because GitHub dispatches only a workflow its default
+ * branch has — the run starts once it is pushed, so nothing is broken here.
+ *
+ * `gh` is resolved on **this shell's** `PATH`. Whether the installed daemon's `PATH` reaches it is
+ * {@link DAEMON_PATH_CHECK}'s question, answered there through {@link requiredBinaries}' conditional
+ * member, so it is not asked twice.
+ *
+ * **A missing `origin/<defaultBranch>`, or an unusable `defaultBranch`, leaves the origin row
+ * ungraded** and the detail says so: that ref's absence is {@link REMOTE_CHECK}'s `fail`, and
+ * reporting it again would make one finding two. It is asked only when `harness-run.yml` exists here,
+ * for the same reason. The ref is read as this checkout last fetched it.
+ *
+ * With remote execution off, a workflow file left in place is a `pass` that says it does nothing:
+ * the watcher dispatches nothing while the key is `local`.
+ */
+const REMOTE_EXECUTION_CHECK: Check = {
+  id: 'remote-execution',
+  title: 'the configured execution target, and whether this repository has what a remote run needs locally',
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+
+    const root = ctx.repoRoot;
+    const present = (path: string): boolean => existsSync(join(root, ...path.split('/')));
+    const runPresent = present(WORKFLOW_RUN_PATH);
+    const resumePresent = present(WORKFLOW_RESUME_PATH);
+
+    if (!remoteExecutionApplies(ctx.config)) {
+      const left = [WORKFLOW_RUN_PATH, WORKFLOW_RESUME_PATH].filter(present);
+      if (left.length === 0) return pass('local execution; remote execution is off (`execution.target`)');
+      return pass(
+        `local execution; remote execution is off (\`execution.target\`), so ${nameList(left)} ${left.length === 1 ? 'is' : 'are'} present and unused: the watcher dispatches nothing while the key is local. \`${CLI} config set execution.target github-actions\` turns remote execution on`,
+      );
+    }
+
+    const failures: string[] = [];
+    const warnings: string[] = [];
+    const notes: string[] = [];
+
+    if (!runPresent) {
+      failures.push(
+        `${WORKFLOW_RUN_PATH} is absent, so no remote run can be dispatched: re-run \`${CLI} init\`, which writes it create-if-absent while execution.target is github-actions`,
+      );
+    }
+    if (!resumePresent) {
+      warnings.push(
+        `${WORKFLOW_RESUME_PATH} is absent, so a hosted run paused on usage waits for /autonomous-sdlc-harness:branch-resume instead of resuming on its own: re-run \`${CLI} init\` to write it`,
+      );
+    }
+
+    const gh = ghCli();
+    if (!resolvesOnPath(gh)) {
+      failures.push(
+        `${gh} does not resolve on this shell's PATH, and the watcher dispatches every remote run through it (${REMOTE_RUN_SCRIPT}): install the GitHub CLI (https://cli.github.com) and run \`gh auth login\`, or point ${GH_CLI_VARIABLE} at it`,
+      );
+    }
+
+    if (runPresent) {
+      const branch = ctx.config.defaultBranch;
+      if (typeof branch !== 'string' || branch.trim() === '') {
+        notes.push(`whether GitHub's default branch carries ${WORKFLOW_RUN_PATH} is not graded, because defaultBranch is not a branch name (see the config check)`);
+      } else if (!remoteTrackingBranchResolves(root, branch)) {
+        notes.push(`whether origin/${branch} carries ${WORKFLOW_RUN_PATH} is not graded, because there is no origin/${branch} (see the remote check)`);
+      } else if (!pathAtRef(root, `origin/${branch}`, WORKFLOW_RUN_PATH)) {
+        warnings.push(
+          `origin/${branch} does not carry ${WORKFLOW_RUN_PATH}, as this checkout last fetched it, and GitHub dispatches only a workflow its default branch carries: commit it and push it with \`git push origin ${branch}\``,
+        );
+      }
+    }
+
+    const noted = notes.length > 0 ? `; ${notes.join('; ')}` : '';
+    const on = 'remote execution is on (execution.target github-actions)';
+    if (failures.length > 0) return fail(`${on}: ${[...failures, ...warnings].join('; ')}${noted}`);
+    if (warnings.length > 0) return warn(`${on}: ${warnings.join('; ')}${noted}`);
+    return pass(
+      `${on}: ${WORKFLOW_RUN_PATH} and ${WORKFLOW_RESUME_PATH} are present and ${gh} resolves on PATH${noted}. What this cannot see lives on GitHub — a credential secret (${OAUTH_TOKEN_SECRET} or ${API_KEY_SECRET}), the ${PUSH_URL_SECRET} and ${GIT_TOKEN_SECRET} secrets, and the ${RUNNER_VARIABLE} and ${REMOTE_STOP_VARIABLE} variables; \`${CLI} doctor --check-github\` asks GitHub`,
     );
   },
 };
@@ -4314,6 +4449,8 @@ const RETRIEVAL_INDEX_CHECK: Check = {
  * for the machine around it — and they are meant to be read together. `daemon-path` comes last of
  * the six because it is the only one that grades an *installed* unit: it has nothing to say until the
  * five above it are answered, and it says so rather than guessing.
+ * `remote-execution` follows it because it asks the same "can this run unattended" question of a run
+ * the watcher dispatches to GitHub rather than spawns here.
  *
  * `plugin-permissions` closes the profile block for the same shape of reason: it is the only profile
  * question whose other half is not in the repository at all — the plugin's machine-local install
@@ -4339,6 +4476,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
   REPO_REGISTRY_CHECK,
   MACHINE_FOOTPRINT_CHECK,
   DAEMON_PATH_CHECK,
+  REMOTE_EXECUTION_CHECK,
   CONFIG_CHECK,
   COMMAND_WRAPPERS_CHECK,
   COMMAND_PERMISSIONS_CHECK,
