@@ -53,7 +53,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_remote_execution_github_act
 7. [x] **Task 7** — Add the job-side `restore` and `save` to `remote-run.sh` _(layer: cli)_ _(points: 14)_
 8. [x] **Task 8** — Add the job-side `continue` and the poller's `poll` to `remote-run.sh` _(layer: cli)_ _(points: 18)_
 9. [x] **Task 9** — Add the watcher's `job` subcommand: one run, supervised inside the job's own checkout _(layer: cli)_ _(points: 20)_
-10. [ ] **Task 10** — Give job mode its remote pause, hosted time budget, in-job waits and bounded auto-resume _(layer: cli)_ _(points: 20)_
+10. [x] **Task 10** — Give job mode its remote pause, hosted time budget, in-job waits and bounded auto-resume _(layer: cli)_ _(points: 20)_
 11. [ ] **Task 11** — Dispatch inbox drops to the workflow when `execution.target` is `github-actions` _(layer: cli)_ _(points: 20)_
 12. [ ] **Task 12** — Relay answers, resumes and pauses for remote records, and keep the local-only passes off them _(layer: cli)_ _(points: 18)_
 13. [ ] **Task 13** — Leave remote records out of `restart-watcher.sh`'s in-flight refusal _(layer: cli)_ _(points: 5)_

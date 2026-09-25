@@ -40,7 +40,10 @@
 # RESUME sentinel has landed. Both re-launch the SAME engine in the run's
 # EXISTING working copy — they never create one — through `spawn_engine`'s 4th
 # and 5th arguments, and they are what makes yielding a session cost nothing
-# while a run waits. The park resume is bounded by THE PARK-LOOP GUARD: a run
+# while a run waits. ONE OTHER PATH brings a run back, and only inside a job
+# (HARNESS_JOB_MODE=1): job mode's BOUNDED AUTO-RESUME, which relaunches a
+# `failed` or overload-`paused` run through the same `spawn_engine` 5th
+# argument at most REMOTE_AUTO_RESUME_MAX times per run — see JOB MODE. The park resume is bounded by THE PARK-LOOP GUARD: a run
 # whose park-resumes keep parking without progress becomes `park_loop` and is
 # resumed no further until an operator creates PARK_LOOP_CLEAR in its
 # clarification directory. And it carries the last two passes: THE STALENESS WATCHDOG,
@@ -268,14 +271,46 @@
 #     count are seeded from it; the auto-resume count only when
 #     HARNESS_INPUT_CHAIN is above 0, because a chain of 0 is a user's own
 #     dispatch; `chain` never — every write records this job's own input.
-#   * IT WRITES `remote_status.json` TWICE: decision `continue` before the spawn,
-#     so a job killed mid-run leaves a bundle that says continue, and decision
-#     `stop` once the run reaches a terminal status. It then prints
+#   * IT WRITES `remote_status.json` with decision `continue` before the spawn,
+#     so a job killed mid-run leaves a bundle that says continue, again after
+#     every successful control poll, and once more when the run leaves
+#     `running` for good, with the decision below. It then prints
 #     `job: <status> <decision>` and exits 0.
+#   * TWO PASSES ONLY A JOB RUNS, while the run is `running`, each dropping
+#     `<state_dir>/PAUSE` at most once per job and recording `pause_reason`:
+#     the CONTROL POLL (`remote-run.sh pause-requested <branch>
+#     <control_polled_at>`, every REMOTE_CONTROL_POLL_SECS) -> `user`; and the
+#     BUDGET — REMOTE_SELF_PAUSE_AFTER_SECS past HARNESS_JOB_STARTED_EPOCH, set
+#     only on a hosted runner -> `budget`. `control_polled_at` STARTS at the
+#     restored bundle's under HARNESS_INPUT_CHAIN above 0, else at this run's own
+#     `createdAt` (`remote-run.sh run-created-at "$GITHUB_RUN_ID"`), else at
+#     HARNESS_JOB_STARTED_EPOCH — NEVER at the job's own start alone, which
+#     would lose a pause sent while the job was queued. Each successful poll
+#     advances it to the epoch taken just before its query; a failed poll
+#     advances nothing and pauses nothing.
+#   * THE DECISION, when the run leaves `running`: `paused` for `budget` ->
+#     `continue`; for `user` -> `stop`; by the usage gate (`usage`) -> WAIT IN
+#     THE JOB, the gate's own auto-resume and resume_paused_runs relaunching it,
+#     when the reset falls before HARNESS_JOB_DEADLINE_EPOCH and the runner is
+#     self-hosted or the wait is at most REMOTE_WAIT_MAX_SECS, else
+#     `wait-poller`; with no pause requested — the run's own API-overload
+#     self-pause (`overload`) -> auto-resume, else `stop`. `failed` ->
+#     auto-resume unless the stall watchdog gave up, else `stop`. Every other
+#     status -> `stop`. An empty HARNESS_JOB_DEADLINE_EPOCH bounds nothing.
+#   * THE BOUNDED AUTO-RESUME: while `auto_resumes` is below
+#     REMOTE_AUTO_RESUME_MAX and REMOTE_AUTO_RESUME_DELAY_SECS from now is
+#     before the deadline, sleep that delay, count one, and relaunch from the
+#     committed ledger through begin_pause_resume and `spawn_engine … "" 1`. The
+#     count resets on any user action — see `auto_resumes` in the registry.
 #   * NOTIFICATIONS name the user's next action instead of a runner path: a
 #     parked run's `/autonomous-sdlc-harness:branch-answer <branch>`, a park
-#     loop's `/autonomous-sdlc-harness:branch-status <branch>`. Their titles carry
-#     HARNESS_REMOTE_SLUG when set.
+#     loop's `/autonomous-sdlc-harness:branch-status <branch>`, a `user` or
+#     exhausted `overload` pause's `/autonomous-sdlc-harness:branch-resume
+#     <branch>`, a usage pause's reset time. A `budget` pause sends NO `paused`,
+#     and the next job no `resumed` for it: a chained continuation is not an
+#     event the user acts on. classify_run_exit's `paused` arm notifies only a
+#     `user` pause; job mode sends the others once it has decided. Their titles
+#     carry HARNESS_REMOTE_SLUG when set.
 #
 # Subcommands:
 #   autonomous-watcher.sh            # the watch loop (the default; the unit uses this)
@@ -289,7 +324,11 @@
 #                                    # one run in a remote job's checkout (JOB MODE);
 #                                    # <engine> task|user_review|docs,
 #                                    # <resume> none|answer|pause. Also reads
-#                                    # HARNESS_REMOTE_SLUG and HARNESS_INPUT_CHAIN
+#                                    # HARNESS_REMOTE_SLUG, HARNESS_INPUT_CHAIN,
+#                                    # HARNESS_JOB_STARTED_EPOCH,
+#                                    # HARNESS_JOB_DEADLINE_EPOCH,
+#                                    # RUNNER_ENVIRONMENT, GITHUB_RUN_ID and
+#                                    # REMOTE_SELF_PAUSE_AFTER_SECS
 #
 # Exit map a caller can switch on:
 #
@@ -543,7 +582,17 @@
 #                    under HARNESS_INPUT_CHAIN=2 the rewritten "$j" says chain "2"
 #                    and auto_resumes "2"; under HARNESS_INPUT_CHAIN=0,
 #                    auto_resumes "0". Kill the job's process group mid-run -> "$j"
-#                    stays at `running` / `continue`
+#                    stays at `running` / `continue`. Point HARNESS_GH_CLI at a
+#                    stub (see remote-run.sh's REPRO) and use a stub agent that
+#                    writes "$d/sdlc-harness/PAUSE_ACK" once PAUSE appears:
+#                    REMOTE_SELF_PAUSE_AFTER_SECS=1 -> `job: paused continue`,
+#                    pause_reason `budget`, no `paused` notification; a `run
+#                    list` answer carrying a `harness pause feat_x` run created
+#                    after the start -> `job: paused stop`, pause_reason `user`.
+#                    A stub writing PAUSE_ACK unrequested, then exiting 0 ->
+#                    one auto-resume, `job: completed stop`; a stub ending
+#                    `exit 2` with REMOTE_AUTO_RESUME_DELAY_SECS=0 -> launched
+#                    1 + REMOTE_AUTO_RESUME_MAX times, `job: failed stop`
 #   unresolvable  printf 'x' > "$d/harness.config.json"
 #                 -> one line on stderr, exit 1, nothing under "$d/sdlc-harness"
 
@@ -673,6 +722,8 @@ CREATE_WORKTREE="$SCRIPT_DIR/create-worktree.sh"
 CLEANUP_SCRIPT="$SCRIPT_DIR/cleanup-merged-worktrees.sh"
 COMMIT_ON_BRANCH="$SCRIPT_DIR/commit-on-branch.sh"
 PUSH_BRANCH="$SCRIPT_DIR/push-branch.sh"
+# Job mode's one route to GitHub — its two read verbs — resolved the same way.
+REMOTE_RUN="$SCRIPT_DIR/remote-run.sh"
 
 # The unattended permission profile, resolved in the MAIN checkout even though a
 # run executes elsewhere: every working copy carries the same committed file, and
@@ -918,11 +969,33 @@ fi
 LAST_USAGE_CHECK=0
 USAGE_WARNING_STREAK=0
 
+# Job mode's own policies (see JOB MODE in the header); a local watcher reads
+# none of them. How often the control poll asks GitHub for a `harness pause
+# <branch>` run — each poll is one `gh run list`.
+REMOTE_CONTROL_POLL_SECS="${REMOTE_CONTROL_POLL_SECS:-60}"
+# The longest usage-reset wait a HOSTED job sits through rather than handing
+# the run to the resume poller, since a hosted job bills for the minutes it
+# waits. A self-hosted job waits for any reset before its deadline.
+REMOTE_WAIT_MAX_SECS="${REMOTE_WAIT_MAX_SECS:-600}"
+# How many times one run is resumed automatically after a failed exit or an
+# overload self-pause before it is left for the user.
+REMOTE_AUTO_RESUME_MAX="${REMOTE_AUTO_RESUME_MAX:-2}"
+# How long job mode waits before each of those resumes, so a transient outage
+# has time to clear.
+REMOTE_AUTO_RESUME_DELAY_SECS="${REMOTE_AUTO_RESUME_DELAY_SECS:-300}"
+
 # JOB MODE (see the header). Assigned HERE, after the override channel and every
 # tunable default, so neither the file nor an inherited value can turn a
 # local-only facility back on inside a job. JOB_MODE is STATE, assigned plainly:
 # classify_run_exit reads it to word its details for a user with no runner path.
 JOB_MODE=0
+# Job mode's pass state, for the same reason: when the control poll last ran,
+# whether each pass has already dropped its one PAUSE, and the job's start
+# (HARNESS_JOB_STARTED_EPOCH, else when run_job began).
+JOB_START_EPOCH=0
+LAST_CONTROL_POLL=0
+JOB_USER_PAUSE_DROPPED=0
+JOB_BUDGET_PAUSE_DROPPED=0
 if [ "${1:-}" = "job" ]; then
   JOB_MODE=1
   AUTO_TAIL_TERMINAL=0
@@ -1049,7 +1122,17 @@ notify() {
 #                       not that it failed on its own.
 #   pause_reason        why a `paused` record paused: `usage` | `budget` | `user` |
 #                       `overload` | empty — the remote state bundle's
-#                       `status.json` vocabulary — plus `killed`, a registry-only
+#                       `status.json` vocabulary, each value written by job mode
+#                       (and copied into a local record by `remote-run.sh sync`):
+#                       `usage` the usage gate requested it; `budget` job mode
+#                       did, REMOTE_SELF_PAUSE_AFTER_SECS into a hosted job;
+#                       `user` job mode did, on a `harness pause <branch>` run;
+#                       `overload` nobody requested it — the run's own
+#                       API-overload self-pause. `user` and `budget` are written
+#                       when the PAUSE is dropped, while still `running`;
+#                       classify_run_exit settles the reason as the run pauses,
+#                       `user` first, then `usage`, then `budget`. Cleared when
+#                       job mode relaunches the run — plus `killed`, a registry-only
 #                       value `remote-run.sh sync` derives when a finished run's
 #                       bundle still says `running`, or a finished run left no
 #                       bundle; `status.json` never carries it. `killed` maps to
@@ -1063,8 +1146,17 @@ notify() {
 #   remote_synced_at    the epoch second of that `sync`, written on every one
 #   remote_detail       one human-readable line from that `sync`: the bundle's
 #                       `detail`, or why the record is `killed` or `failed`
-#   auto_resumes        job mode only: seeded from the restored `status.json`
-#                       when HARNESS_INPUT_CHAIN is above 0, else `0`
+#   auto_resumes        job mode only: how many bounded auto-resumes this run has
+#                       had, capped by REMOTE_AUTO_RESUME_MAX. Seeded from the
+#                       restored `status.json` when HARNESS_INPUT_CHAIN is above
+#                       0, else `0` — so ANY USER ACTION (a drop, an answer, a
+#                       resume: each a chain-0 dispatch) resets it and restores
+#                       the full allowance
+#   control_polled_at   job mode only: the epoch second up to which the job has
+#                       checked for a `harness pause <branch>` run — the lower
+#                       bound of the next control poll, this job's or the next
+#                       chained one's. Set at start (see JOB MODE) and advanced
+#                       by every successful poll
 # -----------------------------------------------------------------------------
 # The bodies are lib/harness-run-lib.sh's THE RUN REGISTRY, shared with every
 # script that reads or writes this file; these wrappers bind them to $REGISTRY.
@@ -1296,7 +1388,7 @@ print_status() {
   ' "$REGISTRY"
   # The resolved tunables, names and values only — the override channel made
   # observable. Nothing else the override file may have set is printed.
-  echo "tunables: MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED"
+  echo "tunables: MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS"
   # Advisory tail: the other repositories armed on this machine. It decides
   # nothing — see the block above print_status.
   machine_footprint_report
@@ -1871,6 +1963,27 @@ classify_run_exit() {
     # un-pause, or the very next tick's resume pass consumes the stale trigger
     # and resumes instantly, defeating the pause.
     rm -f "$resume_file"
+    if [ "$JOB_MODE" = "1" ]; then
+      # The reason is settled BEFORE the status flips: the usage gate's
+      # auto-resume acts only on a `paused` record and clears `paused_by` as it
+      # does, so reading that tag after the flip could find it gone.
+      local reason
+      reason="$(registry_get "$branch" pause_reason)"
+      if [ "$reason" != "user" ]; then
+        if [ "$(registry_get "$branch" paused_by)" = "usage" ]; then
+          reason=usage
+        elif [ "$reason" != "budget" ]; then
+          reason=overload
+        fi
+      fi
+      registry_set "$branch" pause_reason "$reason"
+      registry_set "$branch" status paused
+      log "run '$branch' paused (PAUSE honored, reason $reason) — rc=$rc"
+      if [ "$reason" = "user" ]; then
+        notify paused "$branch" "$log_path" "paused as you asked — run /autonomous-sdlc-harness:branch-resume $branch to continue"
+      fi
+      return 0
+    fi
     registry_set "$branch" status paused
     log "run '$branch' paused (PAUSE honored) — rc=$rc"
     notify paused "$branch" "$log_path" "drop $state_rel/RESUME in $worktree to continue"
@@ -3416,12 +3529,122 @@ job_write_status() {
     log "job: could not write '$2' (decision $3) for '$1'"
 }
 
+# job_int <value> — prints it base 10 when it is a non-negative integer; 1 otherwise.
+job_int() {
+  case "${1-}" in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  printf '%s\n' "$((10#$1))"
+}
+
+# job_start_control_bound <branch> <remote_status> — the control poll's first
+# lower bound, in the order the header's JOB MODE block states.
+job_start_control_bound() {
+  local branch="$1" remote_status="$2" bound=""
+  if [ "$HARNESS_INPUT_CHAIN" -gt 0 ] && [ -f "$remote_status" ]; then
+    bound="$(job_int "$(hr_remote_status_get "$remote_status" control_polled_at)")" || bound=""
+  fi
+  if [ -z "$bound" ] && [ -n "${GITHUB_RUN_ID:-}" ]; then
+    bound="$(job_int "$(bash "$REMOTE_RUN" run-created-at "$GITHUB_RUN_ID" --repo "$MAIN_REPO" 2>>"$WATCHER_LOG")")" || bound=""
+  fi
+  if [ -z "$bound" ]; then
+    bound="$JOB_START_EPOCH"
+    log "job: could not read this run's createdAt — the control poll starts from the job's start ($bound)"
+  fi
+  registry_set "$branch" control_polled_at "$bound"
+}
+
+# job_control_poll <branch> <state_abs> <remote_status> — the `user` pass.
+job_control_poll() {
+  local branch="$1" state_abs="$2" remote_status="$3" now since before rc
+  [ "$JOB_USER_PAUSE_DROPPED" = "0" ] || return 0
+  now="$(date +%s)"
+  [ $((now - LAST_CONTROL_POLL)) -ge "$REMOTE_CONTROL_POLL_SECS" ] || return 0
+  LAST_CONTROL_POLL="$now"
+  since="$(job_int "$(registry_get "$branch" control_polled_at)")" || since="$JOB_START_EPOCH"
+  before="$(date +%s)"
+  bash "$REMOTE_RUN" pause-requested "$branch" "$since" --repo "$MAIN_REPO" >>"$WATCHER_LOG" 2>&1
+  rc=$?
+  case "$rc" in
+    0 | 1) ;;
+    *)
+      log "job: the control poll for '$branch' failed (exit $rc) — not pausing; control_polled_at stays $since"
+      return 0
+      ;;
+  esac
+  registry_set "$branch" control_polled_at "$before"
+  if [ "$rc" = "0" ]; then
+    JOB_USER_PAUSE_DROPPED=1
+    touch "$state_abs/PAUSE"
+    registry_set "$branch" pause_reason user
+    log "job: a 'harness pause $branch' run was created at or after $since — dropped PAUSE (reason user)"
+  fi
+  job_write_status "$branch" "$remote_status" continue "job started"
+}
+
+# job_budget_pass <branch> <state_abs> — the `budget` pass. A `user` reason
+# already recorded is kept: the user's pause outranks the budget's.
+job_budget_pass() {
+  local branch="$1" state_abs="$2" after
+  [ "$JOB_BUDGET_PAUSE_DROPPED" = "0" ] || return 0
+  after="$(job_int "${REMOTE_SELF_PAUSE_AFTER_SECS:-}")" || return 0
+  [ $(($(date +%s) - JOB_START_EPOCH)) -ge "$after" ] || return 0
+  JOB_BUDGET_PAUSE_DROPPED=1
+  touch "$state_abs/PAUSE"
+  [ "$(registry_get "$branch" pause_reason)" = "user" ] || registry_set "$branch" pause_reason budget
+  log "job: ${after}s of the hosted time budget have passed — dropped PAUSE (reason budget)"
+}
+
+# job_usage_wait_ok <branch> — 0 when a usage pause is waited out in the job.
+# An empty usage_resume_at means the gate has already dropped RESUME.
+job_usage_wait_ok() {
+  local ra deadline
+  ra="$(job_int "$(registry_get "$1" usage_resume_at)")" || return 0
+  deadline="$(job_int "${HARNESS_JOB_DEADLINE_EPOCH:-}")" || deadline=""
+  if [ -n "$deadline" ] && [ "$ra" -ge "$deadline" ]; then
+    return 1
+  fi
+  [ "${RUNNER_ENVIRONMENT:-}" = "self-hosted" ] && return 0
+  [ $((ra - $(date +%s))) -le "$REMOTE_WAIT_MAX_SECS" ]
+}
+
+# job_auto_resume <branch> <worktree> <log_path> <state_abs> <why> — 0 when
+# the run was relaunched, 1 when the allowance, the deadline or a user's own
+# pause rules it out.
+job_auto_resume() {
+  local branch="$1" worktree="$2" log_path="$3" state_abs="$4" why="$5" count deadline
+  if [ "$(registry_get "$branch" pause_reason)" = "user" ]; then
+    log "job: no auto-resume of '$branch' after $why — the user asked for a pause"
+    return 1
+  fi
+  count="$(job_int "$(registry_get "$branch" auto_resumes)")" || count=0
+  if [ "$count" -ge "$REMOTE_AUTO_RESUME_MAX" ]; then
+    log "job: no auto-resume of '$branch' after $why — $count of REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX used"
+    return 1
+  fi
+  deadline="$(job_int "${HARNESS_JOB_DEADLINE_EPOCH:-}")" || deadline=""
+  if [ -n "$deadline" ] && [ $(($(date +%s) + REMOTE_AUTO_RESUME_DELAY_SECS)) -ge "$deadline" ]; then
+    log "job: no auto-resume of '$branch' after $why — REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS would pass the job's deadline"
+    return 1
+  fi
+  count=$((count + 1))
+  log "job: auto-resume $count/$REMOTE_AUTO_RESUME_MAX of '$branch' after $why, in ${REMOTE_AUTO_RESUME_DELAY_SECS}s"
+  sleep "$REMOTE_AUTO_RESUME_DELAY_SECS"
+  registry_set "$branch" auto_resumes "$count"
+  registry_set "$branch" pause_reason ""
+  begin_pause_resume "$branch" "$state_abs"
+  notify resumed "$branch" "$log_path" "automatic resume $count/$REMOTE_AUTO_RESUME_MAX after $why ($(job_label))"
+  spawn_engine "$branch" "$worktree" "$log_path" "" 1 || registry_set "$branch" status failed
+  return 0
+}
+
 # run_job <branch> <engine> <resume> — arguments already validated.
 run_job() {
   local branch="$1" engine="$2" resume="$3"
   local worktree="$MAIN_REPO" log_path="$LOGS_DIR/$branch.log"
-  local state_rel state_abs clar_dir remote_status key value answered_set=""
+  local state_rel state_abs clar_dir remote_status key value answered_set="" prev_reason=""
 
+  JOB_START_EPOCH="$(job_int "${HARNESS_JOB_STARTED_EPOCH:-}")" || JOB_START_EPOCH="$(date +%s)"
   state_rel="$(run_state_dir "$worktree")" || fatal "job: the state directory in '$worktree' is unresolvable"
   state_abs="$worktree/$state_rel"
   clar_dir="$state_abs/clarifications/$branch"
@@ -3442,7 +3665,10 @@ run_job() {
   registry_set "$branch" resume_kind ""
   registry_set "$branch" park_loop_cycles 0
   registry_set "$branch" auto_resumes 0
+  registry_set "$branch" pause_reason ""
+  registry_set "$branch" control_polled_at ""
   if [ -f "$remote_status" ]; then
+    prev_reason="$(hr_remote_status_get "$remote_status" pause_reason)" || prev_reason=""
     for key in park_loop_cycles resume_max_question_index stall_restarts; do
       value="$(hr_remote_status_get "$remote_status" "$key")" && registry_set "$branch" "$key" "$value"
     done
@@ -3470,6 +3696,8 @@ run_job() {
     fi
   fi
 
+  job_start_control_bound "$branch" "$remote_status"
+
   # Written BEFORE the spawn, so a job killed at any later point leaves a bundle
   # that says continue.
   registry_set "$branch" status running
@@ -3485,7 +3713,11 @@ run_job() {
     pause)
       log "job: resuming paused run '$branch' in $worktree"
       begin_pause_resume "$branch" "$state_abs"
-      notify resumed "$branch" "$log_path" "after pause ($(job_label))"
+      # A chained continuation after a budget pause is not an event the user
+      # acts on, so it is not announced.
+      if [ "$prev_reason" != "budget" ]; then
+        notify resumed "$branch" "$log_path" "after pause ($(job_label))"
+      fi
       spawn_engine "$branch" "$worktree" "$log_path" "" 1
       ;;
     *)
@@ -3495,11 +3727,76 @@ run_job() {
       ;;
   esac || registry_set "$branch" status failed
 
-  while [ "$(registry_get "$branch" status)" = "running" ]; do
-    sleep "$POLL_INTERVAL_SECS"
-    reconcile_stale_runs
-    check_stalled_runs
-    usage_gate
+  # The supervision loop: the header's JOB MODE block states each decision.
+  local status reason ra when decision="stop" detail="" usage_waiting=0 restarts
+  while :; do
+    status="$(registry_get "$branch" status)"
+    case "$status" in
+      running)
+        usage_waiting=0
+        sleep "$POLL_INTERVAL_SECS"
+        reconcile_stale_runs
+        check_stalled_runs
+        usage_gate
+        [ "$(registry_get "$branch" status)" = "running" ] || continue
+        job_control_poll "$branch" "$state_abs" "$remote_status"
+        job_budget_pass "$branch" "$state_abs"
+        ;;
+      paused)
+        reason="$(registry_get "$branch" pause_reason)"
+        case "$reason" in
+          budget)
+            decision=continue
+            detail="paused at the hosted time budget; the next job continues from the ledger"
+            break
+            ;;
+          user)
+            detail="paused by the user"
+            break
+            ;;
+          usage)
+            ra="$(registry_get "$branch" usage_resume_at)"
+            when="the reset"
+            [ -n "$ra" ] && when="the reset at ~$(stall_human_time "$ra")"
+            if [ "$usage_waiting" = "0" ]; then
+              if ! job_usage_wait_ok "$branch"; then
+                decision=wait-poller
+                detail="usage limit reached; the resume poller resumes it after $when"
+                notify paused "$branch" "$log_path" "usage limit reached — resumes automatically after $when"
+                break
+              fi
+              usage_waiting=1
+              log "job: '$branch' is usage-paused — waiting in the job for $when"
+              notify paused "$branch" "$log_path" "usage limit reached — waiting in the job for $when"
+            fi
+            sleep "$POLL_INTERVAL_SECS"
+            usage_gate
+            resume_paused_runs
+            if [ "$(registry_get "$branch" status)" = "running" ]; then
+              registry_set "$branch" pause_reason ""
+            fi
+            ;;
+          *)
+            job_auto_resume "$branch" "$worktree" "$log_path" "$state_abs" "an overload self-pause" && continue
+            detail="paused itself on API overload; automatic resumes exhausted"
+            notify paused "$branch" "$log_path" "paused itself on API overload — run /autonomous-sdlc-harness:branch-resume $branch to continue"
+            break
+            ;;
+        esac
+        ;;
+      failed)
+        restarts="$(job_int "$(registry_get "$branch" stall_restarts)")" || restarts=0
+        if [ "$STALL_CHECK_ENABLED" = "1" ] && [ "$restarts" -ge "$STALL_MAX_RESTARTS" ]; then
+          log "job: no auto-resume of '$branch' — the stall watchdog gave up on it"
+          break
+        fi
+        job_auto_resume "$branch" "$worktree" "$log_path" "$state_abs" "a failed exit" && continue
+        break
+        ;;
+      *)
+        break
+        ;;
+    esac
   done
   # Reap every session subshell this job spawned, so its exit notification has
   # gone out before the job reports.
@@ -3507,8 +3804,11 @@ run_job() {
 
   local final
   final="$(registry_get "$branch" status)"
-  job_write_status "$branch" "$remote_status" stop "the run ended $final in this job"
-  echo "job: $final stop"
+  # A reason recorded for a pause the run finished before honouring.
+  [ "$final" = "paused" ] || registry_set "$branch" pause_reason ""
+  [ -n "$detail" ] || detail="the run ended $final in this job"
+  job_write_status "$branch" "$remote_status" "$decision" "$detail"
+  echo "job: $final $decision"
   exit 0
 }
 

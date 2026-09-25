@@ -28,6 +28,9 @@
  * cases replace the fixture's `autonomous-notify.sh` with a recorder, as the watcher suite does, so no
  * desktop banner fires; the failed-enable case keeps the real notifier and records through
  * `HARNESS_PUSH_CMD`, with `XDG_CONFIG_HOME` pointed into the fixture so no machine push file is read.
+ *
+ * **For the job's read verbs `pause-requested` and `run-created-at`, the rule is that a failed read is
+ * exit 3 and never an answer**, so job mode, which pauses only on exit 0, cannot pause on a gh fault.
  */
 
 import assert from 'node:assert/strict';
@@ -58,6 +61,7 @@ if (failOn && line.startsWith(failOn)) {
 }
 if (line.startsWith('run list')) process.stdout.write(process.env.STUB_RUN_LIST || '[]');
 if (line.startsWith('repo view')) process.stdout.write(process.env.STUB_REPO_VIEW || '{}');
+if (line.startsWith('run view')) process.stdout.write(process.env.STUB_RUN_VIEW || '{}');
 if (args[0] === 'api') {
   const parts = args[1].split('/');
   const id = parts[parts.length - 2];
@@ -975,4 +979,50 @@ test('poll dispatches a due branch whose harness stop run is older than its newe
   assert.deepEqual(workflowRuns(fx), [
     'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f chain=3',
   ]);
+});
+
+/** 2026-01-01T00:00:10Z, as an epoch second. */
+const PAUSE_CREATED = 1767225610;
+const PAUSE_RUNS = JSON.stringify([
+  { databaseId: 5, displayTitle: 'harness run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:01:00Z' },
+  { databaseId: 6, displayTitle: 'harness pause feat_xy', status: 'completed', createdAt: '2026-01-01T00:01:00Z' },
+  { databaseId: 7, displayTitle: 'harness pause feat_x', status: 'completed', createdAt: '2026-01-01T00:00:10Z' },
+]);
+
+test('pause-requested: 0 for an exact-title run at or after the epoch, 1 for none, 3 when gh fails', async (t) => {
+  const fx = await remoteFixture(t, 'local');
+  const env = { STUB_RUN_LIST: PAUSE_RUNS };
+  for (const [since, expected] of [[PAUSE_CREATED - 10, 0], [PAUSE_CREATED, 0], [PAUSE_CREATED + 1, 1]]) {
+    const result = await remoteRun(fx, ['pause-requested', 'feat_x', String(since)], env);
+    assert.equal(result.status, expected, `since ${since}: ${result.stdout}\n${result.stderr}`);
+  }
+  assert.ok(joined(fx).every((line) => line.startsWith('run list --workflow harness-run.yml --branch feat_x')), joined(fx).join('\n'));
+
+  const failed = await remoteRun(fx, ['pause-requested', 'feat_x', '0'], { ...env, STUB_FAIL_ON: 'run list' });
+  assert.equal(failed.status, 3, failed.stderr);
+  const garbled = await remoteRun(fx, ['pause-requested', 'feat_x', '0'], { STUB_RUN_LIST: 'not json' });
+  assert.equal(garbled.status, 3, garbled.stderr);
+});
+
+test('run-created-at prints the run createdAt as an epoch second, or exits 3', async (t) => {
+  const fx = await remoteFixture(t, 'local');
+  const result = await remoteRun(fx, ['run-created-at', '42'], { STUB_RUN_VIEW: '{"createdAt":"2026-01-01T00:00:10Z"}' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${PAUSE_CREATED}\n`);
+  assert.deepEqual(joined(fx), ['run view 42 --json createdAt']);
+
+  for (const env of [{ STUB_FAIL_ON: 'run view' }, { STUB_RUN_VIEW: '{}' }]) {
+    const failed = await remoteRun(fx, ['run-created-at', '42'], env);
+    assert.equal(failed.status, 3, failed.stderr);
+    assert.equal(failed.stdout, '');
+  }
+});
+
+test('the read verbs refuse bad arguments with exit 1 and call nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  for (const args of [['pause-requested', 'feat_x'], ['pause-requested', 'feat_x', 'x'], ['run-created-at'], ['run-created-at', '0'], ['run-created-at', '4', '5']]) {
+    const result = await remoteRun(fx, args);
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}`);
+  }
+  assert.deepEqual(calls(fx), []);
 });

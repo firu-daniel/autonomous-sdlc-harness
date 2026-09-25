@@ -19,6 +19,8 @@
 #   remote-run.sh save <branch> <out_dir> [--repo <root>]
 #   remote-run.sh continue <branch> <bundle_dir> [--repo <root>]
 #   remote-run.sh poll [--repo <root>]
+#   remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]
+#   remote-run.sh run-created-at <run_id> [--repo <root>]
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress run of that branch was asked to cancel,
 #        or there was none); for status: printed; for sync: the record is
@@ -26,9 +28,12 @@
 #        restore: restored, or no previous bundle under --resume none|pause;
 #        for save: ALWAYS, whatever happened; for continue: whatever it
 #        decided — every outcome a person must act on is a notification; for
-#        poll: the tick finished
+#        poll: the tick finished; for pause-requested: such a run exists; for
+#        run-created-at: printed
 #     1  usage error, or the library or the configuration could not be
-#        resolved; for sync and restore, a local copy or write failed
+#        resolved; for sync and restore, a local copy or write failed; for
+#        pause-requested, also NO such run — a caller that reads 1 as "no
+#        pause" passes arguments it has already validated
 #     2  refused, nothing sent or written: execution.target is not
 #        github-actions (sending verbs); the branch's local record does not
 #        carry `execution: github-actions` (status, sync); the record's mirror
@@ -40,7 +45,9 @@
 #        is not at the top level — the bundle may already be restored, and no
 #        answer is written
 #     3  gh failed: not found, or a non-zero exit — the first line of gh's
-#        stderr is named. For poll: the listing or the disable failed
+#        stderr is named. For poll: the listing or the disable failed. For
+#        pause-requested and run-created-at, also an answer that is not the
+#        expected JSON; a caller never pauses on a failed read
 #
 # `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
 # its job, before and (under `always()`) after the harness step. Without
@@ -139,6 +146,18 @@
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` in the checkout,
 # skipped when that directory already holds its status.json.
 #
+# `pause-requested` AND `run-created-at` ARE THE JOB'S TWO READ VERBS, called by
+# `autonomous-watcher.sh job`; like `restore` they test neither
+# `execution.target` nor a registry record, run gh from `hr_repo_root` of the
+# working directory unless `--repo` names one, and write nothing.
+# `pause-requested` lists the branch's runs and exits 0 when one whose
+# `displayTitle` is exactly `harness pause <branch>` has a `createdAt` at or
+# after <since_epoch> — AT, because `createdAt` has one-second resolution and
+# the caller takes <since_epoch> just before the query it will next start
+# from, so a pause created later in that same second is still seen; seeing one
+# twice is harmless, since the caller drops PAUSE once. `run-created-at` prints
+# `gh run view <run_id> --json createdAt` as an epoch second.
+#
 # `status` AND `sync` READ THE RECORD, NOT THE KEY. A run keeps the execution
 # it started with, so they test the record's `execution` field and never
 # `execution.target`; the configuration is still read for `stateDir`.
@@ -223,7 +242,7 @@
 # `restore`, that download directory, the job restore, `answer_<n>.md` and the
 # `park_loop_cycles` rewrite of `remote_status.json`, all in the job's
 # checkout; for `save`, <out_dir> and the step summary; for `poll`, its
-# download directories.
+# download directories. `pause-requested` and `run-created-at` write nothing.
 #
 # MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
 # rename there is an edit here, byte for byte:
@@ -324,6 +343,14 @@
 #              scripts/remote-run.sh poll -> 0; `run download`, `workflow run
 #              ... -f resume=pause`, then `workflow disable harness-resume.yml`;
 #              with usage_resume_at far ahead -> no dispatch, no disable
+#
+#   the job's reads: a `run list` answer whose run has `displayTitle` `harness
+#   pause feat_x` and `createdAt` `2026-01-01T00:00:10Z` (epoch 1767225610):
+#   pause-requested  bash scripts/remote-run.sh pause-requested feat_x 1767225600
+#              -> 0; with 1767225620 -> 1; a stub failing `run list` -> 3
+#   run-created-at   a stub answering `run view 42 --json createdAt` with
+#              {"createdAt":"2026-01-01T00:00:10Z"}: bash scripts/remote-run.sh
+#              run-created-at 42 -> prints 1767225610, 0; a failing stub -> 3
 
 set -u
 
@@ -358,6 +385,8 @@ EXIT_OK=0
 EXIT_USAGE=1
 EXIT_REFUSED=2
 EXIT_GH=3
+# pause-requested only: the read succeeded and found no pause.
+EXIT_NO_PAUSE=1
 
 usage() {
   echo "remote-run.sh: $1" >&2
@@ -371,6 +400,8 @@ usage() {
   echo "       remote-run.sh save <branch> <out_dir> [--repo <root>]" >&2
   echo "       remote-run.sh continue <branch> <bundle_dir> [--repo <root>]" >&2
   echo "       remote-run.sh poll [--repo <root>]" >&2
+  echo "       remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]" >&2
+  echo "       remote-run.sh run-created-at <run_id> [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -421,7 +452,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|restore|save|continue|poll) ;;
+  dispatch|pause|warm|stop|status|sync|restore|save|continue|poll|pause-requested|run-created-at) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -437,6 +468,8 @@ indexes_given=0
 park_loop_clear=0
 chain="0"
 repo_arg=""
+since_arg=""
+run_id_arg=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -464,8 +497,13 @@ while [ "$#" -gt 0 ]; do
       usage "unknown option '$1'" ;;
     *)
       [ "$verb" != warm ] && [ "$verb" != poll ] || usage "$verb takes no branch"
-      if [ -z "$branch" ]; then
+      if [ "$verb" = run-created-at ]; then
+        [ -z "$run_id_arg" ] || usage "unexpected argument '$1'"
+        run_id_arg="$1"
+      elif [ -z "$branch" ]; then
         branch="$1"
+      elif [ "$verb" = pause-requested ] && [ -z "$since_arg" ]; then
+        since_arg="$1"
       elif [ "$verb" = save ] && [ -z "$out_dir" ]; then
         out_dir="$1"
       elif [ "$verb" = continue ] && [ -z "$bundle_dir" ]; then
@@ -477,8 +515,22 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ "$verb" != warm ] && [ "$verb" != poll ]; then
+if [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != run-created-at ]; then
   valid_branch "$branch" || usage "$verb needs a <branch>"
+fi
+
+if [ "$verb" = pause-requested ]; then
+  case "$since_arg" in
+    ''|*[!0-9]*) usage "pause-requested needs a <since_epoch> that is a non-negative integer" ;;
+  esac
+  # Base 10, so a leading zero is neither octal nor invalid JSON for --argjson.
+  since_arg=$((10#$since_arg))
+fi
+
+if [ "$verb" = run-created-at ]; then
+  case "$run_id_arg" in
+    ''|*[!0-9]*|0*) usage "run-created-at needs a <run_id> that is a positive integer" ;;
+  esac
 fi
 
 if [ "$verb" = continue ] && [ -z "$bundle_dir" ]; then
@@ -537,7 +589,8 @@ setup_fail() {
 
 if [ -n "$repo_arg" ]; then
   root=$(hr_repo_root "$repo_arg") || setup_fail "'$repo_arg' is not a git repository"
-elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ]; then
+elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ] \
+  || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ]; then
   root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
@@ -548,6 +601,9 @@ registry=""
 case "$verb" in
   restore|save|continue|poll)
     hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/harness.config.json'"
+    ;;
+  pause-requested|run-created-at)
+    # Read verbs: no gate, and nothing of the configuration is read.
     ;;
   status|sync)
     registry=$(hr_state_path "$root" autonomous_logs/registry.json) || {
@@ -1272,6 +1328,41 @@ EOF
   echo "remote-run.sh: poll: no branch is waiting; disabled $WORKFLOW_RESUME_FILE"
 }
 
+verb_pause_requested() {
+  local found
+  list_runs
+  # An unparseable createdAt is no match rather than a failed read.
+  found=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness pause $branch" --argjson since "$since_arg" '
+    [.[] | select(.displayTitle == $t)
+      | ((.createdAt // "") | try fromdateiso8601 catch null)
+      | select(. != null and . >= $since)] | length' 2>/dev/null)
+  case "$found" in
+    ''|*[!0-9]*)
+      GH_ERR="its run list is not the expected JSON"
+      gh_fail "listing the runs of '$branch' failed"
+      ;;
+  esac
+  if [ "$found" -gt 0 ]; then
+    echo "remote-run.sh: a 'harness pause $branch' run was created at or after $since_arg"
+    return 0
+  fi
+  echo "remote-run.sh: no 'harness pause $branch' run was created at or after $since_arg"
+  exit "$EXIT_NO_PAUSE"
+}
+
+verb_run_created_at() {
+  local epoch
+  gh_call run view "$run_id_arg" --json createdAt || gh_fail "reading run $run_id_arg failed"
+  epoch=$(printf '%s' "$GH_OUT" | jq -r '.createdAt | fromdateiso8601 | floor' 2>/dev/null)
+  case "$epoch" in
+    ''|*[!0-9]*)
+      GH_ERR="its createdAt is not an ISO 8601 UTC time"
+      gh_fail "reading run $run_id_arg failed"
+      ;;
+  esac
+  printf '%s\n' "$epoch"
+}
+
 case "$verb" in
   dispatch) verb_dispatch ;;
   pause) verb_pause ;;
@@ -1283,5 +1374,7 @@ case "$verb" in
   save) verb_save ;;
   continue) verb_continue ;;
   poll) verb_poll ;;
+  pause-requested) verb_pause_requested ;;
+  run-created-at) verb_run_created_at ;;
 esac
 exit "$EXIT_OK"
