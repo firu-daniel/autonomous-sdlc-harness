@@ -79,8 +79,12 @@ const STDIN_FD = 0;
 /** Standard output, named as a descriptor for the same reason: the probe below must not open a stream. */
 const STDOUT_FD = 1;
 
-/** How many times an unrecognised yes/no answer is re-asked before the default is taken. */
-const REPROMPT_LIMIT = 2;
+/**
+ * How many times an unrecognised answer is re-asked before the default is taken. `init`'s
+ * push-destination re-ask loops over {@link askLine} with this same bound, so the two re-ask loops
+ * cannot drift apart.
+ */
+export const REPROMPT_LIMIT = 2;
 
 /** How long, and how many times, an `EAGAIN` read is retried before input is given up on. */
 const EAGAIN_RETRY_LIMIT = 100;

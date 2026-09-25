@@ -115,7 +115,7 @@ import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js
 import { nameList } from '../core/nameList.js';
 import { insideRepo, packageRoot } from '../core/paths.js';
 import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
-import { askLine, askYesNo, canPrompt } from '../core/prompt.js';
+import { askLine, askYesNo, canPrompt, REPROMPT_LIMIT, type PromptContext } from '../core/prompt.js';
 import { normalizeRepoDir, normalizeRepoPathStrict } from '../core/repoPaths.js';
 import { WritePlan } from '../core/writer.js';
 import { findNestedApplicationDir } from '../detect/nestedApplication.js';
@@ -143,7 +143,12 @@ import {
 } from '../generators/claudeContext.js';
 import { pointHooksPath, writeGitHooks } from '../generators/githooks.js';
 import { writeHarnessConfig, type AppDirSource, type HarnessConfigFlags } from '../generators/harnessConfig.js';
-import { writeNotifications, GUIDED_ENDPOINT_EXAMPLE } from '../generators/notifications.js';
+import {
+  writeNotifications,
+  PUSH_DESTINATION_FORMS,
+  PUSH_DESTINATION_PLACEHOLDER,
+  resolvePushDestination,
+} from '../generators/notifications.js';
 import { writeOuterLoopScripts } from '../generators/outerLoopScripts.js';
 import { writePermissionProfile } from '../generators/permissionProfile.js';
 import {
@@ -406,7 +411,10 @@ export interface InitFlags extends HarnessConfigFlags, ProjectSettingsFlags {
   readonly noAnalyze?: boolean;
   /** `--notifications`. Answers the push-notification opt-in, whose documented default is off. */
   readonly notifications?: boolean;
-  /** `--push-url`. The endpoint the opt-in posts to; read only when the opt-in was taken. */
+  /**
+   * `--push-url`. Where the opt-in posts to — an ntfy topic name or a full URL, checked at parse time
+   * by `resolvePushDestination` and kept as given; read only when the opt-in was taken.
+   */
   readonly pushUrl?: string;
   /** `--preset`. Bypasses the detection table entirely; validated at parse time. */
   readonly preset?: string;
@@ -680,8 +688,9 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
     key: 'pushUrl',
     flag: PUSH_URL_FLAG,
     kind: 'value',
-    placeholder: '<url>',
-    summary: 'Endpoint unattended-run notifications are posted to (with --notifications)',
+    placeholder: PUSH_DESTINATION_PLACEHOLDER,
+    summary:
+      'Where notifications are posted: an ntfy topic name, or the full URL of any endpoint that accepts a POST (with --notifications)',
   },
 ] as const);
 
@@ -877,6 +886,15 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
     const typed = switches.get('docsRetrieval') ?? DOCS_RETRIEVAL_FLAG;
     throw new HarnessError(
       `init: ${typed} needs --docs: retrieval searches the documentation corpus the docs phase maintains, so it is legal only with that phase on`,
+    );
+  }
+  // Checked here for the reason `qaDriver` is, whether or not --notifications was given: a bad value
+  // must not cost an adopter a repository this run created. The value is withheld from the message,
+  // unlike {@link parseQaDriver}'s, because a push destination is a credential and stderr is logged.
+  const pushUrl = values.get('pushUrl');
+  if (pushUrl !== undefined && resolvePushDestination(pushUrl).kind === 'unrecognised') {
+    throw new HarnessError(
+      `init: ${PUSH_URL_FLAG} takes ${PUSH_DESTINATION_FORMS}; the value given is neither, so nothing was written. It is not repeated here, because a push destination is a credential — check it and pass it again`,
     );
   }
 
@@ -1489,14 +1507,15 @@ interface NotificationAnswers {
  *
  * The two questions are asked in order and the second only inside the first's yes, because an
  * endpoint is meaningless without the opt-in and the opt-in writes nothing without an endpoint. The
- * endpoint question carries no default: `askLine` answers `undefined` with none, and `undefined` is
- * what routes the run to the generator's guided-setup note rather than to a file — writing an empty
- * machine-local file would shadow a repository-side one that already has values
- * (`generators/notifications.ts`, choice 1).
+ * endpoint question carries no default, and {@link askPushDestination} ends in one of three outcomes:
+ * `undefined`, which routes the run to the generator's guided-setup note rather than to a file —
+ * writing an empty machine-local file would shadow a repository-side one that already has values
+ * (`generators/notifications.ts`, choice 1); a recognised destination, passed on as typed; or, after
+ * the re-asks run out, the last unrecognised answer, on which the generator writes nothing and warns.
  *
  * A `--push-url` passed **without** the opt-in is left in place rather than dropped here: the
  * generator owns what that means and warns about it, as it owns every other line about the artifact
- * it writes.
+ * it writes. The flag always wins over asking.
  */
 function resolveNotifications(ctx: CommandContext, flags: InitFlags): NotificationAnswers {
   const promptCtx = { flags: ctx.flags, report: ctx.report };
@@ -1512,19 +1531,32 @@ function resolveNotifications(ctx: CommandContext, flags: InitFlags): Notificati
       promptCtx,
     );
 
-  const pushUrl =
-    flags.pushUrl ??
-    (enabled
-      ? askLine(
-          {
-            question: `Where should notifications be posted? (any endpoint that accepts a POST, e.g. ${GUIDED_ENDPOINT_EXAMPLE})`,
-            flag: PUSH_URL_FLAG,
-          },
-          promptCtx,
-        )
-      : undefined);
+  const pushUrl = flags.pushUrl ?? (enabled ? askPushDestination(promptCtx) : undefined);
 
   return pushUrl === undefined ? { enabled } : { enabled, pushUrl };
+}
+
+/**
+ * Ask for the push destination, re-asking an unrecognised answer up to `REPROMPT_LIMIT` times. Loops
+ * over `askLine` rather than reading the terminal, so `core/prompt.ts` stays the one way to ask.
+ * Returns `undefined` for no answer, a recognised answer as typed, or the last unrecognised one.
+ */
+function askPushDestination(promptCtx: PromptContext): string | undefined {
+  let answer: string | undefined;
+  for (let attempt = 0; attempt <= REPROMPT_LIMIT; attempt += 1) {
+    answer = askLine(
+      {
+        question: `Where should notifications be posted? Type ${PUSH_DESTINATION_FORMS}.`,
+        flag: PUSH_URL_FLAG,
+      },
+      promptCtx,
+    );
+    if (answer === undefined || resolvePushDestination(answer).kind !== 'unrecognised') return answer;
+    promptCtx.report.info(
+      'That answer is neither an ntfy topic name nor a full http:// or https:// URL, so it was not used. It is not repeated here, because a push destination is a credential.',
+    );
+  }
+  return answer;
 }
 
 /** What detection concluded, as one line the summary can carry. */
