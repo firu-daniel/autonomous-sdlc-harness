@@ -18,7 +18,9 @@
 #
 # The watcher knows only about inbox files, working copies, central logs, the run
 # registry (including which engine each run was launched with), the concurrency
-# cap, the kill switch, and exit notifications. IT CONTAINS NO PLANNING,
+# cap, the kill switch, and exit notifications — and, when `execution.target` is
+# `github-actions`, it also dispatches a drop to GitHub Actions instead of
+# spawning it (see REMOTE DISPATCH). IT CONTAINS NO PLANNING,
 # IMPLEMENTATION OR FIX ORCHESTRATION LOGIC — all of that lives in the engine
 # commands, which resolve their own anchors inside the working copy they run in.
 # That is what keeps a future trigger (an issue label, a webhook) a drop-in
@@ -107,7 +109,9 @@
 #     `paused_by=usage` tag alone, and a hand pause carries no tag.
 #   * WHILE A PAUSE IS IN EFFECT THE HOLD MARKER IS UP, which is what defers a
 #     fresh inbox drop (it stays in the inbox) and skips the watchdog above:
-#     launching into a full window spends a run on an immediate refusal.
+#     launching into a full window spends a run on an immediate refusal. A
+#     REMOTE drop is dispatched through the hold — the job gates itself (see
+#     REMOTE DISPATCH).
 #   * THE WINDOW TYPES ARE ASSESSED INDEPENDENTLY — the 5-hour one and the
 #     rolling weekly one — so a 5-hour window that has just reset cannot mask a
 #     weekly window sitting at its cap. The worst state across every window of
@@ -125,7 +129,8 @@
 # `<state> <resume_at>` pair it already computes — into one machine-level record,
 # and the three passes that START work (a fresh inbox drop, a park resume, a
 # pause resume) CONSULT that record before acting — and, only when
-# USAGE_LANE_LOCK_ENABLED=1, also acquire a single machine-level lane. Both live
+# USAGE_LANE_LOCK_ENABLED=1, also acquire a single machine-level lane. A remote
+# drop consults neither (see REMOTE DISPATCH). Both live
 # under
 #
 #   ${XDG_STATE_HOME:-$HOME/.local/state}/autonomous-sdlc-harness/
@@ -159,10 +164,42 @@
 # unattended commit point calls: the engine's own "working tree clean"
 # precondition has to be honest from its very first step, and a prompt left
 # uncommitted is lost when the branch reaches a pull request. A dropped REVIEW
-# file is placed and NEVER committed — the flow's own commits pick it up. Both
+# file is placed and NEVER committed — the flow's own commits pick it up — on a
+# local run; a remote one commits it (see REMOTE DISPATCH). On a LOCAL run both
 # commit paths are non-blocking: a failed commit or push is one WARNING line in
 # the log and the run launches anyway, because that failure has to be visible and
-# must never cost the run.
+# must never cost the run. On a remote run it blocks the dispatch (see REMOTE
+# DISPATCH).
+#
+# REMOTE DISPATCH. With `execution.target` `github-actions` — read per inbox
+# file from the configuration in effect at the drop, an unresolvable answer
+# being `local` with one log line — a drop is prepared exactly as a local one
+# (working copy, artifact placed, committed and pushed) and then handed to
+# `remote-run.sh dispatch` instead of spawn_engine, by launch_remote_run. It
+# opens no live-log window and spawns nothing.
+#
+#   * SKIPPED FOR A REMOTE DROP: the usage hold, the concurrency cap and the
+#     machine lane. The job gates itself, and no local component gates a remote
+#     run. The kill switch still defers it, and a parked, paused or park-loop
+#     record still rejects it.
+#   * THE RECORD CARRIES `execution: github-actions`, and a run keeps the
+#     execution it started with for its whole life: the record's field, never
+#     the current key, is what later passes read. Before the duplicate test on
+#     such a record, `remote-run.sh sync` refreshes its status (best-effort).
+#   * THE REVIEW IS COMMITTED, on a remote run only: the job checks out
+#     `origin/<branch>`, so a review left uncommitted would not reach it, and a
+#     job boundary before the flow's own commit would lose it. The working copy
+#     is first fast-forwarded to `origin/<branch>`, because the job, not this
+#     copy, is where the branch advanced.
+#   * A FAILED COMMIT OR PUSH BLOCKS A REMOTE DISPATCH, for all three artifacts,
+#     while it never blocks a local launch. A local run executes in the working
+#     copy that holds the file; a remote job sees only what was pushed. An
+#     identical re-drop still skips the commit, but its push must still land —
+#     the earlier drop's push may be the one that failed. push-branch.sh exits
+#     0 on every path, so "landed" is read as `origin/<branch>` equal to HEAD.
+#
+# A remote run's local working copy is a MIRROR that `remote-run.sh sync`
+# fills; it is stopped through `remote-run.sh stop`.
 #
 # THE AGENT BINARY IS REACHED THROUGH ONE VARIABLE, `${HARNESS_AGENT_CLI:-claude}`,
 # resolved once below. It defaults to the real CLI, so an operator sees no
@@ -184,8 +221,11 @@
 # — is the one that holds the inbox, the logs, the registry and the kill switch,
 # so every run is tailable and stoppable from ONE place while executing in its own
 # sibling working copy — except under `job`, where the main checkout and the
-# working copy are the same directory, the job's own checkout (see JOB MODE).
-# Every run-artifact path under it comes from the configured `stateDir` through
+# working copy are the same directory, the job's own checkout (see JOB MODE);
+# and except for a record with `execution: github-actions`, whose run executes
+# in a GitHub Actions job, whose local working copy is a mirror that
+# `remote-run.sh sync` fills, and which is stopped through `remote-run.sh stop`
+# (see REMOTE DISPATCH). Every run-artifact path under it comes from the configured `stateDir` through
 # lib/harness-run-lib.sh; none of them is spelled here.
 #
 # IT REFUSES TO START ON A CONFIGURATION IT CANNOT READ. A watcher that guessed
@@ -420,7 +460,9 @@
 #                    "already committed (identical re-drop)" line and NO commit
 #   routing       feat_x_review_2.md   -> branch feat_x, the review engine, the
 #                    file placed under sdlc-harness/user_reviews/ with its round
-#                    suffix intact and NOT committed
+#                    suffix intact and NOT committed — on a local run; a remote
+#                    review drop is committed and pushed before dispatch (see
+#                    REMOTE DISPATCH and the `remote review` entry)
 #                 feat_x_docs.md       -> branch feat_x, the docs engine, the
 #                    checklist committed under sdlc-harness/docs_catalog/
 #                 foo_review_task_prompt.md -> branch foo_review, task engine
@@ -593,6 +635,30 @@
 #                    one auto-resume, `job: completed stop`; a stub ending
 #                    `exit 2` with REMOTE_AUTO_RESUME_DELAY_SECS=0 -> launched
 #                    1 + REMOTE_AUTO_RESUME_MAX times, `job: failed stop`
+#   remote drop   `a drop`'s fixture, with "$d"'s own files committed and pushed
+#                 to origin's default branch, `"execution":{"target":
+#                 "github-actions"}` in its harness.config.json, and
+#                 HARNESS_GH_CLI pointed at a recorder (see remote-run.sh's
+#                 REPRO); drop feat_x_task_prompt.md and tick
+#                 -> the prompt committed and pushed as in `a drop`, ONE
+#                    `workflow run harness-run.yml --ref feat_x … -f engine=task
+#                    -f resume=none -f chain=0` recorded, the record
+#                    `execution: github-actions`, `status: running`, an empty
+#                    pid and a remote_dispatched_at, ONE `launched`
+#                    notification saying `dispatched to GitHub Actions`, and
+#                    the stub NOT launched. The usage hold marker, or
+#                    MAX_PARALLEL_RUNS=0, changes nothing; AUTONOMOUS_STOP still
+#                    defers it. A recorder exiting non-zero -> `failed` and ONE
+#                    `failed` notification naming remote-run.sh. A bare origin
+#                    whose pre-receive hook rejects a branch update -> no
+#                    `workflow run`, `failed`, and the notification naming
+#                    push-branch.sh
+#   remote review from that record set `completed`, and a commit pushed to
+#                 origin's feat_x from elsewhere, drop feat_x_review.md and tick
+#                 -> the working copy fast-forwarded to origin/feat_x, then
+#                    `git -C "$w/demo-feat_x" log -1 --format=%s` is
+#                    `chore: add user review for feat_x`, pushed, and ONE
+#                    `-f engine=user_review` dispatch recorded
 #   unresolvable  printf 'x' > "$d/harness.config.json"
 #                 -> one line on stderr, exit 1, nothing under "$d/sdlc-harness"
 
@@ -667,7 +733,10 @@ fi
 # Anchors. All central state lives in the MAIN checkout; a run executes in a
 # sibling working copy — under `job`, the main checkout and the working copy are
 # the same directory, the job's own checkout, which the first working copy
-# `git worktree list` reports already yields (see JOB MODE in the header).
+# `git worktree list` reports already yields (see JOB MODE in the header); for
+# a record with `execution: github-actions` the run executes in a GitHub Actions
+# job, its local working copy is a mirror `remote-run.sh sync` fills, and it is
+# stopped through `remote-run.sh stop` (see REMOTE DISPATCH in the header).
 # Resolving both from this script's location is what makes
 # the answer identical whether the daemon, a person or a test starts it.
 # -----------------------------------------------------------------------------
@@ -722,7 +791,8 @@ CREATE_WORKTREE="$SCRIPT_DIR/create-worktree.sh"
 CLEANUP_SCRIPT="$SCRIPT_DIR/cleanup-merged-worktrees.sh"
 COMMIT_ON_BRANCH="$SCRIPT_DIR/commit-on-branch.sh"
 PUSH_BRANCH="$SCRIPT_DIR/push-branch.sh"
-# Job mode's one route to GitHub — its two read verbs — resolved the same way.
+# The one route to GitHub — job mode's two read verbs, and the inbox pass's
+# `dispatch` and `sync` (REMOTE DISPATCH) — resolved the same way.
 REMOTE_RUN="$SCRIPT_DIR/remote-run.sh"
 
 # The unattended permission profile, resolved in the MAIN checkout even though a
@@ -1157,6 +1227,12 @@ notify() {
 #                       bound of the next control poll, this job's or the next
 #                       chained one's. Set at start (see JOB MODE) and advanced
 #                       by every successful poll
+#   execution           `github-actions` on a record launch_remote_run wrote, and
+#                       absent on a local one. Fixed for the run's life: a later
+#                       pass reads this field, never `execution.target`
+#   remote_dispatched_at
+#                       the epoch second launch_remote_run's `remote-run.sh
+#                       dispatch` returned 0; empty after a failed dispatch
 # -----------------------------------------------------------------------------
 # The bodies are lib/harness-run-lib.sh's THE RUN REGISTRY, shared with every
 # script that reads or writes this file; these wrappers bind them to $REGISTRY.
@@ -1854,6 +1930,48 @@ launch_run() {
   notify launched "$branch" "$log_path" "engine=$engine_kind"
   open_log_terminal "$branch" "$log_path"
   spawn_engine "$branch" "$worktree" "$log_path"
+}
+
+# launch_remote_run <branch> <worktree> <log_path> <engine_kind>
+#
+# launch_run's bookkeeping for a remote drop (REMOTE DISPATCH in the header):
+# the same fields written and cleared, plus `execution` and an empty pid, then
+# `remote-run.sh dispatch` in place of the window and the spawn. `running` is
+# written only once the dispatch returned 0, so a record never claims a run
+# GitHub was not asked for.
+launch_remote_run() {
+  local branch="$1" worktree="$2" log_path="$3" engine_kind="$4" out rc first
+
+  registry_set "$branch" worktree "$worktree"
+  registry_set "$branch" log_path "$log_path"
+  registry_set "$branch" engine "$engine_kind"
+  registry_set "$branch" execution github-actions
+  registry_set "$branch" started_at "$(date '+%Y-%m-%dT%H:%M:%S')"
+  registry_set "$branch" pid ""
+  registry_set "$branch" remote_dispatched_at ""
+  registry_set "$branch" stall_restarts 0
+  registry_set "$branch" stall_warned ""
+  registry_set "$branch" stall_killing ""
+  registry_set "$branch" paused_by ""
+  registry_set "$branch" usage_resume_at ""
+  registry_set "$branch" resume_kind ""
+  registry_set "$branch" park_loop_cycles 0
+
+  log "dispatching '$branch' (engine=$engine_kind) to GitHub Actions via remote-run.sh (log: $log_path)"
+  out="$(bash "$REMOTE_RUN" dispatch "$branch" --engine "$engine_kind" --resume none --chain 0 --repo "$MAIN_REPO" 2>&1)"
+  rc=$?
+  [ -z "$out" ] || printf '%s\n' "$out" >>"$log_path"
+  if [ "$rc" -eq 0 ]; then
+    registry_set "$branch" remote_dispatched_at "$(date +%s)"
+    registry_set "$branch" status running
+    notify launched "$branch" "$log_path" "dispatched to GitHub Actions"
+    return 0
+  fi
+  first="$(printf '%s\n' "$out" | sed -n '1p')"
+  registry_set "$branch" status failed
+  log "remote-run.sh dispatch failed for '$branch' (exit $rc): ${first:-no output}"
+  notify failed "$branch" "$log_path" "(remote-run.sh dispatch failed, exit $rc: ${first:-no output})"
+  return 1
 }
 
 # archive_answered_pair <clar_dir> <n>
@@ -2657,6 +2775,39 @@ reject_preserving_status() {
   notify failed "$branch" "$LOGS_DIR/$branch.log" "$reason"
 }
 
+# remote_commit_and_push <branch> <worktree> <log_path> <file> <fname> <dest> <rel> <subject> <what>
+#
+# The remote arm's commit-and-push, BLOCKING (REMOTE DISPATCH in the header):
+# 0 = <dest> is committed and origin/<branch> carries HEAD; 1 = it is not, and
+# fail_before_launch has already run, so the caller dispatches nothing. The
+# same staging, identical-re-drop skip and wrappers the local arm uses; the
+# push stays a separate statement from the commit.
+remote_commit_and_push() {
+  local branch="$1" worktree="$2" log_path="$3" file="$4" fname="$5"
+  local dest="$6" rel="$7" subject="$8" what="$9" head upstream
+
+  git -C "$worktree" add "$dest"
+  if git -C "$worktree" diff --cached --quiet "$dest"; then
+    log "the $what for '$branch' is already committed (identical re-drop) — skipping the commit, pushing anyway"
+  elif "$COMMIT_ON_BRANCH" --repo "$worktree" "$rel" -- "$subject" >>"$log_path" 2>&1; then
+    log "committed the $what for '$branch' ($subject)"
+  else
+    log "commit-on-branch.sh could not commit the $what for '$branch' — not dispatching (see $log_path)"
+    fail_before_launch "$branch" "$file" "$fname" "(commit-on-branch.sh could not commit the $what — nothing dispatched; see $log_path)"
+    return 1
+  fi
+
+  "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1
+  head="$(git -C "$worktree" rev-parse --verify --quiet HEAD)" || head=""
+  upstream="$(git -C "$worktree" rev-parse --verify --quiet "refs/remotes/origin/$branch")" || upstream=""
+  if [ -z "$head" ] || [ "$head" != "$upstream" ]; then
+    log "push-branch.sh did not bring origin/$branch to HEAD after the $what for '$branch' — not dispatching (see $log_path)"
+    fail_before_launch "$branch" "$file" "$fname" "(push-branch.sh did not push the $what to origin/$branch — nothing dispatched; the job checks out origin/$branch; see $log_path)"
+    return 1
+  fi
+  return 0
+}
+
 # -----------------------------------------------------------------------------
 # One dropped file, end to end. Returns 0 when it CONSUMED the file (launched,
 # failed or rejected it), 10 when it deferred it FOR CAPACITY — this repository's
@@ -2719,6 +2870,15 @@ process_inbox_file() {
   # working-copy directory, which the library derives and sanitizes.
   local log_path="$LOGS_DIR/$branch.log"
 
+  # Where this drop runs: the configuration in effect now (tick reloads it each
+  # pass). REMOTE DISPATCH in the header; remote=0 is today's path throughout.
+  local target remote=0
+  target="$(hr_execution_target "$MAIN_REPO")" || {
+    log "execution.target is unresolvable in '$MAIN_REPO/harness.config.json' — treating the drop of '$fname' as local"
+    target="local"
+  }
+  [ "$target" = "github-actions" ] && remote=1
+
   # ---------------------------------------------------------------------------
   # The shared guards, in this order for all three patterns. The order is the
   # contract the resume and usage passes compose with, not an accident: an
@@ -2729,7 +2889,8 @@ process_inbox_file() {
   # Under the shipped defaults no lane is taken at all (USAGE_LANE_LOCK_ENABLED
   # is 0, so only the shared record is read); when the lock is enabled, taking
   # the lane commits the whole machine to this repository, which is why it sits
-  # below every cheaper refusal.
+  # below every cheaper refusal. A REMOTE drop skips the usage hold, the cap and
+  # the lane, keeping the rest in this order (REMOTE DISPATCH in the header).
   # ---------------------------------------------------------------------------
 
   # The global kill switch, honored before anything is launched. Deferring leaves
@@ -2743,7 +2904,7 @@ process_inbox_file() {
   # The usage hold — the account's rate-limit window is full. Deferred exactly
   # like the kill switch, and for the same reason it exists: launching a fresh
   # run into a maxed-out window spends it on an immediate refusal.
-  if [ -f "$USAGE_HOLD" ]; then
+  if [ "$remote" != 1 ] && [ -f "$USAGE_HOLD" ]; then
     log "a usage hold is active ($USAGE_HOLD) — deferring '$branch' (leaving it in the inbox)"
     return 11
   fi
@@ -2751,18 +2912,34 @@ process_inbox_file() {
   # The per-repository concurrency cap. Deferred, not rejected: capacity frees up
   # on its own as runs finish.
   local current
-  current="$(running_count)"
-  if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
-    log "at the cap ($current/$MAX_PARALLEL_RUNS runs) — deferring '$branch' (leaving it in the inbox)"
-    return 10
+  if [ "$remote" != 1 ]; then
+    current="$(running_count)"
+    if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
+      log "at the cap ($current/$MAX_PARALLEL_RUNS runs) — deferring '$branch' (leaving it in the inbox)"
+      return 10
+    fi
   fi
 
   # This branch already has a LIVE run: the drop is a duplicate (a re-drop, or a
   # second copy of the same file), and launching a second engine on one working
   # copy would have the two overwrite each other's commits. Archived rather than
-  # deferred — nothing about waiting would make it a different file.
-  local existing_pid existing_status
+  # deferred — nothing about waiting would make it a different file. A record
+  # with `execution: github-actions` has no local pid: its status, refreshed by
+  # a best-effort `remote-run.sh sync`, is what says it is live.
+  local existing_pid existing_status sync_rc
   existing_pid="$(registry_get "$branch" pid)"
+  if [ "$remote" = 1 ] && [ "$(registry_get "$branch" execution)" = "github-actions" ]; then
+    bash "$REMOTE_RUN" sync "$branch" --repo "$MAIN_REPO" >>"$log_path" 2>&1
+    sync_rc=$?
+    [ "$sync_rc" -eq 0 ] ||
+      log "remote-run.sh sync failed for '$branch' (exit $sync_rc) — the duplicate test reads the record as it stands (see $log_path)"
+    existing_status="$(registry_get "$branch" status)"
+    if [ "$existing_status" = "running" ]; then
+      log "'$branch' already has a running GitHub Actions run — archiving the duplicate inbox file"
+      mv "$file" "$ARCHIVE_DIR/dup_$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
+      return 0
+    fi
+  fi
   existing_status="$(registry_get "$branch" status)"
   if [ "$existing_status" = "running" ] && [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
     log "'$branch' is already running (pid $existing_pid) — archiving the duplicate inbox file"
@@ -2811,7 +2988,7 @@ process_inbox_file() {
   # the file stays in the inbox, no record is written, and the next pass asks
   # again once the shared window has reset — or, with the lock enabled, once
   # whichever repository holds the lane has released it.
-  if lane_blocks_start "$branch" "the drop of '$fname'"; then
+  if [ "$remote" != 1 ] && lane_blocks_start "$branch" "the drop of '$fname'"; then
     return 10
   fi
 
@@ -2887,18 +3064,24 @@ process_inbox_file() {
     # a run does not happen. The push is a SEPARATE statement for the same reason
     # it is everywhere else — an `if commit; then push; fi` compound is not what
     # the guards match — and it is safe unconditionally, because a push with
-    # nothing new to send is a no-op.
-    git -C "$worktree" add "$prompt_dest"
-    if git -C "$worktree" diff --cached --quiet "$prompt_dest"; then
-      log "the task prompt for '$branch' is already committed (identical re-drop) — skipping the commit"
-    elif "$COMMIT_ON_BRANCH" --repo "$worktree" \
-      "$prompt_rel" \
-      -- "chore: add task prompt for $branch" >>"$log_path" 2>&1; then
-      log "committed the task prompt for '$branch' (chore: add task prompt for $branch)"
-      "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
-        log "WARNING: push-branch.sh failed after the task-prompt commit for '$branch' — continuing"
+    # nothing new to send is a no-op. On the remote arm a failure BLOCKS the
+    # dispatch instead (REMOTE DISPATCH in the header).
+    if [ "$remote" = 1 ]; then
+      remote_commit_and_push "$branch" "$worktree" "$log_path" "$file" "$fname" \
+        "$prompt_dest" "$prompt_rel" "chore: add task prompt for $branch" "task prompt" || return 0
     else
-      log "WARNING: could not commit the task prompt for '$branch' — launching anyway (its working-tree-clean precondition may be dishonest; see $log_path)"
+      git -C "$worktree" add "$prompt_dest"
+      if git -C "$worktree" diff --cached --quiet "$prompt_dest"; then
+        log "the task prompt for '$branch' is already committed (identical re-drop) — skipping the commit"
+      elif "$COMMIT_ON_BRANCH" --repo "$worktree" \
+        "$prompt_rel" \
+        -- "chore: add task prompt for $branch" >>"$log_path" 2>&1; then
+        log "committed the task prompt for '$branch' (chore: add task prompt for $branch)"
+        "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
+          log "WARNING: push-branch.sh failed after the task-prompt commit for '$branch' — continuing"
+      else
+        log "WARNING: could not commit the task prompt for '$branch' — launching anyway (its working-tree-clean precondition may be dishonest; see $log_path)"
+      fi
     fi
   elif [ "$engine_kind" = "docs" ]; then
     # (2c) Docs path: the task path's strategy exactly — a FRESH working copy off
@@ -2922,24 +3105,30 @@ process_inbox_file() {
 
     # (3c) Place, archive, commit and push — the task path's block mirrored: the
     # same wrapper, the same identical-re-drop skip, the same non-blocking rule on
-    # a failed commit or push. Its rationale is stated once, above.
+    # a failed commit or push — and the same blocking rule on the remote arm. Its
+    # rationale is stated once, above.
     local docs_rel="$state_rel/docs_catalog/${branch}_docs.md"
     local docs_dest="$worktree/$docs_rel"
     mkdir -p "$worktree/$state_rel/docs_catalog"
     cp "$file" "$docs_dest"
     mv "$file" "$ARCHIVE_DIR/$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
     log "copied the docs checklist -> $docs_dest; archived the inbox file"
-    git -C "$worktree" add "$docs_dest"
-    if git -C "$worktree" diff --cached --quiet "$docs_dest"; then
-      log "the docs checklist for '$branch' is already committed (identical re-drop) — skipping the commit"
-    elif "$COMMIT_ON_BRANCH" --repo "$worktree" \
-      "$docs_rel" \
-      -- "chore: add docs checklist for $branch" >>"$log_path" 2>&1; then
-      log "committed the docs checklist for '$branch' (chore: add docs checklist for $branch)"
-      "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
-        log "WARNING: push-branch.sh failed after the docs-checklist commit for '$branch' — continuing"
+    if [ "$remote" = 1 ]; then
+      remote_commit_and_push "$branch" "$worktree" "$log_path" "$file" "$fname" \
+        "$docs_dest" "$docs_rel" "chore: add docs checklist for $branch" "docs checklist" || return 0
     else
-      log "WARNING: could not commit the docs checklist for '$branch' — launching anyway (see $log_path)"
+      git -C "$worktree" add "$docs_dest"
+      if git -C "$worktree" diff --cached --quiet "$docs_dest"; then
+        log "the docs checklist for '$branch' is already committed (identical re-drop) — skipping the commit"
+      elif "$COMMIT_ON_BRANCH" --repo "$worktree" \
+        "$docs_rel" \
+        -- "chore: add docs checklist for $branch" >>"$log_path" 2>&1; then
+        log "committed the docs checklist for '$branch' (chore: add docs checklist for $branch)"
+        "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
+          log "WARNING: push-branch.sh failed after the docs-checklist commit for '$branch' — continuing"
+      else
+        log "WARNING: could not commit the docs checklist for '$branch' — launching anyway (see $log_path)"
+      fi
     fi
   else
     # (2b) Review path: REUSE the branch's existing working copy when it is
@@ -2968,7 +3157,8 @@ process_inbox_file() {
       # Reused IN PLACE: no bootstrap re-run, and no fetch, fast-forward or reset
       # — the local branch is the source of truth here. This working copy is where
       # the original run's commits were made, and a single-operator flow has no
-      # competing writer to reconcile with.
+      # competing writer to reconcile with. On the remote arm the job is that
+      # writer, so the copy is fast-forwarded below.
       log "reusing the existing working copy for '$branch' at $worktree"
     else
       # Recreate for the EXISTING branch: fetch it and check it out (never `-b`,
@@ -2978,6 +3168,21 @@ process_inbox_file() {
       if ! "$CREATE_WORKTREE" --existing "$branch" >>"$log_path" 2>&1; then
         log "create-worktree.sh --existing failed for '$branch' — see $log_path; archiving the inbox file"
         fail_before_launch "$branch" "$file" "$fname" "(working-copy recreation failed)"
+        return 0
+      fi
+    fi
+
+    # Remote arm: bring the copy level with origin/<branch> before touching it —
+    # the job, not this copy, is where the branch advanced (REMOTE DISPATCH).
+    if [ "$remote" = 1 ]; then
+      if ! git -C "$worktree" fetch origin "$branch" >>"$log_path" 2>&1; then
+        log "git fetch origin $branch failed in $worktree — not dispatching (see $log_path)"
+        fail_before_launch "$branch" "$file" "$fname" "(git fetch origin $branch failed in the working copy — nothing dispatched; see $log_path)"
+        return 0
+      fi
+      if ! git -C "$worktree" merge --ff-only "origin/$branch" >>"$log_path" 2>&1; then
+        log "git merge --ff-only origin/$branch failed in $worktree — not dispatching (see $log_path)"
+        fail_before_launch "$branch" "$file" "$fname" "(git merge --ff-only origin/$branch failed in the working copy — nothing dispatched; see $log_path)"
         return 0
       fi
     fi
@@ -2994,7 +3199,9 @@ process_inbox_file() {
     # finds it (a fresh drop IS the latest round), and the flow's ordinary commits
     # pick it up as a tracked artifact. THE WATCHER DELIBERATELY DOES NOT COMMIT
     # THIS ONE — unlike a prompt or a checklist, it is not a precondition of the
-    # first step.
+    # first step. That is the local rule: a remote review drop is committed and
+    # pushed before dispatch, below (REMOTE DISPATCH in the header).
+    local review_rel="$state_rel/user_reviews/$fname"
     local review_dest="$worktree/$state_rel/user_reviews/$fname"
     mkdir -p "$worktree/$state_rel/user_reviews"
     if [ -f "$review_dest" ] && ! cmp -s "$file" "$review_dest"; then
@@ -3012,6 +3219,10 @@ process_inbox_file() {
     cp "$file" "$review_dest"
     mv "$file" "$ARCHIVE_DIR/$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
     log "copied the review -> $review_dest; archived the inbox file"
+    if [ "$remote" = 1 ]; then
+      remote_commit_and_push "$branch" "$worktree" "$log_path" "$file" "$fname" \
+        "$review_dest" "$review_rel" "chore: add user review for $branch" "user review" || return 0
+    fi
   fi
 
   # (4) Clear the pause protocol a PREVIOUS run on this branch key may have left
@@ -3027,7 +3238,12 @@ process_inbox_file() {
   # review drop for a branch whose original task run completed flips that
   # branch's EXISTING record from `completed` back to `running` — the same key,
   # which is exactly what keeps the cleanup sweep's active-run guard correct.
-  launch_run "$branch" "$worktree" "$log_path" "$engine_kind"
+  # A remote drop is dispatched instead of spawned.
+  if [ "$remote" = 1 ]; then
+    launch_remote_run "$branch" "$worktree" "$log_path" "$engine_kind" || :
+  else
+    launch_run "$branch" "$worktree" "$log_path" "$engine_kind"
+  fi
   return 0
 }
 
