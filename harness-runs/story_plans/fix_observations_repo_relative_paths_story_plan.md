@@ -23,7 +23,7 @@ This branch closes that in the instructions themselves: a **content rule** in `#
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_observations_repo_relative_paths/task_<K>_plan.md`. Ordered by the configured layer order, with the catch-all layer last.
 
-1. [ ] **Task 1** — State the repo-relative path rule and the pre-commit check in the adopter-facing intake README template _(layer: cli)_ _(points: 5)_
+1. [x] **Task 1** — State the repo-relative path rule and the pre-commit check in the adopter-facing intake README template _(layer: cli)_ _(points: 5)_
 2. [ ] **Task 2** — Add the repo-relative path rule, quoted command output included, to `## The entry format` _(layer: plugin)_ _(points: 10)_
 3. [ ] **Task 3** — Add the machine-path check before the commit wrapper in `## Commit mechanics` _(layer: plugin)_ _(points: 15)_
 4. [ ] **Task 4** — Bring the forks' Override I and commit-point paraphrases and `AUTONOMOUS_FLOW.md` in line with the check _(layer: plugin)_ _(points: 10)_

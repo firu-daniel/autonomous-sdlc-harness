@@ -17,3 +17,5 @@ One block, illustrative rather than real, in the shape every entry takes — as 
 - **cost this run:** two of five tasks carry no type-check result.
 - **hypothesis:** (guess) the entry predates runs executing outside the main checkout.
 ```
+
+Every path an entry names — quoted command output included — is repo-relative: written relative to the checkout it sits in, never with the machine's home directory or a checkout's root in front of it, because this file is committed and merged into the default branch, where a path from one machine means nothing to any other reader and discloses that machine's layout. The run checks the written file for those locations before it commits it, and rewrites any it finds. The rule is `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## The entry format`'s; the check is that file's → `## Commit mechanics`'s.
