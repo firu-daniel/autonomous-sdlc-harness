@@ -44,3 +44,14 @@ remote-run.sh sync <branch>     download the newest available bundle into the mi
 - The byte-identity assertion for `status` covers the registry file and every file under the fixture's state directory.
 - The written `remote-run.sh` still matches its template byte for byte (`outer-loop-scripts.test.mjs`).
 - `grep -n -E "remote_run_id|remote_run_url|remote_synced_at|killed" cli/templates/scripts/autonomous-watcher.sh` hits the registry field-set comment for each of the four.
+
+**Deviations from plan:**
+
+- `status` and `sync` test the record's `execution` field and never `execution.target` (Task 11: a run keeps the execution it started with); the configuration is still read for `stateDir`. The sending verbs keep the key check.
+- The "detail" cases 3 and 4 record has no existing registry field, so `sync` writes `remote_detail` (case 2 takes the bundle's `detail`); it is documented in the watcher's registry field-set comment beside the four the plan names.
+- `gh run list` carries no artifact field, so a run's `harness-state` artifact is read with `gh api repos/{owner}/{repo}/actions/runs/<id>/artifacts`; an expired artifact counts as none. Older runs are only queried when `remote_run_id` is empty.
+- Every newest-run status other than `completed` (including `requested` and `pending`) counts as unfinished → `running`. No `harness run <branch>` run listed at all → exit 0, nothing written.
+- Both `run list` calls pass `--limit 50`; `status` prints at most 10 runs.
+- Exit 1 also covers a failed local copy or registry write in `sync`; exit 2 also covers a downloaded bundle the restore does not recognise.
+- "The record differs only in `remote_synced_at`" is asserted with `updated_at` also set aside: `hr_registry_set` stamps it on every write.
+- Verification `bash scripts/test.sh` exits 0 is not met in this checkout, for two causes this task did not introduce: gate 6a flags an untracked, gitignored `harness-runs/scratch/t3-test.log` left by an earlier task, and gate 11 fails because the docs-retrieval runtime is not installed. Gate 4 (the whole `node --test` suite, `outer-loop-scripts.test.mjs` included) passes, and `node --test cli/test/remote-run.test.mjs` passes all 24 cases.

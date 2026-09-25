@@ -966,6 +966,22 @@ notify() {
 #                       record, whose `status` it sets to `failed` in the same
 #                       pass. It means the run was stopped outright by the user,
 #                       not that it failed on its own.
+#   pause_reason        why a `paused` record paused: `usage` | `budget` | `user` |
+#                       `overload` | empty — the remote state bundle's
+#                       `status.json` vocabulary — plus `killed`, a registry-only
+#                       value `remote-run.sh sync` derives when a finished run's
+#                       bundle still says `running`, or a finished run left no
+#                       bundle; `status.json` never carries it. `killed` maps to
+#                       `paused` rather than `failed` because a `failed` record
+#                       has no resume path, while the ledger on the branch is
+#                       intact
+#   remote_run_id       the GitHub run whose bundle the last `sync` read (or the
+#   remote_run_url      bundle-less run it recorded as `killed`), and its URL.
+#                       Written by `remote-run.sh sync` alone; a later `sync`
+#                       whose newest finished run has this id restores nothing
+#   remote_synced_at    the epoch second of that `sync`, written on every one
+#   remote_detail       one human-readable line from that `sync`: the bundle's
+#                       `detail`, or why the record is `killed` or `failed`
 # -----------------------------------------------------------------------------
 # The bodies are lib/harness-run-lib.sh's THE RUN REGISTRY, shared with every
 # script that reads or writes this file; these wrappers bind them to $REGISTRY.

@@ -6,17 +6,24 @@
  * workflow's inputs, so each verb sends exactly the argument vector the input contract states, a
  * refusal sends nothing at all, and `stop` always sends its `action=stop` marker before any cancel —
  * whether or not a run is in progress.** No case reaches the network: the stub is a Node script that
- * appends its argument vector, as one JSON line, to a log and prints canned JSON for `run list` and
- * `repo view`.
+ * appends its argument vector, as one JSON line, to a log, prints canned JSON for `run list`,
+ * `repo view` and a run's artifact list, and materialises a fixture bundle on `run download`.
+ *
+ * **For `status` and `sync`, the rule is that the newest finished run decides and a bundle already
+ * applied is never applied again**: `status` leaves every byte under the state directory as it found
+ * it, and a second `sync` of the same run — or of a newer run that left no bundle — moves nothing in
+ * the mirror, so an answer written there since the last sync survives. "The record differs only in
+ * `remote_synced_at`" is asserted with `updated_at` set aside too: the shared registry writer stamps
+ * it on every write.
  */
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createFixture, runBash, runCli } from './helpers/fixture.mjs';
+import { createFixture, runBash, runCli, snapshotTree } from './helpers/fixture.mjs';
 
 const SCRIPT = 'scripts/remote-run.sh';
 const STATE_DIR = 'sdlc-harness';
@@ -38,6 +45,17 @@ if (failOn && line.startsWith(failOn)) {
 }
 if (line.startsWith('run list')) process.stdout.write(process.env.STUB_RUN_LIST || '[]');
 if (line.startsWith('repo view')) process.stdout.write(process.env.STUB_REPO_VIEW || '{}');
+if (args[0] === 'api') {
+  const parts = args[1].split('/');
+  const id = parts[parts.length - 2];
+  const names = JSON.parse(process.env.STUB_ARTIFACTS || '{}')[id] || [];
+  process.stdout.write(JSON.stringify({ artifacts: names.map((name) => ({ name, expired: false })) }));
+}
+if (line.startsWith('run download')) {
+  const source = JSON.parse(process.env.STUB_BUNDLES || '{}')[args[2]];
+  if (!source) { process.stderr.write('no artifact matches\\n'); process.exit(1); }
+  require('node:fs').cpSync(source, args[args.indexOf('-D') + 1], { recursive: true });
+}
 `;
 
 const ACTIVE_RUNS = JSON.stringify([
@@ -232,4 +250,283 @@ test('gh that cannot be found yields exit 3', async (t) => {
   const result = await remoteRun(fx, ['warm'], { HARNESS_GH_CLI: join(fx.dir, 'no-such-gh') });
   assert.equal(result.status, 3);
   assert.match(result.stderr, /not found/);
+});
+
+// ---------------------------------------------------------------------------
+// status and sync.
+// ---------------------------------------------------------------------------
+
+const SUPERSEDED = `${STATE_DIR}/autonomous_logs/remote_superseded`;
+const REMOTE_LOG = `${STATE_DIR}/autonomous_logs/feat_x.remote.log`;
+
+const runUrl = (id) => `https://github.com/o/r/actions/runs/${id}`;
+
+/** One `gh run list` entry; `createdAt` orders runs, as GitHub's own list does. */
+function ghRun(id, status, minute, title = 'harness run feat_x') {
+  return {
+    databaseId: id,
+    displayTitle: title,
+    status,
+    conclusion: status === 'completed' ? 'success' : null,
+    createdAt: `2026-01-01T00:${String(minute).padStart(2, '0')}:00Z`,
+    url: runUrl(id),
+  };
+}
+
+/** A remote registry record whose mirror is the fixture itself. */
+function remoteRecord(fx, extra = {}) {
+  mkdirSync(join(fx.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+  const record = { branch: 'feat_x', status: 'running', execution: 'github-actions', worktree: fx.dir, ...extra };
+  writeFileSync(join(fx.dir, REGISTRY), JSON.stringify({ runs: { feat_x: record } }));
+}
+
+/** A bundle directory in Task 4's format, under the stub's directory, for `run download` to copy. */
+function bundle(fx, name, { status = 'parked', questions = ['question_1.md'], detail = 'parked on a question' } = {}) {
+  const dir = join(fx.dir, STATE_DIR, 'stub', 'bundles', name);
+  mkdirSync(join(dir, 'clarifications', 'feat_x'), { recursive: true });
+  writeFileSync(join(dir, 'status.json'), JSON.stringify({
+    schema: '1', branch: 'feat_x', engine: 'task', status, pause_reason: '', usage_resume_at: '',
+    park_loop_cycles: '0', resume_max_question_index: '', auto_resumes: '', stall_restarts: '',
+    chain: '0', control_polled_at: '', decision: 'stop', detail, run_id: '', run_url: '', written_at: '1',
+  }));
+  for (const q of questions) writeFileSync(join(dir, 'clarifications', 'feat_x', q), `${name} ${q}\n`);
+  writeFileSync(join(dir, 'run.log'), `${name} log\n`);
+  return dir;
+}
+
+function syncEnv({ runs, artifacts = {}, bundles = {} }) {
+  return {
+    STUB_RUN_LIST: JSON.stringify(runs),
+    STUB_ARTIFACTS: JSON.stringify(artifacts),
+    STUB_BUNDLES: JSON.stringify(bundles),
+  };
+}
+
+function record(fx) {
+  return JSON.parse(readFileSync(join(fx.dir, REGISTRY), 'utf8')).runs.feat_x;
+}
+
+/** The record without the two fields every sync may restamp. */
+function stable(rec) {
+  const { remote_synced_at: _synced, updated_at: _updated, ...rest } = rec;
+  return rest;
+}
+
+function superseded(fx) {
+  const dir = join(fx.dir, SUPERSEDED);
+  return existsSync(dir) ? readdirSync(dir) : [];
+}
+
+function downloads(fx) {
+  return joined(fx).filter((line) => line.startsWith('run download'));
+}
+
+const mirror = (fx, file) => join(fx.dir, CLARIFY_DIR, file);
+
+test('sync applies a parked bundle, and a second sync of the same run downloads nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx);
+  const env = syncEnv({ runs: [ghRun(101, 'completed', 1)], artifacts: { 101: ['harness-state'] }, bundles: { 101: bundle(fx, 'a') } });
+
+  const first = await remoteRun(fx, ['sync', 'feat_x'], env);
+  assert.equal(first.status, 0, first.stderr);
+  const rec = record(fx);
+  assert.equal(rec.status, 'parked');
+  assert.equal(rec.remote_run_id, '101');
+  assert.equal(rec.remote_run_url, runUrl(101));
+  assert.ok(existsSync(mirror(fx, 'question_1.md')));
+  assert.equal(readFileSync(join(fx.dir, REMOTE_LOG), 'utf8'), 'a log\n');
+  assert.deepEqual(downloads(fx), [`run download 101 -n harness-state -D ${join(fx.dir, STATE_DIR, 'autonomous_logs/remote_download/feat_x/101')}`]);
+
+  const second = await remoteRun(fx, ['sync', 'feat_x'], env);
+  assert.equal(second.status, 0, second.stderr);
+  assert.equal(downloads(fx).length, 1, 'the second sync downloaded again');
+  assert.deepEqual(stable(record(fx)), stable(rec));
+});
+
+test('an answer written into the mirror survives a second sync of the same run', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx);
+  const env = syncEnv({
+    runs: [ghRun(101, 'completed', 1)],
+    artifacts: { 101: ['harness-state'] },
+    bundles: { 101: bundle(fx, 'a', { questions: ['question_1.md', 'question_2.md'] }) },
+  });
+  assert.equal((await remoteRun(fx, ['sync', 'feat_x'], env)).status, 0);
+  writeFileSync(mirror(fx, 'answer_1.md'), 'yes\n');
+  const before = record(fx);
+  const asideBefore = superseded(fx);
+
+  const again = await remoteRun(fx, ['sync', 'feat_x'], env);
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(readFileSync(mirror(fx, 'answer_1.md'), 'utf8'), 'yes\n');
+  assert.deepEqual(superseded(fx), asideBefore);
+  assert.deepEqual(stable(record(fx)), stable(before));
+});
+
+test('a newer finished run with a bundle does replace the mirror, moving the stale pair aside', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx);
+  const a = bundle(fx, 'a');
+  assert.equal((await remoteRun(fx, ['sync', 'feat_x'], syncEnv({
+    runs: [ghRun(101, 'completed', 1)], artifacts: { 101: ['harness-state'] }, bundles: { 101: a },
+  }))).status, 0);
+  writeFileSync(mirror(fx, 'answer_1.md'), 'yes\n');
+
+  const result = await remoteRun(fx, ['sync', 'feat_x'], syncEnv({
+    runs: [ghRun(102, 'completed', 2), ghRun(101, 'completed', 1)],
+    artifacts: { 101: ['harness-state'], 102: ['harness-state'] },
+    bundles: { 101: a, 102: bundle(fx, 'b', { questions: ['question_1.md', 'question_2.md'] }) },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(record(fx).remote_run_id, '102');
+  assert.equal(existsSync(mirror(fx, 'answer_1.md')), false);
+  assert.equal(readFileSync(mirror(fx, 'question_2.md'), 'utf8'), 'b question_2.md\n');
+  const aside = superseded(fx);
+  assert.equal(aside.length, 1);
+  assert.ok(existsSync(join(fx.dir, SUPERSEDED, aside[0], 'clarifications/feat_x/answer_1.md')));
+});
+
+test('an in-progress newest run sets the record running and downloads nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx, { status: 'parked' });
+  const result = await remoteRun(fx, ['sync', 'feat_x'], syncEnv({
+    runs: [ghRun(102, 'in_progress', 2), ghRun(101, 'completed', 1)],
+    artifacts: { 101: ['harness-state'] },
+    bundles: { 101: bundle(fx, 'a') },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(record(fx).status, 'running');
+  assert.deepEqual(downloads(fx), []);
+});
+
+test('a finished run whose bundle still says running syncs as paused / killed', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx);
+  const result = await remoteRun(fx, ['sync', 'feat_x'], syncEnv({
+    runs: [ghRun(101, 'completed', 1)],
+    artifacts: { 101: ['harness-state'] },
+    bundles: { 101: bundle(fx, 'a', { status: 'running' }) },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  const rec = record(fx);
+  assert.equal(rec.status, 'paused');
+  assert.equal(rec.pause_reason, 'killed');
+});
+
+test('a newer finished run with no bundle records paused / killed at that run and restores nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx);
+  const a = bundle(fx, 'a');
+  assert.equal((await remoteRun(fx, ['sync', 'feat_x'], syncEnv({
+    runs: [ghRun(201, 'completed', 1)], artifacts: { 201: ['harness-state'] }, bundles: { 201: a },
+  }))).status, 0);
+  writeFileSync(mirror(fx, 'answer_1.md'), 'yes\n');
+  const asideBefore = superseded(fx);
+  const downloadsBefore = downloads(fx).length;
+  const env = syncEnv({
+    runs: [ghRun(202, 'completed', 2), ghRun(201, 'completed', 1)],
+    artifacts: { 201: ['harness-state'] },
+    bundles: { 201: a },
+  });
+
+  const result = await remoteRun(fx, ['sync', 'feat_x'], env);
+  assert.equal(result.status, 0, result.stderr);
+  const rec = record(fx);
+  assert.equal(rec.status, 'paused');
+  assert.equal(rec.pause_reason, 'killed');
+  assert.equal(rec.remote_run_id, '202');
+  assert.equal(rec.remote_run_url, runUrl(202));
+  assert.ok(rec.remote_detail.includes(runUrl(202)), rec.remote_detail);
+  assert.equal(readFileSync(mirror(fx, 'answer_1.md'), 'utf8'), 'yes\n');
+  assert.deepEqual(superseded(fx), asideBefore);
+  assert.equal(downloads(fx).length, downloadsBefore, 'a run download was recorded');
+
+  const further = await remoteRun(fx, ['sync', 'feat_x'], env);
+  assert.equal(further.status, 0, further.stderr);
+  assert.deepEqual(stable(record(fx)), stable(rec));
+});
+
+test('no bundle in any run and an empty remote_run_id syncs as failed', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx);
+  const result = await remoteRun(fx, ['sync', 'feat_x'], syncEnv({
+    runs: [ghRun(302, 'completed', 2), ghRun(301, 'completed', 1)],
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  const rec = record(fx);
+  assert.equal(rec.status, 'failed');
+  assert.ok(rec.remote_detail.includes(runUrl(302)), rec.remote_detail);
+  assert.deepEqual(downloads(fx), []);
+});
+
+test('a download directory that already holds the bundle is not downloaded again', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx);
+  const target = join(fx.dir, STATE_DIR, 'autonomous_logs/remote_download/feat_x/101');
+  mkdirSync(join(target, '..'), { recursive: true });
+  cpSync(bundle(fx, 'a'), target, { recursive: true });
+  const result = await remoteRun(fx, ['sync', 'feat_x'], syncEnv({
+    runs: [ghRun(101, 'completed', 1)], artifacts: { 101: ['harness-state'] },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(downloads(fx), []);
+  assert.equal(record(fx).status, 'parked');
+});
+
+test('status leaves the registry and every file under the state directory byte-identical', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx, { status: 'parked', remote_run_id: '101', remote_run_url: runUrl(101), remote_synced_at: '5' });
+  const before = await snapshotTree(fx.dir, { exclude: ['.git', 'stub'] });
+  const registryBefore = readFileSync(join(fx.dir, REGISTRY));
+
+  const result = await remoteRun(fx, ['status', 'feat_x'], syncEnv({
+    runs: [
+      ghRun(103, 'completed', 3, 'harness pause feat_x'),
+      ghRun(102, 'completed', 2),
+      ghRun(101, 'completed', 1),
+      ghRun(9, 'completed', 0, 'harness run other'),
+    ],
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /103 {2}harness pause feat_x/);
+  assert.match(result.stdout, /102 {2}harness run feat_x/);
+  assert.doesNotMatch(result.stdout, /harness run other/);
+  assert.match(result.stdout, /remote_synced_at: 5/);
+  assert.match(result.stdout, /run 102 finished after the last sync/);
+  assert.match(result.stdout, /^[\x00-\x7f]*$/);
+
+  assert.deepEqual(readFileSync(join(fx.dir, REGISTRY)), registryBefore);
+  assert.deepEqual(await snapshotTree(fx.dir, { exclude: ['.git', 'stub'] }), before);
+});
+
+test('status and sync refuse a local record, or no record, with exit 2 and call nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  for (const verb of ['status', 'sync']) {
+    const absent = await remoteRun(fx, [verb, 'feat_x']);
+    assert.equal(absent.status, 2, `${verb}: ${absent.stderr}`);
+  }
+  assert.equal(existsSync(join(fx.dir, REGISTRY)), false, 'a refusal created the registry');
+
+  mkdirSync(join(fx.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+  writeFileSync(join(fx.dir, REGISTRY), JSON.stringify({ runs: { feat_x: { branch: 'feat_x', status: 'parked', worktree: fx.dir } } }));
+  const registryBefore = readFileSync(join(fx.dir, REGISTRY));
+  for (const verb of ['status', 'sync']) {
+    const local = await remoteRun(fx, [verb, 'feat_x']);
+    assert.equal(local.status, 2, `${verb}: ${local.stderr}`);
+  }
+  assert.deepEqual(readFileSync(join(fx.dir, REGISTRY)), registryBefore);
+  assert.deepEqual(calls(fx), []);
+});
+
+test('sync with a missing mirror working copy exits 2 naming it and writes nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const gone = join(fx.dir, 'no-such-mirror');
+  remoteRecord(fx, { worktree: gone });
+  const registryBefore = readFileSync(join(fx.dir, REGISTRY));
+  const result = await remoteRun(fx, ['sync', 'feat_x'], syncEnv({ runs: [ghRun(101, 'completed', 1)] }));
+  assert.equal(result.status, 2, result.stderr);
+  assert.ok(result.stderr.includes(gone), result.stderr);
+  assert.deepEqual(readFileSync(join(fx.dir, REGISTRY)), registryBefore);
+  assert.deepEqual(calls(fx), []);
 });
