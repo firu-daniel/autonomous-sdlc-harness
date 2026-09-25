@@ -32,7 +32,7 @@ Two findings are left. The check's command template leaves its literals unquoted
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Single-quote the machine-path check's needles and file path, and say why _(layer: plugin)_
+1. [x] **Finding 1** — Single-quote the machine-path check's needles and file path, and say why _(layer: plugin)_
 2. [ ] **Finding 2** — Qualify the "appends nothing → exit 3" claims for a check that rewrote an earlier block _(layer: plugin)_
 
 ---
