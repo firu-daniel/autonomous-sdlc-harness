@@ -26,3 +26,8 @@
 - `bash -n scripts/measure-suite.sh` exits 0, and `/bin/bash scripts/measure-suite.sh --runs 0` (macOS's bash 3.2) reaches the usage refusal rather than a syntax error.
 - `grep -n 'rm -rf\|rm -r ' scripts/measure-suite.sh` prints nothing.
 - `bash scripts/run-gates.sh` prints no failure that its run on this branch's previous commit did not print (gates 1a and 11 are out of this branch's scope and are compared, not fixed).
+
+**Deviations from plan:**
+
+- The interrupt check's "while `npm ci` is running" rests on the script's phase, not on a process listing: a `pgrep` taken from the scratch probe before sending `SIGINT` returned nothing. The run had printed the preamble's `ref` line, which comes right before `npm ci`, and no timed-run line. It exited 130 about 4 s after starting, printed `interrupted; removing the worktree`, and left `git worktree list` and the `measure-suite.*` temp directories as they were before.
+- The usage line prints only for an unknown argument or a flag with no value. A bad `--ref` or `--runs` value, and `--cpus`, print only their one-line reason, as the verification asks.
