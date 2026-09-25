@@ -75,7 +75,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_remote_execution_github_act
 29. [x] **Task 29** — Add adopter setup, runner choices, costs, billing and security to `docs/remote-execution.md` _(layer: general)_ _(points: 18)_
 30. [x] **Task 30** — Describe remote dispatch and `remote-run.sh` in `docs/watcher.md` _(layer: general)_ _(points: 14)_
 31. [x] **Task 31** — Add hand-run Gate 12 for a real GitHub repository, and list it in `scripts/run-gates.sh` _(layer: general)_ _(points: 14)_
-32. [ ] **Task 32** — Record the new deny row in `docs/guard-verification.md` and the unexercised remote path in `docs/outer-loop-verification.md` _(layer: general)_ _(points: 10)_
+32. [x] **Task 32** — Record the new deny row in `docs/guard-verification.md` and the unexercised remote path in `docs/outer-loop-verification.md` _(layer: general)_ _(points: 10)_
 33. [ ] **Task 33** — Update `README.md`, `llms.txt`, `ARCHITECTURE.md` and the roadmap row _(layer: general)_ _(points: 12)_
 
 ## Scope register
