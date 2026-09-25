@@ -36,7 +36,7 @@ The `plugin` layer is untouched: nothing under `plugin/` narrates this destinati
 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_harness_init_notification_topic_prompt/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Own the push-destination grammar, its one wording, and a shell-safe settings file in the notifications generator _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Own the push-destination grammar, its one wording, and a shell-safe settings file in the notifications generator _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Point `doctor`'s notification advice at the shared destination placeholder _(layer: cli)_ _(points: 5)_
 3. [ ] **Task 3** — Offer the ntfy topic in `init`'s question, refuse an unrecognised `--push-url`, and cover the re-run paths _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Describe the two answer forms, the refusal and the unchanged delivery side in `docs/` _(layer: general)_ _(points: 15)_

@@ -7648,6 +7648,9 @@ const REPO_PUSH_ENV_PATH = '.claude/push-notify.env';
  */
 const PUSH_URL = 'https://example.invalid/t0p1c-appears-nowhere-else';
 
+/** An ntfy topic chosen the way {@link PUSH_URL} is: legal as a topic name, and in no fixture path. */
+const TOPIC = 'harness-t0p1c-nowhere-else-9f3';
+
 /** The two keys the notifier recognises, asserted by name because the file is a contract with it. */
 const PUSH_URL_KEY = 'HARNESS_PUSH_URL';
 const PUSH_CMD_KEY = 'HARNESS_PUSH_CMD';
@@ -7729,6 +7732,22 @@ test('push notifications are opt-in, and an opt-in without an endpoint writes no
     assert.ok(!stdout.includes(PUSH_URL), `the endpoint was printed back on stdout:\n${stdout}`);
     assert.ok(!stderr.includes(PUSH_URL), `the endpoint was printed back on stderr:\n${stderr}`);
     assert.ok(stdout.includes(machine.file), `the run does not say where it wrote the settings:\n${stdout}`);
+  });
+
+  await t.test('a topic given through the flag is written as its ntfy.sh address', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+
+    const { stdout, stderr } = await initOk(dir, ['--notifications', '--push-url', TOPIC], {
+      XDG_CONFIG_HOME: machine.home,
+    });
+
+    const content = readFileSync(machine.file, 'utf8');
+    assert.match(content, new RegExp(`^HARNESS_PUSH_URL=https://ntfy\\.sh/${TOPIC}$`, 'm'));
+    assert.equal(await modeOf(machine.file), 0o600, 'the file holding a push credential is readable beyond its owner');
+    assert.equal(await modeOf(machine.dir), 0o700, 'the directory holding a push credential is not 0700');
+    assert.ok(!stdout.includes(TOPIC), `the topic was printed back on stdout:\n${stdout}`);
+    assert.ok(!stderr.includes(TOPIC), `the topic was printed back on stderr:\n${stderr}`);
   });
 
   await t.test('the opt-in without an endpoint writes nothing and prints the guided setup', async (subtest) => {
