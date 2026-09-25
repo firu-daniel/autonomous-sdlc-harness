@@ -32,3 +32,9 @@ remote-run.sh save <branch> <out_dir>
 - `bash scripts/test.sh` exits 0.
 - `grep -n '\${{' cli/templates/scripts/remote-run.sh` finds nothing: no GitHub expression is ever written into the script.
 - The written script still matches its template byte for byte.
+
+**Deviations from plan:**
+- `save` with neither `remote_status.json` nor a registry file does not call `hr_remote_bundle_write` (its registry fallback would create a registry in the checkout and then fail before copying anything); it creates `<out_dir>` empty. The contract said only `status.json` is left out; the rest is left out too, which no reader can observe, since every reader (`hr_remote_bundle_restore`, `sync`) treats a bundle with no `status.json` as unrecognised. With a registry file but no in-vocabulary record, the library's own early return gives the same empty bundle.
+- `save`'s usage errors and configuration failures also exit 0 with one line, per "never fails the job"; the exit map in the header states it.
+- `restore` requires `--resume` (the verb's stated syntax names it), and refuses (exit 2, before any `gh` call) an `HARNESS_INPUT_ANSWERS` that is not a non-empty object of positive-integer keys to strings under `--resume answer`.
+- The job-side verbs gate on neither `execution.target` nor a registry record, and without `--repo` act on `hr_repo_root` of the working directory rather than `hr_main_repo`; both stated in the header.

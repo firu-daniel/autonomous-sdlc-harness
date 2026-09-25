@@ -15,20 +15,63 @@
 #   remote-run.sh stop <branch> [--repo <root>]
 #   remote-run.sh status <branch> [--repo <root>]
 #   remote-run.sh sync <branch> [--repo <root>]
+#   remote-run.sh restore <branch> --resume none|answer|pause [--repo <root>]
+#   remote-run.sh save <branch> <out_dir> [--repo <root>]
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress run of that branch was asked to cancel,
 #        or there was none); for status: printed; for sync: the record is
-#        current (including "no run listed yet", which writes nothing)
+#        current (including "no run listed yet", which writes nothing); for
+#        restore: restored, or no previous bundle under --resume none|pause;
+#        for save: ALWAYS, whatever happened
 #     1  usage error, or the library or the configuration could not be
-#        resolved; for sync, a local copy or registry write failed
+#        resolved; for sync and restore, a local copy or write failed
 #     2  refused, nothing sent or written: execution.target is not
 #        github-actions (sending verbs); the branch's local record does not
 #        carry `execution: github-actions` (status, sync); the record's mirror
 #        working copy is missing, or a downloaded bundle is unrecognised
-#        (sync); the inputs payload is over the limit; a named answer file is
-#        missing
+#        (sync, restore); the inputs payload is over the limit; a named answer
+#        file is missing. For restore under --resume answer, "nothing more":
+#        no previous bundle, `HARNESS_INPUT_ANSWERS` not an object of
+#        positive-integer keys to strings, or an answer whose `question_<n>.md`
+#        is not at the top level — the bundle may already be restored, and no
+#        answer is written
 #     3  gh failed: not found, or a non-zero exit — the first line of gh's
 #        stderr is named
+#
+# `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
+# its job, before and (under `always()`) after the harness step. Without
+# `--repo` they act on the checkout of the working directory (`hr_repo_root`),
+# not the main checkout. They test neither `execution.target` nor a registry
+# record: the job exists because a dispatch passed the target gate, and a
+# fresh job checkout carries no registry.
+#
+# WORKFLOW INPUTS REACH THEM THROUGH THE ENVIRONMENT, NEVER A `${{ }}`
+# EXPRESSION INTERPOLATED INTO A SHELL LINE — an input is attacker-shaped text,
+# and interpolation makes it shell source. The workflow sets them with `env:`:
+#   HARNESS_INPUT_ANSWERS          the `answers` input (restore --resume answer)
+#   HARNESS_INPUT_PARK_LOOP_CLEAR  the `park_loop_clear` input (restore)
+# `GITHUB_RUN_ID` (restore: this run is never its own previous run) and
+# `GITHUB_STEP_SUMMARY` (save) are the runner's own.
+#
+# `restore` SELECTS the newest `completed` run titled `harness run <branch>`,
+# other than `GITHUB_RUN_ID`, carrying an unexpired `harness-state` artifact;
+# downloads it to `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/`
+# (skipped when that directory already holds its status.json); and restores it
+# in `job` mode — on every --resume kind, `none` included, because a reused
+# branch keeps its clarification history. Then, under --resume answer, it
+# writes each `"<n>": "<text>"` entry to `clarifications/<branch>/answer_<n>.md`
+# with the exact bytes, after checking every entry first; and with
+# `HARNESS_INPUT_PARK_LOOP_CLEAR` exactly `true` it sets `park_loop_cycles` to
+# "0" in the restored `autonomous_logs/remote_status.json`. No previous bundle
+# is an ordinary first job (exit 0, one line) except under --resume answer.
+#
+# `save` WRAPS `hr_remote_bundle_write` into <out_dir>, and with
+# `GITHUB_STEP_SUMMARY` set appends a Markdown table of the bundle's `status`,
+# `decision` and `detail`. With no `autonomous_logs/remote_status.json` and no
+# registry file the harness step never started: <out_dir> is created empty,
+# with no status.json — what `continue` reads as "never started". It never
+# fails the job: every problem, a usage error included, is one line on stderr
+# and exit 0.
 #
 # `status` AND `sync` READ THE RECORD, NOT THE KEY. A run keeps the execution
 # it started with, so they test the record's `execution` field and never
@@ -110,7 +153,10 @@
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
 # `<branch>.remote.log` in the main checkout, plus the mirror restore
-# `hr_remote_bundle_restore` performs in the record's `worktree`.
+# `hr_remote_bundle_restore` performs in the record's `worktree`; for
+# `restore`, that download directory, the job restore, `answer_<n>.md` and the
+# `park_loop_cycles` rewrite of `remote_status.json`, all in the job's
+# checkout; for `save`, <out_dir> and the step summary.
 #
 # MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
 # rename there is an edit here, byte for byte:
@@ -167,6 +213,28 @@
 #              (status.json with schema "1", branch feat_x, status parked) into
 #              <dir> -> the record is `parked`, remote_run_id is <id>; sync
 #              again -> only remote_synced_at changes, no second download
+#
+#   restore and save run in the job's checkout; with that same "a bundle" stub
+#   (the bundle also carrying clarifications/feat_x/question_1.md and
+#   flow_walker_state) and GITHUB_RUN_ID set to another id:
+#   restore    bash scripts/remote-run.sh restore feat_x --resume none   -> 0; the
+#              checkout carries clarifications/feat_x/question_1.md,
+#              .flow_walker_state and autonomous_logs/remote_status.json
+#   answer     HARNESS_INPUT_ANSWERS='{"1":"Use B.\n"}' ... --resume answer -> 0;
+#              clarifications/feat_x/answer_1.md holds exactly `Use B.` + newline
+#   no question  HARNESS_INPUT_ANSWERS='{"2":"x"}' ... --resume answer
+#              -> 2, no answer_2.md written
+#   clear      HARNESS_INPUT_PARK_LOOP_CLEAR=true ... --resume none -> 0;
+#              remote_status.json's park_loop_cycles is "0"
+#   first job  a `run list` answer with no finished run: --resume none -> 0;
+#              --resume answer -> 2
+#   own run    GITHUB_RUN_ID=<the bundle run's id> -> that run is skipped
+#   save       bash scripts/remote-run.sh save feat_x /tmp/b -> 0; /tmp/b holds
+#              status.json, clarifications/feat_x/, flow_walker_state (and
+#              PAUSE_PROGRESS.md, run.log when present); with
+#              GITHUB_STEP_SUMMARY=/tmp/s, /tmp/s gains the status table
+#   never started  no remote_status.json and no registry: save -> 0, /tmp/b
+#              empty
 
 set -u
 
@@ -205,6 +273,9 @@ usage() {
   echo "       remote-run.sh stop <branch> [--repo <root>]" >&2
   echo "       remote-run.sh status <branch> [--repo <root>]" >&2
   echo "       remote-run.sh sync <branch> [--repo <root>]" >&2
+  echo "       remote-run.sh restore <branch> --resume none|answer|pause [--repo <root>]" >&2
+  echo "       remote-run.sh save <branch> <out_dir> [--repo <root>]" >&2
+  [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
 
@@ -249,17 +320,20 @@ valid_branch() {
 # Arguments.
 # ---------------------------------------------------------------------------
 
+verb=""
 [ "$#" -ge 1 ] || usage "no verb given"
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync) ;;
+  dispatch|pause|warm|stop|status|sync|restore|save) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
 branch=""
+out_dir=""
 engine=""
 resume="none"
+resume_given=0
 answers_from=""
 indexes=""
 indexes_given=0
@@ -272,12 +346,15 @@ while [ "$#" -gt 0 ]; do
     --repo)
       [ "$#" -ge 2 ] || usage "--repo needs a value"
       repo_arg="$2"; shift 2 ;;
-    --engine|--resume|--answers-from|--indexes|--chain)
+    --resume)
+      [ "$verb" = dispatch ] || [ "$verb" = restore ] || usage "$1 is a dispatch or restore option"
+      [ "$#" -ge 2 ] || usage "$1 needs a value"
+      resume="$2"; resume_given=1; shift 2 ;;
+    --engine|--answers-from|--indexes|--chain)
       [ "$verb" = dispatch ] || usage "$1 is a dispatch option"
       [ "$#" -ge 2 ] || usage "$1 needs a value"
       case "$1" in
         --engine) engine="$2" ;;
-        --resume) resume="$2" ;;
         --answers-from) answers_from="$2" ;;
         --indexes) indexes="$2"; indexes_given=1 ;;
         --chain) chain="$2" ;;
@@ -289,14 +366,32 @@ while [ "$#" -gt 0 ]; do
     -*)
       usage "unknown option '$1'" ;;
     *)
-      [ -z "$branch" ] || usage "unexpected argument '$1'"
       [ "$verb" != warm ] || usage "warm takes no branch"
-      branch="$1"; shift ;;
+      if [ -z "$branch" ]; then
+        branch="$1"
+      elif [ "$verb" = save ] && [ -z "$out_dir" ]; then
+        out_dir="$1"
+      else
+        usage "unexpected argument '$1'"
+      fi
+      shift ;;
   esac
 done
 
 if [ "$verb" != warm ]; then
   valid_branch "$branch" || usage "$verb needs a <branch>"
+fi
+
+if [ "$verb" = save ] && [ -z "$out_dir" ]; then
+  usage "save needs an <out_dir>"
+fi
+
+if [ "$verb" = restore ]; then
+  [ "$resume_given" -eq 1 ] || usage "restore needs --resume"
+  case "$resume" in
+    none|answer|pause) ;;
+    *) usage "unknown --resume '$resume'" ;;
+  esac
 fi
 
 if [ "$verb" = dispatch ]; then
@@ -330,15 +425,27 @@ fi
 # The repository and its configuration.
 # ---------------------------------------------------------------------------
 
+# setup_fail <message> — a configuration problem: exit 1, except for save.
+setup_fail() {
+  echo "remote-run.sh: $1" >&2
+  [ "$verb" != save ] || exit "$EXIT_OK"
+  exit "$EXIT_USAGE"
+}
+
 if [ -n "$repo_arg" ]; then
-  root=$(hr_repo_root "$repo_arg") || { echo "remote-run.sh: '$repo_arg' is not a git repository" >&2; exit "$EXIT_USAGE"; }
+  root=$(hr_repo_root "$repo_arg") || setup_fail "'$repo_arg' is not a git repository"
+elif [ "$verb" = restore ] || [ "$verb" = save ]; then
+  root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
-  root=$(hr_main_repo "${PWD-.}") || { echo "remote-run.sh: '${PWD-.}' is not inside a git repository" >&2; exit "$EXIT_USAGE"; }
+  root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 fi
 
 hr_config_load "$root" || :
 registry=""
 case "$verb" in
+  restore|save)
+    hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/harness.config.json'"
+    ;;
   status|sync)
     registry=$(hr_state_path "$root" autonomous_logs/registry.json) || {
       echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
@@ -363,7 +470,7 @@ case "$verb" in
     ;;
 esac
 
-cd "$root" || { echo "remote-run.sh: cannot enter '$root'" >&2; exit "$EXIT_USAGE"; }
+cd "$root" || setup_fail "cannot enter '$root'"
 
 # ---------------------------------------------------------------------------
 # The verbs.
@@ -636,6 +743,166 @@ verb_sync() {
   echo "remote-run.sh: no run of $branch carries a state bundle; the record is failed"
 }
 
+restore_fail() {
+  echo "remote-run.sh: $1" >&2
+  exit "$EXIT_USAGE"
+}
+
+restore_refuse() {
+  echo "remote-run.sh: refused: $1" >&2
+  exit "$EXIT_REFUSED"
+}
+
+# previous_bundle_run — the id of the newest finished `harness run <branch>`
+# run, other than this job's own, carrying a state artifact; empty when none.
+previous_bundle_run() {
+  local ids id
+  gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" \
+    --json databaseId,displayTitle,status,createdAt --limit "$RUN_LIST_LIMIT" \
+    || gh_fail "listing the runs of '$branch' failed"
+  ids=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" --arg self "${GITHUB_RUN_ID-}" '
+    [.[] | select(.displayTitle == $t and .status == "completed" and (.databaseId | tostring) != $self)]
+    | sort_by([.createdAt, .databaseId]) | reverse | .[].databaseId | tostring' 2>/dev/null) || {
+    GH_ERR="its run list is not the expected JSON"
+    gh_fail "listing the runs of '$branch' failed"
+  }
+  for id in $ids; do
+    if has_bundle "$id"; then
+      printf '%s\n' "$id"
+      return 0
+    fi
+  done
+  return 0
+}
+
+# The answers input: an object of positive-integer keys to strings, read from
+# the environment by jq itself (`env`, jq 1.5) so no shell word ever holds it.
+ANSWERS_SHAPE='env.HARNESS_INPUT_ANSWERS | fromjson
+  | type == "object" and length > 0
+    and all(to_entries[]; (.value | type) == "string"
+      and (.key | explode | length > 0 and .[0] != 48 and all(.[]; . >= 48 and . <= 57)))'
+
+verb_restore() {
+  local id download status_file clar n tmp status_source
+  if [ "$resume" = answer ]; then
+    HARNESS_INPUT_ANSWERS="${HARNESS_INPUT_ANSWERS-}"
+    export HARNESS_INPUT_ANSWERS
+    jq -n -e "$ANSWERS_SHAPE" >/dev/null 2>&1 \
+      || restore_refuse "HARNESS_INPUT_ANSWERS is not an object of positive-integer keys to strings; nothing written"
+  fi
+
+  id=$(previous_bundle_run)
+  [ "$?" -eq 0 ] || exit "$EXIT_GH"
+  hr_remote_names_var
+  if [ -z "$id" ]; then
+    [ "$resume" != answer ] \
+      || restore_refuse "--resume answer, but no finished run of $branch carries a state bundle; nothing written"
+    echo "remote-run.sh: no previous bundle for $branch; this is its first job"
+  else
+    download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$id") \
+      || restore_fail "cannot resolve '$root/harness.config.json'"
+    status_file="$download/$HR_REMOTE_STATUS_FILE"
+    if [ ! -f "$status_file" ]; then
+      mkdir -p "$download" || restore_fail "cannot create '$download'"
+      gh_call run download "$id" -n "$STATE_ARTIFACT_NAME" -D "$download" || gh_fail "downloading the bundle of run $id failed"
+    fi
+    hr_remote_bundle_restore "$download" "$root" "$branch" job
+    case $? in
+      0) echo "remote-run.sh: restored the bundle of run $id into $root" ;;
+      2) restore_refuse "the bundle in '$download' is unrecognised for $branch; nothing restored" ;;
+      *) restore_fail "restoring '$download' into '$root' failed" ;;
+    esac
+  fi
+
+  if [ "$resume" = answer ]; then
+    clar=$(hr_state_path "$root" "$HR_REMOTE_CLARIFY_DIR/$branch") \
+      || restore_fail "cannot resolve '$root/harness.config.json'"
+    # Every entry is checked before any is written.
+    for n in $(jq -n -r 'env.HARNESS_INPUT_ANSWERS | fromjson | keys_unsorted[]'); do
+      [ -f "$clar/question_$n.md" ] \
+        || restore_refuse "answer $n has no '$clar/question_$n.md'; no answer written"
+    done
+    for n in $(jq -n -r 'env.HARNESS_INPUT_ANSWERS | fromjson | keys_unsorted[]'); do
+      tmp=$(mktemp "$clar/answer_$n.md.tmp.XXXXXX") || restore_fail "cannot write in '$clar'"
+      if jq -n -j --arg k "$n" 'env.HARNESS_INPUT_ANSWERS | fromjson | .[$k]' >"$tmp" \
+        && mv "$tmp" "$clar/answer_$n.md"; then
+        echo "remote-run.sh: wrote answer_$n.md for $branch"
+      else
+        rm -f "$tmp"
+        restore_fail "writing '$clar/answer_$n.md' failed"
+      fi
+    done
+  fi
+
+  if [ "${HARNESS_INPUT_PARK_LOOP_CLEAR-}" = true ]; then
+    status_source=$(hr_state_path "$root" "$HR_REMOTE_STATUS_SOURCE") \
+      || restore_fail "cannot resolve '$root/harness.config.json'"
+    if [ -f "$status_source" ]; then
+      tmp=$(mktemp "$status_source.tmp.XXXXXX") || restore_fail "cannot write beside '$status_source'"
+      if jq '.park_loop_cycles = "0"' "$status_source" >"$tmp" && mv "$tmp" "$status_source"; then
+        echo "remote-run.sh: cleared park_loop_cycles for $branch"
+      else
+        rm -f "$tmp"
+        restore_fail "clearing park_loop_cycles in '$status_source' failed"
+      fi
+    else
+      echo "remote-run.sh: park_loop_clear given, but no restored status to clear for $branch"
+    fi
+  fi
+}
+
+# md_cell <text> — one Markdown table cell: pipes escaped, line breaks flattened.
+md_cell() {
+  local s="${1-}"
+  s=${s//$'\r'/ }
+  s=${s//$'\n'/ }
+  printf '%s' "${s//|/\\|}"
+}
+
+verb_save() {
+  local registry_file status_source status decision detail
+  hr_remote_names_var
+  registry_file=$(hr_state_path "$root" autonomous_logs/registry.json) || {
+    echo "remote-run.sh: save: cannot resolve '$root/harness.config.json'; no bundle written" >&2
+    return 0
+  }
+  status_source=$(hr_state_path "$root" "$HR_REMOTE_STATUS_SOURCE") || status_source=""
+  # Without either file the harness step never started; the library's registry
+  # fallback would create a registry in the checkout to find nothing in it.
+  if [ ! -f "$status_source" ] && [ ! -f "$registry_file" ]; then
+    mkdir -p "$out_dir" 2>/dev/null \
+      || echo "remote-run.sh: save: cannot create '$out_dir'" >&2
+    echo "remote-run.sh: save: the harness step never started for $branch; the bundle carries no status.json" >&2
+  else
+    hr_remote_bundle_write "$root" "$branch" "$registry_file" "$out_dir"
+    case $? in
+      0) echo "remote-run.sh: saved the bundle of $branch into $out_dir" ;;
+      2) echo "remote-run.sh: save: cannot resolve '$root/harness.config.json'; no bundle written" >&2 ;;
+      *)
+        if [ -f "$status_source" ]; then
+          echo "remote-run.sh: save: assembling the bundle in '$out_dir' failed (not empty, or a copy failed)" >&2
+        else
+          echo "remote-run.sh: save: no status for $branch in '$registry_file'; the bundle carries no status.json" >&2
+        fi
+        ;;
+    esac
+  fi
+
+  [ -n "${GITHUB_STEP_SUMMARY-}" ] || return 0
+  if [ -f "$out_dir/$HR_REMOTE_STATUS_FILE" ]; then
+    status=$(hr_remote_status_get "$out_dir/$HR_REMOTE_STATUS_FILE" status) || status=""
+    decision=$(hr_remote_status_get "$out_dir/$HR_REMOTE_STATUS_FILE" decision) || decision=""
+    detail=$(hr_remote_status_get "$out_dir/$HR_REMOTE_STATUS_FILE" detail) || detail=""
+    printf '%s\n' "### harness run $(md_cell "$branch")" "" "| status | decision | detail |" "|---|---|---|" \
+      "| $(md_cell "$status") | $(md_cell "$decision") | $(md_cell "$detail") |" "" >>"$GITHUB_STEP_SUMMARY" \
+      || echo "remote-run.sh: save: cannot append to GITHUB_STEP_SUMMARY" >&2
+  else
+    printf '%s\n' "### harness run $(md_cell "$branch")" "" "No status.json: the harness step never started." "" >>"$GITHUB_STEP_SUMMARY" \
+      || echo "remote-run.sh: save: cannot append to GITHUB_STEP_SUMMARY" >&2
+  fi
+  return 0
+}
+
 case "$verb" in
   dispatch) verb_dispatch ;;
   pause) verb_pause ;;
@@ -643,5 +910,7 @@ case "$verb" in
   stop) verb_stop ;;
   status) verb_status ;;
   sync) verb_sync ;;
+  restore) verb_restore ;;
+  save) verb_save ;;
 esac
 exit "$EXIT_OK"

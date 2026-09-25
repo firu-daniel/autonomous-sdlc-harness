@@ -15,6 +15,11 @@
  * the mirror, so an answer written there since the last sync survives. "The record differs only in
  * `remote_synced_at`" is asserted with `updated_at` set aside too: the shared registry writer stamps
  * it on every write.
+ *
+ * **For the job-side `restore` and `save`, the rule is that a job carries forward exactly the
+ * previous job's bundle — never its own run's — and an answer lands with its exact bytes or not at
+ * all**: every answer is checked against a top-level `question_<n>.md` before any is written, and
+ * `save` exits 0 whatever it met.
  */
 
 import assert from 'node:assert/strict';
@@ -529,4 +534,158 @@ test('sync with a missing mirror working copy exits 2 naming it and writes nothi
   assert.ok(result.stderr.includes(gone), result.stderr);
   assert.deepEqual(readFileSync(join(fx.dir, REGISTRY)), registryBefore);
   assert.deepEqual(calls(fx), []);
+});
+
+// ---------------------------------------------------------------------------
+// restore and save — the job-side verbs.
+// ---------------------------------------------------------------------------
+
+const REMOTE_STATUS = `${STATE_DIR}/autonomous_logs/remote_status.json`;
+const WALKER = `${STATE_DIR}/.flow_walker_state`;
+
+/** A bundle carrying a walker state too, with `park_loop_cycles` set as given. */
+function jobBundle(fx, name, { parkLoopCycles = '2' } = {}) {
+  const dir = bundle(fx, name);
+  const status = JSON.parse(readFileSync(join(dir, 'status.json'), 'utf8'));
+  writeFileSync(join(dir, 'status.json'), JSON.stringify({ ...status, park_loop_cycles: parkLoopCycles }));
+  writeFileSync(join(dir, 'flow_walker_state'), `${name} walker\n`);
+  return dir;
+}
+
+/** One finished run 401 carrying a bundle; this job is run 999. */
+function restoreEnv(fx, extra = {}) {
+  return {
+    ...syncEnv({ runs: [ghRun(401, 'completed', 1)], artifacts: { 401: ['harness-state'] }, bundles: { 401: jobBundle(fx, 'r') } }),
+    GITHUB_RUN_ID: '999',
+    ...extra,
+  };
+}
+
+test('restore places the previous bundle in job mode on --resume none', async (t) => {
+  const fx = await remoteFixture(t);
+  const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'none'], restoreEnv(fx));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(mirror(fx, 'question_1.md'), 'utf8'), 'r question_1.md\n');
+  assert.equal(readFileSync(join(fx.dir, WALKER), 'utf8'), 'r walker\n');
+  assert.equal(JSON.parse(readFileSync(join(fx.dir, REMOTE_STATUS), 'utf8')).status, 'parked');
+  assert.ok(joined(fx)[0].includes('--json databaseId,displayTitle,status,createdAt '), joined(fx)[0]);
+  assert.deepEqual(downloads(fx), [`run download 401 -n harness-state -D ${join(fx.dir, STATE_DIR, 'autonomous_logs/remote_download/feat_x/401')}`]);
+});
+
+test('restore --resume answer writes each answer with its exact bytes', async (t) => {
+  const fx = await remoteFixture(t);
+  const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'answer'],
+    restoreEnv(fx, { HARNESS_INPUT_ANSWERS: JSON.stringify({ 1: 'Use B.\n' }) }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(readFileSync(mirror(fx, 'answer_1.md')), Buffer.from('Use B.\n'));
+});
+
+test('restore --resume answer refuses an answer whose question is not at the top level, writing no answer', async (t) => {
+  const fx = await remoteFixture(t);
+  const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'answer'],
+    restoreEnv(fx, { HARNESS_INPUT_ANSWERS: JSON.stringify({ 1: 'yes\n', 2: 'no\n' }) }));
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stderr, /question_2\.md/);
+  assert.ok(existsSync(mirror(fx, 'question_1.md')), 'the bundle was not restored first');
+  assert.equal(existsSync(mirror(fx, 'answer_1.md')), false);
+  assert.equal(existsSync(mirror(fx, 'answer_2.md')), false);
+});
+
+test('restore --resume answer refuses an answers input that is not an object of index keys to strings', async (t) => {
+  const fx = await remoteFixture(t);
+  for (const answers of ['', '[]', '{}', JSON.stringify({ '01': 'x' }), JSON.stringify({ a: 'x' }), JSON.stringify({ 1: 2 })]) {
+    const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'answer'], restoreEnv(fx, { HARNESS_INPUT_ANSWERS: answers }));
+    assert.equal(result.status, 2, `${answers}: ${result.stderr}`);
+  }
+  assert.deepEqual(calls(fx), []);
+});
+
+test('restore with park_loop_clear true sets park_loop_cycles to "0" in the restored status', async (t) => {
+  const fx = await remoteFixture(t);
+  const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'pause'], restoreEnv(fx, { HARNESS_INPUT_PARK_LOOP_CLEAR: 'true' }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(readFileSync(join(fx.dir, REMOTE_STATUS), 'utf8')).park_loop_cycles, '0');
+
+  const kept = await remoteFixture(t);
+  assert.equal((await remoteRun(kept, ['restore', 'feat_x', '--resume', 'none'], restoreEnv(kept))).status, 0);
+  assert.equal(JSON.parse(readFileSync(join(kept.dir, REMOTE_STATUS), 'utf8')).park_loop_cycles, '2');
+});
+
+test('no previous run is a first job under none and a refusal under answer', async (t) => {
+  const fx = await remoteFixture(t);
+  const env = { ...syncEnv({ runs: [ghRun(401, 'in_progress', 1)] }), GITHUB_RUN_ID: '999' };
+  const none = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'none'], env);
+  assert.equal(none.status, 0, none.stderr);
+  assert.match(none.stdout, /first job/);
+  const answer = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'answer'], { ...env, HARNESS_INPUT_ANSWERS: JSON.stringify({ 1: 'x' }) });
+  assert.equal(answer.status, 2, answer.stderr);
+  assert.deepEqual(downloads(fx), []);
+  assert.equal(existsSync(join(fx.dir, REMOTE_STATUS)), false);
+});
+
+test('restore never selects the current GITHUB_RUN_ID', async (t) => {
+  const fx = await remoteFixture(t);
+  const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'none'], {
+    ...syncEnv({
+      runs: [ghRun(502, 'completed', 2), ghRun(501, 'completed', 1)],
+      artifacts: { 501: ['harness-state'], 502: ['harness-state'] },
+      bundles: { 501: jobBundle(fx, 'old'), 502: jobBundle(fx, 'self') },
+    }),
+    GITHUB_RUN_ID: '502',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(downloads(fx).map((line) => line.split(' ')[2]), ['501']);
+  assert.equal(readFileSync(join(fx.dir, WALKER), 'utf8'), 'old walker\n');
+});
+
+test('restore usage errors exit 1 and call nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  for (const args of [['restore', 'feat_x'], ['restore', 'feat_x', '--resume', 'later'], ['restore', '--resume', 'none']]) {
+    const result = await remoteRun(fx, args);
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}`);
+  }
+  assert.deepEqual(calls(fx), []);
+});
+
+test('save after a job-mode status write produces the full layout and a job-summary table', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx, { status: 'parked', engine: 'task' });
+  const wrote = await runBash(fx.dir, ['-c',
+    '. scripts/lib/harness-run-lib.sh && hr_remote_status_write "$1" feat_x "$2" stop "parked | on a question"',
+    '_', REGISTRY, REMOTE_STATUS]);
+  assert.equal(wrote.status, 0, wrote.stderr);
+  mkdirSync(join(fx.dir, CLARIFY_DIR), { recursive: true });
+  writeFileSync(mirror(fx, 'question_1.md'), 'q\n');
+  writeFileSync(join(fx.dir, STATE_DIR, 'PAUSE_PROGRESS.md'), 'note\n');
+  writeFileSync(join(fx.dir, WALKER), 'walker\n');
+  writeFileSync(join(fx.dir, STATE_DIR, 'autonomous_logs/feat_x.log'), 'log\n');
+
+  const out = join(fx.dir, STATE_DIR, 'stub', 'out');
+  const summary = join(fx.dir, STATE_DIR, 'stub', 'summary.md');
+  const result = await remoteRun(fx, ['save', 'feat_x', out], { GITHUB_STEP_SUMMARY: summary });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(readdirSync(out).sort(), ['PAUSE_PROGRESS.md', 'clarifications', 'flow_walker_state', 'run.log', 'status.json']);
+  assert.ok(existsSync(join(out, 'clarifications/feat_x/question_1.md')));
+  assert.equal(JSON.parse(readFileSync(join(out, 'status.json'), 'utf8')).decision, 'stop');
+  const table = readFileSync(summary, 'utf8');
+  assert.match(table, /\| status \| decision \| detail \|/);
+  assert.match(table, /\| parked \| stop \| parked \\\| on a question \|/);
+  assert.deepEqual(calls(fx), []);
+});
+
+test('save with no status and no registry leaves an empty bundle, and never fails', async (t) => {
+  const fx = await remoteFixture(t);
+  const out = join(fx.dir, STATE_DIR, 'stub', 'out');
+  const summary = join(fx.dir, STATE_DIR, 'stub', 'summary.md');
+  const result = await remoteRun(fx, ['save', 'feat_x', out], { GITHUB_STEP_SUMMARY: summary });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(readdirSync(out), []);
+  assert.match(readFileSync(summary, 'utf8'), /never started/);
+  assert.equal(existsSync(join(fx.dir, REGISTRY)), false, 'save created a registry');
+
+  for (const args of [['save', 'feat_x'], ['save', 'feat_x', out, '--repo', join(fx.dir, 'no-such-dir')]]) {
+    const failed = await remoteRun(fx, args);
+    assert.equal(failed.status, 0, `${args.join(' ')}: ${failed.stderr}`);
+    assert.notEqual(failed.stderr, '');
+  }
 });
