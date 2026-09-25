@@ -56,7 +56,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_remote_execution_github_act
 10. [x] **Task 10** — Give job mode its remote pause, hosted time budget, in-job waits and bounded auto-resume _(layer: cli)_ _(points: 20)_
 11. [x] **Task 11** — Dispatch inbox drops to the workflow when `execution.target` is `github-actions` _(layer: cli)_ _(points: 20)_
 12. [x] **Task 12** — Relay answers, resumes and pauses for remote records, and keep the local-only passes off them _(layer: cli)_ _(points: 18)_
-13. [ ] **Task 13** — Leave remote records out of `restart-watcher.sh`'s in-flight refusal _(layer: cli)_ _(points: 5)_
+13. [x] **Task 13** — Leave remote records out of `restart-watcher.sh`'s in-flight refusal _(layer: cli)_ _(points: 5)_
 14. [ ] **Task 14** — Add `init --plugin-root-entries` for a freshly generated profile _(layer: cli)_ _(points: 15)_
 15. [ ] **Task 15** — Write the `harness-run.yml` workflow template, with its self-pause point measured _(layer: cli)_ _(points: 20)_
 16. [ ] **Task 16** — Write the `harness-resume.yml` poller template and register the `github/` template directory _(layer: cli)_ _(points: 10)_
