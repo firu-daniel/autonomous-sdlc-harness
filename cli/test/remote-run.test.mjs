@@ -20,6 +20,14 @@
  * previous job's bundle — never its own run's — and an answer lands with its exact bytes or not at
  * all**: every answer is checked against a top-level `question_<n>.md` before any is written, and
  * `save` exits 0 whatever it met.
+ *
+ * **For `continue` and `poll`, the rule is that a re-dispatch carries the bundle's own `chain` plus
+ * one, and nothing is sent for a branch that is stopped, under `HARNESS_REMOTE_STOP`, or at the chain
+ * limit**: a `continue` case records at most one `workflow run`, and a branch whose `harness stop` run
+ * is newer than its newest `harness run` run gets no `workflow run` and no `workflow enable`. Most
+ * cases replace the fixture's `autonomous-notify.sh` with a recorder, as the watcher suite does, so no
+ * desktop banner fires; the failed-enable case keeps the real notifier and records through
+ * `HARNESS_PUSH_CMD`, with `XDG_CONFIG_HOME` pointed into the fixture so no machine push file is read.
  */
 
 import assert from 'node:assert/strict';
@@ -688,4 +696,283 @@ test('save with no status and no registry leaves an empty bundle, and never fail
     assert.equal(failed.status, 0, `${args.join(' ')}: ${failed.stderr}`);
     assert.notEqual(failed.stderr, '');
   }
+});
+
+// ---------------------------------------------------------------------------
+// continue and poll — closing the loop without the local machine.
+// ---------------------------------------------------------------------------
+
+const NOTIFY = 'scripts/autonomous-notify.sh';
+const THIS_RUN = { GITHUB_RUN_ID: '900', GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'o/r' };
+/** The job running `continue`: run 900, still in progress, the newest `harness run feat_x`. */
+const CURRENT_RUN = ghRun(900, 'in_progress', 5);
+
+/** Replace the fixture's notifier with a recorder of event, branch, detail and exported slug. */
+function recordNotifications(fx) {
+  const notes = join(fx.dir, STATE_DIR, 'stub', 'notifications.tsv');
+  writeFileSync(join(fx.dir, NOTIFY),
+    `#!/usr/bin/env bash\nprintf '%s\\t%s\\t%s\\t%s\\n' "$1" "$2" "\${4-}" "\${HARNESS_REPO_SLUG-}" >> '${notes}'\n`,
+    { mode: 0o755 });
+  return () => (existsSync(notes) ? readFileSync(notes, 'utf8').split('\n').filter(Boolean).map((line) => {
+    const [event, branch, detail, slug] = line.split('\t');
+    return { event, branch, detail, slug };
+  }) : []);
+}
+
+/** A bundle whose status.json carries the given fields over `bundle`'s defaults. */
+function loopBundle(fx, name, fields) {
+  const dir = bundle(fx, name);
+  const status = JSON.parse(readFileSync(join(dir, 'status.json'), 'utf8'));
+  const merged = { ...status, ...fields };
+  for (const [key, value] of Object.entries(fields)) if (value === undefined) delete merged[key];
+  writeFileSync(join(dir, 'status.json'), JSON.stringify(merged));
+  return dir;
+}
+
+function continueEnv(runs = [CURRENT_RUN], extra = {}) {
+  return { ...THIS_RUN, STUB_RUN_LIST: JSON.stringify(runs), ...extra };
+}
+
+const workflowRuns = (fx) => joined(fx).filter((line) => line.startsWith('workflow run'));
+const enables = (fx) => joined(fx).filter((line) => line.startsWith('workflow enable'));
+
+/** The per-case invariant: `continue` sends at most one `workflow run`. */
+function atMostOneDispatch(fx) {
+  assert.ok(workflowRuns(fx).length <= 1, joined(fx).join('\n'));
+}
+
+test('continue with no status.json notifies failed with the run URL and dispatches nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const empty = join(fx.dir, STATE_DIR, 'stub', 'empty');
+  mkdirSync(empty, { recursive: true });
+  const result = await remoteRun(fx, ['continue', 'feat_x', empty], continueEnv());
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(calls(fx), []);
+  const sent = notes();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].event, 'failed');
+  assert.ok(sent[0].detail.includes('https://github.com/o/r/actions/runs/900'), sent[0].detail);
+});
+
+test('continue under the chain limit re-dispatches with the bundle chain plus one, never HARNESS_INPUT_CHAIN', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const b = loopBundle(fx, 'c', { decision: 'continue', status: 'running', chain: '5', engine: 'user_review' });
+  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], { HARNESS_INPUT_CHAIN: '11' }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(workflowRuns(fx), [
+    'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=pause -f chain=6',
+  ]);
+  assert.ok(joined(fx)[0].startsWith('run list --workflow harness-run.yml --json databaseId,headBranch,displayTitle,status,createdAt'), joined(fx)[0]);
+  assert.deepEqual(notes(), []);
+});
+
+test('continue with an unreadable chain notifies failed once and dispatches nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  for (const [name, chain] of [['x', 'x'], ['absent', undefined], ['empty', '']]) {
+    const b = loopBundle(fx, name, { decision: 'continue', chain });
+    const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], { HARNESS_INPUT_CHAIN: '0', HARNESS_REMOTE_SLUG: 'o/r' }));
+    assert.equal(result.status, 0, `${name}: ${result.stderr}`);
+    atMostOneDispatch(fx);
+  }
+  assert.deepEqual(workflowRuns(fx), []);
+  const sent = notes();
+  assert.equal(sent.length, 3);
+  for (const note of sent) {
+    assert.equal(note.event, 'failed');
+    assert.match(note.detail, /chain unreadable/);
+    assert.equal(note.slug, 'o/r');
+  }
+});
+
+test('continue at the chain limit notifies failed and dispatches nothing; one below it dispatches', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const atDefault = loopBundle(fx, 'limit', { decision: 'continue', chain: '24' });
+  assert.equal((await remoteRun(fx, ['continue', 'feat_x', atDefault], continueEnv())).status, 0);
+  atMostOneDispatch(fx);
+  assert.deepEqual(workflowRuns(fx), []);
+  assert.equal(notes().length, 1);
+  assert.equal(notes()[0].event, 'failed');
+  assert.match(notes()[0].detail, /chain limit reached/);
+
+  const atThree = loopBundle(fx, 'three', { decision: 'continue', chain: '3' });
+  assert.equal((await remoteRun(fx, ['continue', 'feat_x', atThree], continueEnv([CURRENT_RUN], { HARNESS_MAX_CHAIN: '3' }))).status, 0);
+  assert.deepEqual(workflowRuns(fx), []);
+  assert.equal(notes().length, 2);
+
+  const belowThree = loopBundle(fx, 'two', { decision: 'continue', chain: '2' });
+  assert.equal((await remoteRun(fx, ['continue', 'feat_x', belowThree], continueEnv([CURRENT_RUN], { HARNESS_MAX_CHAIN: '3' }))).status, 0);
+  assert.equal(workflowRuns(fx).length, 1);
+  assert.ok(workflowRuns(fx)[0].endsWith('-f chain=3'), workflowRuns(fx)[0]);
+});
+
+test('continue with HARNESS_REMOTE_STOP set sends nothing and notifies paused once', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const b = loopBundle(fx, 'c', { decision: 'continue', chain: '1' });
+  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], { HARNESS_REMOTE_STOP: '1' }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(calls(fx), []);
+  assert.equal(notes().length, 1);
+  assert.equal(notes()[0].event, 'paused');
+  assert.match(notes()[0].detail, /remote stop is set/);
+});
+
+test('continue on wait-poller enables the resume poller and notifies nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const b = loopBundle(fx, 'w', { decision: 'wait-poller', status: 'paused', pause_reason: 'usage', usage_resume_at: '9999999999' });
+  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv());
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(enables(fx), ['workflow enable harness-resume.yml']);
+  assert.deepEqual(workflowRuns(fx), []);
+  assert.deepEqual(notes(), []);
+});
+
+test('continue on wait-poller with a failing enable sends a paused notification through HARNESS_PUSH_CMD', async (t) => {
+  const fx = await remoteFixture(t);
+  const stubDir = join(fx.dir, STATE_DIR, 'stub');
+  const body = join(stubDir, 'push-body');
+  const title = join(stubDir, 'push-title');
+  const b = loopBundle(fx, 'w', { decision: 'wait-poller', status: 'paused', pause_reason: 'usage' });
+  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], {
+    STUB_FAIL_ON: 'workflow enable',
+    STUB_FAIL_STDERR: 'HTTP 403: Resource not accessible by integration',
+    HARNESS_PUSH_CMD: `cat > '${body}'; printf %s "$HARNESS_PUSH_TITLE" > '${title}'`,
+    HARNESS_PUSH_URL: '',
+    XDG_CONFIG_HOME: join(stubDir, 'xdg'),
+    HARNESS_REMOTE_SLUG: 'o/r',
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(workflowRuns(fx), []);
+  assert.deepEqual(enables(fx), ['workflow enable harness-resume.yml']);
+  const message = readFileSync(body, 'utf8');
+  assert.match(message, /Auto-resume is unavailable/);
+  assert.match(message, /HTTP 403: Resource not accessible by integration/);
+  assert.match(message, /autonomous-sdlc-harness:branch-resume feat_x/);
+  const heading = readFileSync(title, 'utf8');
+  assert.ok(heading.startsWith('[o/r] '), heading);
+  assert.match(heading, /paused/i);
+});
+
+test('continue on decision stop sends nothing and notifies nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const b = loopBundle(fx, 's', { decision: 'stop', status: 'completed' });
+  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv());
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(calls(fx), []);
+  assert.deepEqual(notes(), []);
+});
+
+test('continue for a stopped branch sends no workflow run and no enable, and notifies nothing, in either arm', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const runs = [ghRun(901, 'completed', 6, 'harness stop feat_x'), CURRENT_RUN];
+  for (const [name, decision] of [['c', 'continue'], ['w', 'wait-poller']]) {
+    const b = loopBundle(fx, name, { decision, chain: '1', status: 'paused', pause_reason: 'usage' });
+    const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv(runs));
+    assert.equal(result.status, 0, `${decision}: ${result.stderr}`);
+    assert.match(result.stdout, /stopped/);
+  }
+  assert.deepEqual(workflowRuns(fx), []);
+  assert.deepEqual(enables(fx), []);
+  assert.deepEqual(notes(), []);
+});
+
+test('continue with a failing run list fails closed: nothing sent, one paused notification', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const b = loopBundle(fx, 'c', { decision: 'continue', chain: '1' });
+  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], {
+    STUB_FAIL_ON: 'run list', STUB_FAIL_STDERR: 'HTTP 502: bad gateway',
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(workflowRuns(fx), []);
+  assert.equal(notes().length, 1);
+  assert.equal(notes()[0].event, 'paused');
+  assert.match(notes()[0].detail, /HTTP 502: bad gateway/);
+  assert.match(notes()[0].detail, /autonomous-sdlc-harness:branch-resume feat_x/);
+});
+
+/** A usage-paused bundle; `due` puts its reset in the past. */
+function usageBundle(fx, name, due, chain = '2') {
+  return loopBundle(fx, name, {
+    decision: 'wait-poller', status: 'paused', pause_reason: 'usage', chain,
+    usage_resume_at: due ? '1' : '9999999999',
+  });
+}
+
+test('poll dispatches the due branch and keeps the poller for the one still waiting', async (t) => {
+  const fx = await remoteFixture(t);
+  recordNotifications(fx);
+  const result = await remoteRun(fx, ['poll'], syncEnv({
+    runs: [ghRun(702, 'completed', 2, 'harness run feat_b'), ghRun(701, 'completed', 1, 'harness run feat_a')],
+    artifacts: { 701: ['harness-state'], 702: ['harness-state'] },
+    bundles: { 701: usageBundle(fx, 'a', true), 702: usageBundle(fx, 'b', false) },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(workflowRuns(fx), [
+    'workflow run harness-run.yml --ref feat_a -f action=run -f branch=feat_a -f engine=task -f resume=pause -f chain=3',
+  ]);
+  assert.equal(joined(fx).filter((line) => line.startsWith('workflow disable')).length, 0);
+  assert.equal(downloads(fx).length, 2);
+  assert.ok(existsSync(join(fx.dir, STATE_DIR, 'autonomous_logs/remote_download/feat_a/701/status.json')));
+});
+
+test('poll with only a due branch dispatches it, then disables the poller', async (t) => {
+  const fx = await remoteFixture(t);
+  recordNotifications(fx);
+  const result = await remoteRun(fx, ['poll'], syncEnv({
+    runs: [ghRun(701, 'completed', 1, 'harness run feat_a')],
+    artifacts: { 701: ['harness-state'] },
+    bundles: { 701: usageBundle(fx, 'a', true) },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  const sent = joined(fx).filter((line) => line.startsWith('workflow '));
+  assert.deepEqual(sent, [
+    'workflow run harness-run.yml --ref feat_a -f action=run -f branch=feat_a -f engine=task -f resume=pause -f chain=3',
+    'workflow disable harness-resume.yml',
+  ]);
+});
+
+test('poll with HARNESS_REMOTE_STOP set sends nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const result = await remoteRun(fx, ['poll'], {
+    ...syncEnv({ runs: [ghRun(701, 'completed', 1, 'harness run feat_a')], artifacts: { 701: ['harness-state'] }, bundles: { 701: usageBundle(fx, 'a', true) } }),
+    HARNESS_REMOTE_STOP: '1',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(calls(fx), []);
+});
+
+test('poll skips a due branch whose harness stop run is newer, and disables itself when it was the only one waiting', async (t) => {
+  const fx = await remoteFixture(t);
+  recordNotifications(fx);
+  const result = await remoteRun(fx, ['poll'], syncEnv({
+    runs: [ghRun(802, 'completed', 2, 'harness stop feat_x'), ghRun(801, 'completed', 1)],
+    artifacts: { 801: ['harness-state'] },
+    bundles: { 801: usageBundle(fx, 'x', true) },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(workflowRuns(fx), []);
+  assert.deepEqual(downloads(fx), []);
+  assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow ')), ['workflow disable harness-resume.yml']);
+});
+
+test('poll dispatches a due branch whose harness stop run is older than its newest harness run', async (t) => {
+  const fx = await remoteFixture(t);
+  recordNotifications(fx);
+  const result = await remoteRun(fx, ['poll'], syncEnv({
+    runs: [ghRun(802, 'completed', 2), ghRun(801, 'completed', 1, 'harness stop feat_x')],
+    artifacts: { 802: ['harness-state'] },
+    bundles: { 802: usageBundle(fx, 'x', true) },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(workflowRuns(fx), [
+    'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f chain=3',
+  ]);
 });

@@ -47,3 +47,10 @@ Environment read by both (set by the workflows from inputs and repository variab
 - In every `continue` case the stub's recorded vector contains at most one `workflow run`, never one after a `HARNESS_REMOTE_STOP` or chain-limit refusal.
 - In every case whose stubbed listing makes the branch stopped, the recorded vector contains no `workflow run` and no `workflow enable` for that branch.
 - The written script still matches its template byte for byte.
+
+**Deviations from plan:**
+
+- `bash scripts/test.sh` exits 1, not 0. Gate 4 (`npm test`, which includes `cli/test/remote-run.test.mjs` and the byte-for-byte check in `cli/test/outer-loop-scripts.test.mjs`) passes. The two gates that fail are not caused by this change: 6a flags machine paths in `harness-runs/scratch/t3-test.log`, an ignored scratch log left by an earlier task, and 11 fails because the optional docs-retrieval peers are not installed in this checkout.
+- Four cases the plan does not cover, filled in: a `continue` re-dispatch that fails sends one `paused` naming its error; a `status.json` with no recognised `decision`, or an `engine` outside `task|user_review|docs`, sends one `failed` with no dispatch; a `HARNESS_MAX_CHAIN` that is not a non-negative integer dispatches nothing (`continue`: one `failed`; `poll`: exit 1). In `poll`, a chain-limit refusal and a bundle that cannot be downloaded both count as not waiting, so the poller cannot stay enabled forever. A failed dispatch counts as still waiting, so the next tick retries it.
+- The re-dispatch runs `verb_dispatch` in a subshell rather than re-invoking the script. The composition stays in one place, and the execution-target gate is not re-run on the job checkout.
+- Most notification cases swap the fixture's `autonomous-notify.sh` for a recorder, as `cli/test/helpers/watcher.mjs` does, so no desktop banner fires. Only the failed-enable case keeps the real notifier and records through `HARNESS_PUSH_CMD`, as the plan names.

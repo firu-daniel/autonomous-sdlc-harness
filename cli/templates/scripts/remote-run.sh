@@ -17,12 +17,16 @@
 #   remote-run.sh sync <branch> [--repo <root>]
 #   remote-run.sh restore <branch> --resume none|answer|pause [--repo <root>]
 #   remote-run.sh save <branch> <out_dir> [--repo <root>]
+#   remote-run.sh continue <branch> <bundle_dir> [--repo <root>]
+#   remote-run.sh poll [--repo <root>]
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress run of that branch was asked to cancel,
 #        or there was none); for status: printed; for sync: the record is
 #        current (including "no run listed yet", which writes nothing); for
 #        restore: restored, or no previous bundle under --resume none|pause;
-#        for save: ALWAYS, whatever happened
+#        for save: ALWAYS, whatever happened; for continue: whatever it
+#        decided — every outcome a person must act on is a notification; for
+#        poll: the tick finished
 #     1  usage error, or the library or the configuration could not be
 #        resolved; for sync and restore, a local copy or write failed
 #     2  refused, nothing sent or written: execution.target is not
@@ -36,7 +40,7 @@
 #        is not at the top level — the bundle may already be restored, and no
 #        answer is written
 #     3  gh failed: not found, or a non-zero exit — the first line of gh's
-#        stderr is named
+#        stderr is named. For poll: the listing or the disable failed
 #
 # `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
 # its job, before and (under `always()`) after the harness step. Without
@@ -72,6 +76,68 @@
 # with no status.json — what `continue` reads as "never started". It never
 # fails the job: every problem, a usage error included, is one line on stderr
 # and exit 0.
+#
+# `continue` AND `poll` CLOSE THE LOOP WITHOUT THIS MACHINE, and like `restore`
+# and `save` test neither `execution.target` nor a registry record. `continue`
+# is the run workflow's last job step (under `!cancelled()`); `poll` is the
+# whole body of the resume poller, `WORKFLOW_RESUME_FILE`. Both read, from the
+# environment the workflows set:
+#   HARNESS_MAX_CHAIN    the automatic-dispatch limit; `24` when empty. Not a
+#                        non-negative integer: nothing is dispatched
+#   HARNESS_REMOTE_STOP  non-empty: nothing is dispatched
+#   HARNESS_REMOTE_SLUG  exported as `HARNESS_REPO_SLUG` before a notification,
+#                        so it names the repository rather than a runner path
+#   GITHUB_RUN_ID, GITHUB_SERVER_URL, GITHUB_REPOSITORY   the run URL
+# Notifications go through the sibling `autonomous-notify.sh`, as `paused` or
+# `failed`. A re-dispatch is `dispatch <branch> --engine <status.json engine>
+# --resume pause --chain <chain + 1>`, composed by `dispatch` itself.
+#
+# `chain` HAS ONE SOURCE: the bundle's `status.json`, whose `chain` is the
+# writing job's own input — never `HARNESS_INPUT_CHAIN`, the registry or a
+# run's inputs. So `chain + 1` is one more than the job that wrote the bundle,
+# and a user's dispatch (chain 0) restarts the count. An absent or non-integer
+# `chain` is a chain-limit refusal ("chain unreadable"), never 0.
+#
+# `continue <branch> <bundle_dir>` reads the bundle `save` just wrote:
+#   no status.json   the harness step never started: one `failed` naming the
+#                    run URL, no dispatch
+#   decision continue   refused, in this order: `HARNESS_REMOTE_STOP` set (one
+#                    `paused`); the branch stopped (one log line, no
+#                    notification — the user asked for it); chain unreadable
+#                    or `chain + 1` over `HARNESS_MAX_CHAIN` (one `failed`);
+#                    otherwise re-dispatched. A dispatch that fails is one
+#                    `paused` naming its error
+#   decision wait-poller   the branch stopped: one log line. Otherwise `gh
+#                    workflow enable WORKFLOW_RESUME_FILE`; a failed enable
+#                    (the job token's enable permission is unverified) is one
+#                    `paused` saying auto-resume is unavailable
+#   decision stop    nothing: job mode has already notified
+# A job killed by its step timeout re-dispatches, because job mode writes
+# `decision: continue` the moment it starts; `HARNESS_MAX_CHAIN` is what bounds
+# a job that is killed every time.
+#
+# WHY RE-DISPATCH IS NOT LEFT TO `!cancelled()` ALONE. A user's `stop` cancels a
+# running job, so its `continue` step never runs — but a usage-paused run
+# waiting for the poller has no job to cancel. The stop marker reaches it:
+# `remote_branch_stopped` finds a branch stopped when its newest run titled
+# `harness stop <branch>` was created after its newest `harness run <branch>`,
+# from one bounded newest-first listing of every branch. A marker outside the
+# window is older than every `harness run` inside it, and a user's later
+# dispatch is newer than the marker, so it un-stops the branch with no extra
+# step. It runs ahead of every dispatch and every enable. A listing that fails
+# fails CLOSED in `continue`: nothing sent, one `paused` naming gh's error.
+#
+# `poll`: `HARNESS_REMOTE_STOP` set exits 0 with nothing sent. Otherwise one
+# listing; each branch's newest `harness run <branch>` run decides. Skipped,
+# not waiting: a stopped branch, a run not yet `completed` (its own `continue`
+# will decide), a bundle that cannot be downloaded (one line), and anything but
+# `status: paused` / `pause_reason: usage` with an integer `usage_resume_at`.
+# Due (reset passed): re-dispatched under the same chain limit — a refusal is
+# one `failed` and not waiting; a dispatch that fails is one line and still
+# waiting. Reset ahead: waiting. No branch waiting after the tick: `gh workflow
+# disable WORKFLOW_RESUME_FILE`. Bundles download to
+# `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` in the checkout,
+# skipped when that directory already holds its status.json.
 #
 # `status` AND `sync` READ THE RECORD, NOT THE KEY. A run keeps the execution
 # it started with, so they test the record's `execution` field and never
@@ -156,11 +222,13 @@
 # `hr_remote_bundle_restore` performs in the record's `worktree`; for
 # `restore`, that download directory, the job restore, `answer_<n>.md` and the
 # `park_loop_cycles` rewrite of `remote_status.json`, all in the job's
-# checkout; for `save`, <out_dir> and the step summary.
+# checkout; for `save`, <out_dir> and the step summary; for `poll`, its
+# download directories.
 #
 # MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
 # rename there is an edit here, byte for byte:
 #   WORKFLOW_RUN_FILE    mirrors  WORKFLOW_RUN_FILE
+#   WORKFLOW_RESUME_FILE mirrors  WORKFLOW_RESUME_FILE
 #   STATE_ARTIFACT_NAME  mirrors  STATE_ARTIFACT_NAME
 #   HARNESS_GH_CLI       mirrors  GH_CLI_VARIABLE (the binary run as `gh`)
 #
@@ -235,10 +303,32 @@
 #              GITHUB_STEP_SUMMARY=/tmp/s, /tmp/s gains the status table
 #   never started  no remote_status.json and no registry: save -> 0, /tmp/b
 #              empty
+#
+#   continue and poll: point HARNESS_PUSH_CMD at a recorder for notifications;
+#   <b> is a bundle directory whose status.json carries schema "1":
+#   continue   decision continue, chain "3": bash scripts/remote-run.sh continue
+#              feat_x <b> -> 0; `run list ...`, then `workflow run ... -f
+#              resume=pause -f chain=4`
+#   limit      HARNESS_MAX_CHAIN=3, same bundle -> 0, no `workflow run`, one
+#              `failed`; chain "x" -> the same ("chain unreadable")
+#   remote stop  HARNESS_REMOTE_STOP=1 -> 0, nothing sent, one `paused`
+#   stopped    a `run list` answer whose `harness stop feat_x` run is newer than
+#              its `harness run feat_x` run -> 0, no `workflow run`, no
+#              `workflow enable`, no notification
+#   list fails a stub failing `run list` -> 0, nothing sent, one `paused`
+#   wait-poller  decision wait-poller -> `workflow enable harness-resume.yml`;
+#              a stub failing it -> one `paused` naming its stderr
+#   no status  an empty <b> -> 0, one `failed` naming the run URL
+#   poll       a `run list` answer with a completed `harness run feat_x` run
+#              whose bundle says paused / usage / usage_resume_at 1: bash
+#              scripts/remote-run.sh poll -> 0; `run download`, `workflow run
+#              ... -f resume=pause`, then `workflow disable harness-resume.yml`;
+#              with usage_resume_at far ahead -> no dispatch, no disable
 
 set -u
 
-hr_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/harness-run-lib.sh"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+hr_lib="$script_dir/lib/harness-run-lib.sh"
 if [ ! -r "$hr_lib" ]; then
   echo "remote-run.sh: cannot read '$hr_lib'" >&2
   exit 1
@@ -247,6 +337,7 @@ fi
 . "$hr_lib"
 
 WORKFLOW_RUN_FILE='harness-run.yml'
+WORKFLOW_RESUME_FILE='harness-resume.yml'
 STATE_ARTIFACT_NAME='harness-state'
 GH="${HARNESS_GH_CLI:-gh}"
 
@@ -254,6 +345,9 @@ GH="${HARNESS_GH_CLI:-gh}"
 # and sync — enough to reach past interleaved `harness pause` runs.
 STATUS_RUNS_SHOWN=10
 RUN_LIST_LIMIT=50
+# The one listing of every branch's runs that the stop marker and `poll` read.
+ALL_RUNS_LIMIT=100
+MAX_CHAIN_DEFAULT=24
 
 # GitHub's documented limit on a `workflow_dispatch` inputs payload: "The
 # maximum payload for inputs is 65,535 characters."
@@ -275,6 +369,8 @@ usage() {
   echo "       remote-run.sh sync <branch> [--repo <root>]" >&2
   echo "       remote-run.sh restore <branch> --resume none|answer|pause [--repo <root>]" >&2
   echo "       remote-run.sh save <branch> <out_dir> [--repo <root>]" >&2
+  echo "       remote-run.sh continue <branch> <bundle_dir> [--repo <root>]" >&2
+  echo "       remote-run.sh poll [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -325,12 +421,13 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|restore|save) ;;
+  dispatch|pause|warm|stop|status|sync|restore|save|continue|poll) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
 branch=""
 out_dir=""
+bundle_dir=""
 engine=""
 resume="none"
 resume_given=0
@@ -366,11 +463,13 @@ while [ "$#" -gt 0 ]; do
     -*)
       usage "unknown option '$1'" ;;
     *)
-      [ "$verb" != warm ] || usage "warm takes no branch"
+      [ "$verb" != warm ] && [ "$verb" != poll ] || usage "$verb takes no branch"
       if [ -z "$branch" ]; then
         branch="$1"
       elif [ "$verb" = save ] && [ -z "$out_dir" ]; then
         out_dir="$1"
+      elif [ "$verb" = continue ] && [ -z "$bundle_dir" ]; then
+        bundle_dir="$1"
       else
         usage "unexpected argument '$1'"
       fi
@@ -378,8 +477,12 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ "$verb" != warm ]; then
+if [ "$verb" != warm ] && [ "$verb" != poll ]; then
   valid_branch "$branch" || usage "$verb needs a <branch>"
+fi
+
+if [ "$verb" = continue ] && [ -z "$bundle_dir" ]; then
+  usage "continue needs a <bundle_dir>"
 fi
 
 if [ "$verb" = save ] && [ -z "$out_dir" ]; then
@@ -434,7 +537,7 @@ setup_fail() {
 
 if [ -n "$repo_arg" ]; then
   root=$(hr_repo_root "$repo_arg") || setup_fail "'$repo_arg' is not a git repository"
-elif [ "$verb" = restore ] || [ "$verb" = save ]; then
+elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ]; then
   root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
@@ -443,7 +546,7 @@ fi
 hr_config_load "$root" || :
 registry=""
 case "$verb" in
-  restore|save)
+  restore|save|continue|poll)
     hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/harness.config.json'"
     ;;
   status|sync)
@@ -468,6 +571,12 @@ case "$verb" in
       exit "$EXIT_REFUSED"
     fi
     ;;
+esac
+
+# Resolved against the caller's directory before the `cd` below.
+case "$bundle_dir" in
+  ''|/*) ;;
+  *) bundle_dir="${PWD-.}/$bundle_dir" ;;
 esac
 
 cd "$root" || setup_fail "cannot enter '$root'"
@@ -903,6 +1012,266 @@ verb_save() {
   return 0
 }
 
+# notify <event> <branch> <detail> — one lifecycle notification; never fails.
+notify() {
+  if [ -n "${HARNESS_REMOTE_SLUG-}" ]; then
+    HARNESS_REPO_SLUG="$HARNESS_REMOTE_SLUG"
+    export HARNESS_REPO_SLUG
+  fi
+  bash "$script_dir/autonomous-notify.sh" "$1" "$2" "" "$3" \
+    || echo "remote-run.sh: the $1 notification for $2 could not be sent" >&2
+  echo "remote-run.sh: notified $1 for $2: $3"
+}
+
+this_run_url() {
+  if [ -n "${GITHUB_RUN_ID-}" ] && [ -n "${GITHUB_SERVER_URL-}" ] && [ -n "${GITHUB_REPOSITORY-}" ]; then
+    printf '%s' "${GITHUB_SERVER_URL%/}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+  else
+    printf 'run %s' "${GITHUB_RUN_ID:-(unknown)}"
+  fi
+}
+
+# max_chain_var — MAX_CHAIN from HARNESS_MAX_CHAIN; 1 when it is not a
+# non-negative integer.
+MAX_CHAIN=""
+max_chain_var() {
+  MAX_CHAIN="${HARNESS_MAX_CHAIN:-$MAX_CHAIN_DEFAULT}"
+  case "$MAX_CHAIN" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  return 0
+}
+
+# ALL_RUNS — every branch's runs of the workflow, newest first and bounded,
+# listed once per invocation. 1 with GH_ERR set when the listing failed.
+ALL_RUNS=""
+ALL_RUNS_LISTED=0
+list_all_runs() {
+  [ "$ALL_RUNS_LISTED" -eq 0 ] || return 0
+  gh_call run list --workflow "$WORKFLOW_RUN_FILE" \
+    --json databaseId,headBranch,displayTitle,status,createdAt --limit "$ALL_RUNS_LIMIT" || return 1
+  printf '%s' "$GH_OUT" | jq -e 'type == "array"' >/dev/null 2>&1 || {
+    GH_ERR="its run list is not the expected JSON"
+    return 1
+  }
+  ALL_RUNS="$GH_OUT"
+  ALL_RUNS_LISTED=1
+}
+
+# remote_branch_stopped <branch> — 0 stopped (its newest `harness stop` run is
+# newer than its newest `harness run` run), 1 not stopped, 2 the listing failed.
+remote_branch_stopped() {
+  local verdict
+  list_all_runs || return 2
+  verdict=$(printf '%s' "$ALL_RUNS" | jq -r --arg s "harness stop $1" --arg r "harness run $1" '
+    ([.[] | select(.displayTitle == $s) | .createdAt // ""] | max // "") as $stop
+    | ([.[] | select(.displayTitle == $r) | .createdAt // ""] | max // "") as $run
+    | if $stop != "" and $stop > $run then "stopped" else "not" end' 2>/dev/null) || {
+    GH_ERR="its run list is not the expected JSON"
+    return 2
+  }
+  [ "$verdict" = stopped ]
+}
+
+# redispatch <engine> <chain> — `dispatch <branch> --engine <engine> --resume
+# pause --chain <chain>` for the global branch, in a subshell so dispatch's own
+# exits stay its own. On failure REDISPATCH_ERR holds its first stderr line.
+REDISPATCH_ERR=""
+redispatch() {
+  local errfile status
+  REDISPATCH_ERR=""
+  errfile=$(mktemp) || { REDISPATCH_ERR="mktemp failed"; return 1; }
+  (
+    engine="$1"; resume=pause; chain="$2"
+    answers_from=""; indexes=""; indexes_given=0; park_loop_clear=0
+    verb_dispatch
+  ) 2>"$errfile"
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    IFS= read -r REDISPATCH_ERR <"$errfile" || :
+    [ -n "$REDISPATCH_ERR" ] || REDISPATCH_ERR="dispatch exited $status"
+  fi
+  cat "$errfile" >&2
+  rm -f "$errfile"
+  return "$status"
+}
+
+# next_chain_var <status_json> — NEXT_CHAIN is the bundle's `chain` + 1.
+# 1: the chain is unreadable; 2: NEXT_CHAIN is over MAX_CHAIN.
+NEXT_CHAIN=""
+next_chain_var() {
+  local current
+  NEXT_CHAIN=""
+  current=$(hr_remote_status_get "$1" chain) || return 1
+  case "$current" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  NEXT_CHAIN=$((10#$current + 1))
+  [ "$NEXT_CHAIN" -le "$((10#$MAX_CHAIN))" ] || return 2
+}
+
+valid_engine() {
+  case "${1-}" in
+    task|user_review|docs) return 0 ;;
+  esac
+  return 1
+}
+
+STOPPED_LINE="a 'harness stop' run is newer than its newest 'harness run' run"
+RESUME_HINT="/autonomous-sdlc-harness:branch-resume"
+
+continue_redispatch() {
+  local status_file="$1" engine_value
+  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
+    notify paused "$branch" "Not re-dispatched: remote stop is set. Run $RESUME_HINT $branch to continue."
+    return 0
+  fi
+  remote_branch_stopped "$branch"
+  case $? in
+    0) echo "remote-run.sh: $branch is stopped ($STOPPED_LINE); not re-dispatched"; return 0 ;;
+    2) notify paused "$branch" "Not re-dispatched: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue."; return 0 ;;
+  esac
+  if ! max_chain_var; then
+    notify failed "$branch" "Not re-dispatched: HARNESS_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer."
+    return 0
+  fi
+  next_chain_var "$status_file"
+  case $? in
+    1) notify failed "$branch" "Not re-dispatched: chain unreadable in status.json."; return 0 ;;
+    2) notify failed "$branch" "Not re-dispatched: chain limit reached ($NEXT_CHAIN over HARNESS_MAX_CHAIN $MAX_CHAIN)."; return 0 ;;
+  esac
+  engine_value=$(hr_remote_status_get "$status_file" engine) || engine_value=""
+  if ! valid_engine "$engine_value"; then
+    notify failed "$branch" "Not re-dispatched: engine '$engine_value' in status.json is not task, user_review or docs."
+    return 0
+  fi
+  redispatch "$engine_value" "$NEXT_CHAIN" \
+    || notify paused "$branch" "Re-dispatch failed ($REDISPATCH_ERR). Run $RESUME_HINT $branch to continue."
+}
+
+continue_wait_poller() {
+  remote_branch_stopped "$branch"
+  case $? in
+    0) echo "remote-run.sh: $branch is stopped ($STOPPED_LINE); the resume poller is not enabled"; return 0 ;;
+    2) notify paused "$branch" "Auto-resume not enabled: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue."; return 0 ;;
+  esac
+  if gh_call workflow enable "$WORKFLOW_RESUME_FILE"; then
+    echo "remote-run.sh: enabled $WORKFLOW_RESUME_FILE for $branch"
+  else
+    notify paused "$branch" "Auto-resume is unavailable: enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $branch after the usage reset."
+  fi
+}
+
+verb_continue() {
+  local status_file decision
+  hr_remote_names_var
+  status_file="$bundle_dir/$HR_REMOTE_STATUS_FILE"
+  if [ ! -f "$status_file" ]; then
+    notify failed "$branch" "The job stopped before the harness run started: $(this_run_url)"
+    return 0
+  fi
+  decision=$(hr_remote_status_get "$status_file" decision) || decision=""
+  case "$decision" in
+    continue) continue_redispatch "$status_file" ;;
+    wait-poller) continue_wait_poller ;;
+    stop) echo "remote-run.sh: decision stop for $branch; nothing to do" ;;
+    *) notify failed "$branch" "Not re-dispatched: status.json carries no recognised decision: $(this_run_url)" ;;
+  esac
+  return 0
+}
+
+# poll_branch <run_id> <state> — one branch's newest `harness run` run; the
+# global branch names it. Returns 0 when the branch is still waiting.
+poll_branch() {
+  local id="$1" state="$2" download status_file status reason at engine_value now
+  remote_branch_stopped "$branch"
+  case $? in
+    0) echo "remote-run.sh: poll: $branch is stopped ($STOPPED_LINE); skipped"; return 1 ;;
+    2) echo "remote-run.sh: poll: the stop-marker check for $branch failed ($GH_ERR); skipped"; return 1 ;;
+  esac
+  [ "$state" = completed ] || return 1
+  download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$id") || {
+    echo "remote-run.sh: poll: cannot resolve '$root/harness.config.json'; $branch skipped" >&2
+    return 1
+  }
+  status_file="$download/$HR_REMOTE_STATUS_FILE"
+  if [ ! -f "$status_file" ]; then
+    if ! mkdir -p "$download"; then
+      echo "remote-run.sh: poll: cannot create '$download'; $branch skipped" >&2
+      return 1
+    fi
+    if ! gh_call run download "$id" -n "$STATE_ARTIFACT_NAME" -D "$download"; then
+      echo "remote-run.sh: poll: the bundle of run $id ($branch) cannot be downloaded; skipped: $GH_ERR"
+      return 1
+    fi
+  fi
+  status=$(hr_remote_status_get "$status_file" status) || status=""
+  reason=$(hr_remote_status_get "$status_file" pause_reason) || reason=""
+  at=$(hr_remote_status_get "$status_file" usage_resume_at) || at=""
+  [ "$status" = paused ] && [ "$reason" = usage ] || return 1
+  case "$at" in
+    ''|*[!0-9]*) echo "remote-run.sh: poll: $branch is usage-paused with no readable usage_resume_at; skipped"; return 1 ;;
+  esac
+  now=$(date +%s)
+  if [ "$((10#$at))" -gt "$now" ]; then
+    echo "remote-run.sh: poll: $branch waits for its usage reset at $at"
+    return 0
+  fi
+  next_chain_var "$status_file"
+  case $? in
+    1) notify failed "$branch" "Not resumed by the poller: chain unreadable in status.json."; return 1 ;;
+    2) notify failed "$branch" "Not resumed by the poller: chain limit reached ($NEXT_CHAIN over HARNESS_MAX_CHAIN $MAX_CHAIN)."; return 1 ;;
+  esac
+  engine_value=$(hr_remote_status_get "$status_file" engine) || engine_value=""
+  if ! valid_engine "$engine_value"; then
+    notify failed "$branch" "Not resumed by the poller: engine '$engine_value' in status.json is not task, user_review or docs."
+    return 1
+  fi
+  if redispatch "$engine_value" "$NEXT_CHAIN"; then
+    echo "remote-run.sh: poll: dispatched $branch --resume pause --chain $NEXT_CHAIN"
+    return 1
+  fi
+  echo "remote-run.sh: poll: dispatching $branch failed ($REDISPATCH_ERR); still waiting"
+  return 0
+}
+
+verb_poll() {
+  local entries b id state waiting=0
+  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
+    echo "remote-run.sh: poll: remote stop is set; nothing dispatched"
+    return 0
+  fi
+  if ! max_chain_var; then
+    echo "remote-run.sh: poll: HARNESS_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer; nothing dispatched" >&2
+    exit "$EXIT_USAGE"
+  fi
+  hr_remote_names_var
+  list_all_runs || gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
+  entries=$(printf '%s' "$ALL_RUNS" | jq -r '
+    [.[] | select((.displayTitle // "") | startswith("harness run "))]
+    | group_by(.displayTitle)
+    | map(sort_by([.createdAt, .databaseId]) | last)
+    | .[] | [(.displayTitle | ltrimstr("harness run ")), (.databaseId | tostring), (.status // "")] | @tsv' 2>/dev/null) || {
+    GH_ERR="its run list is not the expected JSON"
+    gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
+  }
+  while IFS=$'\t' read -r b id state; do
+    valid_branch "$b" || continue
+    branch="$b"
+    if poll_branch "$id" "$state"; then
+      waiting=$((waiting + 1))
+    fi
+  done <<EOF
+$entries
+EOF
+  if [ "$waiting" -gt 0 ]; then
+    echo "remote-run.sh: poll: $waiting branch(es) still waiting; $WORKFLOW_RESUME_FILE stays enabled"
+    return 0
+  fi
+  gh_call workflow disable "$WORKFLOW_RESUME_FILE" || gh_fail "disabling $WORKFLOW_RESUME_FILE failed"
+  echo "remote-run.sh: poll: no branch is waiting; disabled $WORKFLOW_RESUME_FILE"
+}
+
 case "$verb" in
   dispatch) verb_dispatch ;;
   pause) verb_pause ;;
@@ -912,5 +1281,7 @@ case "$verb" in
   sync) verb_sync ;;
   restore) verb_restore ;;
   save) verb_save ;;
+  continue) verb_continue ;;
+  poll) verb_poll ;;
 esac
 exit "$EXIT_OK"
