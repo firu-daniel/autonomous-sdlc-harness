@@ -277,6 +277,7 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'autonomous-notify.sh',
   'autonomous-watcher.sh',
   'restart-watcher.sh',
+  'remote-run.sh',
   'docs-search-server.sh',
   'flow-walker.sh',
 ];

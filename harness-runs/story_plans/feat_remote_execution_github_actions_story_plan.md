@@ -48,7 +48,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_remote_execution_github_act
 2. [x] **Task 2** — Own the remote-execution names and the `gh` probe in `cli/src/remote/githubActions.ts` _(layer: cli)_ _(points: 12)_
 3. [x] **Task 3** — Give the outer-loop library `hr_execution_target` and the shared run-registry primitives _(layer: cli)_ _(points: 14)_
 4. [x] **Task 4** — Define the remote state bundle in the outer-loop library _(layer: cli)_ _(points: 14)_
-5. [ ] **Task 5** — Ship `remote-run.sh` with `dispatch`, `pause`, `warm` and `stop` _(layer: cli)_ _(points: 20)_
+5. [x] **Task 5** — Ship `remote-run.sh` with `dispatch`, `pause`, `warm` and `stop` _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 6** — Add `sync` and `status` to `remote-run.sh` _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — Add the job-side `restore` and `save` to `remote-run.sh` _(layer: cli)_ _(points: 14)_
 8. [ ] **Task 8** — Add the job-side `continue` and the poller's `poll` to `remote-run.sh` _(layer: cli)_ _(points: 18)_

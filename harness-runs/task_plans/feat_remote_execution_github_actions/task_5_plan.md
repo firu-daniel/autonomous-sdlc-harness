@@ -56,3 +56,12 @@ remote-run.sh stop <branch>
 - The script's `REPRO` block, run by hand against a throwaway fixture, reproduces every exit code in the map.
 - `grep -n "harness-run.yml\|HARNESS_GH_CLI" cli/templates/scripts/remote-run.sh` shows each literal declared once as a named mirror of Task 2's constant.
 - `grep -n "remote_stopped_at" cli/templates/scripts/autonomous-watcher.sh cli/templates/scripts/remote-run.sh` hits the watcher's field-set comment as well as the writer in `remote-run.sh`.
+
+**Deviations from plan:**
+
+- `stop` writes `remote_stopped_at` and `status` = `failed` with two `hr_registry_set` calls, because that primitive sets one key per write and a second writer would break the library's one-writer rule. The watcher's field-set comment therefore says "in the same pass", not "in the same write". The record changes only when the marker, the list and every cancel succeeded. After a partial stop the script exits 3 with the record untouched, so running `stop` again is the remedy.
+- The `REMOTE_INPUT_PAYLOAD_MAX` check measures the whole inputs object as compact JSON, not just the `answers` value, because GitHub's limit applies to the inputs payload as a whole.
+- `warm` sends `-f branch=<GitHub default branch>` next to `--ref`, so its `run-name` reads `harness warm <branch>`. Task 15 must accept `branch` on `action: warm`.
+- `--repo <root>` is accepted by every verb, placed after the verb.
+- Two targets added outside the list: `cli/test/init.test.mjs` → `OUTER_LOOP_SCRIPT_FILES` gains `remote-run.sh` (without it, the wrapper-family assertions count the new script as a wrapper), and `cli/test/outer-loop-scripts.test.mjs` gains the byte-for-byte and mode case that the Verification bullet names.
+- The `answers` round trip is asserted with `jq -j '.["<n>"]'`, which prints raw with no trailing newline, so the file's exact bytes can be compared.

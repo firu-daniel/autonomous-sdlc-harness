@@ -999,6 +999,17 @@ test('the docs-retrieval server launcher is written verbatim, executable, and a 
   assert.equal((await snapshotTree(dir))[LAUNCHER_PATH], first[LAUNCHER_PATH], 'a second init rewrote the launcher');
 });
 
+test('remote-run.sh is written verbatim and executable under scriptsDir', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  const path = `${SCRIPTS_DIR}/remote-run.sh`;
+
+  await initOk(dir);
+
+  assert.equal(text(dir, path), readFileSync(join(PACKAGE_ROOT, 'templates', SCRIPTS_DIR, 'remote-run.sh'), 'utf8'), `${path} is not the template's bytes`);
+  const mode = (await lstat(join(dir, path))).mode & 0o777;
+  assert.equal(mode, 0o755, `${path} is mode ${mode.toString(8)}, not 755`);
+});
+
 test('the docs-retrieval server launcher refuses with an empty stdout when no runtime is installed', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(dir);

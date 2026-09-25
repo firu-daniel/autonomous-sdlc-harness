@@ -960,6 +960,12 @@ notify() {
 #                       while `isUsingOverage`) plus USAGE_RESUME_MARGIN_SECS.
 #                       The ONLY state the wall-clock resume reads, and written
 #                       and cleared together with `paused_by`.
+#   remote_stopped_at   the epoch second `remote-run.sh stop` sent the branch's
+#                       stop marker and asked GitHub to cancel its runs. Written
+#                       by `remote-run.sh stop` alone, only on an existing
+#                       record, whose `status` it sets to `failed` in the same
+#                       pass. It means the run was stopped outright by the user,
+#                       not that it failed on its own.
 # -----------------------------------------------------------------------------
 # The bodies are lib/harness-run-lib.sh's THE RUN REGISTRY, shared with every
 # script that reads or writes this file; these wrappers bind them to $REGISTRY.
