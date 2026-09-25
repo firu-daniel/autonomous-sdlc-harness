@@ -4,7 +4,8 @@
 # `harness.config.json` at run time, answers "is this branch protected?", and
 # derives the anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
-# differently.
+# differently. It also implements the run registry's reads and writes for the
+# scripts that share that registry.
 #
 # WHO SOURCES THIS, AND HOW. Every script in the configured `scriptsDir` that
 # needs this library sources it by a path computed from `${BASH_SOURCE[0]}` —
@@ -43,13 +44,24 @@
 # nowhere else, where `<repo_root>` is resolved from a bare
 # `git rev-parse --show-toplevel` at the directory the caller names. Nothing
 # here reads an environment variable in place of a configured value, and nothing
-# here writes anything inside a repository.
+# here writes inside a repository except through the named write exceptions
+# below.
 #
-# THE ONE EXCEPTION TO "WRITES NOTHING", AND ITS FENCE: the machine-level usage
-# lane at the bottom of this file publishes a state record and takes an advisory
-# lock. Both live under `hr_lane_dir` — a machine-local path outside every
-# repository — and nothing else here writes at all, so a caller that never calls
-# an `hr_lane_*` function still gets a library that only reads. The lane's
+# THE WRITE EXCEPTIONS TO "WRITES NOTHING", AND THEIR FENCES. Each entry names
+# the section that writes, the functions that write, and where. Nothing outside
+# this list writes at all; a section that adds a writer adds its entry here.
+#
+#   1. The machine-level usage lane (the section at the bottom of this file)
+#      publishes a state record and takes an advisory lock. Fence: both live
+#      under `hr_lane_dir` — a machine-local path outside every repository —
+#      and are written only by the `hr_lane_*` functions.
+#   2. THE RUN REGISTRY writes the registry file its caller names. Fence: that
+#      file is `<root>/<state_dir>/autonomous_logs/registry.json`, resolved
+#      through `hr_state_path`, and it is written only by `hr_registry_init`
+#      and `hr_registry_set`.
+#
+# A caller that calls no `hr_lane_*`, `hr_registry_init` or `hr_registry_set`
+# function still gets a library that only reads. The lane's
 # ceilings are the only environment values here that carry policy, because the
 # lane is machine-scoped and has no configuration key to carry them; each is
 # named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
@@ -133,10 +145,13 @@
 # dialect marker for editors and linters). No `set -e` and no `set -u` — a
 # sourced library must not change its caller's shell — but every parameter
 # expansion here is defaulted, so it is safe to source into a caller that sets
-# both. No top-level side effects, no exiting, no writes outside the lane
-# directory named above, and no diagnostics on stdout OR stderr: every reader is
-# silent on failure and signals through its return status, because callers
-# capture stdout. That silence is why the lane reports a lock it BROKE through a
+# both. No top-level side effects, no exiting, no writes outside the fences of
+# the write exceptions named above, and no diagnostics on stdout OR stderr:
+# every reader is silent on failure and signals through its return status,
+# because callers capture stdout. The one pass-through is the registry's two
+# writers, `hr_registry_init` and `hr_registry_set`, which leave the shell's,
+# `mktemp`'s and `jq`'s own stderr on a failed write to the caller, as the
+# watcher's bodies they replaced did — that stream is the watcher's log. That silence is why the lane reports a lock it BROKE through a
 # variable instead of a log line — the caller owns the log.
 #
 # NAMING. Every function is prefixed `hr_`; every variable this file touches
@@ -568,6 +583,7 @@ hr_config_load() {
       s("phases.parity";         try (.phases.parity | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("phases.qa";             try (.phases.qa     | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("phases.docs";           try (.phases.docs   | if type == "boolean" or . == null then . else "invalid" end) catch null),
+      s("execution.target";      try .execution.target     catch null),
       s("protectedBranches.present";
         try (if (.protectedBranches | type) == "array" then "1" else null end) catch null),
       l("protectedBranches";     try .protectedBranches    catch null)
@@ -812,6 +828,28 @@ hr_phase_enabled() {
   return 2
 }
 
+# `execution.target` — where an unattended run executes: `local` or
+# `github-actions`. THE ONE READER OF THE KEY IN THIS FAMILY; a script that
+# needs it calls this. Schema default `local`, so an absent key prints `local`
+# and 1 is never returned. 2 — printing nothing — when the configuration is
+# unresolvable or the stored value is outside the schema's enum, which this
+# refuses rather than guesses about, as `hr_phase_enabled` does.
+hr_execution_target() {
+  local root="${1-}"
+  hr_config_load "$root" || return 2
+  if ! hr_cfg_scalar_var "execution.target"; then
+    printf 'local\n'
+    return 0
+  fi
+  case "$HR_CFG_VALUE" in
+    local|github-actions)
+      printf '%s\n' "$HR_CFG_VALUE"
+      return 0
+      ;;
+  esac
+  return 2
+}
+
 # ---------------------------------------------------------------------------
 # The protected-branch trichotomy.
 # ---------------------------------------------------------------------------
@@ -1043,6 +1081,61 @@ hr_push_env_files() {
     *) printf '%s/%s\n' "${root%/}" "$path" ;;
   esac
   return 0
+}
+
+# ---------------------------------------------------------------------------
+# THE RUN REGISTRY.
+#
+# THE CONTRACT IS NOT THIS SECTION'S. The registry's JSON shape
+# (`{"runs": {"<branch>": {…}}}`), its field set and its status vocabulary are
+# stated in `autonomous-watcher.sh`'s header and registry comment block; this
+# section only reads and writes that shape, for every script that shares the
+# file, so no second copy of a writer exists.
+#
+# Each function takes the registry file as its first argument — the caller
+# resolves it as `hr_state_path <root> autonomous_logs/registry.json` — and is
+# write exception 2 in the header. Every value is written as a JSON string;
+# every write stamps `branch` and `updated_at` on the record and replaces the
+# file through a `mktemp` + `mv`. No shell option is assumed: the caller may set
+# `-e`, `-u` or neither.
+# ---------------------------------------------------------------------------
+
+# Create an empty registry at <file> when none exists.
+hr_registry_init() {
+  local file="${1-}"
+  [ -n "$file" ] || return 1
+  [ -f "$file" ] || printf '{"runs":{}}\n' >"$file"
+}
+
+# hr_registry_set <file> <branch> <key> <value>
+hr_registry_set() {
+  local file="${1-}" branch="${2-}" key="${3-}" value="${4-}" tmp
+  hr_registry_init "$file" || :
+  tmp="$(mktemp)" || return 1
+  if jq --arg b "$branch" --arg k "$key" --arg v "$value" --arg now "$(date '+%Y-%m-%dT%H:%M:%S')" '
+    .runs[$b] = ((.runs[$b] // {}) + {($k): $v, "branch": $b, "updated_at": $now})
+  ' "$file" >"$tmp"; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+    return 1
+  fi
+}
+
+# hr_registry_get <file> <branch> <key>   -> the value, or nothing
+hr_registry_get() {
+  local file="${1-}"
+  hr_registry_init "$file" || :
+  jq -r --arg b "${2-}" --arg k "${3-}" '.runs[$b][$k] // empty' "$file" 2>/dev/null
+}
+
+# Every branch in the registry at <file>, one per line. Prints nothing when the
+# file cannot be read as a registry, which leaves each caller iterating over an
+# empty set.
+hr_registry_branches() {
+  local file="${1-}"
+  hr_registry_init "$file" || :
+  jq -r '.runs | keys[]' "$file" 2>/dev/null
 }
 
 # ---------------------------------------------------------------------------

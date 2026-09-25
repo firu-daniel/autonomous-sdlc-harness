@@ -11,6 +11,12 @@
  * These run against the **compiled** CLI at `dist/cli.js`, so `npm run build` precedes `npm test`;
  * `runCli` refuses with that sentence rather than leaving a module-resolution error to explain it.
  *
+ * **The library's shared readers and writers answer the contract their consumers call.**
+ * `hr_execution_target` is the family's one reader of `execution.target`: the schema default `local`
+ * when the key is absent, the value when it is in the enum, and exit 2 — never a guess — when it is
+ * not. The run registry's primitives are shared by every script that touches the registry, so one
+ * write followed by one read must round-trip through a fresh `{"runs": {…}}` file.
+ *
  * ## Four non-obvious choices, and where each comes from
  *
  * 1. **The written file is compared against the shipped template's bytes.** Everywhere else in this
@@ -269,6 +275,58 @@ test("the library's typed reader answers from the configured file", async (t) =>
   const absent = await sourceAndCall(unset, 'hr_agent_effort');
   assert.equal(absent.status, 1, `hr_agent_effort exited ${absent.status} for an unset key: ${absent.stderr}`);
   assert.equal(absent.stdout, '', 'hr_agent_effort printed a value for an unset key with no default');
+});
+
+test('hr_execution_target applies the schema default, reads the enum and refuses a value outside it', async (t) => {
+  const dir = await fixtureFor(t, {
+    files: { ...nodeProjectFiles(), 'harness.config.json': seededConfig() },
+  });
+  await initOk(dir);
+
+  // Each call is its own `bash`, so the per-process cache is cold and reads the file as rewritten.
+  const withExecution = (execution) =>
+    writeFileSync(
+      join(dir, 'harness.config.json'),
+      `${JSON.stringify(execution === undefined ? seededConfig() : seededConfig({ execution }))}\n`,
+    );
+
+  withExecution(undefined);
+  const absent = await sourceAndCall(dir, 'hr_execution_target');
+  assert.notEqual(absent.status, 2, 'hr_execution_target could not resolve the configuration — `jq` 1.5+ must be on PATH');
+  assert.equal(absent.status, 0, `hr_execution_target exited ${absent.status} with the key absent: ${absent.stderr}`);
+  assert.equal(absent.stdout, 'local\n', 'hr_execution_target did not apply the schema default');
+
+  withExecution({ target: 'github-actions' });
+  const remote = await sourceAndCall(dir, 'hr_execution_target');
+  assert.equal(remote.status, 0, `hr_execution_target exited ${remote.status}: ${remote.stderr}`);
+  assert.equal(remote.stdout, 'github-actions\n', 'hr_execution_target did not print the configured target');
+
+  withExecution({ target: 'gitlab' });
+  const unknown = await sourceAndCall(dir, 'hr_execution_target');
+  assert.equal(unknown.status, 2, `hr_execution_target exited ${unknown.status} for a value outside the enum`);
+  assert.equal(unknown.stdout, '', 'hr_execution_target printed a value for a target outside the enum');
+});
+
+test('hr_registry_set then hr_registry_get round-trips a value through a fresh registry file', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+
+  const registry = join(dir, 'registry.json');
+  const { status, stdout, stderr } = await new Promise((resolve, reject) => {
+    const script = '. "$1"; hr_registry_set "$2" feat/x status running && hr_registry_get "$2" feat/x status';
+    execFile('bash', ['-c', script, '_', join(dir, LIB_PATH), registry], { cwd: dir, encoding: 'utf8' }, (error, out, err) => {
+      if (error !== null && typeof error.code !== 'number') reject(error);
+      else resolve({ status: error === null ? 0 : error.code, stdout: out, stderr: err });
+    });
+  });
+
+  assert.equal(status, 0, `the registry round-trip exited ${status}: ${stderr}`);
+  assert.equal(stdout, 'running\n', 'hr_registry_get did not return the value hr_registry_set wrote');
+  const record = JSON.parse(readFileSync(registry, 'utf8'));
+  assert.deepEqual(Object.keys(record), ['runs'], 'the registry file is not shaped {"runs": {…}}');
+  assert.equal(record.runs['feat/x'].status, 'running');
+  assert.equal(record.runs['feat/x'].branch, 'feat/x', 'the write did not stamp `branch`');
+  assert.equal(typeof record.runs['feat/x'].updated_at, 'string', 'the write did not stamp `updated_at`');
 });
 
 test('a second init leaves an edited outer-loop script exactly as the adopter left it', async (t) => {

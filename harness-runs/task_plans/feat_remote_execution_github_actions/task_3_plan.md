@@ -30,3 +30,9 @@
 - `grep -n "registry_set()\|registry_get()" cli/templates/scripts/autonomous-watcher.sh` shows only one-line wrappers.
 - The header's write-exception list names every section that writes: `grep -n -E "THE WRITE EXCEPTIONS|THE RUN REGISTRY|hr_lane_\*|hr_registry_(init|set)" cli/templates/scripts/lib/harness-run-lib.sh` — each writing section the grep shows (the lane and `THE RUN REGISTRY`) and each writing function is named in the `THE WRITE EXCEPTIONS …` paragraph with its fence, and `grep -n "THE ONE EXCEPTION" cli/templates/scripts/lib/harness-run-lib.sh` has no hit.
 - The watcher's REPRO `status` and `a launch` entries, run by hand against a throwaway fixture per its header, produce the same registry file as before this task.
+
+**Deviations from plan:**
+
+- Verification bullet 4 (REPRO `status` / `a launch` by hand) rests on a different execution: `harness-runs/scratch/t3_registry_equiv.py`, run through `scratch-run.sh`, sources the library and drives the HEAD watcher's four bodies and the new four wrappers through one identical `set -u` sequence (sets, gets of a present and an absent key, `registry_branches`, a value carrying quotes and backslashes, a branch with a space); stdout, stderr, exit status and the registry file (with `updated_at` masked, key order included) were equal. The watcher suites `watcher-park-loop`, `watcher-park-resume` and `outer-loop-scripts` also passed unchanged.
+- The header's `FILE DISCIPLINE.` paragraph was also amended (not named in Targets): its "no writes outside the lane directory" now points at the write-exception fences, and it names the registry writers' one stderr pass-through (`mktemp`'s and `jq`'s own stderr on a failed write, as the watcher's bodies had), which "no diagnostics on stdout OR stderr" would otherwise falsify.
+- The moved writers' internal `hr_registry_init` call is written `|| :`: the watcher's body ignored that status too, and the suffix keeps a `set -e` caller from aborting on it.

@@ -961,37 +961,13 @@ notify() {
 #                       The ONLY state the wall-clock resume reads, and written
 #                       and cleared together with `paused_by`.
 # -----------------------------------------------------------------------------
-registry_init() {
-  [ -f "$REGISTRY" ] || printf '{"runs":{}}\n' >"$REGISTRY"
-}
-
-# registry_set <branch> <key> <value>   (the value is written as a JSON string)
-registry_set() {
-  registry_init
-  local branch="$1" key="$2" value="$3" tmp
-  tmp="$(mktemp)" || return 1
-  if jq --arg b "$branch" --arg k "$key" --arg v "$value" --arg now "$(date '+%Y-%m-%dT%H:%M:%S')" '
-    .runs[$b] = ((.runs[$b] // {}) + {($k): $v, "branch": $b, "updated_at": $now})
-  ' "$REGISTRY" >"$tmp"; then
-    mv "$tmp" "$REGISTRY"
-  else
-    rm -f "$tmp"
-    return 1
-  fi
-}
-
-# registry_get <branch> <key>   -> the value, or nothing
-registry_get() {
-  registry_init
-  jq -r --arg b "$1" --arg k "$2" '.runs[$b][$k] // empty' "$REGISTRY" 2>/dev/null
-}
-
-# Every branch in the registry, one per line. Prints nothing when the file cannot
-# be read as a registry, which leaves each caller iterating over an empty set.
-registry_branches() {
-  registry_init
-  jq -r '.runs | keys[]' "$REGISTRY" 2>/dev/null
-}
+# The bodies are lib/harness-run-lib.sh's THE RUN REGISTRY, shared with every
+# script that reads or writes this file; these wrappers bind them to $REGISTRY.
+# registry_set <branch> <key> <value>; registry_get <branch> <key>.
+registry_init() { hr_registry_init "$REGISTRY"; }
+registry_set() { hr_registry_set "$REGISTRY" "$@"; }
+registry_get() { hr_registry_get "$REGISTRY" "$@"; }
+registry_branches() { hr_registry_branches "$REGISTRY"; }
 
 # Self-healing pass: a record still marked `running` whose process is gone is
 # reconciled to `failed` and notified. Run ONCE per pass, before anything reads
