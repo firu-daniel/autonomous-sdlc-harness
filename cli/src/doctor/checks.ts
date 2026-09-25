@@ -134,6 +134,7 @@ import {
 } from '../generators/githooks.js';
 import {
   PUSH_CMD_KEY,
+  PUSH_DESTINATION_PLACEHOLDER,
   PUSH_URL_KEY,
   pushEnvCandidates,
   type PushEnvCandidate,
@@ -1367,7 +1368,7 @@ function deliveryOptInAdvice(candidates: readonly PushEnvCandidate[]): string {
   const repositoryRemedy = candidates.some((candidate) => candidate.origin === 'repository')
     ? ', and the repository-side one is filled in by hand'
     : `; this repository configures no repository-side file, so filling one means setting \`pushEnvPath\` in ${CONFIG_FILENAME} first`;
-  return `delivery is opt-in and defaults to nothing pushed, so with neither ${PUSH_URL_KEY} nor ${PUSH_CMD_KEY} set an unattended run's completed, parked and failed events reach a macOS desktop banner where one is available and nothing at all on a Linux host. \`${CLI} init --notifications --push-url <url>\` writes the machine-local file for you${repositoryRemedy}`;
+  return `delivery is opt-in and defaults to nothing pushed, so with neither ${PUSH_URL_KEY} nor ${PUSH_CMD_KEY} set an unattended run's completed, parked and failed events reach a macOS desktop banner where one is available and nothing at all on a Linux host. \`${CLI} init --notifications --push-url ${PUSH_DESTINATION_PLACEHOLDER}\` writes the machine-local file for you${repositoryRemedy}`;
 }
 
 /**

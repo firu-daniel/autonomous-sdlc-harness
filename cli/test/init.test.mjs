@@ -79,6 +79,7 @@ import {
   PACKAGE_ROOT,
   WORKSPACE_ROOT,
 } from './helpers/fixture.mjs';
+import { PUSH_DESTINATION_FORMS } from '../dist/generators/notifications.js';
 
 /** The generated artifacts this file addresses by name — the contract, spelled out once. */
 const CONFIG_FILE = 'harness.config.json';
@@ -7648,6 +7649,12 @@ const REPO_PUSH_ENV_PATH = '.claude/push-notify.env';
  */
 const PUSH_URL = 'https://example.invalid/t0p1c-appears-nowhere-else';
 
+/** An ntfy topic chosen the way {@link PUSH_URL} is: legal as a topic name, and in no fixture path. */
+const TOPIC = 'harness-t0p1c-nowhere-else-9f3';
+
+/** Neither a topic name nor a URL, and — for the not-echoed assertions — in no message this CLI prints. */
+const UNRECOGNISED_DESTINATION = 'not a destination';
+
 /** The two keys the notifier recognises, asserted by name because the file is a contract with it. */
 const PUSH_URL_KEY = 'HARNESS_PUSH_URL';
 const PUSH_CMD_KEY = 'HARNESS_PUSH_CMD';
@@ -7686,7 +7693,12 @@ async function modeOf(path) {
  *
  * Every subprocess here has a pipe for stdin, so each takes the non-interactive path the interaction
  * rule promises (`docs/cli.md` §2): the flags are the whole interface, and the first arm is also the
- * proof that a run nobody can ask never blocks on the question.
+ * proof that a run nobody can ask never blocks on the question. For the same reason the terminal
+ * re-ask of an unrecognised destination is not reachable here; it is covered by the hand-run gate in
+ * `docs/development.md` §5 instead.
+ *
+ * `PUSH_DESTINATION_FORMS` is imported rather than spelled out, an exception to choice 3 in this
+ * file's header: the assertion is that two surfaces print one wording, not what that wording is.
  */
 test('push notifications are opt-in, and an opt-in without an endpoint writes nothing at all', async (t) => {
   await t.test('a run that was never asked writes nothing outside the repository', async (subtest) => {
@@ -7729,6 +7741,141 @@ test('push notifications are opt-in, and an opt-in without an endpoint writes no
     assert.ok(!stdout.includes(PUSH_URL), `the endpoint was printed back on stdout:\n${stdout}`);
     assert.ok(!stderr.includes(PUSH_URL), `the endpoint was printed back on stderr:\n${stderr}`);
     assert.ok(stdout.includes(machine.file), `the run does not say where it wrote the settings:\n${stdout}`);
+  });
+
+  await t.test('a topic given through the flag is written as its ntfy.sh address', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+
+    const { stdout, stderr } = await initOk(dir, ['--notifications', '--push-url', TOPIC], {
+      XDG_CONFIG_HOME: machine.home,
+    });
+
+    const content = readFileSync(machine.file, 'utf8');
+    assert.match(content, new RegExp(`^HARNESS_PUSH_URL=https://ntfy\\.sh/${TOPIC}$`, 'm'));
+    assert.equal(await modeOf(machine.file), 0o600, 'the file holding a push credential is readable beyond its owner');
+    assert.equal(await modeOf(machine.dir), 0o700, 'the directory holding a push credential is not 0700');
+    assert.ok(!stdout.includes(TOPIC), `the topic was printed back on stdout:\n${stdout}`);
+    assert.ok(!stderr.includes(TOPIC), `the topic was printed back on stderr:\n${stderr}`);
+    // A bare topic also passes the parse-time check `parseInitFlags` makes on every --push-url.
+    assert.ok(!stderr.includes('init: --push-url takes'), `the parser refused a topic name:\n${stderr}`);
+  });
+
+  await t.test('the ntfy.sh/<topic> host form is written as the same address', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+
+    await initOk(dir, ['--notifications', '--push-url', `ntfy.sh/${TOPIC}`], { XDG_CONFIG_HOME: machine.home });
+
+    assert.match(readFileSync(machine.file, 'utf8'), new RegExp(`^HARNESS_PUSH_URL=https://ntfy\\.sh/${TOPIC}$`, 'm'));
+  });
+
+  await t.test("another service's URL is accepted as well, and single-quoted where a shell would split it", async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+    const url = 'https://example.invalid/hook?a=1&b=2';
+
+    const { stdout, stderr } = await initOk(dir, ['--notifications', '--push-url', url], {
+      XDG_CONFIG_HOME: machine.home,
+    });
+
+    assert.ok(
+      readFileSync(machine.file, 'utf8').split('\n').includes(`${PUSH_URL_KEY}='${url}'`),
+      'the URL was not written single-quoted',
+    );
+    assert.ok(!stdout.includes(url), `the URL was printed back on stdout:\n${stdout}`);
+    assert.ok(!stderr.includes(url), `the URL was printed back on stderr:\n${stderr}`);
+  });
+
+  await t.test('a --push-url that is neither form is refused before anything is written', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+
+    const { status, stdout, stderr } = await runCli(dir, ['init', '--notifications', '--push-url', UNRECOGNISED_DESTINATION], {
+      XDG_CONFIG_HOME: machine.home,
+    });
+
+    assert.equal(status, 1, `init exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(stderr.includes('--push-url'), `the refusal does not name the flag:\n${stderr}`);
+    assert.ok(stderr.includes('ntfy'), `the refusal does not offer the ntfy topic form:\n${stderr}`);
+    assert.ok(!stdout.includes(UNRECOGNISED_DESTINATION), `the value was printed back on stdout:\n${stdout}`);
+    assert.ok(!stderr.includes(UNRECOGNISED_DESTINATION), `the value was printed back on stderr:\n${stderr}`);
+    assert.equal(existsSync(machine.dir), false, `a refused run created ${machine.dir}`);
+    assert.equal(await exists(dir, CONFIG_FILE), false, 'a refused run wrote the config');
+  });
+
+  await t.test('the same value is refused without --notifications too', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+
+    const { status, stdout, stderr } = await runCli(dir, ['init', '--push-url', UNRECOGNISED_DESTINATION], {
+      XDG_CONFIG_HOME: machine.home,
+    });
+
+    assert.equal(status, 1, `init exited ${status}\n${stdout}\n${stderr}`);
+    assert.equal(existsSync(machine.dir), false, `a refused run created ${machine.dir}`);
+  });
+
+  await t.test('a hand-written settings file is not re-pointed by a later topic', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+    mkdirSync(machine.dir, { mode: 0o700 });
+    writeFileSync(machine.file, `# set up by hand\n${PUSH_URL_KEY}=${PUSH_URL}\n`, { mode: 0o600 });
+    const before = readFileSync(machine.file, 'utf8');
+
+    await initOk(dir, ['--notifications', '--push-url', TOPIC], { XDG_CONFIG_HOME: machine.home });
+
+    assert.equal(readFileSync(machine.file, 'utf8'), before, 'a re-run re-pointed a hand-written settings file');
+  });
+
+  await t.test('a plain re-run leaves a configured machine exactly as it was', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+    const env = { XDG_CONFIG_HOME: machine.home };
+    await initOk(dir, ['--notifications', '--push-url', PUSH_URL], env);
+    const before = readFileSync(machine.file, 'utf8');
+
+    await initOk(dir, [], env);
+
+    assert.equal(readFileSync(machine.file, 'utf8'), before, 'a plain re-run rewrote the settings file');
+  });
+
+  await t.test('a refused destination leaves a configured machine exactly as it was', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+    const env = { XDG_CONFIG_HOME: machine.home };
+    await initOk(dir, ['--notifications', '--push-url', PUSH_URL], env);
+    const before = readFileSync(machine.file, 'utf8');
+
+    const { status } = await runCli(dir, ['init', '--notifications', '--push-url', UNRECOGNISED_DESTINATION], env);
+
+    assert.equal(status, 1);
+    assert.equal(readFileSync(machine.file, 'utf8'), before, 'a refused re-run degraded the settings file');
+  });
+
+  await t.test('the question and the guided note describe the accepted forms in one wording', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+
+    const { stdout } = await initOk(dir, ['--notifications'], { XDG_CONFIG_HOME: machine.home });
+
+    const question = stdout.split('\n').find((line) => line.includes('Where should notifications be posted?'));
+    assert.ok(question?.includes(PUSH_DESTINATION_FORMS), `the question does not carry the shared wording:\n${stdout}`);
+    assert.ok(
+      stdout.split(PUSH_DESTINATION_FORMS).length - 1 >= 2,
+      `the shared wording is not on both the question and the guided note:\n${stdout}`,
+    );
+    for (const expected of ['ntfy', 'App Store', 'https://']) {
+      assert.ok(stdout.includes(expected), `stdout does not mention ${expected}:\n${stdout}`);
+    }
+  });
+
+  await t.test('--help names the flag with the shared placeholder', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { stdout } = await runCli(dir, ['init', '--help']);
+
+    assert.ok(stdout.includes('--push-url <url-or-ntfy-topic>'), `--help does not show the placeholder:\n${stdout}`);
   });
 
   await t.test('the opt-in without an endpoint writes nothing and prints the guided setup', async (subtest) => {
