@@ -691,7 +691,7 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
     kind: 'value',
     placeholder: PUSH_DESTINATION_PLACEHOLDER,
     summary:
-      'Where notifications are posted: an ntfy topic name, or the full URL of any endpoint that accepts a POST (with --notifications)',
+      'Where notifications are posted: an ntfy topic name, or the full http:// or https:// URL of any endpoint that accepts a POST (with --notifications)',
   },
 ] as const);
 

@@ -15,7 +15,7 @@ The main things the plan and the task prompt required all hold. There is one gra
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below from top to bottom. The committing role flips each one to `[x]` as that fix's commit lands. That is the `committer` agent in every flow that dispatches one, and the orchestrator itself in the supervised fix flow, which dispatches none. `[ ]` markers anywhere else, such as sub-step bullets inside per-finding files, are informational only.
 
 1. [x] **Finding 1** — Drop the `export` from `NTFY_TOPIC_PATTERN`, which nothing outside `notifications.ts` imports. _(layer: cli)_
-2. [ ] **Finding 3** — Name the `http://` / `https://` scheme in the `--push-url` `--help` summary. _(layer: cli)_
+2. [x] **Finding 3** — Name the `http://` / `https://` scheme in the `--push-url` `--help` summary. _(layer: cli)_
 3. [ ] **Finding 2** — Reword `REPROMPT_LIMIT`'s doc comment so it states each re-ask loop's end state. _(layer: cli)_
 
 ---
