@@ -1,0 +1,30 @@
+### Task 3 — Re-label the existing re-entry suite: `start` resets the counter, a continued walk does not
+
+**Goal:** Make `cli/test/flow-walker-ui-and-reentry.test.mjs` state what it pins now that a planning re-entry continues a saved walk. Its header's *"re-entry resets the loop counter"* becomes a statement about `start` alone. Case `(6)`'s step comment is reworded as a `start` case, while its `test(...)` title string stays byte-identical. Case `(9)`'s comment stops claiming that no reviewer is ever an entry point. Every assertion stays byte-identical.
+
+**Depends on:** Task 2. That task adds `cli/test/flow-walker-resume.test.mjs`, the suite that pins continuation: `current` re-prints a pending action unchanged, and `next` carries on with the counter, the `review_<n>` series, the prompt variant and the recorded findings file. This task points at that suite by its file name and changes nothing in it. It relies on Task 1's graph `entries`, `["plan_writer", "business_parity_review", "ui_writer", "ui_review", "convergence"]`, only to word case `(9)`'s comment. `plan_review` is still not an entry, so case `(9)`'s refusal still holds.
+
+**Where this layer stops.** This task edits comments and the file header only. It changes no `test(...)` title string, adds no case and changes no expected action, because the behaviour `start` pins is unchanged. The re-entry rules themselves are Tasks 4 and 5's. `docs/flow-graph-walker.md` → `### Item 3a` → **Evidence.** cites case `(6)` by its title, `(6) re-entry mid-loop restarts the counter and continues the findings folder`, and `git grep` finds no other citer. That title is a wire (`.claude/context/plugin.md` → `## Citation`), so it stays byte-identical here and Task 7 cites it unchanged. Retitling the case, together with its citer, is left to a later branch. The case `(7)` and `(8)` comments are left alone too: the phrases they quote from the fork's **Resume-from-ledger (planning).** are ones Task 5 keeps verbatim.
+
+### Targets
+
+- `cli/test/flow-walker-ui-and-reentry.test.mjs` — the header, case `(6)`'s step comment (not its title), case `(9)`'s comment, and the closing scenario table.
+
+**Work:**
+
+- [ ] Header: replace the paragraph that opens *"One behaviour pinned here is stated by the prose only by absence: **re-entry resets the loop counter.**"* with one stating that **`start` resets the loop counter** and renders its entry with the `initial` prompt. That covers a fresh write, an **extend**, a **review** of a draft and a **skip** past a loop. The per-folder review indices continue, because they are read off disk. A re-entry that **continues** a saved walk resets nothing: that is pinned in `cli/test/flow-walker-resume.test.mjs`. In the header's rule sentence, change *"and, for re-entry, the pre-change `…_autonomous.md` → `## Override 2 — resumability` and `## Override 5`"* so it says re-entry through `--entry` follows those two sections **as rewritten on `fix_plan_loop_resume_from_walker_state`**.
+- [ ] Case `(6)`: keep its `test(...)` title string byte-identical — `(6) re-entry mid-loop restarts the counter and continues the findings folder`. Replace only the step comment *"A resumed session re-enters as Override 2(a) states …"* with one saying that a `start` issued mid-loop, as **extend** does, opens on a fresh counter. The expected actions do not change.
+- [ ] Case `(9)`: replace the comment *"Override 2 and Override 5 re-enter only at the task-plan loop, the UI-test loop or the hand-off; a reviewer is never an entry point."* with one saying that a `start` enters only at a loop's writer, a loop's **first** gate or the hand-off. A draft sent back for review always starts at its loop's first gate, so `plan_review`, which is not a first gate, is refused. The assertion does not change.
+- [ ] The closing scenario comment table: add a line pointing continuation scenarios at `cli/test/flow-walker-resume.test.mjs`. The table's existing `re-entry mid-loop` line may be reworded to say the re-entry is a `start`, since it is a comment, but it keeps pointing at case `(6)` and does not restate a new title for it.
+
+**Verification:**
+
+- `bash scripts/test.sh` exits 0, and every case in `cli/test/flow-walker-ui-and-reentry.test.mjs` passes unchanged.
+- `git diff cli/test/flow-walker-ui-and-reentry.test.mjs` touches no `assert` line, no `test(...)` title string and no builder call inside an expected-actions array. Only comments and the header change.
+- `git grep -n "re-entry mid-loop restarts the counter" -- cli/test docs` still prints both the case `(6)` test line in `cli/test/flow-walker-ui-and-reentry.test.mjs` and the citing line in `docs/flow-graph-walker.md`.
+- The comments of case `(7) re-entry past a converged task-plan loop dispatches the UI-test writer first` and case `(8) re-entry with planning resolved prints the hand-off immediately` are **not** edited: `git diff` touches neither. They quote "on re-entry, if `P1` is `[x]` skip the task-plan loop" and "if all three `## Planning` entries are **resolved** … fall straight through to implementation (`<terminal_handoff>`)" from the autonomous fork's **Resume-from-ledger (planning).**, and Task 5 keeps both phrases byte-identical (its **Phrases this task must keep verbatim**), so the header's "as rewritten on `fix_plan_loop_resume_from_walker_state`" stays true for them.
+- `grep -n "re-entry resets the loop" cli/test/flow-walker-ui-and-reentry.test.mjs` prints nothing, and `grep -n "flow-walker-resume.test.mjs" cli/test/flow-walker-ui-and-reentry.test.mjs` prints the header and table lines.
+
+**Deviations from plan:**
+
+- Verification bullet 1 (`bash scripts/test.sh` exits 0) is not met: the wrapper exits 1 on `run-gates: 2 failed, 18 passed`. The two failures are `1a plugin manifest` (hook-quoting warnings on `plugin/hooks/hooks.json`) and `6a no machine paths` (hits in the worktree's `.git` pointer file and in `harness-runs/` artifacts). This diff touches neither of those files. Gate `4 npm test`, which runs `cli/test/flow-walker-ui-and-reentry.test.mjs`, reported `ok`, so the claim that every case passes unchanged rests on that gate.

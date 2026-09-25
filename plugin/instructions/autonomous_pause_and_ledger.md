@@ -304,7 +304,12 @@ see the warning above). This makes every flip safe to re-run on a resumed run.
 3. **Skip every `[x]` and every `[-]` phase** — no reviewer re-dispatch, no review regeneration, no
    re-commit.
 4. Within the resume-point phase, the phase's **detail index** drives within-phase resume, exactly as the
-   per-task / per-finding / per-test loops already do today (find the first `[ ]` item).
+   per-task / per-finding / per-test loops already do today (find the first `[ ]` item). The planning
+   entries `P1` and `P2` have no detail index: their within-phase position is the planning walker's
+   saved walk, as `${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_autonomous.md` →
+   `## Override 2 — resumability` applies it. That walk is machine-local and never a second record — where it
+   and this ledger disagree, this ledger wins — and a planning loop whose entry is `[ ]`, with its draft on
+   disk and no usable walk, is reviewed again rather than skipped.
 5. `PAUSE_PROGRESS.md` (§2) is read only as a **human-readable hint / audit trail** — the ledger is
    authoritative. This composes with the clarification park/resume (`Override 2(a)`): the top-level answered pairs
    the watcher resumed for are consumed as `Override 2(a)` states; the ledger independently says which phase to be in.

@@ -23,6 +23,13 @@
 #   bash <scripts_dir>/flow-walker.sh next    --flow <flow> --branch <branch> --outcome <outcome> [--findings <path>] [--skipped <ids|none>]
 #   bash <scripts_dir>/flow-walker.sh current --flow <flow> --branch <branch>
 #
+#   `current` is read-only: it re-prints the saved pending action byte for
+#   byte, and is how a planning (re-)entry finds a saved walk to continue. Its
+#   output names the saved `awaiting`: `action: dispatch` is `dispatch`,
+#   `binding: <ask>` is `answer`, any other `binding:` (`<escalate>`,
+#   `<terminal_handoff>`) is `done` — a finished walk, re-printed but continued
+#   by nothing: `next` refuses it with exit 1.
+#
 #   <outcome>  a key of the pending node's `outcomes`, or `answered` while an
 #              `<ask>` is pending. `FAIL` requires `--findings`.
 #   --skipped  the run mode's skipped ids; read only when no flow-progress
@@ -50,7 +57,8 @@
 # EXIT CODES
 #
 #   0  an action was printed (and, for start / next, the state written)
-#   1  refusal: bad usage, undeclared outcome, `next` before `start`, a flow or
+#   1  refusal: bad usage, undeclared outcome, `next` before `start`, `current`
+#      with no walk saved (a re-entry's "no saved walk"), a flow or
 #      branch other than the state's, unknown flow, formatVersion not 1, FAIL
 #      without --findings, no run-mode record, an unresolvable phase flag
 #   2  the configuration, the graph or the state file cannot be resolved or
@@ -62,8 +70,14 @@
 # lines: flow, branch, the pending node, `awaiting` (dispatch / answer / done),
 # `counter.<name>`, the prompt variants, the last findings file, the recorded
 # `report.<key>` values, the nodes skipped as `skipped`, and the pending
-# action's printed lines (`out=`), which `current` re-prints unchanged. `start`
-# overwrites it and resets every counter to 0. Replaced by temp file and `mv`.
+# action's printed lines (`out=`), which `current` re-prints unchanged. Only
+# `start` overwrites it and resets every counter to 0 — a fresh write, an
+# extend, a review of a draft and a skip past a loop alike. A re-entry that
+# continues a saved walk (`current`, then `next` or a re-dispatch of the
+# printed action) keeps it, so `counter.iteration`, the prompt variants and
+# the last findings file survive a session boundary. It is a position, never a
+# phase record: the flow-progress ledger stays the only durable record.
+# Replaced by temp file and `mv`.
 #
 # BASH 3.2 AND JQ 1.5 ARE THE FLOORS: no associative array and no array-reading
 # builtin. The graph is flattened by one `jq` per call.

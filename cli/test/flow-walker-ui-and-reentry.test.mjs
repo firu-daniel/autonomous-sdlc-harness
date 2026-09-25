@@ -4,17 +4,18 @@
  *
  * **The rule these tests exist to enforce is `cli/test/flow-walker.test.mjs`'s, scoped to the UI
  * loop and re-entry: the walker reproduces the routing the pre-change
- * `plugin/instructions/task_plan_writing_instructions_core.md` prescribed — and, for re-entry, the
- * pre-change `plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Override 2 —
- * resumability` and `## Override 5` — and every expected action is a literal written here, citing
- * its sentence by heading and quoted substring, never read out of the walker's graph.**
+ * `plugin/instructions/task_plan_writing_instructions_core.md` prescribed — and, for re-entry through
+ * `--entry`, `plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Override 2 —
+ * resumability` and `## Override 5` as rewritten on `fix_plan_loop_resume_from_walker_state` — and
+ * every expected action is a literal written here, citing its sentence by heading and quoted
+ * substring, never read out of the walker's graph.**
  *
- * One behaviour pinned here is stated by the prose only by absence: **re-entry resets the loop
- * counter.** The core opens each loop on a fresh counter — `## Loop`: "`iteration = 0`. Loop:";
- * `## UI-test-plan write loop`: "`iteration` is reset to 0 at the start of this loop" — the counter
- * lives only in the orchestrator's context, and Override 2(a) re-enters the loop ("Then continue the
- * loop normally from that point"). The per-folder review indices, by contrast, continue, because
- * they are read off disk.
+ * **`start` resets the loop counter** and renders its entry with the `initial` prompt — a fresh
+ * write, an **extend**, a **review** of a draft and a **skip** past a loop alike. The core opens
+ * each loop on a fresh counter — `## Loop`: "`iteration = 0`. Loop:"; `## UI-test-plan write loop`:
+ * "`iteration` is reset to 0 at the start of this loop". The per-folder review indices, by contrast,
+ * continue, because they are read off disk. A re-entry that **continues** a saved walk resets
+ * nothing; that is pinned in `cli/test/flow-walker-resume.test.mjs`.
  *
  * Every fixture repository is built under the system temp directory and torn down in process.
  */
@@ -260,8 +261,8 @@ test('(6) re-entry mid-loop restarts the counter and continues the findings fold
     { start: true },
     { outcome: 'returned' },
     { outcome: 'FAIL', review: ['architecture_reviews', 0] },
-    // A resumed session re-enters as Override 2(a) states: "Then continue the loop normally from that
-    // point", with the core's "`iteration = 0`. Loop:".
+    // A `start` issued mid-loop, as **extend** does, opens on a fresh counter — the core's
+    // "`iteration = 0`. Loop:".
     { start: true, entry: 'plan_writer' },
     { outcome: 'returned' },
   ]);
@@ -305,8 +306,9 @@ test('(9) an --entry outside the flow\'s entries is refused and changes no state
   await run(dir, [{ start: true }]);
   const before = readFileSync(walkerStatePath(dir));
 
-  // Override 2 and Override 5 re-enter only at the task-plan loop, the UI-test loop or the hand-off;
-  // a reviewer is never an entry point.
+  // A `start` enters only at a loop's writer, a loop's **first** gate or the hand-off; a draft sent
+  // back for review always starts at its loop's first gate, so `plan_review`, not a first gate, is
+  // refused.
   assertRefused(await walk(dir, ['start', ...flags('--entry', 'plan_review', '--skipped', 'none')]));
   assert.deepEqual(readFileSync(walkerStatePath(dir)), before);
 });
@@ -370,5 +372,6 @@ test('(12) a lib/harness-run-lib.sh older than the walker is refused at start, n
  *   run-mode qa skip ......................................... this (3)
  *   blocker: from a reviewer ................................. flow-walker (8)
  *   a gapped review_<n> series ............................... flow-walker (9)
- *   re-entry mid-loop ........................................ this (6)
+ *   re-entry mid-loop through start .......................... this (6)
+ *   a continued walk: counter, review_<n>, prompt, findings .. cli/test/flow-walker-resume.test.mjs
  */

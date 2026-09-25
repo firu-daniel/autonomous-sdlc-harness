@@ -28,7 +28,7 @@
       "minItems": 1,
       "uniqueItems": true,
       "items": { "$ref": "#/definitions/nodeId" },
-      "description": "Every node a run may be entered or resumed at, start included. A resume names one of these; any other node is not a legal re-entry point."
+      "description": "Every node a start may name as its entry, the graph's own start included. A walk continued from its saved state resumes at its pending node and names none of these; any node not listed here is refused as a start entry."
     },
     "counters": {
       "type": "object",
