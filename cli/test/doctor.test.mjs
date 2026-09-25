@@ -264,7 +264,12 @@ function editJson(dir, relativePath, mutate) {
   writeFileSync(path, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
 }
 
-// Read by the plugin-permissions cases below; a top-level `await` cannot sit inside the suite callback.
+/**
+ * Read by the plugin-permissions cases below, and loaded here because a top-level `await` cannot
+ * sit inside the suite callback. `PLUGIN_KEY` is imported from the compiled CLI for
+ * {@link repoSlug}'s reason: a record seeded under any other key is a record the check correctly
+ * reports nothing about, so it has to be the CLI's own string rather than this file's guess at it.
+ */
 const { MARKETPLACE_NAME, PLUGIN_KEY } = await loadCompiled('generators/projectSettings.js');
 const { PLUGIN_NAME } = await loadCompiled('core/pluginIdentity.js');
 
@@ -4570,10 +4575,6 @@ test('the layer-drift check names the directories no layer covers, and is not gr
 /**
  * The plugin's install root, as the agent runner records it — the directory a `plugins/` subtree
  * under `CLAUDE_CONFIG_DIR` names, and the key it is recorded under.
- *
- * `PLUGIN_KEY` is imported from the compiled CLI for {@link repoSlug}'s reason: a record seeded
- * under any other key is a record the check correctly reports nothing about, so it has to be the
- * CLI's own string rather than this file's guess at it.
  */
 const CLAUDE_PLUGINS_DIR = 'plugins';
 const INSTALLED_PLUGINS_FILE = 'installed_plugins.json';
