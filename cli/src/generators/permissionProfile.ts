@@ -92,7 +92,8 @@
  * ## What this module deliberately does not do
  *
  * - **It touches no filesystem beyond reading its two templates — and, on a forced run, the profile
- *   it is about to replace.** {@link writePermissionProfile} enqueues the rendered profile into the
+ *   it is about to replace; under `init --plugin-root-entries`, the agent runner's plugin records.**
+ *   {@link writePermissionProfile} enqueues the rendered profile into the
  *   command's write plan under the `create-if-absent` contract — the profile is hand-tuned after
  *   generation, and an overwrite silently drops the allow entries an adopter added to close a stall —
  *   and the write itself belongs to the write engine. `--force` is the one flag that suspends that
@@ -103,7 +104,14 @@
  *   outside this checkout, unverified: a run that graded nothing revokes nothing. That is a read and
  *   not a question put to the adopter again: they
  *   were told once, by `doctor`, exactly which lines to paste. Preserving an entry is not generating
- *   one — the open owner decision below is untouched by it.
+ *   one: by default nothing here generates one, and the once-open owner decision below is taken for
+ *   the opt-in `init --plugin-root-entries` only, the default unchanged. Under that switch
+ *   {@link generatedPluginRootEntries} reads the plugin records through {@link resolvedPluginRoots}
+ *   on every run, forced or not, and still never tests whether the profile exists: whether the render
+ *   lands is the write engine's `create-if-absent` answer, which `init` hands back to
+ *   {@link pluginRootEntriesNote}. On a forced run the generated lines are appended before the
+ *   carry-forward, which skips any line already in `allow`, so each line has one producer — the rule
+ *   the browser-fragment section states.
  * - **It adds no `hooks` key.** The plugin ships its own guard hooks, which fire from the plugin,
  *   resolve their own root and append to the adopter's hooks rather than replacing them; writing
  *   them into user settings as well would run each guard twice. The template says so in a comment
@@ -126,9 +134,11 @@
  *   `plugin-permissions` check re-derives the root on every run and prints each missing line — and
  *   {@link QA_TEMPLATE_PATH}'s `_README` carries the entry *form* an adopter adds by hand, which the
  *   `create-if-absent` contract above — and, on the run that suspends it, the carry-forward named
- *   there — is what makes survive every later `init`. Whether `init`
- *   should also *write* those entries is an open owner decision rather than a closed one; nothing
- *   here takes it. Moving the helpers somewhere a rule can name unconditionally — the adopter's own
+ *   there — is what makes survive every later `init`. Whether `init` should also *write* those
+ *   entries was an open owner decision, now taken for `--plugin-root-entries` only, default unchanged:
+ *   inside a remote job the plugin is installed immediately before `init` runs and the profile dies
+ *   with the job, so neither reason above holds there, while both still hold for the default.
+ *   Moving the helpers somewhere a rule can name unconditionally — the adopter's own
  *   `scriptsDir`, which the three wrapper forms already reach — would remove the manual step but
  *   change the invocation form everywhere the shipped instruction corpus calls them, so it belongs
  *   to the item that ships them (`plugin/scripts/README.md`) and not to this module.
@@ -185,8 +195,15 @@ import { isJsonObject, readJsonFile, type JsonObject, type JsonValue } from '../
 import { defaultProjectName, readTemplate, workRoot as resolveWorkRoot, worktreeGlob } from '../core/paths.js';
 import { normalizeRepoDir } from '../core/repoPaths.js';
 import { containsToken, renderTemplate } from '../core/templating.js';
-import type { WritePlan } from '../core/writer.js';
-import { installedPluginsPath, pluginInstallRoot, pluginRuntimeRoot, SCRIPTS_DIRNAME } from '../machine/plugins.js';
+import type { WriteEffect, WritePlan } from '../core/writer.js';
+import {
+  installedPluginsPath,
+  pluginHelperPath,
+  pluginHelperScripts,
+  pluginInstallRoot,
+  pluginRuntimeRoot,
+  SCRIPTS_DIRNAME,
+} from '../machine/plugins.js';
 import { SEARCH_TOOL_PERMISSION } from '../retrieval/server.js';
 import {
   OUTER_LOOP_SCRIPTS,
@@ -429,6 +446,14 @@ export interface RenderProfileOptions {
    * faithful-preview contract).
    */
   readonly dryRun?: boolean;
+  /**
+   * `init --plugin-root-entries`: append the entries `doctor`'s `plugin-permissions` check requires at
+   * every plugin root this machine resolves ({@link generatedPluginRootEntries}). Absent means off,
+   * and an off render reads no plugin record for this purpose.
+   */
+  readonly pluginRootEntries?: boolean;
+  /** Sink for that switch's render-time outcome, which {@link writePermissionProfile} returns. */
+  readonly pluginRootOutcome?: (outcome: PluginRootEntriesOutcome) => void;
   /**
    * Sink for a line the adopter should see. Called rather than printed, so this stays a pure
    * renderer: {@link writePermissionProfile} collects into its result and `init` forwards those to
@@ -740,8 +765,8 @@ function entriesOf(permissions: JsonObject, list: string): readonly string[] {
  *
  * It is also one of the two forms a **plugin-root** entry is written in: `doctor`'s
  * `plugin-permissions` check prints those lines for an operator to paste, and
- * {@link pluginRootEntryTarget} reads one back. Nothing in this generator emits one for a plugin
- * root — the module header's standing decision.
+ * {@link pluginRootEntryTarget} reads one back. This generator emits one for a plugin root only
+ * under `init --plugin-root-entries`, through {@link pluginRootEntries} — the module header's decision.
  */
 export function readRule(absolutePath: string): string {
   return `Read(/${absolutePath}/**)`;
@@ -749,8 +774,8 @@ export function readRule(absolutePath: string): string {
 
 /**
  * A wrapper-script rule, in the unquoted `Bash(bash <path>:*)` form every generated one uses — and
- * the other plugin-root form, for a helper under the plugin's own scripts directory. Same two
- * consumers, and the same standing decision, as {@link readRule}.
+ * the other plugin-root form, for a helper under the plugin's own scripts directory. Same consumers,
+ * and the same decision, as {@link readRule}.
  */
 export function bashScriptRule(absolutePath: string): string {
   return `Bash(${INVOCATION_PREFIX}${absolutePath}:*)`;
@@ -1205,6 +1230,84 @@ function resolvedPluginRoots(repoRoot: string): readonly string[] {
   return [...new Set(roots.filter((root): root is string => root !== undefined).map(normalizedRoot))];
 }
 
+/** One entry a plugin root requires, and which of `doctor`'s two symptoms its absence causes. */
+export interface PluginRootEntry {
+  readonly kind: 'read' | 'helper';
+  readonly rule: string;
+}
+
+/**
+ * The helper-script names graded at every root: the sorted, de-duplicated union of
+ * {@link pluginHelperScripts} over `roots` while `phases.qa` is on, and empty while it is off — the
+ * helpers are that phase's alone. Called by `doctor`'s `plugin-permissions` check and by
+ * {@link generatedPluginRootEntries}, so the two cannot grade different names.
+ */
+export function pluginRootHelpers(roots: readonly string[], qaOn: boolean): readonly string[] {
+  return qaOn ? [...new Set(roots.flatMap((root) => pluginHelperScripts(root)))].sort() : [];
+}
+
+/**
+ * The entries one root requires: {@link readRule} unless it is the install root — reads there were
+ * measured to succeed ungranted (`doctor/checks.ts`, `PLUGIN_PERMISSIONS_CHECK`) — then
+ * {@link bashScriptRule} for each of `helpers`, in that order. The one per-root builder, called by
+ * that check and by {@link generatedPluginRootEntries}.
+ */
+export function pluginRootEntries(
+  root: string,
+  options: { readonly isInstallRoot: boolean; readonly helpers: readonly string[] },
+): readonly PluginRootEntry[] {
+  return [
+    ...(options.isInstallRoot ? [] : [{ kind: 'read' as const, rule: readRule(root) }]),
+    ...options.helpers.map((name) => ({ kind: 'helper' as const, rule: bashScriptRule(pluginHelperPath(root, name)) })),
+  ];
+}
+
+/** What `--plugin-root-entries` did to the rendered profile: nothing asked, entries appended, or no root to name. */
+export type PluginRootEntriesOutcome = 'off' | 'appended' | 'no-root';
+
+/** The switch as a message names it — and as `init`'s option row spells it. */
+export const PLUGIN_ROOT_ENTRIES_FLAG = '--plugin-root-entries';
+
+/**
+ * The entries `doctor`'s `plugin-permissions` check requires at every root {@link resolvedPluginRoots}
+ * returns, built by the same two functions it calls, or `undefined` when no root resolves. An entry
+ * a root path would make unmatchable is warned about and left out rather than handed to
+ * {@link assertRunnable}, which would bill a machine-local path to this CLI.
+ */
+function generatedPluginRootEntries(
+  repoRoot: string,
+  config: HarnessConfig,
+  warn: (message: string) => void,
+): readonly string[] | undefined {
+  const roots = resolvedPluginRoots(repoRoot);
+  if (roots.length === 0) return undefined;
+  const installRoot = pluginInstallRoot(repoRoot);
+  const install = installRoot === undefined ? undefined : normalizedRoot(installRoot);
+  const helpers = pluginRootHelpers(roots, config.phases?.qa === true);
+
+  return roots
+    .flatMap((root) => pluginRootEntries(root, { isInstallRoot: root === install, helpers }))
+    .map(({ rule }) => rule)
+    .filter((rule) => {
+      const forbidden = FORBIDDEN_IN_ENTRY.find(([needle]) => rule.includes(needle));
+      if (forbidden === undefined) return true;
+      warn(
+        `${PLUGIN_ROOT_ENTRIES_FLAG} left out ${JSON.stringify(rule)}: the plugin root it names contains ${forbidden[1]}, which the permission guard matches literally, so the entry would match nothing at run time`,
+      );
+      return false;
+    });
+}
+
+/**
+ * The note `init` reports for `--plugin-root-entries` once the plan is applied: the kept-profile line
+ * when `effect` is `'kept'` and entries were appended; undefined otherwise. `effect` is the write
+ * engine's answer for {@link PROFILE_PATH}, identical under `--dry-run`, so the line is too.
+ */
+export function pluginRootEntriesNote(outcome: PluginRootEntriesOutcome, effect: WriteEffect): string | undefined {
+  if (outcome !== 'appended' || effect !== 'kept') return undefined;
+  return `${PLUGIN_ROOT_ENTRIES_FLAG} had no effect: ${PROFILE_PATH} already exists and is kept under its create-if-absent contract, so the plugin-root entries this run rendered do not reach it. Run \`${DOCTOR_COMMAND}\` for the lines it lacks, or \`init --force ${PLUGIN_ROOT_ENTRIES_FLAG}\` to regenerate it after a .bak`;
+}
+
 /**
  * The `permissions.allow` entries of the profile currently on disk, or **an empty list for every way
  * that can fail** — absent, unreadable, not JSON, not an object, no `permissions`, no `allow`.
@@ -1410,6 +1513,8 @@ export function renderProfile({
   referenceToolchainPath,
   force = false,
   dryRun = false,
+  pluginRootEntries: withPluginRootEntries = false,
+  pluginRootOutcome,
   warn,
   note,
 }: RenderProfileOptions): JsonObject {
@@ -1482,6 +1587,27 @@ export function renderProfile({
     warn: warn ?? ((): void => {}),
   });
 
+  // In the same window, and before the carry-forward, whose `allow` check then skips every line
+  // generated here: one producer per line (module header).
+  let outcome: PluginRootEntriesOutcome = 'off';
+  if (withPluginRootEntries) {
+    const generated = generatedPluginRootEntries(repoRoot, config, warn ?? ((): void => {}));
+    if (generated === undefined) {
+      outcome = 'no-root';
+      (warn ?? ((): void => {}))(
+        `${PLUGIN_ROOT_ENTRIES_FLAG} was given but ${installedPluginsPath()} records no plugin root on this machine, so no plugin-root entry was written: run \`claude plugin install\` for this plugin before init, then run init again`,
+      );
+    } else {
+      outcome = 'appended';
+      appendAllow(profile, generated);
+      appendReadme(
+        profile,
+        `THE PLUGIN-ROOT ENTRIES WERE WRITTEN BY init ${PLUGIN_ROOT_ENTRIES_FLAG}: they name this machine's plugin roots, which carry the plugin version, so they go stale on an upgrade. The switch is for a profile that lives no longer than the install it names - a remote job's.`,
+      );
+    }
+  }
+  pluginRootOutcome?.(outcome);
+
   // In the same window and for the same reason: a carried plugin helper whose basename happens to
   // match a wrapper's would be counted as a fourth form of that wrapper above. Gated on `force`,
   // which is the only run that replaces the file these entries are read out of — an unforced render
@@ -1502,7 +1628,8 @@ export function renderProfile({
 }
 
 /** Everything {@link writePermissionProfile} needs, beyond what {@link renderProfile} takes. */
-export interface PermissionProfileOptions extends Omit<RenderProfileOptions, 'workRoot' | 'warn' | 'note'> {
+export interface PermissionProfileOptions
+  extends Omit<RenderProfileOptions, 'workRoot' | 'warn' | 'note' | 'pluginRootOutcome'> {
   /** The command's write plan; this generator enqueues into it and never touches `fs` itself. */
   readonly plan: WritePlan;
   /**
@@ -1523,6 +1650,8 @@ export interface PermissionProfileResult {
   readonly warnings: readonly string[];
   /** Informational lines, one each, for the reporter's `info`. */
   readonly notes: readonly string[];
+  /** What `--plugin-root-entries` did to the render — the first argument {@link pluginRootEntriesNote} takes. */
+  readonly pluginRootEntries: PluginRootEntriesOutcome;
 }
 
 /**
@@ -1547,9 +1676,11 @@ export function writePermissionProfile({
   referenceToolchainPath,
   force,
   dryRun,
+  pluginRootEntries,
 }: PermissionProfileOptions): PermissionProfileResult {
   const warnings: string[] = [];
   const notes: string[] = [];
+  let outcome: PluginRootEntriesOutcome = 'off';
 
   const profile = renderProfile({
     repoRoot,
@@ -1560,6 +1691,10 @@ export function writePermissionProfile({
     ...(referenceToolchainPath === undefined ? {} : { referenceToolchainPath }),
     ...(force === undefined ? {} : { force }),
     ...(dryRun === undefined ? {} : { dryRun }),
+    ...(pluginRootEntries === undefined ? {} : { pluginRootEntries }),
+    pluginRootOutcome: (value) => {
+      outcome = value;
+    },
     warn: (message) => warnings.push(message),
     note: (message) => notes.push(message),
   });
@@ -1575,5 +1710,6 @@ export function writePermissionProfile({
       `${PROFILE_PATH} is committed, and it is machine-specific: the absolute paths in it are this checkout's, so a copy of this repository somewhere else needs doctor to re-check them and init --force to regenerate them. Select it per run with the agent runner's settings flag; it is never installed as the interactive default.`,
       ...notes,
     ],
+    pluginRootEntries: outcome,
   };
 }

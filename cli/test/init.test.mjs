@@ -8351,3 +8351,85 @@ test('init --force carries the profile\'s resolved-plugin-root entries forward, 
     assert.ok(!stdout.includes(CARRIED_UNVERIFIED), `a run that graded the entries calls the carry unverified:\n${stdout}`);
   });
 });
+
+/** The switch under test, and the fragments of the two lines it adds to the run's report. */
+const PLUGIN_ROOT_ENTRIES = '--plugin-root-entries';
+const KEPT_NO_EFFECT = `${PLUGIN_ROOT_ENTRIES} had no effect`;
+const INSTALL_STEP = 'claude plugin install';
+
+/**
+ * `init --plugin-root-entries`: the entries `doctor`'s `plugin-permissions` check dictates, written
+ * into a profile this run generates — the remote job's route to a profile its own plugin install can
+ * run under. Whether the render lands stays the write engine's `create-if-absent` answer.
+ */
+test('init --plugin-root-entries writes the plugin-root entries doctor dictates into a generated profile', async (t) => {
+  await t.test('a first run writes them, and doctor then grades the profile green with no stray and no missing line', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+
+    await initOk(dir, ['--qa', PLUGIN_ROOT_ENTRIES], machine.env);
+
+    const allow = allowEntries(dir);
+    assert.ok(allow.includes(helperEntry(machine.root)), `the helper entry at the planted root was not written:\n${allow.join('\n')}`);
+    // The planted root is the install root, where doctor requires no read rule: the written set is
+    // exactly the required set, which the graded pass below confirms from doctor's side.
+    assert.ok(!allow.includes(readEntry(machine.root)), 'a read rule doctor does not require at the install root was written');
+    const doctor = await runCli(dir, ['doctor'], machine.env);
+    assert.match(doctor.stdout, PLUGIN_PERMISSIONS_GRADED, `doctor does not grade the written entries green:\n${doctor.stdout}`);
+    assert.ok(!doctor.stdout.includes('dead weight'), `doctor names a stray entry the switch wrote:\n${doctor.stdout}`);
+  });
+
+  await t.test('without the switch no plugin-root entry is written', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+
+    await initOk(dir, ['--qa'], machine.env);
+
+    assert.ok(!allowEntries(dir).includes(helperEntry(machine.root)), 'an unswitched init wrote a plugin-root entry');
+  });
+
+  await t.test('over a kept profile it changes nothing and says so, in a real run and a dry run alike', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+    await initOk(dir, ['--qa'], machine.env);
+    const kept = text(dir, PROFILE_FILE);
+
+    const real = await initOk(dir, [PLUGIN_ROOT_ENTRIES], machine.env);
+    assert.equal(text(dir, PROFILE_FILE), kept, 'the switch changed a profile the write engine keeps');
+    assert.ok(real.stdout.includes(KEPT_NO_EFFECT), `the run does not say the switch had no effect:\n${real.stdout}`);
+
+    const dry = await initOk(dir, [PLUGIN_ROOT_ENTRIES, '--dry-run'], machine.env);
+    assert.equal(text(dir, PROFILE_FILE), kept, 'a dry run changed the profile');
+    assert.ok(dry.stdout.includes(KEPT_NO_EFFECT), `the preview does not say the switch would have no effect:\n${dry.stdout}`);
+  });
+
+  await t.test('with no root recorded it warns, names the install step, and writes the unswitched profile', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest, { record: false });
+    await initOk(dir, ['--qa'], machine.env);
+    const unswitched = text(dir, PROFILE_FILE);
+    await rm(join(dir, PROFILE_FILE));
+
+    const { stdout, stderr } = await initOk(dir, ['--qa', PLUGIN_ROOT_ENTRIES], machine.env);
+
+    assert.ok(stderr.includes(PLUGIN_ROOT_ENTRIES) && stderr.includes(INSTALL_STEP), `no warning names the missing install:\n${stderr}`);
+    assert.equal(text(dir, PROFILE_FILE), unswitched, 'the switch changed a profile it had no root to add to');
+    assert.ok(!stdout.includes(KEPT_NO_EFFECT), `a freshly written profile is reported as kept:\n${stdout}`);
+  });
+
+  await t.test('--force over pasted entries leaves each line exactly once', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+    await initOk(dir, ['--qa'], machine.env);
+    allowInProfile(dir, [helperEntry(machine.root)]);
+
+    await initOk(dir, ['--force', PLUGIN_ROOT_ENTRIES], machine.env);
+
+    const allow = allowEntries(dir);
+    assert.equal(
+      allow.filter((entry) => entry === helperEntry(machine.root)).length,
+      1,
+      `the generated and the carried line were both written:\n${allow.join('\n')}`,
+    );
+  });
+});

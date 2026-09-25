@@ -65,3 +65,9 @@
 - `grep -n -E "existsSync|PROFILE_PATH" cli/src/generators/permissionProfile.ts` shows no new existence test of the profile added by this task: the generator does not predict the `create-if-absent` outcome.
 - `grep -n "open owner decision" cli/src/generators/permissionProfile.ts` shows the amended wording: each hit states the decision is taken for `--plugin-root-entries` only and the default is unchanged.
 - A `phases.qa: true` case: the entries `init --plugin-root-entries` writes equal, as a set, the rules `doctor`'s `plugin-permissions` check requires for the same planted roots (the check passes with no stray and no missing line).
+
+**Deviations from plan:**
+- The flag-spelling constant `PLUGIN_ROOT_ENTRIES_FLAG` lives in `cli/src/generators/permissionProfile.ts` and `init.ts` imports it for its option row. The plan asked for a constant "like its neighbours" in `init.ts`, but the generator's no-root warning and kept note name the flag too, and two constants would give one string two producers.
+- The render-time outcome gets from `renderProfile` to `writePermissionProfile` through a `pluginRootOutcome` sink on `RenderProfileOptions`, which `PermissionProfileOptions` omits the way it omits `warn` and `note`. The plan names only the result field.
+- A generated rule carrying a character in `FORBIDDEN_IN_ENTRY` (from a plugin-root path) is warned about and left out instead of reaching `assertRunnable`, which would exit `EXIT.INTERNAL` over a machine-local path.
+- The `phases.qa: true` set-equality verification rests on the first `init.test.mjs` subtest: the planted root is the install root, so no read rule is required there. It asserts that the helper entry is written, that no read rule is written, and that doctor's graded pass names no stray. No runtime root distinct from the install root is planted.

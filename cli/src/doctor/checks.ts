@@ -146,7 +146,9 @@ import {
   isUnderDirectory,
   namesBrowserTool,
   normalizedRoot,
+  pluginRootEntries,
   pluginRootEntryTarget,
+  pluginRootHelpers,
   PROFILE_PATH,
   readRule,
   renderProfile,
@@ -185,8 +187,6 @@ import { machineConfigDir } from '../machine/paths.js';
 import {
   installedPluginsPath,
   knownMarketplacesPath,
-  pluginHelperPath,
-  pluginHelperScripts,
   pluginInstallRoot,
   pluginRuntimeRoot,
   pluginScriptsDir,
@@ -3697,7 +3697,7 @@ function namesHelperScript(entry: string): boolean {
  * With nothing left to grade — the phase off at a single root — it reports **not graded** and names
  * which, rather than a pass an adopter would read as coverage.
  *
- * The helper names come from **reading `<root>/scripts/`** ({@link pluginHelperScripts}) at each
+ * The helper names come from **reading `<root>/scripts/`** ({@link pluginRootHelpers}) at each
  * graded root and taking the union, never from a list kept here: they are declared once, in the
  * plugin's own `scripts/README.md`, and a copy in this file would be a second declaration that
  * drifts the first time one is added. Nothing here classifies a helper by its call site either —
@@ -3788,7 +3788,7 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
     // complete that is one unreadable file away from a stall.
     const phaseKnown = ctx.config !== undefined;
     const qaOn = ctx.config?.phases?.qa === true;
-    const helpers = qaOn ? [...new Set(roots.flatMap((root) => pluginHelperScripts(root)))].sort() : [];
+    const helpers = pluginRootHelpers(roots, qaOn);
 
     const groups: readonly PluginRootGroup[] = roots.map((root) => ({
       root,
@@ -3799,17 +3799,16 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
         : installRoot === undefined
           ? `the directory this marketplace is sourced from (the only root that resolved: ${installedPluginsPath()} records no install root)`
           : `the one plugin root this machine resolves, recorded in ${installedPluginsPath()}`,
-      required: [
-        // Outside the phase gate, and only where the runtime root is its own directory: reads at the
-        // install root were measured to succeed ungranted, ten at the runtime root to be refused.
-        ...(root === installRoot
-          ? []
-          : [{ rule: readRule(root), symptom: 'improvises in place of a contract file it is refused' }]),
-        ...helpers.map((name) => ({
-          rule: bashScriptRule(pluginHelperPath(root, name)),
-          symptom: 'parks with no error at the first helper script it reaches',
-        })),
-      ],
+      // The builder `init --plugin-root-entries` writes through too, so the two cannot differ. The
+      // read rule is outside the phase gate and absent at the install root: reads there were measured
+      // to succeed ungranted, ten at the runtime root to be refused.
+      required: pluginRootEntries(root, { isInstallRoot: root === installRoot, helpers }).map(({ kind, rule }) => ({
+        rule,
+        symptom:
+          kind === 'read'
+            ? 'improvises in place of a contract file it is refused'
+            : 'parks with no error at the first helper script it reaches',
+      })),
     }));
     const required = groups.flatMap((group) => group.required);
 
