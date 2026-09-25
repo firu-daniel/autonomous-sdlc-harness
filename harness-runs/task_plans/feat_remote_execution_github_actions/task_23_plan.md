@@ -22,3 +22,5 @@
 - `bash scripts/check-command-spelling.sh` (gate 6d) exits 0.
 - For each file, a local record's path is word-for-word unchanged apart from the `<scripts_dir>` row and the fence.
 - `bash scripts/test.sh` exits 0.
+
+**Deviations from plan:** In `branch-resume.md` and `branch-pause.md` the sync runs in step 2, before the candidate set is built as well as before the state check, following Task 22's `branch-answer.md` pattern: syncing only at the state check would leave a remote run that paused or started since the last sync out of the no-argument candidate set. A failed `sync` stops the command when the prefix named that record, and drops the record from the candidates otherwise. `bash scripts/test.sh` exited 1 in the implementing session with 18 gates passed and 2 failed. Neither failure involves this unit's files: gate 6a flagged absolute paths in the gitignored scratch file `harness-runs/scratch/t3-test.log`, and gate 11 failed because the docs-retrieval runtime is not installed. Gate 6d passed, and so did `bash scripts/check-command-spelling.sh` on its own.
