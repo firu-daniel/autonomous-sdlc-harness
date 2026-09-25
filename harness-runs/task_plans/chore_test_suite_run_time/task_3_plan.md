@@ -23,6 +23,12 @@ This task imports those and defines no bound of its own.
 - [ ] The file's long poles (planner-measured under load: *"the plugin-permissions check prints the entries to paste, and never above a warning"* ≈14 s, *"the daemon-path check grades the installed unit, and never above a warning"* ≈14 s, *"the machine-footprint check reports the machine, and never fails or writes"* ≈12 s): for each, check that every `t.test` subtest builds its own fixture and its own machine directories and reads no variable another subtest assigns; where that holds, give the parent `{ concurrency: CASE_CONCURRENCY }`, start the subtests without awaiting each, and `await Promise.all(…)` over them. Re-measure per-case durations after the wrapper and apply the same rule to any other case whose serial duration exceeds half the file's new total. A parent whose subtests share state stays serial and is named, with the shared state, in the header.
 - [ ] Header: add the numbered choice *"Cases run concurrently"*, in this file's own words: the audit above, the bound and `HARNESS_TEST_CONCURRENCY=1`, and the rule a new case must keep — its own fixture, every machine directory its own `mkdtemp` passed through `runCli`'s `env`, no `process.env` write, no timing assertion — or it is placed after the suite closes.
 
+**Deviations from plan:**
+
+- The two hoisted `loadCompiled` lines move unchanged, with one comment line added above them naming why they sit outside the suite, so a later edit does not move them back into the callback.
+- The re-measure found no further case to change: in a `HARNESS_TEST_CONCURRENCY=1` run the slowest case after the three long poles took 4.6 s, below half the new concurrent total (19.1 s).
+- The configured `commands.test` (`bash scripts/test.sh`, which runs `run-gates`) reports gate 11 (docs-retrieval relevance floor) failing because the retrieval runtime is not installed on this host. `cli/test/doctor.test.mjs` is not among that gate's inputs; gate 4 (`npm test`) passes.
+
 **Verification:**
 
 - From `cli/`, `node --check test/doctor.test.mjs` exits 0. Every line `grep -nE "^[^ /*].*\bawait\b" test/doctor.test.mjs` prints has a lower line number than the `concurrentSuite('doctor'` line that `grep -n "concurrentSuite('doctor'" test/doctor.test.mjs` prints.

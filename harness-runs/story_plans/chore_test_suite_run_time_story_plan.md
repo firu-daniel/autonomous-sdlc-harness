@@ -33,7 +33,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/chore_test_
 
 1. [x] **Task 1** — Build each fixture repository by copying a seeded template the test process builds once _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — Add the bounded case-concurrency helper and run `stack-presets.test.mjs`'s cases concurrently _(layer: cli)_ _(points: 15)_
-3. [ ] **Task 3** — Run `doctor.test.mjs`'s cases concurrently under the shared bound _(layer: cli)_ _(points: 10)_
+3. [x] **Task 3** — Run `doctor.test.mjs`'s cases concurrently under the shared bound _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Run `init.test.mjs`'s cases concurrently, keeping its one timing-sensitive case outside the suite _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — Add `scripts/measure-suite.sh`: time `npm test` and `run-gates.sh` at any commit, on this host _(layer: general)_ _(points: 15)_
 6. [ ] **Task 6** — Add the core-restricted container mode to `scripts/measure-suite.sh` (`--cpus <n>`) _(layer: general)_ _(points: 15)_
