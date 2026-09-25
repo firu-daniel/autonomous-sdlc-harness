@@ -41,7 +41,8 @@
  * 4. **One grammar for the destination, and a file that survives being sourced.**
  *    {@link resolvePushDestination} is the only definition of what may be given, and
  *    {@link PUSH_DESTINATION_FORMS} the only sentence describing it, for the reason choice 3 gives
- *    for the precedence. The file is a shell fragment `autonomous-notify.sh` sources under
+ *    for the precedence; {@link UNRECOGNISED_DESTINATION_NOTE}, the line `init`'s re-ask prints,
+ *    is produced here too. The file is a shell fragment `autonomous-notify.sh` sources under
  *    `set -a`, so {@link pushEnvContent} single-quotes a URL outside a conservative character set:
  *    an unquoted `&` or `;` in a query string would break the file or run a command. The grammar
  *    refuses `'`, so single quotes always suffice.
@@ -102,6 +103,14 @@ export const GUIDED_ENDPOINT_EXAMPLE = `${NTFY_PUBLIC_ORIGIN}/<your-topic>`;
  */
 export const PUSH_DESTINATION_FORMS =
   `either an ntfy topic name — install the free ntfy app from the App Store or Play Store, create a topic there and type its name, with no server and no account needed (it is posted to as ${GUIDED_ENDPOINT_EXAMPLE}); the name works like a password, because anyone who knows it can read and send these notifications, so choose one nobody would guess — or the full http:// or https:// URL of any other endpoint that accepts a POST`;
+
+const NOT_REPEATED_CLAUSE = 'it is not repeated here, because a push destination is a credential';
+
+/**
+ * The line `init`'s re-ask prints after an unrecognised answer. It names no form, because the
+ * question it follows interpolates {@link PUSH_DESTINATION_FORMS}, and never quotes the answer.
+ */
+export const UNRECOGNISED_DESTINATION_NOTE = `That answer is not one of the forms asked for, so it was not used; ${NOT_REPEATED_CLAUSE}.`;
 
 /** What a push destination resolved to. `url` is always the full URL to write, never the answer as typed. */
 export type PushDestination =
@@ -324,7 +333,7 @@ export function writeNotifications({
   const destination = resolvePushDestination(pushUrl);
   if (destination.kind === 'unrecognised') {
     warnings.push(
-      `the push destination given is not ${PUSH_DESTINATION_FORMS}, so nothing was written; it is not repeated here, because a push destination is a credential. Re-run with --notifications --push-url ${PUSH_DESTINATION_PLACEHOLDER}, or write ${target} yourself with ${PUSH_URL_KEY} set to a full URL and ${PUSH_CMD_KEY} empty`,
+      `the push destination given is not ${PUSH_DESTINATION_FORMS}, so nothing was written; ${NOT_REPEATED_CLAUSE}. Re-run with --notifications --push-url ${PUSH_DESTINATION_PLACEHOLDER}, or write ${target} yourself with ${PUSH_URL_KEY} set to a full URL and ${PUSH_CMD_KEY} empty`,
     );
     return { written: false, notes, warnings };
   }

@@ -148,6 +148,7 @@ import {
   PUSH_DESTINATION_FORMS,
   PUSH_DESTINATION_PLACEHOLDER,
   resolvePushDestination,
+  UNRECOGNISED_DESTINATION_NOTE,
 } from '../generators/notifications.js';
 import { writeOuterLoopScripts } from '../generators/outerLoopScripts.js';
 import { writePermissionProfile } from '../generators/permissionProfile.js';
@@ -1552,9 +1553,7 @@ function askPushDestination(promptCtx: PromptContext): string | undefined {
       promptCtx,
     );
     if (answer === undefined || resolvePushDestination(answer).kind !== 'unrecognised') return answer;
-    promptCtx.report.info(
-      'That answer is neither an ntfy topic name nor a full http:// or https:// URL, so it was not used. It is not repeated here, because a push destination is a credential.',
-    );
+    promptCtx.report.info(UNRECOGNISED_DESTINATION_NOTE);
   }
   return answer;
 }

@@ -8,7 +8,7 @@ Headline: the layering holds. The destination grammar (`resolvePushDestination`)
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — The terminal re-ask line re-words the accepted destination forms outside their owning module _(layer: cli)_
+1. [x] **Finding 1** — The terminal re-ask line re-words the accepted destination forms outside their owning module _(layer: cli)_
 2. [ ] **Finding 2** — `GUIDED_ENDPOINT_EXAMPLE` stays exported with no importer, and its doc comment claims one _(layer: cli)_
 
 ## Must Fix
