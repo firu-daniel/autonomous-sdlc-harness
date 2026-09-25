@@ -31,7 +31,7 @@
 
 Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/chore_test_suite_run_time/task_<K>_plan.md` file. They are ordered bottom-up in the configured layer order, `cli` then `general`, with the catch-all `general` layer last. No task lands in `plugin`.
 
-1. [ ] **Task 1** — Build each fixture repository by copying a seeded template the test process builds once _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — Build each fixture repository by copying a seeded template the test process builds once _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 2** — Add the bounded case-concurrency helper and run `stack-presets.test.mjs`'s cases concurrently _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Run `doctor.test.mjs`'s cases concurrently under the shared bound _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Run `init.test.mjs`'s cases concurrently, keeping its one timing-sensitive case outside the suite _(layer: cli)_ _(points: 15)_
