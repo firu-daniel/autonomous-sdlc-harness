@@ -242,22 +242,22 @@ Every test gets its **own** fixture repository under the system temp directory, 
 **Run time, measured.** Measured on 2026-09-25 on a 10-core macOS host (Darwin arm64, `os.availableParallelism()` 10), Node v20.19.5, git 2.50.1, one host command each, from the repository root:
 
 ```
-bash scripts/measure-suite.sh --ref fe17b4e2293f --runs 1
+bash scripts/measure-suite.sh --ref fe17b4e2293f --runs 3
 ```
 
 ```
 bash scripts/measure-suite.sh --runs 3
 ```
 
-`fe17b4e2293f` is the `dev` commit before the template-copied fixtures and the concurrent suites. Its column was measured at `a885d631d85b`, a commit on the branch that brought them, whose tree differs from `fe17b4e2293f` only under `harness-runs/`. The after columns were measured at that branch's `4c36164a9759`, whose `cli/` and `scripts/` are the ones the `dev` commit adding `scripts/measure-suite.sh` carries. Neither branch commit survives that branch's squash merge, so every command here names a commit that does, and the after command runs at the checkout's own `HEAD`. Each figure is the script's own `measure-suite:` line rounded to whole seconds:
+`fe17b4e2293f` is the `dev` commit before the template-copied fixtures and the concurrent suites. Both before columns were measured at it, and both after columns at the checkout's own `HEAD`, in the one session the opening clause dates, the after run right after the before run. Each figure is the script's own `measure-suite:` line rounded to whole seconds:
 
 | Where | `npm test` before (`fe17b4e2293f`) | `npm test` after | `run-gates.sh` before (`fe17b4e2293f`) | `run-gates.sh` after |
 |---|---|---|---|---|
-| host, 10 cores | 429 s | 238 s, 365 s, 285 s | 345 s | 260 s, 264 s, 222 s |
+| host, 10 cores | 466 s, 494 s, 376 s | 209 s, 209 s, 217 s | 314 s, 507 s, 337 s | 236 s, 316 s, 331 s |
 | `--cpus 4` | not yet measured | not yet measured | not yet measured | not yet measured |
 | `--cpus 2` | not yet measured | not yet measured | not yet measured | not yet measured |
 
-Read the host row as a range, not a point. The host was shared while it was measured: `uptime` read 1-minute load averages between 31 and 60 while the after runs were in progress, and the before run's own `run-gates.sh` (which contains a whole `npm test`) finished 84 s faster than its `npm test` alone. All three after `npm test` runs exited 0. Every `run-gates.sh` run, before and after, exited 1 on the same single failure, `11 docs-retrieval relevance floor`, and no other. Nothing was lost between the two commits. This command, run from `cli/` at each commit, reported 787 tests passing before and 791 after, with none failing:
+Read the host row as a range, not a point. The host was shared while it was measured: `uptime` read a 1-minute load average of 20.86 just before the before run and 5.66 just before the after run, and the before side's fastest `run-gates.sh` (which contains a whole `npm test`) finished 62 s faster than its fastest `npm test` alone. All three after `npm test` runs exited 0. Every `run-gates.sh` run, before and after, exited 1 on the same single failure, `11 docs-retrieval relevance floor`, and no other. Nothing was lost between the two commits. This command, run from `cli/` at each commit, reported 787 tests passing before and 791 after, with none failing:
 
 ```
 node --test --test-reporter=spec test/

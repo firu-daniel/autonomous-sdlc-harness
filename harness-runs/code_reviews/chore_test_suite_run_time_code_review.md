@@ -30,7 +30,7 @@ What is left: a durable record that names commits the squash merge will drop (Fi
 2. [x] **Finding 4** — Move the `PLUGIN_KEY` import rationale in `doctor.test.mjs` back onto the import _(layer: cli)_
 3. [x] **Finding 5** — Rewrite the copied fixture's origin URL with a replacer function _(layer: cli)_
 4. [x] **Finding 1** — Re-point the gate-4 run-time record and its commands at a commit that survives the squash merge _(layer: general)_
-5. [ ] **Finding 2** — Re-measure before and after in one session with three runs each, and record the load _(layer: general)_
+5. [x] **Finding 2** — Re-measure before and after in one session with three runs each, and record the load _(layer: general)_
 
 ---
 

@@ -34,3 +34,8 @@ Re-measuring also changes where every figure was measured. Finding 1's explanato
 - `git grep -n "a885d631d85b\|4c36164a9759" -- docs` prints nothing.
 - The date, Node version and git version in the opening clause match the output of the first step.
 - `bash scripts/run-gates.sh` prints no failure other than gate 11.
+
+**Deviations from plan:**
+
+- A bare `git --version` was refused by the permission profile. The git version was read from the `measure-suite: git --version: git version 2.50.1 (Apple Git-155)` line that both measurement runs print, which executes the same command.
+- The new before figures still show the inversion (fastest before `run-gates.sh` 314 s against fastest before `npm test` 376 s), so the clause was kept and restated with 62 s rather than dropped.
