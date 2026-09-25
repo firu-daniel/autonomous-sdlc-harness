@@ -16,7 +16,7 @@
  *    reads `harness.config.json` at run time, so a workflow frozen with a configured value would go
  *    wrong the moment the key changed. The version is the exception because it is the pin the job
  *    installs the plugin and runs `npx autonomous-sdlc-harness@<version>` against, and it is read
- *    through `retrieval/runtime.ts` → `ownManifestString`, the one reader of this package's manifest.
+ *    through `core/paths.ts` → `ownManifestString`, the one reader of this package's manifest.
  * 2. **`assertNoneSurvive` is on for `harness-run.yml`.** The one substituted value is a version
  *    string, which has no business carrying `{{…}}`; one that did would ship a workflow pinned to
  *    nothing. The template's GitHub expressions are all written `${{ ` with a space, so the token
@@ -31,7 +31,7 @@
 import { join } from 'node:path';
 
 import { remoteExecutionApplies, type HarnessConfig } from '../config/model.js';
-import { readTemplate } from '../core/paths.js';
+import { ownManifestString, readTemplate } from '../core/paths.js';
 import { renderTemplate } from '../core/templating.js';
 import type { WritePlan } from '../core/writer.js';
 import {
@@ -41,7 +41,6 @@ import {
   WORKFLOW_RUN_PATH,
   WORKFLOW_TEMPLATE_DIR,
 } from '../remote/githubActions.js';
-import { ownManifestString } from '../retrieval/runtime.js';
 
 /** Everything {@link writeGithubWorkflows} needs. */
 export interface GithubWorkflowsOptions {

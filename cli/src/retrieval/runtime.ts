@@ -35,7 +35,7 @@ import { dirname, join } from 'node:path';
 
 import { HarnessError, internal } from '../core/errors.js';
 import { isJsonObject, readJsonFile } from '../core/json.js';
-import { packageRoot } from '../core/paths.js';
+import { ownManifest, ownManifestString, packageRoot } from '../core/paths.js';
 import { machineCacheDir } from '../machine/paths.js';
 
 /** The directory under `machineCacheDir()` every retrieval artifact lives in. */
@@ -61,21 +61,6 @@ export function retrievalRuntimeDir(): string {
 /** `<machineCacheDir()>/retrieval/models` — the model weights, shared by every repository and worktree. */
 export function retrievalModelCacheDir(): string {
   return join(machineCacheDir(), RETRIEVAL_CACHE_DIRNAME, RETRIEVAL_MODELS_DIRNAME);
-}
-
-/** This package's own manifest, which a packaging fault alone can make unreadable. */
-function ownManifest(): { [key: string]: unknown } {
-  const manifestPath = join(packageRoot(), 'package.json');
-  const manifest = readJsonFile(manifestPath);
-  if (!isJsonObject(manifest)) throw internal(`this CLI's own manifest could not be read at ${manifestPath}`);
-  return manifest;
-}
-
-/** A string field of this package's own manifest. */
-export function ownManifestString(key: 'name' | 'version'): string {
-  const value = ownManifest()[key];
-  if (typeof value !== 'string' || value === '') throw internal(`this CLI's own manifest carries no ${key}`);
-  return value;
 }
 
 /**

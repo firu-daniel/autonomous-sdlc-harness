@@ -11,7 +11,7 @@ Headline: the layering holds. The configuration key lands in all four places, sc
 1. [x] **Finding 1** — Declare the workflow template's mirror of the retrieval cache path in its owning headers _(layer: cli)_
 2. [x] **Finding 3** — Correct `remote/githubActions.ts`'s mirror list, which names the watcher _(layer: cli)_
 3. [x] **Finding 4** — Update the `agentInvocable` doc comment now that the guard carries `remote-run.sh` _(layer: cli)_
-4. [ ] **Finding 2** — Move this package's manifest reader out of `retrieval/` into `core/` _(layer: cli)_
+4. [x] **Finding 2** — Move this package's manifest reader out of `retrieval/` into `core/` _(layer: cli)_
 
 ## Must Fix
 

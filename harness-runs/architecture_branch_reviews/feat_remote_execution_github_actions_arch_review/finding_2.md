@@ -21,3 +21,9 @@ With two areas needing it, `retrieval/` and `generators/`, the manifest reader's
 3. In `cli/src/commands/docs.ts`, import `ownManifestString` from `../core/paths.js`, and `retrievalModelCacheDir` from `../retrieval/runtime.js` as before.
 4. In `cli/src/generators/githubWorkflows.ts`, import `ownManifestString` from `../core/paths.js`, where `readTemplate` already comes from, and remove the `../retrieval/runtime.js` import. Update header choice 1 to name `core/paths.ts` → `ownManifestString`.
 5. Run a grep to confirm that no `ownManifestString` import from `retrieval/runtime` remains. Then run `commands.typecheck` and `commands.test`. `cli/test/retrieval-loading.test.mjs` keeps guarding that non-retrieval verbs load no peer.
+
+**Deviations from plan:**
+- `ownManifest()` is exported from `core/paths.ts`, not kept private: `retrieval/runtime.ts` → `retrievalPeers` calls it directly, so the retrieval module imports both `ownManifest` and `ownManifestString`. No import in `runtime.ts` became unused (`internal`, `isJsonObject`, `readJsonFile`, `packageRoot` all keep other callers).
+- The site list missed a fourth importer, `cli/src/retrieval/setup.ts`, which took `ownManifestString` from `./runtime.js`; it now takes it from `../core/paths.js`.
+- `core/paths.ts`'s module header now names the manifest reader among what the module owns.
+- `commands.test` failed on two gates that this change does not touch. Gate 11 (docs-retrieval relevance floor) fails because the retrieval runtime is not installed on this machine, and the gitignored earlier log `harness-runs/scratch/t3-test.log` already holds the same error. Gate 6a (no machine paths) fails on the absolute paths inside that same gitignored log. Gate 4 (`npm test`, which includes `cli/test/retrieval-loading.test.mjs`) passed.

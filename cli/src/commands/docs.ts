@@ -17,6 +17,7 @@
 import { requireConfig } from '../config/io.js';
 import { EXIT, HarnessError } from '../core/errors.js';
 import { resolveRepoRoot } from '../core/git.js';
+import { ownManifestString } from '../core/paths.js';
 import {
   DEFAULT_RESULTS,
   MAX_RESULTS,
@@ -33,7 +34,7 @@ import {
   RETRIEVAL_STUB_ENV,
   stubModelsSelected,
 } from '../retrieval/models.js';
-import { ownManifestString, retrievalModelCacheDir } from '../retrieval/runtime.js';
+import { retrievalModelCacheDir } from '../retrieval/runtime.js';
 import { serveDocs } from '../retrieval/server.js';
 import { openRetrieval } from '../retrieval/session.js';
 import type { CommandContext, Subcommand } from './registry.js';
