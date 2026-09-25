@@ -25,3 +25,12 @@
 - Every check id, flag and path named matches the source (`grep -n "id: 'remote-" cli/src/doctor/checks.ts`, `grep -n "check-github\|plugin-root-entries" cli/src/commands`).
 - Re-run the story index's derivation entries 2 and 7 and confirm `docs/cli.md`'s hits are the edited sentences.
 - Commands an adopter runs sit in fenced blocks, one per line.
+
+**Deviations from plan:**
+
+- §7's opening said both options "neither moves the exit status"; `--check-github` enables `remote-github`, which fails (`cli/src/doctor/checks.ts` → `REMOTE_GITHUB_CHECK`), so the opening now says the first two never move it and `--check-github` can.
+- §5's `DENY_SCRIPT_BASENAMES` sentence also names `remote-run.sh` — register row 12 is reached by derivation entry 3 as well as entry 2, and Task 21 added the basename to the guard.
+- §7 gained one severity bullet for the two checks, beside the other severity bullets, and a sentence on the `daemon-path` bullet saying it grades `gh` while `execution.target` is `github-actions`. The Depends list names both facts; the Work list did not ask for them.
+- `--check-registry`'s "the one of the two `--dry-run` does not suppress" became "`--dry-run` does not suppress it", because `--check-github` is not suppressed either (`cli/src/commands/doctor.ts` header).
+- The `--check-github` paragraph names the other two options rather than saying "the two options above", so derivation entry 7 no longer matches it.
+- `bash scripts/test.sh` exits 1 on two gates unrelated to this diff: 6a matches the ignored `harness-runs/scratch/t3-test.log` from an earlier task, and 11 needs the retrieval runtime, which is not installed on this machine.
