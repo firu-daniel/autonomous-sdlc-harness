@@ -34,3 +34,10 @@ This task imports those and defines no bound of its own.
 - The file passes with `HARNESS_TEST_CONCURRENCY=1` in its environment.
 - The relocated case passes in each of three consecutive full `npm test` runs from the repository root, all three green.
 - `grep -c "assert\." cli/test/init.test.mjs` returns the same number before and after — the case moved; none of its assertions did.
+
+**Deviations from plan:**
+
+- The plan says `loadCompiled` is defined above the first case. It is not: it was declared between the `--no-commit` cases and the banner cases. It is hoisted with its doc comment, together with the `claudeContext` / `writer` destructurings that followed it. Without the move, the seven hoisted `await`s would still work at run time, because function declarations hoist, but they would call a function that sits inside the suite's block scope.
+- The long doc comment above `READ_MANIFESTS` also documents `readManifestNames`, so it stays on `readManifestNames`. Only the `const` line moved. The other hoisted lines moved together with their attached doc comments.
+- The per-case re-measure found no case above half the new total. The longest serial case is about 4.9 s and the new file total is about 37 s. So no parent gets subtest concurrency, and the header names none.
+- Evidence: in one of five full-suite runs (the second `bash scripts/test.sh`), gate 4 reported `# fail 2` of 791. The run-gates excerpt cut off the failing case names. Four later `npm test` runs and one more `bash scripts/test.sh` run were all green. I could not identify those two failures, so no claim is made that they came from this file.
