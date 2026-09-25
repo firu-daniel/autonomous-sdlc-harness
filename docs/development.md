@@ -66,10 +66,61 @@ The negative case is worth stating because it works mechanically and is still wr
 
 ## 3. Manifest facts a contributor must not rediscover
 
-Five measured behaviours and one shipped contract, each of which costs a round if it is met by surprise:
+Six measured behaviours and one shipped contract, each of which costs a round if it is met by surprise:
 
 - **`hooks/hooks.json` needs the `{"hooks": { … }}` wrapper.** A bare event map — `{"PreToolUse": [ … ]}` — fails validation with `hooks: Invalid input: expected record, received undefined`. The event names go one level down, inside `hooks`.
 - **Plugin hooks append to an adopter's own hooks; they do not override them.** A hook declared by this plugin composes with whatever the adopter has in their own settings, so the CLI never needs to write guard hooks into user settings to make them take effect. Related and easy to get backwards: `${CLAUDE_PLUGIN_ROOT}` **expands** inside a hook `command` string declared here, and **does not** expand in a settings-file-defined hook — which is the reason the guards live in `hooks.json` rather than in generated settings.
+- **The token sits inside double quotes together with the path it prefixes: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/<guard>.sh"`.** Measured against `claude` **2.1.282** on 2026-09-25. The unquoted form, `bash ${CLAUDE_PLUGIN_ROOT}/hooks/<guard>.sh`, was validated from a copy of `plugin/` at `<tmp>/plugin` with that `hooks.json` restored:
+
+  ```
+  claude plugin validate --strict <tmp>/plugin
+  ```
+
+  It exited 1 with six warnings, one per guard, and `--strict` turned them into the failure of gate `1a`:
+
+  ```
+  Validating plugin manifest: <tmp>/plugin/.claude-plugin/plugin.json
+
+  Validating hooks: <tmp>/plugin/hooks/hooks.json
+
+  ⚠ Found 6 warnings:
+
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/autonomous-protected-branch-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/git-commit-branch-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/git-rewrite-branch-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/autonomous-script-allowlist-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/allow-safe-compounds.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/allow-qa-credentials-read.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+
+  ✘ Validation failed (--strict treats warnings as errors)
+  ```
+
+  With the quoted form, `claude plugin validate --strict plugin` exits 0 and prints, with the checkout root written as `<checkout>`:
+
+  ```
+  Validating plugin manifest: <checkout>/plugin/.claude-plugin/plugin.json
+
+  ✔ Validation passed
+  ```
+
+  **Shell form was kept over exec form.** Quoting changes only word boundaries, it is correct whether the runtime substitutes the token or the shell expands it, and it needs no field beyond the `matcher` / `type` / `command` set `plugin/hooks/README.md` allows; exec form adds `args`. What exec form would change was read, not run: from the hooks documentation the CLI's own schema tip links to (`/hooks#exec-form-and-shell-form`, read 2026-09-25), the CLI changelog, and the hook runner inside the 2.1.282 binary:
+  - **Invocation.** With `args` present, `command` is resolved on `PATH` and spawned with `args` as its argument vector and no shell; without it, the string goes to `sh -c` on macOS and Linux (the documentation).
+  - **Stdin, exit status and stdout.** The runner writes the hook payload to the child's stdin, and reads its stdout and exit status, on one code path after either spawn (the binary). No exec-form hook was run to confirm it.
+  - **Versions.** `args` was added in 2.1.139 (changelog: *"Added hook `args: string[]` field (exec form)"*). What an earlier `claude` does with a hook entry carrying `args` was not established.
+
+  **A plugin loaded from a path containing a space still refuses what the guard exists to refuse.** A copy of `plugin/` at `<tmp>/harness plugin copy/plugin` was loaded into a `claude -p` session run from `<fixture>`, a throwaway repository on `main` with a `harness.config.json` and a branch `feat_x`. The installed plugin was switched off for that session, so the session's `init` record listed the copy as the only `autonomous-sdlc-harness` plugin (`"source":"autonomous-sdlc-harness@inline"`):
+
+  ```
+  claude -p --plugin-dir "<tmp>/harness plugin copy/plugin" --settings '{"enabledPlugins":{"autonomous-sdlc-harness@autonomous-sdlc-harness":false}}' --permission-mode default --allowedTools 'Bash(git merge:*)' --output-format stream-json --verbose --include-hook-events '<prompt: run git merge feat_x and nothing else>'
+  ```
+
+  Ten `PreToolUse` hooks started on `git merge feat_x`. One answered `deny`, and the tool result was:
+
+  ```
+  PreToolUse:Bash hook error: Blocked: push/merge/rebase while HEAD is on protected branch 'main' (protected set: main). The autonomous flow never operates on a protected branch.
+  ```
+
+  `main` did not move. The same session without `--plugin-dir` started four `PreToolUse` hooks, none of which returned a decision, so the six extra hooks and the `deny` came from the spaced-path copy.
 - **A `permissions.allow` entry was not able to pre-approve a command whose script path is written `${CLAUDE_PLUGIN_ROOT}/scripts/<name>.sh`.** Measured against `claude` **2.1.227**, on a session that could **not** be isolated from the measuring machine's own hooks — read the hook caveat that follows the runs below before treating this as a property of `claude` itself. The runs used a throwaway fixture outside this tree — `<scratch>/plugin-root/scripts/probe.sh`, two lines, printing `PROBE OK` — and settings files differing only in their `permissions.allow` list. Each run was `env CLAUDE_PLUGIN_ROOT=<scratch>/plugin-root claude -p --permission-mode default --settings <scratch>/<name>.json '<prompt>'`, the prompt instructing one verbatim Bash command and nothing else:
   - `allow: ["Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/:*)"]`, command `bash ${CLAUDE_PLUGIN_ROOT}/scripts/probe.sh` — **blocked; the script never ran.** On its own this attributes nothing: the entry is a directory prefix, and the by-product below records that form missing even as a literal path, so this run and the next are consistent with the entry form alone. The attribution is the fourth run's.
   - `allow: []`, same command — **blocked.** The entry bought nothing.
@@ -133,7 +184,7 @@ claude plugin validate --strict plugin
 claude plugin validate --strict .
 ```
 
-Both must report `Validation passed` with zero warnings. The first checks the plugin manifest, its hooks file and its components; the second checks the marketplace manifest and the entry it declares.
+Both must report `Validation passed` with zero warnings. The first checks the plugin manifest, its hooks file and its components; the second checks the marketplace manifest and the entry it declares. Only the first grades the command strings in `hooks/hooks.json`: on `claude` 2.1.282, `claude plugin validate --strict .` prints only `Validating marketplace manifest: …` and `✔ Validation passed`, both with the unquoted `hooks.json` of §3 and with the quoted one.
 
 **Gate 2 — CLI build and run.** From the repository root:
 
@@ -163,14 +214,20 @@ npm unlink                    # from cli/, removes the global link again
 
 The middle line must print the version and exit 0. Measured on 2026-08-26 against `0.1.0`: it printed `0.1.0`. `npm link` writes outside this checkout — a global link and a `node_modules` symlink — so the third line is part of the leg rather than cleanup a reader may skip.
 
-**Gate 3 — configuration schema.** From the repository root:
+**Gate 3 — configuration and flow-graph schemas.** From the repository root:
 
 ```
 npm run validate:config
 npm run validate:config:negative
+npm run validate:flow-graph
+npm run validate:flow-graph:negative
+bash scripts/check-flow-graph.sh
+bash scripts/check-flow-graph.sh --negatives
 ```
 
 The first validates the worked example against the schema. The second asserts the inverse case once per fixture, one chained assertion for each document `schemas/negative/` wires into it: `ajv test … --invalid` passes only when a fixture is read *and* rejected, so a green run means **every** wired fixture was still refused — not merely that something exited non-zero — and each assertion prints the keyword path that rejected its own fixture, naming the constraint that fixture proves. A red one means either the schema started accepting a fixture or a fixture could not be loaded, and the message says which: `<file> failed test` and exit 1 for the first, `Cannot find data file …` and exit 2 for the second. Neither red case prints a keyword path — do not go looking for one.
+
+The last four lines cover the flow graph, `cli/templates/scripts/flows/task_plan_writing.graph.json`. `npm run validate:flow-graph` validates that graph and every check fixture against `schemas/flow-graph.schema.json`; `npm run validate:flow-graph:negative` asserts, with the same `ajv test … --invalid` form as above, that each schema negative is read and rejected. `bash scripts/check-flow-graph.sh` runs the checks the schema cannot express against the graph and exits 1 with one stderr line per finding; `--negatives` runs them against each check fixture and exits 1 when a fixture passes every check **or** fails only on another check's id, and when a check has no fixture. The check ids are that script's header block `THE CONTRACT` and are not restated here. The two fixture families live apart on purpose: the schema negatives are the `flow-graph-schema-*.json` files in `schemas/negative/`, which the schema rejects; the check fixtures are in `schemas/flow-graph-check/`, schema-valid by design and rejected by the checker, one check each. The checker reads the plugin documents it compares against at run time rather than copying any of them: the closed directive set in `plugin/instructions/run_mode_instructions.md`, the task-engine template in `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3 Templates`, and the planning core's `## Setup (once per session)` table and cap sentences.
 
 **Gate 4 — `init` against a throwaway fixture.** From the repository root:
 
@@ -198,11 +255,11 @@ It **exits 0** against a freshly wired repository **that has a remote**, warning
 **Gate 6 — self-containment.** Nothing in this tree may name a location on the machine that wrote it, and no generator template may have been committed into the adopter's own dot-namespace. Run this **before committing, on the machine you are committing from**. From the tree root:
 
 ```
-grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist
+grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git | grep -v '^\./\.git:[0-9][0-9]*:'
 find . -name '.claude' -type d -not -path './examples/notes-app/.claude' -not -path './.claude'
 ```
 
-Those two must print nothing — and this is the one gate read from its **output** rather than its exit status, because `grep` exits 1 precisely when it finds nothing, which is the passing case here.
+Those two must print nothing — and this is the one gate read from its **output** rather than its exit status, because `grep` exits 1 precisely when it finds nothing, which is the passing case here — and why the first command may carry a pipe despite §5's opening rule: its anchored `grep -v` drops only the line of the root `.git`, which in a linked worktree is a one-line `gitdir:` pointer **file** naming `<main checkout>` that `--exclude-dir=.git` does not skip, so a nested `.git` file, or any file quoting a `gitdir:` line, is still printed.
 
 `$HOME` is inside double quotes and so is expanded by the shell: the first command searches for the home path of **the user running it**, which is why it is a pre-commit self-check rather than an audit of the tree. Run against a clean clone by anyone else it passes unconditionally, because another author's home path is not theirs — it says nothing about what is committed. To sweep a tree you did not write, widen it to the general shapes, `grep -rnE '/(Users|home)/[a-z]' . --exclude-dir=node_modules --exclude-dir=dist`, and read the hits by eye: that form has legitimate matches — the fictional `/Users/me` and `/home/ada` paths in `docs/watcher.md`, `cli/test/daemon.test.mjs` and `cli/src/daemon/units.ts` — so it is not a print-nothing gate.
 
@@ -279,9 +336,9 @@ Every rung above the schema default is silent here, so `init` writes `main` into
 node cli/dist/cli.js init --cwd <scratch-gitless> --qa
 ```
 
-Four questions, in this order: create the repository, which driver the interactive test phase should run, whether to run the analysis in this repository's first session, and whether to set up push notifications — the endpoint asked for inside that last one's yes. The analysis question is put where its answer is needed, before anything is written: it is the input to the generated `.claude/CLAUDE.md`'s setup-pending block. Answer the first with a word that is neither yes nor no *before* answering `y`: it is put a second time, and the re-ask is reachable no other way. Then type a driver name that is **not** the bracketed default; then `n` to the analysis, whose bracketed default is **yes**, so `n` is the answer that exercises the declined path; then `y`, and an endpoint.
+Four questions, in this order: create the repository, which driver the interactive test phase should run, whether to run the analysis in this repository's first session, and whether to set up push notifications — the endpoint asked for inside that last one's yes. The analysis question is put where its answer is needed, before anything is written: it is the input to the generated `.claude/CLAUDE.md`'s setup-pending block. Answer the first with a word that is neither yes nor no *before* answering `y`: it is put a second time, and the re-ask is reachable no other way. Then type a driver name that is **not** the bracketed default; then `n` to the analysis, whose bracketed default is **yes**, so `n` is the answer that exercises the declined path; then `y`. To the destination question, first answer `not a destination`: the question is put again, and the line before it does not print the typed value back. Then answer with a bare ntfy topic name. This is the only place the destination re-ask and the typed-topic path are exercised, because the subprocess suite hands `init` a pipe.
 
-Each question is put once, the first twice for the re-ask, and the run **exits 0** having recorded what was typed rather than what it would have defaulted to: `harness.config.json` carries the driver that was typed, `${XDG_CONFIG_HOME:-$HOME/.config}/autonomous-sdlc-harness/push.env` exists at `0600` inside a `0700` directory and holds `HARNESS_PUSH_URL`, and the endpoint appears nowhere in what the run itself prints — your own typing echoing back is the terminal, not the run. On a **first** `init` into an empty scratch directory the declined answer leaves `.claude/CLAUDE.md` carrying the setup-pending block in its declined wording — the sections are yours to write by hand, the command still fills them if you change your mind, **and the block can be deleted by hand once those sections are written**, which is the decliner's only route out of a block that otherwise loads in every session — where an accepted answer leaves the accepted wording instead; the wired tree is the same either way. Then, from a second empty scratch directory:
+Each question is put once, the first twice for the re-ask and the destination twice for its own, and the run **exits 0** having recorded what was typed rather than what it would have defaulted to: `harness.config.json` carries the driver that was typed, `${XDG_CONFIG_HOME:-$HOME/.config}/autonomous-sdlc-harness/push.env` exists at `0600` inside a `0700` directory and holds `HARNESS_PUSH_URL=https://ntfy.sh/<the topic>`, and the topic appears nowhere in what the run itself prints — your own typing echoing back is the terminal, not the run. On a **first** `init` into an empty scratch directory the declined answer leaves `.claude/CLAUDE.md` carrying the setup-pending block in its declined wording — the sections are yours to write by hand, the command still fills them if you change your mind, **and the block can be deleted by hand once those sections are written**, which is the decliner's only route out of a block that otherwise loads in every session — where an accepted answer leaves the accepted wording instead; the wired tree is the same either way. Then, from a second empty scratch directory:
 
 ```
 node cli/dist/cli.js init --cwd <scratch-2> --qa --git-init --non-interactive

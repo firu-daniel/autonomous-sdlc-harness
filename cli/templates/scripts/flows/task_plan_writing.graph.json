@@ -1,0 +1,192 @@
+{
+  "formatVersion": 1,
+  "flow": "task_plan_writing",
+  "description": "The routing of ${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_core.md as data: the task-plan loop, the UI-test-plan loop and convergence, with the values the walker resolves (counters, path templates, heartbeats, findings folders, skip gates, cap summaries). The dispatch blocks each agent receives are not here; they stay in that core. Copied verbatim into the adopter's scripts directory, never rendered.",
+  "start": "plan_writer",
+  "entries": ["plan_writer", "business_parity_review", "ui_writer", "ui_review", "convergence"],
+  "counters": {
+    "iteration": { "cap": 5 }
+  },
+  "paths": {
+    "story_index": "{state_dir}/story_plans/{branch}_story_plan.md",
+    "ui_test_index": "{state_dir}/ui_test_plans/{branch}_ui_test_plan.md"
+  },
+  "reports": ["business_parity_review", "architecture_review", "plan_review", "ui_test"],
+  "nodes": {
+    "plan_writer": {
+      "kind": "dispatch",
+      "agent": "task-plan-writer",
+      "heartbeat": "[plan-write · iter {iteration}] → task-plan-writer",
+      "prompts": ["initial", "revision"],
+      "outcomes": {
+        "returned": { "to": "business_parity_review" },
+        "questions": { "binding": "<ask>", "resume": "plan_writer" },
+        "error": { "binding": "<escalate>", "reason": "error" },
+        "blocker": { "binding": "<escalate>", "reason": "blocker" }
+      }
+    },
+    "business_parity_review": {
+      "kind": "dispatch",
+      "agent": "business-parity-reviewer",
+      "heartbeat": "[plan-write · parity · iter {iteration}] → business-parity-reviewer",
+      "findingsFolder": "{state_dir}/business_parity_reviews/{branch}/",
+      "skip": [
+        {
+          "construct": "passedByExclusion",
+          "runModeId": "parity",
+          "to": "architecture_review",
+          "report": { "business_parity_review": "passed-by-exclusion" }
+        },
+        {
+          "construct": "skipped",
+          "phase": "parity",
+          "to": "architecture_review",
+          "report": { "business_parity_review": "skipped" }
+        }
+      ],
+      "outcomes": {
+        "PASS": {
+          "to": "architecture_review",
+          "report": { "business_parity_review": "passed" }
+        },
+        "FAIL": {
+          "to": "plan_writer",
+          "increment": "iteration",
+          "prompt": "revision",
+          "onCap": {
+            "binding": "<escalate>",
+            "reason": "cap",
+            "summary": "the plan loop reached its {cap}-revision cap; the business-parity gate was open when it fired",
+            "roundCounts": ["business_parity_review", "architecture_review", "plan_review"],
+            "evidence": "story_index"
+          }
+        },
+        "error": { "binding": "<escalate>", "reason": "error" },
+        "blocker": { "binding": "<escalate>", "reason": "blocker" }
+      }
+    },
+    "architecture_review": {
+      "kind": "dispatch",
+      "agent": "architecture-reviewer",
+      "heartbeat": "[plan-write · arch · iter {iteration}] → architecture-reviewer",
+      "findingsFolder": "{state_dir}/architecture_reviews/{branch}/",
+      "skip": [
+        {
+          "construct": "passedByExclusion",
+          "runModeId": "architecture",
+          "to": "plan_review",
+          "report": { "architecture_review": "passed-by-exclusion" }
+        }
+      ],
+      "outcomes": {
+        "PASS": {
+          "to": "plan_review",
+          "report": { "architecture_review": "passed" }
+        },
+        "FAIL": {
+          "to": "plan_writer",
+          "increment": "iteration",
+          "prompt": "revision",
+          "onCap": {
+            "binding": "<escalate>",
+            "reason": "cap",
+            "summary": "the plan loop reached its {cap}-revision cap; the architecture gate was open when it fired",
+            "roundCounts": ["business_parity_review", "architecture_review", "plan_review"],
+            "evidence": "story_index"
+          }
+        },
+        "error": { "binding": "<escalate>", "reason": "error" },
+        "blocker": { "binding": "<escalate>", "reason": "blocker" }
+      }
+    },
+    "plan_review": {
+      "kind": "dispatch",
+      "agent": "task-plan-reviewer",
+      "heartbeat": "[plan-write · iter {iteration}] → task-plan-reviewer",
+      "findingsFolder": "{state_dir}/task_plan_reviews/{branch}/",
+      "outcomes": {
+        "PASS": {
+          "to": "ui_writer",
+          "reset": "iteration",
+          "ledger": "P1",
+          "report": { "plan_review": "passed" }
+        },
+        "FAIL": {
+          "to": "plan_writer",
+          "increment": "iteration",
+          "prompt": "revision",
+          "onCap": {
+            "binding": "<escalate>",
+            "reason": "cap",
+            "summary": "the plan loop reached its {cap}-revision cap; the plan-review gate was open when it fired",
+            "roundCounts": ["business_parity_review", "architecture_review", "plan_review"],
+            "evidence": "story_index"
+          }
+        },
+        "error": { "binding": "<escalate>", "reason": "error" },
+        "blocker": { "binding": "<escalate>", "reason": "blocker" }
+      }
+    },
+    "ui_writer": {
+      "kind": "dispatch",
+      "agent": "ui-tests-plan-writer",
+      "heartbeat": "[ui-test-write · iter {iteration}] → ui-tests-plan-writer",
+      "prompts": ["initial", "revision"],
+      "skip": [
+        {
+          "construct": "skipped",
+          "phase": "qa",
+          "to": "convergence",
+          "report": { "ui_test": "qa-phase-off" }
+        },
+        {
+          "construct": "passedByExclusion",
+          "runModeId": "qa",
+          "to": "convergence",
+          "report": { "ui_test": "run-mode-skipped" }
+        }
+      ],
+      "outcomes": {
+        "returned": { "to": "ui_review" },
+        "no_ui": {
+          "to": "convergence",
+          "ledger": "P2",
+          "report": { "ui_test": "no_ui" }
+        },
+        "questions": { "binding": "<ask>", "resume": "ui_writer" },
+        "error": { "binding": "<escalate>", "reason": "error" },
+        "blocker": { "binding": "<escalate>", "reason": "blocker" }
+      }
+    },
+    "ui_review": {
+      "kind": "dispatch",
+      "agent": "ui-tests-plan-reviewer",
+      "heartbeat": "[ui-test-write · iter {iteration}] → ui-tests-plan-reviewer",
+      "findingsFolder": "{state_dir}/ui_test_plan_reviews/{branch}/",
+      "outcomes": {
+        "PASS": {
+          "to": "convergence",
+          "ledger": "P2",
+          "report": { "ui_test": "passed" }
+        },
+        "FAIL": {
+          "to": "ui_writer",
+          "increment": "iteration",
+          "prompt": "revision",
+          "onCap": {
+            "binding": "<escalate>",
+            "reason": "cap",
+            "summary": "{cap} UI-test-plan-review iterations did not converge",
+            "evidence": "ui_test_index"
+          }
+        },
+        "error": { "binding": "<escalate>", "reason": "error" },
+        "blocker": { "binding": "<escalate>", "reason": "blocker" }
+      }
+    },
+    "convergence": {
+      "kind": "terminal",
+      "binding": "<terminal_handoff>"
+    }
+  }
+}

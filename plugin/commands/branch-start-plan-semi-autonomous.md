@@ -11,6 +11,7 @@ The tokens below are not ordinary **path placeholders** (`<branch>`, `<N>`, whic
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in. This file names `flow-walker.sh` and `flows/task_plan_writing.graph.json` as the owners of the planning loop's routing and caps, and invokes neither. |
 | `<parity_vocabulary>` / `<reference_impl>` | config value | `parity.referenceName` / `parity.referenceImplPath` — the name of the reference implementation this project is kept in parity with, and the path to it. Read **only** when `phases.parity` is `true`. |
 
 ---
@@ -35,7 +36,7 @@ You are the **orchestrator** for this phase. You do not draft the plan and you d
 
 2. **Confirm the task prompt exists** at `<state_dir>/task_prompts/<branch>_task_prompt.md`, **and establish its run mode**. If missing, stop and tell the user. Having confirmed it exists, run `grep -nE '^#+ *Run mode' <state_dir>/task_prompts/<branch>_task_prompt.md`. **No hit → this run has no run mode**: carry `none` into the loop below, emit `📌 Run mode: none` at the disclosure site, and do not open `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md`. **A hit →** read `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` and follow it; it owns everything else, and none of it is restated here.
 
-3. **Read `${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_semi_autonomous.md`** and follow it. That file is this flow's **fork**: it carries the mode-specific binding values — including `<terminal_handoff>`, the "Present to user" hand-off and its approval gate — and runs the shared core by reference. **The canonical loop — Setup, the safety contract, writer/reviewer dispatch, the iteration caps, clarification handling and the convergence facts — is `task_plan_writing_instructions_core.md`.** Enter through the fork; do not duplicate or reinterpret either here.
+3. **Read `${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_semi_autonomous.md`** and follow it. That file is this flow's **fork**: it carries the mode-specific binding values — including `<terminal_handoff>`, the "Present to user" hand-off and its approval gate — and runs the shared core by reference. **The loop's routing and its iteration caps are `<scripts_dir>/flow-walker.sh` over `<scripts_dir>/flows/task_plan_writing.graph.json`; Setup, the safety contract, the dispatch blocks, clarification handling and the convergence facts are `task_plan_writing_instructions_core.md`.** Enter through the fork; do not duplicate or reinterpret either here.
 
 ## Note
 
