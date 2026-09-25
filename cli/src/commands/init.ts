@@ -142,6 +142,7 @@ import {
   type AnalyzeOffer,
 } from '../generators/claudeContext.js';
 import { pointHooksPath, writeGitHooks } from '../generators/githooks.js';
+import { writeGithubWorkflows } from '../generators/githubWorkflows.js';
 import { writeHarnessConfig, type AppDirSource, type HarnessConfigFlags } from '../generators/harnessConfig.js';
 import {
   writeNotifications,
@@ -180,6 +181,15 @@ import {
   type WrittenWrapper,
 } from '../generators/scripts.js';
 import { writeStateDir } from '../generators/stateDir.js';
+import {
+  API_KEY_SECRET,
+  GIT_TOKEN_SECRET,
+  OAUTH_TOKEN_SECRET,
+  PUSH_URL_SECRET,
+  RUNNER_VARIABLE,
+  WORKFLOW_RESUME_PATH,
+  WORKFLOW_RUN_PATH,
+} from '../remote/githubActions.js';
 import { setUpRetrieval } from '../retrieval/setup.js';
 import type { CommandContext, Subcommand } from './registry.js';
 
@@ -236,6 +246,9 @@ const DAEMON_INSTALL_COMMAND = `${CLI} daemon install`;
  * `browserWiringApplies` holds (`doctor/checks.ts`'s browser-wiring check, `commands/doctor.ts`).
  */
 const DOCTOR_CHECK_REGISTRY_COMMAND = `${DOCTOR_COMMAND} --check-registry`;
+
+/** The online check of GitHub-side setup, named last in the remote-execution block ({@link reportGithubSteps}). */
+const DOCTOR_CHECK_GITHUB_COMMAND = `${DOCTOR_COMMAND} --check-github`;
 
 /**
  * How `.mcp.json` launches those servers, as the sentence names it.
@@ -2272,6 +2285,10 @@ async function run(ctx: CommandContext): Promise<number> {
   const outerLoop = writeOuterLoopScripts({ repoRoot, config: effective, plan });
   notes.push(...outerLoop.notes);
 
+  // After the scripts, which the workflows run, and before the permission profile. Enqueues nothing
+  // unless `execution.target` is `github-actions` (`generators/githubWorkflows.ts`).
+  const workflows = writeGithubWorkflows({ repoRoot, config: effective, plan });
+
   const state = writeStateDir({ repoRoot, config: effective, plan });
   notes.push(...state.notes);
 
@@ -2410,8 +2427,50 @@ async function run(ctx: CommandContext): Promise<number> {
     // read, never re-spelled here (`config/model.ts`).
     browserWiringApplies(effective),
   );
+  if (workflows.written) reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun);
 
   return EXIT.OK;
+}
+
+/**
+ * The GitHub-side steps only the adopter can take, printed when this run enqueued the workflows.
+ *
+ * Commands stand on their own lines so each can be pasted. The push comes first because GitHub
+ * dispatches a `workflow_dispatch` workflow only once it exists on the default branch.
+ */
+function reportGithubSteps(ctx: CommandContext, defaultBranch: string, dryRun: boolean): void {
+  const wrote = dryRun ? 'would write' : 'wrote';
+  const command = (line: string): void => ctx.report.info(`   ${line}`);
+
+  ctx.report.step('remote execution');
+  ctx.report.info(
+    `1. This run ${wrote} ${WORKFLOW_RUN_PATH} and ${WORKFLOW_RESUME_PATH}. Commit and push both to GitHub's default branch (assumed \`${defaultBranch}\` below) — a workflow_dispatch workflow can be dispatched only once it exists there:`,
+  );
+  command(`git add ${WORKFLOW_RUN_PATH} ${WORKFLOW_RESUME_PATH}`);
+  command('git commit -m "chore: add the harness workflows"');
+  command(`git push origin ${defaultBranch}`);
+  ctx.report.info('');
+  ctx.report.info(
+    `2. Set one credential secret: ${OAUTH_TOKEN_SECRET} for subscription billing, or ${API_KEY_SECRET} for API billing. When both are set, billing follows ${API_KEY_SECRET}:`,
+  );
+  command(`gh secret set ${OAUTH_TOKEN_SECRET}`);
+  command(`gh secret set ${API_KEY_SECRET}`);
+  ctx.report.info('');
+  ctx.report.info(
+    `3. Optionally set ${PUSH_URL_SECRET} to receive push notifications from the job, and ${GIT_TOKEN_SECRET} — a personal or App token — so the job's pushes trigger your own CI, which pushes made with the job's built-in token never do:`,
+  );
+  command(`gh secret set ${PUSH_URL_SECRET}`);
+  command(`gh secret set ${GIT_TOKEN_SECRET}`);
+  ctx.report.info('');
+  ctx.report.info(`4. Optionally set the repository variable ${RUNNER_VARIABLE} to run on a self-hosted runner label instead of ubuntu-latest:`);
+  command(`gh variable set ${RUNNER_VARIABLE} --body <runner-label>`);
+  ctx.report.info('');
+  ctx.report.info('5. Then verify the GitHub side:');
+  command(DOCTOR_CHECK_GITHUB_COMMAND);
+  ctx.report.info('');
+  ctx.report.info(
+    'Runner choices, costs, billing and security: the harness documentation, docs/remote-execution.md — Remote execution on GitHub Actions.',
+  );
 }
 
 /**

@@ -8433,3 +8433,76 @@ test('init --plugin-root-entries writes the plugin-root entries doctor dictates 
     );
   });
 });
+
+/** The two workflows remote execution runs on, as the adopter's repository names them. */
+const WORKFLOW_RUN_FILE = '.github/workflows/harness-run.yml';
+const WORKFLOW_RESUME_FILE = '.github/workflows/harness-resume.yml';
+
+/** The shipped templates they are written from, read straight out of the package. */
+const WORKFLOW_TEMPLATES = join(PACKAGE_ROOT, 'templates', 'github', 'workflows');
+
+/** A `{{token}}` as the renderer defines one; a GitHub `${{ expr }}` never matches it. */
+const RENDER_TOKEN = /\{\{[A-Za-z][A-Za-z0-9_]*\}\}/;
+
+/** Turn remote execution on in a wired fixture, through the command an adopter uses. */
+async function enableRemoteExecution(dir) {
+  const result = await runCli(dir, ['config', 'set', 'execution.target', 'github-actions']);
+  assert.equal(result.status, 0, `config set exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+}
+
+test('the GitHub workflows arrive with execution.target github-actions, and only with it', async (t) => {
+  await t.test('with no execution key init writes no .github path and names none', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { stdout } = await initOk(dir);
+
+    assert.ok(!(await exists(dir, '.github')), 'init wrote a .github path with remote execution off');
+    assert.ok(!stdout.includes('.github'), `the action log names a .github path:\n${stdout}`);
+    assert.ok(!stdout.includes('--check-github'), `the report carries the remote-execution block:\n${stdout}`);
+  });
+
+  await t.test('turned on, init writes both files from their templates and reports the GitHub-side steps', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    await initOk(dir);
+    await enableRemoteExecution(dir);
+
+    const { stdout } = await initOk(dir);
+
+    const version = readJson(join(PACKAGE_ROOT, 'package.json')).version;
+    const runTemplate = readFileSync(join(WORKFLOW_TEMPLATES, 'harness-run.yml'), 'utf8');
+    assert.ok(runTemplate.includes('{{cliVersion}}'), 'the run template no longer carries {{cliVersion}}');
+    assert.equal(text(dir, WORKFLOW_RUN_FILE), runTemplate.replaceAll('{{cliVersion}}', version));
+    assert.ok(!RENDER_TOKEN.test(text(dir, WORKFLOW_RUN_FILE)), 'a {{token}} survived into harness-run.yml');
+    assert.equal(
+      text(dir, WORKFLOW_RESUME_FILE),
+      readFileSync(join(WORKFLOW_TEMPLATES, 'harness-resume.yml'), 'utf8'),
+      'harness-resume.yml is not a verbatim copy of its template',
+    );
+
+    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'doctor --check-github']) {
+      assert.ok(stdout.includes(name), `the closing report does not name ${name}:\n${stdout}`);
+    }
+  });
+
+  await t.test('a second init changes nothing, keeps an edited workflow, and --force replaces it after a .bak', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    await initOk(dir);
+    await enableRemoteExecution(dir);
+    await initOk(dir);
+    const rendered = text(dir, WORKFLOW_RUN_FILE);
+
+    const before = await snapshotTree(dir);
+    await initOk(dir);
+    assert.deepEqual(await snapshotTree(dir), before, 'a second init changed the tree');
+
+    appendFileSync(join(dir, WORKFLOW_RUN_FILE), '# tuned by hand\n', 'utf8');
+    const edited = text(dir, WORKFLOW_RUN_FILE);
+    await initOk(dir);
+    assert.equal(text(dir, WORKFLOW_RUN_FILE), edited, 'a plain re-run rewrote an edited workflow');
+    assert.ok(!(await exists(dir, `${WORKFLOW_RUN_FILE}.bak`)), 'a plain re-run wrote a .bak');
+
+    await initOk(dir, ['--force']);
+    assert.equal(text(dir, `${WORKFLOW_RUN_FILE}.bak`), edited, 'the .bak does not hold the edited workflow');
+    assert.equal(text(dir, WORKFLOW_RUN_FILE), rendered, '--force did not regenerate the workflow');
+  });
+});

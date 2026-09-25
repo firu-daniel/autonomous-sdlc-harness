@@ -60,7 +60,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_remote_execution_github_act
 14. [x] **Task 14** — Add `init --plugin-root-entries` for a freshly generated profile _(layer: cli)_ _(points: 15)_
 15. [x] **Task 15** — Write the `harness-run.yml` workflow template, with its self-pause point measured _(layer: cli)_ _(points: 20)_
 16. [x] **Task 16** — Write the `harness-resume.yml` poller template and register the `github/` template directory _(layer: cli)_ _(points: 10)_
-17. [ ] **Task 17** — Generate the two workflows from `init` when remote execution is on _(layer: cli)_ _(points: 18)_
+17. [x] **Task 17** — Generate the two workflows from `init` when remote execution is on _(layer: cli)_ _(points: 18)_
 18. [ ] **Task 18** — Add `doctor`'s offline `remote-execution` check _(layer: cli)_ _(points: 16)_
 19. [ ] **Task 19** — Add `doctor --check-github` and its `remote-github` check _(layer: cli)_ _(points: 18)_
 20. [ ] **Task 20** — Name remote execution and `remote-run.sh` in `cli/README.md` _(layer: cli)_ _(points: 5)_

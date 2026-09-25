@@ -30,3 +30,8 @@
 - `bash scripts/typecheck.sh` and `bash scripts/test.sh` exit 0.
 - Every pre-existing `init` case passes unchanged — the evidence that a repository with the key absent gets exactly today's files.
 - `grep -rn "'.github" cli/src` finds the directory only through Task 2's constants.
+
+**Deviations from plan:**
+
+- The report block names `docs/remote-execution.md` by path plus the title "Remote execution on GitHub Actions": that file does not exist yet (Tasks 28–29 write it) and no plan fixes its title, so Task 28 should either use that title or update the last line of `cli/src/commands/init.ts` → `reportGithubSteps`.
+- `bash scripts/test.sh` exited 1 in this session on two gates outside this task's change: 6a (machine paths found in the untracked, gitignored `harness-runs/scratch/t3-test.log`, which this task did not write) and 11 (the retrieval runtime is not installed on this machine). Gate 4 (`npm test`, every `init` case including the new ones) passed; `bash scripts/typecheck.sh` passed.
