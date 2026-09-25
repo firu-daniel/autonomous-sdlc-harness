@@ -15,7 +15,9 @@
  * `hr_execution_target` is the family's one reader of `execution.target`: the schema default `local`
  * when the key is absent, the value when it is in the enum, and exit 2 — never a guess — when it is
  * not. The run registry's primitives are shared by every script that touches the registry, so one
- * write followed by one read must round-trip through a fresh `{"runs": {…}}` file.
+ * write followed by one read must round-trip through a fresh `{"runs": {…}}` file. The remote state
+ * bundle is the format every remote-execution consumer shares, so each file must land where the
+ * format says after a write and a restore, and an unrecognised bundle must change nothing.
  *
  * ## Four non-obvious choices, and where each comes from
  *
@@ -56,7 +58,9 @@ import {
   appendFileSync,
   constants as fsConstants,
   mkdirSync,
+  readdirSync,
   readFileSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -327,6 +331,161 @@ test('hr_registry_set then hr_registry_get round-trips a value through a fresh r
   assert.equal(record.runs['feat/x'].status, 'running');
   assert.equal(record.runs['feat/x'].branch, 'feat/x', 'the write did not stamp `branch`');
   assert.equal(typeof record.runs['feat/x'].updated_at, 'string', 'the write did not stamp `updated_at`');
+});
+
+/** Source the written library, then run `script` with the remaining values as `$1`, `$2`, …. */
+function libCall(dir, script, args = [], env = {}) {
+  return runBash(dir, ['-c', `. "$1"; shift; ${script}`, '_', join(dir, LIB_PATH), ...args], env);
+}
+
+/** A slashed branch, so a path built with `${branch%/*}` or a basename would show. */
+const REMOTE_BRANCH = 'feat/x';
+
+/** Every path under `<state_dir>` the bundle format names, spelled out as the contract. */
+const REMOTE = {
+  registry: `${STATE_DIR}/autonomous_logs/registry.json`,
+  status: `${STATE_DIR}/autonomous_logs/remote_status.json`,
+  superseded: `${STATE_DIR}/autonomous_logs/remote_superseded/`,
+  clarify: `${STATE_DIR}/clarifications/${REMOTE_BRANCH}`,
+  pause: `${STATE_DIR}/PAUSE_PROGRESS.md`,
+  walker: `${STATE_DIR}/.flow_walker_state`,
+  log: `${STATE_DIR}/autonomous_logs/${REMOTE_BRANCH}.log`,
+};
+
+/** Plant `relativePath` under `dir` with `content`, creating its parents. */
+function plant(dir, relativePath, content) {
+  mkdirSync(join(dir, relativePath, '..'), { recursive: true });
+  writeFileSync(join(dir, relativePath), content);
+}
+
+test('the remote state bundle carries a run through a job restore and a mirror restore, and places no run log', async (t) => {
+  const source = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(source);
+
+  const registry = join(source, REMOTE.registry);
+  for (const [key, value] of [['status', 'paused'], ['engine', 'task'], ['pause_reason', 'usage'], ['park_loop_cycles', '2']]) {
+    const set = await libCall(source, 'hr_registry_set "$@"', [registry, REMOTE_BRANCH, key, value]);
+    assert.equal(set.status, 0, `hr_registry_set ${key} exited ${set.status}: ${set.stderr}`);
+  }
+  plant(source, `${REMOTE.clarify}/question_1.md`, 'q1\n');
+  plant(source, `${REMOTE.clarify}/answer_1.md`, 'a1\n');
+  plant(source, `${REMOTE.clarify}/answered/question_0.md`, 'q0\n');
+  plant(source, REMOTE.pause, 'pause note\n');
+  plant(source, REMOTE.walker, 'step=3\n');
+  plant(source, REMOTE.log, 'run log\n');
+
+  const provenance = {
+    GITHUB_RUN_ID: '42',
+    GITHUB_SERVER_URL: 'https://github.example',
+    GITHUB_REPOSITORY: 'owner/repo',
+    HARNESS_INPUT_CHAIN: '3',
+  };
+  const writeStatus = () =>
+    libCall(source, 'hr_remote_status_write "$@"', [registry, REMOTE_BRANCH, join(source, REMOTE.status), 'continue', 'one\nline'], provenance);
+
+  const first = await writeStatus();
+  assert.equal(first.status, 0, `hr_remote_status_write exited ${first.status}: ${first.stderr}`);
+  assert.equal(first.stdout, '', 'hr_remote_status_write echoed a value to stdout');
+  const firstInode = statSync(join(source, REMOTE.status)).ino;
+  const second = await writeStatus();
+  assert.equal(second.status, 0, `the second hr_remote_status_write exited ${second.status}: ${second.stderr}`);
+  // A rename installs a new inode; an in-place rewrite would keep the old one, and a reader could see it half-written.
+  assert.notEqual(statSync(join(source, REMOTE.status)).ino, firstInode, 'status.json was rewritten in place, not replaced by rename');
+  assert.deepEqual(
+    readdirSync(join(source, REMOTE.status, '..')).filter((name) => name.includes('.tmp.')),
+    [],
+    'hr_remote_status_write left a temp file beside status.json',
+  );
+
+  const status = JSON.parse(text(source, REMOTE.status));
+  assert.equal(status.schema, '1');
+  assert.equal(status.branch, REMOTE_BRANCH);
+  assert.equal(status.status, 'paused');
+  assert.equal(status.pause_reason, 'usage');
+  assert.equal(status.park_loop_cycles, '2');
+  assert.equal(status.chain, '3', '`chain` is not the job\'s own HARNESS_INPUT_CHAIN');
+  assert.equal(status.run_id, '42');
+  assert.equal(status.run_url, 'https://github.example/owner/repo/actions/runs/42');
+  assert.equal(status.detail, 'one line', '`detail` is not one line');
+  for (const [key, value] of Object.entries(status)) assert.equal(typeof value, 'string', `status.json key ${key} is not a string`);
+
+  const decision = await libCall(source, 'hr_remote_status_get "$@"', [join(source, REMOTE.status), 'decision']);
+  assert.equal(decision.status, 0, `hr_remote_status_get exited ${decision.status}: ${decision.stderr}`);
+  assert.equal(decision.stdout, 'continue\n');
+  const absent = await libCall(source, 'hr_remote_status_get "$@"', [join(source, REMOTE.status), 'no_such_key']);
+  assert.equal(absent.status, 1, `hr_remote_status_get exited ${absent.status} for an absent key`);
+
+  const bundle = join(source, 'bundle-out');
+  const written = await libCall(source, 'hr_remote_bundle_write "$@"', [source, REMOTE_BRANCH, registry, bundle]);
+  assert.equal(written.status, 0, `hr_remote_bundle_write exited ${written.status}: ${written.stderr}`);
+  assert.deepEqual(
+    Object.keys(await snapshotTree(bundle)),
+    [
+      'PAUSE_PROGRESS.md',
+      'clarifications',
+      'clarifications/feat',
+      'clarifications/feat/x',
+      'clarifications/feat/x/answer_1.md',
+      'clarifications/feat/x/answered',
+      'clarifications/feat/x/answered/question_0.md',
+      'clarifications/feat/x/question_1.md',
+      'flow_walker_state',
+      'run.log',
+      'status.json',
+    ],
+    'the bundle does not hold exactly the format of record',
+  );
+  assert.equal(readFileSync(join(bundle, 'status.json'), 'utf8'), text(source, REMOTE.status), 'the bundle did not carry the job\'s own status');
+
+  const job = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(job);
+  const intoJob = await libCall(job, 'hr_remote_bundle_restore "$@"', [bundle, job, REMOTE_BRANCH, 'job']);
+  assert.equal(intoJob.status, 0, `the job restore exited ${intoJob.status}: ${intoJob.stderr}`);
+  assert.equal(text(job, `${REMOTE.clarify}/answer_1.md`), 'a1\n');
+  assert.equal(text(job, `${REMOTE.clarify}/answered/question_0.md`), 'q0\n');
+  assert.equal(text(job, REMOTE.pause), 'pause note\n');
+  assert.equal(text(job, REMOTE.walker), 'step=3\n', 'the job restore did not put the walker state back under its dotted name');
+  assert.equal(text(job, REMOTE.status), text(source, REMOTE.status), 'the job restore did not place status.json');
+  const jobTree = Object.keys(await snapshotTree(job));
+  assert.deepEqual(jobTree.filter((key) => key.endsWith('.log')), [], 'the job restore placed the run log');
+
+  const mirror = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(mirror);
+  plant(mirror, `${REMOTE.clarify}/answer_9.md`, 'stale\n');
+  const intoMirror = await libCall(mirror, 'hr_remote_bundle_restore "$@"', [bundle, mirror, REMOTE_BRANCH, 'mirror']);
+  assert.equal(intoMirror.status, 0, `the mirror restore exited ${intoMirror.status}: ${intoMirror.stderr}`);
+  assert.equal(text(mirror, `${REMOTE.clarify}/question_1.md`), 'q1\n');
+  assert.equal(text(mirror, REMOTE.pause), 'pause note\n');
+  const mirrorTree = Object.keys(await snapshotTree(mirror));
+  assert.ok(!mirrorTree.includes(`${REMOTE.clarify}/answer_9.md`), 'a stale answer survived the mirror restore');
+  assert.equal(
+    mirrorTree.filter((key) => key.startsWith(REMOTE.superseded) && key.endsWith('/answer_9.md')).length,
+    1,
+    'the stale answer was not moved aside under remote_superseded/',
+  );
+  assert.ok(!mirrorTree.includes(REMOTE.walker), 'the mirror restore placed the walker state');
+  assert.ok(!mirrorTree.includes(REMOTE.status), 'the mirror restore placed status.json');
+  assert.deepEqual(mirrorTree.filter((key) => key.endsWith('.log')), [], 'the mirror restore placed the run log');
+});
+
+test('a bundle whose status.json carries an unrecognised schema restores nothing and exits 2', async (t) => {
+  const bundle = await fixtureFor(t, {
+    git: false,
+    files: {
+      'status.json': { schema: '9', branch: REMOTE_BRANCH },
+      'PAUSE_PROGRESS.md': 'pause note\n',
+      'flow_walker_state': 'step=3\n',
+      [`clarifications/${REMOTE_BRANCH}/answer_1.md`]: 'a1\n',
+    },
+  });
+  const target = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(target);
+  plant(target, `${REMOTE.clarify}/answer_9.md`, 'local\n');
+
+  const before = await snapshotTree(target);
+  const restored = await libCall(target, 'hr_remote_bundle_restore "$@"', [bundle, target, REMOTE_BRANCH, 'job']);
+  assert.equal(restored.status, 2, `the restore exited ${restored.status} for an unrecognised schema: ${restored.stderr}`);
+  assert.deepEqual(await snapshotTree(target), before, 'a restore of an unrecognised bundle changed the tree');
 });
 
 test('a second init leaves an edited outer-loop script exactly as the adopter left it', async (t) => {
