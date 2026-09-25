@@ -180,8 +180,10 @@
 # script's own location, and the MAIN checkout — the first working copy git lists
 # — is the one that holds the inbox, the logs, the registry and the kill switch,
 # so every run is tailable and stoppable from ONE place while executing in its own
-# sibling working copy. Every run-artifact path under it comes from the configured
-# `stateDir` through lib/harness-run-lib.sh; none of them is spelled here.
+# sibling working copy — except under `job`, where the main checkout and the
+# working copy are the same directory, the job's own checkout (see JOB MODE).
+# Every run-artifact path under it comes from the configured `stateDir` through
+# lib/harness-run-lib.sh; none of them is spelled here.
 #
 # IT REFUSES TO START ON A CONFIGURATION IT CANNOT READ. A watcher that guessed
 # would watch a directory nobody drops files into, log where nobody tails, and
@@ -237,11 +239,43 @@
 # halts one run.
 #
 # WHO RUNS IT. The service manager (`daemon install` renders the unit), or a
-# person by hand for a single `tick` or a `status`. NEVER a dispatched agent:
+# person by hand for a single `tick` or a `status` — and one other runner, the
+# remote workflow's harness step, invoking `job` with HARNESS_JOB_MODE=1 (see
+# JOB MODE). NEVER a dispatched agent:
 # its basename is on the script-allowlist guard's `DENY_SCRIPT_BASENAMES`, so
 # that guard withholds the permit rather than granting one, and the generated
 # permission profile emits no rule for it either — an agent that could start runs
 # could start runs about itself.
+#
+# JOB MODE. `job <branch> <engine> <resume>` runs EXACTLY ONE run inside a
+# GitHub Actions job's own checkout, through the same spawn_engine launch line,
+# stream tee, classify_run_exit, park-loop guard, stall watchdog and usage gate
+# a local run gets — the job does for itself what this daemon does locally.
+#
+#   * REFUSED UNLESS HARNESS_JOB_MODE=1. The stall watchdog's `git reset --hard
+#     HEAD` acts on the checkout the job runs in, and job mode treats that
+#     checkout as both the main one and the working copy; run by accident in a
+#     developer's checkout it would discard work. Only the workflow sets it.
+#   * OFF: the inbox pass, the cleanup sweep, the live-log window, and the
+#     machine lane (both halves). The lane is local-only, and on a hosted runner
+#     its directory would not outlive the job. They are forced off AFTER the
+#     override channel and the tunable defaults, so no environment value turns
+#     them back on.
+#   * THE REGISTRY is the checkout's gitignored one, ephemeral by construction;
+#     what must cross a job boundary rides in the remote state bundle's
+#     `status.json`, restored to `autonomous_logs/remote_status.json` before the
+#     job starts. Park-loop cycles, the resume baseline and the stall-restart
+#     count are seeded from it; the auto-resume count only when
+#     HARNESS_INPUT_CHAIN is above 0, because a chain of 0 is a user's own
+#     dispatch; `chain` never — every write records this job's own input.
+#   * IT WRITES `remote_status.json` TWICE: decision `continue` before the spawn,
+#     so a job killed mid-run leaves a bundle that says continue, and decision
+#     `stop` once the run reaches a terminal status. It then prints
+#     `job: <status> <decision>` and exits 0.
+#   * NOTIFICATIONS name the user's next action instead of a runner path: a
+#     parked run's `/autonomous-sdlc-harness:branch-answer <branch>`, a park
+#     loop's `/autonomous-sdlc-harness:branch-status <branch>`. Their titles carry
+#     HARNESS_REMOTE_SLUG when set.
 #
 # Subcommands:
 #   autonomous-watcher.sh            # the watch loop (the default; the unit uses this)
@@ -251,13 +285,23 @@
 #   autonomous-watcher.sh usage      # print the usage assessment and policy, then exit.
 #                                    # A READER: it pauses nothing, resumes nothing
 #                                    # and neither writes nor removes the hold marker
+#   HARNESS_JOB_MODE=1 autonomous-watcher.sh job <branch> <engine> <resume>
+#                                    # one run in a remote job's checkout (JOB MODE);
+#                                    # <engine> task|user_review|docs,
+#                                    # <resume> none|answer|pause. Also reads
+#                                    # HARNESS_REMOTE_SLUG and HARNESS_INPUT_CHAIN
 #
 # Exit map a caller can switch on:
 #
-#   0  the subcommand ran (the watch loop only returns this way on a signal)
+#   0  the subcommand ran (the watch loop only returns this way on a signal).
+#      For `job`: the run reached a state the job stops in, and
+#      <state_dir>/autonomous_logs/remote_status.json says which, with its decision
 #   1  refused to start: the library, the repository or the configuration could
 #      not be resolved. Nothing was created and no run was touched
-#   2  usage error: an unrecognized subcommand
+#   2  usage error: an unrecognized subcommand; for `job`, also bad arguments,
+#      HARNESS_JOB_MODE not 1, HARNESS_INPUT_CHAIN neither empty nor a
+#      non-negative integer, or a <branch> hr_branch_is_protected answers
+#      protected or unresolvable for. Nothing is launched
 #
 # REPRO — reproduce any decision by hand, against a throwaway fixture:
 #
@@ -482,6 +526,24 @@
 #                    USAGE_LANE_LOCK_ENABLED=0 turns the lock half off again.
 #                    The record half above is driven independently with
 #                    USAGE_LANE_STATE_ENABLED
+#   a job         j="$d/sdlc-harness/autonomous_logs/remote_status.json"
+#                 HARNESS_AGENT_CLI="$s" POLL_INTERVAL_SECS=1 bash \
+#                   "$d/scripts/autonomous-watcher.sh" job feat_x task none
+#                 -> exit 2 and no stub launch; again with HARNESS_JOB_MODE=1 ->
+#                    `job: completed stop` as the last line, exit 0, "$j" with
+#                    status `completed` and decision `stop`, NO `launched`
+#                    notification, and nothing under $XDG_STATE_HOME. `trunk` as
+#                    the branch, or HARNESS_INPUT_CHAIN=x -> exit 2, no launch. A
+#                    stub writing an unanswered question_1.md -> `job: parked
+#                    stop`, the notification naming
+#                    /autonomous-sdlc-harness:branch-answer feat_x. Write
+#                    answer_1.md and run it with `answer` -> the prompt names
+#                    answer_1.md. Hand-write "$j" with "chain":"5" and
+#                    "auto_resumes":"2" (and "schema":"1", "branch":"feat_x"):
+#                    under HARNESS_INPUT_CHAIN=2 the rewritten "$j" says chain "2"
+#                    and auto_resumes "2"; under HARNESS_INPUT_CHAIN=0,
+#                    auto_resumes "0". Kill the job's process group mid-run -> "$j"
+#                    stays at `running` / `continue`
 #   unresolvable  printf 'x' > "$d/harness.config.json"
 #                 -> one line on stderr, exit 1, nothing under "$d/sdlc-harness"
 
@@ -554,7 +616,10 @@ fi
 
 # -----------------------------------------------------------------------------
 # Anchors. All central state lives in the MAIN checkout; a run executes in a
-# sibling working copy. Resolving both from this script's location is what makes
+# sibling working copy — under `job`, the main checkout and the working copy are
+# the same directory, the job's own checkout, which the first working copy
+# `git worktree list` reports already yields (see JOB MODE in the header).
+# Resolving both from this script's location is what makes
 # the answer identical whether the daemon, a person or a test starts it.
 # -----------------------------------------------------------------------------
 MAIN_REPO="$(hr_main_repo "$SCRIPT_DIR")" || MAIN_REPO=""
@@ -853,6 +918,22 @@ fi
 LAST_USAGE_CHECK=0
 USAGE_WARNING_STREAK=0
 
+# JOB MODE (see the header). Assigned HERE, after the override channel and every
+# tunable default, so neither the file nor an inherited value can turn a
+# local-only facility back on inside a job. JOB_MODE is STATE, assigned plainly:
+# classify_run_exit reads it to word its details for a user with no runner path.
+JOB_MODE=0
+if [ "${1:-}" = "job" ]; then
+  JOB_MODE=1
+  AUTO_TAIL_TERMINAL=0
+  USAGE_LANE_STATE_ENABLED=0
+  USAGE_LANE_LOCK_ENABLED=0
+  if [ -n "${HARNESS_REMOTE_SLUG:-}" ]; then
+    HARNESS_REPO_SLUG="$HARNESS_REMOTE_SLUG"
+    export HARNESS_REPO_SLUG
+  fi
+fi
+
 mkdir -p "$INBOX_DIR" "$LOGS_DIR" "$ARCHIVE_DIR" ||
   fatal "could not create the state directories under '$MAIN_REPO' — refusing to start"
 
@@ -982,6 +1063,8 @@ notify() {
 #   remote_synced_at    the epoch second of that `sync`, written on every one
 #   remote_detail       one human-readable line from that `sync`: the bundle's
 #                       `detail`, or why the record is `killed` or `failed`
+#   auto_resumes        job mode only: seeded from the restored `status.json`
+#                       when HARNESS_INPUT_CHAIN is above 0, else `0`
 # -----------------------------------------------------------------------------
 # The bodies are lib/harness-run-lib.sh's THE RUN REGISTRY, shared with every
 # script that reads or writes this file; these wrappers bind them to $REGISTRY.
@@ -1874,7 +1957,11 @@ classify_run_exit() {
         # Instead of the `parked` status, log and notification below.
         registry_set "$branch" status park_loop
         log "run '$branch' park loop — $cycles consecutive resumes made no progress; not resuming it again (clear: $clar_dir/PARK_LOOP_CLEAR)"
-        notify park_loop "$branch" "$log_path" "$cycles no-progress resumes — create $clar_dir/PARK_LOOP_CLEAR to clear"
+        if [ "$JOB_MODE" = "1" ]; then
+          notify park_loop "$branch" "$log_path" "$cycles no-progress resumes — run /autonomous-sdlc-harness:branch-status $branch to see the question, then clear the park loop"
+        else
+          notify park_loop "$branch" "$log_path" "$cycles no-progress resumes — create $clar_dir/PARK_LOOP_CLEAR to clear"
+        fi
         return 0
       fi
     else
@@ -1885,7 +1972,11 @@ classify_run_exit() {
   if [ "$parked" = 1 ]; then
     registry_set "$branch" status parked
     log "run '$branch' parked (clarification waiting) — rc=$rc"
-    notify parked "$branch" "$log_path" "See $clar_dir"
+    if [ "$JOB_MODE" = "1" ]; then
+      notify parked "$branch" "$log_path" "answer with /autonomous-sdlc-harness:branch-answer $branch"
+    else
+      notify parked "$branch" "$log_path" "See $clar_dir"
+    fi
   elif [ "$rc" -eq 0 ]; then
     registry_set "$branch" status completed
     # Clear the watchdog counters so a reused branch key starts clean.
@@ -1915,6 +2006,47 @@ classify_run_exit() {
 # `<state_dir>/clarifications/<branch>/question_<n>.md` and `answer_<n>.md`,
 # paired by index, created on first write. This side only reads that pairing.
 # -----------------------------------------------------------------------------
+
+# park_answered_set <clar_dir>
+#
+# The consumed set: every top-level index with both files, space-separated and
+# numerically sorted — but only once NO top-level question is still unanswered.
+# Returns 1, printing nothing, when one is, or when there is no answered pair at
+# all. Shared by resume_parked_run and job mode's `answer` start, so both
+# consume the same set. The glob orders `10` before `2`, hence the numeric sort.
+park_answered_set() {
+  local clar_dir="$1" q n answered_list="" answered_set
+  for q in "$clar_dir"/question_*.md; do
+    [ -e "$q" ] || continue
+    n="${q##*/}"
+    n="${n#question_}"
+    n="${n%.md}"
+    case "$n" in
+      '' | *[!0-9]*) continue ;;
+    esac
+    [ -f "$clar_dir/answer_${n}.md" ] || return 1
+    answered_list="${answered_list}${n}
+"
+  done
+  [ -n "$answered_list" ] || return 1
+  answered_set="$(printf '%s' "$answered_list" | sort -n | tr '\n' ' ')"
+  printf '%s\n' "${answered_set% }"
+}
+
+# begin_park_resume <branch> <clar_dir> <answered_set>
+#
+# The registry half of a park resume, shared by resume_parked_run and job mode.
+# The park-loop guard's baseline is recorded here, before the spawn, while the
+# channel holds only what the session is about to read.
+begin_park_resume() {
+  local branch="$1" clar_dir="$2" answered_set="$3"
+  registry_set "$branch" status running
+  registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
+  registry_set "$branch" resumed_for_index "$answered_set"
+  registry_set "$branch" resume_kind answer
+  registry_set "$branch" resumed_at_epoch "$(date +%s)"
+  registry_set "$branch" resume_max_question_index "$(max_question_index "$clar_dir")"
+}
 
 # resume_parked_run <branch>
 #
@@ -1955,29 +2087,11 @@ resume_parked_run() {
   local clar_dir="$worktree/$state_rel/clarifications/$branch"
   [ -d "$clar_dir" ] || return 1
 
-  # The consumed set: every top-level index with both files, but only once NO
-  # top-level question is still unanswered. The index is peeled off with
-  # parameter expansion rather than a regex, so there is no `sed` dialect to be
-  # portable about; the glob orders `10` before `2`, hence the numeric sort.
-  local q n answered_list="" answered_set
-  for q in "$clar_dir"/question_*.md; do
-    [ -e "$q" ] || continue
-    n="${q##*/}"
-    n="${n#question_}"
-    n="${n%.md}"
-    case "$n" in
-      '' | *[!0-9]*) continue ;;
-    esac
-    # Any unanswered question, or no answered pair at all — stay parked, and say
-    # nothing: this is the ordinary state of a parked run on every pass until an
-    # operator has answered the whole park.
-    [ -f "$clar_dir/answer_${n}.md" ] || return 1
-    answered_list="${answered_list}${n}
-"
-  done
-  [ -n "$answered_list" ] || return 1
-  answered_set="$(printf '%s' "$answered_list" | sort -n | tr '\n' ' ')"
-  answered_set="${answered_set% }"
+  # Any unanswered question, or no answered pair at all — stay parked, and say
+  # nothing: this is the ordinary state of a parked run on every pass until an
+  # operator has answered the whole park.
+  local answered_set
+  answered_set="$(park_answered_set "$clar_dir")" || return 1
 
   # The kill switch and the cap are honored BEFORE resuming, exactly as for a
   # fresh launch. A resume is a launch as far as capacity is concerned.
@@ -2009,15 +2123,7 @@ resume_parked_run() {
   # this engine exits, by which time the answers have been read. Archiving here
   # instead would delete the files the run about to start is looking for.
   log "resuming parked run '$branch' (answers $answered_set found) in $worktree"
-  registry_set "$branch" status running
-  registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
-  registry_set "$branch" resumed_for_index "$answered_set"
-  # The park-loop guard's baseline, read by classify_run_exit when this session
-  # exits. Recorded before the spawn, while the channel holds only what the
-  # session is about to read.
-  registry_set "$branch" resume_kind answer
-  registry_set "$branch" resumed_at_epoch "$(date +%s)"
-  registry_set "$branch" resume_max_question_index "$(max_question_index "$clar_dir")"
+  begin_park_resume "$branch" "$clar_dir" "$answered_set"
   notify resumed "$branch" "$log_path" "answered clarification(s) #$answered_set"
   open_log_terminal "$branch" "$log_path"
   spawn_engine "$branch" "$worktree" "$log_path" "$answered_set"
@@ -2099,6 +2205,24 @@ EOF
 # because on a case-insensitive filesystem those two paths collide.
 # -----------------------------------------------------------------------------
 
+# begin_pause_resume <branch> <state_abs>
+#
+# The sentinel and registry half of a pause resume, shared by resume_paused_run
+# and job mode. Consumes the pause protocol — the request (PAUSE), the trigger
+# (RESUME) and the ack (PAUSE_ACK) — and KEEPS PAUSE_PROGRESS.md, per the
+# ownership note above. `resumed_for_index` is deliberately left alone: a pause
+# is not an answer, and if this run was paused mid park-resume its
+# still-unconsumed pairs must stay recorded. `resume_kind pause` keeps this
+# session's exit out of the park-loop guard's count.
+begin_pause_resume() {
+  local branch="$1" state_abs="$2"
+  rm -f "$state_abs/PAUSE" "$state_abs/RESUME" "$state_abs/PAUSE_ACK"
+  registry_set "$branch" status running
+  registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
+  registry_set "$branch" resume_kind pause
+  registry_set "$branch" resumed_at_epoch "$(date +%s)"
+}
+
 # resume_paused_run <branch>
 #
 # Resume one paused run if a RESUME trigger has landed in its working copy.
@@ -2151,20 +2275,10 @@ resume_paused_run() {
 
   [ -n "$log_path" ] || log_path="$LOGS_DIR/$branch.log"
 
-  # Consume the pause protocol: the request (PAUSE), the trigger (RESUME) and the
-  # ack (PAUSE_ACK). KEEP PAUSE_PROGRESS.md — see the ownership note above.
-  rm -f "$state_abs/PAUSE" "$state_abs/RESUME" "$state_abs/PAUSE_ACK"
-
   # Re-launch the SAME engine in the SAME working copy with the pause-resume
-  # clause (spawn_engine's 5th argument). `resumed_for_index` is deliberately
-  # left alone: a pause is not an answer, and if this run was paused mid
-  # park-resume its still-unconsumed pairs must stay recorded.
+  # clause (spawn_engine's 5th argument).
   log "resuming paused run '$branch' (RESUME trigger found) in $worktree"
-  registry_set "$branch" status running
-  registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
-  # `pause` keeps this session's exit out of the park-loop guard's count.
-  registry_set "$branch" resume_kind pause
-  registry_set "$branch" resumed_at_epoch "$(date +%s)"
+  begin_pause_resume "$branch" "$state_abs"
   notify resumed "$branch" "$log_path" "after pause"
   open_log_terminal "$branch" "$log_path"
   spawn_engine "$branch" "$worktree" "$log_path" "" 1
@@ -3274,6 +3388,131 @@ watch_loop() {
 }
 
 # -----------------------------------------------------------------------------
+# JOB MODE — one run, supervised inside a GitHub Actions job's own checkout. The
+# header's JOB MODE block states what runs, what is off and why. Reached only
+# through the `job` arm below, which has already refused a bad invocation.
+# -----------------------------------------------------------------------------
+
+# job_usage <reason> — the exit-2 refusal: one line on stderr, nothing launched.
+job_usage() {
+  echo "$self: job: $*" >&2
+  echo "usage: HARNESS_JOB_MODE=1 $self job <branch> <task|user_review|docs> <none|answer|pause>" >&2
+  exit 2
+}
+
+# The job's name in a `resumed` notification: its GitHub run when known.
+job_label() {
+  if [ -n "${GITHUB_RUN_ID:-}" ]; then
+    printf 'remote job %s\n' "$GITHUB_RUN_ID"
+  else
+    printf 'remote job\n'
+  fi
+}
+
+# job_write_status <branch> <out_json> <decision> <detail> — a failed write is
+# logged and never ends the job: the run matters more than its report.
+job_write_status() {
+  hr_remote_status_write "$REGISTRY" "$1" "$2" "$3" "$4" ||
+    log "job: could not write '$2' (decision $3) for '$1'"
+}
+
+# run_job <branch> <engine> <resume> — arguments already validated.
+run_job() {
+  local branch="$1" engine="$2" resume="$3"
+  local worktree="$MAIN_REPO" log_path="$LOGS_DIR/$branch.log"
+  local state_rel state_abs clar_dir remote_status key value answered_set=""
+
+  state_rel="$(run_state_dir "$worktree")" || fatal "job: the state directory in '$worktree' is unresolvable"
+  state_abs="$worktree/$state_rel"
+  clar_dir="$state_abs/clarifications/$branch"
+  hr_remote_names_var
+  remote_status="$state_abs/$HR_REMOTE_STATUS_SOURCE"
+  registry_init
+
+  # Fresh-launch defaults — launch_run's reused-key resets — then the seed from
+  # the restored bundle over them, so a counter that must survive a job
+  # boundary does. `chain` is never seeded: hr_remote_status_write records
+  # HARNESS_INPUT_CHAIN, this job's own input.
+  registry_set "$branch" pid ""
+  registry_set "$branch" stall_restarts 0
+  registry_set "$branch" stall_warned ""
+  registry_set "$branch" stall_killing ""
+  registry_set "$branch" paused_by ""
+  registry_set "$branch" usage_resume_at ""
+  registry_set "$branch" resume_kind ""
+  registry_set "$branch" park_loop_cycles 0
+  registry_set "$branch" auto_resumes 0
+  if [ -f "$remote_status" ]; then
+    for key in park_loop_cycles resume_max_question_index stall_restarts; do
+      value="$(hr_remote_status_get "$remote_status" "$key")" && registry_set "$branch" "$key" "$value"
+    done
+    # A job whose input chain is 0 was started by a user's action, which resets
+    # the auto-resume count; only an automatic continuation carries it forward.
+    if [ "$((10#$HARNESS_INPUT_CHAIN))" -gt 0 ]; then
+      value="$(hr_remote_status_get "$remote_status" auto_resumes)" && registry_set "$branch" auto_resumes "$value"
+    fi
+  fi
+
+  registry_set "$branch" engine "$engine"
+  registry_set "$branch" worktree "$worktree"
+  registry_set "$branch" log_path "$log_path"
+  registry_set "$branch" started_at "$(date '+%Y-%m-%dT%H:%M:%S')"
+
+  # An `answer` dispatch whose park is not fully answered has nothing to consume:
+  # it stops as parked rather than launching a session that would re-park.
+  if [ "$resume" = "answer" ]; then
+    if ! answered_set="$(park_answered_set "$clar_dir")"; then
+      registry_set "$branch" status parked
+      log "job: '$branch' was dispatched to resume on an answer, but its park is not fully answered — stopping"
+      job_write_status "$branch" "$remote_status" stop "dispatched with an answer, but the park is not fully answered"
+      echo "job: parked stop"
+      exit 0
+    fi
+  fi
+
+  # Written BEFORE the spawn, so a job killed at any later point leaves a bundle
+  # that says continue.
+  registry_set "$branch" status running
+  job_write_status "$branch" "$remote_status" continue "job started"
+
+  case "$resume" in
+    answer)
+      log "job: resuming parked run '$branch' (answers $answered_set) in $worktree"
+      begin_park_resume "$branch" "$clar_dir" "$answered_set"
+      notify resumed "$branch" "$log_path" "answered clarification(s) #$answered_set ($(job_label))"
+      spawn_engine "$branch" "$worktree" "$log_path" "$answered_set"
+      ;;
+    pause)
+      log "job: resuming paused run '$branch' in $worktree"
+      begin_pause_resume "$branch" "$state_abs"
+      notify resumed "$branch" "$log_path" "after pause ($(job_label))"
+      spawn_engine "$branch" "$worktree" "$log_path" "" 1
+      ;;
+    *)
+      # No `launched` notification: the local watcher sent it at dispatch.
+      log "job: launching run for '$branch' (engine=$engine) in $worktree (log: $log_path)"
+      spawn_engine "$branch" "$worktree" "$log_path"
+      ;;
+  esac || registry_set "$branch" status failed
+
+  while [ "$(registry_get "$branch" status)" = "running" ]; do
+    sleep "$POLL_INTERVAL_SECS"
+    reconcile_stale_runs
+    check_stalled_runs
+    usage_gate
+  done
+  # Reap every session subshell this job spawned, so its exit notification has
+  # gone out before the job reports.
+  wait
+
+  local final
+  final="$(registry_get "$branch" status)"
+  job_write_status "$branch" "$remote_status" stop "the run ended $final in this job"
+  echo "job: $final stop"
+  exit 0
+}
+
+# -----------------------------------------------------------------------------
 # Entry point.
 # -----------------------------------------------------------------------------
 case "${1:-watch}" in
@@ -3304,8 +3543,30 @@ tick)
 watch | "")
   watch_loop
   ;;
+job)
+  # Every refusal comes before anything is launched or recorded; see the header's
+  # JOB MODE block for why HARNESS_JOB_MODE is the first of them.
+  [ "${HARNESS_JOB_MODE:-}" = "1" ] || job_usage "refused: HARNESS_JOB_MODE is not 1 — job mode resets the checkout it runs in"
+  [ "$#" -eq 4 ] || job_usage "expected <branch> <engine> <resume>"
+  case "$3" in task | user_review | docs) ;; *) job_usage "unknown engine '$3'" ;; esac
+  case "$4" in none | answer | pause) ;; *) job_usage "unknown resume '$4'" ;; esac
+  HARNESS_INPUT_CHAIN="${HARNESS_INPUT_CHAIN:-0}"
+  case "$HARNESS_INPUT_CHAIN" in
+    *[!0-9]*) job_usage "HARNESS_INPUT_CHAIN must be empty or a non-negative integer" ;;
+  esac
+  HARNESS_INPUT_CHAIN="$((10#$HARNESS_INPUT_CHAIN))"
+  export HARNESS_INPUT_CHAIN
+  # 0 = protected, 2 = unresolvable; both refuse, since a run on either would
+  # fail at its first commit.
+  hr_branch_is_protected "$MAIN_REPO" "$2"
+  case "$?" in
+    1) ;;
+    *) job_usage "refused: '$2' is a protected branch, or its protection is unresolvable" ;;
+  esac
+  run_job "$2" "$3" "$4"
+  ;;
 *)
-  echo "usage: $self [watch|tick|status|usage]" >&2
+  echo "usage: $self [watch|tick|status|usage|job]" >&2
   exit 2
   ;;
 esac

@@ -49,3 +49,12 @@ HARNESS_JOB_MODE=1 autonomous-watcher.sh job <branch> <engine> <resume>
 - `grep -n '"\$AGENT_CLI" -p' cli/templates/scripts/autonomous-watcher.sh` still finds exactly one launch line: job mode added none.
 - The written watcher still matches its template byte for byte.
 - `grep -n -E "WHO RUNS IT|while executing in its own|a run executes in a" cli/templates/scripts/autonomous-watcher.sh` — each hit's passage is followed, in the same passage, by its job-mode qualification pointing at `JOB MODE`; the `WHO RUNS IT.` passage still says NEVER a dispatched agent.
+
+**Deviations from plan:**
+
+- `none` applies `launch_run`'s reused-key resets first and then the seed over them, so `park_loop_cycles` and `stall_restarts` are seeded "always", as **Start** says, rather than zeroed by the fresh-launch bookkeeping.
+- `control_polled_at` is not seeded here: **Start** leaves it to Task 10's lower-bound rule.
+- An `answer` dispatch whose park is not fully answered launches nothing. It records `parked`, writes decision `stop` and exits 0. The plan gives no outcome for that case.
+- The answered-set computation and the park and pause resume registry bookkeeping are now the shared helpers `park_answered_set`, `begin_park_resume` and `begin_pause_resume`. `resume_parked_run`, `resume_paused_run` and job mode all call them, so the job does exactly what those passes do, without a second copy of the code.
+- The registry field-set comment gains an `auto_resumes` line, because job mode now writes that field. Its counting rules are still Task 10's. `chain` is not written to the registry: `hr_remote_status_write` reads it from `HARNESS_INPUT_CHAIN`, which the `job` arm normalises (empty becomes `0`) and exports.
+- Evidence downgrade: `bash -n` on the template was refused. The template's syntax is evidenced by the suites that execute it, the new one included, and not by that command.
