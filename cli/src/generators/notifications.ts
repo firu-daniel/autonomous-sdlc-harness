@@ -90,10 +90,10 @@ export const NTFY_TOPIC_PATTERN = /^[-_A-Za-z0-9]{1,64}$/;
 export const PUSH_DESTINATION_PLACEHOLDER = '<url-or-ntfy-topic>';
 
 /**
- * What an ntfy topic becomes once written — exported so every surface that shows it quotes one
- * spelling.
+ * What an ntfy topic becomes once written. Module-private: it reaches callers only inside
+ * {@link PUSH_DESTINATION_FORMS}, which is the surface every caller quotes.
  */
-export const GUIDED_ENDPOINT_EXAMPLE = `${NTFY_PUBLIC_ORIGIN}/<your-topic>`;
+const GUIDED_ENDPOINT_EXAMPLE = `${NTFY_PUBLIC_ORIGIN}/<your-topic>`;
 
 /**
  * The one description of what may be given as a push destination: a noun phrase, without a final
