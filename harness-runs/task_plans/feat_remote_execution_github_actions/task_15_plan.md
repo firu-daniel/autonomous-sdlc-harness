@@ -38,3 +38,14 @@
 - `bash scripts/test.sh` exits 0.
 - The header's measured figures reproduce when the recorded command is re-run on the same logs.
 - `grep -n '\${{[^ ]' cli/templates/github/workflows/harness-run.yml` prints nothing.
+
+**Deviations from plan:**
+
+- Measurement: `jq -f` is refused in this session, so the probe ran as a Node script (`bash scripts/scratch-run.sh harness-runs/scratch/dispatch_durations.mjs <main>/harness-runs/autonomous_logs`, 2026-09-25: 17 files, 957 dispatches, 0 inherited start timestamps, 1 unpaired — the in-flight dispatch of this run — longest 4382 s / 73.0 min in `chore_test_suite_run_time.stream.jsonl`, p95 930 s / 15.5 min). The header records an equivalent self-contained inline `jq -n '…'` command instead, because the probe file is gitignored; re-run on the same logs it printed 957 / 73.05 / 15.5.
+- Derived default: margin 75 + 15 = 90 min; hosted step timeout 360 − 30 (allowance) = 330; self-pause 240 min; self-hosted step timeout 7200 − 30 = 7170.
+- Timeout form: whether step-level `timeout-minutes` accepts an expression and whether `runner.environment` is available there could **not** be checked against GitHub's documentation (network fetch refused), so this rests on reading, not on the docs. The template takes the plan's fallback: the first step computes every budget value into `GITHUB_ENV` and the harness step reads one `env` value through `fromJSON`. The header says so; Gate 12 records the real behaviour.
+- Plugin pin: `claude plugin marketplace add --help` / `install --help` (Claude Code 2.1.282, measured through `scratch-run.sh`) offer no ref or version, so the job installs and then refuses on a version mismatch read from `claude plugin list --json` (`id` / `version` / `scope` fields, measured).
+- Step order: the `HARNESS_REMOTE_STOP` gate runs before checkout, and the `jq` / `gh` check before the configuration read (which needs `jq`). The plan listed them the other way round.
+- `stateDir` is not read: no step in the job consumes it, because every script it calls resolves the state directory itself.
+- Verification: `bash scripts/test.sh` exited 1 on two gates this task does not touch. Gate 11 failed because the retrieval runtime is not installed on this machine. Gate 6a failed on a machine path inside `harness-runs/scratch/t3-test.log`, a scratch file an earlier task wrote. Gate 4 (`npm test`, which includes the new suite) passed. A mutation probe (`harness-runs/scratch/mutate_workflow.mjs`) confirmed that each of nine template mutations fails the new suite, and the template was restored afterwards.
+- Credentials: the non-empty secrets are exported only inside the harness step, not through `GITHUB_ENV`, so no earlier step (including the adopter's `setup-worktree.sh`) sees them. A separate early step fails before launch when neither secret is set.

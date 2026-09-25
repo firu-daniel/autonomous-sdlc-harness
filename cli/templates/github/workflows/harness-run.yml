@@ -1,0 +1,431 @@
+# harness-run.yml — runs one autonomous-sdlc-harness run in a GitHub Actions job,
+# on a GitHub-hosted or a self-hosted runner chosen by the HARNESS_RUNNER variable.
+#
+# WHO WRITES IT. `autonomous-sdlc-harness init`, only when harness.config.json's
+# `execution.target` is `github-actions`. Written create-if-absent: from then on
+# it is yours to tune, and a re-run of `init` keeps your copy.
+#
+# THE INPUT CONTRACT. Composed on the shell side by `remote-run.sh` alone:
+#   action           run | pause | warm | stop. Only `run` and `warm` start a
+#                    job; `pause` and `stop` are jobless, titled marker runs
+#   branch           the run's branch (for warm: GitHub's default branch)
+#   engine           task | user_review | docs                (action=run)
+#   resume           none | answer | pause                    (action=run)
+#   answers          JSON object {"<n>": "<answer text>"}     (resume=answer)
+#   park_loop_clear  true clears the restored park-loop count
+#   chain            automatic dispatches since the last user action; 0 from a user
+# `run-name` is `harness <action> <branch>`: the job's pause poll and
+# `remote-run.sh continue` / `poll` match runs by that title, so it is a wire.
+#
+# TWO RULES EVERY EDIT KEEPS.
+#   * Every input, variable and secret reaches a shell line through `env:`, never
+#     through a GitHub expression inside `run:` — an interpolated input is shell
+#     source (script injection).
+#   * Every GitHub expression has a space after its opening braces. `init`
+#     renders this file with the CLI's double-brace token renderer, which reads
+#     a letter straight after the braces as a token; the only token here is the
+#     CLI version, HARNESS_CLI_VERSION in each job's `env:`.
+#
+# DECLARED MIRRORS — a rename on either side is an edit to both:
+#   cli/src/remote/githubActions.ts   the file names, HARNESS_RUNNER,
+#                                     HARNESS_REMOTE_STOP, CLAUDE_CODE_OAUTH_TOKEN,
+#                                     ANTHROPIC_API_KEY, HARNESS_PUSH_URL,
+#                                     HARNESS_GIT_TOKEN, the artifact harness-state
+#   cli/src/generators/projectSettings.ts   the marketplace and plugin key
+#                                     autonomous-sdlc-harness@autonomous-sdlc-harness
+#   cli/src/config/model.ts           DEFAULTS.scriptsDir and retrievalApplies
+#   cli/src/machine/paths.ts          machineCacheDir, under which the retrieval
+#                                     runtime sits in `retrieval/`
+#
+# WHAT IT READS.
+#   Secrets: CLAUDE_CODE_OAUTH_TOKEN and/or ANTHROPIC_API_KEY (one is required;
+#     billing follows the API key when both are set), HARNESS_GIT_TOKEN (optional:
+#     a personal or App token, so the job's pushes trigger your own CI, which
+#     GITHUB_TOKEN pushes never do), HARNESS_PUSH_URL (optional notifications).
+#   Variables: HARNESS_RUNNER, HARNESS_REMOTE_STOP (any value stops every job
+#     before it launches anything), HARNESS_STEP_TIMEOUT_MINUTES,
+#     HARNESS_SELF_PAUSE_AFTER_MINUTES, HARNESS_MAX_CHAIN, and the watcher
+#     tunables listed in the `run` job's `env:` under their own names. An unset
+#     variable arrives empty and the script reading it applies its own default.
+#   harness.config.json, at run time: `scriptsDir` and whether docs retrieval
+#     applies. No configured value is frozen into this file.
+#
+# THE SELF-PAUSE POINT, MEASURED. On a hosted runner the job drops its own PAUSE
+# REMOTE_SELF_PAUSE_AFTER_SECS after it started, the run yields at its next
+# dispatch boundary, and `remote-run.sh continue` chains a new job.
+#   Command, over this harness's own repository's main-checkout logs, 2026-09-25
+#   (17 stream logs; a tool_use event with no timestamp would inherit the nearest
+#   preceding one — none lacked one):
+#     jq -n 'def e: .[0:19]+"Z"|fromdateiso8601; reduce inputs as $v ({f:null,t:null,s:{},d:[]}; (if .f!=input_filename then .f=input_filename|.t=null|.s={} else . end) | .t=($v.timestamp//.t) | .t as $t | if $v.type=="assistant" then reduce ($v.message.content[]? | objects | select(.type=="tool_use" and (.name=="Agent" or .name=="Task"))) as $u (.; .s[$u.id]=$t) elif $v.type=="user" then reduce ($v.message.content[]? | objects | select(.type=="tool_result")) as $r (.; if .s[$r.tool_use_id] then .d+=[($t|e)-(.s[$r.tool_use_id]|e)] | del(.s[$r.tool_use_id]) else . end) else . end) | .d|sort|length as $n|{dispatches:$n,longest_min:(.[-1]/60),p95_min:(.[(($n*95+99)/100|floor)-1]/60)}' harness-runs/autonomous_logs/*.stream.jsonl
+#   Figures: 957 sub-agent dispatches; longest 73.05 min; 95th percentile 15.5 min.
+#   Margin: 73.05 rounded up to the next 15 (75) plus 15 for the pause
+#   bookkeeping and the post-steps = 90 min (HARNESS_SELF_PAUSE_MARGIN_MINUTES).
+#   Hosted step timeout: the 360-minute hosted job limit minus a 30-minute
+#   allowance for the steps around it = 330. Default self-pause: 330 - 90 = 240
+#   minutes, floored at 60 when a smaller step timeout is configured. A dispatch
+#   longer than the window left after the self-pause costs its in-flight unit:
+#   the step timeout kills it, and the continuation resumes from the pushed ledger.
+# On a self-hosted runner the self-pause is left UNSET (disabled, not merely
+# unreached) and the step timeout defaults to the 5-day self-hosted job limit
+# minus the same allowance. HARNESS_JOB_DEADLINE_EPOCH is the job's start plus
+# the step timeout. The job-level timeout-minutes is the self-hosted limit; a
+# hosted job is stopped at its own limit whatever that says.
+#
+# WHY THE TIMEOUT IS COMPUTED INTO GITHUB_ENV. Whether a step's timeout-minutes
+# accepts an expression over `runner.environment` could not be checked against
+# GitHub's workflow-syntax documentation when this file was written (no network
+# access), so the first step computes every budget value from
+# `runner.environment` into GITHUB_ENV, and the harness step reads a single
+# `env` value. Gate 12 records the real behaviour.
+#
+# THE PLUGIN PIN. `claude plugin marketplace add --help` and
+# `claude plugin install --help` (Claude Code 2.1.282) offer no ref or version:
+#   "Usage: claude plugin marketplace add [options] <source>" (options: --claudeai,
+#   --scope, --sparse); "Usage: claude plugin install|i [options] <plugin>".
+# So the job installs the plugin, then refuses to run, naming both versions,
+# when `claude plugin list --json` reports a version other than this file's
+# rendered CLI version.
+
+name: harness-run
+run-name: harness ${{ inputs.action }} ${{ inputs.branch }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: What to do
+        required: true
+        type: choice
+        options:
+          - run
+          - pause
+          - warm
+          - stop
+      branch:
+        description: The run's branch
+        required: true
+        type: string
+      engine:
+        description: Which flow runs
+        required: false
+        type: choice
+        default: task
+        options:
+          - task
+          - user_review
+          - docs
+      resume:
+        description: How the run resumes
+        required: false
+        type: choice
+        default: none
+        options:
+          - none
+          - answer
+          - pause
+      answers:
+        description: Clarification answers, a JSON object
+        required: false
+        type: string
+        default: '{}'
+      park_loop_clear:
+        description: Clear the park-loop count
+        required: false
+        type: boolean
+        default: false
+      chain:
+        description: Automatic dispatches since the last user action
+        required: false
+        type: number
+        default: 0
+
+permissions:
+  contents: write
+  actions: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  run:
+    if: inputs.action == 'run'
+    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    # The self-hosted job limit, 5 days; a hosted job stops at its own limit.
+    timeout-minutes: 7200
+    concurrency:
+      group: harness-run-${{ inputs.branch }}
+      cancel-in-progress: false
+    env:
+      HARNESS_CLI_VERSION: '{{cliVersion}}'
+      HARNESS_JOB_MODE: '1'
+      HARNESS_REMOTE_SLUG: ${{ github.repository }}
+      HARNESS_INPUT_BRANCH: ${{ inputs.branch }}
+      HARNESS_INPUT_ENGINE: ${{ inputs.engine }}
+      HARNESS_INPUT_RESUME: ${{ inputs.resume }}
+      HARNESS_INPUT_ANSWERS: ${{ inputs.answers }}
+      HARNESS_INPUT_PARK_LOOP_CLEAR: ${{ inputs.park_loop_clear }}
+      HARNESS_INPUT_CHAIN: ${{ inputs.chain }}
+      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+      HARNESS_MAX_CHAIN: ${{ vars.HARNESS_MAX_CHAIN }}
+      STALL_WARN_SECS: ${{ vars.STALL_WARN_SECS }}
+      STALL_KILL_SECS: ${{ vars.STALL_KILL_SECS }}
+      STALL_MAX_RESTARTS: ${{ vars.STALL_MAX_RESTARTS }}
+      USAGE_PAUSE_TRIGGER: ${{ vars.USAGE_PAUSE_TRIGGER }}
+      USAGE_WARNING_DEBOUNCE: ${{ vars.USAGE_WARNING_DEBOUNCE }}
+      USAGE_RESUME_MARGIN_SECS: ${{ vars.USAGE_RESUME_MARGIN_SECS }}
+      USAGE_SEVEN_DAY_PAUSE_PCT: ${{ vars.USAGE_SEVEN_DAY_PAUSE_PCT }}
+      PARK_LOOP_MAX_CYCLES: ${{ vars.PARK_LOOP_MAX_CYCLES }}
+      PARK_LOOP_WINDOW_SECS: ${{ vars.PARK_LOOP_WINDOW_SECS }}
+      REMOTE_WAIT_MAX_SECS: ${{ vars.REMOTE_WAIT_MAX_SECS }}
+      REMOTE_AUTO_RESUME_MAX: ${{ vars.REMOTE_AUTO_RESUME_MAX }}
+      REMOTE_AUTO_RESUME_DELAY_SECS: ${{ vars.REMOTE_AUTO_RESUME_DELAY_SECS }}
+      REMOTE_CONTROL_POLL_SECS: ${{ vars.REMOTE_CONTROL_POLL_SECS }}
+      HARNESS_PUSH_URL: ${{ secrets.HARNESS_PUSH_URL }}
+      GH_TOKEN: ${{ github.token }}
+      HARNESS_HOSTED_JOB_LIMIT_MINUTES: '360'
+      HARNESS_SELF_HOSTED_JOB_LIMIT_MINUTES: '7200'
+      HARNESS_STEP_ALLOWANCE_MINUTES: '30'
+      HARNESS_SELF_PAUSE_MARGIN_MINUTES: '90'
+    steps:
+      - name: Compute the time budget
+        env:
+          IN_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          IN_STEP_TIMEOUT: ${{ vars.HARNESS_STEP_TIMEOUT_MINUTES }}
+          IN_SELF_PAUSE: ${{ vars.HARNESS_SELF_PAUSE_AFTER_MINUTES }}
+        run: |
+          started=$(date +%s)
+          kind="${IN_RUNNER_ENVIRONMENT:-${RUNNER_ENVIRONMENT:-github-hosted}}"
+          positive() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; [ "$1" -gt 0 ]; }
+          if [ "$kind" = self-hosted ]; then
+            limit="$HARNESS_SELF_HOSTED_JOB_LIMIT_MINUTES"
+          else
+            limit="$HARNESS_HOSTED_JOB_LIMIT_MINUTES"
+          fi
+          step="${IN_STEP_TIMEOUT:-$((limit - HARNESS_STEP_ALLOWANCE_MINUTES))}"
+          if ! positive "$step"; then
+            echo "::error::HARNESS_STEP_TIMEOUT_MINUTES must be a positive integer, got '$step'"
+            exit 1
+          fi
+          {
+            echo "HARNESS_JOB_STARTED_EPOCH=$started"
+            echo "HARNESS_STEP_TIMEOUT_MINUTES=$step"
+            echo "HARNESS_JOB_DEADLINE_EPOCH=$((started + step * 60))"
+          } >> "$GITHUB_ENV"
+          if [ "$kind" != self-hosted ]; then
+            pause="${IN_SELF_PAUSE:-$((step - HARNESS_SELF_PAUSE_MARGIN_MINUTES))}"
+            if [ -z "$IN_SELF_PAUSE" ] && [ "$pause" -lt 60 ]; then pause=60; fi
+            if ! positive "$pause"; then
+              echo "::error::HARNESS_SELF_PAUSE_AFTER_MINUTES must be a positive integer, got '$pause'"
+              exit 1
+            fi
+            echo "REMOTE_SELF_PAUSE_AFTER_SECS=$((pause * 60))" >> "$GITHUB_ENV"
+            echo "runner $kind: step timeout ${step} min, self-pause after ${pause} min"
+          else
+            echo "runner $kind: step timeout ${step} min, self-pause disabled"
+          fi
+
+      - name: Stop when HARNESS_REMOTE_STOP is set
+        run: |
+          if [ -n "$HARNESS_REMOTE_STOP" ]; then
+            echo "HARNESS_STOPPED=1" >> "$GITHUB_ENV"
+            echo "::notice::HARNESS_REMOTE_STOP is set: nothing is launched."
+          fi
+
+      - name: Check out the run's branch
+        if: env.HARNESS_STOPPED != '1'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+          token: ${{ secrets.HARNESS_GIT_TOKEN || github.token }}
+
+      - name: Check for jq and gh
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          missing=""
+          for tool in jq gh; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::this runner lacks:$missing. Install them on the self-hosted runner, or use a GitHub-hosted one."
+            exit 1
+          fi
+
+      - name: Read the configuration
+        id: config
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' harness.config.json)
+          {
+            echo "SCRIPTS_DIR=${scripts_dir%/}"
+            echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval"
+          } >> "$GITHUB_ENV"
+          echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        if: env.HARNESS_STOPPED != '1'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install the claude CLI when absent
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          if ! command -v claude >/dev/null 2>&1; then
+            npm install -g @anthropic-ai/claude-code
+          fi
+          claude --version
+
+      - name: Check the credentials
+        if: env.HARNESS_STOPPED != '1'
+        env:
+          IN_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          IN_API: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$IN_OAUTH" ] && [ -z "$IN_API" ]; then
+            echo "::error::neither the CLAUDE_CODE_OAUTH_TOKEN nor the ANTHROPIC_API_KEY repository secret is set; set one."
+            exit 1
+          fi
+
+      - name: Set the git identity
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install the pinned plugin
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          source_repo=$(jq -r '.extraKnownMarketplaces["autonomous-sdlc-harness"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
+          if [ -z "$source_repo" ]; then
+            echo "::error::.claude/settings.json names no marketplace source for autonomous-sdlc-harness. Run init locally with --marketplace <owner>/<repo> and commit the file."
+            exit 1
+          fi
+          claude plugin marketplace add "$source_repo"
+          claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness
+          installed=$(claude plugin list --json | jq -r '[.[] | select(.id == "autonomous-sdlc-harness@autonomous-sdlc-harness" and .scope == "user")][0].version // empty')
+          if [ "$installed" != "$HARNESS_CLI_VERSION" ]; then
+            echo "::error::the installed plugin is version '${installed:-none}', but this workflow was rendered for $HARNESS_CLI_VERSION. Publish the matching plugin, or re-run init with the installed version and commit the workflow."
+            exit 1
+          fi
+
+      - name: Restore the docs-retrieval cache
+        if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
+          key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}
+
+      - name: Generate the job's permission profile
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" init --plugin-root-entries
+          changed=$(git status --porcelain --untracked-files=no)
+          if [ -n "$changed" ]; then
+            printf '%s\n' "$changed"
+            echo "::error::init $HARNESS_CLI_VERSION changed tracked files. Run 'npx autonomous-sdlc-harness@$HARNESS_CLI_VERSION init' locally and commit the result."
+            exit 1
+          fi
+
+      - name: Preflight with doctor
+        if: env.HARNESS_STOPPED != '1'
+        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor
+
+      - name: Bootstrap the checkout
+        if: env.HARNESS_STOPPED != '1'
+        run: bash "$SCRIPTS_DIR/setup-worktree.sh"
+
+      - name: Restore the previous job's state
+        if: env.HARNESS_STOPPED != '1'
+        run: bash "$SCRIPTS_DIR/remote-run.sh" restore "$HARNESS_INPUT_BRANCH" --resume "$HARNESS_INPUT_RESUME"
+
+      - name: Run the harness
+        if: env.HARNESS_STOPPED != '1'
+        timeout-minutes: ${{ fromJSON(env.HARNESS_STEP_TIMEOUT_MINUTES || env.HARNESS_HOSTED_JOB_LIMIT_MINUTES) }}
+        env:
+          IN_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          IN_API: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$IN_OAUTH" ]; then export CLAUDE_CODE_OAUTH_TOKEN="$IN_OAUTH"; fi
+          if [ -n "$IN_API" ]; then export ANTHROPIC_API_KEY="$IN_API"; fi
+          unset IN_OAUTH IN_API
+          bash "$SCRIPTS_DIR/autonomous-watcher.sh" job "$HARNESS_INPUT_BRANCH" "$HARNESS_INPUT_ENGINE" "$HARNESS_INPUT_RESUME"
+
+      - name: Push the branch
+        if: always() && env.SCRIPTS_DIR != ''
+        run: bash "$SCRIPTS_DIR/push-branch.sh"
+
+      - name: Save the state bundle
+        if: always() && env.SCRIPTS_DIR != ''
+        run: bash "$SCRIPTS_DIR/remote-run.sh" save "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"
+
+      - name: Upload the state bundle
+        if: always() && env.SCRIPTS_DIR != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-state
+          path: ${{ runner.temp }}/harness-state
+          overwrite: true
+
+      - name: Continue, wait or stop
+        if: ${{ !cancelled() && env.SCRIPTS_DIR != '' }}
+        run: bash "$SCRIPTS_DIR/remote-run.sh" continue "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"
+
+      - name: Notify a cancelled job
+        if: cancelled() && env.SCRIPTS_DIR != ''
+        run: |
+          export HARNESS_REPO_SLUG="$HARNESS_REMOTE_SLUG"
+          bash "$SCRIPTS_DIR/autonomous-notify.sh" failed "$HARNESS_INPUT_BRANCH" "" \
+            "job cancelled: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true
+
+  warm:
+    if: inputs.action == 'warm'
+    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    env:
+      HARNESS_CLI_VERSION: '{{cliVersion}}'
+      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+    steps:
+      - name: Stop when HARNESS_REMOTE_STOP is set
+        run: |
+          if [ -n "$HARNESS_REMOTE_STOP" ]; then
+            echo "HARNESS_STOPPED=1" >> "$GITHUB_ENV"
+            echo "::notice::HARNESS_REMOTE_STOP is set: nothing is launched."
+          fi
+
+      - name: Check out the dispatched ref
+        if: env.HARNESS_STOPPED != '1'
+        uses: actions/checkout@v4
+
+      - name: Read the configuration
+        id: config
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "::error::this runner lacks: jq."
+            exit 1
+          fi
+          retrieval=$(jq -r '(.phases.docs == true and .docs.retrieval == true)' harness.config.json)
+          echo "HARNESS_RETRIEVAL_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval" >> "$GITHUB_ENV"
+          echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
+          if [ "$retrieval" != true ]; then
+            echo "::notice::docs retrieval does not apply to this configuration: there is no cache to warm."
+          fi
+
+      - name: Set up Node
+        if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Restore and save the docs-retrieval cache
+        if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
+          key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}
+
+      - name: Install what is missing
+        if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
+        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" init
