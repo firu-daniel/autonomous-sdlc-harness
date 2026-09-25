@@ -237,7 +237,55 @@ npm test
 
 This gate needs `jq` 1.5 or newer on `PATH`: the outer-loop library reaches a configuration only through `jq`, and the library reader this suite exercises reports its absence as exit `2` with no message of its own. It does not need gate 2's build — `cli/package.json` runs `pretest`, so `npm test` compiles `cli/src/` before it runs and always grades the source in the tree.
 
-Every test builds its **own** fixture repository under the system temp directory and removes it in process; nothing is written inside this checkout and no fixture is committed. The gate is red if a first `init` produces a configuration the schema rejects, if a second `init` on the same tree changes anything the first one wrote, or if a `--dry-run` writes at all — idempotence and dry-run purity are asserted before any other behaviour, because a writer aimed at a repository that fails either is destructive rather than merely wrong.
+Every test gets its **own** fixture repository under the system temp directory, a copy of a seeded template its test process builds once, and removes it in process; the template is never handed to a test, nothing is written inside this checkout and no fixture is committed. The gate is red if a first `init` produces a configuration the schema rejects, if a second `init` on the same tree changes anything the first one wrote, or if a `--dry-run` writes at all — idempotence and dry-run purity are asserted before any other behaviour, because a writer aimed at a repository that fails either is destructive rather than merely wrong.
+
+**Run time, measured.** Measured on 2026-09-25 on a 10-core macOS host (Darwin arm64, `os.availableParallelism()` 10), Node v20.19.5, git 2.50.1, one host command each, from the repository root:
+
+```
+bash scripts/measure-suite.sh --ref a885d631d85b --runs 1
+```
+
+```
+bash scripts/measure-suite.sh --ref 4c36164a9759 --runs 3
+```
+
+`a885d631d85b` is the commit before the template-copied fixtures and the concurrent suites; `4c36164a9759` is the commit after them. Each figure is the script's own `measure-suite:` line rounded to whole seconds:
+
+| Where | `npm test` before (`a885d631d85b`) | `npm test` after (`4c36164a9759`) | `run-gates.sh` before (`a885d631d85b`) | `run-gates.sh` after (`4c36164a9759`) |
+|---|---|---|---|---|
+| host, 10 cores | 429 s | 238 s, 365 s, 285 s | 345 s | 260 s, 264 s, 222 s |
+| `--cpus 4` | not yet measured | not yet measured | not yet measured | not yet measured |
+| `--cpus 2` | not yet measured | not yet measured | not yet measured | not yet measured |
+
+Read the host row as a range, not a point. The host was shared while it was measured: `uptime` read 1-minute load averages between 31 and 60 while the after runs were in progress, and the before run's own `run-gates.sh` (which contains a whole `npm test`) finished 84 s faster than its `npm test` alone. All three after `npm test` runs exited 0. Every `run-gates.sh` run, before and after, exited 1 on the same single failure, `11 docs-retrieval relevance floor`, and no other. Nothing was lost between the two commits. This command, run from `cli/` at each commit, reported 787 tests passing before and 791 after, with none failing:
+
+```
+node --test --test-reporter=spec test/
+```
+
+The four it adds are `fixture-template.test.mjs`'s three cases and one entry for the new helper `helpers/concurrency.mjs`, which `node --test` counts as a test file with no tests in it. Beside them are the three suites the concurrent files now open. No case name was removed, and every test file present at the before commit has the same number of `assert.` calls at both commits.
+
+The restricted rows model the hosted runner's **core count**. GitHub's standard hosted Linux runner has 4 vCPUs for a public repository, which this one is, and 2 for a private one, so 4 is the modelled count and 2 sits beside it. Those rows need a `docker`-compatible container runtime, and without one `--cpus` exits 3. These commands fill them:
+
+```
+bash scripts/measure-suite.sh --cpus 4
+```
+
+```
+bash scripts/measure-suite.sh --cpus 2
+```
+
+```
+bash scripts/measure-suite.sh --ref a885d631d85b --cpus 4
+```
+
+Once taken, those figures model the core count and not the hosted runner's per-core speed, because the container runs Linux on the host's own architecture.
+
+**Where the time goes.** Every case is a serial chain of subprocesses: the CLI's own start and its git probes, and, before the template copy, about fourteen git processes to seed each fixture. The work is CPU-bound, so wall time at `n` cores is bounded below by the suite's CPU time over `n`. `init.test.mjs`, `doctor.test.mjs` and `stack-presets.test.mjs` run their cases concurrently under one bound (`cli/test/helpers/concurrency.mjs`). This turns it off and runs every case in series again, which is the first step when diagnosing a failure:
+
+```
+HARNESS_TEST_CONCURRENCY=1 npm test
+```
 
 Rehearsing it by hand means running `node cli/dist/cli.js init --cwd <scratch>` twice against a scratch git repository **outside** this checkout; the second run reports every artifact as kept. Do not aim it at this repository — gate 2 says why.
 
