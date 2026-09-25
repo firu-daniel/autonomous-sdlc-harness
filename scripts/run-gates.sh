@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The harness's own verification, as one command.
 #
-# `docs/development.md` §5 defines eleven gates. This script runs the six a process can run
+# `docs/development.md` §5 defines twelve gates. This script runs the six a process can run
 # unattended — gate 11 among them where the retrieval model cache is provisioned, and reported with
-# the hand-run gates where it is not — and reports the five it cannot, so that a reviewer — human or
+# the hand-run gates where it is not — and reports the six it cannot, so that a reviewer — human or
 # agent — reading a green result has read the whole automatable half rather than one suite of it.
 # `commands.test` in `harness.config.json` points here for exactly that reason: `npm test` is gate 4
 # alone, and a branch review that reads it as "verified" is reading the other five automatable
@@ -169,6 +169,7 @@ echo "  7  the five adoption shapes, against real directories outside this check
 echo "  8  /autonomous-sdlc-harness:harness-analyze, which is judgement and runs inside a model session"
 echo "  9  examples/notes-app, which installs dependencies inside the checkout"
 echo "  10 docs retrieval with the real models, which downloads them and needs a network"
+echo "  12 remote execution, against a real GitHub repository with a runner, a credential and minutes"
 if [ "$floor_blocked" -eq 1 ]; then
   echo "  11 the docs-retrieval relevance floor, reported BLOCKED above: it runs unattended where the"
   echo "     retrieval model cache is provisioned and is listed here where it is not"
@@ -176,7 +177,7 @@ fi
 echo "     -> docs/development.md §5"
 
 # The same conditional the block above states, in the line a caller reads off a green run.
-hand_run="gates 5, 7, 8, 9 and 10 remain hand-run"
+hand_run="gates 5, 7, 8, 9, 10 and 12 remain hand-run"
 if [ "$floor_blocked" -eq 1 ]; then
   hand_run="$hand_run, and gate 11 with them — it runs unattended only where the model cache is provisioned"
 fi

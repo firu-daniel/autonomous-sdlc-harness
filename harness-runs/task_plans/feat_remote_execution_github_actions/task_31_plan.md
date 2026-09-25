@@ -31,3 +31,5 @@
 
 - `bash scripts/run-gates.sh` exits as it did before this task and its summary line names gate 12 as hand-run.
 - `bash scripts/check-command-spelling.sh` passes; every command in the gate sits in a fenced block, one per line.
+
+**Deviations from plan:** The first verification bullet's "exits as it did before this task" rests on reading, not on a baseline run: no pre-change run was taken. The post-change run exits 1 on two gates, 6a (an untracked `harness-runs/scratch/t3-test.log` carrying absolute paths) and 11 (retrieval runtime not installed, `check-floor.mjs` exit 1), neither of which reads `docs/development.md` or the edited lines of `scripts/run-gates.sh`. Because the run is red, the `hand_run` summary line (printed on a green run only) was not observed; the `== gates this script cannot run` block did print gate 12, and the `hand_run` string was checked by reading.
