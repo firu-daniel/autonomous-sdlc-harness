@@ -22,3 +22,8 @@
 - Reproduce the new decision by hand per `plugin/hooks/README.md` → `## Reproducing a decision by hand`, against a throwaway `git init` fixture carrying a `harness.config.json`: the guard emits nothing for both spellings of `remote-run.sh`, and still emits `allow` for `bash <repo>/<scripts_dir>/commit-on-branch.sh …`.
 - `grep -rn "three outer-loop scripts" plugin/hooks` prints nothing.
 - `bash scripts/test.sh` exits 0, which runs gate 1's `--strict` manifest validation among the automatable gates. The re-measurement `docs/guard-verification.md` owes for a guard change is Task 32's.
+
+**Deviations from plan:**
+
+- `plugin/hooks/README.md`: besides the table row and the following paragraph's outer-loop count (three → four), the section's other counts of deny-list entries were updated four → five (the `## Fail closed` section's "four deny-list basenames", "Four entries", and "the four names / the four capabilities"), since each became false with the new row. The guard's fail-closed table row "one of the three outer-loop scripts" was likewise changed to four.
+- Verification `bash scripts/test.sh exits 0` is **not met** on execution: it exits 1 with 18 gates passed and 2 failed, neither touched by this diff — gate 6a flags machine paths in an untracked, gitignored `harness-runs/scratch/t3-test.log` left by an earlier task, and gate 11 fails because the docs-retrieval runtime is not installed in this checkout. Gate 1 (manifests) passed. The guard decisions were verified by execution against a throwaway `git init` fixture: both `remote-run.sh` spellings silent, `commit-on-branch.sh` `allow`.

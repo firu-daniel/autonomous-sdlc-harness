@@ -230,14 +230,15 @@
 # one.
 #
 # THE DENY LIST IS THE DEPLOY WRAPPER AND THE OUTER LOOP. `deploy.sh` and the
-# three outer-loop scripts (`autonomous-watcher.sh`, `restart-watcher.sh`,
-# `cleanup-merged-worktrees.sh`) are generated under `scriptsDir` alongside the
-# other wrappers and are deliberately NOT auto-allowed: a deployment must never
-# be reachable unattended, and neither must the daemon that supervises the run
-# nor the sweep that force-deletes merged branches. Being on the list does NOT
-# mean this guard refuses the invocation — it means the guard grants nothing and
-# the invocation falls through to the adopter's permission system, which asks or
-# refuses as its own rules say. `DENY_SCRIPT_BASENAMES` below is that mechanism,
+# four outer-loop scripts (`autonomous-watcher.sh`, `restart-watcher.sh`,
+# `cleanup-merged-worktrees.sh`, `remote-run.sh`) are generated under
+# `scriptsDir` alongside the other wrappers and are deliberately NOT
+# auto-allowed: a deployment must never be reachable unattended, and neither
+# must the daemon that supervises the run, the sweep that force-deletes merged
+# branches, nor the client that dispatches and cancels remote runs. Being on
+# the list does NOT mean this guard refuses the invocation — it means the guard
+# grants nothing and the invocation falls through to the adopter's permission
+# system, which asks or refuses as its own rules say. `DENY_SCRIPT_BASENAMES` below is that mechanism,
 # kept as a newline-delimited constant so an adopter can read off exactly what is
 # excluded, and matched on BASENAME — LOWER-CASED ON BOTH SIDES — so a relative
 # spelling, an absolute one, any sibling worktree and any capitalisation are all
@@ -330,7 +331,7 @@
 #                                                  test both compare literals)
 #   any token's basename is on the deny list,
 #     compared lower-cased on both sides        -> silent (deploy wrapper, or
-#                                                  one of the three outer-loop
+#                                                  one of the four outer-loop
 #                                                  scripts)
 #   any token resolves outside the allowed roots-> silent
 #   a piece running NO script is not a safe
@@ -390,7 +391,11 @@
 #     bash <repo>/<scripts dir>/$D/x.sh               directory not a literal
 #     bash <repo>/<scripts dir>/autonomous-watcher.sh tick
 #                                                     denied basename (outer loop)
-#     bash /tmp/payload.sh                            outside the workspace
+#     bash <repo>/<scripts dir>/remote-run.sh dispatch feat_x --engine task
+#                                                     denied basename (outer loop)
+#     bash <repo>/<scripts dir>/REMOTE-RUN.sh dispatch feat_x --engine task
+#                                                     same, any case
+#     bash /tmp/payload.sh                           outside the workspace
 #     bash <repo>/<scripts dir>/../../evil.sh         `..` traversal
 #     bash <repo>/<scripts dir>/*.sh                  glob
 #     bash <repo>/<other dir>/thing.sh                outside <scripts dir>
@@ -640,6 +645,10 @@ esac
 #                                manager.
 #   cleanup-merged-worktrees.sh  removing sibling working copies and
 #                                force-deleting local branches (`git branch -D`).
+#   remote-run.sh                dispatching, continuing, pausing and cancelling
+#                                remote runs on GitHub — an agent that could run
+#                                it could start runs about itself, or stop its
+#                                own.
 #
 # The entries are bare basenames, one per line, because `is_denied_script`
 # compares a whole line to a basename — a trailing comment on one of these lines
@@ -691,6 +700,7 @@ deploy.sh
 autonomous-watcher.sh
 restart-watcher.sh
 cleanup-merged-worktrees.sh
+remote-run.sh
 "
 
 is_denied_script() {
