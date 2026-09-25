@@ -66,12 +66,11 @@ The negative case is worth stating because it works mechanically and is still wr
 
 ## 3. Manifest facts a contributor must not rediscover
 
-Five measured behaviours and one shipped contract, each of which costs a round if it is met by surprise:
+Six measured behaviours and one shipped contract, each of which costs a round if it is met by surprise:
 
 - **`hooks/hooks.json` needs the `{"hooks": { … }}` wrapper.** A bare event map — `{"PreToolUse": [ … ]}` — fails validation with `hooks: Invalid input: expected record, received undefined`. The event names go one level down, inside `hooks`.
 - **Plugin hooks append to an adopter's own hooks; they do not override them.** A hook declared by this plugin composes with whatever the adopter has in their own settings, so the CLI never needs to write guard hooks into user settings to make them take effect. Related and easy to get backwards: `${CLAUDE_PLUGIN_ROOT}` **expands** inside a hook `command` string declared here, and **does not** expand in a settings-file-defined hook — which is the reason the guards live in `hooks.json` rather than in generated settings.
-
-  **The token sits inside double quotes together with the path it prefixes: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/<guard>.sh"`.** Measured against `claude` **2.1.282** on 2026-09-25. The unquoted form, `bash ${CLAUDE_PLUGIN_ROOT}/hooks/<guard>.sh`, was validated from a copy of `plugin/` at `<tmp>/plugin` with that `hooks.json` restored:
+- **The token sits inside double quotes together with the path it prefixes: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/<guard>.sh"`.** Measured against `claude` **2.1.282** on 2026-09-25. The unquoted form, `bash ${CLAUDE_PLUGIN_ROOT}/hooks/<guard>.sh`, was validated from a copy of `plugin/` at `<tmp>/plugin` with that `hooks.json` restored:
 
   ```
   claude plugin validate --strict <tmp>/plugin

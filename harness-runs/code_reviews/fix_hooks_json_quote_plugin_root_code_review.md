@@ -13,7 +13,7 @@
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — Limit the hooks README's "Every occurrence of the token" sentence to this manifest's `command` strings _(layer: plugin)_
-2. [ ] **Finding 2** — Give the quoting fact its own bullet in both copies and correct the two count sentences _(layer: plugin, general)_
+2. [x] **Finding 2** — Give the quoting fact its own bullet in both copies and correct the two count sentences _(layer: plugin, general)_
 
 ---
 
