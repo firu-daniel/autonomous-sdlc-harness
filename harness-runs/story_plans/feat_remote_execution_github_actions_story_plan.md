@@ -44,7 +44,7 @@ The work runs bottom-up in the configured layer order, `cli`, then `plugin`, the
 
 Each entry maps 1:1 to `harness-runs/task_plans/feat_remote_execution_github_actions/task_<K>_plan.md`. Entries run bottom-up in ship order, in the configured layer order `cli`, `plugin`, `general`, with the catch-all layer last.
 
-1. [ ] **Task 1** — Add `execution.target` to the config model and the structural check _(layer: cli)_ _(points: 12)_
+1. [x] **Task 1** — Add `execution.target` to the config model and the structural check _(layer: cli)_ _(points: 12)_
 2. [ ] **Task 2** — Own the remote-execution names and the `gh` probe in `cli/src/remote/githubActions.ts` _(layer: cli)_ _(points: 12)_
 3. [ ] **Task 3** — Give the outer-loop library `hr_execution_target` and the shared run-registry primitives _(layer: cli)_ _(points: 14)_
 4. [ ] **Task 4** — Define the remote state bundle in the outer-loop library _(layer: cli)_ _(points: 14)_

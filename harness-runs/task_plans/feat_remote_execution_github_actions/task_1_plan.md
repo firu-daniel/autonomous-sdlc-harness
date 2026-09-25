@@ -27,3 +27,8 @@
 - `bash scripts/typecheck.sh` and `bash scripts/test.sh` exit 0, run without a pipe.
 - `grep -n "remoteExecutionApplies" cli/src/config/model.ts` finds the one declaration; `grep -rn "'github-actions'" cli/src` finds it only in `model.ts` (every later reader imports the constant or the predicate).
 - An existing `init` fixture case still produces a `harness.config.json` with no `execution` key.
+
+**Deviations from plan:**
+
+- `bash scripts/test.sh` exited 1 rather than 0: 19 gates passed, including gate 4 (`npm test`, which runs `cli/test/config-command.test.mjs` with the new cases). Gate 11 (docs-retrieval relevance floor) failed in `evals/docs-retrieval/index-build.mjs` → `assertRealModelsAreAvailable` with "the retrieval runtime is not installed … missing: autonomous-sdlc-harness". That is an environment precondition this task does not touch. The claim that the suite passes therefore rests on gate 4 and gates 1–3 and 6 only, not on gate 11.
+- The "no `execution` key after a fresh `init`" check is asserted inside the new `set execution.target github-actions` case. No existing `init` case was changed.
