@@ -65,7 +65,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_remote_execution_github_act
 19. [x] **Task 19** — Add `doctor --check-github` and its `remote-github` check _(layer: cli)_ _(points: 18)_
 20. [x] **Task 20** — Name remote execution and `remote-run.sh` in `cli/README.md` _(layer: cli)_ _(points: 5)_
 21. [x] **Task 21** — Withhold `remote-run.sh` from the script-allowlist guard and name it in the deny-list prose _(layer: plugin)_ _(points: 10)_
-22. [ ] **Task 22** — Give `branch-status` and `branch-answer` their remote arms _(layer: plugin)_ _(points: 14)_
+22. [x] **Task 22** — Give `branch-status` and `branch-answer` their remote arms _(layer: plugin)_ _(points: 14)_
 23. [ ] **Task 23** — Give `branch-resume`, `branch-pause` and `branch-user-review` their remote arms _(layer: plugin)_ _(points: 14)_
 24. [ ] **Task 24** — State the remote job's pause triggers and resumes in the pause protocol and the flow document _(layer: plugin)_ _(points: 14)_
 25. [ ] **Task 25** — Add the `execution` schema property and its negative fixture _(layer: general)_ _(points: 8)_

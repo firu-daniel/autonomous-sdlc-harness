@@ -28,3 +28,5 @@ A remote record is one whose registry entry carries `"execution": "github-action
 - Every slash command written carries the `/autonomous-sdlc-harness:` prefix (`bash scripts/check-command-spelling.sh`, gate 6d, exits 0).
 - Read both files end to end against the contract above: a local record's path through each is word-for-word unchanged apart from the `<scripts_dir>` row and the fence.
 - `bash scripts/test.sh` exits 0 (gate 1 validates the plugin under `--strict`).
+
+**Deviations from plan:** `bash scripts/test.sh` exited 1 in the implementing session, 18 gates passed and 2 failed, and neither failure involves this unit's files. Gate 1a/1b (manifests) and 6d (command spelling) passed. Gate 6a flagged absolute paths inside the gitignored scratch file `harness-runs/scratch/t3-test.log`, which was left by an earlier task. Gate 11 failed because the docs-retrieval runtime is not installed on this machine.
