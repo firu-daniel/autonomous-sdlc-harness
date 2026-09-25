@@ -238,3 +238,231 @@ The design rests on these GitHub behaviours. None was verified against a real re
 | A `schedule` trigger is a recurring cron on the default branch, at most every 5 minutes, often late and sometimes dropped, and disabled in a public repository after 60 days without activity | The poller's shape, and its tolerance for a late or dropped tick | https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows, retrieved 2026-09-24 (carried) | A late tick delays a resume by one interval; the self-disabling poller is re-enabled by the next pausing job |
 | A `workflow_dispatch` inputs payload is limited to 65,535 characters | `dispatch --resume answer` refusing a larger payload | https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#onworkflow_dispatchinputs, quoted in `remote-run.sh` → `REMOTE_INPUT_PAYLOAD_MAX`; retrieval date not recorded there | A different limit moves the refusal point; the constant is the one place to change |
 | An environment wait timer is fixed per environment and may need a paid plan on a private repository | The decision not to build one (§3) | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment, retrieved 2026-09-24 (carried) | Nothing built depends on it |
+
+---
+
+## 7. Turning it on
+
+The commands below run from the repository root, on the machine the local watcher runs on. That machine needs the GitHub CLI `gh`, logged in to an account that can push to the repository and dispatch its workflows: the watcher sends every remote run through it, and `doctor` fails without it.
+
+**1. Switch it on.**
+
+```
+npx autonomous-sdlc-harness config set execution.target github-actions
+```
+
+**2. Write the two workflows.** `init` writes `.github/workflows/harness-run.yml` and `.github/workflows/harness-resume.yml`, each only if absent, with the run workflow pinned to this CLI's version ([`cli.md`](cli.md) → `## 3.`).
+
+```
+npx autonomous-sdlc-harness init
+```
+
+The job installs the plugin from the marketplace source named in the committed `.claude/settings.json`, and refuses to start when there is none. When `init` reports that it could not resolve the owner, name the source yourself:
+
+```
+npx autonomous-sdlc-harness init --marketplace <owner>/<repo>
+```
+
+**3. Commit the workflows and push them to GitHub's default branch.** GitHub dispatches only a workflow its default branch carries. The harness never pushes a protected branch, so this step is yours; include `.claude/settings.json` if `init` changed it.
+
+```
+git add .github/workflows/harness-run.yml .github/workflows/harness-resume.yml
+```
+
+```
+git commit -m "Add the harness workflows"
+```
+
+```
+git push origin <default branch>
+```
+
+**4. Set a credential secret.** One of the two is required (§9 says which one billing follows). For a Claude subscription, make a long-lived token, then store it; `gh secret set` asks for the value, so it stays out of your shell history:
+
+```
+claude setup-token
+```
+
+```
+gh secret set CLAUDE_CODE_OAUTH_TOKEN
+```
+
+For API billing instead:
+
+```
+gh secret set ANTHROPIC_API_KEY
+```
+
+**5. Optionally, the notification endpoint and the runner.** Without `HARNESS_PUSH_URL` a remote run's `parked`, `paused`, `failed` and `completed` events reach no one, because the desktop banner is on no machine you are at. The runner is §8.
+
+```
+gh secret set HARNESS_PUSH_URL
+```
+
+```
+gh variable set HARNESS_RUNNER --body <runner label>
+```
+
+**6. Check the setup against GitHub.**
+
+```
+npx autonomous-sdlc-harness doctor --check-github
+```
+
+**7. Only where docs retrieval is on: warm the cache** on the default branch, so the first job does not provision the retrieval runtime from nothing (§4). With the default `scriptsDir` of `scripts`:
+
+```
+bash scripts/remote-run.sh warm
+```
+
+The first drop after that runs remotely.
+
+### Every secret and variable
+
+All are set on the GitHub repository (Settings → Secrets and variables → Actions), never in `harness.config.json` ([`config.md`](config.md) → `## 2.`). An unset variable reaches the job empty, and the script that reads it applies the default below.
+
+| Name | Kind | Read by | Default | Required |
+|---|---|---|---|---|
+| `CLAUDE_CODE_OAUTH_TOKEN` | secret | `harness-run.yml`: the credential check and the harness step, which exports it only when non-empty | none | one of this and `ANTHROPIC_API_KEY`; the job fails before launch when neither is set |
+| `ANTHROPIC_API_KEY` | secret | as above | none | as above |
+| `HARNESS_PUSH_URL` | secret | `autonomous-notify.sh` in the job: an endpoint that accepts a POST whose body is the message | none: no push notification | no, but `doctor --check-github` warns without it |
+| `HARNESS_GIT_TOKEN` | secret | `harness-run.yml`'s checkout, so the job's pushes use it | `GITHUB_TOKEN` | no. Set it when your own CI must run on the pushed branch: pushes made with `GITHUB_TOKEN` start no workflow (§6) |
+| `HARNESS_RUNNER` | variable | `runs-on` in both workflows | `ubuntu-latest` | no (§8) |
+| `HARNESS_REMOTE_STOP` | variable | every job and every poller tick | empty | no. Any value stops every job and tick before it launches or dispatches anything (§3) |
+| `HARNESS_MAX_CHAIN` | variable | `remote-run.sh continue` and `poll` | 24 | no (§3, *Runs longer than a job*) |
+| `HARNESS_STEP_TIMEOUT_MINUTES` | variable | `harness-run.yml`'s time budget | 330 hosted, 7170 self-hosted | no |
+| `HARNESS_SELF_PAUSE_AFTER_MINUTES` | variable | as above, hosted runners only | 240 | no |
+| `STALL_WARN_SECS` | variable | the watcher's stall watchdog, in job mode | 1200 | no |
+| `STALL_KILL_SECS` | variable | as above | 2700 | no |
+| `STALL_MAX_RESTARTS` | variable | as above | 2 | no |
+| `USAGE_PAUSE_TRIGGER` | variable | the watcher's usage gate, in job mode ([`watcher.md`](watcher.md) → `## 4.`) | `warning` | no |
+| `USAGE_WARNING_DEBOUNCE` | variable | as above | 2 | no |
+| `USAGE_RESUME_MARGIN_SECS` | variable | as above | 120 | no |
+| `USAGE_SEVEN_DAY_PAUSE_PCT` | variable | as above | 0.95 | no |
+| `PARK_LOOP_MAX_CYCLES` | variable | the watcher's park-loop guard, in job mode | 2 | no |
+| `PARK_LOOP_WINDOW_SECS` | variable | as above | 300 | no |
+| `REMOTE_WAIT_MAX_SECS` | variable | job mode: the longest usage-pause wait a hosted job takes in the job | 600 | no |
+| `REMOTE_AUTO_RESUME_MAX` | variable | job mode: automatic resumes per run after a failure or an overload pause | 2 | no |
+| `REMOTE_AUTO_RESUME_DELAY_SECS` | variable | job mode: the wait before each automatic resume | 300 | no |
+| `REMOTE_CONTROL_POLL_SECS` | variable | job mode: how often the job looks for a `harness pause` run | 60 | no |
+
+The list of record is the `env:` block of the `run` job in `harness-run.yml`; a tunable the watcher reads and that block does not map is not reachable from a repository variable.
+
+### Your own allow entries
+
+Entries you added to this machine's `.claude/settings.autonomous.json` — typically to stop a stall on a command the generated profile did not allow — do not reach the job, which generates its own profile for its own checkout (§4). An entry that names no absolute path can move into the committed `.claude/settings.json`, which the runtime merges beside the profile passed with `--settings`, and then applies on every machine and in every job. An entry naming a path on this machine cannot travel; the remote run does without it.
+
+---
+
+## 8. Choosing a runner
+
+The runner is one repository variable, read by `runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}` in both workflows, so the resume poller runs where the jobs do. Unset, a run goes to a GitHub-hosted `ubuntu-latest` runner.
+
+**GitHub-hosted runners that work:** a standard Linux runner by label (`ubuntu-latest`, `ubuntu-24.04`), or a Linux larger runner by the runner label you gave it when you created it. **Not supported:** macOS and Windows GitHub-hosted runners — the outer-loop scripts and the job's `jq` / `gh` bootstrap are Linux-shaped.
+
+### Setting up a self-hosted runner
+
+A self-hosted runner is any Linux machine you own that runs GitHub's runner application: a VPS, a VM, a container, a Kubernetes pod. The harness never provisions, pays for or reaches it; the job simply runs there.
+
+**Register it.** On GitHub, Settings → Actions → Runners → New self-hosted runner shows the download commands for the runner application and a short-lived registration token. On the machine, in the directory you unpacked it into, register it with a runner label of your choosing:
+
+```
+./config.sh --url https://github.com/<owner>/<repo> --token <registration token> --labels <label>
+```
+
+Then install it as a service and start it, so it survives a reboot:
+
+```
+sudo ./svc.sh install
+```
+
+```
+sudo ./svc.sh start
+```
+
+**Install the prerequisites beside it**, for the user the service runs as: `git`, `jq` 1.5 or newer, `gh`, Node, the `claude` CLI, and whatever toolchain your own `commands.*` lines need, since the job bootstraps the checkout and runs your verification commands there. The job stops before launch, naming what is missing, when `jq` or `gh` is absent. It runs `actions/setup-node` for Node, and installs the `claude` CLI with npm when it does not resolve — which needs write access to npm's global prefix — so installing it yourself avoids that:
+
+```
+npm install -g @anthropic-ai/claude-code
+```
+
+**Point the harness at it:**
+
+```
+gh variable set HARNESS_RUNNER --body <label>
+```
+
+**An ephemeral runner** — registered with `--ephemeral` added to the `config.sh` line — takes one job and then unregisters, so nothing persists between jobs (§11). Something must then register a fresh runner for every job: a chained or resumed run is a new job, and so is every poller tick. Without that, the next job waits in the queue with no runner. GitHub's own guide to autoscaling is https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/autoscaling-with-self-hosted-runners (not retrieved in this branch).
+
+### What differs on a self-hosted runner
+
+- **No self-pause.** It is disabled, not merely unreached (§3): the job limit is five days, so a run of many hours completes in one job. The step timeout defaults to 7170 minutes and is the backstop.
+- **Usage-pause waits happen in the job** whenever the reset falls before the job's deadline, since waiting there costs nothing; only a reset past the deadline goes to the poller.
+- **One runner runs one job at a time.** Two branches' runs, or a poller tick, queue behind a running job on a single runner; register more runners under the same label to run them side by side.
+- **The job tells the kinds apart from `runner.environment`**, not from the variable, so a hosted label in `HARNESS_RUNNER` still gets the hosted budget.
+
+---
+
+## 9. Credentials and billing
+
+**Which credential the run uses.** The job exports each credential secret that is non-empty and fails before launch when neither is. When both are set, `ANTHROPIC_API_KEY` takes precedence over the subscription token, so **billing follows `ANTHROPIC_API_KEY` whenever both are set**; set only the one you mean to pay with. `CLAUDE_CODE_OAUTH_TOKEN` is the long-lived token `claude setup-token` makes, documented for CI and scripts on the Pro, Max, Team and Enterprise plans. Sources: https://code.claude.com/docs/en/authentication and https://code.claude.com/docs/en/github-actions, retrieved 2026-09-24 (carried from the task prompt's research, not re-fetched).
+
+**The terms.** Anthropic's legal and compliance page permits an end user to sign the **unmodified** Claude Code in with their own subscription, *"including where a platform hosts Claude Code"* — which covers a GitHub Actions job running the stock `claude` CLI under the adopter's own token. The same page says products must not route other people's usage through subscription credentials, and that Pro and Max limits assume *"ordinary, individual usage"*. So a subscription token in a repository secret is for the subscriber's own runs; a repository whose runs are started on behalf of other people belongs on an API key. Source: https://code.claude.com/docs/en/legal-and-compliance, retrieved 2026-09-24 (carried from the task prompt's research, not re-fetched).
+
+**The harness is never in the money path.** The GitHub account, the runner, the Claude account and every payment are the adopter's. The harness generates the workflows, documents the setup and checks it; it never holds a credential outside the adopter's own repository secrets, and never pays for or intermediates anyone's compute or Claude usage.
+
+**A paused billing change — a known risk.** Anthropic announced that from 2026-06-15, usage through `claude -p`, the Agent SDK and GitHub Actions would draw on a separate monthly credit — $20 on Pro, $100 on Max 5x, $200 on Max 20x — instead of the plan's own limits. The page now says the change is **paused**. Every unattended run, local or remote, is a headless `claude -p` session, so if it resumes it affects remote **and** local headless runs alike: a subscription would then cover unattended runs only up to that credit. Source: https://support.claude.com/en/articles/15036540, retrieved 2026-09-24 (carried from the task prompt's research, not re-fetched).
+
+---
+
+## 10. What it costs
+
+**Every figure in this section is carried from the task prompt's research, retrieved 2026-09-24, and was not re-fetched in this branch**; prices change, so check each source before relying on it. The only figures computed here are products of those, and each shows its arithmetic.
+
+**GitHub-hosted runners**, after GitHub's 1 January 2026 price change (source: https://docs.github.com/en/billing/reference/actions-runner-pricing, retrieved 2026-09-24, carried):
+
+| Item | Figure |
+|---|---|
+| Linux 2-core standard runner | $0.006 per minute |
+| Linux 4-core larger runner | $0.012 per minute |
+| Standard runners on a public repository | free |
+| Included minutes per month, private repositories | Free plan 2,000; Pro and Team 3,000 |
+| Billing unit | per job, rounded up to the minute — the research's reading, not verified here |
+
+**Unverified:** whether larger runners need a Team or Enterprise plan, and whether their minutes count against the included minutes at all. The figures below assume they do not.
+
+**Self-hosted runners** cost no GitHub minutes today. GitHub announced a platform fee of $0.002 per minute for them on 2025-12-16 and postponed it within days (source: https://github.blog/changelog/2025-12-16-coming-soon-simpler-pricing-and-a-better-experience-for-github-actions/, retrieved 2026-09-24, carried). Treat it as a live risk, not a settled price: at that rate the 360-hour reference month below would add 21,600 × $0.002 = $43.20.
+
+**The resume poller** is billed only while it is enabled — while a run is waiting on a usage pause (§3) — and only on a private repository, at least one minute per tick on the runner `HARNESS_RUNNER` selects (billing unit: same source as the table above, retrieved 2026-09-24, carried). Per month of continuous enablement, 30 days:
+
+| Interval | Ticks a day | Minutes a month |
+|---|---|---|
+| every 15 minutes | 96 | 2,880 |
+| every 30 minutes (shipped) | 48 | 1,440 |
+| hourly | 24 | 720 |
+
+On a 2-core hosted runner, 1,440 minutes past the included allowance would be 1,440 × $0.006 = $8.64.
+
+**The reference figure: one heavy user**, 3 sessions of 6 hours a day, 20 days a month — 360 hours, or 21,600 minutes (the usage profile is the task prompt's, retrieved 2026-09-24):
+
+| Runner | Monthly cost | Arithmetic and source |
+|---|---|---|
+| Hosted Linux 2-core | about $112–130 | 21,600 × $0.006 = $129.60 with no included minutes; $111.60 after Pro's or Team's 3,000. https://docs.github.com/en/billing/reference/actions-runner-pricing, retrieved 2026-09-24 (carried) |
+| Hosted Linux 4-core larger runner | about $259 | 21,600 × $0.012 = $259.20, assuming no included minutes apply. Same source, retrieved 2026-09-24 (carried) |
+| Self-hosted on a Hetzner CX33 (4 vCPU, 8 GB) | €8.49 flat | The server's monthly price, plus nothing from GitHub while the platform fee stays postponed. https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/, retrieved 2026-09-24 (carried). **Unverified:** that Hetzner bills by the hour, capped at the monthly price |
+
+Light use fits inside a private repository's included minutes: the Free plan's 2,000 minutes are about 33 hours of 2-core runner time a month (source as the table above, retrieved 2026-09-24, carried). None of these figures includes Claude usage, which §9 covers and which is the same whether a run is local or remote.
+
+---
+
+## 11. Security
+
+**On a GitHub-hosted runner** each job gets a fresh VM that GitHub destroys after the job. The checkout lives on that VM's disk for the job's duration; the credential lives in GitHub Secrets and reaches the job as an environment variable; the docs-retrieval cache, when used, is stored by GitHub. This is the task prompt's research, which gave no source; GitHub's page is https://docs.github.com/en/actions/concepts/runners/github-hosted-runners (not retrieved in this branch).
+
+**On a self-hosted runner** the code persists on your disk between jobs — the checkout, the installed plugin and anything the run wrote — unless the runner is ephemeral (§8). A persistent self-hosted runner on a **public** repository is a risk if pull requests from forks can run workflows on it: a `pull_request` workflow runs the file as the pull request has it, so a fork can add a job whose `runs-on` names your runner label. The harness's own workflows cannot be started that way — they trigger only on `workflow_dispatch`, which needs write access, and `schedule` — but any workflow can target the label. What prevents it: keep self-hosted runners off public repositories, or require approval for fork pull request workflows from outside contributors (Settings → Actions → General, the fork pull request approval setting), and at organization level restrict the runner through a runner group to the repositories and workflows that need it. GitHub's statement is https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security (not retrieved in this branch; check the setting's current wording there).
+
+**What a reader of the repository's Actions runs can see.** The `harness-state` artifact — the clarification questions and answers, `PAUSE_PROGRESS.md` and the readable run log, which quotes the code and commands the agents worked with — the job logs, the step summary and each run's inputs, including the `answers` a `/autonomous-sdlc-harness:branch-answer` relay carries, are readable by anyone who can read the repository's Actions runs. On a public repository that is everyone.
+
+**Workflow inputs never become shell source.** Every input, variable and secret reaches a shell line through `env:`, never through a GitHub expression interpolated into `run:`, so an input shaped like a command is data (`harness-run.yml` → the header's `TWO RULES EVERY EDIT KEEPS`). Keep that rule in any edit you make to your copy.
+
+**On every option, the code the agents read goes to the Anthropic API**, exactly as it does when the run executes on your own machine. Choosing a remote runner changes where the session runs, not what it sends.

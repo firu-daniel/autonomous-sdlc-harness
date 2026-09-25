@@ -26,3 +26,8 @@
 - Every secret and variable named matches `cli/src/remote/githubActions.ts` and the template's `env:` block, spelled identically.
 - `grep -n "2026-09-24" docs/remote-execution.md` finds a date beside every figure's source, and no figure lacks a source URL.
 - Every command sits in a fenced block, one per line (`harness-runs/lessons.md`); the adopter-facing prose says "GitHub Actions", "self-hosted runner" and "runner label", the terms an adopter arrives with, and uses the configuration key only where the key itself is meant.
+
+- **Deviations from plan:**
+  - The service commands are written `sudo ./svc.sh install` and `sudo ./svc.sh start`: GitHub's runner service script needs root on Linux, and §8 scopes self-hosted runners to Linux.
+  - "The job says which is missing" holds for `jq` and `gh` only (`harness-run.yml` → `Check for jq and gh`). Node comes from `actions/setup-node` and the `claude` CLI is npm-installed when absent, so §8 says that instead.
+  - Evidence downgrade: no page was re-fetched (this session has no web-fetch tool), so every figure in §9–§10 is labelled carried from the task prompt, retrieved 2026-09-24. The sources §8 and §11 add for the ephemeral runner, the hosted-VM lifecycle and the fork pull request setting are outside the prompt's research and are labelled "not retrieved in this branch". The derived figures ($129.60, $111.60, $259.20, $43.20, $8.64, the poller minutes, ~33 hours) are arithmetic over the carried figures and show it.
