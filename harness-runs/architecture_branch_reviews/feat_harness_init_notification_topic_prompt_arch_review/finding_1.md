@@ -1,0 +1,19 @@
+### 1. The terminal re-ask line re-words the accepted destination forms outside their owning module
+
+**Site:** `cli/src/commands/init.ts` → `askPushDestination`, the `promptCtx.report.info(` call carrying `'That answer is neither an ntfy topic name nor a full http:// or https:// URL, so it was not used. It is not repeated here, because a push destination is a credential.'` (around line 1555; navigation hint only).
+
+**Problem.** This branch makes `cli/src/generators/notifications.ts` the single owner of every sentence that describes what may be given as a push destination. Its module header, choice 4, says so, and so does the doc comment on `PUSH_DESTINATION_FORMS`: *"The one description of what may be given as a push destination … Every surface asking for or refusing a destination interpolates it rather than re-wording it."* The other three refusal surfaces this branch adds follow that rule. The parse-time refusal in `parseInitFlags` interpolates `PUSH_DESTINATION_FORMS`. So do the generator's unrecognised-answer warning and its blank-answer note. The re-ask line in `askPushDestination` is also a refusal surface, but it restates the accepted forms in its own words (*"neither an ntfy topic name nor a full http:// or https:// URL"*) and keeps its own copy of the credential clause. That gives the wording a second home in the `commands/` area.
+
+This breaks two written rules:
+- `.claude/context/conventions.md` → `### Where a new responsibility goes`: *"A responsibility that already has a home does not get a second one."* Describing the accepted destination forms and the not-repeated-because-credential clause is a responsibility with a declared home, `generators/notifications.ts`.
+- `.claude/context/cli.md` → `## What "done" means here`: *"A reviewer holds a change to its module's own header. Where the header states a rule, the change either satisfies it or amends the header in the same edit."* The header of `generators/notifications.ts` states the rule, and this change neither satisfies it nor amends it.
+
+`.claude/context/cli.md` → `## How a module in this layer is written` adds a third reason: *"Commands order and report; they decide nothing."* The wording of this line is the generator's to produce, and `init` should only report it.
+
+The drift is a real risk. If the grammar changes later (for example a self-hosted ntfy origin, or another scheme), `PUSH_DESTINATION_FORMS` and `resolvePushDestination` change together in one module, and this line in another module goes stale without any compile error.
+
+**Fix.**
+- [ ] In `cli/src/generators/notifications.ts`, export one constant for the terminal re-ask note, for example `UNRECOGNISED_DESTINATION_NOTE`. Place it beside `PUSH_DESTINATION_FORMS` and give it a doc comment saying that `init`'s re-ask prints it. Build its text from what the module already owns. Either interpolate `PUSH_DESTINATION_FORMS`, or state only that the answer was not one of the accepted forms and that the question that follows (which interpolates `PUSH_DESTINATION_FORMS`) lists them. Include the not-repeated-because-credential clause, worded the same way as the generator's own warning. The note must never include the answer.
+- [ ] In `cli/src/commands/init.ts` → `askPushDestination`, import that constant and pass it to `promptCtx.report.info(...)`. Remove the literal string.
+- [ ] Add a sentence to choice 4 of the `generators/notifications.ts` module header saying that the re-ask note is also produced here, so the header's list of surfaces matches the code.
+- [ ] No test change is needed for placement. `cli/test/init.test.mjs` already states that the terminal re-ask cannot be reached from a subprocess test. Optionally, add an assertion to `cli/test/push-destination.test.mjs` that the exported note does not include `TOPIC` or `AMPERSAND_URL`. The note is a constant, so this only confirms that it quotes no value.
