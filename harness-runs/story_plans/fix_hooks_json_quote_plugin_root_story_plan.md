@@ -22,7 +22,7 @@ Out of scope, per the task prompt: the guard scripts' own logic, and every gate 
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_hooks_json_quote_plugin_root/task_<K>_plan.md`. Entries run bottom-up in the configured layer order, with the catch-all layer (`general`, path `.`) last.
 
-1. [ ] **Task 1** — Quote the plugin-root path in all six `hooks.json` guard commands and record the chosen form in the hooks README _(layer: plugin)_ _(points: 10)_
+1. [x] **Task 1** — Quote the plugin-root path in all six `hooks.json` guard commands and record the chosen form in the hooks README _(layer: plugin)_ _(points: 10)_
 2. [ ] **Task 2** — Record the quoting requirement as a measured manifest fact in `docs/development.md` and run the acceptance checks _(layer: general)_ _(points: 10)_
 
 ## Scope register
