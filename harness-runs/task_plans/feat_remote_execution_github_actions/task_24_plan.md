@@ -25,3 +25,8 @@
 - `bash scripts/check-command-spelling.sh` (gate 6d) and `bash scripts/test.sh` exit 0.
 - No sentence in the three pause-and-flow files describes a change to what the run itself does when it pauses.
 - Re-run the story index's derivation entry 6: its hit in `user_review_fix_plan_writing_instructions_autonomous.md` is the qualified sentence, and Override 3's `git add` list is byte-identical to before.
+
+**Deviations from plan:**
+
+- `bash scripts/test.sh` exited 1 on two gates this task's diff does not touch: 6a matched only the gitignored `harness-runs/scratch/t3-test.log` (an earlier task's scratch log carrying absolute paths), and 11 refused because the docs-retrieval runtime is not installed in this checkout. Gate 6d (`bash scripts/check-command-spelling.sh`) exited 0 and `bash scripts/typecheck.sh` passed.
+- The owner-table row names `docs/remote-execution.md` as the format of record as the Work bullet asks; that file does not exist yet — Tasks 28–29, in the later `general` layer, create it.

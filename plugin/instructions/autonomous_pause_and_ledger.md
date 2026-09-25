@@ -376,15 +376,19 @@ clean, because every earlier Phase-D artifact is already committed.
 
 ## 2. Pause/resume protocol
 
-### 2.0 The three pause triggers — one protocol, three ways in
-All three converge on the same artifacts (`PAUSE_PROGRESS.md` + `PAUSE_ACK` + end-session) and the same
+### 2.0 The four pause triggers — one protocol, four ways in
+All four converge on the same artifacts (`PAUSE_PROGRESS.md` + `PAUSE_ACK` + end-session) and the same
 watcher-owned resume, and differ only in **who notices** and **who resumes**:
 
 | Trigger | Detected by | Path in | Auto-resumes? |
 |---|---|---|---|
 | Operator pause (`/autonomous-sdlc-harness:branch-pause`) | the operator | drops `<state_dir>/PAUSE` → run honors it at a clean boundary (**§2.2**) | no — waits for `/autonomous-sdlc-harness:branch-resume` |
-| **Usage limit** (5 h `five_hour` / weekly `seven_day`) | the **watcher**, parsing `rate_limit_event` off the run's `<branch>.stream.jsonl` | watcher drops `<state_dir>/PAUSE` → run honors it (**§2.2**) | **yes** — watcher records `usage_resume_at` and drops `RESUME` when the window resets |
-| **API overload** (`529` / `500` / `503`) | the **run itself**, from a failed Agent dispatch | run writes `PAUSE_ACK` directly — **no `PAUSE` request** (**§2.5**) | no — an outage has no predictable reset; waits for `/autonomous-sdlc-harness:branch-resume` |
+| **Usage limit** (5 h `five_hour` / weekly `seven_day`) | the **watcher**, parsing `rate_limit_event` off the run's `<branch>.stream.jsonl` — the local daemon for a local run, the job's own watcher (`autonomous-watcher.sh job`) for a remote one | watcher drops `<state_dir>/PAUSE` → run honors it (**§2.2**) | **yes** — watcher records `usage_resume_at` and drops `RESUME` when the window resets; a remote run is resumed by its job, waiting in-job, or else by the `harness-resume.yml` poller dispatching a new job — never by a `RESUME` dropped locally |
+| **API overload** (`529` / `500` / `503`) | the **run itself**, from a failed Agent dispatch | run writes `PAUSE_ACK` directly — **no `PAUSE` request** (**§2.5**) | no — an outage has no predictable reset; waits for `/autonomous-sdlc-harness:branch-resume` (a remote job's bounded exception: §2.5 **Who resumes.**) |
+| **Job time budget** (remote execution, GitHub-hosted runner) | the **job's watcher** | drops `<state_dir>/PAUSE` → run honors it (**§2.2**) | **yes** — the next chained job resumes from the ledger |
+
+A remote run's operator pause reaches the job as a relayed request, and the job's watcher drops `PAUSE` into
+its checkout, so it is honored by the same §2.2 path. Nothing in §2.2 or §2.4 changes for a remote run.
 
 So the usage gate is *not* a self-pause: it is watcher-detected and routed through the ordinary request/ack
 path. §2.5 is the only **run-initiated** pause, which is why it is the only one that writes `PAUSE_ACK` with no
@@ -547,6 +551,12 @@ itself — the run sits at registry `paused` at zero dispatch cost until a `<sta
 resumes it with `/autonomous-sdlc-harness:branch-resume` once the incident is clear. Because the status is genuinely `paused`, both
 `/autonomous-sdlc-harness:branch-resume` and `resume_paused_runs` act on it normally, which is precisely what a falsely-`completed`
 run denies them.
+
+A remote job is the one exception. There the job's watcher resumes an overload self-pause from the committed
+ledger automatically, after a delay (`REMOTE_AUTO_RESUME_DELAY_SECS`), at most `REMOTE_AUTO_RESUME_MAX` times per
+run; past that bound the run stays `paused` and waits for `/autonomous-sdlc-harness:branch-resume` as above. The
+outage still has no predictable reset — the bound is what answers that there, capping what a persistent fault
+can cost.
 
 ---
 
