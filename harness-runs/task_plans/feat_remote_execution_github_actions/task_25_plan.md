@@ -40,3 +40,8 @@
 - `npm run validate:config`, `npm run validate:config:negative` and `npm run validate:config:example` each exit 0, run without a pipe.
 - A scratch copy of `examples/harness.config.json` with `"execution": { "target": "github-actions" }` validates; with `"execution": { "runner": "x" }` it does not.
 - `bash scripts/test.sh` exits 0 (gate 3).
+
+**Deviations from plan:**
+
+- The scratch-copy check ran through `bash scripts/scratch-run.sh` on a `.cjs` probe calling the workspace's `ajv` library (draft-07, `strict: false`), because direct `node_modules/.bin/ajv` and `npx ajv` invocations were refused by the permission profile. Result: `target: github-actions` valid; `runner: x` rejected on `#/properties/execution/additionalProperties`.
+- `bash scripts/test.sh` exited 1, so its bullet is met for gate 3 only (all `3a`–`3f` ok). The two failures are outside this diff: `6a` matched a pre-existing untracked `harness-runs/scratch/t3-test.log` carrying machine paths, and `11` failed because the docs-retrieval runtime is not installed in this environment.

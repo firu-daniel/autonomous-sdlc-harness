@@ -68,7 +68,7 @@ Each entry maps 1:1 to `harness-runs/task_plans/feat_remote_execution_github_act
 22. [x] **Task 22** — Give `branch-status` and `branch-answer` their remote arms _(layer: plugin)_ _(points: 14)_
 23. [x] **Task 23** — Give `branch-resume`, `branch-pause` and `branch-user-review` their remote arms _(layer: plugin)_ _(points: 14)_
 24. [x] **Task 24** — State the remote job's pause triggers and resumes in the pause protocol and the flow document _(layer: plugin)_ _(points: 14)_
-25. [ ] **Task 25** — Add the `execution` schema property and its negative fixture _(layer: general)_ _(points: 8)_
+25. [x] **Task 25** — Add the `execution` schema property and its negative fixture _(layer: general)_ _(points: 8)_
 26. [ ] **Task 26** — Document `execution.target` and where remote settings live in `docs/config.md` and `schemas/README.md` _(layer: general)_ _(points: 8)_
 27. [ ] **Task 27** — Document the workflows, `--plugin-root-entries`, the two checks and `--check-github` in `docs/cli.md` _(layer: general)_ _(points: 16)_
 28. [ ] **Task 28** — Write `docs/remote-execution.md`: the design and the job's lifecycle _(layer: general)_ _(points: 20)_
