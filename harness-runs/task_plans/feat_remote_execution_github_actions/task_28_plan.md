@@ -29,3 +29,5 @@
 - Every behaviour described matches the code: spot-check each section against the named script or module (`remote-run.sh` header, `autonomous-watcher.sh` `JOB MODE` block, the template header).
 - `bash scripts/check-command-spelling.sh` (gate 6d) and the self-containment gate (gate 6) pass: no machine path, every slash command prefixed.
 - Every command an adopter is meant to run sits in a fenced block, one per line; no line number is written anywhere in the file.
+
+**Deviations from plan:** The plan asks for a source URL beside each behaviour in `## 6.`. Three have none: a skipped job billing nothing, a step-level `timeout-minutes` from an expression, and `gh workflow enable` under `GITHUB_TOKEN`. The task prompt's research cites no source for them, and this session had no web access. Their rows say "None retrieved" and name where to check, rather than citing a page nobody read. The plugin-pin row cites the `--help` measurement recorded in the template header, not a URL. No page was re-fetched, so every carried source keeps the 2026-09-24 date and is labelled as carried.
