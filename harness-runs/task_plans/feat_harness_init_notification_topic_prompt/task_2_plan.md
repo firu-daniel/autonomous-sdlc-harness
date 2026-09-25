@@ -26,3 +26,7 @@ This task imports `PUSH_DESTINATION_PLACEHOLDER` beside the `PUSH_CMD_KEY`, `PUS
 
 - `bash scripts/test.sh` exits 0 with the new assertion passing.
 - `grep -rn "push-url <url>" cli/src` returns nothing once Tasks 1 and 2 have landed. The flag row's own `placeholder: '<url>'` in `init.ts` is Task 3's to change.
+
+**Deviations from plan:**
+
+- Verification bullet 1 (`bash scripts/test.sh` exits 0) was not met: it exited 1 with `run-gates: 3 failed, 17 passed`. Gate `4 npm test` passed, and that gate runs `cli/test/doctor.test.mjs` with the new assertion. The three failing gates don't depend on this diff: `1a plugin manifest` (the validator's `--strict` warning about unquoted `${CLAUDE_PLUGIN_ROOT}` in `plugin/` hook commands), `6a no machine paths` (the worktree's `.git` pointer file and the `harness-runs/improvement_observations/` records that quote it), and `11 docs-retrieval relevance floor` (the retrieval runtime is not installed). So bullet 1's claim rests on gate 4 passing, not on the wrapper's exit status.

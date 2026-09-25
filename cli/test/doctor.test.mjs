@@ -2457,6 +2457,7 @@ test('the notifications check reports which settings file is in effect, and neve
     // The remedy is named, because "you get nothing and here is why" is the whole content of this
     // warning: notifications are optional, and the check may never fail over one nobody took.
     assert.match(stderr, /--notifications/);
+    assert.ok(stderr.includes('--push-url <url-or-ntfy-topic>'), `the remedy does not name the shared destination placeholder\n${stderr}`);
     // A read that created the machine-local directory would make `doctor` a writer outside the
     // repository — the one place its "writes nothing" contract is hardest to notice being broken.
     assert.equal(existsSync(machine.dir), false, `${machine.dir} was created by a check that only reads`);
