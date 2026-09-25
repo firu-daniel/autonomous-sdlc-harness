@@ -40,3 +40,5 @@
 - `bash scripts/typecheck.sh` and `bash scripts/test.sh` exit 0.
 - `grep -rn "harness-run.yml\|HARNESS_GH_CLI\|CLAUDE_CODE_OAUTH_TOKEN" cli/src` finds each literal only in `cli/src/remote/githubActions.ts`.
 - The module imports only `node:` builtins and relative siblings.
+
+**Deviations from plan:** `bash scripts/test.sh` exited 1 in the implementing session, on gate 11 (docs-retrieval relevance floor) alone: "the retrieval runtime is not installed, so the optional peers cannot be loaded" — a machine-state precondition this task touches nothing of. Gate 4 (`npm test`, which runs `cli/test/remote-names.test.mjs`) and every other runnable gate passed; `bash scripts/typecheck.sh` passed.
