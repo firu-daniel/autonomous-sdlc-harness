@@ -312,7 +312,8 @@ async function copyTemplate(dir, remote) {
       `fixture setup: the template's origin path occurs ${occurrences} times in ${configPath}, expected exactly once`,
     );
   }
-  await writeFile(configPath, config.replace(template.origin, origin), 'utf8');
+  // A replacer function, because a string replacement would expand any `$` pattern in `origin`.
+  await writeFile(configPath, config.replace(template.origin, () => origin), 'utf8');
   return origin;
 }
 
