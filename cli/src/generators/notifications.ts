@@ -84,7 +84,7 @@ const SHELL_SAFE_VALUE = /^[A-Za-z0-9._:/?#@%+=,-]+$/;
 export const NTFY_PUBLIC_ORIGIN = 'https://ntfy.sh';
 
 /** The ntfy server's own topic-name rule; a name outside it is one the server would refuse. */
-export const NTFY_TOPIC_PATTERN = /^[-_A-Za-z0-9]{1,64}$/;
+const NTFY_TOPIC_PATTERN = /^[-_A-Za-z0-9]{1,64}$/;
 
 /** The one placeholder every flag row, note and advice line prints for the destination. */
 export const PUSH_DESTINATION_PLACEHOLDER = '<url-or-ntfy-topic>';

@@ -14,3 +14,5 @@ const NTFY_TOPIC_PATTERN = /^[-_A-Za-z0-9]{1,64}$/;
 ```
 
 Then confirm that nothing imports it: `git grep -n NTFY_TOPIC_PATTERN -- cli plugin docs` must list only `cli/src/generators/notifications.ts`. Also confirm that `bash scripts/typecheck.sh` and `bash scripts/test.sh` still exit 0, run without a pipe.
+
+**Deviations from plan:** `bash scripts/test.sh` exited 1, not 0. Gate 4 (`npm test`) passed. The three failing gates are outside this diff: `1a plugin manifest` (hook-command quoting warnings in `plugin/hooks/hooks.json`), `6a no machine paths` (the worktree's own `.git` pointer file and `harness-runs/` artifacts), and `11 docs-retrieval relevance floor` (the retrieval runtime is not installed). `bash scripts/typecheck.sh` exited 0.
