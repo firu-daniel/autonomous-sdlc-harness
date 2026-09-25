@@ -81,10 +81,10 @@ export interface OuterLoopScript {
    * `>` that is neither a descriptor duplication nor a redirection to the literal `/dev/null`), so a
    * row that must not be agent-runnable needs an entry in
    * that guard's `DENY_SCRIPT_BASENAMES` as well as `agentInvocable: false` here. The `false` rows
-   * that carry or owe that entry are `autonomous-watcher.sh`, `restart-watcher.sh`,
+   * that carry that entry are `autonomous-watcher.sh`, `restart-watcher.sh`,
    * `cleanup-merged-worktrees.sh` and `remote-run.sh` — the last because a run that could dispatch
-   * runs could start runs about itself (the guard is `plugin/hooks/autonomous-script-allowlist-guard.sh`;
-   * a row that owes the entry is auto-allowed until the guard carries it). For the worktree scripts, the notifier, the stream formatter and
+   * runs could start runs about itself (the guard is `plugin/hooks/autonomous-script-allowlist-guard.sh`).
+   * For the worktree scripts, the notifier, the stream formatter and
    * the docs-retrieval server launcher — which the agent runner starts from `.mcp.json` —
    * `false` is a calling convention rather than a gate: the guard auto-allows them, deliberately.
    *
@@ -160,7 +160,7 @@ export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze(
   Object.freeze({ file: NOTIFY_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: WATCHER_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'restart-watcher.sh', mode: 0o755, agentInvocable: false }),
-  // Run by the watcher, the remote job or a person. Owes a `DENY_SCRIPT_BASENAMES` entry: a run that
+  // Run by the watcher, the remote job or a person. Carries a `DENY_SCRIPT_BASENAMES` entry: a run that
   // could dispatch runs could start runs about itself.
   Object.freeze({ file: 'remote-run.sh', mode: 0o755, agentInvocable: false }),
 ] as const);
