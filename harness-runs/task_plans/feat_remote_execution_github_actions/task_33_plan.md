@@ -23,3 +23,9 @@
 - `bash scripts/run-gates.sh` passes gates 6a–6e (self-containment, `llms.txt` links, command spelling).
 - Re-run the story index's derivation entries 3 and 4 and confirm each hit in these four files is an edited sentence or a `no-change` row.
 - §5's derivation output satisfies its invariant, stated in the commit.
+
+**Deviations from plan:**
+
+- §5's derivation also reaches `cli/src/doctor/checks.ts` (`AGENT_CLI_VARIABLE`, `DEFAULT_AGENT_CLI`), which is already on `main` and was covered by no row and no disposal, so the invariant was broken before this branch. It is disposed of by name in §5's disposition sentence in this same edit, beside this branch's one new file reached, `cli/src/remote/githubActions.ts` (a doc comment). The branch's other new hit, the watcher header's `a job` REPRO line, is the agent stub the first row already covers.
+- The §6 guards paragraph names the four withheld outer-loop scripts by basename, not only their count, so the next addition to `DENY_SCRIPT_BASENAMES` changes a list a reader can check.
+- Verification evidence: `bash scripts/test.sh` exited 1 with two gates failing, neither caused by this edit. 6a hit `harness-runs/scratch/t3-test.log`, a gitignored scratch log an earlier task left behind whose stack traces contain the absolute checkout path. 11 failed because the retrieval runtime is not installed on this host. 6b–6e passed, 6c (`llms.txt` links) and 6d (command spelling) among them.
