@@ -27,3 +27,7 @@
 - `bash scripts/test.sh` exits 0.
 - `grep -n '\${{[^ ]' cli/templates/github/workflows/harness-resume.yml` prints nothing.
 - The self-containment gate (`docs/development.md` → `## 5. Verifying a change`, gate 6) still passes: the templates sit under `cli/templates/github/`, never under a committed dot-directory.
+
+**Deviations from plan:**
+- Beyond the shape, the job carries `concurrency: group: harness-resume` (a hand-dispatched tick overlapping a scheduled one would dispatch `resume: pause` twice for the same branch) and a `jq` / `gh` presence check folded into the configuration step, in `harness-run.yml`'s own wording.
+- `bash scripts/test.sh` exited 1 on two gates this task does not touch: 6a flags the ignored, untracked `harness-runs/scratch/t3-test.log` (a previous unit's scratch log carrying absolute paths), and 11 needs the docs-retrieval runtime, which is not installed here. Gate 4 (`npm test`, including the extended `workflow-templates.test.mjs`, 10/10) and 6b (no template in the dot-namespace) passed.

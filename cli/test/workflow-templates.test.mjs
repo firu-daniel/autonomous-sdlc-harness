@@ -1,5 +1,5 @@
 /**
- * The `harness-run.yml` workflow template, read as text.
+ * The `harness-run.yml` and `harness-resume.yml` workflow templates, read as text.
  *
  * **The contract these tests enforce.** The seven `workflow_dispatch` inputs `remote-run.sh`
  * sends, with `action`'s options exactly `run`, `pause`, `warm` and `stop`; a job only for `run`
@@ -9,6 +9,10 @@
  * renderer (`cli/src/core/templating.ts`) sees nothing else; no input or secret expression inside a
  * `run:` block (script injection); `continue` under `!cancelled()` and the upload and final push
  * under `always()`; and no configured directory frozen into the file.
+ *
+ * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; the permissions exactly
+ * `contents: read` and `actions: write`; `remote-run.sh poll` its only call into the script family;
+ * no template token at all; every GitHub expression spaced; none inside a `run:` block.
  */
 
 import assert from 'node:assert/strict';
@@ -17,31 +21,33 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { PACKAGE_ROOT } from './helpers/fixture.mjs';
-import { WORKFLOW_RUN_FILE, WORKFLOW_TEMPLATE_DIR } from '../dist/remote/githubActions.js';
+import { WORKFLOW_RESUME_FILE, WORKFLOW_RUN_FILE, WORKFLOW_TEMPLATE_DIR } from '../dist/remote/githubActions.js';
 
 const TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_RUN_FILE), 'utf8');
 const LINES = TEXT.split('\n');
+const RESUME_TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_RESUME_FILE), 'utf8');
+const RESUME_LINES = RESUME_TEXT.split('\n');
 
 const indentOf = (line) => line.length - line.trimStart().length;
 
 /** The lines under `LINES[start]` indented deeper than it, blank lines kept. */
-function blockUnder(start) {
-  const base = indentOf(LINES[start]);
+function blockUnder(start, lines = LINES) {
+  const base = indentOf(lines[start]);
   const out = [];
-  for (let i = start + 1; i < LINES.length; i++) {
-    if (LINES[i].trim() !== '' && indentOf(LINES[i]) <= base) break;
-    out.push(LINES[i]);
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i].trim() !== '' && indentOf(lines[i]) <= base) break;
+    out.push(lines[i]);
   }
   return out;
 }
 
 /** Every `run:` body: the inline value, or the block under a `run: |`. */
-function runBodies() {
+function runBodies(lines = LINES) {
   const bodies = [];
-  LINES.forEach((line, i) => {
+  lines.forEach((line, i) => {
     const m = /^\s*(?:- )?run:\s*(.*)$/.exec(line);
     if (m === null) return;
-    bodies.push(m[1] === '|' ? blockUnder(i).join('\n') : m[1]);
+    bodies.push(m[1] === '|' ? blockUnder(i, lines).join('\n') : m[1]);
   });
   return bodies;
 }
@@ -127,4 +133,33 @@ test('no configured directory is frozen into the file', () => {
   assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_])scripts\//m);
   // A segment of its own: the machine cache path's `autonomous-sdlc-harness/` is not the state dir.
   assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_-])sdlc-harness\//m);
+});
+
+test('the poller: a schedule, a hand trigger, and exactly its two permissions', () => {
+  const on = RESUME_LINES.indexOf('on:');
+  assert.notEqual(on, -1);
+  const under = blockUnder(on, RESUME_LINES);
+  const triggers = under.filter((l) => /^ {2}[a-z_]+:/.test(l)).map((l) => l.trim().replace(/:.*$/, ''));
+  assert.deepEqual(triggers, ['schedule', 'workflow_dispatch']);
+  assert.match(under.join('\n'), /^\s*- cron: '[^']+'$/m);
+  const perms = RESUME_LINES.indexOf('permissions:');
+  assert.deepEqual(
+    blockUnder(perms, RESUME_LINES).filter((l) => l.trim() !== '').map((l) => l.trim()),
+    ['contents: read', 'actions: write'],
+  );
+});
+
+test('the poller runs remote-run.sh poll and nothing else of the family', () => {
+  const calls = runBodies(RESUME_LINES).flatMap((body) =>
+    [...body.matchAll(/([A-Za-z0-9_-]+\.sh)"?\s+(\S*)/g)].map((m) => `${m[1]} ${m[2]}`),
+  );
+  assert.deepEqual(calls, ['remote-run.sh poll']);
+});
+
+test('the poller carries no template token, and every expression is spaced and outside run blocks', () => {
+  assert.doesNotMatch(RESUME_TEXT, /\{\{[A-Za-z]/);
+  assert.doesNotMatch(RESUME_TEXT, /\$\{\{[^ ]/);
+  const bodies = runBodies(RESUME_LINES);
+  assert.ok(bodies.length > 0);
+  for (const body of bodies) assert.ok(!body.includes('${{'), `expression in run: ${body}`);
 });

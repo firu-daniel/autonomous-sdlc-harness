@@ -1,0 +1,94 @@
+# harness-resume.yml — resumes usage-paused autonomous-sdlc-harness runs once
+# their usage window has reset, with no local machine involved.
+#
+# WHO WRITES IT. `autonomous-sdlc-harness init`, only when harness.config.json's
+# `execution.target` is `github-actions`. Written create-if-absent: from then on
+# it is yours to tune, and a re-run of `init` keeps your copy.
+#
+# WHY A POLLER. A `schedule` trigger is a recurring cron read from the default
+# branch, not a one-shot timer, so resuming at a recorded reset time means
+# polling. Each tick runs `remote-run.sh poll`: it downloads each branch's
+# newest `harness run` bundle and dispatches `resume: pause` for every
+# usage-paused run whose recorded reset has passed.
+#
+# IT DISABLES ITSELF. When a tick leaves no run waiting, `poll` runs
+# `gh workflow disable harness-resume.yml`; a job that ends on a usage pause
+# re-enables it (`remote-run.sh continue`). Ticks are paid only during a pause.
+# That also makes moot GitHub's disabling of scheduled workflows in a public
+# repository after 60 days without activity.
+#
+# UNVERIFIED: whether GITHUB_TOKEN with `actions: write` may enable and disable
+# a workflow. If it may not, the pausing job's `paused` notification says
+# auto-resume is unavailable, and the run waits for
+# /autonomous-sdlc-harness:branch-resume.
+#
+# THE INTERVAL IS YOURS TO EDIT. On a private repository every tick is billed
+# at least one minute while the poller is enabled: `*/30` is up to 48 minutes a
+# day, `*/15` up to 96, `0 * * * *` up to 24, each adding at most its interval
+# to how late a run resumes after its reset. On a public repository the ticks
+# cost nothing.
+#
+# WHAT IT READS.
+#   Variables: HARNESS_RUNNER, HARNESS_REMOTE_STOP (any value: the tick
+#     dispatches nothing), HARNESS_MAX_CHAIN (the automatic-dispatch limit).
+#   harness.config.json, at run time: `scriptsDir`. No configured value is
+#     frozen into this file.
+#
+# THE RULE EVERY EDIT KEEPS. Every GitHub expression has a space after its
+# opening braces, and every value reaches a shell line through `env:`. `init`
+# renders this file with the CLI's double-brace token renderer, which reads a
+# letter straight after the braces as a token; this file carries no token.
+#
+# DECLARED MIRRORS — a rename on either side is an edit to both:
+#   cli/src/remote/githubActions.ts   WORKFLOW_RESUME_FILE, HARNESS_RUNNER,
+#                                     HARNESS_REMOTE_STOP
+#   cli/src/config/model.ts           DEFAULTS.scriptsDir
+
+name: harness-resume
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  poll:
+    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    # A hand-dispatched tick overlapping a scheduled one would dispatch twice.
+    concurrency:
+      group: harness-resume
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+      HARNESS_MAX_CHAIN: ${{ vars.HARNESS_MAX_CHAIN }}
+      HARNESS_REMOTE_SLUG: ${{ github.repository }}
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Read the configuration
+        run: |
+          missing=""
+          for tool in jq gh; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::this runner lacks:$missing. Install them on the self-hosted runner, or use a GitHub-hosted one."
+            exit 1
+          fi
+          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
+
+      - name: Resume the runs whose usage window has reset
+        run: bash "$SCRIPTS_DIR/remote-run.sh" poll
