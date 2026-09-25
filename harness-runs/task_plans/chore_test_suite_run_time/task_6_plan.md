@@ -28,3 +28,10 @@
 - `bash scripts/measure-suite.sh --in-container` on the host exits 2.
 - `grep -n 'rm -rf\|rm -r ' scripts/measure-suite.sh` prints nothing, and `bash -n scripts/measure-suite.sh` exits 0.
 - `bash scripts/run-gates.sh` prints no failure its run on Task 5's commit did not print.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the `--cpus 4` / `--cpus 2` runs and the "above the runtime's CPU count exits 2" check were not executed. `docker` is not on `PATH` on the implementing machine (`bash scripts/measure-suite.sh --cpus 4` exited 3 with the planned message), so the container side (`--in-container`, jq install, `runuser -u node` extraction, commit, `npm ci`, timed loop) and the NCPU comparison rest on reading, not execution. They need the story index's `Manual setup required` runtime.
+- Evidence downgrade: `bash -n scripts/measure-suite.sh` was refused by the permission profile (needs approval). Substitute evidence: `bash scripts/measure-suite.sh --runs 1` ran host mode to `exit 0`, which parses every top-level compound command in the file, container branches included; it printed `host cpus=10 ref=cb91d513f07e` lines and the run-gates summary `1 failed, 19 passed` (gate 11).
+- Executed: `--in-container` on the host exits 2; `--cpus 0` exits 2; `--cpus 4` with no `docker` exits 3 with the planned message, before `mktemp` runs; the `rm -rf\|rm -r ` grep prints nothing.
+- "`git add` every file" is spelled `git add -- :/` in the in-container scratch repository.

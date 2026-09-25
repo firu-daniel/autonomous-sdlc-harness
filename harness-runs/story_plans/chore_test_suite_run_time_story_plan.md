@@ -36,7 +36,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/chore_test_
 3. [x] **Task 3** — Run `doctor.test.mjs`'s cases concurrently under the shared bound _(layer: cli)_ _(points: 10)_
 4. [x] **Task 4** — Run `init.test.mjs`'s cases concurrently, keeping its one timing-sensitive case outside the suite _(layer: cli)_ _(points: 15)_
 5. [x] **Task 5** — Add `scripts/measure-suite.sh`: time `npm test` and `run-gates.sh` at any commit, on this host _(layer: general)_ _(points: 15)_
-6. [ ] **Task 6** — Add the core-restricted container mode to `scripts/measure-suite.sh` (`--cpus <n>`) _(layer: general)_ _(points: 15)_
+6. [x] **Task 6** — Add the core-restricted container mode to `scripts/measure-suite.sh` (`--cpus <n>`) _(layer: general)_ _(points: 15)_
 7. [ ] **Task 7** — Measure the before and after, prove nothing was lost, and record both in `docs/development.md` gate 4 _(layer: general)_ _(points: 15)_
 
 ## Scope register
