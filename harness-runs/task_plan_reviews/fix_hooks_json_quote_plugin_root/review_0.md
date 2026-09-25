@@ -1,0 +1,19 @@
+# Task plan review — iteration 0
+
+## Must Fix
+
+1. **`task_2_plan.md` — the pre-change warning is recorded from an elided quote, not measured** — `task_2_plan.md`.
+   The first `**Work:**` bullet tells the implementer to record the validator's warning on the unquoted form "quoted verbatim from the task prompt's `## The defect` block". That block is elided: it reads "Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes **…** If the expanded path contains a space…". The rule this edit lands under is `.claude/context/conventions.md` → `## Documents of record`: *"A measured fact states what was measured, the command and the exact message"*. Task 2's own "How this task's implementer reads the conventions" paragraph quotes that rule too. A message copied from the prompt, with an ellipsis in it, is not the exact message, and it was not measured on the version the paragraph names. No task in the set runs the validator against the unquoted file. Task 1 runs it only after its edit.
+   **Fix:** In `task_2_plan.md`, have the probe measure the pre-change message itself. Copy `plugin/` to a temp directory. Overwrite the copy's `hooks/hooks.json` with the pre-change content, taken with `git show <base>:plugin/hooks/hooks.json` through a fixed-argv `execFileSync`, where `<base>` is the commit this branch forked from. Run `claude plugin validate --strict <copy>` and record its full output verbatim, with the copy's path as a placeholder, alongside `claude --version` and the count of warnings. Then remove the copy in-process. Change the §3 bullet's instruction from "quoted verbatim from the task prompt" to "the measured output of that run". The prompt's quote can stay only as a cross-check.
+
+2. **`task_2_plan.md` — measured values are taken from Task 1's transient return** — `task_2_plan.md`.
+   Task 2's §3 paragraph must record "the validator's output after the change, verbatim". It must also restate the exec-form reason from what "Task 1's return and README text" carry. The Task 1 file says it puts the verbatim validator output and `claude --version` "in your return. Task 2 records them." A layer-implementer's return goes to the orchestrator and is not a durable input to the next task. Task 2's implementer reads only its own file and the index `## Context`. None of Task 2's own `**Work:**` bullets produces the verbatim post-change validator output: `bash scripts/run-gates.sh` prints only the `ok    1a plugin manifest` line, and the in-session probe does not run the validator. So this depends on another file's execution output rather than on a restated contract, which is a self-containment breach.
+   **Fix:** In `task_2_plan.md`, add the post-change validator run to Task 2's own probe: `claude --version`, then `claude plugin validate --strict plugin` against the working tree Task 1 left, with combined stdout and stderr recorded verbatim. Make the §3 paragraph rest on that run. Source the exec-form reasoning only from the durable `plugin/hooks/README.md` bullet that Task 1 writes, and drop "Task 1's return" as an input. (Task 1 can keep its own validator run as verification. It is simply not Task 2's source.)
+
+## Should Fix
+
+- `task_2_plan.md`: §3 opens "Five measured behaviours and one shipped contract". Folding a new measured fact (the quoting requirement and its message) into the "Plugin hooks append…" bullet keeps the count literally intact but hides a sixth measured behaviour inside a bullet about something else. Consider stating in the Work bullet that the count sentence is re-read after the edit, and amended if the new paragraph reads as a separate measured behaviour.
+
+## Nice to Have
+
+- `task_1_plan.md`: the README now describes the command form in prose. The byte-identity check in Task 1's last Verification bullet could be made mechanical with a `jq -r '.hooks.PreToolUse[0].hooks[].command' plugin/hooks/hooks.json` listing compared against the README's quoted form, rather than a re-read.

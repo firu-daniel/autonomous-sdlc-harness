@@ -15,12 +15,13 @@ Six guards ship here, declared in `hooks.json`. All six register on the `PreTool
 
 ## Registration, and why it lives here rather than in generated settings
 
-Two facts about this manifest were measured rather than assumed, and are recorded alongside the rest of the packaging contract in `docs/development.md` §3:
+Three facts about this manifest were measured rather than assumed, and are recorded alongside the rest of the packaging contract in `docs/development.md` §3:
 
 - **`hooks.json` needs the `{"hooks": { … }}` wrapper.** A bare event map — `{"PreToolUse": [ … ]}` — fails validation with `hooks: Invalid input: expected record, received undefined`. The event names go one level down.
 - **`${CLAUDE_PLUGIN_ROOT}` expands inside a hook's `command` string declared here, and does *not* expand in a settings-file hook.** That asymmetry is the whole reason the guards are declared in this file: it is the only place a plugin-relative path resolves under both a git-sourced install and a directory-sourced one. The generated permission profile therefore writes no `hooks` key at all, deliberately — plugin hooks **append** to whatever the adopter already has rather than overriding it, so nothing needs to be written into settings to make these fire.
+- **Every occurrence of the token in a `command` string here sits inside double quotes together with the path it prefixes** — `bash "${CLAUDE_PLUGIN_ROOT}/hooks/<guard>.sh"` — because `claude plugin validate --strict` warns on an unquoted token, which fails gate `1a`, and because a plugin root containing a space otherwise splits the command, so the guard errors instead of judging. Shell form was kept over exec form: quoting changes only word boundaries, is correct whether the runtime substitutes the token or the shell expands it, and needs no field beyond `matcher` / `type` / `command`. The exec-form findings and the measured validator message are in `docs/development.md` → `## 3. Manifest facts a contributor must not rediscover`.
 
-Keep the JSON strictly valid — no comments, no trailing commas — and add no field beyond `matcher`, `type` and `command`: `claude plugin validate --strict` promotes an unrecognized field to an error.
+Keep the JSON strictly valid — no comments, no trailing commas — and add no field beyond `matcher`, `type` and `command`: `claude plugin validate --strict` promotes an unrecognized field to an error, and rejects a bare `${CLAUDE_PLUGIN_ROOT}`, so a new entry double-quotes the token together with its path.
 
 The entries are ordered by the severity of what they can emit — the single `deny`-capable guard first, then the one that can `ask`, then the four allow-only ones. **That order is documentation, not precedence.** A `deny` from any hook beats every `allow` from every other, whatever sequence they appear in, so reordering the file changes no outcome; the sequence exists so a reader can see at a glance which entry is the one that can refuse.
 
