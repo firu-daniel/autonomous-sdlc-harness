@@ -242,16 +242,16 @@ Every test gets its **own** fixture repository under the system temp directory, 
 **Run time, measured.** Measured on 2026-09-25 on a 10-core macOS host (Darwin arm64, `os.availableParallelism()` 10), Node v20.19.5, git 2.50.1, one host command each, from the repository root:
 
 ```
-bash scripts/measure-suite.sh --ref a885d631d85b --runs 1
+bash scripts/measure-suite.sh --ref fe17b4e2293f --runs 1
 ```
 
 ```
-bash scripts/measure-suite.sh --ref 4c36164a9759 --runs 3
+bash scripts/measure-suite.sh --runs 3
 ```
 
-`a885d631d85b` is the commit before the template-copied fixtures and the concurrent suites; `4c36164a9759` is the commit after them. Each figure is the script's own `measure-suite:` line rounded to whole seconds:
+`fe17b4e2293f` is the `dev` commit before the template-copied fixtures and the concurrent suites. Its column was measured at `a885d631d85b`, a commit on the branch that brought them, whose tree differs from `fe17b4e2293f` only under `harness-runs/`. The after columns were measured at that branch's `4c36164a9759`, whose `cli/` and `scripts/` are the ones the `dev` commit adding `scripts/measure-suite.sh` carries. Neither branch commit survives that branch's squash merge, so every command here names a commit that does, and the after command runs at the checkout's own `HEAD`. Each figure is the script's own `measure-suite:` line rounded to whole seconds:
 
-| Where | `npm test` before (`a885d631d85b`) | `npm test` after (`4c36164a9759`) | `run-gates.sh` before (`a885d631d85b`) | `run-gates.sh` after (`4c36164a9759`) |
+| Where | `npm test` before (`fe17b4e2293f`) | `npm test` after | `run-gates.sh` before (`fe17b4e2293f`) | `run-gates.sh` after |
 |---|---|---|---|---|
 | host, 10 cores | 429 s | 238 s, 365 s, 285 s | 345 s | 260 s, 264 s, 222 s |
 | `--cpus 4` | not yet measured | not yet measured | not yet measured | not yet measured |
@@ -276,7 +276,7 @@ bash scripts/measure-suite.sh --cpus 2
 ```
 
 ```
-bash scripts/measure-suite.sh --ref a885d631d85b --cpus 4
+bash scripts/measure-suite.sh --ref fe17b4e2293f --cpus 4
 ```
 
 Once taken, those figures model the core count and not the hosted runner's per-core speed, because the container runs Linux on the host's own architecture.
