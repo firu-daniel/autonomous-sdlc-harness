@@ -23,7 +23,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Drop single-segment needles from the machine-path check _(layer: plugin)_
+1. [x] **Finding 1** — Drop single-segment needles from the machine-path check _(layer: plugin)_
 
 ---
 
