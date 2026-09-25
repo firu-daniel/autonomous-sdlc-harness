@@ -5312,3 +5312,201 @@ test('daemon-path names gh when remote execution is on, and not when it is off',
   assert.ok(onLine.includes('remote-run.sh'), onLine);
   assert.ok(!existsSync(stub.log), 'doctor ran gh');
 });
+
+/**
+ * The `remote-github` check and `doctor --check-github`.
+ *
+ * **The rule these cases enforce: GitHub is asked only when the flag asks, and "cannot tell" is never
+ * graded as "missing".** `HARNESS_GH_CLI` points at a stub that logs every invocation and answers per
+ * subcommand from files each case writes, so each row of the grading table is one answer changed from
+ * a healthy set. A timed-out call is simulated by the stub signalling itself, which hands the check
+ * exactly what `runGh`'s bound does — a `null` status — without spending that 30 s bound per case.
+ */
+const GH_CALLS = Object.freeze({
+  auth: ['auth', 'status'],
+  run: ['workflow', 'view', 'harness-run.yml'],
+  secrets: ['secret', 'list', '--json', 'name'],
+  resume: ['workflow', 'view', 'harness-resume.yml'],
+  variables: ['variable', 'list', '--json', 'name,value'],
+});
+
+/** The answer-file stem the stub derives from its argv: spaces and commas become underscores. */
+function ghAnswerKey(args) {
+  return args.join(' ').replace(/[ ,]/g, '_');
+}
+
+/** A `gh` stub that logs its argv and answers from `<answers>/<key>.{out,err,status,kill}`. */
+async function answeringGhStub(t) {
+  const dir = await mkdtemp(join(tmpdir(), 'harness-gh-answers-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const log = join(dir, 'invocations.log');
+  const answers = join(dir, 'answers');
+  mkdirSync(answers);
+  const path = join(dir, FIXTURE_GH_CLI);
+  writeFileSync(
+    path,
+    [
+      '#!/bin/sh',
+      `printf '%s\\n' "$*" >> ${JSON.stringify(log)}`,
+      `a=${JSON.stringify(answers)}/$(printf '%s' "$*" | tr ' ,' '__')`,
+      '[ -f "$a.kill" ] && kill -TERM $$',
+      '[ -f "$a.out" ] && cat "$a.out"',
+      '[ -f "$a.err" ] && cat "$a.err" >&2',
+      '[ -f "$a.status" ] && exit "$(cat "$a.status")"',
+      'exit 0',
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  );
+  return { dir, path, log, answers };
+}
+
+/** Write a healthy answer set, then apply per-call overrides: `{ out?, err?, status?, kill? }`. */
+function answerGh(stub, overrides = {}) {
+  const healthy = {
+    auth: { out: 'Logged in to github.com\n' },
+    run: { out: 'Harness run - harness-run.yml\n' },
+    secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }, { name: 'HARNESS_PUSH_URL' }]) },
+    resume: { out: 'Harness resume - harness-resume.yml\n' },
+    variables: { out: '[]' },
+  };
+  for (const [call, args] of Object.entries(GH_CALLS)) {
+    const answer = { ...healthy[call], ...(overrides[call] ?? {}) };
+    const stem = join(stub.answers, ghAnswerKey(args));
+    for (const [field, value] of Object.entries(answer)) {
+      writeFileSync(`${stem}.${field}`, field === 'kill' ? '' : String(value));
+    }
+  }
+}
+
+/** The stub's logged invocations, one argv string each; empty when it was never run. */
+function ghInvocations(stub) {
+  return existsSync(stub.log) ? readFileSync(stub.log, 'utf8').split('\n').filter((line) => line !== '') : [];
+}
+
+/** A remote-on repository with its workflows pushed, so `remote-execution` passes and only this check varies. */
+async function pushedRemoteFixture(t) {
+  const dir = await remoteFixture(t);
+  await pushWorkflows(dir);
+  return dir;
+}
+
+async function checkGithub(dir, stub, gh = stub.path) {
+  return runCli(dir, ['doctor', '--check-github'], { [GH_CLI_VARIABLE]: gh });
+}
+
+test('the remote-github check asks GitHub only under --check-github and grades each answer', async (t) => {
+  await t.test('it is listed directly after remote-execution', () => {
+    const ids = CHECKS.map((check) => check.id);
+    assert.equal(ids[ids.indexOf('remote-execution') + 1], 'remote-github', ids.join(', '));
+  });
+
+  await t.test('doctor --help lists --check-github with its explanation', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const { status, stdout, stderr } = await runCli(dir, ['doctor', '--help']);
+    assert.equal(status, 0, stderr);
+    assert.match(stdout + stderr, /--check-github\s+Ask GitHub, through gh, whether the remote-execution setup/);
+  });
+
+  await t.test('a default run with remote execution on asks nothing and says how to ask', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub);
+
+    const { status, stdout, stderr } = await runCli(dir, ['doctor'], { [GH_CLI_VARIABLE]: stub.path });
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.deepEqual(ghInvocations(stub), [], 'a default doctor run invoked gh');
+    const line = reportLine(stdout, 'pass', 'remote-github');
+    assert.ok(line?.includes('not asked — run `npx autonomous-sdlc-harness doctor --check-github`'), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('--check-github with remote execution off asks nothing', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub);
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.deepEqual(ghInvocations(stub), []);
+    assert.ok(reportLine(stdout, 'pass', 'remote-github')?.includes('nothing was asked of GitHub'), stdout);
+  });
+
+  await t.test('a complete setup passes, names the runner, and reads secret names only', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub);
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'remote-github');
+    assert.ok(line?.includes('GitHub-hosted (`ubuntu-latest`)'), `${stdout}\n${stderr}`);
+    assert.deepEqual(ghInvocations(stub), Object.values(GH_CALLS).map((args) => args.join(' ')));
+  });
+
+  await t.test('a HARNESS_RUNNER value is reported as the runner label', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { variables: { out: JSON.stringify([{ name: 'HARNESS_RUNNER', value: 'fixture-runner' }]) } });
+
+    const { stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.ok(reportLine(stdout, 'pass', 'remote-github')?.includes('runner label `fixture-runner`'), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('both credential secrets pass with the billing note', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    const names = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'HARNESS_PUSH_URL'];
+    answerGh(stub, { secrets: { out: JSON.stringify(names.map((name) => ({ name }))) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(reportLine(stdout, 'pass', 'remote-github')?.includes('billing follows ANTHROPIC_API_KEY'), `${stdout}\n${stderr}`);
+  });
+
+  // [case, overrides, gh name under the stub dir (default: the stub), expected detail, calls made]
+  const failing = [
+    ['gh does not spawn', {}, `${FIXTURE_GH_CLI}-absent`, 'install the GitHub CLI', 0],
+    ['gh auth status exits non-zero', { auth: { err: 'You are not logged into any GitHub hosts.\n', status: 1 } }, undefined, 'gh auth login', 1],
+    ['GitHub does not know harness-run.yml', { run: { err: 'could not find any workflows named harness-run.yml\n', status: 1 } }, undefined, "push .github/workflows/harness-run.yml to the repository's default branch", 5],
+    ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 5],
+  ];
+  for (const [name, overrides, ghName, expected, calls] of failing) {
+    await t.test(`fails when ${name}`, async (subtest) => {
+      const dir = await pushedRemoteFixture(subtest);
+      const stub = await answeringGhStub(subtest);
+      answerGh(stub, overrides);
+      const gh = ghName === undefined ? stub.path : join(stub.dir, ghName);
+
+      const { status, stdout, stderr } = await checkGithub(dir, stub, gh);
+
+      assert.equal(status, 1, `doctor exited ${status}\n${stdout}\n${stderr}`);
+      assert.ok(reportLine(stderr, 'fail', 'remote-github')?.includes(expected), `${stdout}\n${stderr}`);
+      assert.equal(ghInvocations(stub).length, calls, ghInvocations(stub).join('\n'));
+    });
+  }
+
+  const warning = [
+    ['HARNESS_PUSH_URL is absent', { secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }]) } }, 'notifications from a remote run reach no one'],
+    ['GitHub does not know harness-resume.yml', { resume: { err: 'could not find any workflows named harness-resume.yml\n', status: 1 } }, 'usage auto-resume is unavailable'],
+    ['HARNESS_REMOTE_STOP is set', { variables: { out: JSON.stringify([{ name: 'HARNESS_REMOTE_STOP', value: '1' }]) } }, 'every remote start and continuation is stopped'],
+    ['a gh call is stopped past its bound', { secrets: { kill: true } }, 'cannot tell which repository secrets are set: `gh secret list --json name` gave no answer, because it was stopped before it answered (timed out)'],
+    ['gh cannot reach GitHub', { auth: { err: 'error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n', status: 1 } }, 'cannot tell whether gh is authenticated'],
+  ];
+  for (const [name, overrides, expected] of warning) {
+    await t.test(`warns when ${name}`, async (subtest) => {
+      const dir = await pushedRemoteFixture(subtest);
+      const stub = await answeringGhStub(subtest);
+      answerGh(stub, overrides);
+
+      const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+      assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+      assert.ok(reportLine(stderr, 'warn', 'remote-github')?.includes(expected), `${stdout}\n${stderr}`);
+    });
+  }
+});

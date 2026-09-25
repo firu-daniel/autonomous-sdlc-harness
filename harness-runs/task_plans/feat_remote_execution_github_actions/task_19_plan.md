@@ -43,3 +43,9 @@
 - In the default-run case the stub's invocation log is empty — the offline guarantee, asserted.
 - `doctor --help` lists `--check-github` with its explanation.
 - `git ls-files cli/src/doctor` lists no `remoteExecution.ts`; `grep -n "REMOTE_GITHUB_CHECK" -r cli/src` hits only `cli/src/doctor/checks.ts`.
+
+**Deviations from plan:**
+
+- The timeout case uses a stub that sends itself `SIGTERM` rather than one that sleeps past the bound. `runGh`'s bound is a fixed 30 s (`GH_TIMEOUT_MS`, not overridable), and a child it kills for the bound comes back as exactly what a self-signalled child does: `status: null` with a signal. So the check gets the same input, and the case does not cost 30 s. The bound itself is Task 2's, and this case does not exercise it.
+- `--json` is used on `gh secret list` (`name`) and `gh variable list` (`name,value`) only. `gh workflow view` has no `--json` flag, and `gh auth status` offers one only in recent `gh` releases, so both are run with their plain fixed argv and graded on their exit status.
+- Not in the table, graded `warn` by the "cannot tell" rule: a `gh secret list` / `gh variable list` that exits non-zero for a reason other than the network (for example a 403 for a non-admin), or that answers JSON this check does not read.
