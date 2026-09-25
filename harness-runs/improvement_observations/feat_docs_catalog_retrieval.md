@@ -1,7 +1,7 @@
 ## `bash scripts/test.sh` cannot exit 0 inside a worktree: gate 6a scans the worktree's own `.git` pointer file
 
 - **category:** tooling-gap
-- **evidence:** every implementer dispatch of this run (25 task dispatches plus 11 fix dispatches) reported `bash scripts/test.sh` exiting 1 with exactly one failing gate, `6a no machine paths`, whose hits are the worktree's untracked `.git` pointer file (`gitdir: /Users/daniel/Work/autonomous-sdlc-harness/.git/worktrees/…`) and `harness-runs/` artifacts quoting that same line — among them `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md`, which records the identical failure on all 16 dispatches of an earlier branch. Gate 4 (`npm test`) passed on every run.
+- **evidence:** every implementer dispatch of this run (25 task dispatches plus 11 fix dispatches) reported `bash scripts/test.sh` exiting 1 with exactly one failing gate, `6a no machine paths`, whose hits are the worktree's untracked `.git` pointer file (`gitdir: <main checkout>/.git/worktrees/…`) and `harness-runs/` artifacts quoting that same line — among them `harness-runs/improvement_observations/feat_readme_summary_compact_llms_txt.md`, which records the identical failure on all 16 dispatches of an earlier branch. Gate 4 (`npm test`) passed on every run.
 - **cost this run:** the configured `commands.test` string never returns a pass in a worktree, so no dispatch could use it as a gate; each of the 36 dispatches instead had to diagnose 6a's hits by hand and argue the failure was pre-existing.
 
 ## Plugin manifest validation is unavailable to an unattended run

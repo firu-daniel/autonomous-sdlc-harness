@@ -1,0 +1,38 @@
+### Task 1 — Make gate 6a drop only the worktree `.git` pointer line, identically in every checkout
+
+**Goal:** Change `scripts/run-gates.sh` → gate `6a no machine paths` so that, in a linked worktree, the one line its `.git` pointer file yields (`./.git:1:gitdir: …`) is no longer printed, while every other hit it printed before — anywhere in the tree, `harness-runs/` included, a file that quotes a `gitdir:` line included, a nested file named `.git` included — is still printed; with one command, unchanged between a main checkout and a worktree.
+
+**Where this task stops.** This task owns the gate's command and the comments around it, and nothing else. It does **not** edit `docs/development.md` — Task 2 quotes the command defined below, byte-for-byte. It does **not** touch the six committed `harness-runs/` files that still name a home-rooted path — Task 3 replaces those, and until it lands this worktree's 6a is still red **with those six files as its only hits**, which is the expected state at the end of this task. It changes no other gate, and adds no exclusion for `.claude/settings.autonomous.json` or `harness-runs/autonomous_logs/`, which the task prompt reserves for a separate decision.
+
+### Targets
+
+- `scripts/run-gates.sh` — the `== gate 6 — self-containment` block (the 6a line and the comment above it) and the comment above `gate()`.
+
+**Work:**
+
+- [ ] Replace the line `gate_silent "6a no machine paths" grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git` with a function and a call, placed where that line is, after the existing `$HOME` comment:
+
+  ```bash
+  machine_path_hits() {
+    grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git | grep -v '^\./\.git:[0-9][0-9]*:'
+  }
+  gate_silent "6a no machine paths" machine_path_hits
+  ```
+
+  Keep the first stage **exactly** the old command (same flags, same order), so nothing it reached before stops being reached; the only new thing is the anchored second stage. The pipeline stays on **one line** — Task 2 quotes it as a single line in a fenced block, and a line continuation there would be a second shape to keep in step.
+- [ ] Comment above the function (a few lines, in this file's existing voice) stating: in a linked worktree `.git` is a one-line file, `gitdir: <main checkout>/.git/worktrees/<name>`, which `--exclude-dir=.git` does not skip because it skips directories only; the second stage drops output lines whose path is exactly `./.git` and nothing else, so a nested `.git` file and a file that quotes a `gitdir:` line are still printed; in a main checkout `.git` is the directory the first stage already skips, so the second stage never matches there and the command is the same in both; `--exclude=.git` is not used because GNU and BSD grep both match it against a file's base name, so it would also skip every nested file named `.git`, and `--exclude=./.git` is not used because GNU grep matches a recursive subfile's base name only, so it would exclude nothing on Linux. **Never write the home prefix literally in this comment** — write `<main checkout>`; a literal would be a new 6a hit in this very file.
+- [ ] Comment on the pipe, beside the function or in the one above: `gate_silent` grades **output**, so the second stage's exit status (1 when it filters everything) is never read, and `grep`'s own error lines (`grep: …`) do not begin `./.git:` and still reach the log. Then fix the `gate()` comment's *"Nothing here pipes."* so it stays true: it is the status-graded gates that never pipe; 6a pipes inside an output-graded gate, where no exit status is read. Leave the rest of that comment as it is.
+- [ ] Touch nothing else in the file: gates 6b–6e, gate 11 and the summary lines are unchanged.
+
+**Verification:** (run every by-hand probe with `command grep`, never a bare `grep` — inside the Bash tool a bare `grep` is a shell function running `ugrep --ignore-files`, which hides gitignored hits; `bash scripts/run-gates.sh` is unaffected and is the authoritative run)
+
+- **The pointer line is gone and nothing else is.** In this worktree, run `bash scripts/run-gates.sh`. Gate 6a must no longer print any line beginning `./.git:`, and it still reports `FAIL  6a no machine paths` naming exactly the files `git grep -lF "$HOME"` lists (the committed files Task 3 owns) — that set, and no fewer. Record the 6a block of the output in the return with the home prefix written as `<home>`.
+- **Acceptance 2 — a planted machine path under `harness-runs/` is still printed.** Create `harness-runs/scratch/gate6a_probe.txt` (gitignored by `harness-runs/scratch/*`, so it is never committed) whose single line is the value of `$HOME` followed by `/probe` — write it with the file tool, taking the value from `printenv HOME`, never typing it into a committed file. Run `bash scripts/run-gates.sh`: 6a must `FAIL` and name `./harness-runs/scratch/gate6a_probe.txt`. Then `rm harness-runs/scratch/gate6a_probe.txt` and confirm `git status --short --ignored harness-runs/scratch` no longer lists it. Record the 6a output (home prefix as `<home>`) in the return.
+- **A nested `.git` file is still printed — the "nothing else" half.** Create `harness-runs/scratch/nested_probe/` and copy this worktree's own pointer file into it: `mkdir harness-runs/scratch/nested_probe`, then `cp .git harness-runs/scratch/nested_probe/.git`. Run `bash scripts/run-gates.sh`: 6a must print `./harness-runs/scratch/nested_probe/.git:1:gitdir: …`. Then `rm harness-runs/scratch/nested_probe/.git` and `rmdir harness-runs/scratch/nested_probe`. If the tool layer refuses to create a file named `.git` (it treats that name as sensitive), record the refusal verbatim in the return and do not work around it — the anchoring argument above (`^\./\.git:` matches the root path only) then stands as the evidence, and the return says so.
+- **Acceptance 3 — no new failure in the main checkout, evidenced before merge.** The main checkout is on `dev` and does not carry this script until merge, so compare the two commands there directly. Take the main checkout's path from the first `worktree` line of `git worktree list --porcelain`. Run, from this worktree, `command grep -rln "$HOME" <main checkout> --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git` and confirm that no listed path is `<main checkout>/.git` — i.e. the second stage has nothing to drop there, so old and new 6a print the same lines in the main checkout. Record the listed paths **relative to the checkout root** (profile, `harness-runs/autonomous_logs/` contents, committed `harness-runs/` files), never with the home prefix. Every other gate's command is untouched by this task, so no other gate's result in the main checkout can change.
+- `bash -n scripts/run-gates.sh` exits 0, and `git diff --stat` for this task lists `scripts/run-gates.sh` only.
+
+**Deviations from plan:**
+
+- Nested `.git` verification: `cp .git harness-runs/scratch/nested_probe/.git` was refused by the tool layer — *"Claude requested permissions to edit …/.git which is a sensitive file."* Not worked around. Evidence instead: the anchoring argument, plus a `scratch-run.sh` probe that piped sample lines through the exact second stage (`grep -v '^\./\.git:[0-9][0-9]*:'`). Only `./.git:1:…` was dropped. `./harness-runs/scratch/nested_probe/.git:1:…`, a file quoting `./.git:1:gitdir:`, `./a.git:1:…` and a `grep: …` error line all passed through.
+- `bash -n scripts/run-gates.sh` was refused (it needs approval). Syntax evidence instead: `bash scripts/test.sh` ran the edited script to its final summary twice.
