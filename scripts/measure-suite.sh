@@ -19,8 +19,9 @@
 #      answers <n> there, and a quota would leave it planning for the host's count.
 #   6. Inside the container, untimed: root installs `jq`; then, as the image's `node` user — never
 #      root, or the suite's unreadable-file cases do not hold — the archive is extracted into
-#      /home/node/work, committed once as a fresh repository, and `npm ci` runs. The timed loop of 3
-#      follows, as `node`, with `container` in the <mode> slot and cpus= as the container reports it.
+#      /home/node/work, committed once as a fresh repository, and `npm ci` runs. Item 3's timed loops
+#      follow, <k> runs each, as `node`, with `container` in the <mode> slot and cpus= as the
+#      container reports it.
 #   7. In the container gate 1 reports BLOCKED (no `claude` on PATH) and gate 11 its model-cache
 #      BLOCKED by design, so a container `run-gates` figure is a time, never a verdict; gate verdicts
 #      are read from host mode.

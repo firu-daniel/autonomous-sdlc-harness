@@ -26,7 +26,7 @@ What is left: a durable record that names commits the squash merge will drop (Fi
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 3** — Make `measure-suite.sh`'s contract item 6 say the container runs `<k>` timed runs, not 3 _(layer: general)_
+1. [x] **Finding 3** — Make `measure-suite.sh`'s contract item 6 say the container runs `<k>` timed runs, not 3 _(layer: general)_
 2. [ ] **Finding 4** — Move the `PLUGIN_KEY` import rationale in `doctor.test.mjs` back onto the import _(layer: cli)_
 3. [ ] **Finding 5** — Rewrite the copied fixture's origin URL with a replacer function _(layer: cli)_
 4. [ ] **Finding 1** — Re-point the gate-4 run-time record and its commands at a commit that survives the squash merge _(layer: general)_
