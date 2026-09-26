@@ -705,6 +705,28 @@ test('save with no status and no registry leaves an empty bundle, and never fail
   }
 });
 
+test('save moves aside a restored status.json whose run_id is not this job\'s, and continue then fails without dispatching', async (t) => {
+  const fx = await remoteFixture(t);
+  mkdirSync(join(fx.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+  writeFileSync(join(fx.dir, REMOTE_STATUS), JSON.stringify({
+    schema: '1', branch: 'feat_x', status: 'paused', decision: 'continue', chain: '3', run_id: '111',
+  }));
+  const out = join(fx.dir, STATE_DIR, 'stub', 'out');
+  const saved = await remoteRun(fx, ['save', 'feat_x', out], { GITHUB_RUN_ID: '222' });
+  assert.equal(saved.status, 0, saved.stderr);
+  assert.deepEqual(readdirSync(out), []);
+  assert.ok(existsSync(join(fx.dir, `${REMOTE_STATUS}.previous`)), saved.stderr);
+  assert.equal(existsSync(join(fx.dir, REMOTE_STATUS)), false);
+
+  const notes = recordNotifications(fx);
+  const cont = await remoteRun(fx, ['continue', 'feat_x', out], continueEnv());
+  assert.equal(cont.status, 0, cont.stderr);
+  assert.deepEqual(workflowRuns(fx), []);
+  const sent = notes();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].event, 'failed');
+});
+
 // ---------------------------------------------------------------------------
 // continue and poll — closing the loop without the local machine.
 // ---------------------------------------------------------------------------

@@ -59,4 +59,5 @@ When the previous decision was `stop`, for example a parked run, the same mechan
   - Assert exit 0, that `<out>` exists and is empty, and that `remote_status.json.previous` exists.
   - Then run `continue feat_x <out>` with `HARNESS_PUSH_CMD` pointed at a recorder.
   - Assert exactly one `failed` notification and no `workflow run` in the gh stub's log.
+- **Deviations from plan:** The new test records notifications with the suite's `recordNotifications` notifier stub, as the sibling `'continue with no status.json notifies failed…'` case does, rather than pointing `HARNESS_PUSH_CMD` at a recorder; the assertion (exactly one `failed`, no `workflow run`) is unchanged.
 - [ ] Check that `'save after a job-mode status write produces the full layout and a job-summary table'` still passes. Its status is written by `hr_remote_status_write`, whose `run_id` is `GITHUB_RUN_ID` when the test sets it and empty otherwise. When the test sets no `GITHUB_RUN_ID`, the new branch is skipped by its `-n "${GITHUB_RUN_ID-}"` guard.

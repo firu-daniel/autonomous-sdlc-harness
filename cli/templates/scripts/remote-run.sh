@@ -80,7 +80,11 @@
 # `GITHUB_STEP_SUMMARY` set appends a Markdown table of the bundle's `status`,
 # `decision` and `detail`. With no `autonomous_logs/remote_status.json` and no
 # registry file the harness step never started: <out_dir> is created empty,
-# with no status.json — what `continue` reads as "never started". It never
+# with no status.json — what `continue` reads as "never started". A
+# `remote_status.json` whose `run_id` is not `GITHUB_RUN_ID` is the previous
+# job's copy that `restore` placed. This job's harness step never wrote its
+# own, so `save` moves it aside to `remote_status.json.previous` and decides as
+# if it were absent. It never
 # fails the job: every problem, a usage error included, is one line on stderr
 # and exit 0.
 #
@@ -1037,9 +1041,23 @@ verb_save() {
     return 0
   }
   status_source=$(hr_state_path "$root" "$HR_REMOTE_STATUS_SOURCE") || status_source=""
+  # `restore` places the previous job's status.json at this same path; one whose
+  # run_id is not this job's means this job's harness step never wrote its own,
+  # and re-uploading it would replay the previous job's decision and chain.
+  if [ -n "$status_source" ] && [ -f "$status_source" ] && [ -n "${GITHUB_RUN_ID-}" ] \
+    && [ "$(hr_remote_status_get "$status_source" run_id 2>/dev/null || :)" != "$GITHUB_RUN_ID" ]; then
+    if mv "$status_source" "$status_source.previous" 2>/dev/null; then
+      echo "remote-run.sh: save: $status_source is the previous job's (run_id is not $GITHUB_RUN_ID); moved aside, not uploaded" >&2
+    else
+      echo "remote-run.sh: save: cannot move the previous job's '$status_source' aside; no bundle written" >&2
+      mkdir -p "$out_dir" 2>/dev/null || :
+      status_source=""
+      registry_file=""
+    fi
+  fi
   # Without either file the harness step never started; the library's registry
   # fallback would create a registry in the checkout to find nothing in it.
-  if [ ! -f "$status_source" ] && [ ! -f "$registry_file" ]; then
+  if { [ -z "$status_source" ] || [ ! -f "$status_source" ]; } && { [ -z "$registry_file" ] || [ ! -f "$registry_file" ]; }; then
     mkdir -p "$out_dir" 2>/dev/null \
       || echo "remote-run.sh: save: cannot create '$out_dir'" >&2
     echo "remote-run.sh: save: the harness step never started for $branch; the bundle carries no status.json" >&2
