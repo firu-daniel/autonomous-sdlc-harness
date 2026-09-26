@@ -362,6 +362,8 @@
 #     before the deadline, sleep that delay, count one, and relaunch from the
 #     committed ledger through begin_pause_resume and `spawn_engine … "" 1`. The
 #     count resets on any user action — see `auto_resumes` in the registry.
+#     A resume taken after the hosted budget's PAUSE was dropped re-drops it,
+#     so the relaunched session still yields at the budget.
 #   * NOTIFICATIONS name the user's next action instead of a runner path: a
 #     parked run's `/autonomous-sdlc-harness:branch-answer <branch>`, a park
 #     loop's `/autonomous-sdlc-harness:branch-status <branch>`, a `user` or
@@ -4027,6 +4029,14 @@ job_auto_resume() {
   registry_set "$branch" auto_resumes "$count"
   registry_set "$branch" pause_reason ""
   begin_pause_resume "$branch" "$state_abs"
+  # begin_pause_resume just removed the hosted budget's PAUSE, and job_budget_pass
+  # is one-shot: put it back, so the relaunched session still yields at its next
+  # clean checkpoint instead of running on until the step timeout kills it.
+  if [ "$JOB_BUDGET_PAUSE_DROPPED" = "1" ]; then
+    touch "$state_abs/PAUSE"
+    registry_set "$branch" pause_reason budget
+    log "job: the hosted time budget's PAUSE was pending at the resume of '$branch' after $why — re-dropped it"
+  fi
   notify resumed "$branch" "$log_path" "automatic resume $count/$REMOTE_AUTO_RESUME_MAX after $why ($(job_label))"
   spawn_engine "$branch" "$worktree" "$log_path" "" 1 || registry_set "$branch" status failed
   return 0

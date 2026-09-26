@@ -40,3 +40,5 @@ The chain still recovers. The last `job_control_poll` left `status.json` saying 
   - The agent stub's first launch sleeps past the budget and then exits `2`.
   - Its second launch, which is the pause resume, writes `PAUSE_ACK` when `<state_dir>/PAUSE` exists and exits `0`, the way the existing budget case's stub honours a pause.
   - Assert that the job prints `job: paused continue`, and that `remote_status.json` carries `pause_reason` `budget` and `auto_resumes` `"1"`.
+
+**Deviations from plan:** The first launch waits for `<state_dir>/PAUSE` to appear (up to 10s, new `FAIL_AFTER_PAUSE` stub body) and then exits `2`, instead of sleeping a fixed time past the budget; a fixed sleep races the 1s poll under a loaded suite. The case also asserts two launches. A mutation that disables the re-drop fails it with `job: completed stop`.

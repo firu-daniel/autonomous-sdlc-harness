@@ -38,7 +38,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Re-drop the hosted budget's PAUSE when job mode auto-resumes a run after it was dropped _(layer: cli)_
+1. [x] **Finding 2** — Re-drop the hosted budget's PAUSE when job mode auto-resumes a run after it was dropped _(layer: cli)_
 2. [ ] **Finding 1** — Make `save` move aside a restored `remote_status.json` whose `run_id` is not this job's, instead of re-uploading it _(layer: cli)_
 
 ---

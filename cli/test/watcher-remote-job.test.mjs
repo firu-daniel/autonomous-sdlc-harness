@@ -57,6 +57,9 @@ const pauseRunList = (secs) =>
 /** Stub bodies. `STATE` is the state directory and `REC` the recorder directory. */
 const HONOUR_PAUSE = (tenths) =>
   `for i in $(seq 1 ${tenths}); do if [ -f "$STATE/PAUSE" ]; then : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`;
+/** Exits 2 once PAUSE is dropped, without acknowledging it — a session failing before its checkpoint. */
+const FAIL_AFTER_PAUSE = (tenths) =>
+  `for i in $(seq 1 ${tenths}); do if [ -f "$STATE/PAUSE" ]; then exit 2; fi; sleep 0.1; done; exit 2`;
 const COUNT_LAUNCH = 'n=$(cat "$REC/count" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$REC/count"';
 const rateLimitRejected = (aheadSecs) =>
   `printf '{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"five_hour","resetsAt":%s,"isUsingOverage":false}}\\n' "$(( $(date +%s) + ${aheadSecs} ))"`;
@@ -401,6 +404,22 @@ test('budget: a hosted self-pause continues, silently', async (t) => {
     assert.equal(j.status().pause_reason, 'budget');
     assert.equal(j.status().decision, 'continue');
     assert.equal(j.notifications().some((n) => n.event === 'paused'), false);
+  });
+
+  await t.test('a failed exit after the budget PAUSE -> the auto-resume re-drops it, paused / budget / continue', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    await j.setStub(`${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then ${FAIL_AFTER_PAUSE(100)}; fi\n${HONOUR_PAUSE(100)}`);
+    const result = await j.job([j.branch, 'task', 'none'], {
+      HARNESS_JOB_STARTED_EPOCH: String(nowSecs()),
+      REMOTE_SELF_PAUSE_AFTER_SECS: '1',
+      REMOTE_AUTO_RESUME_DELAY_SECS: '0',
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(lastLine(result.stdout), 'job: paused continue');
+    assert.equal(j.prompts().length, 2);
+    assert.equal(j.status().pause_reason, 'budget');
+    assert.equal(j.status().auto_resumes, '1');
   });
 
   await t.test('self-hosted with the variable unset -> no self-pause', async () => {
