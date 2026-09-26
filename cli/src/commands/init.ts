@@ -187,8 +187,6 @@ import {
   OAUTH_TOKEN_SECRET,
   PUSH_URL_SECRET,
   RUNNER_VARIABLE,
-  WORKFLOW_RESUME_PATH,
-  WORKFLOW_RUN_PATH,
 } from '../remote/githubActions.js';
 import { setUpRetrieval } from '../retrieval/setup.js';
 import type { CommandContext, Subcommand } from './registry.js';
@@ -2427,26 +2425,40 @@ async function run(ctx: CommandContext): Promise<number> {
     // read, never re-spelled here (`config/model.ts`).
     browserWiringApplies(effective),
   );
-  if (workflows.written) reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun);
+  // Only the workflows this run created or replaced: a kept one is the adopter's already, and telling
+  // them to commit it again is false on every unforced re-run and in every remote job's `init`.
+  const freshWorkflows = workflows.workflows
+    .filter(({ absolute }) => {
+      const result = applied.find((r) => r.path === absolute);
+      return result !== undefined && result.effect !== 'kept';
+    })
+    .map(({ repoPath }) => repoPath);
+  if (freshWorkflows.length > 0) reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun, freshWorkflows);
 
   return EXIT.OK;
 }
 
 /**
- * The GitHub-side steps only the adopter can take, printed when this run enqueued the workflows.
+ * The GitHub-side steps only the adopter can take, printed when this run created or replaced at least
+ * one of the two workflows; `workflowPaths` names those, repo-relative.
  *
  * Commands stand on their own lines so each can be pasted. The push comes first because GitHub
  * dispatches a `workflow_dispatch` workflow only once it exists on the default branch.
  */
-function reportGithubSteps(ctx: CommandContext, defaultBranch: string, dryRun: boolean): void {
+function reportGithubSteps(
+  ctx: CommandContext,
+  defaultBranch: string,
+  dryRun: boolean,
+  workflowPaths: readonly string[],
+): void {
   const wrote = dryRun ? 'would write' : 'wrote';
   const command = (line: string): void => ctx.report.info(`   ${line}`);
 
   ctx.report.step('remote execution');
   ctx.report.info(
-    `1. This run ${wrote} ${WORKFLOW_RUN_PATH} and ${WORKFLOW_RESUME_PATH}. Commit and push both to GitHub's default branch (assumed \`${defaultBranch}\` below) — a workflow_dispatch workflow can be dispatched only once it exists there:`,
+    `1. This run ${wrote} ${workflowPaths.join(' and ')}. Commit and push ${workflowPaths.length === 1 ? 'it' : 'both'} to GitHub's default branch (assumed \`${defaultBranch}\` below) — a workflow_dispatch workflow can be dispatched only once it exists there:`,
   );
-  command(`git add ${WORKFLOW_RUN_PATH} ${WORKFLOW_RESUME_PATH}`);
+  command(`git add ${workflowPaths.join(' ')}`);
   command('git commit -m "Add the harness workflows"');
   command(`git push origin ${defaultBranch}`);
   ctx.report.info('');

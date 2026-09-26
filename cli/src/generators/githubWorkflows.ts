@@ -56,6 +56,8 @@ export interface GithubWorkflowsOptions {
 export interface GithubWorkflowsResult {
   /** True when remote execution applied and both workflows were enqueued; `init` gates its block on it. */
   readonly written: boolean;
+  /** Each workflow enqueued — its absolute target and its repo-relative path — in the order written; empty when remote execution does not apply. */
+  readonly workflows: readonly { readonly absolute: string; readonly repoPath: string }[];
 }
 
 /**
@@ -64,11 +66,14 @@ export interface GithubWorkflowsResult {
  * Nothing here touches the filesystem: the generator plans, and `init` applies the plan once.
  */
 export function writeGithubWorkflows({ repoRoot, config, plan }: GithubWorkflowsOptions): GithubWorkflowsResult {
-  if (!remoteExecutionApplies(config)) return { written: false };
+  if (!remoteExecutionApplies(config)) return { written: false, workflows: [] };
+
+  const runPath = join(repoRoot, ...WORKFLOW_RUN_PATH.split('/'));
+  const resumePath = join(repoRoot, ...WORKFLOW_RESUME_PATH.split('/'));
 
   const runTemplate = `${WORKFLOW_TEMPLATE_DIR}/${WORKFLOW_RUN_FILE}`;
   plan.add({
-    path: join(repoRoot, ...WORKFLOW_RUN_PATH.split('/')),
+    path: runPath,
     policy: 'create-if-absent',
     content: renderTemplate(
       readTemplate(runTemplate),
@@ -79,11 +84,17 @@ export function writeGithubWorkflows({ repoRoot, config, plan }: GithubWorkflows
   });
 
   plan.add({
-    path: join(repoRoot, ...WORKFLOW_RESUME_PATH.split('/')),
+    path: resumePath,
     policy: 'create-if-absent',
     content: readTemplate(`${WORKFLOW_TEMPLATE_DIR}/${WORKFLOW_RESUME_FILE}`),
     label: `workflow ${WORKFLOW_RESUME_FILE}`,
   });
 
-  return { written: true };
+  return {
+    written: true,
+    workflows: [
+      { absolute: runPath, repoPath: WORKFLOW_RUN_PATH },
+      { absolute: resumePath, repoPath: WORKFLOW_RESUME_PATH },
+    ],
+  };
 }

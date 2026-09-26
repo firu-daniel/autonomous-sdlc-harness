@@ -8493,8 +8493,9 @@ test('the GitHub workflows arrive with execution.target github-actions, and only
     const rendered = text(dir, WORKFLOW_RUN_FILE);
 
     const before = await snapshotTree(dir);
-    await initOk(dir);
+    const { stdout } = await initOk(dir);
     assert.deepEqual(await snapshotTree(dir), before, 'a second init changed the tree');
+    assert.ok(!stdout.includes('--check-github'), `a re-run that kept both workflows printed the remote-execution block:\n${stdout}`);
 
     appendFileSync(join(dir, WORKFLOW_RUN_FILE), '# tuned by hand\n', 'utf8');
     const edited = text(dir, WORKFLOW_RUN_FILE);
