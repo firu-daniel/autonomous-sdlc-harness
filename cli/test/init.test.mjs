@@ -8479,7 +8479,8 @@ test('the GitHub workflows arrive with execution.target github-actions, and only
       'harness-resume.yml is not a verbatim copy of its template',
     );
 
-    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'doctor --check-github']) {
+    // The commit line is the one `docs/remote-execution.md` → `## 7. Turning it on` step 3 prints.
+    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'doctor --check-github', 'git commit -m "Add the harness workflows"']) {
       assert.ok(stdout.includes(name), `the closing report does not name ${name}:\n${stdout}`);
     }
   });

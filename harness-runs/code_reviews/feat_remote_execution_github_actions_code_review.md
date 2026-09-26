@@ -43,7 +43,7 @@ Three further items need a decision nobody in the fix loop can take. They are in
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 6** — Give `init`'s printed commit command the same subject as `docs/remote-execution.md` step 3 _(layer: cli)_
+1. [x] **Finding 6** — Give `init`'s printed commit command the same subject as `docs/remote-execution.md` step 3 _(layer: cli)_
 2. [ ] **Finding 2** — Pin `STATE_ARTIFACT_NAME` to both of its mirrors in `workflow-templates.test.mjs` _(layer: cli)_
 3. [ ] **Finding 4** — Make `remote-run.sh stop` cancel only `harness run <branch>` runs, never the jobless markers _(layer: cli)_
 4. [ ] **Finding 5** — Print `init`'s remote-execution block only for workflows this run created or replaced _(layer: cli)_

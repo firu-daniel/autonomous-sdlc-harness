@@ -2447,7 +2447,7 @@ function reportGithubSteps(ctx: CommandContext, defaultBranch: string, dryRun: b
     `1. This run ${wrote} ${WORKFLOW_RUN_PATH} and ${WORKFLOW_RESUME_PATH}. Commit and push both to GitHub's default branch (assumed \`${defaultBranch}\` below) — a workflow_dispatch workflow can be dispatched only once it exists there:`,
   );
   command(`git add ${WORKFLOW_RUN_PATH} ${WORKFLOW_RESUME_PATH}`);
-  command('git commit -m "chore: add the harness workflows"');
+  command('git commit -m "Add the harness workflows"');
   command(`git push origin ${defaultBranch}`);
   ctx.report.info('');
   ctx.report.info(
