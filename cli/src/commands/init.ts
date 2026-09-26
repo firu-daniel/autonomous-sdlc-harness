@@ -142,6 +142,7 @@ import {
   type AnalyzeOffer,
 } from '../generators/claudeContext.js';
 import { pointHooksPath, writeGitHooks } from '../generators/githooks.js';
+import { writeGithubWorkflows } from '../generators/githubWorkflows.js';
 import { writeHarnessConfig, type AppDirSource, type HarnessConfigFlags } from '../generators/harnessConfig.js';
 import {
   writeNotifications,
@@ -151,7 +152,11 @@ import {
   UNRECOGNISED_DESTINATION_NOTE,
 } from '../generators/notifications.js';
 import { writeOuterLoopScripts } from '../generators/outerLoopScripts.js';
-import { writePermissionProfile } from '../generators/permissionProfile.js';
+import {
+  PLUGIN_ROOT_ENTRIES_FLAG,
+  pluginRootEntriesNote,
+  writePermissionProfile,
+} from '../generators/permissionProfile.js';
 import {
   writeProjectSettings,
   MARKETPLACE_FLAG,
@@ -176,6 +181,13 @@ import {
   type WrittenWrapper,
 } from '../generators/scripts.js';
 import { writeStateDir } from '../generators/stateDir.js';
+import {
+  API_KEY_SECRET,
+  GIT_TOKEN_SECRET,
+  OAUTH_TOKEN_SECRET,
+  PUSH_URL_SECRET,
+  RUNNER_VARIABLE,
+} from '../remote/githubActions.js';
 import { setUpRetrieval } from '../retrieval/setup.js';
 import type { CommandContext, Subcommand } from './registry.js';
 
@@ -232,6 +244,9 @@ const DAEMON_INSTALL_COMMAND = `${CLI} daemon install`;
  * `browserWiringApplies` holds (`doctor/checks.ts`'s browser-wiring check, `commands/doctor.ts`).
  */
 const DOCTOR_CHECK_REGISTRY_COMMAND = `${DOCTOR_COMMAND} --check-registry`;
+
+/** The online check of GitHub-side setup, named last in the remote-execution block ({@link reportGithubSteps}). */
+const DOCTOR_CHECK_GITHUB_COMMAND = `${DOCTOR_COMMAND} --check-github`;
 
 /**
  * How `.mcp.json` launches those servers, as the sentence names it.
@@ -423,6 +438,12 @@ export interface InitFlags extends HarnessConfigFlags, ProjectSettingsFlags {
   readonly appDir?: string;
   /** `--reference-toolchain-path`. Read only when the parity phase is on. */
   readonly referenceToolchainPath?: string;
+  /**
+   * `--plugin-root-entries`. Include this machine's plugin-root entries when the permission profile
+   * is generated — for a remote job, whose plugin install and profile live and die together
+   * (`generators/permissionProfile.ts`). Writes no config key.
+   */
+  readonly pluginRootEntries?: boolean;
 }
 
 /**
@@ -467,8 +488,8 @@ type ValueFlagKey = Exclude<keyof InitFlags, SwitchFlagKey>;
  * (`generators/projectSettings.ts`) and `--reference-toolchain-path` reaches the permission profile
  * (`generators/permissionProfile.ts`), so both still take effect on a kept run; and the run-shape
  * rows — `--git-init`, `--reset-config`, the {@link ANALYZE_FLAG} / {@link NO_ANALYZE_FLAG} pair,
- * {@link NOTIFICATIONS_FLAG} and {@link PUSH_URL_FLAG} — are about the shape of the run or about
- * artifacts outside the repository's config.
+ * {@link NOTIFICATIONS_FLAG}, {@link PUSH_URL_FLAG} and {@link PLUGIN_ROOT_ENTRIES_FLAG} — are about
+ * the shape of the run or about artifacts outside the repository's config.
  *
  * **Marked *and* detection-steering** is the sub-case, and {@link InitOption.steersDetection} is how
  * a row states it: `--preset` and {@link APP_DIR_FLAG} write a config key like every other marked
@@ -533,8 +554,9 @@ function initOptions<T extends readonly InitOption[]>(
  * then the two that decide what is detected, then the values written into the config, then the three
  * phase toggles with their own inputs beside them, then the onboarding slug, then the pair that
  * answers the offer to analyze this repository — which decides the wording the generated
- * always-loaded file carries — and last the pair that decides whether this account gets told when an
- * unattended run finishes, which is the one pair that writes nothing into the repository at all.
+ * always-loaded file carries — then the pair that decides whether this account gets told when an
+ * unattended run finishes, which is the one pair that writes nothing into the repository at all, and
+ * last the switch that adds this machine's plugin-root entries to a freshly generated profile.
  *
  * The first two sit together, and ahead of everything else, because they are the rows whose subject
  * is the **shape of the run** rather than a value in the generated file: one settles what `init` is
@@ -692,6 +714,12 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
     placeholder: PUSH_DESTINATION_PLACEHOLDER,
     summary:
       'Where notifications are posted: an ntfy topic name, or the full http:// or https:// URL of any endpoint that accepts a POST (with --notifications)',
+  },
+  {
+    key: 'pluginRootEntries',
+    flag: PLUGIN_ROOT_ENTRIES_FLAG,
+    kind: 'switch',
+    summary: "Include this machine's plugin-root permission entries when the profile is generated (for a remote job)",
   },
 ] as const);
 
@@ -911,6 +939,7 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
     docs: switches.has('docs'),
     docsRetrieval: switches.has('docsRetrieval'),
     parity: switches.has('parity'),
+    pluginRootEntries: switches.has('pluginRootEntries'),
   } as InitFlags;
 }
 
@@ -2254,6 +2283,10 @@ async function run(ctx: CommandContext): Promise<number> {
   const outerLoop = writeOuterLoopScripts({ repoRoot, config: effective, plan });
   notes.push(...outerLoop.notes);
 
+  // After the scripts, which the workflows run, and before the permission profile. Enqueues nothing
+  // unless `execution.target` is `github-actions` (`generators/githubWorkflows.ts`).
+  const workflows = writeGithubWorkflows({ repoRoot, config: effective, plan });
+
   const state = writeStateDir({ repoRoot, config: effective, plan });
   notes.push(...state.notes);
 
@@ -2301,6 +2334,7 @@ async function run(ctx: CommandContext): Promise<number> {
     // The run's `--dry-run`, which changes that report's tense and nothing else — the same contract
     // the project-file generator above keeps.
     dryRun: ctx.flags.dryRun,
+    pluginRootEntries: flags.pluginRootEntries === true,
   });
   warnings.push(...permissions.warnings);
   notes.push(...permissions.notes);
@@ -2341,7 +2375,11 @@ async function run(ctx: CommandContext): Promise<number> {
   notes.push(...hooks.notes);
 
   ctx.report.step(ctx.flags.dryRun ? 'files (dry run — nothing is written)' : 'files');
-  plan.apply({ repoRoot, report: ctx.report, dryRun: ctx.flags.dryRun, force: ctx.flags.force });
+  const applied = plan.apply({ repoRoot, report: ctx.report, dryRun: ctx.flags.dryRun, force: ctx.flags.force });
+  const profileWrite = applied.find((result) => result.path === permissions.path);
+  const pluginRootNote =
+    profileWrite === undefined ? undefined : pluginRootEntriesNote(permissions.pluginRootEntries, profileWrite.effect);
+  if (pluginRootNote !== undefined) notes.push(pluginRootNote);
 
   // After the plan, deliberately: this is the one git-configuration write, and pointing
   // `core.hooksPath` at a directory whose hook has not landed yet would enable nothing.
@@ -2387,8 +2425,64 @@ async function run(ctx: CommandContext): Promise<number> {
     // read, never re-spelled here (`config/model.ts`).
     browserWiringApplies(effective),
   );
+  // Only the workflows this run created or replaced: a kept one is the adopter's already, and telling
+  // them to commit it again is false on every unforced re-run and in every remote job's `init`.
+  const freshWorkflows = workflows.workflows
+    .filter(({ absolute }) => {
+      const result = applied.find((r) => r.path === absolute);
+      return result !== undefined && result.effect !== 'kept';
+    })
+    .map(({ repoPath }) => repoPath);
+  if (freshWorkflows.length > 0) reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun, freshWorkflows);
 
   return EXIT.OK;
+}
+
+/**
+ * The GitHub-side steps only the adopter can take, printed when this run created or replaced at least
+ * one of the two workflows; `workflowPaths` names those, repo-relative.
+ *
+ * Commands stand on their own lines so each can be pasted. The push comes first because GitHub
+ * dispatches a `workflow_dispatch` workflow only once it exists on the default branch.
+ */
+function reportGithubSteps(
+  ctx: CommandContext,
+  defaultBranch: string,
+  dryRun: boolean,
+  workflowPaths: readonly string[],
+): void {
+  const wrote = dryRun ? 'would write' : 'wrote';
+  const command = (line: string): void => ctx.report.info(`   ${line}`);
+
+  ctx.report.step('remote execution');
+  ctx.report.info(
+    `1. This run ${wrote} ${workflowPaths.join(' and ')}. Commit and push ${workflowPaths.length === 1 ? 'it' : 'both'} to GitHub's default branch (assumed \`${defaultBranch}\` below) — a workflow_dispatch workflow can be dispatched only once it exists there:`,
+  );
+  command(`git add ${workflowPaths.join(' ')}`);
+  command('git commit -m "Add the harness workflows"');
+  command(`git push origin ${defaultBranch}`);
+  ctx.report.info('');
+  ctx.report.info(
+    `2. Set one credential secret: ${OAUTH_TOKEN_SECRET} for subscription billing, or ${API_KEY_SECRET} for API billing. When both are set, billing follows ${API_KEY_SECRET}:`,
+  );
+  command(`gh secret set ${OAUTH_TOKEN_SECRET}`);
+  command(`gh secret set ${API_KEY_SECRET}`);
+  ctx.report.info('');
+  ctx.report.info(
+    `3. Optionally set ${PUSH_URL_SECRET} to receive push notifications from the job, and ${GIT_TOKEN_SECRET} — a personal or App token — so the job's pushes trigger your own CI, which pushes made with the job's built-in token never do:`,
+  );
+  command(`gh secret set ${PUSH_URL_SECRET}`);
+  command(`gh secret set ${GIT_TOKEN_SECRET}`);
+  ctx.report.info('');
+  ctx.report.info(`4. Optionally set the repository variable ${RUNNER_VARIABLE} to run on a self-hosted runner label instead of ubuntu-latest:`);
+  command(`gh variable set ${RUNNER_VARIABLE} --body <runner-label>`);
+  ctx.report.info('');
+  ctx.report.info('5. Then verify the GitHub side:');
+  command(DOCTOR_CHECK_GITHUB_COMMAND);
+  ctx.report.info('');
+  ctx.report.info(
+    'Runner choices, costs, billing and security: the harness documentation, docs/remote-execution.md — Remote execution on GitHub Actions.',
+  );
 }
 
 /**

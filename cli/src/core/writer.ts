@@ -46,6 +46,8 @@
  * | `.gitignore` | `merge-lines` (a managed block, lines not already present) | Every repo already has one. |
  * | The `stateDir` tree and its per-directory READMEs | `ensure-dir` + `create-if-absent` | Creating what is missing is the whole operation; an adopter may have rewritten a contract sentence. |
  * | The ledgers `lessons.md` / `improvement_suggestions.md` | `create-if-absent`, **not upgraded by `--force`** | Ledgers accumulate and nothing can re-derive one; the engine's `.bak` is single-generation, so `--force` may not touch them. |
+ * | `.github/workflows/harness-run.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the timeouts and the runner, and `--force` after a `.bak` is the upgrade path, which also re-pins the CLI version rendered into it. |
+ * | `.github/workflows/harness-resume.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the cron, and `--force` after a `.bak` is the upgrade path. |
  * | Git hook `pre-push`, wrapper scripts | `create-if-absent` | Adopter may have edited the guard. The hook alone is also replaced, after a `.bak`, by the one run that rebuilt the config it is rendered from (`init --reset-config`) — and only where its rendered `case` label no longer matches the set that config resolves, never where the label cannot be read. |
  *
  * `--force` upgrades **`create-if-absent` only** to overwrite-after-backup, and only where the

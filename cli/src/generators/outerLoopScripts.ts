@@ -68,8 +68,9 @@ export interface OuterLoopScript {
    * exactly when a *dispatched agent* or *the orchestrating session* is the thing that runs the
    * file — the git wrappers an agent is told to commit, push and refresh its branch through, the
    * scratch runner it executes a probe or a mutation check with, and the flow walker the
-   * orchestrating session steps a flow with. The watcher, the daemon wrappers and
-   * the worktree and cleanup scripts are run by the watcher process or by a person, so they are
+   * orchestrating session steps a flow with. The watcher, the daemon wrappers, the remote-run
+   * script and the worktree and cleanup scripts are run by the watcher process (or the remote job)
+   * or by a person, so they are
    * `false`: the flag records which of those two runs a script, and the profile follows it so an
    * agent is not handed an entry for a script nothing dispatches it to run.
    *
@@ -79,9 +80,11 @@ export interface OuterLoopScript {
    * allow from a command carrying `$(…)`, a backtick, `|`, `<`, a non-`${IDENT}` braced form, or a
    * `>` that is neither a descriptor duplication nor a redirection to the literal `/dev/null`), so a
    * row that must not be agent-runnable needs an entry in
-   * that guard's `DENY_SCRIPT_BASENAMES` as well as `agentInvocable: false` here. Only three of
-   * the `false` rows carry that entry today — `autonomous-watcher.sh`, `restart-watcher.sh` and
-   * `cleanup-merged-worktrees.sh`. For the worktree scripts, the notifier, the stream formatter and
+   * that guard's `DENY_SCRIPT_BASENAMES` as well as `agentInvocable: false` here. The `false` rows
+   * that carry that entry are `autonomous-watcher.sh`, `restart-watcher.sh`,
+   * `cleanup-merged-worktrees.sh` and `remote-run.sh` — the last because a run that could dispatch
+   * runs could start runs about itself (the guard is `plugin/hooks/autonomous-script-allowlist-guard.sh`).
+   * For the worktree scripts, the notifier, the stream formatter and
    * the docs-retrieval server launcher — which the agent runner starts from `.mcp.json` —
    * `false` is a calling convention rather than a gate: the guard auto-allows them, deliberately.
    *
@@ -157,6 +160,9 @@ export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze(
   Object.freeze({ file: NOTIFY_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: WATCHER_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'restart-watcher.sh', mode: 0o755, agentInvocable: false }),
+  // Run by the watcher, the remote job or a person. Carries a `DENY_SCRIPT_BASENAMES` entry: a run that
+  // could dispatch runs could start runs about itself.
+  Object.freeze({ file: 'remote-run.sh', mode: 0o755, agentInvocable: false }),
 ] as const);
 
 /** The templates' subdirectory under `cli/templates/`, addressed as {@link readTemplate} wants it. */

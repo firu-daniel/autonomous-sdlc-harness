@@ -277,6 +277,7 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'autonomous-notify.sh',
   'autonomous-watcher.sh',
   'restart-watcher.sh',
+  'remote-run.sh',
   'docs-search-server.sh',
   'flow-walker.sh',
 ];
@@ -8348,5 +8349,162 @@ test('init --force carries the profile\'s resolved-plugin-root entries forward, 
     assert.ok(stderr.includes(BY_HAND_REMEDY), `the unpreserved grant lost its own remedy:\n${stderr}`);
     assert.ok(stdout.includes(GRADED_CARRY), `a run that resolved a root does not say so:\n${stdout}`);
     assert.ok(!stdout.includes(CARRIED_UNVERIFIED), `a run that graded the entries calls the carry unverified:\n${stdout}`);
+  });
+});
+
+/** The switch under test, and the fragments of the two lines it adds to the run's report. */
+const PLUGIN_ROOT_ENTRIES = '--plugin-root-entries';
+const KEPT_NO_EFFECT = `${PLUGIN_ROOT_ENTRIES} had no effect`;
+const INSTALL_STEP = 'claude plugin install';
+
+/**
+ * `init --plugin-root-entries`: the entries `doctor`'s `plugin-permissions` check dictates, written
+ * into a profile this run generates — the remote job's route to a profile its own plugin install can
+ * run under. Whether the render lands stays the write engine's `create-if-absent` answer.
+ */
+test('init --plugin-root-entries writes the plugin-root entries doctor dictates into a generated profile', async (t) => {
+  await t.test('a first run writes them, and doctor then grades the profile green with no stray and no missing line', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+
+    await initOk(dir, ['--qa', PLUGIN_ROOT_ENTRIES], machine.env);
+
+    const allow = allowEntries(dir);
+    assert.ok(allow.includes(helperEntry(machine.root)), `the helper entry at the planted root was not written:\n${allow.join('\n')}`);
+    // The planted root is the install root, where doctor requires no read rule: the written set is
+    // exactly the required set, which the graded pass below confirms from doctor's side.
+    assert.ok(!allow.includes(readEntry(machine.root)), 'a read rule doctor does not require at the install root was written');
+    const doctor = await runCli(dir, ['doctor'], machine.env);
+    assert.match(doctor.stdout, PLUGIN_PERMISSIONS_GRADED, `doctor does not grade the written entries green:\n${doctor.stdout}`);
+    assert.ok(!doctor.stdout.includes('dead weight'), `doctor names a stray entry the switch wrote:\n${doctor.stdout}`);
+  });
+
+  await t.test('without the switch no plugin-root entry is written', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+
+    await initOk(dir, ['--qa'], machine.env);
+
+    assert.ok(!allowEntries(dir).includes(helperEntry(machine.root)), 'an unswitched init wrote a plugin-root entry');
+  });
+
+  await t.test('over a kept profile it changes nothing and says so, in a real run and a dry run alike', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+    await initOk(dir, ['--qa'], machine.env);
+    const kept = text(dir, PROFILE_FILE);
+
+    const real = await initOk(dir, [PLUGIN_ROOT_ENTRIES], machine.env);
+    assert.equal(text(dir, PROFILE_FILE), kept, 'the switch changed a profile the write engine keeps');
+    assert.ok(real.stdout.includes(KEPT_NO_EFFECT), `the run does not say the switch had no effect:\n${real.stdout}`);
+
+    const dry = await initOk(dir, [PLUGIN_ROOT_ENTRIES, '--dry-run'], machine.env);
+    assert.equal(text(dir, PROFILE_FILE), kept, 'a dry run changed the profile');
+    assert.ok(dry.stdout.includes(KEPT_NO_EFFECT), `the preview does not say the switch would have no effect:\n${dry.stdout}`);
+  });
+
+  await t.test('with no root recorded it warns, names the install step, and writes the unswitched profile', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest, { record: false });
+    await initOk(dir, ['--qa'], machine.env);
+    const unswitched = text(dir, PROFILE_FILE);
+    await rm(join(dir, PROFILE_FILE));
+
+    const { stdout, stderr } = await initOk(dir, ['--qa', PLUGIN_ROOT_ENTRIES], machine.env);
+
+    assert.ok(stderr.includes(PLUGIN_ROOT_ENTRIES) && stderr.includes(INSTALL_STEP), `no warning names the missing install:\n${stderr}`);
+    assert.equal(text(dir, PROFILE_FILE), unswitched, 'the switch changed a profile it had no root to add to');
+    assert.ok(!stdout.includes(KEPT_NO_EFFECT), `a freshly written profile is reported as kept:\n${stdout}`);
+  });
+
+  await t.test('--force over pasted entries leaves each line exactly once', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+    await initOk(dir, ['--qa'], machine.env);
+    allowInProfile(dir, [helperEntry(machine.root)]);
+
+    await initOk(dir, ['--force', PLUGIN_ROOT_ENTRIES], machine.env);
+
+    const allow = allowEntries(dir);
+    assert.equal(
+      allow.filter((entry) => entry === helperEntry(machine.root)).length,
+      1,
+      `the generated and the carried line were both written:\n${allow.join('\n')}`,
+    );
+  });
+});
+
+/** The two workflows remote execution runs on, as the adopter's repository names them. */
+const WORKFLOW_RUN_FILE = '.github/workflows/harness-run.yml';
+const WORKFLOW_RESUME_FILE = '.github/workflows/harness-resume.yml';
+
+/** The shipped templates they are written from, read straight out of the package. */
+const WORKFLOW_TEMPLATES = join(PACKAGE_ROOT, 'templates', 'github', 'workflows');
+
+/** A `{{token}}` as the renderer defines one; a GitHub `${{ expr }}` never matches it. */
+const RENDER_TOKEN = /\{\{[A-Za-z][A-Za-z0-9_]*\}\}/;
+
+/** Turn remote execution on in a wired fixture, through the command an adopter uses. */
+async function enableRemoteExecution(dir) {
+  const result = await runCli(dir, ['config', 'set', 'execution.target', 'github-actions']);
+  assert.equal(result.status, 0, `config set exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+}
+
+test('the GitHub workflows arrive with execution.target github-actions, and only with it', async (t) => {
+  await t.test('with no execution key init writes no .github path and names none', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { stdout } = await initOk(dir);
+
+    assert.ok(!(await exists(dir, '.github')), 'init wrote a .github path with remote execution off');
+    assert.ok(!stdout.includes('.github'), `the action log names a .github path:\n${stdout}`);
+    assert.ok(!stdout.includes('--check-github'), `the report carries the remote-execution block:\n${stdout}`);
+  });
+
+  await t.test('turned on, init writes both files from their templates and reports the GitHub-side steps', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    await initOk(dir);
+    await enableRemoteExecution(dir);
+
+    const { stdout } = await initOk(dir);
+
+    const version = readJson(join(PACKAGE_ROOT, 'package.json')).version;
+    const runTemplate = readFileSync(join(WORKFLOW_TEMPLATES, 'harness-run.yml'), 'utf8');
+    assert.ok(runTemplate.includes('{{cliVersion}}'), 'the run template no longer carries {{cliVersion}}');
+    assert.equal(text(dir, WORKFLOW_RUN_FILE), runTemplate.replaceAll('{{cliVersion}}', version));
+    assert.ok(!RENDER_TOKEN.test(text(dir, WORKFLOW_RUN_FILE)), 'a {{token}} survived into harness-run.yml');
+    assert.equal(
+      text(dir, WORKFLOW_RESUME_FILE),
+      readFileSync(join(WORKFLOW_TEMPLATES, 'harness-resume.yml'), 'utf8'),
+      'harness-resume.yml is not a verbatim copy of its template',
+    );
+
+    // The commit line is the one `docs/remote-execution.md` → `## 7. Turning it on` step 3 prints.
+    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'doctor --check-github', 'git commit -m "Add the harness workflows"']) {
+      assert.ok(stdout.includes(name), `the closing report does not name ${name}:\n${stdout}`);
+    }
+  });
+
+  await t.test('a second init changes nothing, keeps an edited workflow, and --force replaces it after a .bak', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    await initOk(dir);
+    await enableRemoteExecution(dir);
+    await initOk(dir);
+    const rendered = text(dir, WORKFLOW_RUN_FILE);
+
+    const before = await snapshotTree(dir);
+    const { stdout } = await initOk(dir);
+    assert.deepEqual(await snapshotTree(dir), before, 'a second init changed the tree');
+    assert.ok(!stdout.includes('--check-github'), `a re-run that kept both workflows printed the remote-execution block:\n${stdout}`);
+
+    appendFileSync(join(dir, WORKFLOW_RUN_FILE), '# tuned by hand\n', 'utf8');
+    const edited = text(dir, WORKFLOW_RUN_FILE);
+    await initOk(dir);
+    assert.equal(text(dir, WORKFLOW_RUN_FILE), edited, 'a plain re-run rewrote an edited workflow');
+    assert.ok(!(await exists(dir, `${WORKFLOW_RUN_FILE}.bak`)), 'a plain re-run wrote a .bak');
+
+    await initOk(dir, ['--force']);
+    assert.equal(text(dir, `${WORKFLOW_RUN_FILE}.bak`), edited, 'the .bak does not hold the edited workflow');
+    assert.equal(text(dir, WORKFLOW_RUN_FILE), rendered, '--force did not regenerate the workflow');
   });
 });

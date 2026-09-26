@@ -24,7 +24,10 @@
  *    `$HOME`. `hr_cache_dir()` in `cli/templates/scripts/lib/harness-run-lib.sh` mirrors
  *    {@link machineCacheDir} the same way, over `XDG_CACHE_HOME` and `$HOME/.cache`: the retrieval
  *    launcher resolves the runtime it `exec`s through it, so a change to either resolution is an
- *    edit to both. A variable holding a relative path yields a relative directory here exactly as it
+ *    edit to both. `cli/templates/github/workflows/harness-run.yml` mirrors {@link machineCacheDir}'s
+ *    resolution too — `XDG_CACHE_HOME`, else `$HOME/.cache`, then {@link MACHINE_DIR_NAME} — in its
+ *    retrieval-cache path, so a change to that resolution or to {@link MACHINE_DIR_NAME} is an edit
+ *    to the workflow template as well. A variable holding a relative path yields a relative directory here exactly as it
  *    does there. Only a target on a `WritePlan` is refused for that, and of these two directories
  *    the one that goes on a plan is {@link machineConfigDir} — `generators/notifications.ts`
  *    enqueues it under `allowOutsideRepo`. `machine/registry.ts` writes {@link machineStateDir}

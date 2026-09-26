@@ -160,9 +160,9 @@ The repo-scoped side of the same boundary — what belongs in the committed `har
 
 ## 5. Verifying a change
 
-Eleven gates. Run each **without a pipe** and read the exit status: piping into a pager or into `head` returns the *pager's* status, not the tool's, so a failing gate reads as a passing one.
+Twelve gates. Run each **without a pipe** and read the exit status: piping into a pager or into `head` returns the *pager's* status, not the tool's, so a failing gate reads as a passing one.
 
-**Six of the eleven run unattended, and `scripts/run-gates.sh` is how.** It runs gates 1, 2, 3, 4, 6 and 11 — every gate below that a process can run without a terminal, a browser, a model session or a network — grades each one the way this section says to grade it, and prints the remaining five, gates 5, 7, 8, 9 and 10, rather than passing over them. **Gate 11 is the one conditional member of that six:** it runs unattended **where the retrieval model cache is provisioned**, and where the cache is empty it is printed with the gates the script cannot run and counted among neither the passes nor the failures — so the script's exit status never depends on a several-hundred-megabyte download. `commands.test` in `harness.config.json` points at it, so a branch review's verification is the automatable half of this section rather than gate 4 alone. It is hand-written and is not in the set `init --force` regenerates; the `scripts/test.sh` that wraps it is generated and is not this file. Running the gates by hand, as written below, stays correct and is what the script's own text is checked against.
+**Six of the twelve run unattended, and `scripts/run-gates.sh` is how.** It runs gates 1, 2, 3, 4, 6 and 11 — every gate below that a process can run without a terminal, a browser, a model session or a network — grades each one the way this section says to grade it, and prints the remaining six, gates 5, 7, 8, 9, 10 and 12, rather than passing over them. **Gate 11 is the one conditional member of that six:** it runs unattended **where the retrieval model cache is provisioned**, and where the cache is empty it is printed with the gates the script cannot run and counted among neither the passes nor the failures — so the script's exit status never depends on a several-hundred-megabyte download. `commands.test` in `harness.config.json` points at it, so a branch review's verification is the automatable half of this section rather than gate 4 alone. It is hand-written and is not in the set `init --force` regenerates; the `scripts/test.sh` that wraps it is generated and is not this file. Running the gates by hand, as written below, stays correct and is what the script's own text is checked against.
 
 **One standing exemption, stated here so no gate has to restate it.** `examples/notes-app/` is two
 things with different obligations, and its own README draws the line (*"The capture is frozen; the
@@ -626,6 +626,100 @@ Record all four, the `claude` line being the version leg (v) ran under. Record t
 **Where the results go.** Each leg's command and exact output is recorded in `docs/retrieval.md` → `## Measured, and how`, item (d), dated and carrying leg (vi)'s platform; the placeholder that item once held is filled by the 2026-09-22 run. Leg (iii)'s figures are the one exception and do **not** live in item (d): the wall times, their spread and cause, the per-chunk and per-phase breakdown and the `du` figure are in `docs/retrieval-eval-results.md` → `## Cold build and index size`, under their own host and corpus stamp, and item (d) cites them there. What item (d) carries by name from leg (iii) is the **chunk count**, because that is what shows the corpus floor was met. A Linux run also settles `docs/retrieval.md`'s Linux question under `## Still open`. A run that could not execute this gate says so in its Done summary, naming the legs it could not run and why.
 
 **Gate 11 — docs-retrieval relevance floor.** `scripts/run-gates.sh` runs it as `node evals/docs-retrieval/check-floor.mjs`, which drives the docs-retrieval eval over the committed **`fixture-catalog`** corpus — that corpus alone — for every arm the eval's arm table has a search mode for, and grades each arm's recall@5 and MRR against the values recorded in `evals/docs-retrieval/floor.json`. It loads the **real** embedder and reranker: `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` is set nowhere on that path and the eval refuses to produce a number while it is set, so unlike every retrieval case in gate 4 this gate exercises the models gate 10 installs. **A failure means retrieval got worse**: a measured figure below a recorded floor, on a corpus that moves only when this eval moves, so the change is a property of the retrieval code rather than of the documents. **An empty model cache is reported, not counted as a failure** — the module exits with a status reserved for that case, the script prints it as `BLOCKED` and lists it with the gates it cannot run, and it pushes the gate onto neither the passes nor the failures, so a machine without the hand-provisioned cache still reads a true green. A shortfall is not exempt: it fails the script. The floor policy itself — the margin between a measured figure and its recorded floor, why the graded corpus is `fixture-catalog` alone, and when a floor is re-recorded — is stated in `docs/retrieval-eval.md` → `## The regression floor`, which `floor.json`'s own `see` field names.
+
+**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a throwaway **private** repository created for the purpose — never this repository, for the reason gate 2 gives — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Nine observations, after a setup that is itself the first.
+
+**Setup.**
+
+```
+gh repo create <owner>/<scratch-repo> --private --clone
+```
+
+Then, from the new repository's root, with at least one commit on its default branch:
+
+```
+npx --yes autonomous-sdlc-harness@<version> init --non-interactive
+npx --yes autonomous-sdlc-harness@<version> config set execution.target github-actions
+npx --yes autonomous-sdlc-harness@<version> init
+git add <each path the two init runs reported writing>
+git commit -m "Adopt the harness"
+git push origin <default branch>
+gh secret set CLAUDE_CODE_OAUTH_TOKEN
+npx --yes autonomous-sdlc-harness@<version> doctor --check-github
+```
+
+Where the second `init` reports it could not resolve the plugin's owner, re-run it with `--marketplace <owner>/<repo>`, as `docs/remote-execution.md` → `## 7. Turning it on` step 2 says. Each observation below names what passes and what to record; a failure is recorded with its command and exact message, never retried until it passes. The job's own log is read with `gh run view <run id> --log`, and the run ids with `gh run list --workflow harness-run.yml`.
+
+**(i) Adoption.** Passes when `doctor --check-github` reports `PASS remote-execution` and `PASS remote-github`. Record both lines, and every `WARN` it prints — `HARNESS_PUSH_URL` unset warns and is not a failure of this observation.
+
+**(ii) The first job, and its plugin-root entries.** In a `claude` session in the scratch repository, drop a small task with `/autonomous-sdlc-harness:branch-prompt`, then let the watcher dispatch it in one pass:
+
+```
+bash <scriptsDir>/autonomous-watcher.sh tick
+gh run list --workflow harness-run.yml
+```
+
+Passes when a run titled `harness run <branch>` starts a job on `ubuntu-latest`, its `init --plugin-root-entries` step leaves no tracked file changed, and its `Preflight with doctor` step reports `PASS plugin-permissions` — the check that the job's plugin install produces a root `init` can resolve. Record the run id, the runner label from the job log, and the `plugin-permissions` line verbatim.
+
+**(iii) The self-pause chain, and the `GITHUB_TOKEN` dispatch exception.** Before the drop, make the self-pause small, and give the task enough work to outlast it:
+
+```
+gh variable set HARNESS_SELF_PAUSE_AFTER_MINUTES --body 5
+```
+
+Passes when the job drops its own `PAUSE`, ends with decision `continue`, its `remote-run.sh continue` step dispatches, and a **new** `harness run <branch>` run starts whose job restores the previous bundle and resumes from the pushed ledger. That second run starting is the evidence that a `workflow_dispatch` sent with `GITHUB_TOKEN` starts a run. Record both run ids, the `continue` step's output, the second job's `restore` line, and whether a push the first job made started any other workflow.
+
+**(iv) A `pause` dispatch.** While a job is running, run `/autonomous-sdlc-harness:branch-pause <branch>` in the session, then relay it and read the marker run:
+
+```
+bash <scriptsDir>/autonomous-watcher.sh tick
+gh run view <pause run id>
+gh api repos/<owner>/<scratch-repo>/actions/runs/<pause run id>/timing
+```
+
+Passes when the `harness pause <branch>` run's job is **skipped**, its billable time is zero, and within `REMOTE_CONTROL_POLL_SECS` of it the running job finds it, yields at its next clean checkpoint and ends with decision `stop`, re-dispatching nothing. Record the `timing` answer verbatim and the job-log line where the pause was found. Where the billable figure is not zero, record it: `docs/remote-execution.md` §6 already states that cost.
+
+**(v) `gh workflow enable` and `disable` under the job's token.** The disable is reached by one hand-started poller tick with nothing waiting:
+
+```
+gh workflow enable harness-resume.yml
+gh workflow run harness-resume.yml
+gh workflow view harness-resume.yml
+```
+
+Passes when the tick's `remote-run.sh poll` disables the poller itself and the last command reports it disabled. The enable is reached only by a job that ends on a usage pause with decision `wait-poller`; set `REMOTE_WAIT_MAX_SECS` to `0` so that any usage pause on a hosted runner goes to the poller, and record the `continue` step's output of the first such job. A gate run that meets no usage pause records the enable as **not observed**, never inferred from the disable. Record each succeeded or its exact refusal.
+
+**(vi) The step's `timeout-minutes` expression.** The run workflow computes the harness step's `timeout-minutes` from an expression over `env`. Passes when observation (ii)'s job ran that step at all — GitHub rejects a workflow it cannot parse before any job starts. Record whether the workflow was accepted, and, if it was rejected, the message GitHub reported on the run page or from `gh run view <run id>`.
+
+**(vii) A self-hosted runner.** Register one under a label of your choosing (`docs/remote-execution.md` → `## 8. Choosing a runner`), leave observation (iii)'s five-minute variable set, then point the harness at it and drop a second task:
+
+```
+gh variable set HARNESS_RUNNER --body <label>
+```
+
+Passes when the job runs on that runner and **no** self-pause occurs past the five minutes. Record the runner name from the job log and the run's duration.
+
+**(viii) Stopping, then resuming.** While a job is running:
+
+```
+bash <scriptsDir>/remote-run.sh stop <branch>
+gh run list --workflow harness-run.yml
+bash <scriptsDir>/remote-run.sh sync <branch>
+```
+
+Passes when a `harness stop <branch>` run appears, the running job is cancelled, and no new `harness run <branch>` run follows it. Then run `/autonomous-sdlc-harness:branch-resume <branch>` in the session and one more `tick`; passes when that dispatch starts a job that resumes from the pushed ledger. Record the `stop` output, the run list after it, and the resumed job's `restore` line — or, where the resume is refused, the exact refusal.
+
+**(ix) Both credentials.**
+
+```
+gh secret set ANTHROPIC_API_KEY
+```
+
+With `CLAUDE_CODE_OAUTH_TOKEN` still set, drop a task and let it run to its first session. Sync it, then read the session's stream log under `<stateDir>/autonomous_logs/`. Record the `system` event the session opens with, verbatim, and which credential it names. `docs/remote-execution.md` → `## 9. Credentials and billing` states that `ANTHROPIC_API_KEY` wins; this observation confirms or corrects it.
+
+**Teardown.** Deregister the self-hosted runner, then delete the scratch repository with `gh repo delete <owner>/<scratch-repo>`.
+
+**Where the results go.** A dated paragraph under this gate, as gate 10's opens, carrying the CLI version, the `claude` version the job installed and each observation's recorded output; and for each behaviour an observation settled, its row in `docs/remote-execution.md` → `## 6. What is not verified here` is moved from *not verified* to *verified on <date>*, citing this gate. A behaviour an observation corrected rather than confirmed changes the design text it rests on, not only that row. A run that could not execute an observation names it and why.
 
 ---
 

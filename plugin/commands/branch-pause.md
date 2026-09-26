@@ -15,7 +15,7 @@ table the body uses each one as an ordinary placeholder.
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
-| `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in. This file names one of them, `autonomous-watcher.sh`, **only** in the scope fence, as a file it must not modify; it never invokes it. |
+| `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in, repo-relative; a script is invoked from the root of the checkout this session runs in. This file names two of them: `remote-run.sh`, which it invokes — its `sync` verb, for a remote record in step 2 — and `autonomous-watcher.sh`, **only** in the scope fence, as a file it must not modify and never invokes. It modifies neither. |
 
 ---
 
@@ -30,8 +30,9 @@ session** — the watcher marks the run `paused` and notifies. Resume later with
 `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`.
 
 Only a **running** run can honor a PAUSE (the engine must be alive to see it). This command writes ONE
-marker file and reports — it must NOT modify `<scripts_dir>/autonomous-watcher.sh`, the engines, or the
-instruction forks.
+marker file and reports. The only script it invokes is `<scripts_dir>/remote-run.sh sync`, for a remote
+record; it names `remote-run.sh stop` in its report and never runs it. It must NOT modify
+`<scripts_dir>/autonomous-watcher.sh`, `<scripts_dir>/remote-run.sh`, the engines, or the instruction forks.
 
 **Usage:** type `/autonomous-sdlc-harness:branch-pause`. Optionally target a branch with a leading `<branch>: ` prefix and add a
 free-text reason after it, e.g. `/autonomous-sdlc-harness:branch-pause feat_settings_search: session token window nearly full`. The
@@ -47,6 +48,12 @@ own audit — the orchestrator only checks the file's **presence**, never its co
    `status: "running"`, target it; otherwise list the running candidates and ask via `AskUserQuestion`.
    Never guess when ambiguous. Enumerate with
    `jq -r '.runs | to_entries[] | select(.value.status=="running") | .key'`.
+   - **Remote records sync first.** Before building the candidate set — and before reading a prefix-named
+     record — run `bash <scripts_dir>/remote-run.sh sync <branch>` for every record carrying
+     `execution: github-actions` whose `status` is neither `completed` nor `failed`, then read the registry
+     again, so a remote run that already finished is not "paused". A `sync` that exits non-zero is reported
+     with its message, and that record is left out of the candidates — or, when the prefix named it, the
+     command stops — never guessed about.
 3. **State check.** Read the target's status with `jq -r '.runs["<branch>"].status'`. If it is not
    `running` (e.g. already `paused`, `parked`, `completed`, `failed`), report the actual status and stop —
    dropping PAUSE on a non-running run has no effect (nothing is alive to honor it).
@@ -60,3 +67,9 @@ own audit — the orchestrator only checks the file's **presence**, never its co
    `/autonomous-sdlc-harness:branch-resume <branch>` (or by dropping `<state_dir>/RESUME` in the worktree). Note that the pause is
    not instantaneous — the checkpoint is reached between sub-agent dispatches, so an in-flight dispatch
    (e.g. a long interactive-test or review) finishes first.
+
+   For a **remote record** (`execution: github-actions`), report also that the local watcher relays the
+   pause to the GitHub Actions job, so the local watcher must be running for that to happen, and that the
+   job honours it at its next clean checkpoint exactly as a local run does. To stop a remote run outright
+   rather than pause it, `bash <scripts_dir>/remote-run.sh stop <branch>` cancels its job and its chain —
+   report that command; never run it.

@@ -4,7 +4,9 @@
 # `harness.config.json` at run time, answers "is this branch protected?", and
 # derives the anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
-# differently.
+# differently. It also implements the run registry's reads and writes for the
+# scripts that share that registry, and states the remote state bundle's format
+# with the one writer and restorer every remote-execution consumer shares.
 #
 # WHO SOURCES THIS, AND HOW. Every script in the configured `scriptsDir` that
 # needs this library sources it by a path computed from `${BASH_SOURCE[0]}` —
@@ -43,19 +45,43 @@
 # nowhere else, where `<repo_root>` is resolved from a bare
 # `git rev-parse --show-toplevel` at the directory the caller names. Nothing
 # here reads an environment variable in place of a configured value, and nothing
-# here writes anything inside a repository.
+# here writes inside a repository except through the named write exceptions
+# below.
 #
-# THE ONE EXCEPTION TO "WRITES NOTHING", AND ITS FENCE: the machine-level usage
-# lane at the bottom of this file publishes a state record and takes an advisory
-# lock. Both live under `hr_lane_dir` — a machine-local path outside every
-# repository — and nothing else here writes at all, so a caller that never calls
-# an `hr_lane_*` function still gets a library that only reads. The lane's
-# ceilings are the only environment values here that carry policy, because the
-# lane is machine-scoped and has no configuration key to carry them; each is
+# THE WRITE EXCEPTIONS TO "WRITES NOTHING", AND THEIR FENCES. Each entry names
+# the section that writes, the functions that write, and where. Nothing outside
+# this list writes at all; a section that adds a writer adds its entry here.
+#
+#   1. The machine-level usage lane (the section at the bottom of this file)
+#      publishes a state record and takes an advisory lock. Fence: both live
+#      under `hr_lane_dir` — a machine-local path outside every repository —
+#      and are written only by the `hr_lane_*` functions.
+#   2. THE RUN REGISTRY writes the registry file its caller names. Fence: that
+#      file is `<root>/<state_dir>/autonomous_logs/registry.json`, resolved
+#      through `hr_state_path`, and it is written only by `hr_registry_init`
+#      and `hr_registry_set`.
+#   3. THE REMOTE STATE BUNDLE writes the files its format lists. Fence: inside
+#      `<root>/<state_dir>/` (resolved through `hr_state_dir`), only
+#      `autonomous_logs/remote_status.json`, `clarifications/<branch>/`,
+#      `PAUSE_PROGRESS.md`, `.flow_walker_state` and the move-aside directory
+#      `autonomous_logs/remote_superseded/`; outside it, only the caller-named
+#      `<out_dir>` of `hr_remote_bundle_write` and the caller-named `<out_json>`
+#      of `hr_remote_status_write`. Written only by `hr_remote_status_write`,
+#      `hr_remote_bundle_write` and `hr_remote_bundle_restore`, and nothing
+#      there but a writer's own failed temp file is ever removed.
+#
+# A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
+# `hr_remote_status_write`, `hr_remote_bundle_write` or
+# `hr_remote_bundle_restore` function still gets a library that only reads. The
+# lane's ceilings are the only environment values here that carry policy, because
+# the lane is machine-scoped and has no configuration key to carry them; each is
 # named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
 # `HOME` and `PWD` are also read, as location anchors only, and `PATH` is read by
 # `hr_path_with_fallbacks` alone — as that function's input, which it prints back
-# transformed and never assigns.
+# transformed and never assigns. `GITHUB_RUN_ID`, `GITHUB_SERVER_URL`,
+# `GITHUB_REPOSITORY` and `HARNESS_INPUT_CHAIN` are read by
+# `hr_remote_status_write` alone, as provenance values copied into
+# `status.json` — never a configured value and never policy.
 #
 # CONFIGURATION IS READ AT RUN TIME, NOT FROZEN AT GENERATION TIME. That is the
 # whole reason the shipped scripts carry no `{{token}}`: a guard whose protected
@@ -133,10 +159,13 @@
 # dialect marker for editors and linters). No `set -e` and no `set -u` — a
 # sourced library must not change its caller's shell — but every parameter
 # expansion here is defaulted, so it is safe to source into a caller that sets
-# both. No top-level side effects, no exiting, no writes outside the lane
-# directory named above, and no diagnostics on stdout OR stderr: every reader is
-# silent on failure and signals through its return status, because callers
-# capture stdout. That silence is why the lane reports a lock it BROKE through a
+# both. No top-level side effects, no exiting, no writes outside the fences of
+# the write exceptions named above, and no diagnostics on stdout OR stderr:
+# every reader is silent on failure and signals through its return status,
+# because callers capture stdout. The one pass-through is the registry's two
+# writers, `hr_registry_init` and `hr_registry_set`, which leave the shell's,
+# `mktemp`'s and `jq`'s own stderr on a failed write to the caller, as the
+# watcher's bodies they replaced did — that stream is the watcher's log. That silence is why the lane reports a lock it BROKE through a
 # variable instead of a log line — the caller owns the log.
 #
 # NAMING. Every function is prefixed `hr_`; every variable this file touches
@@ -147,7 +176,8 @@
 # `HR_CFG_VALUE`, `HR_CFG_COMMAND_KEYS`, `HR_PROTECTED_DEFAULT`, and the lane's
 # `HR_LANE_RANK`, `HR_LANE_STATE`, `HR_LANE_RESUME_AT`, `HR_LANE_OBSERVED_AT`,
 # `HR_LANE_OBSERVED_REPO`, `HR_LANE_OWNER_SLUG`, `HR_LANE_OWNER_PID`,
-# `HR_LANE_OWNER_AT` and `HR_LANE_BROKEN_OWNER`. Every one of them is assigned
+# `HR_LANE_OWNER_AT` and `HR_LANE_BROKEN_OWNER`, and the remote state bundle's
+# names, which `hr_remote_names_var` assigns. Every one of them is assigned
 # before it is read by the function that owns it, so an inherited value from a
 # parent process is overwritten rather than believed.
 #
@@ -568,6 +598,7 @@ hr_config_load() {
       s("phases.parity";         try (.phases.parity | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("phases.qa";             try (.phases.qa     | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("phases.docs";           try (.phases.docs   | if type == "boolean" or . == null then . else "invalid" end) catch null),
+      s("execution.target";      try .execution.target     catch null),
       s("protectedBranches.present";
         try (if (.protectedBranches | type) == "array" then "1" else null end) catch null),
       l("protectedBranches";     try .protectedBranches    catch null)
@@ -812,6 +843,28 @@ hr_phase_enabled() {
   return 2
 }
 
+# `execution.target` — where an unattended run executes: `local` or
+# `github-actions`. THE ONE READER OF THE KEY IN THIS FAMILY; a script that
+# needs it calls this. Schema default `local`, so an absent key prints `local`
+# and 1 is never returned. 2 — printing nothing — when the configuration is
+# unresolvable or the stored value is outside the schema's enum, which this
+# refuses rather than guesses about, as `hr_phase_enabled` does.
+hr_execution_target() {
+  local root="${1-}"
+  hr_config_load "$root" || return 2
+  if ! hr_cfg_scalar_var "execution.target"; then
+    printf 'local\n'
+    return 0
+  fi
+  case "$HR_CFG_VALUE" in
+    local|github-actions)
+      printf '%s\n' "$HR_CFG_VALUE"
+      return 0
+      ;;
+  esac
+  return 2
+}
+
 # ---------------------------------------------------------------------------
 # The protected-branch trichotomy.
 # ---------------------------------------------------------------------------
@@ -1043,6 +1096,329 @@ hr_push_env_files() {
     *) printf '%s/%s\n' "${root%/}" "$path" ;;
   esac
   return 0
+}
+
+# ---------------------------------------------------------------------------
+# THE RUN REGISTRY.
+#
+# THE CONTRACT IS NOT THIS SECTION'S. The registry's JSON shape
+# (`{"runs": {"<branch>": {…}}}`), its field set and its status vocabulary are
+# stated in `autonomous-watcher.sh`'s header and registry comment block; this
+# section only reads and writes that shape, for every script that shares the
+# file, so no second copy of a writer exists.
+#
+# Each function takes the registry file as its first argument — the caller
+# resolves it as `hr_state_path <root> autonomous_logs/registry.json` — and is
+# write exception 2 in the header. Every value is written as a JSON string;
+# every write stamps `branch` and `updated_at` on the record and replaces the
+# file through a `mktemp` + `mv`. No shell option is assumed: the caller may set
+# `-e`, `-u` or neither.
+# ---------------------------------------------------------------------------
+
+# Create an empty registry at <file> when none exists.
+hr_registry_init() {
+  local file="${1-}"
+  [ -n "$file" ] || return 1
+  [ -f "$file" ] || printf '{"runs":{}}\n' >"$file"
+}
+
+# hr_registry_set <file> <branch> <key> <value>
+hr_registry_set() {
+  local file="${1-}" branch="${2-}" key="${3-}" value="${4-}" tmp
+  hr_registry_init "$file" || :
+  tmp="$(mktemp)" || return 1
+  if jq --arg b "$branch" --arg k "$key" --arg v "$value" --arg now "$(date '+%Y-%m-%dT%H:%M:%S')" '
+    .runs[$b] = ((.runs[$b] // {}) + {($k): $v, "branch": $b, "updated_at": $now})
+  ' "$file" >"$tmp"; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+    return 1
+  fi
+}
+
+# hr_registry_get <file> <branch> <key>   -> the value, or nothing
+hr_registry_get() {
+  local file="${1-}"
+  hr_registry_init "$file" || :
+  jq -r --arg b "${2-}" --arg k "${3-}" '.runs[$b][$k] // empty' "$file" 2>/dev/null
+}
+
+# Every branch in the registry at <file>, one per line. Prints nothing when the
+# file cannot be read as a registry, which leaves each caller iterating over an
+# empty set.
+hr_registry_branches() {
+  local file="${1-}"
+  hr_registry_init "$file" || :
+  jq -r '.runs | keys[]' "$file" 2>/dev/null
+}
+
+# ---------------------------------------------------------------------------
+# THE REMOTE STATE BUNDLE.
+#
+# THE FORMAT OF RECORD. What a remote job carries across a job boundary and
+# reports back, uploaded as the Actions artifact `harness-state`. Every name
+# below is a variable `hr_remote_names_var` assigns; no function spells one.
+#
+#   <bundle>/status.json                 the job's record, fixed schema below
+#   <bundle>/clarifications/<branch>/    the whole branch directory, answered/ included
+#   <bundle>/PAUSE_PROGRESS.md           when present
+#   <bundle>/flow_walker_state           <state_dir>/.flow_walker_state, WITHOUT its dot
+#   <bundle>/run.log                     <state_dir>/autonomous_logs/<branch>.log; never restored
+#
+# The walker state loses its dot because `actions/upload-artifact` skips hidden
+# files by default. NOTHING IN THE BUNDLE IS EVER COMMITTED: every file in it is
+# gitignored machine-local state, and the remote-status and move-aside paths sit
+# under `autonomous_logs/`, whose ignore rule already covers them.
+#
+# WHO READS EACH FILE. `status.json`: `remote-run.sh sync` / `status` (into the
+# local registry), `continue` / `poll` (the decision, `chain`, the reset time)
+# and the next job's seed. The clarification directory and `PAUSE_PROGRESS.md`:
+# the next job, and the user's local mirror. The walker state: the next job
+# only. `run.log`: the user only — `sync` copies it to the main checkout's logs
+# directory itself, and no restore places it.
+#
+# `status.json` — schema `HR_REMOTE_STATE_SCHEMA`; every value a JSON string:
+#   schema                  a reader that does not recognise it treats the bundle as absent
+#   branch, engine          the run's branch; `task` | `user_review` | `docs`
+#   status                  `running` | `parked` | `park_loop` | `paused` | `completed` | `failed`
+#   pause_reason            `usage` | `budget` | `user` | `overload` | empty. The registry's
+#                           registry-only `killed` is never written here
+#   usage_resume_at         the epoch second a usage pause may resume at, or empty
+#   park_loop_cycles, resume_max_question_index, auto_resumes, stall_restarts
+#                           the counters that must survive a job boundary
+#   chain                   the writing job's OWN input `HARNESS_INPUT_CHAIN`, never
+#                           a value carried from an earlier bundle
+#   control_polled_at       the epoch second up to which the job checked for a
+#                           `harness pause <branch>` run, or empty
+#   decision                `continue` | `wait-poller` | `stop`
+#   detail                  one human-readable line
+#   run_id, run_url, written_at
+#                           `GITHUB_RUN_ID`, the run's URL, the epoch second written
+# ---------------------------------------------------------------------------
+
+hr_remote_names_var() {
+  HR_REMOTE_STATE_SCHEMA='1'
+  HR_REMOTE_STATUS_FILE='status.json'
+  HR_REMOTE_CLARIFY_DIR='clarifications'
+  HR_REMOTE_PAUSE_FILE='PAUSE_PROGRESS.md'
+  HR_REMOTE_WALKER_FILE='flow_walker_state'
+  HR_REMOTE_WALKER_SOURCE=".$HR_REMOTE_WALKER_FILE"
+  HR_REMOTE_LOG_FILE='run.log'
+  HR_REMOTE_LOGS_DIR='autonomous_logs'
+  HR_REMOTE_STATUS_SOURCE="$HR_REMOTE_LOGS_DIR/remote_status.json"
+  HR_REMOTE_SUPERSEDED_DIR="$HR_REMOTE_LOGS_DIR/remote_superseded"
+}
+
+# hr_remote_status_write <registry_file> <branch> <out_json> <decision> <detail>
+#
+# Reads <branch>'s record through `hr_registry_get` and replaces <out_json> by
+# rename, so a concurrent reader sees the old file or the new one, never half.
+# Prints nothing. 1 — writing nothing — when an argument is missing, <decision>
+# is outside its vocabulary, the record has no in-vocabulary `status`, or the
+# write fails. A `pause_reason` outside the bundle's vocabulary is written empty.
+hr_remote_status_write() {
+  local registry="${1-}" branch="${2-}" out="${3-}" decision="${4-}" detail="${5-}"
+  local status engine reason chain run_id run_url tmp
+  [ -n "$registry" ] && [ -n "$branch" ] && [ -n "$out" ] || return 1
+  case "$decision" in
+    continue|wait-poller|stop) ;;
+    *) return 1 ;;
+  esac
+  hr_remote_names_var
+  status=$(hr_registry_get "$registry" "$branch" status)
+  case "$status" in
+    running|parked|park_loop|paused|completed|failed) ;;
+    *) return 1 ;;
+  esac
+  engine=$(hr_registry_get "$registry" "$branch" engine)
+  reason=$(hr_registry_get "$registry" "$branch" pause_reason)
+  case "$reason" in
+    usage|budget|user|overload) ;;
+    *) reason="" ;;
+  esac
+  chain="${HARNESS_INPUT_CHAIN-}"
+  case "$chain" in
+    ''|*[!0-9]*) chain="" ;;
+  esac
+  run_id="${GITHUB_RUN_ID-}"
+  run_url=""
+  if [ -n "$run_id" ] && [ -n "${GITHUB_SERVER_URL-}" ] && [ -n "${GITHUB_REPOSITORY-}" ]; then
+    run_url="${GITHUB_SERVER_URL%/}/${GITHUB_REPOSITORY}/actions/runs/${run_id}"
+  fi
+  detail=${detail//$'\r'/ }
+  detail=${detail//$'\n'/ }
+  # The temp file sits beside <out_json> so the `mv` is a same-filesystem rename.
+  tmp=$(mktemp "${out}.tmp.XXXXXX" 2>/dev/null) || return 1
+  if jq -n \
+    --arg schema "$HR_REMOTE_STATE_SCHEMA" \
+    --arg branch "$branch" \
+    --arg engine "$engine" \
+    --arg status "$status" \
+    --arg pause_reason "$reason" \
+    --arg usage_resume_at "$(hr_registry_get "$registry" "$branch" usage_resume_at)" \
+    --arg park_loop_cycles "$(hr_registry_get "$registry" "$branch" park_loop_cycles)" \
+    --arg resume_max_question_index "$(hr_registry_get "$registry" "$branch" resume_max_question_index)" \
+    --arg auto_resumes "$(hr_registry_get "$registry" "$branch" auto_resumes)" \
+    --arg stall_restarts "$(hr_registry_get "$registry" "$branch" stall_restarts)" \
+    --arg chain "$chain" \
+    --arg control_polled_at "$(hr_registry_get "$registry" "$branch" control_polled_at)" \
+    --arg decision "$decision" \
+    --arg detail "$detail" \
+    --arg run_id "$run_id" \
+    --arg run_url "$run_url" \
+    --arg written_at "$(date +%s)" \
+    '{schema: $schema, branch: $branch, engine: $engine, status: $status,
+      pause_reason: $pause_reason, usage_resume_at: $usage_resume_at,
+      park_loop_cycles: $park_loop_cycles,
+      resume_max_question_index: $resume_max_question_index,
+      auto_resumes: $auto_resumes, stall_restarts: $stall_restarts,
+      chain: $chain, control_polled_at: $control_polled_at,
+      decision: $decision, detail: $detail,
+      run_id: $run_id, run_url: $run_url, written_at: $written_at}' \
+    >"$tmp" 2>/dev/null && mv "$tmp" "$out" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
+}
+
+# hr_remote_status_get <status_json> <key>   -> the value
+#
+# 0 with the value printed; 1 when <key> is absent; 2 when the file is
+# unreadable, is not JSON, or its `schema` is not `HR_REMOTE_STATE_SCHEMA` —
+# the bundle is then treated as absent, whatever <key> holds.
+hr_remote_status_get() {
+  local file="${1-}" key="${2-}" out
+  [ -n "$file" ] && [ -r "$file" ] || return 2
+  hr_remote_names_var
+  # One `jq`, one marker character: `S` a schema it does not recognise, `A` an
+  # absent key, `V` a value — an exit status cannot carry three outcomes.
+  out=$(jq -r --arg k "$key" --arg s "$HR_REMOTE_STATE_SCHEMA" '
+    if type != "object" or .schema != $s then "S"
+    elif (.[$k] | type) == "string" then "V" + .[$k]
+    else "A" end' "$file" 2>/dev/null) || return 2
+  case "$out" in
+    V*) printf '%s\n' "${out#V}" ;;
+    A) return 1 ;;
+    *) return 2 ;;
+  esac
+}
+
+# hr_remote_bundle_write <root> <branch> <registry_file> <out_dir>
+#
+# Assembles the format above in <out_dir>, which must be absent or empty, from
+# <root>'s configured state directory. `status.json` is the job's own
+# `autonomous_logs/remote_status.json` when present; otherwise it is written
+# from <branch>'s registry record with decision `stop`, because a job that never
+# wrote its status never decided to continue. 0 written; 1 a missing argument,
+# a non-empty <out_dir> or a failed copy; 2 <root>'s configuration unresolvable.
+hr_remote_bundle_write() {
+  local root="${1-}" branch="${2-}" registry="${3-}" out="${4-}" state base clarify
+  [ -n "$root" ] && [ -n "$branch" ] && [ -n "$registry" ] && [ -n "$out" ] || return 1
+  state=$(hr_state_dir "$root") || return 2
+  hr_remote_names_var
+  base="${root%/}/$state"
+  out=${out%/}
+  if [ -e "$out" ]; then
+    [ -d "$out" ] || return 1
+    [ -z "$(ls -A "$out" 2>/dev/null)" ] || return 1
+  fi
+  mkdir -p "$out" 2>/dev/null || return 1
+
+  if [ -f "$base/$HR_REMOTE_STATUS_SOURCE" ]; then
+    cp "$base/$HR_REMOTE_STATUS_SOURCE" "$out/$HR_REMOTE_STATUS_FILE" 2>/dev/null || return 1
+  else
+    hr_remote_status_write "$registry" "$branch" "$out/$HR_REMOTE_STATUS_FILE" stop \
+      "the job wrote no status; derived from the registry record when the bundle was saved" || return 1
+  fi
+  if [ -d "$base/$HR_REMOTE_CLARIFY_DIR/$branch" ]; then
+    clarify="$out/$HR_REMOTE_CLARIFY_DIR/$branch"
+    mkdir -p "${clarify%/*}" 2>/dev/null || return 1
+    # No trailing slash on the source: BSD `cp -R dir/` copies the contents instead.
+    cp -R "$base/$HR_REMOTE_CLARIFY_DIR/$branch" "$clarify" 2>/dev/null || return 1
+  fi
+  if [ -f "$base/$HR_REMOTE_PAUSE_FILE" ]; then
+    cp "$base/$HR_REMOTE_PAUSE_FILE" "$out/$HR_REMOTE_PAUSE_FILE" 2>/dev/null || return 1
+  fi
+  if [ -f "$base/$HR_REMOTE_WALKER_SOURCE" ]; then
+    cp "$base/$HR_REMOTE_WALKER_SOURCE" "$out/$HR_REMOTE_WALKER_FILE" 2>/dev/null || return 1
+  fi
+  if [ -f "$base/$HR_REMOTE_LOGS_DIR/$branch.log" ]; then
+    cp "$base/$HR_REMOTE_LOGS_DIR/$branch.log" "$out/$HR_REMOTE_LOG_FILE" 2>/dev/null || return 1
+  fi
+  return 0
+}
+
+# hr_remote_bundle_restore <bundle_dir> <root> <branch> <mode>
+#
+# <mode> `job` places the clarification directory, `PAUSE_PROGRESS.md`, the
+# walker state (back under its dotted name) and `status.json` (as
+# `autonomous_logs/remote_status.json`); `mirror` places the first two only. The
+# run log is placed by neither.
+#
+# THE CLARIFICATION DIRECTORY IS REPLACED WHOLESALE, AND NOTHING IS DELETED. An
+# existing target is moved aside with one `mv` into
+# `autonomous_logs/remote_superseded/<epoch>/clarifications/<branch>` (`<epoch>-<n>`
+# when an earlier restore took that second) before the
+# bundle's copy goes in, so a stale local pair cannot survive and no recursive
+# removal is ever shelled out. A bundle carrying no clarification directory
+# leaves the target alone: in a mirror it may hold an answer not yet relayed.
+#
+# 0 restored; 1 a missing argument, an unknown <mode> or a failed copy; 2 —
+# touching nothing — when the bundle is unrecognised (no readable `status.json`,
+# a schema other than `HR_REMOTE_STATE_SCHEMA`, or a `branch` other than
+# <branch>) or <root>'s configuration is unresolvable.
+hr_remote_bundle_restore() {
+  local bundle="${1-}" root="${2-}" branch="${3-}" mode="${4-}"
+  local state base named target epoch aside n tmp
+  [ -n "$bundle" ] && [ -n "$root" ] && [ -n "$branch" ] || return 1
+  case "$mode" in
+    job|mirror) ;;
+    *) return 1 ;;
+  esac
+  hr_remote_names_var
+  bundle=${bundle%/}
+  named=$(hr_remote_status_get "$bundle/$HR_REMOTE_STATUS_FILE" branch) || return 2
+  [ "$named" = "$branch" ] || return 2
+  state=$(hr_state_dir "$root") || return 2
+  base="${root%/}/$state"
+
+  if [ -d "$bundle/$HR_REMOTE_CLARIFY_DIR/$branch" ]; then
+    target="$base/$HR_REMOTE_CLARIFY_DIR/$branch"
+    if [ -e "$target" ]; then
+      epoch=$(date +%s)
+      aside="$base/$HR_REMOTE_SUPERSEDED_DIR/$epoch"
+      n=0
+      while [ -e "$aside/$HR_REMOTE_CLARIFY_DIR/$branch" ]; do
+        n=$((n + 1))
+        aside="$base/$HR_REMOTE_SUPERSEDED_DIR/$epoch-$n"
+      done
+      aside="$aside/$HR_REMOTE_CLARIFY_DIR/$branch"
+      mkdir -p "${aside%/*}" 2>/dev/null || return 1
+      mv "$target" "$aside" 2>/dev/null || return 1
+    fi
+    mkdir -p "${target%/*}" 2>/dev/null || return 1
+    cp -R "$bundle/$HR_REMOTE_CLARIFY_DIR/$branch" "$target" 2>/dev/null || return 1
+  fi
+  if [ -f "$bundle/$HR_REMOTE_PAUSE_FILE" ]; then
+    mkdir -p "$base" 2>/dev/null || return 1
+    cp "$bundle/$HR_REMOTE_PAUSE_FILE" "$base/$HR_REMOTE_PAUSE_FILE" 2>/dev/null || return 1
+  fi
+  [ "$mode" = job ] || return 0
+
+  if [ -f "$bundle/$HR_REMOTE_WALKER_FILE" ]; then
+    mkdir -p "$base" 2>/dev/null || return 1
+    cp "$bundle/$HR_REMOTE_WALKER_FILE" "$base/$HR_REMOTE_WALKER_SOURCE" 2>/dev/null || return 1
+  fi
+  mkdir -p "$base/$HR_REMOTE_LOGS_DIR" 2>/dev/null || return 1
+  tmp=$(mktemp "$base/$HR_REMOTE_STATUS_SOURCE.tmp.XXXXXX" 2>/dev/null) || return 1
+  if cp "$bundle/$HR_REMOTE_STATUS_FILE" "$tmp" 2>/dev/null \
+    && mv "$tmp" "$base/$HR_REMOTE_STATUS_SOURCE" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
 }
 
 # ---------------------------------------------------------------------------

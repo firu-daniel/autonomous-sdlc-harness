@@ -18,7 +18,9 @@
 #
 # The watcher knows only about inbox files, working copies, central logs, the run
 # registry (including which engine each run was launched with), the concurrency
-# cap, the kill switch, and exit notifications. IT CONTAINS NO PLANNING,
+# cap, the kill switch, and exit notifications — and, when `execution.target` is
+# `github-actions`, it also dispatches a drop to GitHub Actions instead of
+# spawning it (see REMOTE DISPATCH). IT CONTAINS NO PLANNING,
 # IMPLEMENTATION OR FIX ORCHESTRATION LOGIC — all of that lives in the engine
 # commands, which resolve their own anchors inside the working copy they run in.
 # That is what keeps a future trigger (an issue label, a webhook) a drop-in
@@ -40,7 +42,13 @@
 # RESUME sentinel has landed. Both re-launch the SAME engine in the run's
 # EXISTING working copy — they never create one — through `spawn_engine`'s 4th
 # and 5th arguments, and they are what makes yielding a session cost nothing
-# while a run waits. The park resume is bounded by THE PARK-LOOP GUARD: a run
+# while a run waits. For a record whose `execution` is `github-actions` each
+# pass instead DISPATCHES (`remote-run.sh dispatch … --resume answer|pause`)
+# rather than re-launching through `spawn_engine`, and it neither consults the
+# lane nor holds a cap slot — see REMOTE DISPATCH. ONE OTHER PATH brings a run back, and only inside a job
+# (HARNESS_JOB_MODE=1): job mode's BOUNDED AUTO-RESUME, which relaunches a
+# `failed` or overload-`paused` run through the same `spawn_engine` 5th
+# argument at most REMOTE_AUTO_RESUME_MAX times per run — see JOB MODE. The park resume is bounded by THE PARK-LOOP GUARD: a run
 # whose park-resumes keep parking without progress becomes `park_loop` and is
 # resumed no further until an operator creates PARK_LOOP_CLEAR in its
 # clarification directory. And it carries the last two passes: THE STALENESS WATCHDOG,
@@ -104,7 +112,9 @@
 #     `paused_by=usage` tag alone, and a hand pause carries no tag.
 #   * WHILE A PAUSE IS IN EFFECT THE HOLD MARKER IS UP, which is what defers a
 #     fresh inbox drop (it stays in the inbox) and skips the watchdog above:
-#     launching into a full window spends a run on an immediate refusal.
+#     launching into a full window spends a run on an immediate refusal. A
+#     REMOTE drop is dispatched through the hold — the job gates itself (see
+#     REMOTE DISPATCH).
 #   * THE WINDOW TYPES ARE ASSESSED INDEPENDENTLY — the 5-hour one and the
 #     rolling weekly one — so a 5-hour window that has just reset cannot mask a
 #     weekly window sitting at its cap. The worst state across every window of
@@ -122,7 +132,9 @@
 # `<state> <resume_at>` pair it already computes — into one machine-level record,
 # and the three passes that START work (a fresh inbox drop, a park resume, a
 # pause resume) CONSULT that record before acting — and, only when
-# USAGE_LANE_LOCK_ENABLED=1, also acquire a single machine-level lane. Both live
+# USAGE_LANE_LOCK_ENABLED=1, also acquire a single machine-level lane. A remote
+# drop, a remote park resume and a remote pause resume consult neither (see
+# REMOTE DISPATCH). Both live
 # under
 #
 #   ${XDG_STATE_HOME:-$HOME/.local/state}/autonomous-sdlc-harness/
@@ -156,10 +168,57 @@
 # unattended commit point calls: the engine's own "working tree clean"
 # precondition has to be honest from its very first step, and a prompt left
 # uncommitted is lost when the branch reaches a pull request. A dropped REVIEW
-# file is placed and NEVER committed — the flow's own commits pick it up. Both
+# file is placed and NEVER committed — the flow's own commits pick it up — on a
+# local run; a remote one commits it (see REMOTE DISPATCH). On a LOCAL run both
 # commit paths are non-blocking: a failed commit or push is one WARNING line in
 # the log and the run launches anyway, because that failure has to be visible and
-# must never cost the run.
+# must never cost the run. On a remote run it blocks the dispatch (see REMOTE
+# DISPATCH).
+#
+# REMOTE DISPATCH. With `execution.target` `github-actions` — read per inbox
+# file from the configuration in effect at the drop, an unresolvable answer
+# being `local` with one log line — a drop is prepared exactly as a local one
+# (working copy, artifact placed, committed and pushed) and then handed to
+# `remote-run.sh dispatch` instead of spawn_engine, by launch_remote_run. It
+# opens no live-log window and spawns nothing.
+#
+#   * SKIPPED FOR A REMOTE DROP: the usage hold, the concurrency cap and the
+#     machine lane. The job gates itself, and no local component gates a remote
+#     run. The kill switch still defers it, and a parked, paused or park-loop
+#     record still rejects it.
+#   * THE RECORD CARRIES `execution: github-actions`, and a run keeps the
+#     execution it started with for its whole life: the record's field, never
+#     the current key, is what later passes read. Before the duplicate test on
+#     such a record, `remote-run.sh sync` refreshes its status (best-effort).
+#   * THE REVIEW IS COMMITTED, on a remote run only: the job checks out
+#     `origin/<branch>`, so a review left uncommitted would not reach it, and a
+#     job boundary before the flow's own commit would lose it. The working copy
+#     is first fast-forwarded to `origin/<branch>`, because the job, not this
+#     copy, is where the branch advanced.
+#   * A FAILED COMMIT OR PUSH BLOCKS A REMOTE DISPATCH, for all three artifacts,
+#     while it never blocks a local launch. A local run executes in the working
+#     copy that holds the file; a remote job sees only what was pushed. An
+#     identical re-drop still skips the commit, but its push must still land —
+#     the earlier drop's push may be the one that failed. push-branch.sh exits
+#     0 on every path, so "landed" is read as `origin/<branch>` equal to HEAD.
+#   * NOTHING LOCAL WATCHES, GATES, RESTARTS OR RESUMES A REMOTE RUN ON ITS
+#     OWN. Skipped for such a record: the vanished-process reconcile, the cap
+#     count, the stall watchdog, both halves of the usage gate, and the lane's
+#     idle release.
+#   * THE RELAYS — EVERY ONE A USER'S ACTION RELAYED, never a decision of this
+#     script. The files a user's command writes into the mirror become
+#     dispatches: a fully answered park -> `dispatch --resume answer
+#     --answers-from <clar_dir> --indexes "<set>"` (plus `--park-loop-clear`
+#     after a PARK_LOOP_CLEAR); a RESUME -> `dispatch --resume pause`; a PAUSE on
+#     a `running` record -> `remote-run.sh pause`. Each is chain 0, takes no cap
+#     slot and consults no lane; only a sent dispatch changes the record or
+#     removes a file, so a refusal or a `gh` failure is one log line and the
+#     next pass retries. The kill switch defers the two resumes; the pause relay
+#     runs ahead of it, the one action that still runs under the brake, because
+#     it starts nothing.
+#
+# A remote run's local working copy is a MIRROR that `remote-run.sh sync`
+# fills; it is stopped through `remote-run.sh stop`.
 #
 # THE AGENT BINARY IS REACHED THROUGH ONE VARIABLE, `${HARNESS_AGENT_CLI:-claude}`,
 # resolved once below. It defaults to the real CLI, so an operator sees no
@@ -180,8 +239,13 @@
 # script's own location, and the MAIN checkout — the first working copy git lists
 # — is the one that holds the inbox, the logs, the registry and the kill switch,
 # so every run is tailable and stoppable from ONE place while executing in its own
-# sibling working copy. Every run-artifact path under it comes from the configured
-# `stateDir` through lib/harness-run-lib.sh; none of them is spelled here.
+# sibling working copy — except under `job`, where the main checkout and the
+# working copy are the same directory, the job's own checkout (see JOB MODE);
+# and except for a record with `execution: github-actions`, whose run executes
+# in a GitHub Actions job, whose local working copy is a mirror that
+# `remote-run.sh sync` fills, and which is stopped through `remote-run.sh stop`
+# (see REMOTE DISPATCH). Every run-artifact path under it comes from the configured `stateDir` through
+# lib/harness-run-lib.sh; none of them is spelled here.
 #
 # IT REFUSES TO START ON A CONFIGURATION IT CANNOT READ. A watcher that guessed
 # would watch a directory nobody drops files into, log where nobody tails, and
@@ -232,16 +296,83 @@
 # THE KILL SWITCH IS THE OPERATOR'S, AND THIS SCRIPT NEVER DELETES IT.
 # `<state_dir>/AUTONOMOUS_STOP` in the main checkout stops the watcher from
 # launching or resuming ANY run, and it is removed by hand — a watcher that
-# cleared its own brake would restart the very runs it was told to stop. It is
-# distinct from the per-run `<state_dir>/STOP` inside one working copy, which
-# halts one run.
+# cleared its own brake would restart the very runs it was told to stop.
+# Relaying a remote run's pause is the one action that still runs under the
+# brake, because it starts nothing (see REMOTE DISPATCH). It is distinct from
+# the per-run `<state_dir>/STOP` inside one working copy, which halts one run.
 #
 # WHO RUNS IT. The service manager (`daemon install` renders the unit), or a
-# person by hand for a single `tick` or a `status`. NEVER a dispatched agent:
+# person by hand for a single `tick` or a `status` — and one other runner, the
+# remote workflow's harness step, invoking `job` with HARNESS_JOB_MODE=1 (see
+# JOB MODE). NEVER a dispatched agent:
 # its basename is on the script-allowlist guard's `DENY_SCRIPT_BASENAMES`, so
 # that guard withholds the permit rather than granting one, and the generated
 # permission profile emits no rule for it either — an agent that could start runs
 # could start runs about itself.
+#
+# JOB MODE. `job <branch> <engine> <resume>` runs EXACTLY ONE run inside a
+# GitHub Actions job's own checkout, through the same spawn_engine launch line,
+# stream tee, classify_run_exit, park-loop guard, stall watchdog and usage gate
+# a local run gets — the job does for itself what this daemon does locally.
+#
+#   * REFUSED UNLESS HARNESS_JOB_MODE=1. The stall watchdog's `git reset --hard
+#     HEAD` acts on the checkout the job runs in, and job mode treats that
+#     checkout as both the main one and the working copy; run by accident in a
+#     developer's checkout it would discard work. Only the workflow sets it.
+#   * OFF: the inbox pass, the cleanup sweep, the live-log window, and the
+#     machine lane (both halves). The lane is local-only, and on a hosted runner
+#     its directory would not outlive the job. They are forced off AFTER the
+#     override channel and the tunable defaults, so no environment value turns
+#     them back on.
+#   * THE REGISTRY is the checkout's gitignored one, ephemeral by construction;
+#     what must cross a job boundary rides in the remote state bundle's
+#     `status.json`, restored to `autonomous_logs/remote_status.json` before the
+#     job starts. Park-loop cycles, the resume baseline and the stall-restart
+#     count are seeded from it; the auto-resume count only when
+#     HARNESS_INPUT_CHAIN is above 0, because a chain of 0 is a user's own
+#     dispatch; `chain` never — every write records this job's own input.
+#   * IT WRITES `remote_status.json` with decision `continue` before the spawn,
+#     so a job killed mid-run leaves a bundle that says continue, again after
+#     every successful control poll, and once more when the run leaves
+#     `running` for good, with the decision below. It then prints
+#     `job: <status> <decision>` and exits 0.
+#   * TWO PASSES ONLY A JOB RUNS, while the run is `running`, each dropping
+#     `<state_dir>/PAUSE` at most once per job and recording `pause_reason`:
+#     the CONTROL POLL (`remote-run.sh pause-requested <branch>
+#     <control_polled_at>`, every REMOTE_CONTROL_POLL_SECS) -> `user`; and the
+#     BUDGET — REMOTE_SELF_PAUSE_AFTER_SECS past HARNESS_JOB_STARTED_EPOCH, set
+#     only on a hosted runner -> `budget`. `control_polled_at` STARTS at the
+#     restored bundle's under HARNESS_INPUT_CHAIN above 0, else at this run's own
+#     `createdAt` (`remote-run.sh run-created-at "$GITHUB_RUN_ID"`), else at
+#     HARNESS_JOB_STARTED_EPOCH — NEVER at the job's own start alone, which
+#     would lose a pause sent while the job was queued. Each successful poll
+#     advances it to the epoch taken just before its query; a failed poll
+#     advances nothing and pauses nothing.
+#   * THE DECISION, when the run leaves `running`: `paused` for `budget` ->
+#     `continue`; for `user` -> `stop`; by the usage gate (`usage`) -> WAIT IN
+#     THE JOB, the gate's own auto-resume and resume_paused_runs relaunching it,
+#     when the reset falls before HARNESS_JOB_DEADLINE_EPOCH and the runner is
+#     self-hosted or the wait is at most REMOTE_WAIT_MAX_SECS, else
+#     `wait-poller`; with no pause requested — the run's own API-overload
+#     self-pause (`overload`) -> auto-resume, else `stop`. `failed` ->
+#     auto-resume unless the stall watchdog gave up, else `stop`. Every other
+#     status -> `stop`. An empty HARNESS_JOB_DEADLINE_EPOCH bounds nothing.
+#   * THE BOUNDED AUTO-RESUME: while `auto_resumes` is below
+#     REMOTE_AUTO_RESUME_MAX and REMOTE_AUTO_RESUME_DELAY_SECS from now is
+#     before the deadline, sleep that delay, count one, and relaunch from the
+#     committed ledger through begin_pause_resume and `spawn_engine … "" 1`. The
+#     count resets on any user action — see `auto_resumes` in the registry.
+#     A resume taken after the hosted budget's PAUSE was dropped re-drops it,
+#     so the relaunched session still yields at the budget.
+#   * NOTIFICATIONS name the user's next action instead of a runner path: a
+#     parked run's `/autonomous-sdlc-harness:branch-answer <branch>`, a park
+#     loop's `/autonomous-sdlc-harness:branch-status <branch>`, a `user` or
+#     exhausted `overload` pause's `/autonomous-sdlc-harness:branch-resume
+#     <branch>`, a usage pause's reset time. A `budget` pause sends NO `paused`,
+#     and the next job no `resumed` for it: a chained continuation is not an
+#     event the user acts on. classify_run_exit's `paused` arm notifies only a
+#     `user` pause; job mode sends the others once it has decided. Their titles
+#     carry HARNESS_REMOTE_SLUG when set.
 #
 # Subcommands:
 #   autonomous-watcher.sh            # the watch loop (the default; the unit uses this)
@@ -251,13 +382,27 @@
 #   autonomous-watcher.sh usage      # print the usage assessment and policy, then exit.
 #                                    # A READER: it pauses nothing, resumes nothing
 #                                    # and neither writes nor removes the hold marker
+#   HARNESS_JOB_MODE=1 autonomous-watcher.sh job <branch> <engine> <resume>
+#                                    # one run in a remote job's checkout (JOB MODE);
+#                                    # <engine> task|user_review|docs,
+#                                    # <resume> none|answer|pause. Also reads
+#                                    # HARNESS_REMOTE_SLUG, HARNESS_INPUT_CHAIN,
+#                                    # HARNESS_JOB_STARTED_EPOCH,
+#                                    # HARNESS_JOB_DEADLINE_EPOCH,
+#                                    # RUNNER_ENVIRONMENT, GITHUB_RUN_ID and
+#                                    # REMOTE_SELF_PAUSE_AFTER_SECS
 #
 # Exit map a caller can switch on:
 #
-#   0  the subcommand ran (the watch loop only returns this way on a signal)
+#   0  the subcommand ran (the watch loop only returns this way on a signal).
+#      For `job`: the run reached a state the job stops in, and
+#      <state_dir>/autonomous_logs/remote_status.json says which, with its decision
 #   1  refused to start: the library, the repository or the configuration could
 #      not be resolved. Nothing was created and no run was touched
-#   2  usage error: an unrecognized subcommand
+#   2  usage error: an unrecognized subcommand; for `job`, also bad arguments,
+#      HARNESS_JOB_MODE not 1, HARNESS_INPUT_CHAIN neither empty nor a
+#      non-negative integer, or a <branch> hr_branch_is_protected answers
+#      protected or unresolvable for. Nothing is launched
 #
 # REPRO — reproduce any decision by hand, against a throwaway fixture:
 #
@@ -337,7 +482,9 @@
 #                    "already committed (identical re-drop)" line and NO commit
 #   routing       feat_x_review_2.md   -> branch feat_x, the review engine, the
 #                    file placed under sdlc-harness/user_reviews/ with its round
-#                    suffix intact and NOT committed
+#                    suffix intact and NOT committed — on a local run; a remote
+#                    review drop is committed and pushed before dispatch (see
+#                    REMOTE DISPATCH and the `remote review` entry)
 #                 feat_x_docs.md       -> branch feat_x, the docs engine, the
 #                    checklist committed under sdlc-harness/docs_catalog/
 #                 foo_review_task_prompt.md -> branch foo_review, task engine
@@ -482,6 +629,74 @@
 #                    USAGE_LANE_LOCK_ENABLED=0 turns the lock half off again.
 #                    The record half above is driven independently with
 #                    USAGE_LANE_STATE_ENABLED
+#   a job         j="$d/sdlc-harness/autonomous_logs/remote_status.json"
+#                 HARNESS_AGENT_CLI="$s" POLL_INTERVAL_SECS=1 bash \
+#                   "$d/scripts/autonomous-watcher.sh" job feat_x task none
+#                 -> exit 2 and no stub launch; again with HARNESS_JOB_MODE=1 ->
+#                    `job: completed stop` as the last line, exit 0, "$j" with
+#                    status `completed` and decision `stop`, NO `launched`
+#                    notification, and nothing under $XDG_STATE_HOME. `trunk` as
+#                    the branch, or HARNESS_INPUT_CHAIN=x -> exit 2, no launch. A
+#                    stub writing an unanswered question_1.md -> `job: parked
+#                    stop`, the notification naming
+#                    /autonomous-sdlc-harness:branch-answer feat_x. Write
+#                    answer_1.md and run it with `answer` -> the prompt names
+#                    answer_1.md. Hand-write "$j" with "chain":"5" and
+#                    "auto_resumes":"2" (and "schema":"1", "branch":"feat_x"):
+#                    under HARNESS_INPUT_CHAIN=2 the rewritten "$j" says chain "2"
+#                    and auto_resumes "2"; under HARNESS_INPUT_CHAIN=0,
+#                    auto_resumes "0". Kill the job's process group mid-run -> "$j"
+#                    stays at `running` / `continue`. Point HARNESS_GH_CLI at a
+#                    stub (see remote-run.sh's REPRO) and use a stub agent that
+#                    writes "$d/sdlc-harness/PAUSE_ACK" once PAUSE appears:
+#                    REMOTE_SELF_PAUSE_AFTER_SECS=1 -> `job: paused continue`,
+#                    pause_reason `budget`, no `paused` notification; a `run
+#                    list` answer carrying a `harness pause feat_x` run created
+#                    after the start -> `job: paused stop`, pause_reason `user`.
+#                    A stub writing PAUSE_ACK unrequested, then exiting 0 ->
+#                    one auto-resume, `job: completed stop`; a stub ending
+#                    `exit 2` with REMOTE_AUTO_RESUME_DELAY_SECS=0 -> launched
+#                    1 + REMOTE_AUTO_RESUME_MAX times, `job: failed stop`
+#   remote drop   `a drop`'s fixture, with "$d"'s own files committed and pushed
+#                 to origin's default branch, `"execution":{"target":
+#                 "github-actions"}` in its harness.config.json, and
+#                 HARNESS_GH_CLI pointed at a recorder (see remote-run.sh's
+#                 REPRO); drop feat_x_task_prompt.md and tick
+#                 -> the prompt committed and pushed as in `a drop`, ONE
+#                    `workflow run harness-run.yml --ref feat_x … -f engine=task
+#                    -f resume=none -f chain=0` recorded, the record
+#                    `execution: github-actions`, `status: running`, an empty
+#                    pid and a remote_dispatched_at, ONE `launched`
+#                    notification saying `dispatched to GitHub Actions`, and
+#                    the stub NOT launched. The usage hold marker, or
+#                    MAX_PARALLEL_RUNS=0, changes nothing; AUTONOMOUS_STOP still
+#                    defers it. A recorder exiting non-zero -> `failed` and ONE
+#                    `failed` notification naming remote-run.sh. A bare origin
+#                    whose pre-receive hook rejects a branch update -> no
+#                    `workflow run`, `failed`, and the notification naming
+#                    push-branch.sh
+#   remote review from that record set `completed`, and a commit pushed to
+#                 origin's feat_x from elsewhere, drop feat_x_review.md and tick
+#                 -> the working copy fast-forwarded to origin/feat_x, then
+#                    `git -C "$w/demo-feat_x" log -1 --format=%s` is
+#                    `chore: add user review for feat_x`, pushed, and ONE
+#                    `-f engine=user_review` dispatch recorded
+#   remote skips  that record `running` with an empty pid -> tick after tick it
+#                 stays `running` with no `failed` notification, a local drop in
+#                 the same tick still launches under MAX_PARALLEL_RUNS=1, its
+#                 back-dated mirror logs draw no stall line, and a `rejected`
+#                 event in its stream drops no PAUSE
+#   remote relays from that record: `parked` with question_1.md and answer_1.md
+#                 in the mirror's clarifications/feat_x/ -> ONE `-f resume=answer`
+#                 dispatch whose `answers` carries answer_1.md's bytes, the stub
+#                 NOT launched, the record `running`; `park_loop` plus
+#                 PARK_LOOP_CLEAR -> the same, with `-f park_loop_clear=true`;
+#                 `paused` with the mirror's RESUME -> ONE `-f resume=pause`
+#                 dispatch and PAUSE / RESUME / PAUSE_ACK gone; `running` with
+#                 the mirror's PAUSE -> ONE `-f action=pause` dispatch, PAUSE
+#                 gone and pause_relayed_at set. With AUTONOMOUS_STOP present
+#                 only the pause is sent; with a recorder exiting non-zero
+#                 every file and status stays
 #   unresolvable  printf 'x' > "$d/harness.config.json"
 #                 -> one line on stderr, exit 1, nothing under "$d/sdlc-harness"
 
@@ -554,7 +769,13 @@ fi
 
 # -----------------------------------------------------------------------------
 # Anchors. All central state lives in the MAIN checkout; a run executes in a
-# sibling working copy. Resolving both from this script's location is what makes
+# sibling working copy — under `job`, the main checkout and the working copy are
+# the same directory, the job's own checkout, which the first working copy
+# `git worktree list` reports already yields (see JOB MODE in the header); for
+# a record with `execution: github-actions` the run executes in a GitHub Actions
+# job, its local working copy is a mirror `remote-run.sh sync` fills, and it is
+# stopped through `remote-run.sh stop` (see REMOTE DISPATCH in the header).
+# Resolving both from this script's location is what makes
 # the answer identical whether the daemon, a person or a test starts it.
 # -----------------------------------------------------------------------------
 MAIN_REPO="$(hr_main_repo "$SCRIPT_DIR")" || MAIN_REPO=""
@@ -608,6 +829,9 @@ CREATE_WORKTREE="$SCRIPT_DIR/create-worktree.sh"
 CLEANUP_SCRIPT="$SCRIPT_DIR/cleanup-merged-worktrees.sh"
 COMMIT_ON_BRANCH="$SCRIPT_DIR/commit-on-branch.sh"
 PUSH_BRANCH="$SCRIPT_DIR/push-branch.sh"
+# The one route to GitHub — job mode's two read verbs, and the inbox pass's
+# `dispatch` and `sync` (REMOTE DISPATCH) — resolved the same way.
+REMOTE_RUN="$SCRIPT_DIR/remote-run.sh"
 
 # The unattended permission profile, resolved in the MAIN checkout even though a
 # run executes elsewhere: every working copy carries the same committed file, and
@@ -853,6 +1077,44 @@ fi
 LAST_USAGE_CHECK=0
 USAGE_WARNING_STREAK=0
 
+# Job mode's own policies (see JOB MODE in the header); a local watcher reads
+# none of them. How often the control poll asks GitHub for a `harness pause
+# <branch>` run — each poll is one `gh run list`.
+REMOTE_CONTROL_POLL_SECS="${REMOTE_CONTROL_POLL_SECS:-60}"
+# The longest usage-reset wait a HOSTED job sits through rather than handing
+# the run to the resume poller, since a hosted job bills for the minutes it
+# waits. A self-hosted job waits for any reset before its deadline.
+REMOTE_WAIT_MAX_SECS="${REMOTE_WAIT_MAX_SECS:-600}"
+# How many times one run is resumed automatically after a failed exit or an
+# overload self-pause before it is left for the user.
+REMOTE_AUTO_RESUME_MAX="${REMOTE_AUTO_RESUME_MAX:-2}"
+# How long job mode waits before each of those resumes, so a transient outage
+# has time to clear.
+REMOTE_AUTO_RESUME_DELAY_SECS="${REMOTE_AUTO_RESUME_DELAY_SECS:-300}"
+
+# JOB MODE (see the header). Assigned HERE, after the override channel and every
+# tunable default, so neither the file nor an inherited value can turn a
+# local-only facility back on inside a job. JOB_MODE is STATE, assigned plainly:
+# classify_run_exit reads it to word its details for a user with no runner path.
+JOB_MODE=0
+# Job mode's pass state, for the same reason: when the control poll last ran,
+# whether each pass has already dropped its one PAUSE, and the job's start
+# (HARNESS_JOB_STARTED_EPOCH, else when run_job began).
+JOB_START_EPOCH=0
+LAST_CONTROL_POLL=0
+JOB_USER_PAUSE_DROPPED=0
+JOB_BUDGET_PAUSE_DROPPED=0
+if [ "${1:-}" = "job" ]; then
+  JOB_MODE=1
+  AUTO_TAIL_TERMINAL=0
+  USAGE_LANE_STATE_ENABLED=0
+  USAGE_LANE_LOCK_ENABLED=0
+  if [ -n "${HARNESS_REMOTE_SLUG:-}" ]; then
+    HARNESS_REPO_SLUG="$HARNESS_REMOTE_SLUG"
+    export HARNESS_REPO_SLUG
+  fi
+fi
+
 mkdir -p "$INBOX_DIR" "$LOGS_DIR" "$ARCHIVE_DIR" ||
   fatal "could not create the state directories under '$MAIN_REPO' — refusing to start"
 
@@ -960,37 +1222,75 @@ notify() {
 #                       while `isUsingOverage`) plus USAGE_RESUME_MARGIN_SECS.
 #                       The ONLY state the wall-clock resume reads, and written
 #                       and cleared together with `paused_by`.
+#   remote_stopped_at   the epoch second `remote-run.sh stop` sent the branch's
+#                       stop marker and asked GitHub to cancel its runs. Written
+#                       by `remote-run.sh stop` alone, only on an existing
+#                       record, whose `status` it sets to `failed` in the same
+#                       pass. It means the run was stopped outright by the user,
+#                       not that it failed on its own.
+#   pause_reason        why a `paused` record paused: `usage` | `budget` | `user` |
+#                       `overload` | empty — the remote state bundle's
+#                       `status.json` vocabulary, each value written by job mode
+#                       (and copied into a local record by `remote-run.sh sync`):
+#                       `usage` the usage gate requested it; `budget` job mode
+#                       did, REMOTE_SELF_PAUSE_AFTER_SECS into a hosted job;
+#                       `user` job mode did, on a `harness pause <branch>` run;
+#                       `overload` nobody requested it — the run's own
+#                       API-overload self-pause. `user` and `budget` are written
+#                       when the PAUSE is dropped, while still `running`;
+#                       classify_run_exit settles the reason as the run pauses,
+#                       `user` first, then `usage`, then `budget`. Cleared when
+#                       job mode relaunches the run — plus `killed`, a registry-only
+#                       value `remote-run.sh sync` derives when a finished run's
+#                       bundle still says `running`, or a finished run left no
+#                       bundle; `status.json` never carries it. `killed` maps to
+#                       `paused` rather than `failed` because a `failed` record
+#                       has no resume path, while the ledger on the branch is
+#                       intact
+#   remote_run_id       the GitHub run whose bundle the last `sync` read (or the
+#   remote_run_url      bundle-less run it recorded as `killed`), and its URL.
+#                       Written by `remote-run.sh sync` alone; a later `sync`
+#                       whose newest finished run has this id restores nothing
+#   remote_synced_at    the epoch second of that `sync`, written on every one
+#   remote_detail       one human-readable line from that `sync`: the bundle's
+#                       `detail`, or why the record is `killed` or `failed`
+#   auto_resumes        job mode only: how many bounded auto-resumes this run has
+#                       had, capped by REMOTE_AUTO_RESUME_MAX. Seeded from the
+#                       restored `status.json` when HARNESS_INPUT_CHAIN is above
+#                       0, else `0` — so ANY USER ACTION (a drop, an answer, a
+#                       resume: each a chain-0 dispatch) resets it and restores
+#                       the full allowance
+#   control_polled_at   job mode only: the epoch second up to which the job has
+#                       checked for a `harness pause <branch>` run — the lower
+#                       bound of the next control poll, this job's or the next
+#                       chained one's. Set at start (see JOB MODE) and advanced
+#                       by every successful poll
+#   execution           `github-actions` on a record launch_remote_run wrote, and
+#                       absent on a local one. Fixed for the run's life: a later
+#                       pass reads this field, never `execution.target`
+#   remote_dispatched_at
+#                       the epoch second launch_remote_run's `remote-run.sh
+#                       dispatch` returned 0; empty after a failed dispatch
+#   park_loop_clear_pending
+#                       `1` on a remote record clear_park_loops returned to
+#                       `parked`, so the next answer relay sends
+#                       `--park-loop-clear`; cleared once that relay is sent
+#   pause_relayed_at    the epoch second the pause relay sent a remote record's
+#                       `remote-run.sh pause`
 # -----------------------------------------------------------------------------
-registry_init() {
-  [ -f "$REGISTRY" ] || printf '{"runs":{}}\n' >"$REGISTRY"
-}
+# The bodies are lib/harness-run-lib.sh's THE RUN REGISTRY, shared with every
+# script that reads or writes this file; these wrappers bind them to $REGISTRY.
+# registry_set <branch> <key> <value>; registry_get <branch> <key>.
+registry_init() { hr_registry_init "$REGISTRY"; }
+registry_set() { hr_registry_set "$REGISTRY" "$@"; }
+registry_get() { hr_registry_get "$REGISTRY" "$@"; }
+registry_branches() { hr_registry_branches "$REGISTRY"; }
 
-# registry_set <branch> <key> <value>   (the value is written as a JSON string)
-registry_set() {
-  registry_init
-  local branch="$1" key="$2" value="$3" tmp
-  tmp="$(mktemp)" || return 1
-  if jq --arg b "$branch" --arg k "$key" --arg v "$value" --arg now "$(date '+%Y-%m-%dT%H:%M:%S')" '
-    .runs[$b] = ((.runs[$b] // {}) + {($k): $v, "branch": $b, "updated_at": $now})
-  ' "$REGISTRY" >"$tmp"; then
-    mv "$tmp" "$REGISTRY"
-  else
-    rm -f "$tmp"
-    return 1
-  fi
-}
-
-# registry_get <branch> <key>   -> the value, or nothing
-registry_get() {
-  registry_init
-  jq -r --arg b "$1" --arg k "$2" '.runs[$b][$k] // empty' "$REGISTRY" 2>/dev/null
-}
-
-# Every branch in the registry, one per line. Prints nothing when the file cannot
-# be read as a registry, which leaves each caller iterating over an empty set.
-registry_branches() {
-  registry_init
-  jq -r '.runs | keys[]' "$REGISTRY" 2>/dev/null
+# True iff <branch>'s record carries `execution: github-actions` — the record's
+# field, never `execution.target` (see REMOTE DISPATCH). Silent: running_count
+# calls it inside a command substitution.
+record_is_remote() {
+  [ "$(registry_get "$1" execution)" = "github-actions" ]
 }
 
 # Self-healing pass: a record still marked `running` whose process is gone is
@@ -1002,6 +1302,9 @@ reconcile_stale_runs() {
   local b pid
   while IFS= read -r b; do
     [ -n "$b" ] || continue
+    # A remote run has no local process to vanish; `remote-run.sh sync` owns
+    # its status.
+    record_is_remote "$b" && continue
     pid="$(registry_get "$b" pid)"
     if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
       if [ "$(registry_get "$b" status)" = "running" ]; then
@@ -1022,6 +1325,8 @@ running_count() {
   local n=0 b pid
   while IFS= read -r b; do
     [ -n "$b" ] || continue
+    # A remote run holds no local slot: the job gates itself.
+    record_is_remote "$b" && continue
     pid="$(registry_get "$b" pid)"
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
       n=$((n + 1))
@@ -1210,19 +1515,21 @@ print_status() {
     .runs
     | to_entries
     | if length == 0 then "  (no runs recorded)"
-      else (.[] | "  \(.value.status // "?")\t\(.key)\tpid=\(.value.pid // "-")\t\(.value.log_path // "-")")
+      else (.[] | "  \(.value.status // "?")\t\(.key)\tpid=\(.value.pid // "-")\t\(.value.log_path // "-")"
+                  + (if (.value.execution // "") != "" then "\texecution=\(.value.execution)" else "" end))
       end
   ' "$REGISTRY"
   # The resolved tunables, names and values only — the override channel made
   # observable. Nothing else the override file may have set is printed.
-  echo "tunables: MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED"
+  echo "tunables: MAX_PARALLEL_RUNS=$MAX_PARALLEL_RUNS POLL_INTERVAL_SECS=$POLL_INTERVAL_SECS PERMISSION_MODE=$PERMISSION_MODE CLEANUP_INTERVAL_SECS=$CLEANUP_INTERVAL_SECS AUTO_TAIL_TERMINAL=$AUTO_TAIL_TERMINAL STALL_CHECK_ENABLED=$STALL_CHECK_ENABLED STALL_WARN_SECS=$STALL_WARN_SECS STALL_KILL_SECS=$STALL_KILL_SECS STALL_MAX_RESTARTS=$STALL_MAX_RESTARTS STALL_BUSY_CPU_PCT=$STALL_BUSY_CPU_PCT PARK_LOOP_MAX_CYCLES=$PARK_LOOP_MAX_CYCLES PARK_LOOP_WINDOW_SECS=$PARK_LOOP_WINDOW_SECS USAGE_CHECK_ENABLED=$USAGE_CHECK_ENABLED USAGE_CHECK_INTERVAL_SECS=$USAGE_CHECK_INTERVAL_SECS USAGE_PAUSE_TRIGGER=$USAGE_PAUSE_TRIGGER USAGE_WARNING_DEBOUNCE=$USAGE_WARNING_DEBOUNCE USAGE_RESUME_MARGIN_SECS=$USAGE_RESUME_MARGIN_SECS USAGE_SEVEN_DAY_PAUSE_PCT=$USAGE_SEVEN_DAY_PAUSE_PCT USAGE_LANE_STATE_ENABLED=$USAGE_LANE_STATE_ENABLED USAGE_LANE_LOCK_ENABLED=$USAGE_LANE_LOCK_ENABLED REMOTE_CONTROL_POLL_SECS=$REMOTE_CONTROL_POLL_SECS REMOTE_WAIT_MAX_SECS=$REMOTE_WAIT_MAX_SECS REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS"
   # Advisory tail: the other repositories armed on this machine. It decides
   # nothing — see the block above print_status.
   machine_footprint_report
 }
 
 # The global kill switch — checked before every launch and at the top of every
-# pass. NEVER removed here; see the header.
+# pass, after the remote-pause relay, which starts nothing (see REMOTE DISPATCH).
+# NEVER removed here; see the header.
 kill_switch_active() {
   [ -f "$GLOBAL_STOP" ]
 }
@@ -1342,7 +1649,8 @@ lane_blocks_start() {
 # watcher that is idle for its own reasons (the kill switch, an empty inbox)
 # never sits on the machine. Called from `tick` only.
 #
-# `running_count` is the same liveness test every capacity decision here makes.
+# `running_count` is the same liveness test every capacity decision here makes,
+# and it skips remote records, so a live remote run never holds the lane.
 # Nothing is logged unless a release actually happened: this runs on every pass.
 lane_release_if_idle() {
   # Lock only: with it off nothing is ever held, so nothing is ever released.
@@ -1683,6 +1991,48 @@ launch_run() {
   spawn_engine "$branch" "$worktree" "$log_path"
 }
 
+# launch_remote_run <branch> <worktree> <log_path> <engine_kind>
+#
+# launch_run's bookkeeping for a remote drop (REMOTE DISPATCH in the header):
+# the same fields written and cleared, plus `execution` and an empty pid, then
+# `remote-run.sh dispatch` in place of the window and the spawn. `running` is
+# written only once the dispatch returned 0, so a record never claims a run
+# GitHub was not asked for.
+launch_remote_run() {
+  local branch="$1" worktree="$2" log_path="$3" engine_kind="$4" out rc first
+
+  registry_set "$branch" worktree "$worktree"
+  registry_set "$branch" log_path "$log_path"
+  registry_set "$branch" engine "$engine_kind"
+  registry_set "$branch" execution github-actions
+  registry_set "$branch" started_at "$(date '+%Y-%m-%dT%H:%M:%S')"
+  registry_set "$branch" pid ""
+  registry_set "$branch" remote_dispatched_at ""
+  registry_set "$branch" stall_restarts 0
+  registry_set "$branch" stall_warned ""
+  registry_set "$branch" stall_killing ""
+  registry_set "$branch" paused_by ""
+  registry_set "$branch" usage_resume_at ""
+  registry_set "$branch" resume_kind ""
+  registry_set "$branch" park_loop_cycles 0
+
+  log "dispatching '$branch' (engine=$engine_kind) to GitHub Actions via remote-run.sh (log: $log_path)"
+  out="$(bash "$REMOTE_RUN" dispatch "$branch" --engine "$engine_kind" --resume none --chain 0 --repo "$MAIN_REPO" 2>&1)"
+  rc=$?
+  [ -z "$out" ] || printf '%s\n' "$out" >>"$log_path"
+  if [ "$rc" -eq 0 ]; then
+    registry_set "$branch" remote_dispatched_at "$(date +%s)"
+    registry_set "$branch" status running
+    notify launched "$branch" "$log_path" "dispatched to GitHub Actions"
+    return 0
+  fi
+  first="$(printf '%s\n' "$out" | sed -n '1p')"
+  registry_set "$branch" status failed
+  log "remote-run.sh dispatch failed for '$branch' (exit $rc): ${first:-no output}"
+  notify failed "$branch" "$log_path" "(remote-run.sh dispatch failed, exit $rc: ${first:-no output})"
+  return 1
+}
+
 # archive_answered_pair <clar_dir> <n>
 #
 # Move an answered question_<n>.md / answer_<n>.md pair into
@@ -1790,6 +2140,27 @@ classify_run_exit() {
     # un-pause, or the very next tick's resume pass consumes the stale trigger
     # and resumes instantly, defeating the pause.
     rm -f "$resume_file"
+    if [ "$JOB_MODE" = "1" ]; then
+      # The reason is settled BEFORE the status flips: the usage gate's
+      # auto-resume acts only on a `paused` record and clears `paused_by` as it
+      # does, so reading that tag after the flip could find it gone.
+      local reason
+      reason="$(registry_get "$branch" pause_reason)"
+      if [ "$reason" != "user" ]; then
+        if [ "$(registry_get "$branch" paused_by)" = "usage" ]; then
+          reason=usage
+        elif [ "$reason" != "budget" ]; then
+          reason=overload
+        fi
+      fi
+      registry_set "$branch" pause_reason "$reason"
+      registry_set "$branch" status paused
+      log "run '$branch' paused (PAUSE honored, reason $reason) — rc=$rc"
+      if [ "$reason" = "user" ]; then
+        notify paused "$branch" "$log_path" "paused as you asked — run /autonomous-sdlc-harness:branch-resume $branch to continue"
+      fi
+      return 0
+    fi
     registry_set "$branch" status paused
     log "run '$branch' paused (PAUSE honored) — rc=$rc"
     notify paused "$branch" "$log_path" "drop $state_rel/RESUME in $worktree to continue"
@@ -1876,7 +2247,11 @@ classify_run_exit() {
         # Instead of the `parked` status, log and notification below.
         registry_set "$branch" status park_loop
         log "run '$branch' park loop — $cycles consecutive resumes made no progress; not resuming it again (clear: $clar_dir/PARK_LOOP_CLEAR)"
-        notify park_loop "$branch" "$log_path" "$cycles no-progress resumes — create $clar_dir/PARK_LOOP_CLEAR to clear"
+        if [ "$JOB_MODE" = "1" ]; then
+          notify park_loop "$branch" "$log_path" "$cycles no-progress resumes — run /autonomous-sdlc-harness:branch-status $branch to see the question, then clear the park loop"
+        else
+          notify park_loop "$branch" "$log_path" "$cycles no-progress resumes — create $clar_dir/PARK_LOOP_CLEAR to clear"
+        fi
         return 0
       fi
     else
@@ -1887,7 +2262,11 @@ classify_run_exit() {
   if [ "$parked" = 1 ]; then
     registry_set "$branch" status parked
     log "run '$branch' parked (clarification waiting) — rc=$rc"
-    notify parked "$branch" "$log_path" "See $clar_dir"
+    if [ "$JOB_MODE" = "1" ]; then
+      notify parked "$branch" "$log_path" "answer with /autonomous-sdlc-harness:branch-answer $branch"
+    else
+      notify parked "$branch" "$log_path" "See $clar_dir"
+    fi
   elif [ "$rc" -eq 0 ]; then
     registry_set "$branch" status completed
     # Clear the watchdog counters so a reused branch key starts clean.
@@ -1918,13 +2297,54 @@ classify_run_exit() {
 # paired by index, created on first write. This side only reads that pairing.
 # -----------------------------------------------------------------------------
 
+# park_answered_set <clar_dir>
+#
+# The consumed set: every top-level index with both files, space-separated and
+# numerically sorted — but only once NO top-level question is still unanswered.
+# Returns 1, printing nothing, when one is, or when there is no answered pair at
+# all. Shared by resume_parked_run and job mode's `answer` start, so both
+# consume the same set. The glob orders `10` before `2`, hence the numeric sort.
+park_answered_set() {
+  local clar_dir="$1" q n answered_list="" answered_set
+  for q in "$clar_dir"/question_*.md; do
+    [ -e "$q" ] || continue
+    n="${q##*/}"
+    n="${n#question_}"
+    n="${n%.md}"
+    case "$n" in
+      '' | *[!0-9]*) continue ;;
+    esac
+    [ -f "$clar_dir/answer_${n}.md" ] || return 1
+    answered_list="${answered_list}${n}
+"
+  done
+  [ -n "$answered_list" ] || return 1
+  answered_set="$(printf '%s' "$answered_list" | sort -n | tr '\n' ' ')"
+  printf '%s\n' "${answered_set% }"
+}
+
+# begin_park_resume <branch> <clar_dir> <answered_set>
+#
+# The registry half of a park resume, shared by resume_parked_run and job mode.
+# The park-loop guard's baseline is recorded here, before the spawn, while the
+# channel holds only what the session is about to read.
+begin_park_resume() {
+  local branch="$1" clar_dir="$2" answered_set="$3"
+  registry_set "$branch" status running
+  registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
+  registry_set "$branch" resumed_for_index "$answered_set"
+  registry_set "$branch" resume_kind answer
+  registry_set "$branch" resumed_at_epoch "$(date +%s)"
+  registry_set "$branch" resume_max_question_index "$(max_question_index "$clar_dir")"
+}
+
 # resume_parked_run <branch>
 #
 # Resume one parked run once EVERY top-level question of its park has an answer.
 # Returns 0 when it resumed, 1 when there was nothing to do, 10 when it deferred
 # for the cap and 11 when it deferred for the kill switch — the same three-way
 # vocabulary the inbox pass returns, so a caller that already distinguishes them
-# needs no second one.
+# needs no second one. A remote record returns relay_remote_answers' code.
 #
 # THE PARK IS THE UNIT. A partly answered park is not resumed, and a resume
 # consumes every answered pair at once: resuming on a subset would leave pairs
@@ -1957,29 +2377,11 @@ resume_parked_run() {
   local clar_dir="$worktree/$state_rel/clarifications/$branch"
   [ -d "$clar_dir" ] || return 1
 
-  # The consumed set: every top-level index with both files, but only once NO
-  # top-level question is still unanswered. The index is peeled off with
-  # parameter expansion rather than a regex, so there is no `sed` dialect to be
-  # portable about; the glob orders `10` before `2`, hence the numeric sort.
-  local q n answered_list="" answered_set
-  for q in "$clar_dir"/question_*.md; do
-    [ -e "$q" ] || continue
-    n="${q##*/}"
-    n="${n#question_}"
-    n="${n%.md}"
-    case "$n" in
-      '' | *[!0-9]*) continue ;;
-    esac
-    # Any unanswered question, or no answered pair at all — stay parked, and say
-    # nothing: this is the ordinary state of a parked run on every pass until an
-    # operator has answered the whole park.
-    [ -f "$clar_dir/answer_${n}.md" ] || return 1
-    answered_list="${answered_list}${n}
-"
-  done
-  [ -n "$answered_list" ] || return 1
-  answered_set="$(printf '%s' "$answered_list" | sort -n | tr '\n' ' ')"
-  answered_set="${answered_set% }"
+  # Any unanswered question, or no answered pair at all — stay parked, and say
+  # nothing: this is the ordinary state of a parked run on every pass until an
+  # operator has answered the whole park.
+  local answered_set
+  answered_set="$(park_answered_set "$clar_dir")" || return 1
 
   # The kill switch and the cap are honored BEFORE resuming, exactly as for a
   # fresh launch. A resume is a launch as far as capacity is concerned.
@@ -1987,6 +2389,16 @@ resume_parked_run() {
     log "global kill switch present ($GLOBAL_STOP) — deferring resume of '$branch'"
     return 11
   fi
+
+  [ -n "$log_path" ] || log_path="$LOGS_DIR/$branch.log"
+
+  # A remote run is relayed, not re-launched: no cap slot, no lane (REMOTE
+  # DISPATCH). The pairs stay in the mirror, which the next `sync` replaces.
+  if record_is_remote "$branch"; then
+    relay_remote_answers "$branch" "$clar_dir" "$log_path" "$answered_set"
+    return
+  fi
+
   local current
   current="$(running_count)"
   if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
@@ -2002,8 +2414,6 @@ resume_parked_run() {
     return 10
   fi
 
-  [ -n "$log_path" ] || log_path="$LOGS_DIR/$branch.log"
-
   # Re-launch the SAME engine in the SAME working copy, LEAVING every answered
   # pair at the TOP LEVEL so the engine can self-detect and consume them — the
   # re-entering fork keys off the top-level answer_<n>.md files. The whole set
@@ -2011,18 +2421,52 @@ resume_parked_run() {
   # this engine exits, by which time the answers have been read. Archiving here
   # instead would delete the files the run about to start is looking for.
   log "resuming parked run '$branch' (answers $answered_set found) in $worktree"
-  registry_set "$branch" status running
-  registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
-  registry_set "$branch" resumed_for_index "$answered_set"
-  # The park-loop guard's baseline, read by classify_run_exit when this session
-  # exits. Recorded before the spawn, while the channel holds only what the
-  # session is about to read.
-  registry_set "$branch" resume_kind answer
-  registry_set "$branch" resumed_at_epoch "$(date +%s)"
-  registry_set "$branch" resume_max_question_index "$(max_question_index "$clar_dir")"
+  begin_park_resume "$branch" "$clar_dir" "$answered_set"
   notify resumed "$branch" "$log_path" "answered clarification(s) #$answered_set"
   open_log_terminal "$branch" "$log_path"
   spawn_engine "$branch" "$worktree" "$log_path" "$answered_set"
+  return 0
+}
+
+# remote_relay_call <log_path> <remote-run.sh argument>...
+#
+# One relay's `remote-run.sh` call, from the main checkout, its output appended
+# to <log_path>. Returns the script's exit code (0 sent, 2 refused, 3 `gh`
+# failed) and leaves its first output line in REMOTE_RELAY_FIRST for the
+# caller's one log line.
+remote_relay_call() {
+  local log_path="$1" out rc
+  shift
+  out="$(bash "$REMOTE_RUN" "$@" --repo "$MAIN_REPO" 2>&1)"
+  rc=$?
+  [ -z "$out" ] || printf '%s\n' "$out" >>"$log_path"
+  REMOTE_RELAY_FIRST="$(printf '%s\n' "$out" | sed -n '1p')"
+  return "$rc"
+}
+
+# relay_remote_answers <branch> <clar_dir> <log_path> <answered_set>
+#
+# resume_parked_run's remote arm: the answered set sent as a chain-0 `--resume
+# answer` dispatch, with `--park-loop-clear` while clear_park_loops has left
+# `park_loop_clear_pending` set. 0 dispatched; 1 refused or `gh` failed, the
+# record left `parked` and every file where it is, so the next pass retries.
+relay_remote_answers() {
+  local branch="$1" clar_dir="$2" log_path="$3" answered_set="$4" rc
+  local -a plc=()
+  [ "$(registry_get "$branch" park_loop_clear_pending)" = "1" ] && plc=(--park-loop-clear)
+  remote_relay_call "$log_path" dispatch "$branch" --engine "$(registry_get "$branch" engine)" \
+    --resume answer --answers-from "$clar_dir" --indexes "$answered_set" ${plc[@]+"${plc[@]}"} --chain 0
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    log "remote-run.sh dispatch --resume answer for '$branch' failed (exit $rc): ${REMOTE_RELAY_FIRST:-no output} — leaving it parked"
+    return 1
+  fi
+  log "relayed the answers ($answered_set) of parked remote run '$branch' to GitHub Actions"
+  registry_set "$branch" status running
+  registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
+  registry_set "$branch" resume_kind answer
+  registry_set "$branch" park_loop_clear_pending ""
+  notify resumed "$branch" "$log_path" "answered clarification(s) #$answered_set, dispatched"
   return 0
 }
 
@@ -2050,7 +2494,9 @@ EOF
 # `parked`, with its count reset, once <clar_dir>/PARK_LOOP_CLEAR exists in the
 # run's working copy; the file is removed so the clear is spent once. Answering a
 # question never releases the hold — only this file does. A missing working copy
-# or an unresolvable state directory leaves the record held.
+# or an unresolvable state directory leaves the record held. A remote record is
+# also marked `park_loop_clear_pending`, because the count that matters lives in
+# the job's bundle: the answer relay carries the clear to it.
 clear_park_loops() {
   registry_init
   local b worktree state_rel clear_file
@@ -2072,6 +2518,7 @@ clear_park_loops() {
     rm -f "$clear_file"
     registry_set "$b" park_loop_cycles 0
     registry_set "$b" status parked
+    record_is_remote "$b" && registry_set "$b" park_loop_clear_pending 1
     log "park loop cleared for '$b' (PARK_LOOP_CLEAR found) — back to parked"
   done <<EOF
 $(registry_branches)
@@ -2101,11 +2548,31 @@ EOF
 # because on a case-insensitive filesystem those two paths collide.
 # -----------------------------------------------------------------------------
 
+# begin_pause_resume <branch> <state_abs>
+#
+# The sentinel and registry half of a pause resume, shared by resume_paused_run
+# and job mode. Consumes the pause protocol — the request (PAUSE), the trigger
+# (RESUME) and the ack (PAUSE_ACK) — and KEEPS PAUSE_PROGRESS.md, per the
+# ownership note above. `resumed_for_index` is deliberately left alone: a pause
+# is not an answer, and if this run was paused mid park-resume its
+# still-unconsumed pairs must stay recorded. `resume_kind pause` keeps this
+# session's exit out of the park-loop guard's count.
+begin_pause_resume() {
+  local branch="$1" state_abs="$2"
+  rm -f "$state_abs/PAUSE" "$state_abs/RESUME" "$state_abs/PAUSE_ACK"
+  registry_set "$branch" status running
+  registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
+  registry_set "$branch" resume_kind pause
+  registry_set "$branch" resumed_at_epoch "$(date +%s)"
+}
+
 # resume_paused_run <branch>
 #
 # Resume one paused run if a RESUME trigger has landed in its working copy.
 # Return codes, the missing-working-copy outcome and the kill-switch/cap ordering
-# are resume_parked_run's, for the same reasons.
+# are resume_parked_run's, for the same reasons. A remote record is relayed as a
+# chain-0 `--resume pause` dispatch: 0 sent, 1 refused or `gh` failed with
+# nothing removed.
 resume_paused_run() {
   local branch="$1"
   local worktree log_path
@@ -2136,6 +2603,26 @@ resume_paused_run() {
     log "global kill switch present ($GLOBAL_STOP) — deferring pause-resume of '$branch'"
     return 11
   fi
+
+  [ -n "$log_path" ] || log_path="$LOGS_DIR/$branch.log"
+
+  # A remote run is relayed, not re-launched: no cap slot, no lane (REMOTE
+  # DISPATCH). The sentinels go only once the dispatch was sent.
+  if record_is_remote "$branch"; then
+    local rc
+    remote_relay_call "$log_path" dispatch "$branch" --engine "$(registry_get "$branch" engine)" \
+      --resume pause --chain 0
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      log "remote-run.sh dispatch --resume pause for '$branch' failed (exit $rc): ${REMOTE_RELAY_FIRST:-no output} — leaving it paused"
+      return 1
+    fi
+    log "relayed the RESUME of paused remote run '$branch' to GitHub Actions"
+    begin_pause_resume "$branch" "$state_abs"
+    notify resumed "$branch" "$log_path" "after pause, dispatched"
+    return 0
+  fi
+
   local current
   current="$(running_count)"
   if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
@@ -2151,22 +2638,10 @@ resume_paused_run() {
     return 10
   fi
 
-  [ -n "$log_path" ] || log_path="$LOGS_DIR/$branch.log"
-
-  # Consume the pause protocol: the request (PAUSE), the trigger (RESUME) and the
-  # ack (PAUSE_ACK). KEEP PAUSE_PROGRESS.md — see the ownership note above.
-  rm -f "$state_abs/PAUSE" "$state_abs/RESUME" "$state_abs/PAUSE_ACK"
-
   # Re-launch the SAME engine in the SAME working copy with the pause-resume
-  # clause (spawn_engine's 5th argument). `resumed_for_index` is deliberately
-  # left alone: a pause is not an answer, and if this run was paused mid
-  # park-resume its still-unconsumed pairs must stay recorded.
+  # clause (spawn_engine's 5th argument).
   log "resuming paused run '$branch' (RESUME trigger found) in $worktree"
-  registry_set "$branch" status running
-  registry_set "$branch" resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')"
-  # `pause` keeps this session's exit out of the park-loop guard's count.
-  registry_set "$branch" resume_kind pause
-  registry_set "$branch" resumed_at_epoch "$(date +%s)"
+  begin_pause_resume "$branch" "$state_abs"
   notify resumed "$branch" "$log_path" "after pause"
   open_log_terminal "$branch" "$log_path"
   spawn_engine "$branch" "$worktree" "$log_path" "" 1
@@ -2185,6 +2660,39 @@ resume_paused_runs() {
     [ -n "$b" ] || continue
     [ "$(registry_get "$b" status)" = "paused" ] || continue
     resume_paused_run "$b" || true
+  done <<EOF
+$(registry_branches)
+EOF
+}
+
+# THE PAUSE RELAY (REMOTE DISPATCH). A `running` remote record whose mirror
+# holds `<state_dir>/PAUSE` — a user's pause — is sent `remote-run.sh pause`;
+# on exit 0 the mirror's PAUSE goes and `pause_relayed_at` is stamped, and on
+# any other exit both stay for the next pass. Called from `tick` ahead of the
+# kill switch, because a pause starts nothing; it consults neither the cap nor
+# the lane.
+relay_remote_pauses() {
+  registry_init
+  local b wt state_rel rc log_path
+  while IFS= read -r b; do
+    [ -n "$b" ] || continue
+    record_is_remote "$b" || continue
+    [ "$(registry_get "$b" status)" = "running" ] || continue
+    wt="$(registry_get "$b" worktree)"
+    [ -n "$wt" ] && [ -d "$wt" ] || continue
+    state_rel="$(run_state_dir "$wt")" || continue
+    [ -f "$wt/$state_rel/PAUSE" ] || continue
+    log_path="$(registry_get "$b" log_path)"
+    [ -n "$log_path" ] || log_path="$LOGS_DIR/$b.log"
+    remote_relay_call "$log_path" pause "$b"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      log "remote-run.sh pause for '$b' failed (exit $rc): ${REMOTE_RELAY_FIRST:-no output} — PAUSE left in the mirror"
+      continue
+    fi
+    rm -f "$wt/$state_rel/PAUSE"
+    registry_set "$b" pause_relayed_at "$(date +%s)"
+    log "relayed the PAUSE of remote run '$b' to GitHub Actions"
   done <<EOF
 $(registry_branches)
 EOF
@@ -2263,6 +2771,9 @@ check_stalled_runs() {
   now="$(date +%s)"
   while IFS= read -r b; do
     [ -n "$b" ] || continue
+    # A remote run's mirror logs are not its liveness, and its job runs its own
+    # watchdog.
+    record_is_remote "$b" && continue
     [ "$(registry_get "$b" status)" = "running" ] || continue
     pid="$(registry_get "$b" pid)"
     # A vanished process is the reconcile pass's business; only alive-but-stuck
@@ -2432,6 +2943,39 @@ reject_preserving_status() {
   notify failed "$branch" "$LOGS_DIR/$branch.log" "$reason"
 }
 
+# remote_commit_and_push <branch> <worktree> <log_path> <file> <fname> <dest> <rel> <subject> <what>
+#
+# The remote arm's commit-and-push, BLOCKING (REMOTE DISPATCH in the header):
+# 0 = <dest> is committed and origin/<branch> carries HEAD; 1 = it is not, and
+# fail_before_launch has already run, so the caller dispatches nothing. The
+# same staging, identical-re-drop skip and wrappers the local arm uses; the
+# push stays a separate statement from the commit.
+remote_commit_and_push() {
+  local branch="$1" worktree="$2" log_path="$3" file="$4" fname="$5"
+  local dest="$6" rel="$7" subject="$8" what="$9" head upstream
+
+  git -C "$worktree" add "$dest"
+  if git -C "$worktree" diff --cached --quiet "$dest"; then
+    log "the $what for '$branch' is already committed (identical re-drop) — skipping the commit, pushing anyway"
+  elif "$COMMIT_ON_BRANCH" --repo "$worktree" "$rel" -- "$subject" >>"$log_path" 2>&1; then
+    log "committed the $what for '$branch' ($subject)"
+  else
+    log "commit-on-branch.sh could not commit the $what for '$branch' — not dispatching (see $log_path)"
+    fail_before_launch "$branch" "$file" "$fname" "(commit-on-branch.sh could not commit the $what — nothing dispatched; see $log_path)"
+    return 1
+  fi
+
+  "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1
+  head="$(git -C "$worktree" rev-parse --verify --quiet HEAD)" || head=""
+  upstream="$(git -C "$worktree" rev-parse --verify --quiet "refs/remotes/origin/$branch")" || upstream=""
+  if [ -z "$head" ] || [ "$head" != "$upstream" ]; then
+    log "push-branch.sh did not bring origin/$branch to HEAD after the $what for '$branch' — not dispatching (see $log_path)"
+    fail_before_launch "$branch" "$file" "$fname" "(push-branch.sh did not push the $what to origin/$branch — nothing dispatched; the job checks out origin/$branch; see $log_path)"
+    return 1
+  fi
+  return 0
+}
+
 # -----------------------------------------------------------------------------
 # One dropped file, end to end. Returns 0 when it CONSUMED the file (launched,
 # failed or rejected it), 10 when it deferred it FOR CAPACITY — this repository's
@@ -2494,6 +3038,15 @@ process_inbox_file() {
   # working-copy directory, which the library derives and sanitizes.
   local log_path="$LOGS_DIR/$branch.log"
 
+  # Where this drop runs: the configuration in effect now (tick reloads it each
+  # pass). REMOTE DISPATCH in the header; remote=0 is today's path throughout.
+  local target remote=0
+  target="$(hr_execution_target "$MAIN_REPO")" || {
+    log "execution.target is unresolvable in '$MAIN_REPO/harness.config.json' — treating the drop of '$fname' as local"
+    target="local"
+  }
+  [ "$target" = "github-actions" ] && remote=1
+
   # ---------------------------------------------------------------------------
   # The shared guards, in this order for all three patterns. The order is the
   # contract the resume and usage passes compose with, not an accident: an
@@ -2504,7 +3057,8 @@ process_inbox_file() {
   # Under the shipped defaults no lane is taken at all (USAGE_LANE_LOCK_ENABLED
   # is 0, so only the shared record is read); when the lock is enabled, taking
   # the lane commits the whole machine to this repository, which is why it sits
-  # below every cheaper refusal.
+  # below every cheaper refusal. A REMOTE drop skips the usage hold, the cap and
+  # the lane, keeping the rest in this order (REMOTE DISPATCH in the header).
   # ---------------------------------------------------------------------------
 
   # The global kill switch, honored before anything is launched. Deferring leaves
@@ -2518,7 +3072,7 @@ process_inbox_file() {
   # The usage hold — the account's rate-limit window is full. Deferred exactly
   # like the kill switch, and for the same reason it exists: launching a fresh
   # run into a maxed-out window spends it on an immediate refusal.
-  if [ -f "$USAGE_HOLD" ]; then
+  if [ "$remote" != 1 ] && [ -f "$USAGE_HOLD" ]; then
     log "a usage hold is active ($USAGE_HOLD) — deferring '$branch' (leaving it in the inbox)"
     return 11
   fi
@@ -2526,18 +3080,34 @@ process_inbox_file() {
   # The per-repository concurrency cap. Deferred, not rejected: capacity frees up
   # on its own as runs finish.
   local current
-  current="$(running_count)"
-  if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
-    log "at the cap ($current/$MAX_PARALLEL_RUNS runs) — deferring '$branch' (leaving it in the inbox)"
-    return 10
+  if [ "$remote" != 1 ]; then
+    current="$(running_count)"
+    if [ "$current" -ge "$MAX_PARALLEL_RUNS" ]; then
+      log "at the cap ($current/$MAX_PARALLEL_RUNS runs) — deferring '$branch' (leaving it in the inbox)"
+      return 10
+    fi
   fi
 
   # This branch already has a LIVE run: the drop is a duplicate (a re-drop, or a
   # second copy of the same file), and launching a second engine on one working
   # copy would have the two overwrite each other's commits. Archived rather than
-  # deferred — nothing about waiting would make it a different file.
-  local existing_pid existing_status
+  # deferred — nothing about waiting would make it a different file. A record
+  # with `execution: github-actions` has no local pid: its status, refreshed by
+  # a best-effort `remote-run.sh sync`, is what says it is live.
+  local existing_pid existing_status sync_rc
   existing_pid="$(registry_get "$branch" pid)"
+  if [ "$remote" = 1 ] && [ "$(registry_get "$branch" execution)" = "github-actions" ]; then
+    bash "$REMOTE_RUN" sync "$branch" --repo "$MAIN_REPO" >>"$log_path" 2>&1
+    sync_rc=$?
+    [ "$sync_rc" -eq 0 ] ||
+      log "remote-run.sh sync failed for '$branch' (exit $sync_rc) — the duplicate test reads the record as it stands (see $log_path)"
+    existing_status="$(registry_get "$branch" status)"
+    if [ "$existing_status" = "running" ]; then
+      log "'$branch' already has a running GitHub Actions run — archiving the duplicate inbox file"
+      mv "$file" "$ARCHIVE_DIR/dup_$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
+      return 0
+    fi
+  fi
   existing_status="$(registry_get "$branch" status)"
   if [ "$existing_status" = "running" ] && [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
     log "'$branch' is already running (pid $existing_pid) — archiving the duplicate inbox file"
@@ -2586,7 +3156,7 @@ process_inbox_file() {
   # the file stays in the inbox, no record is written, and the next pass asks
   # again once the shared window has reset — or, with the lock enabled, once
   # whichever repository holds the lane has released it.
-  if lane_blocks_start "$branch" "the drop of '$fname'"; then
+  if [ "$remote" != 1 ] && lane_blocks_start "$branch" "the drop of '$fname'"; then
     return 10
   fi
 
@@ -2662,18 +3232,24 @@ process_inbox_file() {
     # a run does not happen. The push is a SEPARATE statement for the same reason
     # it is everywhere else — an `if commit; then push; fi` compound is not what
     # the guards match — and it is safe unconditionally, because a push with
-    # nothing new to send is a no-op.
-    git -C "$worktree" add "$prompt_dest"
-    if git -C "$worktree" diff --cached --quiet "$prompt_dest"; then
-      log "the task prompt for '$branch' is already committed (identical re-drop) — skipping the commit"
-    elif "$COMMIT_ON_BRANCH" --repo "$worktree" \
-      "$prompt_rel" \
-      -- "chore: add task prompt for $branch" >>"$log_path" 2>&1; then
-      log "committed the task prompt for '$branch' (chore: add task prompt for $branch)"
-      "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
-        log "WARNING: push-branch.sh failed after the task-prompt commit for '$branch' — continuing"
+    # nothing new to send is a no-op. On the remote arm a failure BLOCKS the
+    # dispatch instead (REMOTE DISPATCH in the header).
+    if [ "$remote" = 1 ]; then
+      remote_commit_and_push "$branch" "$worktree" "$log_path" "$file" "$fname" \
+        "$prompt_dest" "$prompt_rel" "chore: add task prompt for $branch" "task prompt" || return 0
     else
-      log "WARNING: could not commit the task prompt for '$branch' — launching anyway (its working-tree-clean precondition may be dishonest; see $log_path)"
+      git -C "$worktree" add "$prompt_dest"
+      if git -C "$worktree" diff --cached --quiet "$prompt_dest"; then
+        log "the task prompt for '$branch' is already committed (identical re-drop) — skipping the commit"
+      elif "$COMMIT_ON_BRANCH" --repo "$worktree" \
+        "$prompt_rel" \
+        -- "chore: add task prompt for $branch" >>"$log_path" 2>&1; then
+        log "committed the task prompt for '$branch' (chore: add task prompt for $branch)"
+        "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
+          log "WARNING: push-branch.sh failed after the task-prompt commit for '$branch' — continuing"
+      else
+        log "WARNING: could not commit the task prompt for '$branch' — launching anyway (its working-tree-clean precondition may be dishonest; see $log_path)"
+      fi
     fi
   elif [ "$engine_kind" = "docs" ]; then
     # (2c) Docs path: the task path's strategy exactly — a FRESH working copy off
@@ -2697,24 +3273,30 @@ process_inbox_file() {
 
     # (3c) Place, archive, commit and push — the task path's block mirrored: the
     # same wrapper, the same identical-re-drop skip, the same non-blocking rule on
-    # a failed commit or push. Its rationale is stated once, above.
+    # a failed commit or push — and the same blocking rule on the remote arm. Its
+    # rationale is stated once, above.
     local docs_rel="$state_rel/docs_catalog/${branch}_docs.md"
     local docs_dest="$worktree/$docs_rel"
     mkdir -p "$worktree/$state_rel/docs_catalog"
     cp "$file" "$docs_dest"
     mv "$file" "$ARCHIVE_DIR/$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
     log "copied the docs checklist -> $docs_dest; archived the inbox file"
-    git -C "$worktree" add "$docs_dest"
-    if git -C "$worktree" diff --cached --quiet "$docs_dest"; then
-      log "the docs checklist for '$branch' is already committed (identical re-drop) — skipping the commit"
-    elif "$COMMIT_ON_BRANCH" --repo "$worktree" \
-      "$docs_rel" \
-      -- "chore: add docs checklist for $branch" >>"$log_path" 2>&1; then
-      log "committed the docs checklist for '$branch' (chore: add docs checklist for $branch)"
-      "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
-        log "WARNING: push-branch.sh failed after the docs-checklist commit for '$branch' — continuing"
+    if [ "$remote" = 1 ]; then
+      remote_commit_and_push "$branch" "$worktree" "$log_path" "$file" "$fname" \
+        "$docs_dest" "$docs_rel" "chore: add docs checklist for $branch" "docs checklist" || return 0
     else
-      log "WARNING: could not commit the docs checklist for '$branch' — launching anyway (see $log_path)"
+      git -C "$worktree" add "$docs_dest"
+      if git -C "$worktree" diff --cached --quiet "$docs_dest"; then
+        log "the docs checklist for '$branch' is already committed (identical re-drop) — skipping the commit"
+      elif "$COMMIT_ON_BRANCH" --repo "$worktree" \
+        "$docs_rel" \
+        -- "chore: add docs checklist for $branch" >>"$log_path" 2>&1; then
+        log "committed the docs checklist for '$branch' (chore: add docs checklist for $branch)"
+        "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
+          log "WARNING: push-branch.sh failed after the docs-checklist commit for '$branch' — continuing"
+      else
+        log "WARNING: could not commit the docs checklist for '$branch' — launching anyway (see $log_path)"
+      fi
     fi
   else
     # (2b) Review path: REUSE the branch's existing working copy when it is
@@ -2743,7 +3325,8 @@ process_inbox_file() {
       # Reused IN PLACE: no bootstrap re-run, and no fetch, fast-forward or reset
       # — the local branch is the source of truth here. This working copy is where
       # the original run's commits were made, and a single-operator flow has no
-      # competing writer to reconcile with.
+      # competing writer to reconcile with. On the remote arm the job is that
+      # writer, so the copy is fast-forwarded below.
       log "reusing the existing working copy for '$branch' at $worktree"
     else
       # Recreate for the EXISTING branch: fetch it and check it out (never `-b`,
@@ -2753,6 +3336,21 @@ process_inbox_file() {
       if ! "$CREATE_WORKTREE" --existing "$branch" >>"$log_path" 2>&1; then
         log "create-worktree.sh --existing failed for '$branch' — see $log_path; archiving the inbox file"
         fail_before_launch "$branch" "$file" "$fname" "(working-copy recreation failed)"
+        return 0
+      fi
+    fi
+
+    # Remote arm: bring the copy level with origin/<branch> before touching it —
+    # the job, not this copy, is where the branch advanced (REMOTE DISPATCH).
+    if [ "$remote" = 1 ]; then
+      if ! git -C "$worktree" fetch origin "$branch" >>"$log_path" 2>&1; then
+        log "git fetch origin $branch failed in $worktree — not dispatching (see $log_path)"
+        fail_before_launch "$branch" "$file" "$fname" "(git fetch origin $branch failed in the working copy — nothing dispatched; see $log_path)"
+        return 0
+      fi
+      if ! git -C "$worktree" merge --ff-only "origin/$branch" >>"$log_path" 2>&1; then
+        log "git merge --ff-only origin/$branch failed in $worktree — not dispatching (see $log_path)"
+        fail_before_launch "$branch" "$file" "$fname" "(git merge --ff-only origin/$branch failed in the working copy — nothing dispatched; see $log_path)"
         return 0
       fi
     fi
@@ -2769,7 +3367,9 @@ process_inbox_file() {
     # finds it (a fresh drop IS the latest round), and the flow's ordinary commits
     # pick it up as a tracked artifact. THE WATCHER DELIBERATELY DOES NOT COMMIT
     # THIS ONE — unlike a prompt or a checklist, it is not a precondition of the
-    # first step.
+    # first step. That is the local rule: a remote review drop is committed and
+    # pushed before dispatch, below (REMOTE DISPATCH in the header).
+    local review_rel="$state_rel/user_reviews/$fname"
     local review_dest="$worktree/$state_rel/user_reviews/$fname"
     mkdir -p "$worktree/$state_rel/user_reviews"
     if [ -f "$review_dest" ] && ! cmp -s "$file" "$review_dest"; then
@@ -2787,6 +3387,10 @@ process_inbox_file() {
     cp "$file" "$review_dest"
     mv "$file" "$ARCHIVE_DIR/$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
     log "copied the review -> $review_dest; archived the inbox file"
+    if [ "$remote" = 1 ]; then
+      remote_commit_and_push "$branch" "$worktree" "$log_path" "$file" "$fname" \
+        "$review_dest" "$review_rel" "chore: add user review for $branch" "user review" || return 0
+    fi
   fi
 
   # (4) Clear the pause protocol a PREVIOUS run on this branch key may have left
@@ -2802,7 +3406,12 @@ process_inbox_file() {
   # review drop for a branch whose original task run completed flips that
   # branch's EXISTING record from `completed` back to `running` — the same key,
   # which is exactly what keeps the cleanup sweep's active-run guard correct.
-  launch_run "$branch" "$worktree" "$log_path" "$engine_kind"
+  # A remote drop is dispatched instead of spawned.
+  if [ "$remote" = 1 ]; then
+    launch_remote_run "$branch" "$worktree" "$log_path" "$engine_kind" || :
+  else
+    launch_run "$branch" "$worktree" "$log_path" "$engine_kind"
+  fi
   return 0
 }
 
@@ -2919,6 +3528,8 @@ usage_assess() {
   now="$(date +%s)"
   while IFS= read -r b; do
     [ -n "$b" ] || continue
+    # The pause side skips a remote run: its job gates itself.
+    record_is_remote "$b" && continue
     usage_running_alive "$b" || continue
     # One line per window, each assessed on its own: a five_hour window that has
     # reset must not mask a seven_day window at its cap, or the reverse. The
@@ -3019,6 +3630,9 @@ usage_gate() {
   local b status pb ra wt state_rel="" state_abs=""
   while IFS= read -r b; do
     [ -n "$b" ] || continue
+    # The auto-resume side skips a remote run: its job gates itself, and
+    # resume_paused_run relays only a user's RESUME.
+    record_is_remote "$b" && continue
     status="$(registry_get "$b" status)"
     pb="$(registry_get "$b" paused_by)"
     # A run with no tag is not this gate's: a hand-dropped pause has no
@@ -3140,6 +3754,8 @@ EOF
     [ "$resume_at" -le 0 ] && resume_at=$((now + 3600))
     while IFS= read -r b; do
       [ -n "$b" ] || continue
+      # The pause side skips a remote run: its job gates itself.
+      record_is_remote "$b" && continue
       usage_running_alive "$b" || continue
       # Already requested on an earlier pass — the engine is still walking to its
       # boundary. Re-dropping PAUSE would be harmless; overwriting the recorded
@@ -3182,8 +3798,11 @@ EOF
 }
 
 # -----------------------------------------------------------------------------
-# One pass. The kill switch first, so an operator's brake beats everything else,
-# then the reconcile that frees capacity for the passes that read the cap.
+# One pass. The relay of a remote run's pause first, then the kill switch, so an
+# operator's brake beats everything else — relaying a remote run's pause is the
+# one action that still runs under the brake, because it starts nothing (see
+# REMOTE DISPATCH) — then the reconcile that frees capacity for the passes that
+# read the cap.
 # -----------------------------------------------------------------------------
 tick() {
   # Drop the library's per-process cache so an edit to `harness.config.json` is
@@ -3192,6 +3811,8 @@ tick() {
   # directory under a live watcher needs a restart, by design.
   hr_config_reset
   hr_config_load "$MAIN_REPO" || :
+
+  relay_remote_pauses
 
   if kill_switch_active; then
     log "global kill switch active — not launching or resuming runs this pass"
@@ -3276,6 +3897,326 @@ watch_loop() {
 }
 
 # -----------------------------------------------------------------------------
+# JOB MODE — one run, supervised inside a GitHub Actions job's own checkout. The
+# header's JOB MODE block states what runs, what is off and why. Reached only
+# through the `job` arm below, which has already refused a bad invocation.
+# -----------------------------------------------------------------------------
+
+# job_usage <reason> — the exit-2 refusal: one line on stderr, nothing launched.
+job_usage() {
+  echo "$self: job: $*" >&2
+  echo "usage: HARNESS_JOB_MODE=1 $self job <branch> <task|user_review|docs> <none|answer|pause>" >&2
+  exit 2
+}
+
+# The job's name in a `resumed` notification: its GitHub run when known.
+job_label() {
+  if [ -n "${GITHUB_RUN_ID:-}" ]; then
+    printf 'remote job %s\n' "$GITHUB_RUN_ID"
+  else
+    printf 'remote job\n'
+  fi
+}
+
+# job_write_status <branch> <out_json> <decision> <detail> — a failed write is
+# logged and never ends the job: the run matters more than its report.
+job_write_status() {
+  hr_remote_status_write "$REGISTRY" "$1" "$2" "$3" "$4" ||
+    log "job: could not write '$2' (decision $3) for '$1'"
+}
+
+# job_int <value> — prints it base 10 when it is a non-negative integer; 1 otherwise.
+job_int() {
+  case "${1-}" in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  printf '%s\n' "$((10#$1))"
+}
+
+# job_start_control_bound <branch> <remote_status> — the control poll's first
+# lower bound, in the order the header's JOB MODE block states.
+job_start_control_bound() {
+  local branch="$1" remote_status="$2" bound=""
+  if [ "$HARNESS_INPUT_CHAIN" -gt 0 ] && [ -f "$remote_status" ]; then
+    bound="$(job_int "$(hr_remote_status_get "$remote_status" control_polled_at)")" || bound=""
+  fi
+  if [ -z "$bound" ] && [ -n "${GITHUB_RUN_ID:-}" ]; then
+    bound="$(job_int "$(bash "$REMOTE_RUN" run-created-at "$GITHUB_RUN_ID" --repo "$MAIN_REPO" 2>>"$WATCHER_LOG")")" || bound=""
+  fi
+  if [ -z "$bound" ]; then
+    bound="$JOB_START_EPOCH"
+    log "job: could not read this run's createdAt — the control poll starts from the job's start ($bound)"
+  fi
+  registry_set "$branch" control_polled_at "$bound"
+}
+
+# job_control_poll <branch> <state_abs> <remote_status> — the `user` pass.
+job_control_poll() {
+  local branch="$1" state_abs="$2" remote_status="$3" now since before rc
+  [ "$JOB_USER_PAUSE_DROPPED" = "0" ] || return 0
+  now="$(date +%s)"
+  [ $((now - LAST_CONTROL_POLL)) -ge "$REMOTE_CONTROL_POLL_SECS" ] || return 0
+  LAST_CONTROL_POLL="$now"
+  since="$(job_int "$(registry_get "$branch" control_polled_at)")" || since="$JOB_START_EPOCH"
+  before="$(date +%s)"
+  bash "$REMOTE_RUN" pause-requested "$branch" "$since" --repo "$MAIN_REPO" >>"$WATCHER_LOG" 2>&1
+  rc=$?
+  case "$rc" in
+    0 | 1) ;;
+    *)
+      log "job: the control poll for '$branch' failed (exit $rc) — not pausing; control_polled_at stays $since"
+      return 0
+      ;;
+  esac
+  registry_set "$branch" control_polled_at "$before"
+  if [ "$rc" = "0" ]; then
+    JOB_USER_PAUSE_DROPPED=1
+    touch "$state_abs/PAUSE"
+    registry_set "$branch" pause_reason user
+    log "job: a 'harness pause $branch' run was created at or after $since — dropped PAUSE (reason user)"
+  fi
+  job_write_status "$branch" "$remote_status" continue "job started"
+}
+
+# job_budget_pass <branch> <state_abs> — the `budget` pass. A `user` reason
+# already recorded is kept: the user's pause outranks the budget's.
+job_budget_pass() {
+  local branch="$1" state_abs="$2" after
+  [ "$JOB_BUDGET_PAUSE_DROPPED" = "0" ] || return 0
+  after="$(job_int "${REMOTE_SELF_PAUSE_AFTER_SECS:-}")" || return 0
+  [ $(($(date +%s) - JOB_START_EPOCH)) -ge "$after" ] || return 0
+  JOB_BUDGET_PAUSE_DROPPED=1
+  touch "$state_abs/PAUSE"
+  [ "$(registry_get "$branch" pause_reason)" = "user" ] || registry_set "$branch" pause_reason budget
+  log "job: ${after}s of the hosted time budget have passed — dropped PAUSE (reason budget)"
+}
+
+# job_usage_wait_ok <branch> — 0 when a usage pause is waited out in the job.
+# An empty usage_resume_at means the gate has already dropped RESUME.
+job_usage_wait_ok() {
+  local ra deadline
+  ra="$(job_int "$(registry_get "$1" usage_resume_at)")" || return 0
+  deadline="$(job_int "${HARNESS_JOB_DEADLINE_EPOCH:-}")" || deadline=""
+  if [ -n "$deadline" ] && [ "$ra" -ge "$deadline" ]; then
+    return 1
+  fi
+  [ "${RUNNER_ENVIRONMENT:-}" = "self-hosted" ] && return 0
+  [ $((ra - $(date +%s))) -le "$REMOTE_WAIT_MAX_SECS" ]
+}
+
+# job_auto_resume <branch> <worktree> <log_path> <state_abs> <why> — 0 when
+# the run was relaunched, 1 when the allowance, the deadline or a user's own
+# pause rules it out.
+job_auto_resume() {
+  local branch="$1" worktree="$2" log_path="$3" state_abs="$4" why="$5" count deadline
+  if [ "$(registry_get "$branch" pause_reason)" = "user" ]; then
+    log "job: no auto-resume of '$branch' after $why — the user asked for a pause"
+    return 1
+  fi
+  count="$(job_int "$(registry_get "$branch" auto_resumes)")" || count=0
+  if [ "$count" -ge "$REMOTE_AUTO_RESUME_MAX" ]; then
+    log "job: no auto-resume of '$branch' after $why — $count of REMOTE_AUTO_RESUME_MAX=$REMOTE_AUTO_RESUME_MAX used"
+    return 1
+  fi
+  deadline="$(job_int "${HARNESS_JOB_DEADLINE_EPOCH:-}")" || deadline=""
+  if [ -n "$deadline" ] && [ $(($(date +%s) + REMOTE_AUTO_RESUME_DELAY_SECS)) -ge "$deadline" ]; then
+    log "job: no auto-resume of '$branch' after $why — REMOTE_AUTO_RESUME_DELAY_SECS=$REMOTE_AUTO_RESUME_DELAY_SECS would pass the job's deadline"
+    return 1
+  fi
+  count=$((count + 1))
+  log "job: auto-resume $count/$REMOTE_AUTO_RESUME_MAX of '$branch' after $why, in ${REMOTE_AUTO_RESUME_DELAY_SECS}s"
+  sleep "$REMOTE_AUTO_RESUME_DELAY_SECS"
+  registry_set "$branch" auto_resumes "$count"
+  registry_set "$branch" pause_reason ""
+  begin_pause_resume "$branch" "$state_abs"
+  # begin_pause_resume just removed the hosted budget's PAUSE, and job_budget_pass
+  # is one-shot: put it back, so the relaunched session still yields at its next
+  # clean checkpoint instead of running on until the step timeout kills it.
+  if [ "$JOB_BUDGET_PAUSE_DROPPED" = "1" ]; then
+    touch "$state_abs/PAUSE"
+    registry_set "$branch" pause_reason budget
+    log "job: the hosted time budget's PAUSE was pending at the resume of '$branch' after $why — re-dropped it"
+  fi
+  notify resumed "$branch" "$log_path" "automatic resume $count/$REMOTE_AUTO_RESUME_MAX after $why ($(job_label))"
+  spawn_engine "$branch" "$worktree" "$log_path" "" 1 || registry_set "$branch" status failed
+  return 0
+}
+
+# run_job <branch> <engine> <resume> — arguments already validated.
+run_job() {
+  local branch="$1" engine="$2" resume="$3"
+  local worktree="$MAIN_REPO" log_path="$LOGS_DIR/$branch.log"
+  local state_rel state_abs clar_dir remote_status key value answered_set="" prev_reason=""
+
+  JOB_START_EPOCH="$(job_int "${HARNESS_JOB_STARTED_EPOCH:-}")" || JOB_START_EPOCH="$(date +%s)"
+  state_rel="$(run_state_dir "$worktree")" || fatal "job: the state directory in '$worktree' is unresolvable"
+  state_abs="$worktree/$state_rel"
+  clar_dir="$state_abs/clarifications/$branch"
+  hr_remote_names_var
+  remote_status="$state_abs/$HR_REMOTE_STATUS_SOURCE"
+  registry_init
+
+  # Fresh-launch defaults — launch_run's reused-key resets — then the seed from
+  # the restored bundle over them, so a counter that must survive a job
+  # boundary does. `chain` is never seeded: hr_remote_status_write records
+  # HARNESS_INPUT_CHAIN, this job's own input.
+  registry_set "$branch" pid ""
+  registry_set "$branch" stall_restarts 0
+  registry_set "$branch" stall_warned ""
+  registry_set "$branch" stall_killing ""
+  registry_set "$branch" paused_by ""
+  registry_set "$branch" usage_resume_at ""
+  registry_set "$branch" resume_kind ""
+  registry_set "$branch" park_loop_cycles 0
+  registry_set "$branch" auto_resumes 0
+  registry_set "$branch" pause_reason ""
+  registry_set "$branch" control_polled_at ""
+  if [ -f "$remote_status" ]; then
+    prev_reason="$(hr_remote_status_get "$remote_status" pause_reason)" || prev_reason=""
+    for key in park_loop_cycles resume_max_question_index stall_restarts; do
+      value="$(hr_remote_status_get "$remote_status" "$key")" && registry_set "$branch" "$key" "$value"
+    done
+    # A job whose input chain is 0 was started by a user's action, which resets
+    # the auto-resume count; only an automatic continuation carries it forward.
+    if [ "$((10#$HARNESS_INPUT_CHAIN))" -gt 0 ]; then
+      value="$(hr_remote_status_get "$remote_status" auto_resumes)" && registry_set "$branch" auto_resumes "$value"
+    fi
+  fi
+
+  registry_set "$branch" engine "$engine"
+  registry_set "$branch" worktree "$worktree"
+  registry_set "$branch" log_path "$log_path"
+  registry_set "$branch" started_at "$(date '+%Y-%m-%dT%H:%M:%S')"
+
+  # An `answer` dispatch whose park is not fully answered has nothing to consume:
+  # it stops as parked rather than launching a session that would re-park.
+  if [ "$resume" = "answer" ]; then
+    if ! answered_set="$(park_answered_set "$clar_dir")"; then
+      registry_set "$branch" status parked
+      log "job: '$branch' was dispatched to resume on an answer, but its park is not fully answered — stopping"
+      job_write_status "$branch" "$remote_status" stop "dispatched with an answer, but the park is not fully answered"
+      echo "job: parked stop"
+      exit 0
+    fi
+  fi
+
+  job_start_control_bound "$branch" "$remote_status"
+
+  # Written BEFORE the spawn, so a job killed at any later point leaves a bundle
+  # that says continue.
+  registry_set "$branch" status running
+  job_write_status "$branch" "$remote_status" continue "job started"
+
+  case "$resume" in
+    answer)
+      log "job: resuming parked run '$branch' (answers $answered_set) in $worktree"
+      begin_park_resume "$branch" "$clar_dir" "$answered_set"
+      notify resumed "$branch" "$log_path" "answered clarification(s) #$answered_set ($(job_label))"
+      spawn_engine "$branch" "$worktree" "$log_path" "$answered_set"
+      ;;
+    pause)
+      log "job: resuming paused run '$branch' in $worktree"
+      begin_pause_resume "$branch" "$state_abs"
+      # A chained continuation after a budget pause is not an event the user
+      # acts on, so it is not announced.
+      if [ "$prev_reason" != "budget" ]; then
+        notify resumed "$branch" "$log_path" "after pause ($(job_label))"
+      fi
+      spawn_engine "$branch" "$worktree" "$log_path" "" 1
+      ;;
+    *)
+      # No `launched` notification: the local watcher sent it at dispatch.
+      log "job: launching run for '$branch' (engine=$engine) in $worktree (log: $log_path)"
+      spawn_engine "$branch" "$worktree" "$log_path"
+      ;;
+  esac || registry_set "$branch" status failed
+
+  # The supervision loop: the header's JOB MODE block states each decision.
+  local status reason ra when decision="stop" detail="" usage_waiting=0 restarts
+  while :; do
+    status="$(registry_get "$branch" status)"
+    case "$status" in
+      running)
+        usage_waiting=0
+        sleep "$POLL_INTERVAL_SECS"
+        reconcile_stale_runs
+        check_stalled_runs
+        usage_gate
+        [ "$(registry_get "$branch" status)" = "running" ] || continue
+        job_control_poll "$branch" "$state_abs" "$remote_status"
+        job_budget_pass "$branch" "$state_abs"
+        ;;
+      paused)
+        reason="$(registry_get "$branch" pause_reason)"
+        case "$reason" in
+          budget)
+            decision=continue
+            detail="paused at the hosted time budget; the next job continues from the ledger"
+            break
+            ;;
+          user)
+            detail="paused by the user"
+            break
+            ;;
+          usage)
+            ra="$(registry_get "$branch" usage_resume_at)"
+            when="the reset"
+            [ -n "$ra" ] && when="the reset at ~$(stall_human_time "$ra")"
+            if [ "$usage_waiting" = "0" ]; then
+              if ! job_usage_wait_ok "$branch"; then
+                decision=wait-poller
+                detail="usage limit reached; the resume poller resumes it after $when"
+                notify paused "$branch" "$log_path" "usage limit reached — resumes automatically after $when"
+                break
+              fi
+              usage_waiting=1
+              log "job: '$branch' is usage-paused — waiting in the job for $when"
+              notify paused "$branch" "$log_path" "usage limit reached — waiting in the job for $when"
+            fi
+            sleep "$POLL_INTERVAL_SECS"
+            usage_gate
+            resume_paused_runs
+            if [ "$(registry_get "$branch" status)" = "running" ]; then
+              registry_set "$branch" pause_reason ""
+            fi
+            ;;
+          *)
+            job_auto_resume "$branch" "$worktree" "$log_path" "$state_abs" "an overload self-pause" && continue
+            detail="paused itself on API overload; automatic resumes exhausted"
+            notify paused "$branch" "$log_path" "paused itself on API overload — run /autonomous-sdlc-harness:branch-resume $branch to continue"
+            break
+            ;;
+        esac
+        ;;
+      failed)
+        restarts="$(job_int "$(registry_get "$branch" stall_restarts)")" || restarts=0
+        if [ "$STALL_CHECK_ENABLED" = "1" ] && [ "$restarts" -ge "$STALL_MAX_RESTARTS" ]; then
+          log "job: no auto-resume of '$branch' — the stall watchdog gave up on it"
+          break
+        fi
+        job_auto_resume "$branch" "$worktree" "$log_path" "$state_abs" "a failed exit" && continue
+        break
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+  # Reap every session subshell this job spawned, so its exit notification has
+  # gone out before the job reports.
+  wait
+
+  local final
+  final="$(registry_get "$branch" status)"
+  # A reason recorded for a pause the run finished before honouring.
+  [ "$final" = "paused" ] || registry_set "$branch" pause_reason ""
+  [ -n "$detail" ] || detail="the run ended $final in this job"
+  job_write_status "$branch" "$remote_status" "$decision" "$detail"
+  echo "job: $final $decision"
+  exit 0
+}
+
+# -----------------------------------------------------------------------------
 # Entry point.
 # -----------------------------------------------------------------------------
 case "${1:-watch}" in
@@ -3306,8 +4247,30 @@ tick)
 watch | "")
   watch_loop
   ;;
+job)
+  # Every refusal comes before anything is launched or recorded; see the header's
+  # JOB MODE block for why HARNESS_JOB_MODE is the first of them.
+  [ "${HARNESS_JOB_MODE:-}" = "1" ] || job_usage "refused: HARNESS_JOB_MODE is not 1 — job mode resets the checkout it runs in"
+  [ "$#" -eq 4 ] || job_usage "expected <branch> <engine> <resume>"
+  case "$3" in task | user_review | docs) ;; *) job_usage "unknown engine '$3'" ;; esac
+  case "$4" in none | answer | pause) ;; *) job_usage "unknown resume '$4'" ;; esac
+  HARNESS_INPUT_CHAIN="${HARNESS_INPUT_CHAIN:-0}"
+  case "$HARNESS_INPUT_CHAIN" in
+    *[!0-9]*) job_usage "HARNESS_INPUT_CHAIN must be empty or a non-negative integer" ;;
+  esac
+  HARNESS_INPUT_CHAIN="$((10#$HARNESS_INPUT_CHAIN))"
+  export HARNESS_INPUT_CHAIN
+  # 0 = protected, 2 = unresolvable; both refuse, since a run on either would
+  # fail at its first commit.
+  hr_branch_is_protected "$MAIN_REPO" "$2"
+  case "$?" in
+    1) ;;
+    *) job_usage "refused: '$2' is a protected branch, or its protection is unresolvable" ;;
+  esac
+  run_job "$2" "$3" "$4"
+  ;;
 *)
-  echo "usage: $self [watch|tick|status|usage]" >&2
+  echo "usage: $self [watch|tick|status|usage|job]" >&2
   exit 2
   ;;
 esac
