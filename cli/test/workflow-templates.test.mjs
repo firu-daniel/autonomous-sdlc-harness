@@ -8,7 +8,9 @@
  * expression spaced after its braces and `{{cliVersion}}` the only template token, so the CLI's
  * renderer (`cli/src/core/templating.ts`) sees nothing else; no input or secret expression inside a
  * `run:` block (script injection); `continue` under `!cancelled()` and the upload and final push
- * under `always()`; and no configured directory frozen into the file.
+ * under `always()`; the upload step's artifact name and `remote-run.sh`'s `STATE_ARTIFACT_NAME` are
+ * both `cli/src/remote/githubActions.ts` → `STATE_ARTIFACT_NAME`; and no configured directory frozen
+ * into the file.
  *
  * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; the permissions exactly
  * `contents: read` and `actions: write`; `remote-run.sh poll` its only call into the script family;
@@ -21,7 +23,12 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { PACKAGE_ROOT } from './helpers/fixture.mjs';
-import { WORKFLOW_RESUME_FILE, WORKFLOW_RUN_FILE, WORKFLOW_TEMPLATE_DIR } from '../dist/remote/githubActions.js';
+import {
+  STATE_ARTIFACT_NAME,
+  WORKFLOW_RESUME_FILE,
+  WORKFLOW_RUN_FILE,
+  WORKFLOW_TEMPLATE_DIR,
+} from '../dist/remote/githubActions.js';
 
 const TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_RUN_FILE), 'utf8');
 const LINES = TEXT.split('\n');
@@ -127,6 +134,13 @@ test('continue runs unless cancelled; the upload and the final push always run',
   assert.match(ifOf(stepCarrying('remote-run.sh" continue')), /!cancelled\(\)/);
   assert.match(ifOf(stepCarrying('actions/upload-artifact')), /always\(\)/);
   assert.match(ifOf(stepCarrying('push-branch.sh')), /always\(\)/);
+});
+
+test('the uploaded artifact is the one remote-run.sh downloads: STATE_ARTIFACT_NAME in both mirrors', () => {
+  const upload = stepCarrying('actions/upload-artifact');
+  assert.match(upload, new RegExp(`^\\s*name: ${STATE_ARTIFACT_NAME}$`, 'm'));
+  const script = readFileSync(join(PACKAGE_ROOT, 'templates', 'scripts', 'remote-run.sh'), 'utf8');
+  assert.match(script, new RegExp(`^STATE_ARTIFACT_NAME='${STATE_ARTIFACT_NAME}'$`, 'm'));
 });
 
 test('no configured directory is frozen into the file', () => {
