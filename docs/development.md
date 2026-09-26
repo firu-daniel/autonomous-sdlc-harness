@@ -239,25 +239,25 @@ This gate needs `jq` 1.5 or newer on `PATH`: the outer-loop library reaches a co
 
 Every test gets its **own** fixture repository under the system temp directory, a copy of a seeded template its test process builds once, and removes it in process; the template is never handed to a test, nothing is written inside this checkout and no fixture is committed. The gate is red if a first `init` produces a configuration the schema rejects, if a second `init` on the same tree changes anything the first one wrote, or if a `--dry-run` writes at all — idempotence and dry-run purity are asserted before any other behaviour, because a writer aimed at a repository that fails either is destructive rather than merely wrong.
 
-**Run time, measured.** Measured on 2026-09-25 on a 10-core macOS host (Darwin arm64, `os.availableParallelism()` 10), Node v20.19.5, git 2.50.1, one host command each, from the repository root:
+**Run time, measured.** Measured by hand on 2026-09-26 on a 10-core macOS host (Darwin arm64, `os.availableParallelism()` 10), Node v22.23.2, git 2.50.1 (Apple Git-155), outside any headless session and with no other heavy process running, one host command each, from the repository root:
 
 ```
-bash scripts/measure-suite.sh --ref fe17b4e2293f --runs 3
+bash scripts/measure-suite.sh --ref fe17b4e2293f --runs 1
 ```
 
 ```
-bash scripts/measure-suite.sh --runs 3
+bash scripts/measure-suite.sh --runs 1
 ```
 
-`fe17b4e2293f` is the `dev` commit before the template-copied fixtures and the concurrent suites. Both before columns were measured at it, and both after columns at the checkout's own `HEAD`, in the one session the opening clause dates, the after run right after the before run. Each figure is the script's own `measure-suite:` line rounded to whole seconds:
+`fe17b4e2293f` is the `dev` commit before the template-copied fixtures and the concurrent suites. Both before columns were measured at it, and both after columns at the branch's own `HEAD`, from the branch's worktree with the branch's own `scripts/measure-suite.sh`, the before run taken right after the after run. Each figure is the script's own `measure-suite:` line rounded to whole seconds:
 
 | Where | `npm test` before (`fe17b4e2293f`) | `npm test` after | `run-gates.sh` before (`fe17b4e2293f`) | `run-gates.sh` after |
 |---|---|---|---|---|
-| host, 10 cores | 466 s, 494 s, 376 s | 209 s, 209 s, 217 s | 314 s, 507 s, 337 s | 236 s, 316 s, 331 s |
+| host, 10 cores | 170 s | 118 s (−31%) | 208 s | 135 s (−35%) |
 | `--cpus 4` | not yet measured | not yet measured | not yet measured | not yet measured |
 | `--cpus 2` | not yet measured | not yet measured | not yet measured | not yet measured |
 
-Read the host row as a range, not a point. The host was shared while it was measured: `uptime` read a 1-minute load average of 20.86 just before the before run and 5.66 just before the after run, and the before side's fastest `run-gates.sh` (which contains a whole `npm test`) finished 62 s faster than its fastest `npm test` alone. All three after `npm test` runs exited 0. Every `run-gates.sh` run, before and after, exited 1 on the same single failure, `11 docs-retrieval relevance floor`, and no other. Nothing was lost between the two commits. This command, run from `cli/` at each commit, reported 787 tests passing before and 791 after, with none failing:
+One run per side is deliberate. A measurement taken inside a harness session is unstable and unpredictable: other sessions can be running their own tests and other processes on the same machine at the same time, and the session taking the measurement adds to the load itself. So these figures are taken by hand, outside any headless session, on a machine with no other heavy process running. `uptime` read a 1-minute load average of 2.47 just before the after run and 2.25 just before the before run. Repeating the measurement inside a run would not make it more trustworthy. Both `npm test` runs exited 0. Every `run-gates.sh` run, before and after, exited 1 on the same single failure, `11 docs-retrieval relevance floor`, and no other. Nothing was lost between the two commits. This command, run from `cli/` at each commit, reported 787 tests passing before and 791 after, with none failing:
 
 ```
 node --test --test-reporter=spec test/

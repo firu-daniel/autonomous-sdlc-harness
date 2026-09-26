@@ -14,7 +14,7 @@
 
 Each entry resolves to a self-contained `harness-runs/user_reviews/chore_test_suite_run_time_fix_plan/finding_<K>.md` file through its `**Finding K**` reference. Entries are sorted from lowest blast radius first to wider refactors last.
 
-1. [ ] **Finding 1** — Replace Gate 4's host run-time row with the user's hand-measured figures (`npm test` 170 s → 118 s, `run-gates.sh` 208 s → 135 s). Update the provenance (date, Node v22.23.2, `--runs 1`, after at branch `HEAD`), and record why one run per side, taken outside any headless session, is deliberate. _(layer: general)_
+1. [x] **Finding 1** — Replace Gate 4's host run-time row with the user's hand-measured figures (`npm test` 170 s → 118 s, `run-gates.sh` 208 s → 135 s). Update the provenance (date, Node v22.23.2, `--runs 1`, after at branch `HEAD`), and record why one run per side, taken outside any headless session, is deliberate. _(layer: general)_
 
 ---
 
