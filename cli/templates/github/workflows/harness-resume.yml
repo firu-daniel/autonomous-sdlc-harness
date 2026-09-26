@@ -29,6 +29,8 @@
 # cost nothing.
 #
 # WHAT IT READS.
+#   Secrets: HARNESS_PUSH_URL (optional notifications: the poller's own failed
+#     notice when it cannot resume a run).
 #   Variables: HARNESS_RUNNER, HARNESS_REMOTE_STOP (any value: the tick
 #     dispatches nothing), HARNESS_MAX_CHAIN (the automatic-dispatch limit).
 #   harness.config.json, at run time: `scriptsDir`. No configured value is
@@ -41,7 +43,7 @@
 #
 # DECLARED MIRRORS — a rename on either side is an edit to both:
 #   cli/src/remote/githubActions.ts   WORKFLOW_RESUME_FILE, HARNESS_RUNNER,
-#                                     HARNESS_REMOTE_STOP
+#                                     HARNESS_REMOTE_STOP, HARNESS_PUSH_URL
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir
 
 name: harness-resume
@@ -71,6 +73,7 @@ jobs:
       HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
       HARNESS_MAX_CHAIN: ${{ vars.HARNESS_MAX_CHAIN }}
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
+      HARNESS_PUSH_URL: ${{ secrets.HARNESS_PUSH_URL }}
     steps:
       - name: Check out the default branch
         uses: actions/checkout@v4

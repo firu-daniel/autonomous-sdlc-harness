@@ -14,7 +14,7 @@
  *
  * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; the permissions exactly
  * `contents: read` and `actions: write`; `remote-run.sh poll` its only call into the script family;
- * no template token at all; every GitHub expression spaced; none inside a `run:` block.
+ * `HARNESS_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block.
  */
 
 import assert from 'node:assert/strict';
@@ -168,6 +168,10 @@ test('the poller runs remote-run.sh poll and nothing else of the family', () => 
     [...body.matchAll(/([A-Za-z0-9_-]+\.sh)"?\s+(\S*)/g)].map((m) => `${m[1]} ${m[2]}`),
   );
   assert.deepEqual(calls, ['remote-run.sh poll']);
+});
+
+test('the poller passes the push secret through env, so its failed notice can be delivered', () => {
+  assert.match(RESUME_TEXT, /^ {6}HARNESS_PUSH_URL: \$\{\{ secrets\.HARNESS_PUSH_URL \}\}$/m);
 });
 
 test('the poller carries no template token, and every expression is spaced and outside run blocks', () => {

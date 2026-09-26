@@ -48,7 +48,7 @@ Three further items need a decision nobody in the fix loop can take. They are in
 3. [x] **Finding 4** — Make `remote-run.sh stop` cancel only `harness run <branch>` runs, never the jobless markers _(layer: cli)_
 4. [x] **Finding 5** — Print `init`'s remote-execution block only for workflows this run created or replaced _(layer: cli)_
 5. [x] **Finding 3** — Check `restore --resume answer`'s indexes against the downloaded bundle before restoring it _(layer: cli)_
-6. [ ] **Finding 1** — Pass `HARNESS_PUSH_URL` to the resume poller, and record it in the header, the test and the secrets table _(layer: cli, general)_
+6. [x] **Finding 1** — Pass `HARNESS_PUSH_URL` to the resume poller, and record it in the header, the test and the secrets table _(layer: cli, general)_
 
 ---
 

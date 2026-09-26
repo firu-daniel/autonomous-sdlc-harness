@@ -325,7 +325,7 @@ All are set on the GitHub repository (Settings → Secrets and variables → Act
 |---|---|---|---|---|
 | `CLAUDE_CODE_OAUTH_TOKEN` | secret | `harness-run.yml`: the credential check and the harness step, which exports it only when non-empty | none | one of this and `ANTHROPIC_API_KEY`; the job fails before launch when neither is set |
 | `ANTHROPIC_API_KEY` | secret | as above | none | as above |
-| `HARNESS_PUSH_URL` | secret | `autonomous-notify.sh` in the job: an endpoint that accepts a POST whose body is the message | none: no push notification | no, but `doctor --check-github` warns without it |
+| `HARNESS_PUSH_URL` | secret | `autonomous-notify.sh` in the run job and in the resume poller: an endpoint that accepts a POST whose body is the message | none: no push notification | no, but `doctor --check-github` warns without it |
 | `HARNESS_GIT_TOKEN` | secret | `harness-run.yml`'s checkout, so the job's pushes use it | `GITHUB_TOKEN` | no. Set it when your own CI must run on the pushed branch: pushes made with `GITHUB_TOKEN` start no workflow (§6) |
 | `HARNESS_RUNNER` | variable | `runs-on` in both workflows | `ubuntu-latest` | no (§8) |
 | `HARNESS_REMOTE_STOP` | variable | every job and every poller tick | empty | no. Any value stops every job and tick before it launches or dispatches anything (§3) |
