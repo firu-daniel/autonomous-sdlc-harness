@@ -600,7 +600,8 @@ test('restore --resume answer refuses an answer whose question is not at the top
     restoreEnv(fx, { HARNESS_INPUT_ANSWERS: JSON.stringify({ 1: 'yes\n', 2: 'no\n' }) }));
   assert.equal(result.status, 2, result.stderr);
   assert.match(result.stderr, /question_2\.md/);
-  assert.ok(existsSync(mirror(fx, 'question_1.md')), 'the bundle was not restored first');
+  assert.equal(existsSync(mirror(fx, 'question_1.md')), false, 'the bundle was restored before the refusal');
+  assert.equal(existsSync(join(fx.dir, REMOTE_STATUS)), false);
   assert.equal(existsSync(mirror(fx, 'answer_1.md')), false);
   assert.equal(existsSync(mirror(fx, 'answer_2.md')), false);
 });

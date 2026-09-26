@@ -42,8 +42,8 @@
 #        file is missing. For restore under --resume answer, "nothing more":
 #        no previous bundle, `HARNESS_INPUT_ANSWERS` not an object of
 #        positive-integer keys to strings, or an answer whose `question_<n>.md`
-#        is not at the top level — the bundle may already be restored, and no
-#        answer is written
+#        is not at the top level of the previous bundle — nothing is restored
+#        and no answer is written
 #     3  gh failed: not found, or a non-zero exit — the first line of gh's
 #        stderr is named. For poll: the listing or the disable failed. For
 #        pause-requested and run-created-at, also an answer that is not the
@@ -973,6 +973,14 @@ verb_restore() {
       mkdir -p "$download" || restore_fail "cannot create '$download'"
       gh_call run download "$id" -n "$STATE_ARTIFACT_NAME" -D "$download" || gh_fail "downloading the bundle of run $id failed"
     fi
+    if [ "$resume" = answer ]; then
+      # Checked against the downloaded bundle, before anything is restored: a refusal
+      # must leave no restored status for `save` to re-upload as this job's own.
+      for n in $(jq -n -r 'env.HARNESS_INPUT_ANSWERS | fromjson | keys_unsorted[]'); do
+        [ -f "$download/$HR_REMOTE_CLARIFY_DIR/$branch/question_$n.md" ] \
+          || restore_refuse "answer $n has no question_$n.md in the bundle of run $id; nothing restored, no answer written"
+      done
+    fi
     hr_remote_bundle_restore "$download" "$root" "$branch" job
     case $? in
       0) echo "remote-run.sh: restored the bundle of run $id into $root" ;;
@@ -984,11 +992,6 @@ verb_restore() {
   if [ "$resume" = answer ]; then
     clar=$(hr_state_path "$root" "$HR_REMOTE_CLARIFY_DIR/$branch") \
       || restore_fail "cannot resolve '$root/harness.config.json'"
-    # Every entry is checked before any is written.
-    for n in $(jq -n -r 'env.HARNESS_INPUT_ANSWERS | fromjson | keys_unsorted[]'); do
-      [ -f "$clar/question_$n.md" ] \
-        || restore_refuse "answer $n has no '$clar/question_$n.md'; no answer written"
-    done
     for n in $(jq -n -r 'env.HARNESS_INPUT_ANSWERS | fromjson | keys_unsorted[]'); do
       tmp=$(mktemp "$clar/answer_$n.md.tmp.XXXXXX") || restore_fail "cannot write in '$clar'"
       if jq -n -j --arg k "$n" 'env.HARNESS_INPUT_ANSWERS | fromjson | .[$k]' >"$tmp" \
