@@ -22,8 +22,8 @@
 #   remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]
 #   remote-run.sh run-created-at <run_id> [--repo <root>]
 #     0  sent (for stop: the action=stop marker was dispatched, and every
-#        queued, waiting or in-progress run of that branch was asked to cancel,
-#        or there was none); for status: printed; for sync: the record is
+#        queued, waiting or in-progress `harness run` run of that branch was
+#        asked to cancel, or there was none); for status: printed; for sync: the record is
 #        current (including "no run listed yet", which writes nothing); for
 #        restore: restored, or no previous bundle under --resume none|pause;
 #        for save: ALWAYS, whatever happened; for continue: whatever it
@@ -217,8 +217,10 @@
 # as the stop marker `continue` and `poll` read. It is first because it is the
 # only part that reaches a usage-paused run waiting on the resume poller, which
 # has no job to cancel; a marker dispatch that fails exits 3 at once, before any
-# cancel. (2) It lists the branch's runs of the workflow and cancels each one
-# whose status is `queued`, `in_progress` or `waiting`, trying every one even
+# cancel. (2) It lists the branch's runs of the workflow and cancels each run
+# titled `harness run <branch>` whose status is `queued`, `in_progress` or
+# `waiting` — never a jobless `harness stop` / `harness pause` marker, which has
+# no job to stop and may complete before its cancel lands — trying every one even
 # after a failure. (3) Only when (1) and (2) all succeeded, and only when a
 # local registry record exists, it writes `remote_stopped_at` and sets `status`
 # to `failed` through `hr_registry_set`; a partial stop leaves the record alone
@@ -260,7 +262,7 @@
 #   d=$(mktemp -d); git -C "$d" init -q; (cd "$d" && npx autonomous-sdlc-harness init)
 #   jq '.execution = {target: "github-actions"}' "$d/harness.config.json" > "$d/c" && mv "$d/c" "$d/harness.config.json"
 #   s=$(mktemp -d)/gh; printf '%s\n' '#!/bin/sh' 'echo "$*" >> "$0.log"' \
-#     'case "$1 $2" in "run list") echo "[{\"databaseId\":7,\"status\":\"in_progress\"}]";;' \
+#     'case "$1 $2" in "run list") echo "[{\"databaseId\":7,\"displayTitle\":\"harness run feat_x\",\"status\":\"in_progress\"}]";;' \
 #     '"repo view") echo "{\"defaultBranchRef\":{\"name\":\"main\"}}";; esac' > "$s"; chmod +x "$s"
 #   export HARNESS_GH_CLI="$s"; cd "$d"
 #
@@ -704,8 +706,8 @@ verb_stop() {
   gh_call workflow run "$WORKFLOW_RUN_FILE" --ref "$branch" -f "action=stop" -f "branch=$branch" || gh_fail "stop marker for '$branch' failed, nothing cancelled"
   echo "remote-run.sh: dispatched the action=stop marker for $branch"
 
-  gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json databaseId,status --limit 100 || gh_fail "listing the runs of '$branch' failed"
-  ids=$(printf '%s' "$GH_OUT" | jq -r '.[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting") | .databaseId' 2>/dev/null) || {
+  gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json databaseId,displayTitle,status --limit 100 || gh_fail "listing the runs of '$branch' failed"
+  ids=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" '.[] | select(.displayTitle == $t and (.status == "queued" or .status == "in_progress" or .status == "waiting")) | .databaseId' 2>/dev/null) || {
     GH_ERR="its run list is not the expected JSON"
     gh_fail "listing the runs of '$branch' failed"
   }

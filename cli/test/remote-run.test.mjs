@@ -76,10 +76,11 @@ if (line.startsWith('run download')) {
 `;
 
 const ACTIVE_RUNS = JSON.stringify([
-  { databaseId: 11, status: 'in_progress' },
-  { databaseId: 12, status: 'completed' },
-  { databaseId: 13, status: 'queued' },
-  { databaseId: 14, status: 'waiting' },
+  { databaseId: 11, displayTitle: 'harness run feat_x', status: 'in_progress' },
+  { databaseId: 12, displayTitle: 'harness run feat_x', status: 'completed' },
+  { databaseId: 13, displayTitle: 'harness run feat_x', status: 'queued' },
+  { databaseId: 14, displayTitle: 'harness run feat_x', status: 'waiting' },
+  { databaseId: 15, displayTitle: 'harness stop feat_x', status: 'queued' },
 ]);
 
 /** An `init`-wired fixture with `execution.target` set, and a recorder stub beside it. */
@@ -224,6 +225,7 @@ test('stop sends the marker first, cancels exactly the active runs, and flips an
   assert.equal(sent[0], 'workflow run harness-run.yml --ref feat_x -f action=stop -f branch=feat_x');
   assert.ok(sent[1].startsWith('run list '), sent[1]);
   assert.deepEqual(sent.slice(2), ['run cancel 11', 'run cancel 13', 'run cancel 14']);
+  assert.ok(!sent.includes('run cancel 15'), 'stop cancelled its own jobless marker run');
 
   const record = JSON.parse(readFileSync(join(fx.dir, REGISTRY), 'utf8')).runs.feat_x;
   assert.equal(record.status, 'failed');

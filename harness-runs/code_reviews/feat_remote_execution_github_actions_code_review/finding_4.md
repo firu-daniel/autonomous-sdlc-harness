@@ -33,3 +33,5 @@ Cancelling a marker also buys nothing. A marker has no job to stop, and `remote_
   - Give each element of `ACTIVE_RUNS` `displayTitle: 'harness run feat_x'`.
   - Add a fifth element, `{ databaseId: 15, displayTitle: 'harness stop feat_x', status: 'queued' }`.
   - In `'stop sends the marker first, cancels exactly the active runs, and flips an existing record to failed'`, assert that no `run cancel 15` was recorded.
+
+**Deviations from plan:** The header's usage exit-0 line for `stop` ("every queued, waiting or in-progress run of that branch was asked to cancel") also narrowed to "`harness run` run", so the header still matches `verb_stop` (`.claude/context/cli.md` → a change satisfies its module's header or amends it).
