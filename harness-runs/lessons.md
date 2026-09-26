@@ -34,4 +34,6 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **A decision rule's outcome is a proposal to the maintainer, not a settled future: record the verdict and the change it names, but never write the change into other documents as pending work until the maintainer has decided to execute it.** _(taught by: feat_arm_a_real_catalog_measurement)_
 
+- **A wall-clock figure in a document of record is never one a run measured inside its own session: record figures taken by hand, outside any headless session, on an otherwise idle machine. A plan never makes repeated in-run timing runs its acceptance evidence.** _(taught by: chore_test_suite_run_time)_
+
 _Written by `autonomous-sdlc-harness init`, and yours from there on: a re-run never touches a ledger that already exists._
