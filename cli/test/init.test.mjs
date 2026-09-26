@@ -24,11 +24,13 @@
  * test may; every retrieval-on case runs under the stub and a planted model cache, and the setup cases
  * assert only the skips, the dry-run notes and the stub refusals. Gate 10 covers the real path by hand.
  *
- * ## Four non-obvious choices, and where each comes from
+ * ## Five non-obvious choices, and where each comes from
  *
  * 1. **Every test builds its own fixture and tears it down.** No directory is shared and none is
  *    reused across tests, so a test that writes cannot change what a later one observes, and a
- *    failure leaves nothing behind to confuse the next run (`helpers/fixture.mjs`).
+ *    failure leaves nothing behind to confuse the next run (`helpers/fixture.mjs`). That is what
+ *    lets the cases run concurrently: they sit in one `concurrentSuite` and run `CASE_CONCURRENCY`
+ *    at a time (`test/helpers/concurrency.mjs`); `HARNESS_TEST_CONCURRENCY=1` runs them in series.
  * 2. **The wrapper ↔ profile invariant is asserted in both directions**, because the two failures
  *    are different and neither is loud: a written wrapper missing one of its three allow forms
  *    leaves a caller using that spelling matching neither `allow` nor `deny`, which in an unattended
@@ -52,6 +54,12 @@
  *    nothing in this package: its template and `test.sh`'s carry the same executable body and
  *    differ only in their comments — `diff <(grep -v '^#' cli/templates/scripts/typecheck.sh)
  *    <(grep -v '^#' cli/templates/scripts/test.sh)` — so running it would re-drive the arm above.
+ * 5. **One case runs after the suite, alone.** The dev-server case asserts wall-clock bounds — the
+ *    wrapper returns within `RETURNS_PROMPTLY_MS`, and `eventually` polls its pid — which are about
+ *    the wrapper, and under a burst of concurrent subprocesses would measure the machine's load
+ *    instead. **A new case joins the suite only if it builds its own fixture, passes every override
+ *    through `runCli`'s `env`, writes no `process.env` and asserts nothing about wall-clock time**;
+ *    otherwise it goes after the suite closes.
  */
 
 import assert from 'node:assert/strict';
@@ -64,6 +72,7 @@ import test from 'node:test';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
+import { concurrentSuite } from './helpers/concurrency.mjs';
 import {
   createFixture,
   ignoredAmong,
@@ -684,6 +693,46 @@ async function assertWrapperPairing(dir, config, profile) {
   return written;
 }
 
+/** The pair that reads a written hook back: the set its `case` label carries, and whether it drifted. */
+const { readProtectedCaseLabel, caseLabelMatches } = await loadCompiled('generators/githooks.js');
+
+/** The pair that reads a written wrapper back: which file a key invokes, and the line inside it. */
+const { configuredWrapperFile, wrapperCommandLine, writeWrapperScripts } = await loadCompiled('generators/scripts.js');
+
+const { READ_MANIFESTS } = await loadCompiled('detect/presets.js');
+
+/**
+ * A compiled generator, imported for the one wording no command line reaches yet: the banner a
+ * declined offer records. The offer is an *input* to this generator, so rendering both wordings is
+ * the only way to assert that neither leaves its reader without a way out of the block — and a
+ * banner is written once, at setup, into a file every later run keeps.
+ */
+async function loadCompiled(relativePath) {
+  const path = join(PACKAGE_ROOT, 'dist', relativePath);
+  if (!existsSync(path)) {
+    throw new Error(
+      `${path} is missing. These tests run against the compiled CLI, so run \`npm run build\` before \`npm test\`.`,
+    );
+  }
+  return import(pathToFileURL(path).href);
+}
+
+const { writeClaudeContext } = await loadCompiled('generators/claudeContext.js');
+const { WritePlan } = await loadCompiled('core/writer.js');
+
+/** The CLI's own slug parser, so the gate below reads the shipped manifest the way `init` reads it. */
+const { parseRepoSlug } = await loadCompiled('core/paths.js');
+
+/**
+ * The plugin's identity, taken from the compiled CLI rather than spelled here: a record seeded under
+ * any other key is one the CLI correctly resolves nothing from, so the fixture would pin a machine
+ * with no plugin while claiming to pin one with it. Everything else below is spelled literally —
+ * choice 3 in the module header — because the *form* of these entries is what a run matches on.
+ */
+const { PLUGIN_KEY } = await loadCompiled('generators/projectSettings.js');
+
+concurrentSuite('init', () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
+
 test('a first init exits 0 and writes a schema-shaped harness.config.json', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
 
@@ -846,9 +895,6 @@ test('a re-run says the kept pre-push hook carries the set it was written with, 
     `the note still says --force rebuilds ${CONFIG_FILE}, which it no longer does:\n${note}`,
   );
 });
-
-/** The pair that reads a written hook back: the set its `case` label carries, and whether it drifted. */
-const { readProtectedCaseLabel, caseLabelMatches } = await loadCompiled('generators/githooks.js');
 
 /**
  * The hook reader's round trip, and it is one only because every label below was rendered by `init`
@@ -1203,9 +1249,6 @@ test('a command line that merely names the wrapper file is written into it, not 
   assert.doesNotMatch(stderr, /recurse forever/);
 });
 
-/** The pair that reads a written wrapper back: which file a key invokes, and the line inside it. */
-const { configuredWrapperFile, wrapperCommandLine, writeWrapperScripts } = await loadCompiled('generators/scripts.js');
-
 /**
  * The reader's round trip — and it is one only because every wrapper below was written by `init` in
  * this test rather than typed out as a fixture string: a parse graded against a hand-written wrapper
@@ -1423,56 +1466,6 @@ test("a wrapper reports its command's failure as one verdict line and exits with
   assert.doesNotMatch(failed.stdout, /^PASS: /m);
   // The command was reached: this is its failure being reported, not the wrapper refusing to run it.
   assert.equal(recorded(record).cwd, dir);
-});
-
-/**
- * The dev-server wrapper is the one that must **not** wait for its command, and the one whose
- * output a caller has to act on: the QA phase polls the port, checks that the pid it was given is
- * still alive before trusting an answer, and reads the log when the start failed.
- */
-test('the dev-server wrapper starts the server detached and prints a live pid and a readable log', async (t) => {
-  const dir = await fixtureFor(t, { files: recordingFixtureFiles(), dirs: [NESTED_DIR] });
-
-  await initOk(dir);
-
-  const startedAt = Date.now();
-  const result = await runBash(join(dir, NESTED_DIR), [
-    join(dir, SCRIPTS_DIR, 'start-dev-server.sh'),
-    DEV_SERVER_PORT,
-    '--extra',
-  ]);
-  const elapsed = Date.now() - startedAt;
-
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-  assert.ok(
-    elapsed < RETURNS_PROMPTLY_MS,
-    `the wrapper took ${elapsed}ms, so it waited for a server that stays up for ${DEV_SERVER_STUB_SECONDS}s`,
-  );
-
-  const pid = Number(/^STARTING: devServer \(pid (\d+)\)$/m.exec(result.stdout)?.[1]);
-  const logPath = /^LOG: (\S+)$/m.exec(result.stdout)?.[1];
-  assert.ok(Number.isInteger(pid), `the wrapper printed no pid:\n${result.stdout}`);
-  assert.ok(
-    logPath?.endsWith(`harness-dev-server-${DEV_SERVER_PORT}.log`),
-    `the wrapper printed no per-port log path:\n${result.stdout}`,
-  );
-  t.after(() => rm(logPath, { force: true }));
-  t.after(() => {
-    if (alive(pid)) process.kill(pid);
-  });
-
-  assert.ok(alive(pid), 'the pid the wrapper printed is not a running process');
-
-  // The port reached the command through the environment, and everything after it as arguments.
-  await eventually(
-    () => existsSync(logPath) && readFileSync(logPath, 'utf8').includes('port='),
-    `nothing was written to ${logPath}`,
-  );
-  assert.match(readFileSync(logPath, 'utf8'), new RegExp(`^port=${DEV_SERVER_PORT} args=--extra$`, 'm'));
-
-  // And the pid is the whole of what was started: signalling it leaves no orphan behind.
-  process.kill(pid);
-  await eventually(() => !alive(pid), 'the process the wrapper printed outlived the signal sent to it');
 });
 
 test('--qa writes the browser wiring, and it declares exactly the servers the profile starts', async (t) => {
@@ -4666,8 +4659,6 @@ function nestedScriptedAppFiles({ scripts = { typecheck: 'echo typecheck', test:
  * and each family's entry is asserted **whole** rather than by segment: an entry may be a path (the
  * Android family's is), and `src`, `main` are not manifest names the sentence has to promise.
  */
-const { READ_MANIFESTS } = await loadCompiled('detect/presets.js');
-
 function readManifestNames() {
   return READ_MANIFESTS.split(',').map((entry) => entry.trim()).filter((entry) => entry !== '');
 }
@@ -5207,25 +5198,6 @@ const KEPT_PROJECT_FILE_NOTE = 'was kept as it stands, so the setup-pending bann
 /** The same note's dry-run wording: the conditional a run that wrote nothing is owed. */
 const KEPT_PROJECT_FILE_NOTE_DRY =
   'would be kept as it stands, so the setup-pending banner would not be written into it';
-
-/**
- * A compiled generator, imported for the one wording no command line reaches yet: the banner a
- * declined offer records. The offer is an *input* to this generator, so rendering both wordings is
- * the only way to assert that neither leaves its reader without a way out of the block — and a
- * banner is written once, at setup, into a file every later run keeps.
- */
-async function loadCompiled(relativePath) {
-  const path = join(PACKAGE_ROOT, 'dist', relativePath);
-  if (!existsSync(path)) {
-    throw new Error(
-      `${path} is missing. These tests run against the compiled CLI, so run \`npm run build\` before \`npm test\`.`,
-    );
-  }
-  return import(pathToFileURL(path).href);
-}
-
-const { writeClaudeContext } = await loadCompiled('generators/claudeContext.js');
-const { WritePlan } = await loadCompiled('core/writer.js');
 
 /** What the generator would write into `.claude/CLAUDE.md` for one answer, without writing it. */
 function renderProjectFile(dir, analyzeOffer) {
@@ -5982,9 +5954,6 @@ test('the first step states the marketplace wiring: the entry it wrote, or both 
     );
   }
 });
-
-/** The CLI's own slug parser, so the gate below reads the shipped manifest the way `init` reads it. */
-const { parseRepoSlug } = await loadCompiled('core/paths.js');
 
 /** The account shape a slot has to name — the pattern `projectSettings.ts` resolves a slug against. */
 const OWNER_SHAPE = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/;
@@ -8012,14 +7981,6 @@ test('every question and every closing entry is separated from the line above it
   });
 });
 
-/**
- * The plugin's identity, taken from the compiled CLI rather than spelled here: a record seeded under
- * any other key is one the CLI correctly resolves nothing from, so the fixture would pin a machine
- * with no plugin while claiming to pin one with it. Everything else below is spelled literally —
- * choice 3 in the module header — because the *form* of these entries is what a run matches on.
- */
-const { PLUGIN_KEY } = await loadCompiled('generators/projectSettings.js');
-
 /** The agent runner's plugin directory under `CLAUDE_CONFIG_DIR`, and the record inside it. */
 const CLAUDE_PLUGINS_DIR = 'plugins';
 const INSTALLED_PLUGINS_FILE = 'installed_plugins.json';
@@ -8349,4 +8310,57 @@ test('init --force carries the profile\'s resolved-plugin-root entries forward, 
     assert.ok(stdout.includes(GRADED_CARRY), `a run that resolved a root does not say so:\n${stdout}`);
     assert.ok(!stdout.includes(CARRIED_UNVERIFIED), `a run that graded the entries calls the carry unverified:\n${stdout}`);
   });
+});
+
+});
+
+// Outside the suite, so it runs alone within this file: choice 5 in the header.
+/**
+ * The dev-server wrapper is the one that must **not** wait for its command, and the one whose
+ * output a caller has to act on: the QA phase polls the port, checks that the pid it was given is
+ * still alive before trusting an answer, and reads the log when the start failed.
+ */
+test('the dev-server wrapper starts the server detached and prints a live pid and a readable log', async (t) => {
+  const dir = await fixtureFor(t, { files: recordingFixtureFiles(), dirs: [NESTED_DIR] });
+
+  await initOk(dir);
+
+  const startedAt = Date.now();
+  const result = await runBash(join(dir, NESTED_DIR), [
+    join(dir, SCRIPTS_DIR, 'start-dev-server.sh'),
+    DEV_SERVER_PORT,
+    '--extra',
+  ]);
+  const elapsed = Date.now() - startedAt;
+
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.ok(
+    elapsed < RETURNS_PROMPTLY_MS,
+    `the wrapper took ${elapsed}ms, so it waited for a server that stays up for ${DEV_SERVER_STUB_SECONDS}s`,
+  );
+
+  const pid = Number(/^STARTING: devServer \(pid (\d+)\)$/m.exec(result.stdout)?.[1]);
+  const logPath = /^LOG: (\S+)$/m.exec(result.stdout)?.[1];
+  assert.ok(Number.isInteger(pid), `the wrapper printed no pid:\n${result.stdout}`);
+  assert.ok(
+    logPath?.endsWith(`harness-dev-server-${DEV_SERVER_PORT}.log`),
+    `the wrapper printed no per-port log path:\n${result.stdout}`,
+  );
+  t.after(() => rm(logPath, { force: true }));
+  t.after(() => {
+    if (alive(pid)) process.kill(pid);
+  });
+
+  assert.ok(alive(pid), 'the pid the wrapper printed is not a running process');
+
+  // The port reached the command through the environment, and everything after it as arguments.
+  await eventually(
+    () => existsSync(logPath) && readFileSync(logPath, 'utf8').includes('port='),
+    `nothing was written to ${logPath}`,
+  );
+  assert.match(readFileSync(logPath, 'utf8'), new RegExp(`^port=${DEV_SERVER_PORT} args=--extra$`, 'm'));
+
+  // And the pid is the whole of what was started: signalling it leaves no orphan behind.
+  process.kill(pid);
+  await eventually(() => !alive(pid), 'the process the wrapper printed outlived the signal sent to it');
 });
