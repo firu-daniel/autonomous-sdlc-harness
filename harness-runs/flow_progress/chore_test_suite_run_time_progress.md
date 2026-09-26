@@ -11,4 +11,4 @@ Source: harness-runs/task_prompts/chore_test_suite_run_time_task_prompt.md → `
 ## Fixing
 - [x] R3. All fix-plan findings implemented (fix-plan index all [x])
 - [-] R4. QA passed (UI-test index all [x] / no_ui / no-op augment)
-- [ ] R5. Post-user-review statistics committed
+- [x] R5. Post-user-review statistics committed
