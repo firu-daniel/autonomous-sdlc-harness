@@ -2,11 +2,11 @@
 
 ## Summary
 
-- `success_rate`: **`100%`** — headline metric.
+- `success_rate`: **`95%`** — headline metric.
 - `story_points_total`: `100` — denominator (sum of every task's `_(points: <N>)_` story-point estimate in the story index's `## Phase 2 Readiness — Ordered Fix List`).
-- `issue_cost_total`: `0` — subtraction (sum of each user-review observation's severity weight, in story-point units).
+- `issue_cost_total`: `5` — subtraction (sum of each user-review observation's severity weight, in story-point units).
 - `story_plan_tasks`: `7` — retained raw count of `## Phase 2 Readiness — Ordered Fix List` task entries.
-- `user_review_issues`: `0` — retained raw count of observations across all `chore_test_suite_run_time_review*.md` user-review files.
+- `user_review_issues`: `1` — retained raw count of observations across all `chore_test_suite_run_time_review*.md` user-review files.
 
 Formula:
 
@@ -14,7 +14,7 @@ Formula:
 success_rate = round(clamp((story_points_total - issue_cost_total) / story_points_total, 0, 1) * 100, 1) percent
 ```
 
-Worked example: `issue_cost_total` is `0`, so the "no issues" rule applies: `round(clamp((100 - 0) / 100, 0, 1) * 100, 1)` = `100%`.
+Worked example: `round(clamp((100 - 5) / 100, 0, 1) * 100, 1)` = `round(95.0, 1)` = `95%`.
 
 Edge cases (the rate is always computed via the formula, then adjusted by these rules):
 
@@ -40,16 +40,17 @@ Per-source raw numbers and per-issue costs are retained so the metric can be ref
     - **sum (`story_points_total`)**: `100`
   - `dispositioned_points`: `0` — no commit in `dev..HEAD` (`git log --format='%h %s%n%b' dev..HEAD`) carries the `record disposition of ` record, so no task here was closed without a fix, and no unpointed token was matched.
   - (Back-compat: every entry carries a `_(points: …)_` tag, so the task-count fallback did not fire.)
-- **User-review source** — `user_review_issues`: `0`, `issue_cost_total`: `0`
-  - `harness-runs/user_reviews/chore_test_suite_run_time_review*.md` — no matching files (pre-user-review write; no user review exists yet for this branch). No file was counted, so no enumeration arm applied.
-  - **total**: `0` observations → `issue_cost_total` `0`
-  - Each file's observation count is the count of whatever top-level enumeration that file uses, taken from the first of four arms to return non-zero and never summed across arms: (1) numbered `##`–`####` headings with required trailing punctuation, `grep -cE '^#{2,4} +[0-9]+[.):]'`; (2) top-level numbered/bulleted list items, `grep -cE '^[0-9]+\.|^[-*][[:space:]]'`; (3) an explicit per-observation marker the file itself uses, with the matching grep recorded beside the count; (4) `1`, reserved for a file with no enumeration of any kind.
+- **User-review source** — `user_review_issues`: `1`, `issue_cost_total`: `5` (per user-review file, then summed)
+  - `harness-runs/user_reviews/chore_test_suite_run_time_review.md`: `1` observation → cost `5`. Counted by **arm 1, numbered headings** — `grep -cE '^#{2,4} +[0-9]+[.):]' <file>` → `1` (`## 1. The gate-4 host figures were measured on a machine other sessions were loading, so they overstate the gain`); arm 2 is not evaluated or added. The glob `chore_test_suite_run_time_review*.md` matched only this file; `chore_test_suite_run_time_fix_plan.md` and the `chore_test_suite_run_time_fix_plan/` directory are excluded by the pattern. Weight beside the observation:
+    1. the gate-4 host run-time figures in `docs/development.md` were measured under load from other sessions and overstate the gain; replace them with the hand-measured figures and record why one run per side is deliberate → **Minor** `5` (no `[major]`/`[trivial]` marker; a documentation figure correction, not a broken user-facing flow, authorization gap, data-integrity issue or absent behaviour)
+  - **total**: `1` observation → `issue_cost_total` `5`
+  - Each file's observation count is the count of whatever top-level enumeration that file uses, taken from the first of four arms to return non-zero and never summed across arms: (1) numbered `##`–`####` headings with required trailing punctuation, `grep -cE '^#{2,4} +[0-9]+[.):]'` — here `1`, so arm 1 is this file's count; (2) top-level numbered/bulleted list items, `grep -cE '^[0-9]+\.|^[-*][[:space:]]'`; (3) an explicit per-observation marker the file itself uses, with the matching grep recorded beside the count; (4) `1`, reserved for a file with no enumeration of any kind.
   - Each observation is weighted in story-point units: **Major** `15` (explicit `[major]` marker, or the observation describes a broken/incorrect user-facing flow, a missing/client-only authorization gate, data loss/corruption/unprotected data, or an absent whole ported behaviour — the deciding phrase is quoted beside the observation), **Trivial** `2` (explicit `[trivial]` marker), **Minor** `5` (the default for every observation without a Major/Trivial classification).
 
 ## Status
 
-- status: `pre-user-review` — `pre-user-review` means this file was written right after the branch (code) review with no user review yet (`issue_cost_total` `0` → `100%`); `post-user-review` means it was re-written after user-review fixes, with the issues from the `chore_test_suite_run_time_review*.md` files counted and weighted.
-- last_updated: `2026-09-25`
+- status: `post-user-review` — `pre-user-review` means this file was written right after the branch (code) review with no user review yet (`issue_cost_total` `0` → `100%`); `post-user-review` means it was re-written after user-review fixes, with the issues from the `chore_test_suite_run_time_review*.md` files counted and weighted.
+- last_updated: `2026-09-26`
 
 ## Notes
 
