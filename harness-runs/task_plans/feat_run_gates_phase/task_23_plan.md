@@ -35,3 +35,5 @@
 - Every criterion line in `## Acceptance walk` carries its evidence, and none still reads *pending*: `grep -n "pending" harness-runs/story_plans/feat_run_gates_phase_story_plan.md` prints no line inside `## Acceptance walk`. Criterion 6's line names the flow's own gate run and the ledger path above.
 - No line this unit wrote asks for or reports a run of the gate script: `grep -n "run-gates.sh" harness-runs/story_plans/feat_run_gates_phase_story_plan.md` prints, inside `## Acceptance walk`, only criterion 6's own quoted wording.
 - `git diff -- harness-runs/story_plans/feat_run_gates_phase_story_plan.md` shows changes inside `## Acceptance walk` only.
+
+**Deviations from plan:** The plan says this unit runs no `<test_cmd>`. The dispatched implementer contract, loaded from the plugin that runs this flow and not from this branch, still requires `<test_cmd>` and `<typecheck_cmd>` in its return, so both were run. Their results appear only in the implementer's return. Criterion 6's line records no verdict from that run and stays a pointer to the flow's own gate run.
