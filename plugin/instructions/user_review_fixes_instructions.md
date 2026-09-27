@@ -4,12 +4,13 @@
 
 ## Resolved values
 
-The two tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<K>`, which this file's own text resolves): one is derived at runtime and one resolves from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<K>`, `<n>`, `<log>`, which this file's own text resolves): `<repo_root>` is derived at runtime and the rest resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this session runs in. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in, including the gate wrapper Phase 3 runs. |
 
 ---
 
@@ -26,10 +27,16 @@ The two tokens below are neither Mode-contract **bindings** (this file declares 
 
 Run this **once**, only when the **last** fix-plan item has been fixed — i.e. **every** `[ ]` entry in the active fix-plan index's `## Phase 2 Readiness — Ordered Fix List` (the index resolved in Phase 1, at `<repo_root>/<state_dir>/user_reviews/<branch>_fix_plan*.md`) is now `[x]`. Guard it on the full list being `[x]`; do **not** run it after each item — running per-item would re-write the file on every commit. (The `statistics-plan-writer` overwrites its single `statistics.md`, but only the final all-`[x]` write reflects the complete fixed scope, so fire it exactly once at the end.)
 
-Dispatch the `statistics-plan-writer` agent with the **update (post-user-review)** prompt so the statistics get refreshed now that all user-review fixes have landed:
+1. **Run the gates**, because the implementers this flow dispatched ran no suite (`${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`). The label is `review_<n>_supervised`, where `<n>` is the active fix-plan index's round — its numeric suffix, and `1` for the unsuffixed `<branch>_fix_plan.md`; resolve it before issuing the command. From `<repo_root>`, run `bash <scripts_dir>/run-test-suite.sh review_<n>_supervised` and read only its stdout line:
+   - `pass` → step 2.
+   - `fail <log>` → write no statistics. Tell the user the gates failed, name `<log>`, and stop. Once the failure is fixed, re-running `/autonomous-sdlc-harness:branch-implement-user-review` re-runs this phase.
+   - No stdout line → report the wrapper's one stderr line and stop.
+   - If the tool layer moves the run to the background, re-issue the same command with `--wait` before the label, as a plain foreground command, after each `pending` until it prints the verdict line — the mechanism of `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `### G.1 Run the gates`. No `Monitor` and no `sleep`. A `--wait` refusal is the no-line case.
 
-```
-Update branch statistics. Branch: <branch>. Story index: <state_dir>/story_plans/<branch>_story_plan.md. User reviews: all <state_dir>/user_reviews/<branch>_review*.md. Output: <state_dir>/branch_statistics/<branch>/statistics.md.
-```
+2. **Dispatch the `statistics-plan-writer` agent** with the **update (post-user-review)** prompt so the statistics get refreshed now that all user-review fixes have landed:
 
-This is an update/overwrite of the single `<state_dir>/branch_statistics/<branch>/statistics.md` (post-user-review status) — not a round-suffixed file; it re-runs after each user-review round. The `statistics-plan-writer` agent owns the counting, the cumulative glob, and the output format. Relay the returned `success_rate` / `statistics_file` to the user.
+   ```
+   Update branch statistics. Branch: <branch>. Story index: <state_dir>/story_plans/<branch>_story_plan.md. User reviews: all <state_dir>/user_reviews/<branch>_review*.md. Output: <state_dir>/branch_statistics/<branch>/statistics.md.
+   ```
+
+   This is an update/overwrite of the single `<state_dir>/branch_statistics/<branch>/statistics.md` (post-user-review status) — not a round-suffixed file; it re-runs after each user-review round. The `statistics-plan-writer` agent owns the counting, the cumulative glob, and the output format. Relay the returned `success_rate` / `statistics_file` to the user.

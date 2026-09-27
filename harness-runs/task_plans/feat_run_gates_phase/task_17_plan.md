@@ -37,3 +37,8 @@ The supervised flows get no writer/reviewer fix loop. They are human-gated item 
 - Walk the supervised user-review flow as the orchestrator with a failing gate. The text stops before statistics, names the log, and names the re-run route. With a passing gate it proceeds to statistics unchanged.
 - `grep -ln "The test-run rule" plugin/instructions/code_review_instructions.md plugin/instructions/code_review_fixes_instructions.md plugin/instructions/user_review_fixes_instructions.md` lists all three files.
 - None of the three files gains a binding table: `grep -n "Mode contract" plugin/instructions/code_review_instructions.md plugin/instructions/code_review_fixes_instructions.md plugin/instructions/user_review_fixes_instructions.md` prints nothing, because supervised files declare none.
+
+**Deviations from plan:**
+
+- `code_review_instructions.md` had no `<repo_root>` row, and the gate step runs "from `<repo_root>`"; added a `derived at runtime` row copied from the two fix files, beside the planned `<scripts_dir>` row.
+- The background re-issue is written as "re-issue the same command with `--wait` before the label" rather than spelling out a second `bash <scripts_dir>/run-test-suite.sh --wait <label>` line, so the first Verification grep shows exactly one `run-test-suite.sh` invocation per file as that bullet requires. Same behaviour as the Work bullet.

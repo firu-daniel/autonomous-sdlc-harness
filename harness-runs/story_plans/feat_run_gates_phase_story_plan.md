@@ -104,7 +104,7 @@ These wire names use test vocabulary, the term adopters already arrive with. Onl
 14. [x] **Task 14** — Wire Phase G into the user-review fix autonomous and semi-autonomous forks _(layer: plugin)_ _(points: 10)_
 15. [x] **Task 15** — Bind the plan writers to the test-run rule _(layer: plugin)_ _(points: 10)_
 16. [x] **Task 16** — Make the plan reviewers raise a test-run request as a Must Fix _(layer: plugin)_ _(points: 12)_
-17. [ ] **Task 17** — Run the gates once before statistics in the three supervised statistics points _(layer: plugin)_ _(points: 10)_
+17. [x] **Task 17** — Run the gates once before statistics in the three supervised statistics points _(layer: plugin)_ _(points: 10)_
 18. [ ] **Task 18** — Describe the Run gates phase in `AUTONOMOUS_FLOW.md` and the whiteboard _(layer: plugin)_ _(points: 15)_
 19. [ ] **Task 19** — Update `/autonomous-sdlc-harness:branch-status` and the engine commands' phase lists _(layer: plugin)_ _(points: 12)_
 20. [ ] **Task 20** — Mirror the new templates into this repository's self-adopted `scripts/`, `harness-runs/` and `.gitignore` _(layer: general)_ _(points: 15)_
