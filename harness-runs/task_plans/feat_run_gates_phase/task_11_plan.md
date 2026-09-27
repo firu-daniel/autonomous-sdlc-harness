@@ -23,3 +23,5 @@
 - In each template, the new line sits between the two named neighbours. Check with `grep -n "^- \[ \] \(E\|G\|D\)\.\|^- \[ \] R[G45]\." plugin/instructions/autonomous_pause_and_ledger.md`.
 - `grep -n "\[-\]" plugin/instructions/autonomous_pause_and_ledger.md` shows no line making `G` or `RG` `[-]`-eligible.
 - `### 1.7 Resume-from-ledger (every fork, on every (re-)entry)` keeps its heading text byte-identical: `plugin/docs/AUTONOMOUS_FLOW.md` cites it by that heading.
+
+**Deviations from plan:** `### 1.4 Creation` named the user-review round's fresh entries as `R1–R5` in three places (the round description, the re-seed bullet and the create/re-seed `## Run mode` paragraph); each now names `RG` beside `R1–R5`, for the same reason the plan makes `### 1.5`'s ranges explicit rather than trusting the letter range.
