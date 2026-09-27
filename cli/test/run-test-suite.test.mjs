@@ -31,6 +31,9 @@ const BRANCH = 'feat/run-gates';
 const LOG_DIR = `${STATE_DIR}/test_run_logs/feat-run-gates`;
 const LOGS_ROOT = `${STATE_DIR}/test_run_logs`;
 
+/** What `init` itself writes into the log tree — its contract file — and so what a refusal must leave it holding. */
+const LOGS_ROOT_AS_INITIALISED = Object.freeze(['README.md']);
+
 const COUNTER = 'stub-counter.txt';
 const PWD_RECORD = 'stub-pwd.txt';
 const STDOUT_MARKER = 'STUB-STDOUT-MARKER';
@@ -250,7 +253,7 @@ test('malformed invocations refuse with exit 2, one stderr line and nothing writ
     assert.match(result.stderr, /^run-test-suite\.sh: [^\n]*\n$/, `${what}: stderr`);
   }
 
-  assert.equal(existsSync(join(dir, LOGS_ROOT)), false, 'a refusal created the log tree');
+  assert.deepEqual(readdirSync(join(dir, LOGS_ROOT)), LOGS_ROOT_AS_INITIALISED, 'a refusal wrote into the log tree');
   assert.deepEqual(counterLines(dir), [], 'a refusal ran the command');
   assert.deepEqual(await snapshotTree(dir), before, 'a refusal wrote a file');
 });
@@ -267,7 +270,7 @@ test('a detached HEAD refuses with exit 2, one stderr line and nothing written',
   assert.equal(result.status, 2);
   assert.equal(result.stdout, '');
   assert.match(result.stderr, /^run-test-suite\.sh: [^\n]*\n$/);
-  assert.equal(existsSync(join(dir, LOGS_ROOT)), false, 'the refusal created the log tree');
+  assert.deepEqual(readdirSync(join(dir, LOGS_ROOT)), LOGS_ROOT_AS_INITIALISED, 'the refusal wrote into the log tree');
   assert.deepEqual(counterLines(dir), [], 'the refusal ran the command');
   assert.deepEqual(await snapshotTree(dir), before, 'the refusal wrote a file');
 });

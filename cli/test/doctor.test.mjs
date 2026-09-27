@@ -1016,7 +1016,7 @@ test('the stale comment lines alone warn and leave the exit status at 0', async 
  * property of the block, not of any one directory: the check must name none of them, so the test
  * drives all four.
  */
-const README_PAIR_DIRS = Object.freeze(['autonomous_logs', 'clarifications', 'autonomous_inbox', 'scratch']);
+const README_PAIR_DIRS = Object.freeze(['autonomous_logs', 'clarifications', 'autonomous_inbox', 'scratch', 'test_run_logs']);
 
 /**
  * The other way a pair breaks, and the one a layout test looking *above* the negation cannot see:

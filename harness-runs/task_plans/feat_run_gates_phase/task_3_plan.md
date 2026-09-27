@@ -44,3 +44,8 @@
 - `bash scripts/typecheck.sh` passes.
 - `cli/test/doctor.test.mjs`, which this unit edits, is run on its own where a single-file test command is stated. Where none is, the run is skipped and recorded, per `plugin/instructions/unit_loop_core.md` → `## The test-run rule` once Task 5 lands.
 - `grep -n "test_run_logs\|test_fix_plans\|test_fix_plan_reviews\|test_fix_point_reviews" cli/src/generators/stateDir.ts` shows the four rows. `grep -rn "test_run_logs" cli/src` shows it declared once in `stateDir.ts` and once as `repoRoot.ts`'s constant, whose `treeDirectory` check ties the two together.
+
+**Deviations from plan:**
+- `cli/test/run-test-suite.test.mjs` (Task 2's suite, not a listed target) was edited. Its two refusal cases asserted that `<state_dir>/test_run_logs` does not exist. That stopped holding once `init` began writing the directory and its README. They now assert that the directory holds only `README.md` (`LOGS_ROOT_AS_INITIALISED`).
+- The `test_run_logs` README names the subdirectory as the branch name *sanitized for use as a path*. It follows the header of `cli/templates/scripts/run-test-suite.sh` (`<sanitized branch>`), where the plan's table writes a bare `<branch>`.
+- The configured `bash scripts/test.sh` was run in full, as the implementer's current output contract requires; the test-run rule's replacement (Task 5 and Task 6) has not landed yet.

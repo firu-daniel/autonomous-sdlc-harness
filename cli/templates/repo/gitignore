@@ -53,6 +53,11 @@
 # log directory above.
 {{scratchGlob}}
 {{scratchReadmeException}}
+# The full output of each gate run, one log per round. It is machine-local because it carries
+# machine paths, while the directory's README is the committed contract for it - so the contents are
+# ignored and that one file is excepted, exactly as for the log directory above.
+{{testRunLogsGlob}}
+{{testRunLogsReadmeException}}
 # The backup `config set` copies the configuration to before every write, and the one .bak an
 # adopter gets without asking for it: applying a layer split is the documented path, so without this
 # rule a wired repository carries an untracked file from its first `config set` onward. The leading
