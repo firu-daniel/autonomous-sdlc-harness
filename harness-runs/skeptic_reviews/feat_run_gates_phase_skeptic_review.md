@@ -26,7 +26,7 @@ This review is de-duplicated against the committed code review, `harness-runs/co
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Make the canonical code-review sample edit the test it asks to run, and stop it claiming a green suite _(layer: plugin)_
+1. [x] **Finding 1** — Make the canonical code-review sample edit the test it asks to run, and stop it claiming a green suite _(layer: plugin)_
 
 ## Must Fix
 
