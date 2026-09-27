@@ -106,7 +106,7 @@ These wire names use test vocabulary, the term adopters already arrive with. Onl
 16. [x] **Task 16** — Make the plan reviewers raise a test-run request as a Must Fix _(layer: plugin)_ _(points: 12)_
 17. [x] **Task 17** — Run the gates once before statistics in the three supervised statistics points _(layer: plugin)_ _(points: 10)_
 18. [x] **Task 18** — Describe the Run gates phase in `AUTONOMOUS_FLOW.md` and the whiteboard _(layer: plugin)_ _(points: 15)_
-19. [ ] **Task 19** — Update `/autonomous-sdlc-harness:branch-status` and the engine commands' phase lists _(layer: plugin)_ _(points: 12)_
+19. [x] **Task 19** — Update `/autonomous-sdlc-harness:branch-status` and the engine commands' phase lists _(layer: plugin)_ _(points: 12)_
 20. [ ] **Task 20** — Mirror the new templates into this repository's self-adopted `scripts/`, `harness-runs/` and `.gitignore` _(layer: general)_ _(points: 15)_
 21. [ ] **Task 21** — Exclude `test_run_logs` from gate 6a in `scripts/run-gates.sh` and `docs/development.md` _(layer: general)_ _(points: 5)_
 22. [ ] **Task 22** — Update `docs/cli.md`, `docs/config.md`, `docs/watcher.md` and `ARCHITECTURE.md` for the new script, phase and agent _(layer: general)_ _(points: 15)_

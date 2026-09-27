@@ -28,6 +28,12 @@
   - the paragraph opening **"Phase A (fixes) followed by a QA phase."** becomes **"Phase A (fixes) followed by a QA phase and a Run gates phase."**, and gains one sentence after the Phase QA description: after QA, **Phase G** runs the configured test command once through the `run-test-suite.sh` wrapper and loops any failure through a test fix plan, capped at five gate runs (`user_review_fixes_instructions_core.md`, which runs `plan_orchestration_instructions_core.md` → `## Phase G — Run gates` by reference);
   - step 4's *"The canonical loop for Phase A and the subsequent Phase QA (UI-test augment + QA loop) — and for Phase D —"* becomes *"… Phase QA (UI-test augment + QA loop), Phase G (Run gates) — and for Phase D —"*, and the sentence's closing citation chain adds that the gate loop is canonical in `plan_orchestration_instructions_core.md` → `## Phase G — Run gates`.
 
+**Deviations from plan:**
+
+- `branch-start-user-review-fix-autonomous.md` step 7 also said *"The middle phase is gated … Phases A and D run either way."* With G inserted, "the middle phase" became ambiguous and G was omitted from the always-run set (the core's `## Phase G — Run gates` has no `phases.*` gate). Reworded to *"Phase QA is gated … Phases A, G and D run either way."*
+- `branch-status.md`: the test fix plan filename is given as the glob `<branch>_*_round_*.md` rather than `<branch>_<gate_key>_round_<gate_round>.md`, because that command declares neither `<gate_key>` nor `<gate_round>`. Its `## Must Fix` headings carry no checkbox (`test-fix-plan-writer.md` step for `## Must Fix`), so the resolved / STILL OPEN state is read from the index's readiness list.
+- Evidence downgrade: the manifest gate `claude plugin validate --strict plugin` was refused by the permission layer and not run; the edits touch no manifest or frontmatter key, only a `description:` value.
+
 **Verification:**
 
 - `grep -rn "C2 → E → D\|A → QA → D" plugin/commands` prints nothing.
