@@ -6,7 +6,7 @@
 
 1. [x] **Finding 6** — Give the self-adopted `scripts/run-test-suite.sh` the 0755 mode `init` writes _(layer: general)_
 2. [x] **Finding 5** — Correct the log-path shape in `test-fix-plan-writer.md` to the sanitized branch directory _(layer: plugin)_
-3. [ ] **Finding 4** — Fix the `item_<N>` numbering claim in the `test_fix_point_reviews` README and its mirror _(layer: cli, general)_
+3. [x] **Finding 4** — Fix the `item_<N>` numbering claim in the `test_fix_point_reviews` README and its mirror _(layer: cli, general)_
 4. [ ] **Finding 3** — Replace the three blanket "no test run" paraphrases with the rule's own scope _(layer: plugin)_
 5. [ ] **Finding 2** — Name `RG` in the user-review fix-plan fork's ledger enumerations _(layer: plugin)_
 6. [ ] **Finding 1** — Refuse a second concurrent run of the same label in `run-test-suite.sh` _(layer: cli, plugin, general)_
