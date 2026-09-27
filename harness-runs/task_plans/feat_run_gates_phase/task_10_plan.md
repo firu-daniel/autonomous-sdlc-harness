@@ -20,3 +20,5 @@
 - `grep -n "five fix rows\|only two of these phases" plugin/agents/committer.md` prints nothing.
 - `grep -n "G.3\|G.4" plugin/agents/committer.md` shows both new callers. Each cited section resolves: `### G.3 Commit the test fix plan` in `plugin/instructions/plan_orchestration_instructions_core.md`, and the `G.4` row in `plugin/instructions/unit_loop_core.md`.
 - No mode, argument name or fixed subject changes. Check with `grep -n "chore: add code review for" plugin/agents/committer.md`, whose hits are unchanged.
+
+**Deviations from plan:** Also added `<test_fix_plan_path>` and `<test_fix_review_folder>` to `committer.md` → `## Resolved values`' list of caller-side placeholders "reproduced here but resolved **there**", since the two rows now quote them. The file's other targets were left untouched.
