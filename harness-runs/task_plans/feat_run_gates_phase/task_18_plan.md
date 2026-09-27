@@ -40,3 +40,5 @@
 - `grep -n "C2 → E → D\|QA → D" plugin/docs/AUTONOMOUS_FLOW.md plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md` prints nothing.
 - Every `${CLAUDE_PLUGIN_ROOT}/…` path and `→` heading the new text cites resolves under `plugin/`, in particular `## Phase G — Run gates`, `## The test-run rule` and `agents/test-fix-plan-writer.md`. Re-run the citer sweep `plugin/docs/README.md` gives for `AUTONOMOUS_FLOW`, and check its output is a subset of the files present.
 - The whiteboard's agent count equals the number of `.md` entries `ls plugin/agents/` shows.
+
+**Deviations from plan:** The whiteboard's count paragraph also says a `README.md` in `agents/` would load *"as a twenty-second agent"*; with 22 agent definitions that figure is stale too, so it became *"twenty-third"* alongside the two counts the plan names.
