@@ -47,3 +47,8 @@
 - `bash scripts/typecheck.sh` passes.
 - `cli/test/run-test-suite.test.mjs`, which this unit creates, is run on its own where a single-file test command is stated in the conventions documents. Where none is stated, the run is skipped and recorded, per `plugin/instructions/unit_loop_core.md` → `## The test-run rule` once Task 5 lands.
 - Every assertion names a literal, such as `pass\n`, the log path shape or the exit code, rather than a value read back out of the script under test (`.claude/context/conventions.md` → `## The testing bar`).
+
+**Deviations from plan:**
+- No single-file test command is stated in the conventions documents; the suite was run on its own with `node --test test/run-test-suite.test.mjs` from `cli/` after `npm run build` (11 pass), and again inside `bash scripts/test.sh` → gate 4 `npm test` (ok).
+- `commands.test` (`bash scripts/test.sh`) exited 1 on two gates this unit does not touch: 6a flags the gitignored `harness-runs/scratch/test_out.txt`, a Task 1 capture holding absolute paths; gate 11 needs the retrieval runtime, which is not installed on this host.
+- The refusal cases assert a byte-identical whole-tree snapshot (`snapshotTree`) in addition to "no new file under `test_run_logs`"; the run cases assert the wrapper's stderr is empty rather than only marker-free.
