@@ -91,7 +91,7 @@ These wire names use test vocabulary, the term adopters already arrive with. Onl
 1. [x] **Task 1** — Ship the `run-test-suite.sh` outer-loop script and its `OUTER_LOOP_SCRIPTS` row _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Drive `run-test-suite.sh` in a new `cli/test/run-test-suite.test.mjs` _(layer: cli)_ _(points: 18)_
 3. [x] **Task 3** — Add the four Run-gates directories to the run-artifact tree and ignore `test_run_logs` by its contents _(layer: cli)_ _(points: 20)_
-4. [ ] **Task 4** — Ask adopters for their single-file test command in the conventions skeletons, re-word the scratch mutation-revert sentences, and add `run-test-suite.sh` to the adopter-facing outer-loop rosters _(layer: cli)_ _(points: 15)_
+4. [x] **Task 4** — Ask adopters for their single-file test command in the conventions skeletons, re-word the scratch mutation-revert sentences, and add `run-test-suite.sh` to the adopter-facing outer-loop rosters _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — State `## The test-run rule` and add substitution row `G.4` in `unit_loop_core.md` _(layer: plugin)_ _(points: 15)_
 6. [ ] **Task 6** — Make `layer-implementer` run `<typecheck_cmd>` per unit and only its own test files _(layer: plugin)_ _(points: 15)_
 7. [ ] **Task 7** — Add the `test-fix-plan-writer` agent and grant it the plan-writer search roster _(layer: plugin)_ _(points: 20)_
