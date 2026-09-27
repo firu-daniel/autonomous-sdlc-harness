@@ -12,7 +12,7 @@
  *
  * These run against the **compiled** CLI at `dist/cli.js`, so `npm run build` precedes `npm test`.
  *
- * ## Two non-obvious choices, and where each comes from
+ * ## Three non-obvious choices, and where each comes from
  *
  * 1. **`fixtureFor` and `initOk` are defined here rather than imported.** `test/helpers/fixture.mjs`
  *    exports neither: they are file-local in `init.test.mjs`, `outer-loop-scripts.test.mjs` and
@@ -25,6 +25,18 @@
  *    holding a placeholder is a *written* key — so "this stack derives no build command" has to be
  *    asserted as absence, with the placeholder named separately when it is what actually happened.
  *    {@link stackCase}'s `absentCommands` does both, through the model's own `isPlaceholder`.
+ * 3. **Cases run concurrently.** Every case is a serial chain of subprocesses, so run one after
+ *    another the file uses one core. The cases sit in one `concurrentSuite` and run
+ *    `CASE_CONCURRENCY` at a time (`test/helpers/concurrency.mjs`); the two slowest — the
+ *    adoption-matrix case and the conventional-test-root case — also start their `stackCase`
+ *    subtests together and await them as one. `HARNESS_TEST_CONCURRENCY=1` runs all of it in series.
+ *    That is safe because no case shares anything with another: each builds its own fixture under a
+ *    fresh temp directory and tears it down with `t.after`, no case writes `process.env` (an
+ *    override reaches one subprocess through `runCli`'s `env`), the only module-level state is the
+ *    read-only compiled modules imported above the suite, `dist/` is read and never written, and no
+ *    assertion depends on timing. **A new case keeps to that — its own fixture, no `process.env`
+ *    write, no timing assertion — or is placed after the suite closes, where it runs alone within
+ *    this file.**
  */
 
 import assert from 'node:assert/strict';
@@ -33,6 +45,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 
+import { CASE_CONCURRENCY, concurrentSuite } from './helpers/concurrency.mjs';
 import { createFixture, readJson, runCli, PACKAGE_ROOT, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 
 /** The generated configuration every assertion here reads, relative to the fixture root. */
@@ -291,6 +304,8 @@ function stackCase(
     assertAlso?.({ name, dir, config, stdout, stderr });
   });
 }
+
+concurrentSuite('stack presets', () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
 
 /**
  * {@link stackCase} exercised against a preset that already exists, so the helper nine later stacks
@@ -2304,9 +2319,11 @@ function matrixInvariants({ expectTestWrapper = true } = {}) {
   };
 }
 
-test('every stack on the adoption matrix is served end to end', async (t) => {
+test('every stack on the adoption matrix is served end to end', { concurrency: CASE_CONCURRENCY }, async (t) => {
+  const stacks = [];
+
   // (A) Flutter, laid out in layers — the shape the harness's own reference application has.
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     name: 'matrix: Flutter, layered lib/',
     seed: {
       'pubspec.yaml': PUBSPEC,
@@ -2327,10 +2344,10 @@ test('every stack on the adoption matrix is served end to end', async (t) => {
     commands: { depInstall: 'flutter pub get' },
     absentCommands: ['build', 'devServer'],
     assertAlso: matrixInvariants(),
-  });
+  }));
 
   // (B) Flutter, feature-first — the arm that answered `flat` before this branch.
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     name: 'matrix: Flutter, feature-first lib/',
     seed: {
       'pubspec.yaml': PUBSPEC,
@@ -2348,10 +2365,10 @@ test('every stack on the adoption matrix is served end to end', async (t) => {
     commands: { depInstall: 'flutter pub get' },
     absentCommands: ['build', 'devServer'],
     assertAlso: matrixInvariants(),
-  });
+  }));
 
   // (C) Native Android, single module.
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     name: 'matrix: native Android',
     seed: {
       'settings.gradle.kts': SETTINGS_GRADLE,
@@ -2369,10 +2386,10 @@ test('every stack on the adoption matrix is served end to end', async (t) => {
     wrapperCommands: { 'typecheck.sh': GRADLE_TYPECHECK, 'test.sh': GRADLE_TEST },
     absentCommands: ['build', 'devServer', 'depInstall'],
     assertAlso: matrixInvariants(),
-  });
+  }));
 
   // (D) Native iOS, SwiftPM — the arm of the Apple preset that serves both required keys.
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     name: 'matrix: native iOS (SwiftPM)',
     seed: {
       'Package.swift': SWIFT_MANIFEST,
@@ -2389,13 +2406,13 @@ test('every stack on the adoption matrix is served end to end', async (t) => {
     commands: { depInstall: SWIFT_DEP_INSTALL },
     absentCommands: ['build', 'devServer'],
     assertAlso: matrixInvariants(),
-  });
+  }));
 
   // (E) Native iOS, Xcode with one shared scheme — **the matrix's one documented exception.**
   // `typecheck` is derived; `test` is not, because `xcodebuild test` requires a `-destination` that
   // no file in the repository states, so the key stays a placeholder and gets no wrapper
   // (`docs/cli.md` §5). Asserted here as an expectation, so the exception is visible in this file.
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     name: 'matrix: native iOS (Xcode, one shared scheme)',
     seed: {
       'MyApp.xcodeproj/project.pbxproj': PBXPROJ,
@@ -2416,11 +2433,11 @@ test('every stack on the adoption matrix is served end to end', async (t) => {
     noteCounts: { [XCODE_DESTINATION_NOTE]: 1 },
     warningCounts: { [undetectedWarning('test')]: 1, [noWrapperWarning('test.sh')]: 1 },
     assertAlso: matrixInvariants({ expectTestWrapper: false }),
-  });
+  }));
 
   // (F) A Node backend. Its manifest declares no `build` script, so the matrix-wide `build` absence
   // is asserted here on the one stack whose family *can* resolve that key at all.
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     name: 'matrix: Node backend',
     seed: {
       'package.json': rootManifest({ typecheck: 'tsc --noEmit', test: 'vitest run' }),
@@ -2438,10 +2455,10 @@ test('every stack on the adoption matrix is served end to end', async (t) => {
     commands: { depInstall: 'npm ci' },
     absentCommands: ['build', 'devServer'],
     assertAlso: matrixInvariants(),
-  });
+  }));
 
   // (G) A .NET backend.
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     name: 'matrix: .NET backend',
     seed: {
       'MyApp.sln': SOLUTION_FILE,
@@ -2460,12 +2477,12 @@ test('every stack on the adoption matrix is served end to end', async (t) => {
     commands: { depInstall: DOTNET_DEP_INSTALL },
     absentCommands: ['build', 'devServer'],
     assertAlso: matrixInvariants(),
-  });
+  }));
 
   // (H) A .NET frontend — the same preset, the same layers and the same lines as (G) by decision
   // (the optional-phase set is `init` flag-driven, not preset-driven), and a separate matrix entry
   // because the matrix names it separately.
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     name: 'matrix: .NET frontend',
     seed: {
       'MyApp.sln': SOLUTION_FILE,
@@ -2483,11 +2500,11 @@ test('every stack on the adoption matrix is served end to end', async (t) => {
     commands: { depInstall: DOTNET_DEP_INSTALL },
     absentCommands: ['build', 'devServer'],
     assertAlso: matrixInvariants(),
-  });
+  }));
 
   // (I) A Java backend, Maven. No `mvnw` is seeded, so the lines below are the wrapper-absent arm —
   // `mvn` from `PATH`, as in case (r); the wrapper spelling is case (r2)'s claim.
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     name: 'matrix: Java backend (Maven)',
     seed: {
       'pom.xml': '<project><artifactId>fixture</artifactId></project>\n',
@@ -2503,10 +2520,10 @@ test('every stack on the adoption matrix is served end to end', async (t) => {
     commands: { depInstall: MAVEN_DEP_INSTALL },
     absentCommands: ['build', 'devServer'],
     assertAlso: matrixInvariants(),
-  });
+  }));
 
   // (J) A C++ tree built by CMake.
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     name: 'matrix: C++ (CMake)',
     seed: {
       'CMakeLists.txt': `${CMAKE_LISTS}enable_testing()\n`,
@@ -2523,7 +2540,9 @@ test('every stack on the adoption matrix is served end to end', async (t) => {
     wrapperCommands: { 'typecheck.sh': CMAKE_TYPECHECK, 'test.sh': CMAKE_TEST },
     absentCommands: ['build', 'devServer', 'depInstall'],
     assertAlso: matrixInvariants(),
-  });
+  }));
+
+  await Promise.all(stacks);
 });
 
 /**
@@ -2546,8 +2565,10 @@ test('every stack on the adoption matrix is served end to end', async (t) => {
  * candidates. (p) is the half a root-only table misses: a directory-shaped preset whose source row
  * resolved below `src/` and whose suite is there too.
  */
-test("a preset declares its toolchain's conventional test root, and only where it exists", async (t) => {
-  await stackCase(t, {
+test("a preset declares its toolchain's conventional test root, and only where it exists", { concurrency: CASE_CONCURRENCY }, async (t) => {
+  const stacks = [];
+
+  stacks.push(stackCase(t, {
     // (a) `layered-clean-arch`, whose candidates are `test` then `tests`. No manifest: the row is
     // directory-shaped, so the seed is the two layer directories and the test root and nothing else.
     name: 'tests row: a layered tree with a test/ directory',
@@ -2560,9 +2581,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'layered-clean-arch:layer-directories',
     layers: ['data', 'domain', 'tests', 'general'],
     layerPaths: { data: 'src/data', domain: 'src/domain', tests: 'test' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (b) `api-service`, the other preset reached by a directory-shaped row. The `tests` row is a
     // sibling of the `api` row rather than a replacement for it: both are asserted.
     name: 'tests row: an api service with a test/ directory',
@@ -2575,9 +2596,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'api-service:route-directory',
     layers: ['api', 'tests', 'general'],
     layerPaths: { api: 'src/routes', tests: 'test' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (c) `python-package`, whose candidates are `tests` then `test` — pytest's order, and the
     // reverse of (a)'s. The seeded `tests/` carries no `__init__.py`, so it is not a candidate for
     // the `package` row either (`findPythonPackageDir`).
@@ -2591,9 +2612,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'python-package:packaging-manifest',
     layers: ['package', 'tests', 'general'],
     layerPaths: { package: 'fixture', tests: 'tests' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (d) `flutter`: the single candidate `test`, which is the directory `flutter create` writes.
     name: 'tests row: a feature-first Flutter application with a test/ directory',
     seed: {
@@ -2606,9 +2627,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'flutter:pubspec-manifest',
     layers: ['lib', 'tests', 'general'],
     layerPaths: { lib: 'lib', tests: 'test' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (e) `android-gradle`, **the entry whose candidate is two segments deep** and therefore the one
     // a wrong table entry hides in: a row spelled `test` or `src/test` resolves nothing in this tree
     // and the case reports a profile with no `tests` row at all.
@@ -2624,9 +2645,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'android-gradle:android-manifest',
     layers: ['app', 'tests', 'general'],
     layerPaths: { app: 'app/src/main/java', tests: 'app/src/test' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (f) `jvm`: `src/test`, the sibling source set of `src/main` — so the two rows are asserted
     // together, since a candidate of `src` would swallow the source root the `main` row names.
     name: 'tests row: a Maven project with a src/test/ source set',
@@ -2639,9 +2660,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'jvm:maven-manifest',
     layers: ['main', 'tests', 'general'],
     layerPaths: { main: 'src/main/java', tests: 'src/test' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (g) `dotnet`: `tests/`, the directory `dotnet new sln` layouts put test projects in, beside
     // the `src/` the source row names.
     name: 'tests row: a .NET solution with a tests/ directory',
@@ -2654,9 +2675,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'dotnet:solution-or-project',
     layers: ['src', 'tests', 'general'],
     layerPaths: { src: 'src', tests: 'tests' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (h) `apple-native`: `Tests/`, SwiftPM's own capitalised directory — the entry that fails on a
     // table whose candidates were lower-cased.
     name: 'tests row: a Swift package with a Tests/ directory',
@@ -2669,9 +2690,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'apple-native:swift-package-or-xcode-project',
     layers: ['sources', 'tests', 'general'],
     layerPaths: { sources: 'Sources', tests: 'Tests' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (i) `rust-cargo`: `tests/`, the integration-test directory Cargo compiles per file.
     name: 'tests row: a Rust crate with a tests/ directory',
     seed: {
@@ -2683,9 +2704,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'rust-cargo:cargo-manifest',
     layers: ['src', 'tests', 'general'],
     layerPaths: { src: 'src', tests: 'tests' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (j) `ruby-bundler`: `spec/`, RSpec's directory, which is the first candidate. (n) is the
     // preference half of the same entry.
     name: 'tests row: a gem with a spec/ directory',
@@ -2699,9 +2720,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'ruby-bundler:gemfile',
     layers: ['lib', 'tests', 'general'],
     layerPaths: { lib: 'lib', tests: 'spec' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (k) `php-composer`: `tests/`, PHPUnit's conventional directory.
     name: 'tests row: a PSR-4 library with a tests/ directory',
     seed: {
@@ -2713,9 +2734,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'php-composer:composer-manifest',
     layers: ['src', 'tests', 'general'],
     layerPaths: { src: 'src', tests: 'tests' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (l) `cmake-cpp`, and the one preset carrying **two** source rows before the test row: `src/`
     // and `include/` are siblings of a different kind from the test tree — public headers are
     // implementation work under the module rules, a test tree is the `tests` row — so all three are
@@ -2731,9 +2752,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'cmake-cpp:cmake-lists',
     layers: ['src', 'include', 'tests', 'general'],
     layerPaths: { src: 'src', include: 'include', tests: 'tests' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (m) **The control for the whole table.** (d)'s tree with the `test/` directory removed and
     // nothing else changed: the profile is the two rows this repository answered before the test row
     // existed, so a candidate list that resolved a directory that is not there fails here.
@@ -2747,9 +2768,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'flutter:pubspec-manifest',
     layers: ['lib', 'general'],
     layerPaths: { lib: 'lib' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (n) The preference order, on the one entry where it is falsifiable in a single tree: (j)'s gem
     // with a leftover `test/` beside its `spec/`. `spec` wins, which is the order the table states —
     // such a repository is an RSpec suite with a leftover far more often than the reverse.
@@ -2765,9 +2786,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'ruby-bundler:gemfile',
     layers: ['lib', 'tests', 'general'],
     layerPaths: { lib: 'lib', tests: 'spec' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (o) The `include/` row alone, which is the control for (l)'s second *source* row: a project
     // whose public headers are the only conventional source directory it has. `include` is the
     // scoped source row here rather than a fallback, and the profile carries no `tests` row.
@@ -2780,9 +2801,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'cmake-cpp:cmake-lists',
     layers: ['include', 'general'],
     layerPaths: { include: 'include' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (p) The nested test root of a directory-shaped preset: (b)'s api service with its suite under
     // `src/test/` instead of a root `test/`. `findApiDir` resolves the source row over
     // `candidateRoots`, so it reaches `src/routes`, while the test row searches `manifestRoots` —
@@ -2798,9 +2819,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'api-service:route-directory',
     layers: ['api', 'tests', 'general'],
     layerPaths: { api: 'src/routes', tests: 'src/test' },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (q) **The unresolved source root a test row must not hide.** A CMake project with its sources
     // at the repository root — neither `src/` nor `include/`, so both source candidates miss — and a
     // conventional `tests/`, which is the ordinary shape of the population `PRESET_TEST_ROOTS` and
@@ -2820,9 +2841,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     layers: ['tests', 'general'],
     layerPaths: { tests: 'tests' },
     warningCounts: { '`general` layer only': 1 },
-  });
+  }));
 
-  await stackCase(t, {
+  stacks.push(stackCase(t, {
     // (r) The control for (q) on the warning channel: (l)'s tree, whose source rows resolved, raises
     // it zero times. Without this, a change that raised the warning unconditionally would pass (q).
     name: 'tests row: a CMake project whose source rows resolved raises no general-only warning',
@@ -2836,7 +2857,9 @@ test("a preset declares its toolchain's conventional test root, and only where i
     signal: 'cmake-cpp:cmake-lists',
     layers: ['src', 'include', 'tests', 'general'],
     warningCounts: { '`general` layer only': 0 },
-  });
+  }));
+
+  await Promise.all(stacks);
 });
 
 /**
@@ -3150,4 +3173,6 @@ test('the profile says which family answered when manifests collide, and when on
     assert.ok(isPlaceholder(profile.rawCommands.typecheck));
     assert.equal(profile.warnings.filter((warning) => warning.includes('could not be detected')).length, 1);
   });
+});
+
 });

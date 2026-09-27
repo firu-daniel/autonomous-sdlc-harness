@@ -14,7 +14,7 @@
  * These run against the **compiled** CLI at `dist/cli.js`, so `npm run build` precedes `npm test`;
  * `runCli` refuses with that sentence rather than leaving a module-resolution error to explain it.
  *
- * ## Three non-obvious choices, and where each comes from
+ * ## Four non-obvious choices, and where each comes from
  *
  * 1. **Every failing case is one hand edit to a repository `init` has already wired.** The edit is
  *    what the assertion is about, so a fixture that was never wired — or one broken in two places —
@@ -28,6 +28,19 @@
  * 3. **Assertions name the check id in the report line, not only the summary counts.** A run that
  *    exited 1 for a different reason than the edit made would otherwise pass, which is the one way a
  *    test like this can be green and worthless.
+ * 4. **Cases run concurrently.** Every case is a serial chain of subprocesses, so run one after
+ *    another the file uses one core. The cases sit in one `concurrentSuite` and run
+ *    `CASE_CONCURRENCY` at a time (`test/helpers/concurrency.mjs`); the three slowest — the
+ *    machine-footprint, daemon-path and plugin-permissions cases — also start their subtests together
+ *    and await them as one. `HARNESS_TEST_CONCURRENCY=1` runs all of it in series. That is safe
+ *    because no case shares anything with another: each builds its own repository with
+ *    `wiredFixture`, every machine directory it points the CLI at (`HOME`, `XDG_STATE_HOME`,
+ *    `XDG_CONFIG_HOME`, `CLAUDE_CONFIG_DIR`, the stub directories put first on `PATH`) is its own temp
+ *    directory handed over through `runCli`'s `env`, a worktree is named after its case's own fixture,
+ *    no case writes `process.env`, the only module-level state is read-only, `doctor` itself writes
+ *    nothing, and no assertion depends on timing. **A new case keeps to that — its own fixture, every
+ *    machine directory its own temp directory passed through `runCli`'s `env`, no `process.env` write,
+ *    no timing assertion — or is placed after the suite closes, where it runs alone within this file.**
  */
 
 import assert from 'node:assert/strict';
@@ -46,6 +59,7 @@ import { basename, delimiter, dirname, join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 
+import { CASE_CONCURRENCY, concurrentSuite } from './helpers/concurrency.mjs';
 import {
   createFixture,
   plantModelFiles,
@@ -249,6 +263,17 @@ function editJson(dir, relativePath, mutate) {
   mutate(parsed);
   writeFileSync(path, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
 }
+
+/**
+ * Read by the plugin-permissions cases below, and loaded here because a top-level `await` cannot
+ * sit inside the suite callback. `PLUGIN_KEY` is imported from the compiled CLI for
+ * {@link repoSlug}'s reason: a record seeded under any other key is a record the check correctly
+ * reports nothing about, so it has to be the CLI's own string rather than this file's guess at it.
+ */
+const { MARKETPLACE_NAME, PLUGIN_KEY } = await loadCompiled('generators/projectSettings.js');
+const { PLUGIN_NAME } = await loadCompiled('core/pluginIdentity.js');
+
+concurrentSuite('doctor', () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
 
 test('doctor exits 0 on a freshly wired repository, warnings and all, and writes nothing', async (t) => {
   const dir = await wiredFixture(t);
@@ -2832,8 +2857,10 @@ function seedRunRegistry(root, runs) {
  * stop one, and every read is of a file this check may only report on: a stale row is named, never
  * pruned, and `machineStateDir()` is not brought into being by asking.
  */
-test('the machine-footprint check reports the machine, and never fails or writes', async (t) => {
-  await t.test('an armed machine is reported entry by entry, with each row read from its own checkout', async (subtest) => {
+test('the machine-footprint check reports the machine, and never fails or writes', { concurrency: CASE_CONCURRENCY }, async (t) => {
+  const subtests = [];
+
+  subtests.push(t.test('an armed machine is reported entry by entry, with each row read from its own checkout', async (subtest) => {
     const here = await wiredFixture(subtest);
     const other = await wiredFixture(subtest);
     const machine = await footprintMachine(subtest, { cap: FOOTPRINT_CAP });
@@ -2879,9 +2906,9 @@ test('the machine-footprint check reports the machine, and never fails or writes
     for (const row of rows) {
       assert.ok(row.includes(`cap=${FOOTPRINT_CAP}`), `a row carries no cap cell from the machine-local default:\n${row}`);
     }
-  });
+  }));
 
-  await t.test('with no machine-local watcher.env, the cap cell reports the shipped default', async (subtest) => {
+  subtests.push(t.test('with no machine-local watcher.env, the cap cell reports the shipped default', async (subtest) => {
     const dir = await wiredFixture(subtest);
     // No `cap`, so no `watcher.env` is written at all: the only path that exercises the default the
     // shell's `:-` applies. Every other case here overrides it, which is what left this path
@@ -2897,9 +2924,9 @@ test('the machine-footprint check reports the machine, and never fails or writes
       line.includes(`cap=${shippedParallelRunsDefault()}`),
       `the row does not report the shipped default the watcher applies:\n${line}`,
     );
-  });
+  }));
 
-  await t.test('a checkout whose configuration could not be read reads unknown, never the schema default', async (subtest) => {
+  subtests.push(t.test('a checkout whose configuration could not be read reads unknown, never the schema default', async (subtest) => {
     const here = await wiredFixture(subtest);
     const unwired = await wiredFixture(subtest);
     const machine = await footprintMachine(subtest, { cap: FOOTPRINT_CAP });
@@ -2934,9 +2961,9 @@ test('the machine-footprint check reports the machine, and never fails or writes
       wiredRow.includes(`model=${DEFAULTS.agentModel}`),
       `a readable configuration stopped being read:\n${wiredRow}`,
     );
-  });
+  }));
 
-  await t.test('staleness is reported, never counted as armed and never repaired', async (subtest) => {
+  subtests.push(t.test('staleness is reported, never counted as armed and never repaired', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const machine = await footprintMachine(subtest, { cap: FOOTPRINT_CAP });
     const gone = join(machine.root, 'a-checkout-that-was-removed');
@@ -2961,9 +2988,9 @@ test('the machine-footprint check reports the machine, and never fails or writes
     // Pruning is `daemon list --prune`'s; a read may only report.
     assert.deepEqual(Object.keys(readJson(machine.file).repos).sort(), [repoSlug(dir), repoSlug(gone)].sort());
     assert.equal(readFileSync(machine.file, 'utf8'), seeded, 'doctor rewrote a registry it may only read');
-  });
+  }));
 
-  await t.test('a registry that is absent, empty or unparseable warns identically and never fails', async (subtest) => {
+  subtests.push(t.test('a registry that is absent, empty or unparseable warns identically and never fails', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const machine = await footprintMachine(subtest);
 
@@ -2985,9 +3012,9 @@ test('the machine-footprint check reports the machine, and never fails or writes
       assert.doesNotMatch(stderr, /^!! FAIL/m, `${label} produced a failure\n${stderr}`);
       assert.match(stdout, CLEAN_SUMMARY);
     }
-  });
+  }));
 
-  await t.test('it writes nothing — not the repository, not the registry, not the machine directory', async (subtest) => {
+  subtests.push(t.test('it writes nothing — not the repository, not the registry, not the machine directory', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const machine = await footprintMachine(subtest);
     const before = await snapshotTree(dir);
@@ -3010,9 +3037,9 @@ test('the machine-footprint check reports the machine, and never fails or writes
     assert.equal(seededRun.status, 0, `doctor exited ${seededRun.status}\n${seededRun.stdout}\n${seededRun.stderr}`);
     assert.equal(readFileSync(machine.file, 'utf8'), seeded, 'doctor rewrote the registry it read');
     assert.deepEqual(await snapshotTree(dir), before, 'doctor wrote to the repository it was asked about');
-  });
+  }));
 
-  await t.test('a live run is counted by status and by pid, not by pid alone', async (subtest) => {
+  subtests.push(t.test('a live run is counted by status and by pid, not by pid alone', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const machine = await footprintMachine(subtest, { cap: FOOTPRINT_CAP });
     const unitPath = await seededUnitFile(subtest);
@@ -3034,9 +3061,9 @@ test('the machine-footprint check reports the machine, and never fails or writes
     for (const value of ['live=1', 'armed=1 stale=0 live=1']) {
       assert.ok(line.includes(value), `the check does not report ${value}:\n${line}`);
     }
-  });
+  }));
 
-  await t.test('an unreadable configuration reports live=0 — the schema-default registry is never read', async (subtest) => {
+  subtests.push(t.test('an unreadable configuration reports live=0 — the schema-default registry is never read', async (subtest) => {
     const here = await wiredFixture(subtest);
     const unwired = await wiredFixture(subtest);
     const machine = await footprintMachine(subtest, { cap: FOOTPRINT_CAP });
@@ -3064,7 +3091,9 @@ test('the machine-footprint check reports the machine, and never fails or writes
     // And into the summary, which is the number acceptance names: armed by the registry entry's
     // grade, live=0 by the unreadable configuration.
     assert.ok(line.includes('armed=2 stale=0 live=0'), `the summary does not report live=0:\n${line}`);
-  });
+  }));
+
+  await Promise.all(subtests);
 });
 
 /**
@@ -3217,8 +3246,10 @@ function reportLine(output, status, id) {
  * The grade never rises above a warning, which is what the exit-status assertion in each case is
  * for: a foreground run is unaffected by any of this, and the remedy is an operator step.
  */
-test('the daemon-path check grades the installed unit, and never above a warning', async (t) => {
-  await t.test('a unit whose PATH reaches every required binary passes', { skip: NO_BACKEND }, async (subtest) => {
+test('the daemon-path check grades the installed unit, and never above a warning', { concurrency: CASE_CONCURRENCY }, async (t) => {
+  const subtests = [];
+
+  subtests.push(t.test('a unit whose PATH reaches every required binary passes', { skip: NO_BACKEND }, async (subtest) => {
     const dir = await wiredFixture(subtest);
     const toolchain = await toolchainDir(subtest, [DEFAULT_AGENT_CLI]);
     // The agent CLI is the one required binary no machine supplies, so it is supplied here — and the
@@ -3239,9 +3270,9 @@ test('the daemon-path check grades the installed unit, and never above a warning
     assert.ok(line.includes(unit.targetPath), `the check does not name the unit it graded:\n${line}`);
     assert.ok(line.includes(DEFAULT_AGENT_CLI), `the check does not name the agent binary it graded:\n${line}`);
     assert.deepEqual(await snapshotTree(dir), before, 'doctor wrote to the repository it was asked about');
-  });
+  }));
 
-  await t.test('a unit left on the service manager\'s own directories warns and names what it cannot reach', { skip: NO_BACKEND }, async (subtest) => {
+  subtests.push(t.test('a unit left on the service manager\'s own directories warns and names what it cannot reach', { skip: NO_BACKEND }, async (subtest) => {
     const dir = await wiredFixture(subtest);
     const toolchain = await toolchainDir(subtest, [DEFAULT_AGENT_CLI]);
     const { home } = await installUnitCarrying(subtest, dir, SERVICE_MANAGER_DEFAULT_PATH);
@@ -3269,9 +3300,9 @@ test('the daemon-path check grades the installed unit, and never above a warning
     // without a second command: the remedy is to re-render from a shell that holds this directory.
     assert.ok(line.includes(toolchain), `the warning does not name the directory that binary lives in:\n${line}`);
     assert.match(stderr, /daemon install --force/);
-  });
+  }));
 
-  await t.test("the shell's agent CLI variable changes nothing that is graded", { skip: NO_BACKEND }, async (subtest) => {
+  subtests.push(t.test("the shell's agent CLI variable changes nothing that is graded", { skip: NO_BACKEND }, async (subtest) => {
     // The property, stated once: the daemon inherits the service manager's environment, so the
     // variable `doctor` was started with is not the one the watcher will read. Two runs that differ
     // only in it must produce the same line — the assertion that stops the next reader restoring a
@@ -3295,9 +3326,9 @@ test('the daemon-path check grades the installed unit, and never above a warning
       line,
       `${AGENT_CLI_VARIABLE} changed the daemon-path line:\n${set.stdout}\n${set.stderr}`,
     );
-  });
+  }));
 
-  await t.test('a unit that sets the agent CLI variable is graded against the CLI it names', { skip: NO_BACKEND }, async (subtest) => {
+  subtests.push(t.test('a unit that sets the agent CLI variable is graded against the CLI it names', { skip: NO_BACKEND }, async (subtest) => {
     // The override the daemon actually honours, and the only way it exists: a hand edit to the
     // installed unit, because the renderer writes `PATH` and nothing else. Grading it is what keeps
     // the check reading the environment the watcher runs on rather than a name assumed here.
@@ -3318,9 +3349,9 @@ test('the daemon-path check grades the installed unit, and never above a warning
     const line = reportLine(stderr, 'warn', 'daemon-path');
     assert.ok(line.includes(FIXTURE_AGENT_CLI), `the warning does not name the CLI the unit launches:\n${line}`);
     assert.ok(!line.includes(DEFAULT_AGENT_CLI), `the warning grades the default the unit overrides:\n${line}`);
-  });
+  }));
 
-  await t.test('a toolchain reached only through a wrapper is graded, and the warning says which wrapper', { skip: NO_BACKEND }, async (subtest) => {
+  subtests.push(t.test('a toolchain reached only through a wrapper is graded, and the warning says which wrapper', { skip: NO_BACKEND }, async (subtest) => {
     // Finding 66's first half, in miniature: the repository's toolchain is off the service manager's
     // PATH and resolves only from the shell `doctor` was typed at. `commands.test` holds the wrapper
     // invocation `init` writes, so the value's own head is `bash` — grading that is what answered
@@ -3349,9 +3380,9 @@ test('the daemon-path check grades the installed unit, and never above a warning
     // Naming where it does resolve is what shows an operator that their shell and their daemon
     // disagree, which is the whole finding: the foreground command works and the run does not.
     assert.ok(line.includes(shellToolchain), `the warning does not name the directory the binary lives in:\n${line}`);
-  });
+  }));
 
-  await t.test('the same repository passes once the unit reaches that toolchain, and the two states read differently', { skip: NO_BACKEND }, async (subtest) => {
+  subtests.push(t.test('the same repository passes once the unit reaches that toolchain, and the two states read differently', { skip: NO_BACKEND }, async (subtest) => {
     // Finding 66's second half — *"passes once the unit is re-rendered from a shell that reaches
     // it"* — on the same repository as the case above. What it measured there was a `daemon-path`
     // line that came back **byte-identical** across a working and a broken unit, so the assertion is
@@ -3378,9 +3409,9 @@ test('the daemon-path check grades the installed unit, and never above a warning
     // This branch adds reads under `scriptsDir`, and a `readFileSync` on a missing path is the one
     // way a check of this shape starts repairing what it was asked about.
     assert.deepEqual(await snapshotTree(dir), before, 'doctor wrote to the repository it was asked about');
-  });
+  }));
 
-  await t.test('a wrapper whose command line cannot be read is named as ungraded, not silently dropped', { skip: NO_BACKEND }, async (subtest) => {
+  subtests.push(t.test('a wrapper whose command line cannot be read is named as ungraded, not silently dropped', { skip: NO_BACKEND }, async (subtest) => {
     // The two ways an adopter's tree stops answering, on one fixture: a body this parse does not
     // recognise, and a file that is not there at all. Both are reports — an edited or deleted
     // wrapper must not throw, must not fail, and must not be quietly left out of a universal claim.
@@ -3431,9 +3462,9 @@ test('the daemon-path check grades the installed unit, and never above a warning
       line.includes('that could be derived here'),
       `the pass still claims to have reached every binary while naming wrappers it could not read:\n${line}`,
     );
-  });
+  }));
 
-  await t.test('a wrapper line headed by an environment assignment is graded on the binary behind it', { skip: NO_BACKEND }, async (subtest) => {
+  subtests.push(t.test('a wrapper line headed by an environment assignment is graded on the binary behind it', { skip: NO_BACKEND }, async (subtest) => {
     // A shell strips a leading `VAR=value` before it resolves the command, and the check has to strip
     // it for the same reason: taking the first token unconditionally graded `HARNESS_FIXTURE_FLAG=1`
     // as a binary, found it on no `PATH`, and warned on a correct machine under a remedy — re-render
@@ -3456,9 +3487,9 @@ test('the daemon-path check grades the installed unit, and never above a warning
       `the pass does not grade the binary behind the assignment, with the wrapper it came from:\n${line}`,
     );
     assert.ok(!line.includes(assignment), `the assignment prefix is graded as though it were a binary:\n${line}`);
-  });
+  }));
 
-  await t.test('a compound wrapper line names no binary and is reported ungraded rather than guessed at', { skip: NO_BACKEND }, async (subtest) => {
+  subtests.push(t.test('a compound wrapper line names no binary and is reported ungraded rather than guessed at', { skip: NO_BACKEND }, async (subtest) => {
     // `typecheck.sh`, `test.sh` and `deploy.sh` all warn that a compound is unsupported — *"keep that
     // line one command rather than a compound"* — so it is a state the templates anticipate. Its head
     // is a builtin no `PATH` holds: grading it warns about a binary that exists on no machine, and
@@ -3481,9 +3512,9 @@ test('the daemon-path check grades the installed unit, and never above a warning
       line.includes('that could be derived here'),
       `the pass still claims every binary while naming a line it could not reduce:\n${line}`,
     );
-  });
+  }));
 
-  await t.test('a repository whose commands are wrappers alone grades its toolchain, which is where the defect was measured', { skip: NO_BACKEND }, async (subtest) => {
+  subtests.push(t.test('a repository whose commands are wrappers alone grades its toolchain, which is where the defect was measured', { skip: NO_BACKEND }, async (subtest) => {
     // The Python or Go shape, built out of a Node fixture. `build` and `depInstall` hold raw command
     // lines, which is Node's accidental exemption — they are why `npm` was graded at all on the
     // repository Finding 66 measured, while nothing a run executes through a wrapper was. With them
@@ -3513,9 +3544,9 @@ test('the daemon-path check grades the installed unit, and never above a warning
       line.includes(`${FIXTURE_LINTER_BINARY} (commands.typecheck → scripts/typecheck.sh`),
       `the warning does not name the binary commands.typecheck reaches through its wrapper:\n${line}`,
     );
-  });
+  }));
 
-  await t.test('a checkout with no unit installed is not graded, and does not repeat the registry warning', async (subtest) => {
+  subtests.push(t.test('a checkout with no unit installed is not graded, and does not repeat the registry warning', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const home = await throwawayHome(subtest);
     const before = await snapshotTree(dir);
@@ -3532,7 +3563,9 @@ test('the daemon-path check grades the installed unit, and never above a warning
     const line = reportLine(stdout, 'pass', 'daemon-path');
     assert.ok(!line.includes('daemon install'), `the not-graded line repeats the repo-registry remedy:\n${line}`);
     assert.deepEqual(await snapshotTree(dir), before, 'doctor wrote to the repository it was asked about');
-  });
+  }));
+
+  await Promise.all(subtests);
 });
 
 /** A deploy toolchain no machine has, and no prefix of the two binaries above — the same rule. */
@@ -4542,13 +4575,7 @@ test('the layer-drift check names the directories no layer covers, and is not gr
 /**
  * The plugin's install root, as the agent runner records it — the directory a `plugins/` subtree
  * under `CLAUDE_CONFIG_DIR` names, and the key it is recorded under.
- *
- * `PLUGIN_KEY` is imported from the compiled CLI for {@link repoSlug}'s reason: a record seeded
- * under any other key is a record the check correctly reports nothing about, so it has to be the
- * CLI's own string rather than this file's guess at it.
  */
-const { MARKETPLACE_NAME, PLUGIN_KEY } = await loadCompiled('generators/projectSettings.js');
-const { PLUGIN_NAME } = await loadCompiled('core/pluginIdentity.js');
 const CLAUDE_PLUGINS_DIR = 'plugins';
 const INSTALLED_PLUGINS_FILE = 'installed_plugins.json';
 const KNOWN_MARKETPLACES_FILE = 'known_marketplaces.json';
@@ -4673,10 +4700,12 @@ function reportLines(output) {
  * the check: an entry whose form drifted by one character matches nothing at run time and costs a
  * silent stall, and a substring assertion would go on passing through exactly that drift.
  */
-test('the plugin-permissions check prints the entries to paste, and never above a warning', async (t) => {
+test('the plugin-permissions check prints the entries to paste, and never above a warning', { concurrency: CASE_CONCURRENCY }, async (t) => {
+  const subtests = [];
+
   const HELPERS = ['find-free-port.sh', 'reserve-qa-user.sh'];
 
-  await t.test('the interactive-test phase on, with none of the entries, warns and prints them all', async (subtest) => {
+  subtests.push(t.test('the interactive-test phase on, with none of the entries, warns and prints them all', async (subtest) => {
     const dir = await wiredFixture(subtest, ['--qa']);
     const root = await pluginInstallRootFixture(subtest, HELPERS);
     const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: root }]);
@@ -4706,9 +4735,9 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     // The finding is the profile's, not the machine's: nothing is written anywhere.
     assert.deepEqual(await readdir(home.root), [CLAUDE_PLUGINS_DIR], `doctor wrote under ${home.root}`);
     assert.deepEqual(await snapshotTree(dir), before, 'doctor wrote to the repository it was asked about');
-  });
+  }));
 
-  await t.test('the same repository with the entries pasted in passes, and says nothing on stderr', async (subtest) => {
+  subtests.push(t.test('the same repository with the entries pasted in passes, and says nothing on stderr', async (subtest) => {
     const dir = await wiredFixture(subtest, ['--qa']);
     const root = await pluginInstallRootFixture(subtest, HELPERS);
     const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: root }]);
@@ -4735,9 +4764,9 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     for (const entry of generatedReads) {
       assert.match(entry, /^Read\(\/\/[^/]/, `a file rule over an absolute path is not anchored at the filesystem root: ${entry}`);
     }
-  });
+  }));
 
-  await t.test('a project-scope row for this repository is preferred over a user-scope one', async (subtest) => {
+  subtests.push(t.test('a project-scope row for this repository is preferred over a user-scope one', async (subtest) => {
     const dir = await wiredFixture(subtest, ['--qa']);
     const here = await pluginInstallRootFixture(subtest, HELPERS);
     const elsewhere = await pluginInstallRootFixture(subtest, HELPERS);
@@ -4754,9 +4783,9 @@ test('the plugin-permissions check prints the entries to paste, and never above 
       assert.ok(lines.includes(entry), `the check did not resolve this repository's own row:\n${stderr}`);
     }
     assert.ok(!stderr.includes(elsewhere), `the check resolved the user-scope root over this repository's:\n${stderr}`);
-  });
+  }));
 
-  await t.test('the interactive-test phase off grades nothing here, and a profile carrying nothing passes', async (subtest) => {
+  subtests.push(t.test('the interactive-test phase off grades nothing here, and a profile carrying nothing passes', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const root = await pluginInstallRootFixture(subtest, HELPERS);
     const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: root }]);
@@ -4780,9 +4809,9 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     }
     // And no entry at all, of either kind — the read grant included: there is nothing to paste.
     assert.ok(!/Read\(|Bash\(bash /.test(line), `the check printed an entry with nothing graded:\n${line}`);
-  });
+  }));
 
-  await t.test('a machine where the plugin is not enabled names the step and invents no path', async (subtest) => {
+  subtests.push(t.test('a machine where the plugin is not enabled names the step and invents no path', async (subtest) => {
     const dir = await wiredFixture(subtest, ['--qa']);
     const home = await claudeConfigHome(subtest);
 
@@ -4802,9 +4831,9 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     assert.equal(reportLines(stderr).filter((entry) => entry.startsWith('Read(') || entry.startsWith('Bash(')).length, 0);
     // A read that created the runner's directory would make `doctor` a writer outside the repository.
     assert.deepEqual(await readdir(home.root), [], `doctor wrote under ${home.root}`);
-  });
+  }));
 
-  await t.test('the same machine counts the entries it cannot grade, and still names none of them', async (subtest) => {
+  subtests.push(t.test('the same machine counts the entries it cannot grade, and still names none of them', async (subtest) => {
     const dir = await wiredFixture(subtest, ['--qa']);
     const home = await claudeConfigHome(subtest);
     // Both dictated forms, pasted while a root still answered. With no record to read this check
@@ -4831,9 +4860,9 @@ test('the plugin-permissions check prints the entries to paste, and never above 
       assert.ok(!line.includes(entry), `the check named an entry no root on this machine answered for:\n${line}`);
     }
     assert.equal(reportLines(stderr).filter((entry) => entry.startsWith('Read(') || entry.startsWith('Bash(')).length, 0);
-  });
+  }));
 
-  await t.test('a helper entry under no resolved root is named on the passing line, and a wrapper entry never is', async (subtest) => {
+  subtests.push(t.test('a helper entry under no resolved root is named on the passing line, and a wrapper entry never is', async (subtest) => {
     const dir = await wiredFixture(subtest, ['--qa']);
     const root = await pluginInstallRootFixture(subtest, HELPERS);
     // A second plugin root nothing on this machine records: the shape an upgrade leaves behind,
@@ -4860,9 +4889,9 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     // The false positive the repo-root exclusion exists to prevent: reporting `init`'s own output
     // as dead weight would send an adopter to delete a wrapper grant their runs need.
     assert.ok(!line.includes(wrapperEntry), `a wrapper entry inside this checkout was reported as dead weight:\n${line}`);
-  });
+  }));
 
-  await t.test('the same entry beside a missing one still warns, and is never one of the lines to paste', async (subtest) => {
+  subtests.push(t.test('the same entry beside a missing one still warns, and is never one of the lines to paste', async (subtest) => {
     const dir = await wiredFixture(subtest, ['--qa']);
     const root = await pluginInstallRootFixture(subtest, HELPERS);
     const stale = await pluginInstallRootFixture(subtest, HELPERS);
@@ -4883,9 +4912,9 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     // Named in the prose and never among the pasteable lines: those are what an operator copies, and
     // an entry to delete standing among them would be pasted straight back in.
     assert.ok(!lines.includes(staleEntry), `the entry to delete was printed as a line to paste:\n${stderr}`);
-  });
+  }));
 
-  await t.test('with nothing graded here at all, the same entry is still named', async (subtest) => {
+  subtests.push(t.test('with nothing graded here at all, the same entry is still named', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const root = await pluginInstallRootFixture(subtest, HELPERS);
     const stale = await pluginInstallRootFixture(subtest, HELPERS);
@@ -4903,7 +4932,7 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     const line = detailLine(stdout, passLine('plugin-permissions'));
     assert.match(line, /not graded/);
     assert.ok(line.includes(staleEntry), `the not-graded line did not name the entry no root resolves:\n${line}`);
-  });
+  }));
 
   // The seven cases above write no `known_marketplaces.json`, so the runtime root falls back to the
   // install root and the two coincide — the git-sourced adoption, and the state their "no read
@@ -4913,7 +4942,7 @@ test('the plugin-permissions check prints the entries to paste, and never above 
   const EXTRA_HELPER = 'poll-dev-server.sh';
   const UNION = [...HELPERS, EXTRA_HELPER].sort();
 
-  await t.test('a directory-sourced marketplace grades both roots, and only the runtime one carries a read grant', async (subtest) => {
+  subtests.push(t.test('a directory-sourced marketplace grades both roots, and only the runtime one carries a read grant', async (subtest) => {
     const dir = await wiredFixture(subtest, ['--qa']);
     const installed = await pluginInstallRootFixture(subtest, HELPERS);
     const sourced = await marketplaceLocationFixture(subtest, UNION);
@@ -4950,9 +4979,9 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     assert.equal(pasted.status, 0, `doctor exited ${pasted.status}\n${pasted.stdout}\n${pasted.stderr}`);
     assert.match(pasted.stdout, passLine('plugin-permissions'));
     assert.doesNotMatch(pasted.stderr, warnLine('plugin-permissions'));
-  });
+  }));
 
-  await t.test("a profile carrying one root's entries warns naming the other root's, in both directions", async (subtest) => {
+  subtests.push(t.test("a profile carrying one root's entries warns naming the other root's, in both directions", async (subtest) => {
     const installed = await pluginInstallRootFixture(subtest, HELPERS);
     const sourced = await marketplaceLocationFixture(subtest, HELPERS);
     const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: installed }], sourced.location);
@@ -4980,9 +5009,9 @@ test('the plugin-permissions check prints the entries to paste, and never above 
         assert.ok(!lines.includes(entry), `the check reprinted an entry the profile already carries: ${entry}\n${stderr}`);
       }
     }
-  });
+  }));
 
-  await t.test('with the interactive-test phase off, a differing runtime root still needs its read grant', async (subtest) => {
+  subtests.push(t.test('with the interactive-test phase off, a differing runtime root still needs its read grant', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const installed = await pluginInstallRootFixture(subtest, HELPERS);
     const sourced = await marketplaceLocationFixture(subtest, HELPERS);
@@ -5010,7 +5039,9 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     assert.equal(pastedRun.status, 0, `doctor exited ${pastedRun.status}\n${pastedRun.stdout}\n${pastedRun.stderr}`);
     assert.match(pastedRun.stdout, passLine('plugin-permissions'));
     assert.doesNotMatch(pastedRun.stderr, warnLine('plugin-permissions'));
-  });
+  }));
+
+  await Promise.all(subtests);
 });
 
 /**
@@ -5118,4 +5149,6 @@ test('Acceptance 6 (e): a passing index check quotes the coverage warning the bu
   const line = detailLine(stdout, passLine('retrieval-index'));
   assert.ok(line.includes('docs index: 1 files'), line);
   assert.ok(line.includes('docs.root docs is not a directory'), line);
+});
+
 });
