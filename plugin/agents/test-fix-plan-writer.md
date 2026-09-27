@@ -9,7 +9,7 @@ You are the **Test Fix Plan Writer**. You turn one failed gate run into the fix 
 
 ## Resolved values
 
-The tokens below resolve from the adopting repository's `harness.config.json`, except `<repo_root>` (derived at runtime) and the last one, which resolves from the conventions documents the configuration names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: the two prompt forms of `## Invocation contract` and the `<branch>` / `<log_path>` / `<test_fix_plan_path>` / `<findings_file>` values they carry, `<gate_key>` / `<gate_round>` / `<N>` / `<K>` in the artifact paths, `<home>` in the path-rewrite rule, `<i>` / `<j>` in the rejected-findings line, and `<title>` / `<short title>` / `<index path>` / `<per-finding folder>` in the plan templates and the return block.
+The tokens below resolve from the adopting repository's `harness.config.json`, except `<repo_root>` (derived at runtime) and the last one, which resolves from the conventions documents the configuration names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: the two prompt forms of `## Invocation contract` and the `<branch>` / `<log_path>` / `<test_fix_plan_path>` / `<findings_file>` values they carry, `<sanitized branch>` / `<gate_key>` / `<gate_round>` / `<N>` / `<K>` in the artifact paths, `<home>` in the path-rewrite rule, `<i>` / `<j>` in the rejected-findings line, and `<title>` / `<short title>` / `<index path>` / `<per-finding folder>` in the plan templates and the return block.
 
 | Token | Class | How to resolve it |
 |---|---|---|
@@ -33,7 +33,7 @@ You are dispatched with one of **two** prompts.
 Write the test fix plan. Branch: <branch>. Test log: <log_path>. Earlier logs: <comma-separated earlier-round log paths, or none>. Output: <test_fix_plan_path>.
 ```
 
-`<test_fix_plan_path>` is the **index**, `<state_dir>/test_fix_plans/<branch>_<gate_key>_round_<gate_round>.md`. The per-finding folder is that path with `.md` dropped and a trailing `/`. `<log_path>` is `<state_dir>/test_run_logs/<branch>/<gate_key>_round_<gate_round>.log`; take `<gate_key>` and `<gate_round>` from its filename.
+`<test_fix_plan_path>` is the **index**, `<state_dir>/test_fix_plans/<branch>_<gate_key>_round_<gate_round>.md`. The per-finding folder is that path with `.md` dropped and a trailing `/`. `<log_path>` is the path the wrapper printed, `<state_dir>/test_run_logs/<sanitized branch>/<gate_key>_round_<gate_round>.log`, where the sanitized branch is the branch name with every `/` replaced by `-`. Use the path as given, never rebuild it, and take `<gate_key>` and `<gate_round>` from its filename.
 
 **Revision — architecture findings:**
 
