@@ -3,7 +3,8 @@
  * test builds and throws away.
  *
  * **The rule these tests exist to enforce: the wrapper hands the orchestrator one line and nothing
- * else, runs the configured command exactly once per invocation, and versions its log per round.**
+ * else, runs the configured command at most once per invocation, and never while a run of the same
+ * label is live, and versions its log per round.**
  * Every case seeds `commands.test` with a stub that counts its own runs, so "exactly once" is an
  * assertion on a counter file rather than an inference from the verdict, and "nothing else" is an
  * assertion that the stub's own output reached the log and neither of the wrapper's streams.
@@ -209,6 +210,28 @@ test('--wait prints `pending` while the run is live, then its verdict once re-is
   assert.equal(waited.stdout, 'pass\n');
   assert.equal(waited.status, 0);
   assert.equal((await inFlight).stdout, 'pass\n');
+  assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
+});
+
+test('a run form issued while a run of the same label is live prints `pending` and starts nothing', async (t) => {
+  const dir = await wiredFixture(t);
+  const release = join(dir, 'stub-release');
+  const running = join(dir, LOG_DIR, 'task_round_1.running');
+
+  const inFlight = wrapper(dir, ['task_round_1'], { STUB_RELEASE: release });
+  await pollUntil(() => existsSync(running) && counterLines(dir).length === 1, 'the run in flight');
+
+  const second = await wrapper(dir, ['task_round_1'], { RUN_TEST_SUITE_WAIT_SLICE: '1' });
+  assert.equal(second.stdout, 'pending\n');
+  assert.equal(second.status, 3);
+  assert.deepEqual(counterLines(dir), ['ran'], 'the second run form started the command');
+
+  writeFileSync(release, '');
+  const first = await inFlight;
+  assert.equal(first.stdout, 'pass\n');
+
+  const waited = await wrapper(dir, ['--wait', 'task_round_1']);
+  assert.equal(waited.stdout, 'pass\n');
   assert.deepEqual(counterLines(dir), ['ran'], 'the command did not run exactly once');
 });
 

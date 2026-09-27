@@ -9,7 +9,7 @@
 3. [x] **Finding 4** — Fix the `item_<N>` numbering claim in the `test_fix_point_reviews` README and its mirror _(layer: cli, general)_
 4. [x] **Finding 3** — Replace the three blanket "no test run" paraphrases with the rule's own scope _(layer: plugin)_
 5. [x] **Finding 2** — Name `RG` in the user-review fix-plan fork's ledger enumerations _(layer: plugin)_
-6. [ ] **Finding 1** — Refuse a second concurrent run of the same label in `run-test-suite.sh` _(layer: cli, plugin, general)_
+6. [x] **Finding 1** — Refuse a second concurrent run of the same label in `run-test-suite.sh` _(layer: cli, plugin, general)_
 
 ## Must Fix
 

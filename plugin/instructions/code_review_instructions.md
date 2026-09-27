@@ -37,7 +37,7 @@ The tokens below are neither Mode-contract **bindings** (this file declares none
       - `pass` → step 2.
       - `fail <log>` → write no statistics. Tell the user the gates failed, name `<log>`, and stop. Once the failure is fixed, `/autonomous-sdlc-harness:branch-implement-review` re-runs the gates in its Phase 3 — a clean pass has no fix flow to return to.
       - No stdout line → report the wrapper's one stderr line and stop.
-      - If the tool layer moves the run to the background, re-issue the same command with `--wait` before the label, as a plain foreground command, after each `pending` until it prints the verdict line — the mechanism of `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `### G.1 Run the gates`. No `Monitor` and no `sleep`. A `--wait` refusal is the no-line case.
+      - If the tool layer moves the run to the background, or the command prints `pending`, re-issue the same command with `--wait` before the label, as a plain foreground command, after each `pending` until it prints the verdict line — the mechanism of `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `### G.1 Run the gates`. No `Monitor` and no `sleep`. A `--wait` refusal is the no-line case.
 
    2. **Dispatch the `statistics-plan-writer` agent** with the **first-write** prompt:
 

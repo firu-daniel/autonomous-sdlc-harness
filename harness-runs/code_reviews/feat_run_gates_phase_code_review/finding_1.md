@@ -95,3 +95,5 @@ Allow only one run per label. A run form that finds a live run of its label coll
 - [ ] **Supervised prose.** In each of the three supervised statistics points named above, rewrite *"If the tool layer moves the run to the background, re-issue the same command"* to *"If the tool layer moves the run to the background, or the command prints `pending`, re-issue the same command"*.
 
 **Verification:** typecheck only. The Run gates phase covers the suite, and the new case is this unit's own test file.
+
+**Deviations from plan:** G.1 lead: the prescribed replacement text, followed by the kept tail *"— the expected case wherever the suite outlasts the Bash tool's foreground window —"*, reads as two stacked dash clauses. Implemented as bold lead *"If the tool layer moves the run to the background, or the run form itself prints `pending`"* followed by *"— the first the expected case wherever the suite outlasts the Bash tool's foreground window, the second meaning a run of this label is already in flight, because this session re-entered the phase while its earlier run still runs —"*. Same content, both conditions kept.

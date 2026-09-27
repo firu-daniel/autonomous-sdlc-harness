@@ -3,8 +3,9 @@
 # one verdict for it, `pass` or `fail`, so the Run gates phase's orchestrator
 # reads that verdict and never the suite's output.
 #
-# OUTPUT CONTRACT — the run form prints exactly one stdout line: `pass` (exit 0)
-# or `fail <log path>` (exit 1), the log path repo-relative. Nothing the command
+# OUTPUT CONTRACT — the run form prints exactly one stdout line: `pass` (exit 0),
+# `fail <log path>` (exit 1), or — when a run of the same label is already in
+# flight — `pending` (exit 3), the log path repo-relative. Nothing the command
 # prints reaches stdout or stderr; all of it goes to the log. The orchestrator
 # never reads the log — it hands the path on to whatever plans the fix.
 #
@@ -24,6 +25,10 @@
 # No caller's correctness depends on the slice's length: `pending` means only
 # "issue the same call again", so the suite may take any length of time.
 #
+# ONE RUN PER LABEL. The run form never starts a second run of a label whose
+# run is live: it collects that run's verdict as the wait form would. A run
+# removes a `.running` file only while it still holds its own PID.
+#
 # BESIDE THE LOG, in the same directory:
 #   <label>.running  the run form's own PID, present while the command runs
 #   <label>.verdict  the verdict line, renamed into place whole once the command
@@ -40,7 +45,7 @@
 #   2  refusal — one stderr line `run-test-suite.sh: <reason>`, nothing on stdout:
 #      bad arguments, a label outside the pattern, an unresolvable configuration,
 #      `commands.test` unset, no current branch, or (wait form) no run in flight
-#   3  pending (wait form only) — the run is still going; call again
+#   3  pending — the wait form, or the run form finding a run of the same label already in flight; issue the wait form
 
 # Deliberately no `-e`: this script has to outlive the command's failure long
 # enough to write and print the verdict.
@@ -112,8 +117,10 @@ run_alive() {
   kill -0 "$pid" 2>/dev/null
 }
 
-if [ "$mode" = wait ]; then
-  deadline=$((SECONDS + WAIT_SLICE_SECONDS))
+# Poll for the verdict of the run of <label> that is in flight, for at most one
+# wait slice; print it, or `pending`.
+wait_for_verdict() {
+  local deadline=$((SECONDS + WAIT_SLICE_SECONDS))
   while :; do
     [ -f "$verdict_file" ] && emit_verdict
     if ! run_alive; then
@@ -127,6 +134,10 @@ if [ "$mode" = wait ]; then
   done
   echo pending
   exit 3
+}
+
+if [ "$mode" = wait ]; then
+  wait_for_verdict
 fi
 
 command_line="$(hr_command "$root" test)"
@@ -136,6 +147,13 @@ case $? in
   *) command_line="" ;;
 esac
 [ -n "$command_line" ] || refuse "commands.test is not set in harness.config.json"
+
+# ONE RUN PER LABEL. A live run of this label — a session that re-entered the
+# phase while its earlier, backgrounded run still runs — is never joined by a
+# second: collect that run's verdict instead, exactly as the wait form would.
+if run_alive; then
+  wait_for_verdict
+fi
 
 mkdir -p "$log_dir" || refuse "cannot create '$log_dir'"
 rm -f "$verdict_file" "$verdict_file.tmp"
@@ -157,7 +175,7 @@ else
 fi
 
 printf '%s\n' "$verdict" > "$verdict_file.tmp" && mv -f "$verdict_file.tmp" "$verdict_file"
-rm -f "$running_file"
+if [ "$(cat "$running_file" 2>/dev/null)" = "$$" ]; then rm -f "$running_file"; fi
 
 echo "$verdict"
 [ "$status" -eq 0 ] && exit 0
