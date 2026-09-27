@@ -96,7 +96,7 @@ These wire names use test vocabulary, the term adopters already arrive with. Onl
 6. [x] **Task 6** — Make `layer-implementer` run `<typecheck_cmd>` per unit and only its own test files _(layer: plugin)_ _(points: 15)_
 7. [x] **Task 7** — Add the `test-fix-plan-writer` agent and grant it the plan-writer search roster _(layer: plugin)_ _(points: 20)_
 8. [x] **Task 8** — Give `architecture-reviewer` insertion point 4 (the test fix plan) and the test-run check _(layer: plugin)_ _(points: 12)_
-9. [ ] **Task 9** — Write `## Phase G — Run gates` into `plan_orchestration_instructions_core.md` _(layer: plugin)_ _(points: 20)_
+9. [x] **Task 9** — Write `## Phase G — Run gates` into `plan_orchestration_instructions_core.md` _(layer: plugin)_ _(points: 20)_
 10. [ ] **Task 10** — Add the Phase G commit and fix-loop callers to `committer.md`'s caller table _(layer: plugin)_ _(points: 5)_
 11. [ ] **Task 11** — Add the `G.` and `RG.` entries to the flow-progress ledger and its resume rules _(layer: plugin)_ _(points: 10)_
 12. [ ] **Task 12** — Wire Phase G into the task-engine autonomous and semi-autonomous forks _(layer: plugin)_ _(points: 10)_

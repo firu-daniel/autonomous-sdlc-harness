@@ -74,3 +74,12 @@
 - `grep -n "\-\-wait\|Monitor\|§2.5" plugin/instructions/plan_orchestration_instructions_core.md` shows the wait form, the named prohibitions and the §2.5 citation inside `### G.1 Run the gates`.
 - Walk Phase G once as the orchestrator for each outcome — all green on round 1; a round-1 run moved to the background, answered `pending` twice by `--wait` and then `pass`; a `fail` on round 1 then `pass` on round 2; a `fail` on every round; `fixable: 0`; a resume with a tracked `[ ]` index. At each step, name the one next action the text prescribes. Record in the detail file any step where the text leaves a choice.
 - Every heading this task cites resolves: `## The test-run rule` and the `G.4` row in `unit_loop_core.md`, and `### G.2 Write and review the test fix plan` as Task 8's reviewer text names it.
+
+**Deviations from plan:**
+
+- G.0 counts only **tracked** indices with no `[ ]` entry as complete. The plan counted every index with no `[ ]` entry, but an untracked `fixable: 0` draft (for example, the G.3 commit never landed) would then be skipped as complete and its round never committed. Counting only tracked indices makes "untracked means draft" hold for every shape of index.
+- G.2 also routes a `blocker:` return from `test-fix-plan-writer` to `<escalate>`. The writer's `## Output contract` defines that return for an unreadable input, and the plan gave it no route.
+- The Stop-conditions entry for the missing verdict line says "its wait form" rather than `--wait`, so the `--wait` grep in **Verification:** hits only inside `### G.1 Run the gates`.
+- Evidence downgrade: `claude plugin validate --strict plugin` (the layer's manifest gate) was refused ("This command requires approval"), so it was not run. The walk below is a reading of the text, not an execution.
+
+**Walk (reading):** round 1 green: G.0 → round 1, no index → G.1 → `pass` → Phase D. Backgrounded run: G.1 → `--wait` → `pending` → STOP/PAUSE check → `--wait` → `pending` → again → `pass` → Phase D. `fail` then `pass`: G.1 → G.2 writer → arch PASS → G.3 → G.4 → G.5 (round 2) → G.1 `pass`. `fail` on every round: round 5 `fail` → `<escalate>` with no G.2. `fixable: 0`: G.2 → G.3 (no `meta_findings_folder`) → `<escalate>`. Resume with a tracked `[ ]` index: G.0 step 4 → G.4 → G.5. In none of these walks did the text leave the next action open.
