@@ -392,6 +392,36 @@ test('the flow walker, its gate library and its graph land verbatim under script
   }
 });
 
+/** The Run gates phase's test-suite runner: run by the orchestrating session, so executable. */
+const TEST_SUITE_RUNNER = 'run-test-suite.sh';
+const TEST_SUITE_RUNNER_MODE = 0o755;
+
+test('the test-suite runner lands verbatim under scriptsDir, and a re-run keeps it', async (t) => {
+  for (const [name, scriptsDir, config] of [
+    ['the default scriptsDir', SCRIPTS_DIR, undefined],
+    ['a relocated scriptsDir', RELOCATED_SCRIPTS_DIR, seededConfig({ scriptsDir: RELOCATED_SCRIPTS_DIR })],
+  ]) {
+    await t.test(name, async (subtest) => {
+      const files = config === undefined ? nodeProjectFiles() : { ...nodeProjectFiles(), 'harness.config.json': config };
+      const dir = await fixtureFor(subtest, { files });
+      const path = `${scriptsDir}/${TEST_SUITE_RUNNER}`;
+
+      await initOk(dir);
+      const first = await snapshotTree(dir);
+
+      const template = readFileSync(join(PACKAGE_ROOT, 'templates', SCRIPTS_DIR, TEST_SUITE_RUNNER), 'utf8');
+      assert.equal(text(dir, path), template, `${path} is not the template's bytes`);
+      assert.deepEqual(copiesOf(first, TEST_SUITE_RUNNER), [path], `${TEST_SUITE_RUNNER} was written somewhere other than ${scriptsDir}/`);
+      const mode = (await lstat(join(dir, path))).mode & 0o777;
+      assert.equal(mode, TEST_SUITE_RUNNER_MODE, `${path} is mode ${mode.toString(8)}, not ${TEST_SUITE_RUNNER_MODE.toString(8)}`);
+
+      await initOk(dir);
+
+      assert.equal((await snapshotTree(dir))[path], first[path], `a second init rewrote ${path}`);
+    });
+  }
+});
+
 /**
  * A wired repository holding the paths the refusal cases below need to **exist**: a file in another
  * state directory, a sibling directory whose name is a prefix of `scratch`, a file inside the

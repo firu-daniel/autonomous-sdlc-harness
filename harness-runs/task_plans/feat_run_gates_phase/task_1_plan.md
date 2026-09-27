@@ -60,3 +60,10 @@
 - The two edited suite files, which this unit edits, are run on their own where the conventions documents state a single-file test command. Where none is stated, the run is skipped and recorded as skipped (`plugin/instructions/unit_loop_core.md` → `## The test-run rule`, once Task 5 lands).
 - `grep -n "run-test-suite.sh" cli/src/generators/outerLoopScripts.ts` shows exactly one row, and `grep -rn "'run-test-suite.sh'" cli/src` shows no second spelling of the name used as a path. That is the module's one-table rule.
 - `grep -nw "ten\|eleven" cli/src/retrieval/server.ts` shows the header's count as eleven and no `ten` beside `tools:`.
+
+**Deviations from plan:**
+
+- Beyond the contract's refusal list, the script also refuses (exit 2, one stderr line, no file written) when the library is unreadable, `mkdir -p` of the log directory fails, or a `.verdict` file holds no `pass` / `fail <log>` line. The wait form also refuses `no run in flight` when the in-flight PID dies during the slice without a verdict appearing. The wait form doesn't read `commands.test`, because it never runs the command.
+- `RUN_TEST_SUITE_WAIT_SLICE` overrides `WAIT_SLICE_SECONDS=60` only when it is a non-negative integer. Any other value falls back to the constant instead of being refused, so the contract's closed refusal list stays as written.
+- The command runs under `set +u +o pipefail` inside its subshell. That way it is graded with the options a plain `bash -c` gives it, not the wrapper's `set -uo pipefail`.
+- The single-file suite runs were skipped: neither `.claude/context/conventions.md` nor `.claude/context/cli.md` states a single-file test command. Both edited suites ran inside `commands.test`'s gate 4 (`npm test`), which passed.
