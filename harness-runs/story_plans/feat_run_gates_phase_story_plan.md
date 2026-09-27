@@ -100,7 +100,7 @@ These wire names use test vocabulary, the term adopters already arrive with. Onl
 10. [x] **Task 10** — Add the Phase G commit and fix-loop callers to `committer.md`'s caller table _(layer: plugin)_ _(points: 5)_
 11. [x] **Task 11** — Add the `G.` and `RG.` entries to the flow-progress ledger and its resume rules _(layer: plugin)_ _(points: 10)_
 12. [x] **Task 12** — Wire Phase G into the task-engine autonomous and semi-autonomous forks _(layer: plugin)_ _(points: 10)_
-13. [ ] **Task 13** — Run Phase G by reference from `user_review_fixes_instructions_core.md` _(layer: plugin)_ _(points: 15)_
+13. [x] **Task 13** — Run Phase G by reference from `user_review_fixes_instructions_core.md` _(layer: plugin)_ _(points: 15)_
 14. [ ] **Task 14** — Wire Phase G into the user-review fix autonomous and semi-autonomous forks _(layer: plugin)_ _(points: 10)_
 15. [ ] **Task 15** — Bind the plan writers to the test-run rule _(layer: plugin)_ _(points: 10)_
 16. [ ] **Task 16** — Make the plan reviewers raise a test-run request as a Must Fix _(layer: plugin)_ _(points: 12)_
