@@ -100,6 +100,7 @@ The review is **split**: a thin index at `review_path` plus one self-contained `
 
 - Each is self-contained: a `### N. Title` heading, the site anchor (the repo-relative path plus the symbol, heading or short quoted substring that locates the change, with a quoted substring beside any symbol whose body spans more than the change and a bare path only when the change is the whole file; a line number may follow as a navigation hint, and nothing depends on it), the full description of the problem, and a concrete fix suggestion (the exact snippet or the precise rename). A consumer must be able to implement the fix from this one file alone — a finding file that only restates the title or omits the site anchor or the fix is a Must Fix, and a missing or stale line number never is.
 - Sub-step `- [ ]` bullets **inside** a finding body are permitted — they are informational implementer-progress markers and not a finding.
+- A finding whose fix or sub-step asks for a test run the rule forbids — the configured test command, a gate script, or a test file the fix neither creates nor edits — is a **Must Fix** against the review, naming `finding_<N>.md` (`${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`). A fix running its own new or edited test file is not a finding.
 
 **Index ↔ finding correspondence (Must Fix):**
 

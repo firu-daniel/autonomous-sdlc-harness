@@ -30,3 +30,9 @@
 - `grep -n "Only parity violations are Must Fix" plugin/agents/business-parity-reviewer.md` prints nothing, or prints only the amended sentence that also names the test-run request. `grep -n "unit_loop_core.md" plugin/agents/business-parity-reviewer.md` shows a hit inside `## Read first`, which runs from that heading to `## Process`.
 - `grep -n "test_cmd" plugin/agents/task-plan-reviewer.md plugin/agents/review-plan-reviewer.md plugin/agents/business-parity-reviewer.md` prints nothing: no edited file carries a `<test_cmd>` hit, so none uses an undeclared token.
 - No edited file changes its verdict literals, `verdict: PASS` / `verdict: FAIL`, or its return keys: `grep -n "^verdict: " plugin/agents/task-plan-reviewer.md plugin/agents/review-plan-reviewer.md plugin/agents/business-parity-reviewer.md` shows them unchanged.
+
+**Deviations from plan:**
+
+- `business-parity-reviewer.md` → `## Read first`: the rule-source entry is a bullet at the end of the list, *above* the "A cited path you cannot read is a finding, not a fallback" paragraph rather than below it. That list is what `## Process` step 1 reads as "the rule-source files above", and it matches the placement Task 8 used in `architecture-reviewer.md`. The paragraph still governs the entry.
+- `business-parity-reviewer.md`: the new check is placed after check (j)'s sub-bullet so that (j) keeps its nesting.
+- The configured test command was not run. It is deferred to the Run gates phase per `unit_loop_core.md` → `## The test-run rule` point (1). No test file was created or edited.
