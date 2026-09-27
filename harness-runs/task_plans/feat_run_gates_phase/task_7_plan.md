@@ -72,3 +72,7 @@
 - `grep -c "^  test-fix-plan-writer.md" plugin/agents/README.txt` finds the roster line.
 - `grep -nw "ten" plugin/agents/README.txt` prints no line inside `The docs-retrieval grant — one roster, one wire` (the section runs from that heading to `Sample fixture pointers`), and `grep -nw "eleven" plugin/agents/README.txt` shows the three count sentences.
 - `grep -n "<home>\|git rev-parse --show-toplevel\|printenv HOME" plugin/agents/test-fix-plan-writer.md` shows the rewrite rule and the pre-return check, and `grep -n "Rewrite machine paths before quoting\." plugin/agents/test-fix-plan-writer.md` shows the step's bold lead inside `## Process`.
+
+**Deviations from plan:**
+
+- The layer's manifest gate (`claude plugin validate --strict plugin`, `.claude/context/plugin.md` → `## Verifying a change in this layer`) was refused by the permission layer in the implementing session. So the closed-frontmatter claim rests on the plan's own `grep -n "^[a-z_]*: "` sweep, not on the validator: the fence carries only `name`, `description`, `tools` and `model`, and the other hits are the `## Output contract` return block.
