@@ -19,6 +19,7 @@
 - [ ] **`user-review-fix-plan-writer.md`.** In `## Process` step 4, the per-finding-file sentence says the file carries *"the concrete fix suggestion"*. Add that the fix names no test run, per that rule. Add the matching check to step 5's quality checks.
 - [ ] **`branch-reviewer.md`.** Under the paragraph beginning *"**Every finding must be implementable as written, by an implementer that makes no decision of its own.**"*, add one sentence: a finding's fix suggestion asks for no test run, per that rule. The Run gates phase runs the suite after every review's fixes land.
 - [ ] **`skeptic-reviewer.md`.** Add the same sentence under its paragraph of the same opening.
+- **Deviations from plan:** In `branch-reviewer.md` and `skeptic-reviewer.md`, the plan's second sentence ("The Run gates phase runs the suite after every review's fixes land.") was not added: it is rationale, and `layer-implementer.md` → `## Minimal prose — every line carries a rule` bars the argument for a rule from an agent definition. Its content is also already stated by the cited rule's point (1). Each reviewer got only the one-sentence pointer.
 
 **Verification:**
 
