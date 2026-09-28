@@ -2861,6 +2861,38 @@ test('a repository wired before the backup rule existed gains it inside its own 
 });
 
 /**
+ * The permission profile names this checkout's absolute paths, so the managed block ignores it for
+ * every adopter — not only a remote-execution one — and the first commit never carries it.
+ */
+test('the managed ignore block ignores the permission profile, once, and a re-run leaves it alone', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+
+  assert.ok(await exists(dir, PROFILE_FILE), `${PROFILE_FILE} was not written, so asking git about it proves nothing`);
+  const ignore = text(dir, GITIGNORE_FILE);
+  const lines = ignore.split('\n');
+  const header = lines.findIndex((line) => line.includes(GITIGNORE_MARKER));
+  assert.notEqual(header, -1, `the generated ${GITIGNORE_FILE} has no managed block:\n${ignore}`);
+  const blockEnd = lines.findIndex((line, index) => index > header && line.trim() === '');
+  const block = lines.slice(header + 1, blockEnd === -1 ? lines.length : blockEnd);
+  assert.equal(
+    block.filter((line) => line.trim() === PROFILE_FILE).length,
+    1,
+    `${PROFILE_FILE} is not in the managed block exactly once:\n${ignore}`,
+  );
+  assert.equal(
+    lines.filter((line) => line.trim() === PROFILE_FILE).length,
+    1,
+    `${PROFILE_FILE} appears outside the managed block too:\n${ignore}`,
+  );
+  assert.deepEqual(await ignoredAmong(dir, [PROFILE_FILE]), [PROFILE_FILE], `git does not ignore ${PROFILE_FILE}`);
+  assert.deepEqual(await ignoredAmong(dir, [SETTINGS_FILE]), [], `the rule reaches ${SETTINGS_FILE}, which is committed`);
+
+  await initOk(dir);
+  assert.equal(text(dir, GITIGNORE_FILE), ignore, `the second init changed ${GITIGNORE_FILE}`);
+});
+
+/**
  * The half of the ignore contract no string search reaches.
  *
  * The test above reads the block's text; this one asks git what the block *does*, and the two are

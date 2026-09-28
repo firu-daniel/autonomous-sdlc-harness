@@ -26,3 +26,8 @@
 - `commands.typecheck` passes.
 - `cli/test/doctor.test.mjs` is not run by this task (it does not edit it — `unit_loop_core.md` → `## The test-run rule`); its sibling-worktree case was made independent of a committed profile by Task 12, which is what lets this task ship without breaking it.
 - The rendered `.gitignore` of a fixture `init` wrote carries exactly one `.claude/settings.autonomous.json` line inside the managed block, and no line naming the profile as committed remains in `cli/templates/repo/gitignore`.
+
+**Deviations from plan:**
+
+- Verification bullet "The new case in `cli/test/init.test.mjs` passes" was not executed: neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, so the case was not run in this unit and its pass is deferred to the Run gates phase. The same applies to the rendered-fixture bullet (exactly one profile line inside the managed block), which the new case asserts. What was executed: `bash scripts/typecheck.sh` (PASS), and a grep of `cli/templates/repo/gitignore` for `committed profile` / `profiles` (no match).
+- The module header of `cli/src/generators/repoRoot.ts` characterised the block as covering only files "the harness configures by path"; extended to name the generated permission profile too. `GITIGNORE_BLOCK_HEADER`'s doc enumerates no rules and was left unchanged.

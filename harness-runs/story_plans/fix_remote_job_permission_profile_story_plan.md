@@ -24,7 +24,7 @@ Task numbering is ship order, with two exceptions, both added in plan revision: 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_job_permission_profile/task_<K>_plan.md`. Ordered bottom-up by ship sequence, with the catch-all `general` layer last.
 
 1. [x] **Task 12** — Make `doctor` in a linked worktree grade the main checkout's profile _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 1** — Ignore the permission profile in the managed `.gitignore` block _(layer: cli)_ _(points: 10)_
+2. [x] **Task 1** — Ignore the permission profile in the managed `.gitignore` block _(layer: cli)_ _(points: 10)_
 3. [ ] **Task 2** — Require the plugin-root `Read` grant at the runtime root, including a root that is both _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 3** — Make `init --plugin-root-entries` grant shell reads over the plugin roots, and keep its notes true _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 4** — Add `doctor --remote-job`, under which an unusable profile fails the preflight _(layer: cli)_ _(points: 18)_
