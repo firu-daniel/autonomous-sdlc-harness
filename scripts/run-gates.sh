@@ -117,8 +117,10 @@ echo "== gate 6 — self-containment"
 # The pipe is safe here and only here: `gate_silent` grades OUTPUT, so the second stage's exit
 # status (1 when it filters everything) is never read, and grep's own `grep: …` error lines do not
 # begin `./.git:` and still reach the log.
+# `test_run_logs` holds the Run gates phase's logs: they carry machine paths by construction, are
+# gitignored, and include the log of the run in progress, so 6a would fail on its own output.
 machine_path_hits() {
-  grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git | grep -v '^\./\.git:[0-9][0-9]*:'
+  grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs | grep -v '^\./\.git:[0-9][0-9]*:'
 }
 gate_silent "6a no machine paths" machine_path_hits
 # Two exclusions, not one. `examples/notes-app/.claude` is an adopted repository's own generated

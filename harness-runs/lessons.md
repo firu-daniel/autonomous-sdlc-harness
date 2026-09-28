@@ -34,6 +34,8 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **A decision rule's outcome is a proposal to the maintainer, not a settled future: record the verdict and the change it names, but never write the change into other documents as pending work until the maintainer has decided to execute it.** _(taught by: feat_arm_a_real_catalog_measurement)_
 
+- **A wall-clock figure in a document of record is never one a run measured inside its own session: record figures taken by hand, outside any headless session, on an otherwise idle machine. A plan never makes repeated in-run timing runs its acceptance evidence.** _(taught by: chore_test_suite_run_time)_
+
 ## Unattended control loops
 
 - **A process that turns off a shared switch another actor can turn on must check the enabling condition again after switching it off, and switch it back on if needed, so an enable that races its check is never undone.** _(taught by: feat_remote_execution_github_actions)_

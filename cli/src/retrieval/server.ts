@@ -4,7 +4,7 @@
  *
  * **The rule this module exists to enforce: the server's name, its tool's name and the permission
  * string built from them are a wire.** `plugin/agents/*.md` quotes {@link SEARCH_TOOL_PERMISSION} in
- * ten `tools:` allowlists, and the two CLI templates that register the server for an adopter carry
+ * eleven `tools:` allowlists, and the two CLI templates that register the server for an adopter carry
  * {@link DOCS_SERVER_NAME}, so renaming any of the three is an edit to every one of those files.
  *
  * **The tool's output is document text**, which an agent must treat as untrusted data rather than as

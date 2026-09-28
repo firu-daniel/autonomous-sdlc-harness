@@ -1,6 +1,7 @@
 /**
  * Generator: the outer-loop scripts — the run watcher, the git wrappers, the worktree tooling, the
- * flow walker with its gate library and flow graph, and the shared library they all source —
+ * flow walker with its gate library and flow graph, the test-suite runner, and the shared library
+ * they all source —
  * written into the adopter's configured `scriptsDir`.
  *
  * **The rule this module exists to enforce: {@link OUTER_LOOP_SCRIPTS} is the single declaration of
@@ -67,8 +68,9 @@ export interface OuterLoopScript {
    * **The input to the permission profile's entries for these scripts, and the only one.** `true`
    * exactly when a *dispatched agent* or *the orchestrating session* is the thing that runs the
    * file — the git wrappers an agent is told to commit, push and refresh its branch through, the
-   * scratch runner it executes a probe or a mutation check with, and the flow walker the
-   * orchestrating session steps a flow with. The watcher, the daemon wrappers, the remote-run
+   * scratch runner it executes a probe or a mutation check with, the flow walker the
+   * orchestrating session steps a flow with, and the test-suite runner that session grades a gate
+   * round with. The watcher, the daemon wrappers, the remote-run
    * script and the worktree and cleanup scripts are run by the watcher process (or the remote job)
    * or by a person, so they are
    * `false`: the flag records which of those two runs a script, and the profile follows it so an
@@ -149,6 +151,9 @@ export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze(
   Object.freeze({ file: 'task_plan_writing.graph.json', subdir: 'flows', mode: 0o644, agentInvocable: false }),
   // Run by the orchestrating session; no `DENY_SCRIPT_BASENAMES` entry, because it must be reachable.
   Object.freeze({ file: 'flow-walker.sh', mode: 0o755, agentInvocable: true }),
+  // Run by the orchestrating session in the Run gates phase; no `DENY_SCRIPT_BASENAMES` entry,
+  // because it must be reachable.
+  Object.freeze({ file: 'run-test-suite.sh', mode: 0o755, agentInvocable: true }),
   Object.freeze({ file: 'create-worktree.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'setup-worktree.sh', mode: 0o755, agentInvocable: false }),
   // Started by the agent runner from `.mcp.json`, never by a dispatched agent's Bash call, so `false`

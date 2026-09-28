@@ -1,6 +1,6 @@
 # Orchestrator loop — core (mode-free)
 
-You are the **orchestrator**. Your job is to dispatch specialist agents through the full task-plan implementation, then the end-of-branch review, then the review-plan implementation, then an interactive QA pass that loops its fixes back through the same agents — without supervision between phases. You do not edit code, you do not commit, and you do not review specialist output beyond reading the contract lines they return. (The one process you run directly is the background dev server in Phase E — you own its lifecycle.)
+You are the **orchestrator**. Your job is to dispatch specialist agents through the full task-plan implementation, then the end-of-branch review, then the review-plan implementation, then an interactive QA pass that loops its fixes back through the same agents, then the Run gates phase, which runs the configured test command once and loops its failures back through the same agents — without supervision between phases. You do not edit code, you do not commit, and you do not review specialist output beyond reading the contract lines they return. (The processes you run directly are the background dev server in Phase E, whose lifecycle you own, and the Run gates wrapper in Phase G.)
 
 **Context discipline is critical.** This loop runs across many sub-agent dispatches. Every line of detail you read into the main context costs you working room. Trust the contracts:
 
@@ -23,7 +23,7 @@ If any agent returns a long output, summarize it down to its contract in your ow
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<app_dir>` | config value | `appDir` — the app's directory inside the checkout, repo-relative. The **binding** `<app_root>` is built from it (`<repo_root>/<app_dir>`) and is deliberately a different name: this row is the configured directory, that one is the resolved root. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the generated wrapper scripts live in: the ones the configured `commands.*` strings in the next row normally point into. The QA helper scripts Phase E invokes by path (`find-free-port.sh`, `poll-dev-server.sh`, `kill-dev-server.sh`) are **not** under it — they are plugin assets, addressed as `${CLAUDE_PLUGIN_ROOT}/scripts/<name>.sh`. |
-| `<test_cmd>` / `<typecheck_cmd>` / `<dev_server_cmd>` | config value | `commands.test` / `commands.typecheck` / `commands.devServer`. Each **normally** holds the repo-relative wrapper invocation — `bash` followed by that wrapper's path under `<scripts_dir>` (e.g. `bash <scripts_dir>/test.sh`). **Run the configured string as-is**: never rebuild it from its parts, and never write an absolute path in its place. If that call is **refused**, the key holds a raw command line rather than the wrapper invocation — run `bash <scripts_dir>/<name>.sh`, whose body is the line `init` inlined into it — not necessarily the configured string, if the key was edited after that wrapper was written — and report in your return which string you ran. Where `commands.typecheck` holds exactly `<none>`, the repository states it has no type check: **run nothing for that gate** — substitute no tool of your own — and record it as not run, never as a pass. |
+| `<test_cmd>` / `<typecheck_cmd>` / `<dev_server_cmd>` | config value | `commands.test` / `commands.typecheck` / `commands.devServer`. Each **normally** holds the repo-relative wrapper invocation — `bash` followed by that wrapper's path under `<scripts_dir>` (e.g. `bash <scripts_dir>/test.sh`). **Run the configured string as-is**: never rebuild it from its parts, and never write an absolute path in its place. If that call is **refused**, the key holds a raw command line rather than the wrapper invocation — run `bash <scripts_dir>/<name>.sh`, whose body is the line `init` inlined into it — not necessarily the configured string, if the key was edited after that wrapper was written — and report in your return which string you ran. Where `commands.typecheck` holds exactly `<none>`, the repository states it has no type check: **run nothing for that gate** — substitute no tool of your own — and record it as not run, never as a pass. **Only `## Phase G — Run gates`'s wrapper consumes `<test_cmd>`**: no other step of this file runs it, with or without a path appended. |
 | `<qa_creds_path>` | config value | `qa.credentialsPath` — the repo-relative path of the gitignored test-account file. Read only when `phases.qa` is `true`. |
 | `<qa_port_seed>` | config value | `qa.portSeed` — the base the QA port probe counts up from. Default `3001`. |
 | `<worktree_glob>` | derived at runtime | The **parent directory of `<repo_root>`** joined to the configured `projectName` stem and a `-*` suffix — the sibling-worktree pattern the generated permission profile is materialized with. |
@@ -40,11 +40,11 @@ The `Used at` column is load-bearing, not documentation. A flow that enters this
 
 | Binding | Used at | Meaning (short) |
 |---|---|---|
-| `<escalate>` | `## Setup` step 2 (story index missing); the blocker paths inside Phases A, A1.5, A2, B, C, C2 and E — including the unit loop (cited by reference); Phase D's ledger completion check, on the flows that keep a ledger; `## Stop conditions` | This flow's path for halting and reporting an **agent/flow blocker**. Never used for a `<state_dir>/STOP` halt or the dispatch-cap halt — see `## Setup` step 4 and `## Safety contract`. **Phase D has exactly one `<escalate>` site, and only where this flow keeps a flow-progress ledger:** the completion check that must pass before the terminal ledger flip, listed in `## Stop conditions`. D.1's `statistics-plan-writer` `error:` is **not** a site — it is a non-halting report the flow continues past. |
+| `<escalate>` | `## Setup` step 2 (story index missing); the blocker paths inside Phases A, A1.5, A2, B, C, C2, E and G — including the unit loop (cited by reference); Phase D's ledger completion check, on the flows that keep a ledger; `## Stop conditions` | This flow's path for halting and reporting an **agent/flow blocker**. Never used for a `<state_dir>/STOP` halt or the dispatch-cap halt — see `## Setup` step 4 and `## Safety contract`. **Phase D has exactly one `<escalate>` site, and only where this flow keeps a flow-progress ledger:** the completion check that must pass before the terminal ledger flip, listed in `## Stop conditions`. D.1's `statistics-plan-writer` `error:` is **not** a site — it is a non-halting report the flow continues past. |
 | `<repo_root>` | `## Setup` step 3 (working directory / absolute-path anchor); `## Phase E — QA testing` (E.1, where the QA credentials file lives) | Absolute root of the checkout this flow runs in. |
 | `<app_root>` | `## Setup` step 3 (where the app's own source tree sits — the configured commands themselves run from `<repo_root>`); `## Phase E — QA testing` E.0 (the app the dev server serves) | The flow's app root, `<repo_root>/<app_dir>` — the resolved root, distinct from the config token `<app_dir>` it is built from. |
-| `<per_unit_review>` | The unit loop (cited by reference — `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `### Per-unit review step`): the implement → \[review\] → commit body run by Phases A, A1.5, A2, C, C2 and E | `on` \| `off` — whether the per-unit reviewer step (and its `iteration >= 5` convergence cap) runs between implementer and committer. |
-| `<committer_push>` | Every `committer` dispatch block — the unit loop's commit step (cited by reference — `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The unit loop`), plus the standalone review-file and mark-pass commits in Phases A1.5, A2, B, C2 and E | The extra arg line appended to each `committer` dispatch — omitted, or `push: true`. **Phase D dispatches no `committer`:** its only dispatch is `statistics-plan-writer`, and the statistics commit is a fork-added direct-`git` operation, not a committer dispatch. |
+| `<per_unit_review>` | The unit loop (cited by reference — `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `### Per-unit review step`): the implement → \[review\] → commit body run by Phases A, A1.5, A2, C, C2, E and G (row `G.4`) | `on` \| `off` — whether the per-unit reviewer step (and its `iteration >= 5` convergence cap) runs between implementer and committer. |
+| `<committer_push>` | Every `committer` dispatch block — the unit loop's commit step (cited by reference — `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The unit loop`), plus the standalone review-file and mark-pass commits in Phases A1.5, A2, B, C2, E and G (the G.3 commit; row `G.4` reaches it through the unit loop) | The extra arg line appended to each `committer` dispatch — omitted, or `push: true`. **Phase D dispatches no `committer`:** its only dispatch is `statistics-plan-writer`, and the statistics commit is a fork-added direct-`git` operation, not a committer dispatch. |
 | `<reentry_command>` | `## Setup` step 4 (STOP soft-fail at launch); `## Safety contract` step 1 (pre-dispatch STOP check) | The command named in a halt message ("… re-run X to continue"). |
 | `<planning_command>` | `## Setup` step 2 — the missing-story-index rule, and nowhere else in this file | The command that produces the plan this flow expects to already exist. |
 | `<next_step_note>` | `## Phase D — Done` → D.2 Done summary (the terminal "optional next step" paragraph) | The hand-off line that closes the Done summary. |
@@ -81,6 +81,11 @@ The `Used at` column is load-bearing, not documentation. A flow that enters this
    | `<qa_review_findings_dir>` | `<state_dir>/qa_reviews/<branch>_qa_review/` | (will be created later, on the first round QA finds issues) The QA-review folder the qa-tester writes into. The folder name mirrors the round suffix on re-test rounds (`<branch>_qa_review_2/` for round 2). What it holds per round: see `#### Notes on the QA-review paths`. |
    | `<qa_review_path>` | `<qa_review_findings_dir>/qa_review_<iteration>.md` — **do NOT pre-compute this as a literal** | The merged round-level QA index the orchestrator assembles in E.2. Full rule: see `#### Notes on the QA-review paths`. |
    | `<qa_fix_findings_root>` | `<state_dir>/qa_review_point_reviews/<branch>_qa_review/` | The QA-fix per-item reviewer findings root (`item_<N>/`), mirroring `review_plan_point_reviews/`. Mirrors the round suffix on re-test rounds. |
+   | `<gate_key>` | `task` | The Run gates key of this flow: the wrapper label's and every test-fix path's leading segment. |
+   | `<test_fix_plan_path>` | `<state_dir>/test_fix_plans/<branch>_<gate_key>_round_<gate_round>.md` | (will be created later, on the first round the gates fail) The test fix plan **index** (thin: `## Context` + `## Phase 2 Readiness — Ordered Fix List` + finding pointers). `<gate_round>` is bound in `### G.0 Resolve the round` and re-bound each round — resolve this path through it every time, never as a literal. |
+   | `<test_fix_findings_dir>` | `<state_dir>/test_fix_plans/<branch>_<gate_key>_round_<gate_round>/` | (will be created later) The per-finding detail folder (`finding_<N>.md`). |
+   | `<test_fix_review_folder>` | `<state_dir>/test_fix_plan_reviews/<branch>_<gate_key>_round_<gate_round>/` | Where the `architecture-reviewer` writes its review of the test fix plan (G.2). |
+   | `<test_fix_findings_root>` | `<state_dir>/test_fix_point_reviews/<branch>_<gate_key>_round_<gate_round>/` | The per-item layer-reviewer findings root (`item_<N>/`) for the G.4 fix loop. |
 
    **Phase-gated rows.** `init` materializes an artifact directory, with its contract README, only when the phase that owns it is `true` in `harness.config.json`: every path above under `<state_dir>/business_parity_*` is gated on `phases.parity`, and every one under `<state_dir>/qa_*` or `<state_dir>/ui_test_*` on `phases.qa`. The rest are always written. A gated directory that is absent means its phase is off, not a write the flow missed.
 
@@ -95,11 +100,11 @@ Two rows of the table above carry rules too long for a table cell.
 
 **`<qa_review_path>` — do NOT pre-compute this as a literal.** It is the **merged round-level index** at `<qa_review_findings_dir>/qa_review_<iteration>.md` that the orchestrator assembles in E.2 (iteration is `0` for each round; the round suffix lives in the folder). Use that path verbatim for the E.2 commit and as the E.3 `plan_path` / readiness source. (The qa-tester's per-dispatch `findings_file:` returns name the per-test index files `qa_review_<iteration>_t<T>.md`, NOT this merged file — those returns are merge inputs, not the readiness source.)
 
-3. **Working directory:** stay where you are; never `cd`. All paths absolute, anchored at `<repo_root>` — this checkout's root, with the app itself at `<app_root>` — which is where the app sits, not a working directory. Run the canonical test / type-check from `<repo_root>` through their configured wrappers: `<test_cmd>` (with the path to test appended) and `<typecheck_cmd>` — the strings `commands.test` and `commands.typecheck` hold, each normally a repo-relative wrapper invocation. **Run each configured string exactly as it is written** unless that call is **refused** — the `<test_cmd>` / `<typecheck_cmd>` row above states what to run then — and the same for any other package script the flow needs: take the string from its `commands.*` key and run it as-is — never invoke the underlying package manager directly, and never rewrite a configured command into an absolute path. Where `commands.typecheck` holds exactly `<none>`, this repository has no type check: run nothing for that gate, substitute no tool of your own, and record it as **not run**, never as a pass.
+3. **Working directory:** stay where you are; never `cd`. All paths absolute, anchored at `<repo_root>` — this checkout's root, with the app itself at `<app_root>` — which is where the app sits, not a working directory. An implementer's unit runs the type check from `<repo_root>` through its configured wrapper: `<typecheck_cmd>` — the string `commands.typecheck` holds, normally a repo-relative wrapper invocation. **Run each configured string exactly as it is written** unless that call is **refused** — the commands row of `## Resolved values` states what to run then — and the same for any other package script the flow needs: take the string from its `commands.*` key and run it as-is — never invoke the underlying package manager directly, and never rewrite a configured command into an absolute path. Where `commands.typecheck` holds exactly `<none>`, this repository has no type check: run nothing for that gate, substitute no tool of your own, and record it as **not run**, never as a pass.
 4. **STOP file soft-fail at launch:** if `<state_dir>/STOP` exists, halt and report: `Halted by STOP file at <state_dir>/STOP. Delete the file and re-run <reentry_command> to continue.` Do NOT delete the STOP file yourself — it is owned by whoever created it, never by this flow. Then stop. (A STOP file is a user-initiated stop, not a flow blocker: it halts exactly as written here.)
 5. **Initialize safety counters:**
    - Run `echo 0 > <state_dir>/.dispatch_counter` to reset the persistent dispatch counter. The counter lives in `<state_dir>/.dispatch_counter` — on disk rather than in context, so it survives harness auto-compaction; re-read on every dispatch (see the safety contract below). It is a machine-local run artifact: keep it out of commits (`init`'s managed ignore block covers it), and never stage `<state_dir>/` as a directory.
-   - `MAX_TOTAL_DISPATCHES = 800` — the hard ceiling on Agent dispatches across the entire session (Phases A+A1.5+A2+B+C+C2+E+D). Phase D's single `statistics-plan-writer` dispatch (the first branch-statistics write) also counts against this ceiling — one extra dispatch, well within the existing headroom, so no numeric change is required for it. Raised from 600 to absorb the **per-test QA fan-out**: Phase E now dispatches the `qa-tester` once per UI test **and** a `committer` (`ui_test_pass`) once per passing test, plus per-failure fix loops, across up to `MAX_QA_ROUNDS` rounds (skip-`[x]` shrinks re-test rounds to only the still-failing tests) — so the QA phase scales with the UI-test count (≈2–3× it) rather than a single dispatch. Phase A1.5's business-parity review of the implemented branch (one `business-parity-reviewer` dispatch plus, on FAIL, a handful of fix-loop dispatches), Phase A2's architecture review of the implemented branch (one `architecture-reviewer` dispatch plus, on FAIL, a handful of fix-loop dispatches), and Phase C2's adversarial skeptic review (one `skeptic-reviewer` dispatch plus, on FAIL, a meta-review loop and a handful of fix-loop dispatches) also count against this ceiling — 800 already has the headroom, so no numeric change is required for them. If you hit it, halt.
+   - `MAX_TOTAL_DISPATCHES = 800` — the hard ceiling on Agent dispatches across the entire session (Phases A+A1.5+A2+B+C+C2+E+G+D). Phase D's single `statistics-plan-writer` dispatch (the first branch-statistics write) also counts against this ceiling — one extra dispatch, well within the existing headroom, so no numeric change is required for it. Raised from 600 to absorb the **per-test QA fan-out**: Phase E now dispatches the `qa-tester` once per UI test **and** a `committer` (`ui_test_pass`) once per passing test, plus per-failure fix loops, across up to `MAX_QA_ROUNDS` rounds (skip-`[x]` shrinks re-test rounds to only the still-failing tests) — so the QA phase scales with the UI-test count (≈2–3× it) rather than a single dispatch. Phase A1.5's business-parity review of the implemented branch (one `business-parity-reviewer` dispatch plus, on FAIL, a handful of fix-loop dispatches), Phase A2's architecture review of the implemented branch (one `architecture-reviewer` dispatch plus, on FAIL, a handful of fix-loop dispatches), Phase C2's adversarial skeptic review (one `skeptic-reviewer` dispatch plus, on FAIL, a meta-review loop and a handful of fix-loop dispatches), and Phase G's Run gates rounds (per failing round, one `test-fix-plan-writer` dispatch, an `architecture-reviewer` loop, one `committer` and the G.4 fix-loop dispatches, across at most `MAX_GATE_ROUNDS` rounds; the gate runs themselves are Bash commands and count nothing) also count against this ceiling — 800 already has the headroom, so no numeric change is required for them. If you hit it, halt.
 6. **Establish the run mode — from the record where one exists, otherwise a grep; open the contract only on a hit.** Where this flow's fork maintains a flow-progress ledger carrying a `## Run mode` block, read that block: a block reading `skipped: none` with no `ignored:` line means **no run mode** — hold `none`, emit `📌 Run mode: none` where a disclosure is owed, and open nothing further — and a block that names any id **or carries an `ignored:` line** means **read `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` and follow it**. Where the fork maintains no ledger, or its ledger carries no such block (a run created before this contract existed), run `grep -nE '^#+ *Run mode' <task_prompt_path>` and take the same two branches off it: no hit → `none`; a hit → read that file and resolve the section to its directive ids. Hold what you resolved for this session. Which of the two sources applies, and everything else about the contract, is that file's; none of it is restated here. **This half neither creates nor seeds that record.** Where a record exists it was written by the fork that owns it, at planning time; on a resumed run it already exists and is authoritative — which is exactly how a session that never dispatched a planner arrives holding the run mode. What you act on is the **re-read** each gate below performs, never a value carried forward from here.
 
 ---
@@ -405,13 +410,13 @@ When the loop ends — every `[ ]` entry inside the skeptic-review index's `## P
 
 ## Phase E — QA testing
 
-**Skip this phase unless `phases.qa` is `true` in `harness.config.json`.**
+**Skip this phase unless `phases.qa` is `true` in `harness.config.json`** — a skipped Phase E proceeds to **Phase G**, whichever of the skips below fired.
 
 After Phases A–C complete (implementation, end-of-branch review, review-plan fixes), drive the **running** app through the UI-test plan via the `qa-tester` agent, and — if QA finds defects — loop the fixes back through the normal implementer / reviewer / committer agents until QA passes. **You own the dev-server lifecycle**: the qa-tester never starts, polls, or stops the server (it only consumes an already-running one — see `qa-tester.md`). Start it in E.0, tear it down when QA passes or on any halt.
 
-If `<ui_test_index>` does not exist (no UI-test plan was produced for this branch), **skip Phase E entirely** and note that in the Done summary — do not fail.
+If `<ui_test_index>` does not exist (no UI-test plan was produced for this branch), **skip Phase E entirely**, note that in the Done summary and proceed to **Phase G** — do not fail.
 
-**Gate — re-read the run mode.** Before E.0, re-read the run mode from the record `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` → `## The durable record` defines for this flow. If `qa` is among the skipped ids, **skip Phase E entirely** — no `qa-tester` dispatch, no mark-pass commit, no fix loop, no re-test round — and note the skip for the Done summary; do not fail. Two things follow that the sentence above does not cover:
+**Gate — re-read the run mode.** Before E.0, re-read the run mode from the record `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` → `## The durable record` defines for this flow. If `qa` is among the skipped ids, **skip Phase E entirely** — no `qa-tester` dispatch, no mark-pass commit, no fix loop, no re-test round — note the skip for the Done summary and proceed to **Phase G**; do not fail. Two things follow that the sentence above does not cover:
 
 - **The three skips have different provenances and are reported differently.** A missing `<ui_test_index>` is this flow's own finding that no UI-test plan exists to run; a run-mode skip is an authored exclusion decided for this branch before the run began, and it holds *even if* a UI-test index is present; a `phases.qa: false` gate is a repository-level exclusion that holds for every branch and needs no task prompt at all. D.2 gives each its own wording — never report one in another's words. The execution-environment skip a fork's ledger may record (below) is reported in the wording the driving fork gives it, not in any of D.2's arms.
 - **A run-mode skip happens before E.0, so no dev server is ever started, and none is torn down.** E.0's teardown rule and the "tear down the background dev server" obligation in `## Stop conditions` are vacuous for a phase that never ran — there is no process to kill and no port to release.
@@ -447,7 +452,7 @@ You (not the qa-tester) start the dev server for the app at `<app_root>` in the 
 
 **Skip already-passed (`[x]`) tests; run only the still-`[ ]` ones.** A passing test is marked `[x]` in the readiness list (the mark-on-pass step below), so QA is **resumable** across rounds and sessions: re-running Phase E does not re-test what already passed. This mirrors how the unit loop walks a readiness list and acts only on `[ ]` entries.
 
-**All-`[x]` short-circuit.** If **every** readiness entry in the `<ui_test_index>` is already `[x]` when E.1 starts, there is nothing to run: skip the QA loop entirely and go to **Done**, noting QA was already complete for this branch. Do not fail, do not assemble any QA-review index. (Keep the E.0 ordering — the dev server is already up from E.0; just tear it down per the E.0 teardown rule before going to Done. This is the "nothing to test" terminal case.)
+**All-`[x]` short-circuit.** If **every** readiness entry in the `<ui_test_index>` is already `[x]` when E.1 starts, there is nothing to run: skip the QA loop entirely and go to **Phase G**, noting QA was already complete for this branch. Do not fail, do not assemble any QA-review index. (Keep the E.0 ordering — the dev server is already up from E.0; just tear it down per the E.0 teardown rule before going to Phase G. This is the "nothing to test" terminal case.)
 
 **Loop over the still-`[ ]` test cases in `<ui_test_index>`, in order.** For each test case `N` whose readiness entry is `[ ]`, apply the **safety contract** (STOP check → increment counter → heartbeat → compose the prompt) **before that dispatch**, then dispatch `qa-tester` for that single test. **Skip** any test whose readiness entry is already `[x]`: do not dispatch the qa-tester for it, do not count it as a failure, do not count it toward the round verdict — it is simply not run.
 
@@ -487,7 +492,7 @@ Heartbeat label: `[E · qa · test 3 · mark-pass] → committer  (#N)`. The com
 
 After the E.1 loop, fold the per-test returns into a single round outcome. The verdict is decided over **only the tests that ran** (the still-`[ ]` ones); skipped `[x]` tests are not folded in either direction:
 
-- **Round PASS** — when **no `[ ]` entries remain** in the `<ui_test_index>` after the run: every test that ran returned `verdict: PASS` and got marked `[x]` (the mark-on-pass step), and the previously-passed tests were already `[x]` and skipped. QA is clean for this round. Each passing test that ran was already marked + committed **per-test during E.1** (the `mode: ui_test_pass` committer dispatch), so the UI-test index is fully `[x]` by now — the round-pass branch writes **no** further index: tear down the dev server (E.0) and go to **Done**. (No round-level QA-review index is assembled on a clean round either; that merged index only exists on a FAIL round.) A skipped (`[x]`) test is **not** a pass to recount here — it simply was not run; the PASS condition is "no remaining `[ ]`," not "every test in the index ran and passed this round." On a FAIL round the same per-test marking already happened in E.1 for every test that ran and passed — only the *failing* tests are left `[ ]`, and they go through the E.3 fix loop and get marked when they pass on re-test (E.4).
+- **Round PASS** — when **no `[ ]` entries remain** in the `<ui_test_index>` after the run: every test that ran returned `verdict: PASS` and got marked `[x]` (the mark-on-pass step), and the previously-passed tests were already `[x]` and skipped. QA is clean for this round. Each passing test that ran was already marked + committed **per-test during E.1** (the `mode: ui_test_pass` committer dispatch), so the UI-test index is fully `[x]` by now — the round-pass branch writes **no** further index: tear down the dev server (E.0) and go to **Phase G**. (No round-level QA-review index is assembled on a clean round either; that merged index only exists on a FAIL round.) A skipped (`[x]`) test is **not** a pass to recount here — it simply was not run; the PASS condition is "no remaining `[ ]`," not "every test in the index ran and passed this round." On a FAIL round the same per-test marking already happened in E.1 for every test that ran and passed — only the *failing* tests are left `[ ]`, and they go through the E.3 fix loop and get marked when they pass on re-test (E.4).
 - **A per-test `error:`** (dev server unreachable, an auth-gated test blocked with no credentials, etc.) → this is a **stop condition** the moment any dispatch returns it. Tear down the dev server, then halt and report the blocker via `<escalate>` **immediately** — do not let later per-test dispatches mask an earlier blocked one, and do not roll a blocked test into a PASS. Do not continue. (A skipped `[x]` test never produces an `error:` — it is not dispatched.)
 - **Round FAIL** — if no dispatch errored but **at least one** test that ran returned `verdict: FAIL`. A skipped (`[x]`) test is never a failure (it was not run). Build the merged round index, then commit it and run E.3:
   1. **Assemble the merged round index** at `<qa_review_path>` = `<qa_review_findings_dir>/qa_review_<iteration>.md` (iteration `0`; round suffix in the folder). The qa-tester already wrote each failing test's per-dispatch index (`qa_review_<iteration>_t<T>.md`) and namespaced per-finding files (`finding_t<T>_<N>.md`) into `<qa_review_findings_dir>`. You **own** the merged index: it carries a `## Context` paragraph (branch + date + per-test pass/fail/blocked roll-up) and a single `## Phase 2 Readiness — Ordered Fix List` that enumerates **every failing test's findings exactly once**, in recommended ship order, each entry `N. [ ] **Finding K** — short description. _(layer: …)_` pointing at the corresponding `finding_t<T>_<M>.md` file. **Assign a fresh contiguous merged identity:** number the merged findings `1..n` in the order you list them and write that number as both the entry's `**Finding K**` token and its `### K. Title` pointer heading, leaving each entry's pointer aimed at its unchanged `finding_t<T>_<M>.md` file (the per-test `M` is never renumbered — only the merged `K`). **No two entries may share a token:** `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` row `E.3` passes the matching `### K. <title>` heading as `task_heading:` and `committer.md` resolves the readiness entry by that token alone, with no positional fallback. Renumber the `## Must Fix` / `## Should Fix` / `## Nice to Have` pointer headings with the entries so the index stays 1-to-1 (`**Finding K**` ↔ `### K. Title` ↔ one detail file), as the code-review index is. **Carry each per-dispatch entry's `_(layer: …)_` tag through verbatim into the merged entry — the qa-tester already tagged it (it knows the finding's fix-target layer when it authors the entry); the orchestrator copies it, it does not re-derive it** (and never opens the finding body to determine the layer). Do **not** fragment the readiness list across the per-dispatch indices — the E.3 fix loop reads **exactly one** `## Phase 2 Readiness — Ordered Fix List` as its source of truth. (Assembling the index is a plan/workflow document edit; you may write it directly here, the same way you bind and pass `<qa_review_path>` — you are not editing app code.)
@@ -523,9 +528,119 @@ Tear down the dev server when QA passes (E.2) or on any halt in this phase.
 
 ---
 
+## Phase G — Run gates
+
+Run this phase after Phase E — or after Phase E was skipped — and before Phase D. **It is the only place in the flow `<test_cmd>` runs**, and it runs only through the `run-test-suite.sh` wrapper. You never learn what the gates are and never read their output: you read the one line the wrapper prints, and hand its log path on unread. Why no unit runs the suite, and what a unit runs instead, is `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`. A `fail` opens a fix loop — a test fix plan written from the log, approved by the architecture gate, committed, then walked by the unit loop — and the gates run again, for at most `MAX_GATE_ROUNDS` gate runs.
+
+> **Two flow-dependent vocabularies of `<…>` name appear below, and this section is written to be executed by a flow from another family too** (`mode_contract.md` rule (5) — another family's core may cite it by reference). The **Mode-contract bindings** it uses are `<escalate>` and `<committer_push>` — plus `<per_unit_review>`, via the unit-loop row G.4 runs — and they resolve from the fork the executing flow was dispatched via. Every **other** `<…>` name here — setting aside the config-value tokens declared in `## Resolved values` — is a **path placeholder** and resolves from the `## Setup` of the flow's **own entry core**: `<branch>`, `<gate_key>`, `<test_fix_plan_path>`, `<test_fix_findings_dir>`, `<test_fix_review_folder>` and `<test_fix_findings_root>`. **Resolve the four test-fix paths through that Setup every round, never as a literal** — each carries `<gate_round>`, and a path baked in on one round lands the next round's artifacts in the previous round's folder. `<gate_round>`, the wrapper's `<log>` and the counter `<iteration>` are neither kind: they are bound below, at their point of use. No step in this phase depends on any other phase of this file having run.
+
+### G.0 Resolve the round
+
+`<gate_round>` is derived from the tree, never carried in memory, so a resumed session derives the same round a straight-through one holds:
+
+1. List this `<gate_key>`'s test fix plan indices — the files `<branch>_<gate_key>_round_<j>.md` directly under `<state_dir>/test_fix_plans/` — and which of them are tracked, with `git ls-files <state_dir>/test_fix_plans/`.
+2. An index is **complete** when it is tracked and its readiness list has no `[ ]` entry — `grep -cE '^[0-9]+\. \[ \]' <index>` prints `0`. (Match the entry form, never a bare `[ ]`: the index's lead paragraph names the marker in prose.)
+3. `<gate_round>` = 1 + the number of complete indices.
+4. Then look at the index numbered `<gate_round>`, if one exists:
+   - **Tracked, with a `[ ]` entry** — a committed test fix plan still in flight. Resume at **G.4** on it; do not re-run the gates for this round.
+   - **Untracked** — a draft that never converged. Run **G.1** for this round; G.2 rewrites the draft.
+   - **None** → run **G.1**.
+
+### G.1 Run the gates
+
+Apply the safety contract's STOP check — and the PAUSE check, where the fork adds one after it — but **increment no counter and compose no prompt**: a gate run is a Bash command, not a dispatch. Then:
+
+1. Print `[G · gates · round <gate_round>] → run-test-suite.sh`.
+2. Run `bash <scripts_dir>/run-test-suite.sh <gate_key>_round_<gate_round>` as one plain command, with the label resolved before the command is issued.
+3. Print `[G · gates · round <gate_round>] <the wrapper's line>`.
+
+**If the tool layer moves the run to the background, or the run form itself prints `pending`** — the first the expected case wherever the suite outlasts the Bash tool's foreground window, the second meaning a run of this label is already in flight, because this session re-entered the phase while its earlier run still runs — collect the verdict with the wrapper's wait form, and with nothing else:
+
+- Issue `bash <scripts_dir>/run-test-suite.sh --wait <gate_key>_round_<gate_round>` as a fresh plain foreground command. On `pending`, apply the STOP check (and the fork's PAUSE check) again, still incrementing no counter, and re-issue the same call. Repeat until it prints `pass` or `fail <log>`: that line is the verdict. If the backgrounded run's own completion arrives first, its line is the same verdict.
+- The number of `--wait` calls is not capped. Each call is bounded by the wrapper's wait slice, `pending` means only "call again", and the suite may take any length of time, so nothing here depends on a wall-clock constant being large enough. The STOP check on every re-issue is how a human ends the wait. It does not stop the suite, which runs on until it exits, and a re-entered Phase G collects that same run's verdict rather than starting a second.
+- **Forbidden here, by name: a `Monitor`, a `sleep` of any length in your own command, and ending the turn with the run in flight.** A headless `claude -p` session is torn down when its turn ends, a pending monitor dies with it, and that `rc=0` exit with no `PAUSE_ACK` is classified `completed` (`${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` → §2.5, the paragraph opening *"A backoff is not a resumption mechanism, and neither is a `Monitor`."*) — the run would stop at Phase G behind a success notification. Repeated foreground `--wait` calls keep the turn open, so the session, and the backgrounded wrapper it launched, stay alive until the verdict is read.
+- A `--wait` refusal (no run in flight, nothing on stdout) is the no-verdict-line case below.
+
+Branch on the verdict line:
+
+- `pass` → leave the phase for **Phase D**, under the phase-boundary sentence that closes G.5.
+- `fail <log>` with `<gate_round>` ≥ `MAX_GATE_ROUNDS` → `<escalate>`: the gates are not converging. Name every round's log path — `<log>` with its round number replaced by each `j` ≤ `<gate_round>` whose log exists — and the latest test fix plan index.
+- `fail <log>` otherwise → bind `<log>` to the printed path and go to **G.2**.
+- **No verdict line** — the wrapper, or its wait form, printed nothing on stdout → `<escalate>`, quoting the wrapper's one stderr line.
+
+### G.2 Write and review the test fix plan
+
+`iteration = 0`. Apply the **safety contract** (STOP check → increment counter → heartbeat → compose the prompt), then dispatch `test-fix-plan-writer`. Heartbeat:
+
+```
+[G · test-fix-plan · iter <iteration>] → test-fix-plan-writer  (#<total_dispatches>)
+```
+
+Prompt — `Earlier logs:` lists `<log>` with its round number replaced by each `j` < `<gate_round>` whose file exists, comma-separated, or `none`:
+
+```
+Write the test fix plan. Branch: <branch>. Test log: <log>. Earlier logs: <paths or none>. Output: <test_fix_plan_path>.
+```
+
+Parse the return — on this dispatch and on every revision dispatch below alike:
+
+- A **`## Questions`** section (`fix_plan_file: (pending — questions for user)`) → `<escalate>`, carrying the questions verbatim.
+- `blocker:` → `<escalate>` with it.
+- `fixable: 0` → **G.3**, then `<escalate>`: nothing on this round's plan is the branch's to fix. Name the index and its `## Not fixable on this branch` section. No architecture gate runs for a plan with no fixes.
+- Otherwise → the architecture gate.
+
+**The architecture gate.** Apply the safety contract, then dispatch `architecture-reviewer` in plan-review mode. Heartbeat:
+
+```
+[G · test-fix-plan · arch · iter <iteration>] → architecture-reviewer  (#<total_dispatches>)
+```
+
+```
+story_path: <test_fix_plan_path>
+task_files_dir: <test_fix_findings_dir>
+prompt_path: <log>
+findings_folder: <test_fix_review_folder>
+iteration: <iteration>
+```
+
+(The `architecture-reviewer` creates `<test_fix_review_folder>` itself only when it has findings to write — do NOT `mkdir -p` here.)
+
+- `verdict: PASS` → **G.3**.
+- `verdict: FAIL` → increment `iteration`. If `>= 5`, `<escalate>`, naming the latest `findings_file:` and the index's `## Rejected findings` section. Else apply the safety contract, dispatch `test-fix-plan-writer` with `Revise the test fix plan at <test_fix_plan_path> per architecture findings: <findings_file>.` (heartbeat as above, at the new `iteration`), parse its return as above, and re-run the gate.
+
+### G.3 Commit the test fix plan
+
+Apply the safety contract (heartbeat `[G · test-fix-plan · commit] → committer  (#<total_dispatches>)`), then spawn `committer` — it stages the index and its per-finding folder together, with no checkbox flip:
+
+```
+plan_path: <test_fix_plan_path>
+mode: review_plan_file
+meta_findings_folder: <test_fix_review_folder>
+commit_prefix: chore
+<committer_push>
+```
+
+**The existence guard on `meta_findings_folder` is yours**, exactly as in B.3: include the key **only if** `<test_fix_review_folder>` exists and is non-empty — a gate that passed on iteration 0 created none, and a `fixable: 0` plan may never have reached the gate. The fixed subject `chore: add code review for <branch>` is reused as-is, as in E.2. Then run **G.4**, or `<escalate>` on the `fixable: 0` path.
+
+### G.4 Fix loop
+
+Run **the unit loop of `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The unit loop`, substitution row `G.4`** — that row carries this round's test fix plan index as its readiness index and every other per-phase value the loop substitutes.
+
+When the loop ends — every `[ ]` entry inside the test fix plan index's `## Phase 2 Readiness — Ordered Fix List` is `[x]` — go to **G.5**.
+
+### G.5 Re-run, and the round cap
+
+`MAX_GATE_ROUNDS = 5`. Increment `<gate_round>`, re-resolve the four test-fix paths through it, and return to **G.1**. The cap counts **gate runs**, not fix loops — the same five-iteration bound the plan-writing and end-of-branch review loops carry — so a branch gets at most four fix loops, and a `fail` on round 5 escalates without a fifth.
+
+**An answered park never buys a fresh cap.** A round-cap park writes no index for its round, so on resume G.0 counts the four complete indices before it and yields round 5 — at least `MAX_GATE_ROUNDS`. The resumed phase therefore runs the gates exactly once more, and a further `fail` escalates again without another fix loop. A park from G.2 leaves its round's index absent or untracked, so the resumed phase re-runs that same round; a `fixable: 0` park leaves a committed index with no `[ ]` entry, so the resumed phase runs the gates for the next round.
+
+Before you leave this phase — on `pass`, and before any durable phase-completion marker your fork records — run `## Phase boundaries`.
+
+---
+
 ## Phase D — Done
 
-This is the **last** phase, run after Phase E (QA).
+This is the **last** phase, run after Phase G (Run gates).
 
 ### D.1 Write the first branch-statistics file (pre-user-review)
 
@@ -558,6 +673,7 @@ Emit the Done summary — a short summary. **Every figure in it is computed here
 - **Architecture review (Phase A2): N findings fixed** — or "passed clean (no architecture findings)" if `architecture-reviewer` returned `verdict: PASS`, or "skipped by run mode (authority: the branch's task prompt `### Run mode`)" if the phase's gate skipped it
 - **Skeptic review (Phase C2): N net-new findings fixed** — or "passed clean (no net-new findings)" if `skeptic-reviewer` returned `verdict: PASS`
 - **QA (Phase E): passed on round N, with X findings fixed across the rounds** — or "skipped (no UI-test plan for this branch)" if `<ui_test_index>` was absent, or "skipped by run mode (authority: the branch's task prompt `### Run mode`)" if the run-mode gate skipped it, or "phase not enabled (authority: the `phases:` line the run's ledger recorded from `harness.config.json`, or `harness.config.json` `phases.qa` itself where this flow keeps no ledger)" if the configuration gate did, or "already complete (every UI test was already `[x]`)" if the E.1 all-`[x]` short-circuit fired. The three exclusion arms are **not** interchangeable — an absent plan is this flow's own finding, a run mode an authored exclusion decided for this branch, the configuration a repository-level one that holds for every branch (`## Phase E — QA testing` states the distinction) — so never report one in another's words. Where the recorded block carries the execution-environment skip (`${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` → `### 1.3`), this bullet is replaced by the driving fork's wording for it, and none of the arms above is used. Where E.0 step 3 reached its cannot-run arm — neither the `ps -p` probe nor the step-2 log was available — append `liveness unverified` and the one-clause reason to the **passed** arm, e.g. "passed on round 2, with 3 findings fixed across the rounds — liveness unverified: the probe was refused and the dev-server log unreadable". That clause qualifies the passed arm; it is **not** a fourth exclusion and never replaces one
+- **Run gates (Phase G): passed on round N, with X test fixes landed across the rounds** — both counted off the tree, so a resumed session states the same figures a straight-through one does: `N` is `### G.0 Resolve the round`'s derivation re-run here (1 + this `<gate_key>`'s complete test fix plan indices), `X` the count of `[x]` entries across those indices' `## Phase 2 Readiness — Ordered Fix List` sections (`grep -cE '^[0-9]+\. \[x\]'` per index). Where either cannot be counted — a listing or a count refused — say **that** and name the command, never a remembered number
 - **Branch statistics: `success_rate` (`pre-user-review`), written to `<statistics_file>`** — the `success_rate` and path from D.1 (omit this bullet if D.1 returned `error:`)
 - **Corpus staleness: each entry's type and what it owes — a `stale-rule` entry's invalidated conventions document and the follow-up restatement it owes, an `undescribed-layer` entry's directory and the supervised remedy it owes** — taken from the `## Corpus staleness` section of the plan writer's return (that literal heading; the section is omitted when there is none), each entry summarised with its type as its first token, the way the writer emitted it. Say **"none reported"** when the plan raised none, and — when the planning half ran in an earlier session, so this session never saw that return — say **that**, never "none": they are different facts. This is a hand-off line, never a gate: corpus debt is a follow-up task's work, not a blocker on this branch
 - **Review questions: the decisions a review declined to take, and who owes each** — taken from the `## Questions` section of the `branch-reviewer`'s and `skeptic-reviewer`'s returns (that literal heading; the section is omitted when there is none). Say **"none raised"** when neither raised one. This is a hand-off line, never a gate: an unanswered review question is the operator's to settle, not a blocker on this branch
@@ -571,7 +687,7 @@ Confirm the dev server started in Phase E has been torn down.
 
 Then close with `<next_step_note>`.
 
-Then stop. Do not push, do not open a PR, do not run a final test command unless asked.
+Then stop. Do not push, do not open a PR, do not run a final test command unless asked — Phase G is where the suite runs.
 
 ---
 
@@ -579,7 +695,7 @@ Then stop. Do not push, do not open a PR, do not run a final test command unless
 
 - **STOP file present** at `<state_dir>/STOP` (checked before every dispatch — see `## Safety contract` above). It halts exactly as that step words it: a plain report naming `<reentry_command>`, then stop — **never** routed through `<escalate>`, because a STOP file is a user-initiated stop, not a flow blocker.
 - **`total_dispatches > MAX_TOTAL_DISPATCHES`** — global session ceiling exceeded. It halts exactly as `## Safety contract` step 2 words it: a plain report + stop, **not** an escalation — this flow does not park on a cap hit.
-- Any implementer reports `blocker:` or returns an `error:` — halt and report the blocker via `<escalate>`. **One exclusion:** a blocker the unit loop closes the unit on under `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `### The dispositioned outcome` — that loop continues past it, so this condition is not reached and nothing is escalated. Every other blocker halts here, and an `error:` return halts either way.
+- Any implementer reports `blocker:` or returns an `error:` — halt and report the blocker via `<escalate>`. **One exclusion:** a blocker the unit loop closes the unit on under `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `### The dispositioned outcome` — the `prohibited — ` marker, or on row `G.4` the `already passing — ` one — that loop continues past it, so this condition is not reached and nothing is escalated. Every other blocker halts here, and an `error:` return halts either way.
 - Any review loop hits `iteration >= 5` without `PASS` — `<escalate>`, naming the latest findings file path.
 - Business-parity-review fix loop (Phase A1.5.3, the implemented-branch parity phase's fix loop) hits `iteration >= 5` on any item without `PASS` — `<escalate>`, naming the latest findings file path.
 - Architecture-review fix loop (Phase A2.3) hits `iteration >= 5` on any item without `PASS` — `<escalate>`, naming the latest findings file path.
@@ -589,6 +705,11 @@ Then stop. Do not push, do not open a PR, do not run a final test command unless
 - **QA dev server fails to start** (E.0 `find-free-port.sh` exits non-zero / probe exhausted, the fail-loudly-on-a-taken-port start still fails after 3 attempts, or polling on `http://localhost:<qa_port>` never answers within the bound) — tear down any started server (`kill-dev-server.sh <qa_port>`), then `<escalate>`.
 - **Any per-test `qa-tester` dispatch returns `error:`** (dev server unreachable, an auth-gated test blocked with no credentials) — tear down the dev server, then `<escalate>` the moment it occurs; do not let later per-test dispatches mask it.
 - **QA re-test round cap exceeded** (`MAX_QA_ROUNDS = 3` rounds still `FAIL`) — tear down the dev server, then `<escalate>`, naming the latest merged QA-review index (`<qa_review_path>` as bound for that round).
+- **Run gates round cap exceeded** (G.1: a `fail` at `<gate_round>` ≥ `MAX_GATE_ROUNDS = 5`) — `<escalate>`, naming every round's log path and the latest test fix plan index.
+- **The Run gates wrapper prints no verdict line** (G.1, the run form or its wait form) — `<escalate>`, quoting its stderr line.
+- **`test-fix-plan-writer` returns a `## Questions` section** (G.2) — `<escalate>`, carrying the questions verbatim; a `blocker:` from it — `<escalate>`.
+- **`test-fix-plan-writer` returns `fixable: 0`** (G.2) — commit the index (G.3), then `<escalate>`, naming its `## Not fixable on this branch` section.
+- **The test fix plan's architecture gate** (G.2) hits `iteration >= 5` without `PASS` — `<escalate>`, naming the latest findings file and the index's `## Rejected findings` section.
 - **Phase-D completion check fails.** Where this flow keeps its phase-progress record as a ledger, the check that runs before the terminal ledger flip finds an entry still `[ ]` — a phase that neither ran nor was authorised to be skipped — **or** the ledger's recorded `phases:` line disagreeing with the live `harness.config.json` (`${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` → `### 1.8` owns the check, both fail arms and their remedies). Do **not** flip the terminal entry and do **not** emit the Done summary — `<escalate>`, naming every unresolved entry id and the phase each names. A flow that keeps no such ledger runs no such check, and this entry is inert for it.
 
 On any Phase E halt, **tear down the background dev server** before stopping.

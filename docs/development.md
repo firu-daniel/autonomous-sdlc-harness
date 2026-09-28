@@ -237,7 +237,55 @@ npm test
 
 This gate needs `jq` 1.5 or newer on `PATH`: the outer-loop library reaches a configuration only through `jq`, and the library reader this suite exercises reports its absence as exit `2` with no message of its own. It does not need gate 2's build — `cli/package.json` runs `pretest`, so `npm test` compiles `cli/src/` before it runs and always grades the source in the tree.
 
-Every test builds its **own** fixture repository under the system temp directory and removes it in process; nothing is written inside this checkout and no fixture is committed. The gate is red if a first `init` produces a configuration the schema rejects, if a second `init` on the same tree changes anything the first one wrote, or if a `--dry-run` writes at all — idempotence and dry-run purity are asserted before any other behaviour, because a writer aimed at a repository that fails either is destructive rather than merely wrong.
+Every test gets its **own** fixture repository under the system temp directory, a copy of a seeded template its test process builds once, and removes it in process; the template is never handed to a test, nothing is written inside this checkout and no fixture is committed. The gate is red if a first `init` produces a configuration the schema rejects, if a second `init` on the same tree changes anything the first one wrote, or if a `--dry-run` writes at all — idempotence and dry-run purity are asserted before any other behaviour, because a writer aimed at a repository that fails either is destructive rather than merely wrong.
+
+**Run time, measured.** Measured by hand on 2026-09-26 on a 10-core macOS host (Darwin arm64, `os.availableParallelism()` 10), Node v22.23.2, git 2.50.1 (Apple Git-155), outside any headless session and with no other heavy process running, one host command each, from the repository root:
+
+```
+bash scripts/measure-suite.sh --ref fe17b4e2293f --runs 1
+```
+
+```
+bash scripts/measure-suite.sh --runs 1
+```
+
+`fe17b4e2293f` is the `dev` commit before the template-copied fixtures and the concurrent suites. Both before columns were measured at it, and both after columns at the branch's own `HEAD`, from the branch's worktree with the branch's own `scripts/measure-suite.sh`, the before run taken right after the after run. Each figure is the script's own `measure-suite:` line rounded to whole seconds:
+
+| Where | `npm test` before (`fe17b4e2293f`) | `npm test` after | `run-gates.sh` before (`fe17b4e2293f`) | `run-gates.sh` after |
+|---|---|---|---|---|
+| host, 10 cores | 170 s | 118 s (−31%) | 208 s | 135 s (−35%) |
+| `--cpus 4` | not yet measured | not yet measured | not yet measured | not yet measured |
+| `--cpus 2` | not yet measured | not yet measured | not yet measured | not yet measured |
+
+One run per side is deliberate. A measurement taken inside a harness session is unstable and unpredictable: other sessions can be running their own tests and other processes on the same machine at the same time, and the session taking the measurement adds to the load itself. So these figures are taken by hand, outside any headless session, on a machine with no other heavy process running. `uptime` read a 1-minute load average of 2.47 just before the after run and 2.25 just before the before run. Repeating the measurement inside a run would not make it more trustworthy. Both `npm test` runs exited 0. Every `run-gates.sh` run, before and after, exited 1 on the same single failure, `11 docs-retrieval relevance floor`, and no other. Nothing was lost between the two commits. This command, run from `cli/` at each commit, reported 787 tests passing before and 791 after, with none failing:
+
+```
+node --test --test-reporter=spec test/
+```
+
+The four it adds are `fixture-template.test.mjs`'s three cases and one entry for the new helper `helpers/concurrency.mjs`, which `node --test` counts as a test file with no tests in it. Beside them are the three suites the concurrent files now open. No case name was removed, and every test file present at the before commit has the same number of `assert.` calls at both commits.
+
+The restricted rows model the hosted runner's **core count**. GitHub's standard hosted Linux runner has 4 vCPUs for a public repository, which this one is, and 2 for a private one, so 4 is the modelled count and 2 sits beside it. Those rows need a `docker`-compatible container runtime, and without one `--cpus` exits 3. These commands fill them:
+
+```
+bash scripts/measure-suite.sh --cpus 4
+```
+
+```
+bash scripts/measure-suite.sh --cpus 2
+```
+
+```
+bash scripts/measure-suite.sh --ref fe17b4e2293f --cpus 4
+```
+
+Once taken, those figures model the core count and not the hosted runner's per-core speed, because the container runs Linux on the host's own architecture.
+
+**Where the time goes.** Every case is a serial chain of subprocesses: the CLI's own start and its git probes, and, before the template copy, about fourteen git processes to seed each fixture. The work is CPU-bound, so wall time at `n` cores is bounded below by the suite's CPU time over `n`. `init.test.mjs`, `doctor.test.mjs` and `stack-presets.test.mjs` run their cases concurrently under one bound (`cli/test/helpers/concurrency.mjs`). This turns it off and runs every case in series again, which is the first step when diagnosing a failure:
+
+```
+HARNESS_TEST_CONCURRENCY=1 npm test
+```
 
 Rehearsing it by hand means running `node cli/dist/cli.js init --cwd <scratch>` twice against a scratch git repository **outside** this checkout; the second run reports every artifact as kept. Do not aim it at this repository — gate 2 says why.
 
@@ -255,11 +303,11 @@ It **exits 0** against a freshly wired repository **that has a remote**, warning
 **Gate 6 — self-containment.** Nothing in this tree may name a location on the machine that wrote it, and no generator template may have been committed into the adopter's own dot-namespace. Run this **before committing, on the machine you are committing from**. From the tree root:
 
 ```
-grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git | grep -v '^\./\.git:[0-9][0-9]*:'
+grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs | grep -v '^\./\.git:[0-9][0-9]*:'
 find . -name '.claude' -type d -not -path './examples/notes-app/.claude' -not -path './.claude'
 ```
 
-Those two must print nothing — and this is the one gate read from its **output** rather than its exit status, because `grep` exits 1 precisely when it finds nothing, which is the passing case here — and why the first command may carry a pipe despite §5's opening rule: its anchored `grep -v` drops only the line of the root `.git`, which in a linked worktree is a one-line `gitdir:` pointer **file** naming `<main checkout>` that `--exclude-dir=.git` does not skip, so a nested `.git` file, or any file quoting a `gitdir:` line, is still printed.
+Those two must print nothing — and this is the one gate read from its **output** rather than its exit status, because `grep` exits 1 precisely when it finds nothing, which is the passing case here — and why the first command may carry a pipe despite §5's opening rule: its anchored `grep -v` drops only the line of the root `.git`, which in a linked worktree is a one-line `gitdir:` pointer **file** naming `<main checkout>` that `--exclude-dir=.git` does not skip, so a nested `.git` file, or any file quoting a `gitdir:` line, is still printed. `--exclude-dir=test_run_logs` skips the Run gates phase's logs, which are machine-local and never committed, while this gate exists to stop a machine path reaching a commit — and the log of the current run is being written while the gate reads the tree, so without it a gate run would fail on its own log.
 
 `$HOME` is inside double quotes and so is expanded by the shell: the first command searches for the home path of **the user running it**, which is why it is a pre-commit self-check rather than an audit of the tree. Run against a clean clone by anyone else it passes unconditionally, because another author's home path is not theirs — it says nothing about what is committed. To sweep a tree you did not write, widen it to the general shapes, `grep -rnE '/(Users|home)/[a-z]' . --exclude-dir=node_modules --exclude-dir=dist`, and read the hits by eye: that form has legitimate matches — the fictional `/Users/me` and `/home/ada` paths in `docs/watcher.md`, `cli/test/daemon.test.mjs` and `cli/src/daemon/units.ts` — so it is not a print-nothing gate.
 

@@ -55,7 +55,7 @@ The docs-retrieval grant — one roster, one wire
 -----------------------------------------------
 
 The docs-retrieval search tool `mcp__harness-docs__search_docs` is granted to
-exactly these ten agents:
+exactly these eleven agents:
 
   architecture-reviewer.md
   branch-reviewer.md
@@ -64,6 +64,7 @@ exactly these ten agents:
   skeptic-reviewer.md
   task-plan-reviewer.md
   task-plan-writer.md
+  test-fix-plan-writer.md
   ui-tests-plan-reviewer.md
   ui-tests-plan-writer.md
   user-review-fix-plan-writer.md
@@ -81,7 +82,7 @@ contract's `<docs_retrieval>` row and bullet tell the agent to ignore it unless
 only when retrieval is on (`cli/templates/claude/settings.autonomous.retrieval.json`).
 
 The server name and the tool name are a wire owned by `cli/src/retrieval/server.ts`
-(`DOCS_SERVER_NAME`, `SEARCH_TOOL_NAME`). Renaming either is an edit to the ten
+(`DOCS_SERVER_NAME`, `SEARCH_TOOL_NAME`). Renaming either is an edit to the eleven
 agent files above, that module, and the two CLI templates that carry the server
 name (`cli/templates/repo/mcp.retrieval.json`,
 `cli/templates/claude/settings.autonomous.retrieval.json`). Re-derive the roster
@@ -89,7 +90,7 @@ with
 
   grep -rln --include='*.md' "mcp__harness-docs__search_docs" plugin/agents
 
-whose output must be exactly the ten files listed above; the `--include` keeps
+whose output must be exactly the eleven files listed above; the `--include` keeps
 this file, which names the tool, out of the result.
 
 

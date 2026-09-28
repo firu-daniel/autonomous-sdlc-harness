@@ -1,6 +1,6 @@
 # Semi-autonomous orchestrator loop
 
-Run `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` Phases **A → A1.5 → A2 → B → C → C2 → E → D** verbatim by reference, with the bindings below. Do not restate the phase bodies — Setup, the Safety contract, every phase, the stop conditions and the "What you must NOT do" list are canonical there, and the unit loop with its substitution table, named exceptions and gated per-unit review step is canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md`, which the core cites.
+Run `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` Phases **A → A1.5 → A2 → B → C → C2 → E → G → D** verbatim by reference, with the bindings below. Do not restate the phase bodies — Setup, the Safety contract, every phase, the stop conditions and the "What you must NOT do" list are canonical there, and the unit loop with its substitution table, named exceptions and gated per-unit review step is canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md`, which the core cites.
 
 **This fork is bound by the semi-autonomous entry point only.** The `/autonomous-sdlc-harness:branch-implement-plan-semi-autonomous` command is its sole reader. It does **not** serve the supervised task-plan implementation flow: `/autonomous-sdlc-harness:branch-implement-plan` reads `${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_implementation_instructions.md`, which sends it on to `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions.md` — a separate, human-gated, one-item-per-session loop, and not a mode fork over this core. Two files each declaring themselves the supervised orchestration flow is precisely the naming lie this restructure exists to end.
 
@@ -42,7 +42,7 @@ One row per binding declared in `plan_orchestration_instructions_core.md` → `#
 - `## Setup (once per session)` — its six steps and the path-placeholder table that resolves every `<bracketed-name>` this flow uses. Canonical in the core.
 - `## Safety contract — applies before EVERY Agent dispatch` — the per-run `<state_dir>/STOP` check, the `.dispatch_counter` increment, `MAX_TOTAL_DISPATCHES`, the heartbeat format, and the compose-the-prompt step. Canonical in the core.
 - **The unit loop** — its body, the layer routing table, the gated per-unit review step, the substitution table and the named exceptions. Canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md`, which the core cites by reference.
-- Every phase body — **A, A1.5, A2, B, C, C2, E, D**, including each phase's dispatch blocks and hand-offs. Canonical in the core.
+- Every phase body — **A, A1.5, A2, B, C, C2, E, G, D**, including each phase's dispatch blocks and hand-offs. Canonical in the core.
 - `## Stop conditions (halt and do NOT continue)` and `## What you must NOT do`. Canonical in the core.
 
 **Ownership.** This fork **binds** values; it never restates a body, and it is never cited by another fork. Anything that reads as *what to do* rather than *what a value is* belongs in the core — or in `unit_loop_core.md` when it is loop content (`mode_contract.md` rules (3) and (5)).

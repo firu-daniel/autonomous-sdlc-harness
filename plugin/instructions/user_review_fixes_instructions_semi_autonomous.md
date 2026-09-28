@@ -1,6 +1,6 @@
 # Semi-autonomous user-review fix loop
 
-Run `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fixes_instructions_core.md` Phases **A → QA → D** verbatim by reference, with the bindings below. Do not restate the Setup, the Safety contract, the Phase A unit-loop row and its review step, the Phase QA augment + E.0–E.4 loop, Phase D, the stop conditions or the "What you must NOT do" list — they are canonical in that core and in the files it cites (`${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md`, and `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `## Phase E — QA testing`).
+Run `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fixes_instructions_core.md` Phases **A → QA → G → D** verbatim by reference, with the bindings below. Do not restate the Setup, the Safety contract, the Phase A unit-loop row and its review step, the Phase QA augment + E.0–E.4 loop, Phase D, the stop conditions or the "What you must NOT do" list — they are canonical in that core and in the files it cites (`${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md`, and `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `## Phase E — QA testing`).
 
 ---
 
@@ -41,7 +41,7 @@ One row per binding declared in `user_review_fixes_instructions_core.md` → `##
 - `## Setup (once per session)` — its six steps and the path-placeholder table that resolves every `<bracketed-name>` this flow uses, **including the ones the cited sections consume** (the QA-review folders reached two hops out, through `## Phase QA` → `## Phase E` → row `E.3`, among them). Canonical in the core, which is this flow's entry core and therefore owns those paths — never family 1's Setup, whichever file the text happens to sit in.
 - `## Safety contract — applies before EVERY Agent dispatch` — the per-run `<state_dir>/STOP` check, the `.dispatch_counter` increment, `MAX_TOTAL_DISPATCHES`, the heartbeat format, and the compose-the-prompt step. Canonical in the core.
 - **The unit loop** — its body, the layer routing table, the gated per-unit review step, the substitution table and the named exceptions, this flow's row `UR-A` included. Canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md`, which the core cites by reference.
-- Every phase body — **A, QA (the QA.0 augment and the QA.1+ loop), D**, including each phase's dispatch blocks and hand-offs. Canonical in the core, and for the QA loop's E.0–E.4 in `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `## Phase E — QA testing`, which the core cites by reference.
+- Every phase body — **A, QA (the QA.0 augment and the QA.1+ loop), G, D**, including each phase's dispatch blocks and hand-offs. Canonical in the core, and for the QA loop's E.0–E.4 in `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `## Phase E — QA testing`, which the core cites by reference.
 - `## Stop conditions (halt and do NOT continue)` and `## What you must NOT do`. Canonical in the core.
 
 **Ownership.** This fork **binds** values; it never restates a body. Anything that reads as *what to do* rather than *what a value is* belongs in the core — or in `unit_loop_core.md` when it is loop content (`mode_contract.md` rules (3) and (5)).
