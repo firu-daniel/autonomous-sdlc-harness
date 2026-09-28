@@ -204,6 +204,8 @@ Then four invocations, in this order and with these expectations: `node cli/dist
 
 A one-off source edit is the other way to get a single run through, and it was rejected for a reason worth recording: `init` is not one-shot. `--force` regenerates a generated file when `cli/templates/` changes, and `--reset-config` rebuilds the configuration, so the run this exists for recurs every time a template moves. An edit-build-revert-build cycle per template change is a standing invitation to ship the CLI with its guard removed — and while the refusal *is* covered (`cli/test/init.test.mjs`, the harness's-own-repository subtest), a test only catches a forgotten revert if it is run before the commit.
 
+**This repository cannot host its own remote runs.** Two reasons, either sufficient: a job's `init --plugin-root-entries` step meets the refusal above, because the job sets no `HARNESS_SELF_ADOPT`; and `main` — GitHub's default branch here, and the branch the poller and `remote-run.sh warm` run from — carries no adoption, because `scripts/publish-main.sh` removes it (`removed_paths`). Gate 12 runs against a scratch repository for this reason.
+
 **A fifth invocation, optional per run where the four above are mandatory: the linked binary.** `cli/package.json` declares `"bin": {"autonomous-sdlc-harness": "./dist/cli.js"}`, and every gate below runs `node cli/dist/cli.js …` instead, so nothing in this repository exercises that declaration — the form an adopter installs is otherwise first executed on publication day. Run it when the `bin` declaration, `cli/dist/cli.js`'s shebang or the package layout changed, and skip it otherwise:
 
 ```
@@ -675,7 +677,20 @@ Record all four, the `claude` line being the version leg (v) ran under. Record t
 
 **Gate 11 — docs-retrieval relevance floor.** `scripts/run-gates.sh` runs it as `node evals/docs-retrieval/check-floor.mjs`, which drives the docs-retrieval eval over the committed **`fixture-catalog`** corpus — that corpus alone — for every arm the eval's arm table has a search mode for, and grades each arm's recall@5 and MRR against the values recorded in `evals/docs-retrieval/floor.json`. It loads the **real** embedder and reranker: `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` is set nowhere on that path and the eval refuses to produce a number while it is set, so unlike every retrieval case in gate 4 this gate exercises the models gate 10 installs. **A failure means retrieval got worse**: a measured figure below a recorded floor, on a corpus that moves only when this eval moves, so the change is a property of the retrieval code rather than of the documents. **An empty model cache is reported, not counted as a failure** — the module exits with a status reserved for that case, the script prints it as `BLOCKED` and lists it with the gates it cannot run, and it pushes the gate onto neither the passes nor the failures, so a machine without the hand-provisioned cache still reads a true green. A shortfall is not exempt: it fails the script. The floor policy itself — the margin between a measured figure and its recorded floor, why the graded corpus is `fixture-catalog` alone, and when a floor is re-recorded — is stated in `docs/retrieval-eval.md` → `## The regression floor`, which `floor.json`'s own `see` field names.
 
-**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a throwaway **private** repository created for the purpose — never this repository, for the reason gate 2 gives — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Ten observations, after a setup that is itself the first.
+**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a throwaway **private** repository created for the purpose — never this repository, for the reason gate 2 gives and for those gate 2's **This repository cannot host its own remote runs.** states — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Ten observations, after a setup that is itself the first.
+
+**Round 1 — 2026-09-28, CLI 0.4.0.** Run by hand against the scratch repository `firu-daniel/harness-gate12` (private, a small TypeScript library, `phases.qa`, `docs` and `parity` off, `execution.target: github-actions`), with one task dropped. It did not get past observation (ii): every run's session parked on its first read of a plugin instruction file. Run `36425634480`: the adoption commit had carried `.claude/settings.autonomous.json` with the adopting machine's absolute paths; the job's `init --plugin-root-entries` kept it; the preflight `doctor` printed `WARN  profile-paths  neither a path nor a pattern in .claude/settings.autonomous.json covers this repository root (/home/runner/work/harness-gate12/harness-gate12) …` and `PASS  plugin-permissions  not graded at this machine's plugin root (/home/runner/.claude/plugins/cache/autonomous-sdlc-harness/autonomous-sdlc-harness/0.4.0), because phases.qa is off, and the helper scripts are that phase's alone.` and exited 0; the session then parked asking for read access to the plugin's instruction files, every `Read` under the plugin cache asking permission and `cat`/`ls` refused as outside *"the allowed working directory `/home/runner/work/harness-gate12/harness-gate12`"*. Run `36426447207`: the profile untracked and gitignored in the scratch repository, so the job's `init` created one for the runner and `doctor` gave `PASS profile-paths` — but the generated profile carried no plugin-root entry, and the session parked the same way. Run `36428382006`: a `Read` rule and an `additionalDirectories` entry for the plugin cache added to the committed `.claude/settings.json`, which the session confirmed were in the file at `HEAD`; the same refusals, and the park-loop guard stopped the run. The eight findings, and what 0.4.1 changed for each:
+
+1. The profile granted nothing over the plugin root, whose runtime and install roots are one directory on the runner → a `Read` grant is required at the runtime root whatever `phases.qa` says, `init --plugin-root-entries` also writes every plugin root into `permissions.additionalDirectories`, and a job-mode launch adds one `--add-dir` per such entry.
+2. `init` left the profile committable, and the job's create-if-absent `init` kept a committed one → the managed `.gitignore` block ignores `.claude/settings.autonomous.json`, and `init`'s notes say a teammate runs `init` once to generate theirs.
+3. The preflight let a profile covering no runner path through with a `WARN` → the job runs `doctor --remote-job`, under which `profile-paths` fails, and a new `profile-tracked` check fails on a committed profile, naming the untrack command.
+4. `plugin-permissions` could not see finding 1, answering *not graded* with `phases.qa` off → it grades the runtime-root `Read` grant independently of `phases.qa`, and fails rather than warns under `--remote-job`.
+5. Entries in the committed `settings.json` did not reach the job's session → not made true: `docs/remote-execution.md` → `### Your own allow entries` stops promising it and records Run `36428382006` as the measured negative.
+6. The documented setup push was refused by the `pre-push` hook → *Setup*, observation (x), `docs/remote-execution.md` → `## 7. Turning it on` and `init`'s printed steps give `git push --no-verify origin <default branch>`.
+7. The `workflow` token scope was not mentioned → *Setup*, `docs/remote-execution.md` → `## 7. Turning it on` and `init`'s printed steps give `gh auth refresh -s workflow` before the push.
+8. Nothing said this repository cannot host its own remote runs → gate 2 states it, under **This repository cannot host its own remote runs.**
+
+The fixes ship in 0.4.1; none has been observed on a runner. **The re-run on 0.4.1 starts from observation (i)**, and every observation is re-recorded.
 
 **Setup.**
 
@@ -690,13 +705,27 @@ npx --yes autonomous-sdlc-harness@<version> init --non-interactive
 npx --yes autonomous-sdlc-harness@<version> config set execution.target github-actions
 npx --yes autonomous-sdlc-harness@<version> init
 git add <each path the two init runs reported writing>
-git commit -m "Adopt the harness"
-git push origin <default branch>
+git commit -m "Add the harness workflows"
+```
+
+`.claude/settings.autonomous.json` is not among the paths to add: the managed `.gitignore` block ignores it, and the job generates its own. Pushing a `.github/workflows/*.yml` file over HTTPS with a `gh` token is refused unless the token carries the `workflow` scope:
+
+```
+gh auth refresh -s workflow
+```
+
+The push skips the `pre-push` hook `init` wires, which refuses any push to the default branch; this push is the operator's deliberate one:
+
+```
+git push --no-verify origin <default branch>
+```
+
+```
 gh secret set CLAUDE_CODE_OAUTH_TOKEN
 npx --yes autonomous-sdlc-harness@<version> doctor --check-github
 ```
 
-Where the second `init` reports it could not resolve the plugin's owner, re-run it with `--marketplace <owner>/<repo>`, as `docs/remote-execution.md` → `## 7. Turning it on` step 2 says. Each observation below names what passes and what to record; a failure is recorded with its command and exact message, never retried until it passes. The job's own log is read with `gh run view <run id> --log`, and the run ids with `gh run list --workflow harness-run.yml`.
+These are the commands `docs/remote-execution.md` → `## 7. Turning it on` gives, in the order the second `init` prints them. Where the second `init` reports it could not resolve the plugin's owner, re-run it with `--marketplace <owner>/<repo>`, as `docs/remote-execution.md` → `## 7. Turning it on` step 2 says. Each observation below names what passes and what to record; a failure is recorded with its command and exact message, never retried until it passes. The job's own log is read with `gh run view <run id> --log`, and the run ids with `gh run list --workflow harness-run.yml`.
 
 **(i) Adoption.** Passes when `doctor --check-github` reports `PASS remote-execution` and `PASS remote-github`. Record both lines, and every `WARN` it prints — `HARNESS_PUSH_URL` unset warns and is not a failure of this observation.
 
@@ -707,7 +736,7 @@ bash <scriptsDir>/autonomous-watcher.sh tick
 gh run list --workflow harness-run.yml
 ```
 
-Passes when a run titled `harness run <branch>` starts a job on `ubuntu-latest`, its `init --plugin-root-entries` step leaves no tracked file changed, and its `Preflight with doctor` step reports `PASS plugin-permissions` — the check that the job's plugin install produces a root `init` can resolve. Record the run id, the runner label from the job log, and the `plugin-permissions` line verbatim.
+Passes when a run titled `harness run <branch>` starts a job on `ubuntu-latest`, its `init --plugin-root-entries` step leaves no tracked file changed, its `Preflight with doctor` step — `doctor --remote-job` — reports `PASS profile-paths`, `PASS profile-tracked` and `PASS plugin-permissions`, and the session reads the plugin's instruction files without asking for permission. Record the run id, the runner label from the job log, and those three lines verbatim.
 
 **(iii) The self-pause chain, and the `GITHUB_TOKEN` dispatch exception.** Before the drop, make the self-pause small, and give the task enough work to outlast it:
 
@@ -784,7 +813,7 @@ git commit -m "Turn on the interactive-test phase"
 ```
 
 ```
-git push origin <default branch>
+git push --no-verify origin <default branch>
 ```
 
 Then drop a small task and let it run to the end. Passes when the run ends at "ready for review" with its ledger's `E` entry `[-]` and `P2` `[x]`, the ledger's `## Run mode` block carrying `remote-skipped: qa`, the Done summary carrying the `QA (Phase E): skipped` line, and the `completed` notification's detail naming the skip and `/autonomous-sdlc-harness:branch-qa-test <branch>` (`docs/remote-execution.md` → `## 3.` → *The interactive-test phase*). Record the ledger's `## Run mode` block and the notification text verbatim.

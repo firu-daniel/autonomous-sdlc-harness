@@ -34,7 +34,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_job_permission_pr
 9. [x] **Task 11** — Make `init`'s remote-execution note and `doctor`'s `remote-execution` remedy print the setup push that works _(layer: cli)_ _(points: 18)_
 10. [x] **Task 8** — Correct `docs/remote-execution.md` §1, §4, §6 and §7 _(layer: general)_ _(points: 15)_
 11. [x] **Task 9** — Bring `docs/cli.md` and `ARCHITECTURE.md` into line with the new grading and launch _(layer: general)_ _(points: 15)_
-12. [ ] **Task 10** — Record Gate 12 round 1, fix its setup, state that this repository cannot host its own remote runs, and correct the README's teammate onboarding _(layer: general)_ _(points: 20)_
+12. [x] **Task 10** — Record Gate 12 round 1, fix its setup, state that this repository cannot host its own remote runs, and correct the README's teammate onboarding _(layer: general)_ _(points: 20)_
 
 ## Scope register
 

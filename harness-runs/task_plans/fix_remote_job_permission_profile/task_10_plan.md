@@ -28,3 +28,8 @@
 - `grep -nE "permission profile.{0,40}committed" README.md` returns only a line saying the profile is **not** committed, and **F. A teammate clones** carries an `npx autonomous-sdlc-harness init` block before its `doctor` block.
 - The *Setup*'s four commands match, in order and spelling, the four `init.ts` → `reportGithubSteps` prints after Task 11.
 - Every command added sits in its own fenced block, one per line (`harness-runs/lessons.md` → *"Every command an adopter is meant to run sits in a fenced block"*).
+
+**Deviations from plan:**
+
+- *Setup*'s commit subject changed from `Adopt the harness` to `Add the harness workflows`, so the four commands match `reportGithubSteps`'s spelling as the Verification bullet requires; the plan's Work list did not name that line.
+- The round-1 findings are a numbered list under the dated paragraph rather than lines inside it, one item per finding.
