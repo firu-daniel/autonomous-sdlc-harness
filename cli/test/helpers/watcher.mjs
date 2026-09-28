@@ -10,7 +10,7 @@
  *
  * `node --test test` loads this file as a test file of its own, so nothing here runs at import time.
  *
- * ## Three non-obvious choices
+ * ## Four non-obvious choices
  *
  * 1. **The stub sleeps before its body runs.** Not for the registry: its writes are serialized, so
  *    the pass's post-spawn `pid` write and the session's exit classification both survive whichever
@@ -22,6 +22,11 @@
  *    push settings hold.
  * 3. **The cleanup pass is pushed out of reach** (`CLEANUP_INTERVAL_SECS`), because it runs on a
  *    process's first pass and acts on worktrees and branches, none of which these suites assert.
+ * 4. **`tick` is bounded at {@link TICK_TIMEOUT_MS}**, through `runBash`'s process-group bound
+ *    (`fixture.mjs`, choice 6), and by the test's own `t.signal`. A pass plus its `wait` for a stub
+ *    that sleeps under a second is far below it; it sits below the suite's `--test-timeout`
+ *    (`cli/package.json` → `scripts.test`) so a hung pass fails naming its command, and its session
+ *    and `sleep`s are killed with it.
  */
 
 import assert from 'node:assert/strict';
@@ -40,6 +45,9 @@ const WATCHER_LOG_PATH = `${STATE_DIR}/autonomous_logs/watcher.log`;
 /** The recorders' own directory inside the fixture — never on the machine's `PATH`. */
 const RECORDER_DIR = 'watcher-test';
 const PROMPT_DELIMITER = '----- end of prompt -----';
+
+/** One watcher pass's bound (choice 4 in the module header). */
+const TICK_TIMEOUT_MS = 60_000;
 
 /** The seed `init`'s own tests use: a repository whose stack detection resolves every command. */
 function nodeProjectFiles() {
@@ -136,11 +144,29 @@ export async function createWatcherFixture(t, { branch = 'feat_x' } = {}) {
   await chmod(notifyPath, 0o755);
 
   const ensureClarDir = () => mkdir(clarDir, { recursive: true });
+  const watcherPath = join(dir, WATCHER_PATH);
+  /** The environment a pass runs under: recorders in, the usage gate, stall check and cleanup out. */
+  const watcherEnv = (env = {}) => ({
+    HARNESS_AGENT_CLI: stubPath,
+    CLAR: clarDir,
+    AUTO_TAIL_TERMINAL: '0',
+    USAGE_CHECK_ENABLED: '0',
+    STALL_CHECK_ENABLED: '0',
+    USAGE_LANE_STATE_ENABLED: '0',
+    USAGE_LANE_LOCK_ENABLED: '0',
+    CLEANUP_INTERVAL_SECS: '999999999999',
+    HOME: join(dir, 'home'),
+    XDG_CONFIG_HOME: join(dir, 'home', '.config'),
+    XDG_STATE_HOME: join(dir, 'home', '.local', 'state'),
+    ...env,
+  });
 
   return {
     dir,
     branch,
     clarDir,
+    watcherPath,
+    watcherEnv,
     async writeQuestion(n, body) {
       await ensureClarDir();
       await writeFile(join(clarDir, `question_${n}.md`), body, 'utf8');
@@ -161,21 +187,9 @@ export async function createWatcherFixture(t, { branch = 'feat_x' } = {}) {
     async tick(env = {}) {
       const result = await runBash(
         dir,
-        ['-c', '. "$1" status >/dev/null; tick; wait', '_', join(dir, WATCHER_PATH)],
-        {
-          HARNESS_AGENT_CLI: stubPath,
-          CLAR: clarDir,
-          AUTO_TAIL_TERMINAL: '0',
-          USAGE_CHECK_ENABLED: '0',
-          STALL_CHECK_ENABLED: '0',
-          USAGE_LANE_STATE_ENABLED: '0',
-          USAGE_LANE_LOCK_ENABLED: '0',
-          CLEANUP_INTERVAL_SECS: '999999999999',
-          HOME: join(dir, 'home'),
-          XDG_CONFIG_HOME: join(dir, 'home', '.config'),
-          XDG_STATE_HOME: join(dir, 'home', '.local', 'state'),
-          ...env,
-        },
+        ['-c', '. "$1" status >/dev/null; tick; wait', '_', watcherPath],
+        watcherEnv(env),
+        { timeoutMs: TICK_TIMEOUT_MS, signal: t.signal },
       );
       assert.equal(result.status, 0, `the watcher pass exited ${result.status}\n${result.stdout}\n${result.stderr}`);
       return result;

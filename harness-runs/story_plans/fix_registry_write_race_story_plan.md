@@ -47,7 +47,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/fix_registr
 3. [x] **Task 3** — Batch `remote-run.sh`'s registry writes, and race a `stop` against watcher writes _(layer: cli)_ _(points: 10)_
 4. [x] **Task 4** — Repair a usage pause whose `usage_resume_at` was lost, and bound the job-mode usage wait by `REMOTE_WAIT_MAX_SECS` _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Drive the lost-reset record through job mode and through the local watcher's `tick` _(layer: cli)_ _(points: 15)_
-6. [ ] **Task 6** — Give `node --test` a per-test timeout and `runBash` a process-group kill-on-timeout, proven by a deliberately hung watcher _(layer: cli)_ _(points: 15)_
+6. [x] **Task 6** — Give `node --test` a per-test timeout and `runBash` a process-group kill-on-timeout, proven by a deliberately hung watcher _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — Bound every job-suite watcher run, and add an opt-in repeat seam for the job-mode usage case _(layer: cli)_ _(points: 10)_
 8. [ ] **Task 8** — Document the serialized registry writer, the lost-reset repair, the bounded usage wait and the bounded test suite _(layer: general)_ _(points: 15)_
 
