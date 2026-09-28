@@ -41,6 +41,7 @@
  *   and {@link CHECK_REGISTRY_FLAG} and {@link CHECK_GITHUB_FLAG}, reads that change nothing anywhere
  *   and so are not suppressed by `--dry-run`. A POST fired by every `doctor` — in CI, from an `&&` chain, from the
  *   run daemon before it starts a run — would cost the command every property above.
+ *   {@link REMOTE_JOB_FLAG} reaches no network either: it changes two checks' grades and nothing else.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -89,12 +90,27 @@ const CHECK_REGISTRY_FLAG = '--check-registry';
 const CHECK_GITHUB_FLAG = '--check-github';
 
 /**
+ * An option this command takes of its own: it grades the permission profile for a remote job, where
+ * `profile-paths` and `plugin-permissions` fail instead of warning and the profile's
+ * `additionalDirectories` must carry every plugin root.
+ *
+ * A flag rather than a probe of the job's environment, so an operator's own shell cannot trip it by
+ * inheriting a variable; the remote workflow's preflight passes it.
+ */
+const REMOTE_JOB_FLAG = '--remote-job';
+
+/**
  * Every option this command takes of its own, in the order `--help` lists them.
  *
  * Declared as the list rather than spelled into the refusal message, so the message a mistyped flag
  * gets names whatever the command actually accepts and cannot fall behind it.
  */
-const OWN_FLAGS: readonly string[] = Object.freeze([TEST_NOTIFICATION_FLAG, CHECK_REGISTRY_FLAG, CHECK_GITHUB_FLAG]);
+const OWN_FLAGS: readonly string[] = Object.freeze([
+  TEST_NOTIFICATION_FLAG,
+  CHECK_REGISTRY_FLAG,
+  CHECK_GITHUB_FLAG,
+  REMOTE_JOB_FLAG,
+]);
 
 /**
  * The event word the test send carries.
@@ -140,6 +156,8 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   '                       fetched, inside the browser-wiring check',
   `  ${CHECK_GITHUB_FLAG}       Ask GitHub, through gh, whether the remote-execution setup is`,
   '                       complete, inside the remote-github check',
+  `  ${REMOTE_JOB_FLAG}         Grade the permission profile for a remote job, where an unusable one`,
+  '                       fails rather than warns',
   '',
   'A default run sends nothing: the notifications check reads which settings file the notifier',
   `resolves and prints no value from it, and only ${TEST_NOTIFICATION_FLAG} delivers a message. The`,
@@ -162,6 +180,11 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   'harness-run.yml and harness-resume.yml, which secret names are set (names only, never values) and',
   'which runner HARNESS_RUNNER selects. A call that times out or cannot reach GitHub warns rather than',
   'fails. Every call is a read, so --dry-run does not suppress it either.',
+  '',
+  `${REMOTE_JOB_FLAG} turns two warnings into failures: profile-paths, when no rule in the profile covers`,
+  'this checkout, and plugin-permissions, when an entry a plugin root needs is missing or no plugin',
+  'root resolves; it also requires every plugin root in permissions.additionalDirectories. The remote',
+  'workflow passes it, so its preflight stops before a session that would park. It reaches no network.',
   '',
   'Exit status is the contract — branch on it rather than on the report text:',
   '  0  no check failed: every check passed, or the only findings were warnings',
@@ -200,6 +223,8 @@ interface DoctorOptions {
   readonly checkRegistry: boolean;
   /** Whether {@link CHECK_GITHUB_FLAG} was given: the remote-github check's `gh` queries, otherwise off. */
   readonly checkGithub: boolean;
+  /** Whether {@link REMOTE_JOB_FLAG} was given: the permission profile graded for a remote job. */
+  readonly remoteJob: boolean;
 }
 
 /**
@@ -217,6 +242,7 @@ function parseOptions(argv: readonly string[]): DoctorOptions {
   let testNotification = false;
   let checkRegistry = false;
   let checkGithub = false;
+  let remoteJob = false;
   for (const token of argv) {
     if (token === TEST_NOTIFICATION_FLAG) {
       testNotification = true;
@@ -230,13 +256,17 @@ function parseOptions(argv: readonly string[]): DoctorOptions {
       checkGithub = true;
       continue;
     }
+    if (token === REMOTE_JOB_FLAG) {
+      remoteJob = true;
+      continue;
+    }
     throw new HarnessError(
       token.startsWith('-')
         ? `doctor: unknown option ${JSON.stringify(token)} — the options doctor takes of its own are ${OWN_FLAGS.join(', ')}; run \`npx autonomous-sdlc-harness doctor --help\` for them and for the global options it accepts`
         : `doctor: unexpected argument ${JSON.stringify(token)} — doctor takes no arguments, and checks the repository containing the current directory (or --cwd)`,
     );
   }
-  return { testNotification, checkRegistry, checkGithub };
+  return { testNotification, checkRegistry, checkGithub, remoteJob };
 }
 
 /** `Summary: 9 pass, 3 warn, 0 fail — exit 0 (no check failed; warnings do not fail the command)`. */
@@ -398,7 +428,7 @@ function sendTestNotification(ctx: CommandContext, checks: CheckContext): void {
 async function run(ctx: CommandContext): Promise<number> {
   const options = parseOptions(ctx.argv);
 
-  const checks = buildCheckContext(ctx.cwd, options.checkRegistry, options.checkGithub);
+  const checks = buildCheckContext(ctx.cwd, options.checkRegistry, options.checkGithub, options.remoteJob);
   const results = runChecks(checks);
   const width = Math.max(...results.map((result) => result.id.length));
 

@@ -27,7 +27,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_job_permission_pr
 2. [x] **Task 1** — Ignore the permission profile in the managed `.gitignore` block _(layer: cli)_ _(points: 10)_
 3. [x] **Task 2** — Require the plugin-root `Read` grant at the runtime root, including a root that is both _(layer: cli)_ _(points: 20)_
 4. [x] **Task 3** — Make `init --plugin-root-entries` grant shell reads over the plugin roots, and keep its notes true _(layer: cli)_ _(points: 20)_
-5. [ ] **Task 4** — Add `doctor --remote-job`, under which an unusable profile fails the preflight _(layer: cli)_ _(points: 18)_
+5. [x] **Task 4** — Add `doctor --remote-job`, under which an unusable profile fails the preflight _(layer: cli)_ _(points: 18)_
 6. [ ] **Task 5** — Add the `profile-tracked` doctor check _(layer: cli)_ _(points: 10)_
 7. [ ] **Task 6** — Run the job's preflight as `doctor --remote-job` _(layer: cli)_ _(points: 5)_
 8. [ ] **Task 7** — Pass the profile's `additionalDirectories` as `--add-dir` at a job-mode launch _(layer: cli)_ _(points: 15)_

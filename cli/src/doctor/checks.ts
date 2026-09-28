@@ -116,6 +116,7 @@ import {
   worktreeList,
 } from '../core/git.js';
 import { isJsonObject, readJsonFile, type JsonObject, type JsonValue } from '../core/json.js';
+import { defaultBranchPushCommand, defaultBranchPushReason } from '../core/defaultBranchPush.js';
 import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
@@ -158,6 +159,7 @@ import {
   isUnderDirectory,
   namesBrowserTool,
   normalizedRoot,
+  pluginRootDirectories,
   pluginRootEntries,
   pluginRootEntryTarget,
   pluginRootHelpers,
@@ -361,6 +363,12 @@ export interface CheckContext {
    * {@link probeRegistry}'s reason.
    */
   readonly probeGithub: boolean;
+  /**
+   * Whether `doctor --remote-job` graded the profile for a remote job: {@link PROFILE_PATHS_CHECK} and
+   * {@link PLUGIN_PERMISSIONS_CHECK} fail where they otherwise warn, and the latter also grades
+   * `permissions.additionalDirectories`. `false` in every default run.
+   */
+  readonly remoteJob: boolean;
 }
 
 /** The permission lists a generated profile carries, in the order the template writes them. */
@@ -635,9 +643,15 @@ function serversStartedByProfile(profile: JsonObject): readonly string[] {
  *
  * `probeRegistry` and `probeGithub` are the caller's answers rather than this function's, and both
  * default to `false`: a context built without them is the context every default run gets, and no
- * check here reaches a network unless the command was asked to.
+ * check here reaches a network unless the command was asked to. `remoteJob` is the caller's too, and
+ * defaults to `false` for the same reason: only the remote job's preflight asks for its grading.
  */
-export function buildCheckContext(cwd: string, probeRegistry = false, probeGithub = false): CheckContext {
+export function buildCheckContext(
+  cwd: string,
+  probeRegistry = false,
+  probeGithub = false,
+  remoteJob = false,
+): CheckContext {
   let repoRoot: string | undefined;
   let repoProblem: string | undefined;
   try {
@@ -646,7 +660,7 @@ export function buildCheckContext(cwd: string, probeRegistry = false, probeGithu
     repoProblem = messageOf(error);
   }
 
-  if (repoRoot === undefined) return { cwd, repoProblem, configProblems: [], probeRegistry, probeGithub };
+  if (repoRoot === undefined) return { cwd, repoProblem, configProblems: [], probeRegistry, probeGithub, remoteJob };
 
   const loaded = loadConfig(repoRoot);
   const profileRoot = mainWorktreeRoot(repoRoot) ?? repoRoot;
@@ -681,6 +695,7 @@ export function buildCheckContext(cwd: string, probeRegistry = false, probeGithu
     profilePath,
     probeRegistry,
     probeGithub,
+    remoteJob,
   };
 }
 
@@ -3893,12 +3908,39 @@ const PROFILE_CHECK: Check = {
 };
 
 /**
+ * The route that stops a committed profile from reaching a remote job: untrack it on the default
+ * branch, so the job's create-if-absent `init` finds none and generates its own.
+ *
+ * The commit must land on the **default branch**, because every run's branch is cut from
+ * `origin/<defaultBranch>` (`create-worktree.sh` → `worktree add … "origin/$default_branch"`): an
+ * untrack pushed only to a run branch covers that one run, and the next branch carries the profile
+ * again. The push and its `--no-verify` reason are `core/defaultBranchPush.ts`'s, spelled nowhere here.
+ *
+ * Called by {@link PROFILE_PATHS_CHECK} under `--remote-job`, and by `PROFILE_TRACKED_CHECK`.
+ */
+function profileUntrackRemedy(ctx: CheckContext): string {
+  const configured = ctx.config?.defaultBranch;
+  const branch = typeof configured === 'string' && configured !== '' ? configured : '<defaultBranch>';
+  const commands = [
+    `git rm --cached ${PROFILE_PATH}`,
+    'git commit -m "Stop tracking the machine-local permission profile"',
+    defaultBranchPushCommand(branch),
+  ];
+  return `${commands.map((command) => `\`${command}\``).join(', then ')}. The commit must land on ${branch}, because every run's branch is cut from origin/${branch}, so an untrack pushed only to a run branch covers that one run and the next branch carries the profile again. ${defaultBranchPushReason(branch)}`;
+}
+
+/**
  * Do the profile's absolute paths still name this checkout?
  *
  * The profile is generated with `<repo_root>`, `<work_root>` and the worktree glob resolved at `init`
  * time, so a repository cloned onto another machine — or moved — carries a profile whose rules point
  * at a location that no longer exists. A `warn`, because the fix is a re-run rather than an edit and
  * because a hand-tuned profile is a file the adopter may deliberately have pointed elsewhere.
+ *
+ * **A `fail` under `--remote-job`** ({@link CheckContext.remoteJob}): there the profile was committed
+ * from another machine and the job's create-if-absent `init` kept it, so the job cannot regenerate it
+ * — the step that runs `init` refuses a rewrite of a tracked file, which is why `init --force` is not
+ * printed there. The remedy is {@link profileUntrackRemedy}, so the job generates its own.
  *
  * The question asked is "does any rule cover this root", not "is every path correct": a profile
  * generated here mentions the root in its edit, write and read rules, so its complete absence is the
@@ -3921,6 +3963,11 @@ const PROFILE_PATHS_CHECK: Check = {
     if (ctx.profile === undefined) return unevaluated(`${PROFILE_PATH} could not be read (see the permission-profile check)`);
 
     const covered = locationStrings(ctx.profile).some((entry) => namesRoot(entry, ctx.repoRoot as string));
+    if (!covered && ctx.remoteJob) {
+      return fail(
+        `neither a path nor a pattern in ${PROFILE_PATH} covers this repository root (${ctx.repoRoot}): the profile was generated on another machine and committed, and this job's create-if-absent \`${CLI} init\` kept it, so a run loading it would find its edit, write, read and script rules matching nothing here. Stop tracking it so the job generates its own: ${profileUntrackRemedy(ctx)}`,
+      );
+    }
     return covered
       ? pass(
           `the profile's rules cover this repository root (${ctx.repoRoot}) — by naming it, or by a pattern such as the sibling-worktree glob that matches it — so they apply to this checkout`,
@@ -4070,10 +4117,19 @@ function namesHelperScript(entry: string): boolean {
  * drifts the first time one is added. Nothing here classifies a helper by its call site either —
  * the root set is what varies, and the name set stays read from disk.
  *
- * **It never fails**, for {@link REPO_REGISTRY_CHECK}'s reason: this is a machine-local gap with an
- * operator remedy, and the profile is a file the adopter owns. And when no root resolves it invents
- * none — it names the step and the file it read, because a fabricated path is worse than no path: an
- * operator would paste it and get a profile that is wrong in a way nothing reports.
+ * **It never fails outside `--remote-job`**, for {@link REPO_REGISTRY_CHECK}'s reason: this is a
+ * machine-local gap with an operator remedy, and the profile is a file the adopter owns. And when no
+ * root resolves it invents none — it names the step and the file it read, because a fabricated path is
+ * worse than no path: an operator would paste it and get a profile that is wrong in a way nothing
+ * reports.
+ *
+ * **Under `--remote-job`** ({@link CheckContext.remoteJob}) a missing entry and an unresolved root are
+ * each a `fail`, and every directory {@link pluginRootDirectories} returns for the graded roots is
+ * required in `permissions.additionalDirectories` — the shell-readable grant. The job differs because
+ * the plugin was installed and the profile generated moments earlier on a machine that exists for one
+ * run, so a gap is a launch that parks rather than an operator's paste. Outside the flag that list is
+ * not graded: a missing shell grant has not been observed to stall a run on a person's machine, and a
+ * version-carrying directory would go stale at every upgrade.
  *
  * **A helper entry under no resolved root is named in every *graded* disposition and moves no
  * grade.** A profile carrying dead weight and every required entry still passes; one missing a
@@ -4125,6 +4181,11 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
         ungraded === 0
           ? ''
           : `. ${PROFILE_PATH} carries ${ungraded} absolute-directory \`permissions.allow\` ${entryWord(ungraded)} outside this checkout that nothing here can grade until a root resolves, counted rather than named because calling one stale or required would be a judgement no record on this machine supports; \`${CLI} init --force\` carries ${ungraded === 1 ? 'it' : 'them'} forward unverified in the meantime`;
+      if (ctx.remoteJob) {
+        return fail(
+          `${installedPluginsPath()} records no install root for ${PLUGIN_KEY}, so the entries ${PROFILE_PATH} needs for it cannot be named and are not guessed at: a remote job installs the plugin before this preflight, so no record means that install did not take effect on this runner — a run launched now would be refused every read of the plugin's instruction files${dangling}`,
+        );
+      }
       return warn(
         `${installedPluginsPath()} records no install root for ${PLUGIN_KEY}, so the entries ${PROFILE_PATH} needs for it cannot be named and are not guessed at: enable the plugin — open this repository with the agent runner once, which applies the ${SETTINGS_PATH} keys \`${CLI} init\` wrote — and re-run \`${CLI} doctor\`, which reads the root back and prints the exact lines to paste${dangling}`,
       );
@@ -4195,6 +4256,22 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
       ` The \`Read\` entry is required at the runtime root, including where it is also the install root, and outside the \`phases.qa\` gate, because instruction files and samples are read by every run: on 2026-09-28 a GitHub-hosted runner whose one plugin root was both was refused every \`Read\` of its instruction files under a profile naming no rule over it. It is not required at an install root distinct from the runtime root${split ? ', as here' : ''}: reads there were measured (2026-08-26, a \`directory\`-sourced marketplace) to succeed under a profile naming no rule over it, while ten at the runtime root were refused in that same run.`;
 
     const missing = required.filter((entry) => !allowed.includes(entry.rule));
+    // Graded under `--remote-job` only, through the same pure read `allowed` came from.
+    const granted = permissionEntries(ctx.profile, 'additionalDirectories').map(normalizedRoot);
+    const missingDirectories = ctx.remoteJob
+      ? pluginRootDirectories(roots).filter((directory) => !granted.includes(directory))
+      : [];
+    const directoryBlock =
+      missingDirectories.length === 0 ? '' : `\n\npermissions.additionalDirectories:\n${missingDirectories.join('\n')}`;
+    const jobClause = ctx.remoteJob
+      ? ' Under --remote-job this is a failure: the plugin was installed and the profile generated moments earlier on a machine that exists for one run, so a gap here is a launch that parks rather than an operator\'s paste.'
+      : '';
+
+    if (missing.length === 0 && missingDirectories.length > 0) {
+      return fail(
+        `${PROFILE_PATH} carries every \`permissions.allow\` entry this machine's plugin ${split ? 'roots need' : 'root needs'}, but its \`permissions.additionalDirectories\` lacks ${missingDirectories.length === 1 ? 'the plugin root' : `${missingDirectories.length} plugin roots`}, so a shell command in a run is refused a read under ${missingDirectories.length === 1 ? 'it' : 'them'} as outside the allowed working directory.${jobClause}${stray} Add each line below to that list as its own string, unquoted exactly as it stands:${directoryBlock}`,
+      );
+    }
 
     if (missing.length > 0) {
       const symptoms = [...new Set(missing.map((entry) => entry.symptom))].join(', and ');
@@ -4202,8 +4279,8 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
         .map((group) => ({ group, rules: group.required.filter((entry) => missing.includes(entry)).map((entry) => entry.rule) }))
         .filter(({ rules }) => rules.length > 0)
         .map(({ group, rules }) => renderRootGroup(group.label, group.root, rules));
-      return warn(
-        `${PROFILE_PATH} is missing ${missing.length} of the ${required.length} \`permissions.allow\` ${entryWord(required.length)} this machine's plugin ${split ? 'roots need' : 'root needs'}, so an unattended run ${symptoms}. \`${CLI} init\` does not generate ${missing.length === 1 ? 'it' : 'them'} — a root is machine-local and the install root carries the plugin version, so an entry written once goes stale on an upgrade and this check re-derives ${split ? 'both' : 'it'} instead.${why}${partial}${stray} Add each line below to that list as its own string, unquoted exactly as it stands:\n${blocks.join('\n\n')}`,
+      return (ctx.remoteJob ? fail : warn)(
+        `${PROFILE_PATH} is missing ${missing.length} of the ${required.length} \`permissions.allow\` ${entryWord(required.length)} this machine's plugin ${split ? 'roots need' : 'root needs'}, so an unattended run ${symptoms}. \`${CLI} init\` does not generate ${missing.length === 1 ? 'it' : 'them'} — a root is machine-local and the install root carries the plugin version, so an entry written once goes stale on an upgrade and this check re-derives ${split ? 'both' : 'it'} instead.${why}${partial}${jobClause}${stray} Add each line below to ${directoryBlock === '' ? 'that list' : 'that list, or to `permissions.additionalDirectories` under its own heading,'} as its own string, unquoted exactly as it stands:\n${blocks.join('\n\n')}${directoryBlock}`,
       );
     }
 
@@ -4215,7 +4292,7 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
       )
       .join('; ');
     return pass(
-      `${PROFILE_PATH} carries all ${required.length} \`permissions.allow\` ${entryWord(required.length)} this machine's plugin ${split ? 'roots need' : 'root needs'} — ${carried}.${why}${partial}${stray}`,
+      `${PROFILE_PATH} carries all ${required.length} \`permissions.allow\` ${entryWord(required.length)} this machine's plugin ${split ? 'roots need' : 'root needs'} — ${carried}.${ctx.remoteJob ? ` Under --remote-job its \`permissions.additionalDirectories\` was graded too, and carries every plugin root, so a shell command in a run may read under ${split ? 'them' : 'it'}.` : ''}${why}${partial}${stray}`,
     );
   },
 };

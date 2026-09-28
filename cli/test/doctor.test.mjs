@@ -2614,6 +2614,7 @@ test('the notifications check reports which settings file is in effect, and neve
     assert.match(stderr, /--test-notification/);
     // Both, because a refusal that names a subset sends an operator to `--help` for the rest.
     assert.match(stderr, /--check-registry/);
+    assert.match(stderr, /--remote-job/);
   });
 
   await t.test('--test-notification with no notifier warns, sends nothing and moves no exit status', async (subtest) => {
@@ -5095,6 +5096,121 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     assert.equal(pastedRun.status, 0, `doctor exited ${pastedRun.status}\n${pastedRun.stdout}\n${pastedRun.stderr}`);
     assert.match(pastedRun.stdout, passLine('plugin-permissions'));
     assert.doesNotMatch(pastedRun.stderr, warnLine('plugin-permissions'));
+  }));
+
+  await Promise.all(subtests);
+});
+
+/**
+ * `doctor --remote-job`: the remote job's preflight, under which a profile that cannot work on the
+ * runner is a `fail` — exit 1, so the job stops before it spends a session — where a default run warns.
+ *
+ * Each case also runs the same fixture **without** the flag, and asserts the warning and exit 0 that
+ * run keeps: the flag is what moves the grade, never the fixture.
+ */
+test('doctor --remote-job fails an unusable profile where a default run warns', { concurrency: CASE_CONCURRENCY }, async (t) => {
+  const subtests = [];
+
+  /** The runner's shape: a GitHub-sourced marketplace whose one plugin root is both install and runtime root. */
+  async function runnerHome(subtest) {
+    const root = await pluginInstallRootFixture(subtest, []);
+    const location = await pluginInstallRootFixture(subtest, []);
+    const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: root }], location, {
+      github: 'example-owner/example-marketplace',
+    });
+    return { root, env: home.env };
+  }
+
+  /** Add directories to the generated profile's `permissions.additionalDirectories`. */
+  function grantDirectories(dir, directories) {
+    editJson(dir, PROFILE_FILE, (profile) => {
+      profile.permissions.additionalDirectories = [...(profile.permissions.additionalDirectories ?? []), ...directories];
+    });
+  }
+
+  subtests.push(t.test('a profile rendered for another root fails profile-paths, naming the untrack route', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const { root, env } = await runnerHome(subtest);
+    allowInProfile(dir, [pluginReadEntry(root)]);
+    grantDirectories(dir, [root]);
+    // The same one-edit move as the default-run case above, re-pointing every path at a prefix name.
+    const profilePath = join(dir, PROFILE_FILE);
+    writeFileSync(profilePath, readFileSync(profilePath, 'utf8').split(basename(dir)).join(`moved-${basename(dir)}`), 'utf8');
+    const branch = readJson(join(dir, CONFIG_FILE)).defaultBranch;
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], env);
+
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} on a profile generated elsewhere\n${job.stdout}\n${job.stderr}`);
+    const line = detailLine(job.stderr, failLine('profile-paths'));
+    assert.ok(line.includes(`git rm --cached ${PROFILE_FILE}`), `the failure does not name the untrack command:\n${line}`);
+    assert.ok(line.includes(`git push --no-verify origin ${branch}`), `the failure does not name the default-branch push:\n${line}`);
+    assert.ok(!line.includes('git push origin '), `the failure prints a push the pre-push hook refuses:\n${line}`);
+    // The local remedy rewrites a tracked file, which the job refuses.
+    assert.ok(!line.includes('init --force'), `the failure prints init --force under --remote-job:\n${line}`);
+
+    const local = await runCli(dir, ['doctor'], env);
+    assert.match(local.stderr, warnLine('profile-paths'));
+    assert.doesNotMatch(local.stderr, failLine('profile-paths'));
+  }));
+
+  subtests.push(t.test('the runner-shaped profile lacking the Read grant fails plugin-permissions, naming the Read line', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const { root, env } = await runnerHome(subtest);
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], env);
+
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} with the Read grant missing\n${job.stdout}\n${job.stderr}`);
+    assert.match(job.stderr, failLine('plugin-permissions'));
+    assert.ok(reportLines(job.stderr).includes(pluginReadEntry(root)), `the failure did not print the Read line:\n${job.stderr}`);
+
+    const local = await runCli(dir, ['doctor'], env);
+    assert.equal(local.status, 0, `doctor exited ${local.status} on a condition that only warns\n${local.stdout}\n${local.stderr}`);
+    assert.match(local.stderr, warnLine('plugin-permissions'));
+  }));
+
+  subtests.push(t.test('the Read grant without the root in additionalDirectories fails, naming the directory', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const { root, env } = await runnerHome(subtest);
+    allowInProfile(dir, [pluginReadEntry(root)]);
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], env);
+
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} with the directory missing\n${job.stdout}\n${job.stderr}`);
+    assert.match(job.stderr, failLine('plugin-permissions'));
+    assert.ok(reportLines(job.stderr).includes(root), `the failure did not print the directory to add:\n${job.stderr}`);
+
+    // Outside the flag the directory is not graded, so the same profile passes.
+    const local = await runCli(dir, ['doctor'], env);
+    assert.equal(local.status, 0, `doctor exited ${local.status}\n${local.stdout}\n${local.stderr}`);
+    assert.match(local.stdout, passLine('plugin-permissions'));
+  }));
+
+  subtests.push(t.test('the Read grant and the directory both present pass, saying the shell grant was graded', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const { root, env } = await runnerHome(subtest);
+    allowInProfile(dir, [pluginReadEntry(root)]);
+    grantDirectories(dir, [root]);
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], env);
+
+    assert.equal(job.status, 0, `doctor --remote-job exited ${job.status}\n${job.stdout}\n${job.stderr}`);
+    assert.match(job.stdout, passLine('plugin-permissions'));
+    assert.match(detailLine(job.stdout, passLine('plugin-permissions')), /additionalDirectories/);
+    assert.match(job.stdout, passLine('profile-paths'));
+  }));
+
+  subtests.push(t.test('no plugin record fails plugin-permissions, where a default run warns', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const home = await claudeConfigHome(subtest);
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], home.env);
+
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} with no plugin record\n${job.stdout}\n${job.stderr}`);
+    assert.match(job.stderr, failLine('plugin-permissions'));
+
+    const local = await runCli(dir, ['doctor'], home.env);
+    assert.equal(local.status, 0, `doctor exited ${local.status} on a condition that only warns\n${local.stdout}\n${local.stderr}`);
+    assert.match(local.stderr, warnLine('plugin-permissions'));
   }));
 
   await Promise.all(subtests);

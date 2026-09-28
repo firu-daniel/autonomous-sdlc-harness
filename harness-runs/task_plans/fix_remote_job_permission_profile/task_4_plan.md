@@ -58,3 +58,8 @@ Also on **Task 12**, which made `buildCheckContext` read the profile from `mainW
 - `doctor --help` lists `--remote-job`.
 - `profileUntrackRemedy`'s text contains `git push --no-verify origin` and no `git push origin ` form.
 - `grep -rn "no-verify origin" cli/src` finds the spelling only in `cli/src/core/defaultBranchPush.ts` — not in `cli/src/doctor/checks.ts`.
+
+**Deviations from plan:**
+
+- The `cli/test/doctor.test.mjs` cases were written but not run: neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, so the run is deferred to the Run gates phase (`unit_loop_core.md` → `## The test-run rule`, point 3). The verification bullets *"The new cases … pass"* therefore rest on a throwaway scratch probe instead (`bash scripts/scratch-run.sh` over a `.mjs` under `harness-runs/scratch/`, deleted after), which drove the compiled CLI against temp fixtures and observed: runner shape without `Read` → `FAIL plugin-permissions` naming the `Read` line, exit 1 (default run: `WARN`, exit 0); `Read` without the root in `additionalDirectories` → `FAIL` printing the directory, exit 1; both present → `PASS` whose text names `additionalDirectories`, exit 0; profile moved → `FAIL profile-paths`, exit 1; no plugin record → `FAIL`, exit 1; `doctor --help` lists `--remote-job`; the unknown-option refusal lists it.
+- Under `--remote-job`, a profile missing both an `allow` entry and a plugin-root directory prints the directories in the same `FAIL`, after the `allow` blocks under a `permissions.additionalDirectories:` heading, rather than reporting only the `allow` gap first — so one preflight names every line the job's profile lacks.
