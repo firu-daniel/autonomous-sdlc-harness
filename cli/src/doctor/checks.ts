@@ -116,7 +116,12 @@ import {
   worktreeList,
 } from '../core/git.js';
 import { isJsonObject, readJsonFile, type JsonObject, type JsonValue } from '../core/json.js';
-import { defaultBranchPushCommand, defaultBranchPushReason } from '../core/defaultBranchPush.js';
+import {
+  defaultBranchPushCommand,
+  defaultBranchPushReason,
+  WORKFLOW_SCOPE_COMMAND,
+  WORKFLOW_SCOPE_REASON,
+} from '../core/defaultBranchPush.js';
 import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
@@ -2347,7 +2352,9 @@ const DAEMON_PATH_CHECK: Check = {
  * dispatches through it. Three `warn`s: no `harness-resume.yml`, because a usage-paused hosted run then
  * waits for `/autonomous-sdlc-harness:branch-resume`; a `harness-run.yml` that
  * `origin/<defaultBranch>` does not carry, because GitHub dispatches only a workflow its default
- * branch has — the run starts once it is pushed, so nothing is broken here; and `phases.qa` true,
+ * branch has — the run starts once it is pushed, so nothing is broken here, and its remedy's push
+ * skips the hook because the `pre-push` hook `init` wired refuses every push to the default branch
+ * (`core/defaultBranchPush.ts` owns that push, its `workflow`-scope step and both reasons); and `phases.qa` true,
  * because a remote run skips the interactive-test phase and the branch still reaches review — the
  * phase is then owed a local run. It needs no GitHub answer, so it is asked here rather than in
  * {@link REMOTE_GITHUB_CHECK}.
@@ -2420,7 +2427,7 @@ const REMOTE_EXECUTION_CHECK: Check = {
         notes.push(`whether origin/${branch} carries ${WORKFLOW_RUN_PATH} is not graded, because there is no origin/${branch} (see the remote check)`);
       } else if (!pathAtRef(root, `origin/${branch}`, WORKFLOW_RUN_PATH)) {
         warnings.push(
-          `origin/${branch} does not carry ${WORKFLOW_RUN_PATH}, as this checkout last fetched it, and GitHub dispatches only a workflow its default branch carries: commit it and push it with \`git push origin ${branch}\``,
+          `origin/${branch} does not carry ${WORKFLOW_RUN_PATH}, as this checkout last fetched it, and GitHub dispatches only a workflow its default branch carries: commit it, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`,
         );
       }
     }

@@ -62,3 +62,9 @@ and extends its module header's owned-values list and its *"The rule this module
 - `grep -n "git push origin" cli/src/commands/init.ts` returns nothing, and `grep -n "git push origin" cli/src/doctor/checks.ts` returns only `base-freshness` and `remote`-check lines, none inside `REMOTE_EXECUTION_CHECK`.
 - `grep -rn "no-verify origin" cli/src` finds the spelling only in `cli/src/core/defaultBranchPush.ts`, and `grep -rn "auth refresh -s workflow" cli/src` likewise finds it only there — no hit in `cli/src/commands/init.ts` or `cli/src/doctor/checks.ts`.
 - The four commands `init` prints are byte-identical to the four fenced commands Task 8 writes into `docs/remote-execution.md` → `## 7.` step 3, with `<default branch>` in the document standing for the branch name `init` substitutes.
+
+**Deviations from plan:**
+
+- `**Verification:**` bullet one ("The edited cases in `cli/test/init.test.mjs` and `cli/test/doctor.test.mjs` pass") was not executed: neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, and `commands.test` is not run by the unit. Deferred to the Run gates phase; the edited assertions rest on reading the printers' code, not on execution.
+- `**Verification:**` bullet five (byte-identity with Task 8's `docs/remote-execution.md` step 3) is deferred to Task 8, which has not landed yet.
+- `init.test.mjs`: the fixture's default branch is read from the fixture's own `harness.config.json` → `defaultBranch` rather than spelled, and the `git add` line is asserted by its `git add ` prefix, so the case pins all four step-1 commands.

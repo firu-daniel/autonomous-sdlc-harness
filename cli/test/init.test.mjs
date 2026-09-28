@@ -8533,10 +8533,23 @@ test('the GitHub workflows arrive with execution.target github-actions, and only
       'harness-resume.yml is not a verbatim copy of its template',
     );
 
-    // The commit line is the one `docs/remote-execution.md` → `## 7. Turning it on` step 3 prints.
-    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'doctor --check-github', 'git commit -m "Add the harness workflows"']) {
+    // The commit, scope and push lines, with the `git add` line checked by its prefix, are the four
+    // commands `docs/remote-execution.md` → `## 7. Turning it on` step 3 prints.
+    const { defaultBranch } = readJson(join(dir, 'harness.config.json'));
+    const names = [
+      'CLAUDE_CODE_OAUTH_TOKEN',
+      'ANTHROPIC_API_KEY',
+      'doctor --check-github',
+      'git add ',
+      'git commit -m "Add the harness workflows"',
+      'gh auth refresh -s workflow',
+      `git push --no-verify origin ${defaultBranch}`,
+    ];
+    for (const name of names) {
       assert.ok(stdout.includes(name), `the closing report does not name ${name}:\n${stdout}`);
     }
+    // The pre-push hook init installs refuses this form.
+    assert.ok(!stdout.includes('git push origin '), `the closing report prints a push the hook refuses:\n${stdout}`);
   });
 
   await t.test('a second init changes nothing, keeps an edited workflow, and --force replaces it after a .bak', async (subtest) => {

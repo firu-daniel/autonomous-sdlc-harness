@@ -5514,6 +5514,8 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-execution');
     assert.ok(line?.includes('GitHub dispatches only a workflow its default branch carries'), stderr);
+    assert.ok(line.includes('git push --no-verify origin'), line);
+    assert.ok(line.includes('gh auth refresh -s workflow'), line);
   });
 
   const QA_SKIP = 'a remote run skips the interactive-test phase';
