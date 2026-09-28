@@ -3,11 +3,12 @@
  *
  * **The rule this module exists to enforce: the eval records real-model numbers over a corpus whose
  * size is recorded with them.** So it refuses before loading anything when the stub models are
- * selected, when the model cache is incomplete, or when the retrieval runtime is not installed; and
- * every build returns `snapshot: { files, chunks }`, taken straight off `refreshIndex`'s own
- * `RefreshResult`, which is the stamp every figure quoted from this run carries. Both numbers are
- * derived from that result and never typed as a literal, and two figures carrying different stamps
- * are not a before/after pair (`evals/docs-retrieval/corpora.mjs` → the moving-corpus paragraph).
+ * selected, when the model cache is incomplete, or when this checkout's build cannot resolve the
+ * retrieval packages; and every build returns `snapshot: { files, chunks }`, taken straight off
+ * `refreshIndex`'s own `RefreshResult`, which is the stamp every figure quoted from this run carries.
+ * Both numbers are derived from that result and never typed as a literal, and two figures carrying
+ * different stamps are not a before/after pair (`evals/docs-retrieval/corpora.mjs` → the
+ * moving-corpus paragraph).
  *
  * It imports the compiled retrieval modules under `cli/dist/retrieval/` — the real interfaces, never
  * a copy of them — so `npm run build` is its precondition, which `scripts/run-gates.sh` already
@@ -23,15 +24,22 @@ import { chunkMarkdown } from '../../cli/dist/retrieval/chunk.js';
 import { corpusFiles } from '../../cli/dist/retrieval/corpus.js';
 import { RETRIEVAL_STUB_ENV, modelFilesPresent, resolveModels } from '../../cli/dist/retrieval/models.js';
 import { refreshIndex } from '../../cli/dist/retrieval/refresh.js';
-import { retrievalModelCacheDir, retrievalRuntimeState } from '../../cli/dist/retrieval/runtime.js';
+import { retrievalModelCacheDir, unresolvedRetrievalPeers } from '../../cli/dist/retrieval/runtime.js';
 import { openPgliteStore } from '../../cli/dist/retrieval/store.js';
+
+/** The workspace's own lockfile install, which puts every optional peer into `node_modules` because `cli/package.json` repeats them under `devDependencies`. */
+export const LOCAL_INSTALL_COMMAND = 'npm ci';
 
 /**
  * The three refusals, each before anything is loaded, each naming what to do about it.
  *
- * Exported because a pass that takes real-model numbers without building an index here owes the same
- * three checks (`evals/docs-retrieval/query-log-pass.mjs`, which measures the shipped server instead),
- * and a second copy of them would drift from this one.
+ * Its callers are `buildIndex` here, `evals/docs-retrieval/cold-build.mjs` → `measureColdBuild` and
+ * `evals/docs-retrieval/query-log-pass.mjs` → `runQueryLogPass`, which measures the shipped server code
+ * over MCP, spawned from this checkout's `cli/dist/cli.js`. Each loads this checkout's `cli/dist` and
+ * resolves the peers from the workspace, so the machine-wide runtime `init` installs is **not** a
+ * precondition of any of them, and the check on it is gone: it failed every caller on each version bump
+ * until that version was published and reinstalled. Exported because a second copy of these checks
+ * would drift from this one.
  */
 export function assertRealModelsAreAvailable() {
   if ((process.env[RETRIEVAL_STUB_ENV] ?? '') !== '') {
@@ -49,11 +57,12 @@ export function assertRealModelsAreAvailable() {
     );
   }
 
-  const runtime = retrievalRuntimeState();
-  if (!runtime.installed) {
+  const missing = unresolvedRetrievalPeers();
+  if (missing.length > 0) {
     throw new Error(
-      `eval: the retrieval runtime is not installed, so the optional peers cannot be loaded; ` +
-        `missing: ${runtime.missing.join(', ')}. Run the harness's retrieval setup to install them`,
+      `eval: the retrieval packages cannot be resolved from this checkout's build under cli/dist, so no ` +
+        `real-model number can be taken; missing: ${missing.join(', ')}. Run ${LOCAL_INSTALL_COMMAND} at ` +
+        `the repository root to install them`,
     );
   }
 }

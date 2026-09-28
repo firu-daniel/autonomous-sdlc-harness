@@ -2,9 +2,10 @@
 # The harness's own verification, as one command.
 #
 # `docs/development.md` §5 defines twelve gates. This script runs the six a process can run
-# unattended — gate 11 among them where the retrieval model cache is provisioned, and reported with
-# the hand-run gates where it is not — and reports the six it cannot, so that a reviewer — human or
-# agent — reading a green result has read the whole automatable half rather than one suite of it.
+# unattended — gate 11 among them where the retrieval model cache is provisioned and the workspace's
+# retrieval packages are installed, and reported with the hand-run gates where they are not — and
+# reports the six it cannot, so that a reviewer — human or agent — reading a green result has read
+# the whole automatable half rather than one suite of it.
 # `commands.test` in `harness.config.json` points here for exactly that reason: `npm test` is gate 4
 # alone, and a branch review that reads it as "verified" is reading the other five automatable
 # gates' worth of silence as a pass.
@@ -150,8 +151,13 @@ echo "== gate 11 — docs-retrieval relevance floor"
 # provisioning gap rather than a regression — counting it would turn `commands.test` red on every
 # contributor's machine and in every branch worktree without the several-hundred-megabyte download,
 # which is why §5 sorts real-model retrieval into gate 10. So it is reported below with the gates
-# this script cannot run and pushed onto neither array. A SHORTFALL against the recorded floor is
-# any other non-zero and still fails the script. It depends on gate 2a having built `cli/dist`.
+# this script cannot run and pushed onto neither array. Status 4 is the local-peers status: this
+# checkout's build cannot resolve the retrieval packages, which `npm ci` provisions the way the
+# download provisions the cache, and gates 2a and 4 need that same install and go red on their own
+# where it has not run — so it is BLOCKED on the same terms. The gate grades this checkout's build
+# and the workspace's peers, never the machine-wide retrieval runtime. A SHORTFALL against the
+# recorded floor is any other non-zero and still fails the script. It depends on gate 2a having
+# built `cli/dist`.
 node evals/docs-retrieval/check-floor.mjs >"$log" 2>&1
 floor_status=$?
 if [ "$floor_status" -eq 0 ]; then
@@ -160,6 +166,10 @@ if [ "$floor_status" -eq 0 ]; then
 elif [ "$floor_status" -eq 3 ]; then
   floor_blocked=1
   echo "  BLOCKED 11 docs-retrieval relevance floor — the retrieval model cache is empty"
+  sed 's/^/        /' "$log" | tail -25
+elif [ "$floor_status" -eq 4 ]; then
+  floor_blocked=1
+  echo "  BLOCKED 11 docs-retrieval relevance floor — the workspace's retrieval packages are not installed"
   sed 's/^/        /' "$log" | tail -25
 else
   failed+=("11 docs-retrieval relevance floor")
@@ -177,14 +187,15 @@ echo "  10 docs retrieval with the real models, which downloads them and needs a
 echo "  12 remote execution, against a real GitHub repository with a runner, a credential and minutes"
 if [ "$floor_blocked" -eq 1 ]; then
   echo "  11 the docs-retrieval relevance floor, reported BLOCKED above: it runs unattended where the"
-  echo "     retrieval model cache is provisioned and is listed here where it is not"
+  echo "     retrieval model cache is provisioned and the workspace's retrieval packages are installed,"
+  echo "     and is listed here where they are not"
 fi
 echo "     -> docs/development.md §5"
 
 # The same conditional the block above states, in the line a caller reads off a green run.
 hand_run="gates 5, 7, 8, 9, 10 and 12 remain hand-run"
 if [ "$floor_blocked" -eq 1 ]; then
-  hand_run="$hand_run, and gate 11 with them — it runs unattended only where the model cache is provisioned"
+  hand_run="$hand_run, and gate 11 with them — it runs unattended only where the model cache is provisioned and the workspace's retrieval packages are installed"
 fi
 
 echo
