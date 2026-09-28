@@ -12,6 +12,28 @@
  * `usage_resume_at` in the bundle, repaired to the gate's one-hour fallback when the value was
  * lost, or with the in-job wait's bound fired. The `usage:` cases assert both on the written
  * `remote_status.json` and the notification recorder, and none of them waits on the fallback hour.
+ *
+ * **Every watcher this file starts is bounded and reaped, so a hang fails by name.** Each `runBash`
+ * call carries `timeoutMs: WATCHER_RUN_TIMEOUT_MS` and `t.signal`. The value sits below the per-test
+ * timeout (`--test-timeout=300000`), because that expiry kills this file's process and leaves the
+ * watcher's detached group running (`helpers/fixture.mjs` → choice 6); and far above the longest
+ * honest run here, a few one-second poll intervals, so only a hang reaches it. The case *"a job
+ * killed mid-run leaves running / continue"* spawns and kills its own group, and is not bounded here.
+ *
+ * **`HARNESS_JOB_USAGE_REPEAT` repeats the case *"a reset 2 seconds ahead"* concurrently.** Unset is
+ * 1 and runs the case once; a positive integer N runs N independent job fixtures at once and fails
+ * naming the repetition; anything else fails the file's load naming the variable. At N > 1 each
+ * repetition's reset is `REPEAT_RESET_AHEAD_SECS` ahead and its stub waits `REPEAT_PAUSE_WAIT_TENTHS`
+ * for PAUSE: under that load a watcher's pass outlasts 2 seconds, the gate then reads an elapsed
+ * window and downgrades it (the watcher's usage-gate invariant 1), and the run completes unpaused on
+ * one prompt — a failure of the fixture's timing, not of the race. The race window, a tag written
+ * after its PAUSE, does not depend on the lead. It is off by
+ * default because N concurrent watchers multiply the suite's load for evidence only a maintainer
+ * needs: that the registry write race stays closed under contention, not one lucky pass. Its figure
+ * is taken by hand, outside any harness session (`harness-runs/lessons.md` → *"A wall-clock figure
+ * in a document of record is never one a run measured inside its own session"*). From `cli/`:
+ *
+ *     HARNESS_JOB_USAGE_REPEAT=40 node --test --test-timeout=300000 test/watcher-remote-job.test.mjs
  */
 
 import assert from 'node:assert/strict';
@@ -27,6 +49,28 @@ import { createWatcherFixture } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
 const PROMPT_DELIMITER = '----- end of prompt -----';
+
+/** The bound on one watcher run — the header argues the value. */
+const WATCHER_RUN_TIMEOUT_MS = 120_000;
+
+/** The environment variable naming how many times the repeatable usage case runs at once. */
+const JOB_USAGE_REPEAT_VARIABLE = 'HARNESS_JOB_USAGE_REPEAT';
+
+/** Unset: 1. A positive integer: that count. Anything else: refused by name. */
+function jobUsageRepeat() {
+  const value = process.env[JOB_USAGE_REPEAT_VARIABLE];
+  if (value === undefined) return 1;
+  if (/^[1-9][0-9]*$/.test(value)) return Number(value);
+  throw new Error(
+    `${JOB_USAGE_REPEAT_VARIABLE} is set to \`${value}\`; it takes a positive integer, and \`1\` runs the case once.`,
+  );
+}
+
+const JOB_USAGE_REPEAT = jobUsageRepeat();
+
+/** The repeated case's reset lead and PAUSE wait — the header argues why they differ from one run's. */
+const REPEAT_RESET_AHEAD_SECS = 15;
+const REPEAT_PAUSE_WAIT_TENTHS = 600;
 
 function shellQuote(value) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
@@ -146,7 +190,8 @@ async function createJobFixture(t) {
     watcher,
     jobEnv,
     setStub: (shellBody) => writeFile(bodyPath, `${shellBody}\n`, 'utf8'),
-    job: (args, env = {}) => runBash(w.dir, [watcher, 'job', ...args], jobEnv(env)),
+    job: (args, env = {}) =>
+      runBash(w.dir, [watcher, 'job', ...args], jobEnv(env), { timeoutMs: WATCHER_RUN_TIMEOUT_MS, signal: t.signal }),
     argv: () => (existsSync(argvPath) ? readFileSync(argvPath, 'utf8').split('\n').slice(0, -1) : null),
     prompts: () =>
       existsSync(promptsPath)
@@ -472,17 +517,33 @@ test('budget: a hosted self-pause continues, silently', async (t) => {
 
 test('usage: a short reset is waited out in the job, a reset past the deadline goes to the poller', async (t) => {
   await t.test('a reset 2 seconds ahead -> the run completes in the same job', async (t) => {
-    const j = await createJobFixture(t);
-    if (j === null) return;
-    await j.setStub(`${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then ${rateLimitRejected(2)}; ${HONOUR_PAUSE(100)}; fi`);
-    const result = await j.job([j.branch, 'task', 'none'], {
-      USAGE_CHECK_INTERVAL_SECS: '1',
-      USAGE_RESUME_MARGIN_SECS: '0',
-    });
-    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.equal(lastLine(result.stdout), 'job: completed stop');
-    assert.equal(j.prompts().length, 2);
-    assert.equal(j.status().pause_reason, '');
+    const runOnce = async (label, aheadSecs, pauseTenths) => {
+      const j = await createJobFixture(t);
+      if (j === null) return;
+      await j.setStub(
+        `${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then ${rateLimitRejected(aheadSecs)}; ${HONOUR_PAUSE(pauseTenths)}; fi`,
+      );
+      const result = await j.job([j.branch, 'task', 'none'], {
+        USAGE_CHECK_INTERVAL_SECS: '1',
+        USAGE_RESUME_MARGIN_SECS: '0',
+      });
+      assert.equal(result.status, 0, `${label}${result.stdout}\n${result.stderr}`);
+      assert.equal(lastLine(result.stdout), 'job: completed stop', label);
+      assert.equal(j.prompts().length, 2, label);
+      assert.equal(j.status().pause_reason, '', label);
+    };
+    if (JOB_USAGE_REPEAT === 1) {
+      await runOnce('', 2, 100);
+      return;
+    }
+    // Settled rather than `Promise.all`, so no watcher outlives the case and every failure is named.
+    const outcomes = await Promise.allSettled(
+      Array.from({ length: JOB_USAGE_REPEAT }, (_, i) =>
+        runOnce(`repetition ${i + 1} of ${JOB_USAGE_REPEAT}: `, REPEAT_RESET_AHEAD_SECS, REPEAT_PAUSE_WAIT_TENTHS),
+      ),
+    );
+    const failures = outcomes.filter((o) => o.status === 'rejected').map((o) => o.reason?.message ?? String(o.reason));
+    assert.deepEqual(failures, [], `${failures.length} of ${JOB_USAGE_REPEAT} repetitions failed`);
   });
 
   await t.test('a reset beyond the deadline -> paused / usage / wait-poller', async (t) => {
@@ -656,10 +717,12 @@ test('status prints the four job-mode tunables with their defaults', async (t) =
   const j = await createJobFixture(t);
   if (j === null) return;
 
-  const result = await runBash(j.dir, [j.watcher, 'status'], {
-    HOME: join(j.dir, 'home'),
-    XDG_CONFIG_HOME: join(j.dir, 'home', '.config'),
-  });
+  const result = await runBash(
+    j.dir,
+    [j.watcher, 'status'],
+    { HOME: join(j.dir, 'home'), XDG_CONFIG_HOME: join(j.dir, 'home', '.config') },
+    { timeoutMs: WATCHER_RUN_TIMEOUT_MS, signal: t.signal },
+  );
   assert.equal(result.status, 0, result.stderr);
   for (const pair of [
     'REMOTE_CONTROL_POLL_SECS=60',
