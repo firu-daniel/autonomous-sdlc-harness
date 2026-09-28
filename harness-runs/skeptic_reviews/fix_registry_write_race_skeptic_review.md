@@ -38,7 +38,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Reword `docs/development.md`'s hung-case paragraph so it no longer cites `cli/test/test-timeout.test.mjs` as proof of the `--test-timeout` behaviour, and name the one unbounded job-suite case. _(layer: general)_
+1. [x] **Finding 2** — Reword `docs/development.md`'s hung-case paragraph so it no longer cites `cli/test/test-timeout.test.mjs` as proof of the `--test-timeout` behaviour, and name the one unbounded job-suite case. _(layer: general)_
 2. [ ] **Finding 1** — Measure the in-job usage wait's bound from the gate's last chance to resume (`+ USAGE_CHECK_INTERVAL_SECS + POLL_INTERVAL_SECS`), and amend the watcher header and `docs/remote-execution.md` to match. _(layer: cli, general)_
 
 ---
