@@ -108,6 +108,7 @@ import {
   commitsAhead,
   configuredRemotes,
   hasCommits,
+  mainWorktreeRoot,
   pathAtRef,
   pathIsIgnored,
   remoteTrackingBranchResolves,
@@ -343,7 +344,10 @@ export interface CheckContext {
   readonly profile?: JsonObject;
   /** Why the profile did not parse. Present exactly when {@link profile} is absent. */
   readonly profileProblem?: string;
-  /** Absolute path the profile was looked for at. */
+  /**
+   * Absolute path the profile was looked for at — the main checkout's when `doctor` runs in a linked
+   * worktree, since that is the profile a run loads.
+   */
   readonly profilePath?: string;
   /**
    * Whether the run asked for {@link BROWSER_WIRING_CHECK}'s registry reachability probe, which
@@ -625,6 +629,11 @@ function serversStartedByProfile(profile: JsonObject): readonly string[] {
  * has to report on rather than crash against, and the same holds for a config or a profile that does
  * not parse. Each failure becomes a field the check that owns that subject renders.
  *
+ * The profile is read from the main checkout ({@link mainWorktreeRoot}, falling back to `repoRoot`
+ * when the probe does not answer), since that is the one a run loads; `repoRoot` stays the checkout
+ * `doctor` runs in, so a linked worktree's profile checks grade the main checkout's file against the
+ * worktree's root.
+ *
  * `probeRegistry` and `probeGithub` are the caller's answers rather than this function's, and both
  * default to `false`: a context built without them is the context every default run gets, and no
  * check here reaches a network unless the command was asked to.
@@ -641,14 +650,18 @@ export function buildCheckContext(cwd: string, probeRegistry = false, probeGithu
   if (repoRoot === undefined) return { cwd, repoProblem, configProblems: [], probeRegistry, probeGithub };
 
   const loaded = loadConfig(repoRoot);
-  const profilePath = join(repoRoot, PROFILE_PATH);
+  const profileRoot = mainWorktreeRoot(repoRoot) ?? repoRoot;
+  const profilePath = join(profileRoot, PROFILE_PATH);
 
   let profile: JsonObject | undefined;
   let profileProblem: string | undefined;
   try {
     const parsed = readJsonFile(profilePath);
     if (parsed === undefined) {
-      profileProblem = `no ${PROFILE_PATH} at ${profilePath}: this repository has no unattended-run permission profile — run \`${CLI} init\` to generate one`;
+      profileProblem =
+        profileRoot === repoRoot
+          ? `no ${PROFILE_PATH} at ${profilePath}: this repository has no unattended-run permission profile — run \`${CLI} init\` to generate one`
+          : `no ${PROFILE_PATH} at ${profilePath}: a linked worktree carries no profile of its own, and runs load the main checkout's, at ${profileRoot} — run \`${CLI} init\` there, not in this worktree, to generate one`;
     } else if (!isJsonObject(parsed)) {
       profileProblem = `${profilePath} is not a JSON object, so it is not a settings file the agent runner can load`;
     } else {
@@ -3866,7 +3879,10 @@ const PLUGIN_WIRING_CHECK: Check = {
   },
 };
 
-/** Is there a permission profile, and does it parse? Everything below reads it. */
+/**
+ * Is there a permission profile, and does it parse? Everything below reads it. In a linked worktree it
+ * grades the main checkout's profile, the one a run loads ({@link buildCheckContext}).
+ */
 const PROFILE_CHECK: Check = {
   id: 'permission-profile',
   title: `${PROFILE_PATH} exists and parses`,
@@ -3892,10 +3908,11 @@ const PROFILE_CHECK: Check = {
  * "Cover" is deliberately not "contain" ({@link namesRoot}). A generated profile names two locations —
  * the checkout it was generated at, and the sibling-worktree pattern that is emitted unconditionally
  * beside it — and a sibling worktree is covered by the second while appearing in neither as a
- * substring. Warning there would be a standing false alarm in exactly the checkouts the flow runs in,
- * and its remediation is the damaging part: an `init --force` inside a worktree regenerates the
- * **committed** profile with that worktree as `<repo_root>`, leaving the main checkout named by
- * nothing, since `<work>/<project>` does not match `<work>/<project>-*`.
+ * substring. A linked worktree carries no profile of its own — the profile is gitignored and
+ * machine-local — so in a worktree this check grades the main checkout's profile, the one the watcher
+ * loads, against the worktree's root, which the sibling-worktree glob covers. A false warning there
+ * would send the operator to `init --force` inside the worktree, which writes a profile naming the
+ * worktree that no run ever loads.
  */
 const PROFILE_PATHS_CHECK: Check = {
   id: 'profile-paths',

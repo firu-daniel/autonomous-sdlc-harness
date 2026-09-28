@@ -35,3 +35,8 @@
 - `commands.typecheck` passes.
 - `grep -n "committed\*\* profile" cli/src/doctor/checks.ts` returns no hit inside `PROFILE_PATHS_CHECK`'s doc comment.
 - `grep -rn "'worktree', 'list'" cli/src` finds both constants only in `cli/src/core/git.ts` — no other module issues the probe.
+
+**Deviations from plan:**
+
+- The verification bullet *"The two cases in `cli/test/doctor.test.mjs` pass"* was not executed: neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, so per `unit_loop_core.md` → `## The test-run rule` (3) the run is skipped and deferred to the Run gates phase. The claim rests on reading the code and a passing `commands.typecheck`, not on execution.
+- The two cases share their worktree setup through a file-local `wiredWorktree(t, dir)` helper, rather than each repeating `configuredBranchWithCommit`, `git worktree add` and the `rm` of the worktree's profile.

@@ -68,6 +68,18 @@ const GIT_SYMBOLIC_HEAD_ARGS: readonly string[] = Object.freeze(['symbolic-ref',
 const GIT_WORKTREE_LIST_ARGS: readonly string[] = Object.freeze(['worktree', 'list']);
 
 /**
+ * The worktree inventory probe in its machine-readable form, for {@link mainWorktreeRoot}.
+ *
+ * Separate from {@link GIT_WORKTREE_LIST_ARGS}, whose caller needs only whether git answers: this
+ * caller needs the first path, and the porcelain form is the one whose first `worktree <path>` line
+ * is the main working copy, with no column formatting to split a path containing a space.
+ */
+const GIT_WORKTREE_PORCELAIN_ARGS: readonly string[] = Object.freeze(['worktree', 'list', '--porcelain']);
+
+/** The prefix of a porcelain record's path line. */
+const PORCELAIN_WORKTREE_PREFIX = 'worktree ';
+
+/**
  * "Does `HEAD` name a commit" — `--quiet` so an unborn HEAD prints nothing rather than an error,
  * leaving the exit status as the whole answer.
  */
@@ -370,6 +382,26 @@ export function worktreeList(repoRoot: string): string[] | undefined {
     .map((line) => line.trim())
     .filter((line) => line !== '');
   return lines.length === 0 ? undefined : lines;
+}
+
+/**
+ * The main checkout of the repository `repoRoot` belongs to, or `undefined` when the probe did not
+ * answer — a non-zero exit, or no `worktree ` line. In a main checkout it returns that checkout.
+ *
+ * Mirrors `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_main_repo`, the resolution the
+ * watcher uses for `SETTINGS_PROFILE`, so `doctor` and the watcher cannot disagree about which
+ * checkout's permission profile a run loads.
+ */
+export function mainWorktreeRoot(repoRoot: string): string | undefined {
+  let output: string;
+  try {
+    output = runGit(GIT_WORKTREE_PORCELAIN_ARGS, repoRoot);
+  } catch {
+    return undefined;
+  }
+  const first = output.split('\n').find((line) => line.startsWith(PORCELAIN_WORKTREE_PREFIX));
+  const path = first?.slice(PORCELAIN_WORKTREE_PREFIX.length);
+  return path === undefined || path === '' ? undefined : path;
 }
 
 /**

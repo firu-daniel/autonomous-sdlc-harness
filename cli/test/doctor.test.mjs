@@ -333,34 +333,58 @@ test('a deleted run watcher warns and leaves the exit status at 0', async (t) =>
   assert.match(stdout, CLEAN_SUMMARY);
 });
 
-test('a sibling worktree is covered by the profile\'s worktree pattern and does not warn', async (t) => {
-  const dir = await wiredFixture(t);
-  // `init`'s own first commit is what makes the next two steps possible at all — `git worktree add`
-  // cannot prepare a checkout from a repository with no commit, and the profile has to be *committed*
-  // for the second checkout to carry it. This case used to make that commit by hand; it is now the
-  // wiring run's, so the precondition is checked rather than re-created.
+/**
+ * A linked worktree of a wired repository, made the way an adopter's run makes one, with the
+ * worktree's own copy of the profile removed. `init`'s own first commit is what lets `git worktree
+ * add` prepare it; the worktree's run loads the main checkout's profile, so removing the worktree's
+ * copy — a no-op once the profile is ignored — is what proves the main checkout's is the one graded.
+ */
+async function wiredWorktree(t, dir) {
   await configuredBranchWithCommit(dir);
-
-  // A real second checkout, made the way an adopter's run makes one, rather than a hand-written
-  // profile: the assertion is about the glob the generator actually emitted, and only a worktree at a
-  // path that glob matches — `<work_root>/<project>-*`, `core/paths.ts` — exercises it.
+  // A real second checkout at a path the emitted glob — `<work_root>/<project>-*`, `core/paths.ts` —
+  // matches, since the assertion is about the glob the generator actually emitted.
   const worktree = `${dir}-feature_x`;
   await runGit(dir, ['worktree', 'add', '-b', 'feature_x', worktree]);
   t.after(() => rm(worktree, { recursive: true, force: true }));
+  await rm(join(worktree, PROFILE_FILE), { force: true });
+  return worktree;
+}
 
-  // What makes this case the one the check used to get wrong: the committed profile carries no
+test('a sibling worktree is covered by the profile\'s worktree pattern and does not warn', async (t) => {
+  const dir = await wiredFixture(t);
+  const worktree = await wiredWorktree(t, dir);
+
+  // What makes this case the one the check used to get wrong: the main checkout's profile carries no
   // occurrence of this checkout's path at all, so the pattern is the only thing that can cover it.
-  const profile = readFileSync(join(worktree, PROFILE_FILE), 'utf8');
+  const profile = readFileSync(join(dir, PROFILE_FILE), 'utf8');
   assert.ok(!profile.includes(worktree), `${PROFILE_FILE} names the worktree literally, so this case proves nothing`);
 
   const { status, stdout, stderr } = await runCli(worktree, ['doctor']);
 
-  // The remediation is what makes a false warning here expensive rather than merely noisy: `init
-  // --force` inside a worktree regenerates the *committed* profile against the worktree's own path
-  // and leaves the main checkout named by nothing.
+  // A false warning here is expensive rather than merely noisy: its remedy, `init --force` inside the
+  // worktree, writes a profile naming the worktree that no run ever loads.
   assert.doesNotMatch(stderr, warnLine('profile-paths'), `doctor warned about the profile's paths in a worktree the profile covers\n${stderr}`);
   assert.equal(status, 0, `doctor exited ${status} in a sibling worktree of a wired repository\n${stdout}\n${stderr}`);
   assert.match(stdout, CLEAN_SUMMARY);
+  assert.ok(
+    passDetail(stdout, 'permission-profile').includes(join(dir, PROFILE_FILE)),
+    `the permission-profile check did not grade the main checkout's profile\n${stdout}`,
+  );
+});
+
+test('a sibling worktree whose main checkout has no profile fails, naming the main checkout as where to run init', async (t) => {
+  const dir = await wiredFixture(t);
+  const worktree = await wiredWorktree(t, dir);
+  await rm(join(dir, PROFILE_FILE), { force: true });
+
+  const { status, stdout, stderr } = await runCli(worktree, ['doctor']);
+
+  assert.equal(status, 1, `doctor exited ${status} with no profile in the main checkout\n${stdout}\n${stderr}`);
+  const line = reportLine(stderr, 'fail', 'permission-profile') ?? '';
+  assert.match(stderr, failLine('permission-profile'), stderr);
+  assert.ok(line.includes(`at ${dir} — run`), `the failure does not name the main checkout as where to run init\n${line}`);
+  assert.ok(!line.includes(join(worktree, PROFILE_FILE)), `the failure names the worktree's profile path\n${line}`);
+  assert.ok(!line.includes(`${worktree} — run`), `the failure sends the operator to the worktree\n${line}`);
 });
 
 test('a profile generated for another directory still warns, and leaves the exit status at 0', async (t) => {
