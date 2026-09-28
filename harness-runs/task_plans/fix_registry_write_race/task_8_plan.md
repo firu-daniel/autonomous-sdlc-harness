@@ -54,3 +54,10 @@ Read each of those in the code before writing about it. This file is the contrac
 - Each statement added is checked against the code it describes. For example, the bound's formula is read off `run_job`'s `usage)` arm and the timeout off `cli/package.json`, never off this file.
 - The repeat command appears in a fenced block, one command per line, and matches the spelling in `cli/test/watcher-remote-job.test.mjs`'s header byte for byte.
 - No figure measured in this session appears in any of the three documents.
+
+**Deviations from plan:**
+- Gate 4's timeout paragraph does not say `--test-timeout` alone makes a hung case fail by name: per Task 6's deviation and `cli/test/helpers/fixture.mjs` → choice 6, under Node 20.19.5 that expiry names the file and leaves its detached group running. The paragraph states that, and credits the per-case name and the process-group kill to `runBash`'s `timeoutMs` in `tick` and in the job suite.
+- The repeat-command sub-paragraph sits in Gate 4 immediately before `**Run time, measured.**`, not physically beside the `HARNESS_TEST_CONCURRENCY=1 npm test` note, which is inside `**Run time, measured.**` (row 22, `no-change`) and past this task's target fence.
+- The stub is described as polling for `PAUSE` every 0.1 s and exiting once it appears, read off the stub in `cli/test/watcher-remote-job.test.mjs` (`sleep 0.1` loop).
+- The `**Hand it to the poller**` bullet gained one clause (*"or when an in-job wait reaches that bound"*) so it agrees with the bound stated in the Wait bullet; row 5 names both bullets.
+- `docs/watcher.md` §4's knobs paragraph is unchanged: the fallback is the constant `USAGE_FALLBACK_RESUME_SECS`, not a tunable, and that paragraph names none of it.
