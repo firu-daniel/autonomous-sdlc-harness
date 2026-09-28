@@ -5,8 +5,9 @@
  * **The rule this module exists to enforce: a test's repository is built by the test, lives under
  * `os.tmpdir()`, and is torn down in-process.** `init` is a writer aimed at a repository, so the
  * only honest way to test it is to give it a real one — and the only safe one is to give it a
- * repository that exists for the length of one test. Nothing here is committed, nothing is shared
- * between tests, and no fixture is ever created inside this checkout.
+ * repository that exists for the length of one test. Nothing here is committed, no repository is
+ * shared between tests, and no fixture is ever created inside this checkout. The seeded template of
+ * choice 5 is **never handed to a test**: every test still receives its own repository, a copy of it.
  *
  * The tests these helpers serve run against the **compiled** CLI at `dist/cli.js`, so
  * `npm run build` precedes `npm test`. {@link runCli} says so in its own refusal rather than
@@ -17,7 +18,7 @@
  * why nothing here runs at import time: the module defines functions and resolves paths, and every
  * subprocess, temp directory and refusal happens inside a call a real test makes.
  *
- * ## Four non-obvious choices, and where each comes from
+ * ## Five non-obvious choices, and where each comes from
  *
  * 1. **The fixture directory is `realpath`-resolved.** `git rev-parse --show-toplevel` answers with
  *    the physical path, while `os.tmpdir()` is a symlink on macOS. Without this, every absolute path
@@ -39,12 +40,19 @@
  * 4. **Every subprocess resolves rather than throws on a non-zero exit.** Half the assertions here
  *    are about refusals, and a runner that threw on exit 1 would make the ordinary case the awkward
  *    one. A failure to spawn at all still rejects, because that is not a result the CLI produced.
+ * 5. **The seeded repository is copied, not rebuilt.** Seeding one — {@link seedRepository} — is
+ *    about fourteen git processes and ~100 ms of CPU-bound work, and across the suite that was ~42%
+ *    of every git process it ran, all re-deriving one identical state. So each process seeds one
+ *    template per `remote` variant, lazily on first use, and every fixture is an in-process copy of
+ *    it, removed by `rmSync` on exit (choice 2). The one absolute path git stores in the copy is
+ *    `remote.origin.url` in `.git/config`; it is rewritten to the fixture's own origin, and a copy
+ *    in which it does not occur exactly once is refused rather than left pointing at a shared one.
  */
 
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, lstat, realpath, rm, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { cp, mkdir, mkdtemp, readdir, readFile, lstat, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 
@@ -59,6 +67,9 @@ export const CLI_ENTRY = join(PACKAGE_ROOT, 'dist', 'cli.js');
 
 /** The temp-directory prefix, which is also the fixture's `projectName` stem in generated output. */
 const FIXTURE_PREFIX = 'harness-fixture-';
+
+/** The temp-directory prefix of a per-process template root (choice 5 in the module header). */
+const TEMPLATE_PREFIX = 'harness-fixture-template-';
 
 /**
  * The suffix the fixture's own `origin` is created under, as a sibling of the fixture directory.
@@ -232,6 +243,81 @@ async function seedOrigin(dir) {
 }
 
 /**
+ * Seed a fresh repository in `dir`: the one place the seeding sequence is written, used to build
+ * each template (choice 5 in the module header) and by the suite proving a copy is equivalent.
+ *
+ * @param {string} dir an existing, empty directory.
+ * @param {{ remote?: boolean }} [options] `true` also seeds the sibling `origin` ({@link seedOrigin}).
+ * @returns {Promise<string | undefined>} the origin's path, or `undefined` without a remote.
+ */
+export async function seedRepository(dir, { remote = true } = {}) {
+  await runGit(dir, ['init', '--quiet']);
+  await runGit(dir, ['config', 'user.email', 'fixture@example.invalid']);
+  await runGit(dir, ['config', 'user.name', 'Harness Fixture']);
+  return remote ? seedOrigin(dir) : undefined;
+}
+
+/** `remote` → the memoized build of that variant's template. Empty until a fixture needs one. */
+const templates = new Map();
+
+/** Every template root this process built, removed on exit. */
+const templateRoots = [];
+
+/**
+ * The seeded template for one `remote` variant, built on first call; every later caller —
+ * concurrent ones included — awaits the same promise.
+ *
+ * @param {boolean} remote
+ * @returns {Promise<{ repo: string, origin: string | undefined }>}
+ */
+function templateFor(remote) {
+  if (!templates.has(remote)) {
+    templates.set(remote, (async () => {
+      const root = await realpath(await mkdtemp(join(tmpdir(), TEMPLATE_PREFIX)));
+      if (templateRoots.length === 0) {
+        process.once('exit', () => {
+          for (const path of templateRoots) rmSync(path, { recursive: true, force: true });
+        });
+      }
+      templateRoots.push(root);
+      const repo = join(root, 'repo');
+      await mkdir(repo);
+      const origin = await seedRepository(repo, { remote });
+      return { repo, origin };
+    })());
+  }
+  return templates.get(remote);
+}
+
+/**
+ * Copy the variant's template into `dir`, and its origin to `dir`'s own sibling, repointing
+ * `remote.origin.url` at that sibling.
+ *
+ * @param {string} dir the fixture directory, existing and empty.
+ * @param {boolean} remote
+ * @returns {Promise<string | undefined>} the fixture's origin path, or `undefined` without a remote.
+ */
+async function copyTemplate(dir, remote) {
+  const template = await templateFor(remote);
+  await cp(template.repo, dir, { recursive: true });
+  if (template.origin === undefined) return undefined;
+
+  const origin = `${dir}${ORIGIN_SUFFIX}`;
+  await cp(template.origin, origin, { recursive: true });
+  const configPath = join(dir, '.git', 'config');
+  const config = await readFile(configPath, 'utf8');
+  const occurrences = config.split(template.origin).length - 1;
+  if (occurrences !== 1) {
+    throw new Error(
+      `fixture setup: the template's origin path occurs ${occurrences} times in ${configPath}, expected exactly once`,
+    );
+  }
+  // A replacer function, because a string replacement would expand any `$` pattern in `origin`.
+  await writeFile(configPath, config.replace(template.origin, () => origin), 'utf8');
+  return origin;
+}
+
+/**
  * Build a throwaway repository under `os.tmpdir()` and return it with its teardown.
  *
  * @param {object} [options]
@@ -252,12 +338,7 @@ export async function createFixture({ files = {}, dirs = [], git = true, remote 
   /** @type {string | undefined} */
   let originDir;
 
-  if (git) {
-    await runGit(dir, ['init', '--quiet']);
-    await runGit(dir, ['config', 'user.email', 'fixture@example.invalid']);
-    await runGit(dir, ['config', 'user.name', 'Harness Fixture']);
-    if (remote) originDir = await seedOrigin(dir);
-  }
+  if (git) originDir = await copyTemplate(dir, Boolean(remote));
 
   for (const relativeDir of dirs) {
     await mkdir(insideFixture(dir, relativeDir), { recursive: true });

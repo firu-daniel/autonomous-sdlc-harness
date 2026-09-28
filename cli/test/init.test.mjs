@@ -24,11 +24,13 @@
  * test may; every retrieval-on case runs under the stub and a planted model cache, and the setup cases
  * assert only the skips, the dry-run notes and the stub refusals. Gate 10 covers the real path by hand.
  *
- * ## Four non-obvious choices, and where each comes from
+ * ## Five non-obvious choices, and where each comes from
  *
  * 1. **Every test builds its own fixture and tears it down.** No directory is shared and none is
  *    reused across tests, so a test that writes cannot change what a later one observes, and a
- *    failure leaves nothing behind to confuse the next run (`helpers/fixture.mjs`).
+ *    failure leaves nothing behind to confuse the next run (`helpers/fixture.mjs`). That is what
+ *    lets the cases run concurrently: they sit in one `concurrentSuite` and run `CASE_CONCURRENCY`
+ *    at a time (`test/helpers/concurrency.mjs`); `HARNESS_TEST_CONCURRENCY=1` runs them in series.
  * 2. **The wrapper ↔ profile invariant is asserted in both directions**, because the two failures
  *    are different and neither is loud: a written wrapper missing one of its three allow forms
  *    leaves a caller using that spelling matching neither `allow` nor `deny`, which in an unattended
@@ -52,6 +54,12 @@
  *    nothing in this package: its template and `test.sh`'s carry the same executable body and
  *    differ only in their comments — `diff <(grep -v '^#' cli/templates/scripts/typecheck.sh)
  *    <(grep -v '^#' cli/templates/scripts/test.sh)` — so running it would re-drive the arm above.
+ * 5. **One case runs after the suite, alone.** The dev-server case asserts wall-clock bounds — the
+ *    wrapper returns within `RETURNS_PROMPTLY_MS`, and `eventually` polls its pid — which are about
+ *    the wrapper, and under a burst of concurrent subprocesses would measure the machine's load
+ *    instead. **A new case joins the suite only if it builds its own fixture, passes every override
+ *    through `runCli`'s `env`, writes no `process.env` and asserts nothing about wall-clock time**;
+ *    otherwise it goes after the suite closes.
  */
 
 import assert from 'node:assert/strict';
@@ -64,6 +72,7 @@ import test from 'node:test';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
+import { concurrentSuite } from './helpers/concurrency.mjs';
 import {
   createFixture,
   ignoredAmong,
@@ -79,6 +88,7 @@ import {
   PACKAGE_ROOT,
   WORKSPACE_ROOT,
 } from './helpers/fixture.mjs';
+import { PUSH_DESTINATION_FORMS } from '../dist/generators/notifications.js';
 
 /** The generated artifacts this file addresses by name — the contract, spelled out once. */
 const CONFIG_FILE = 'harness.config.json';
@@ -128,8 +138,8 @@ const QA_SCENARIOS_HEADING = /^# QA test scenarios$/m;
 const GITIGNORE_MARKER = '>>> autonomous-sdlc-harness (managed block';
 
 /**
- * The unattended loop's stop, pause and dispatch-count files, written flat at the root of the
- * run-artifact tree while a run is in flight and never committed.
+ * The unattended loop's stop, pause and dispatch-count files and the flow walker's state file,
+ * written flat at the root of the run-artifact tree while a run is in flight and never committed.
  *
  * Spelled out here rather than imported from the generator that emits them — choice 3 in the module
  * header — so a name dropped from the generated block fails an assertion instead of quietly
@@ -137,6 +147,7 @@ const GITIGNORE_MARKER = '>>> autonomous-sdlc-harness (managed block';
  */
 const RUN_CONTROL_ARTIFACTS = [
   '.dispatch_counter',
+  '.flow_walker_state',
   'STOP',
   'AUTONOMOUS_STOP',
   'PAUSE',
@@ -275,7 +286,10 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'autonomous-notify.sh',
   'autonomous-watcher.sh',
   'restart-watcher.sh',
+  'remote-run.sh',
   'docs-search-server.sh',
+  'flow-walker.sh',
+  'run-test-suite.sh',
 ];
 
 /** A left-over template token — none may survive into a generated file. */
@@ -681,6 +695,46 @@ async function assertWrapperPairing(dir, config, profile) {
   return written;
 }
 
+/** The pair that reads a written hook back: the set its `case` label carries, and whether it drifted. */
+const { readProtectedCaseLabel, caseLabelMatches } = await loadCompiled('generators/githooks.js');
+
+/** The pair that reads a written wrapper back: which file a key invokes, and the line inside it. */
+const { configuredWrapperFile, wrapperCommandLine, writeWrapperScripts } = await loadCompiled('generators/scripts.js');
+
+const { READ_MANIFESTS } = await loadCompiled('detect/presets.js');
+
+/**
+ * A compiled generator, imported for the one wording no command line reaches yet: the banner a
+ * declined offer records. The offer is an *input* to this generator, so rendering both wordings is
+ * the only way to assert that neither leaves its reader without a way out of the block — and a
+ * banner is written once, at setup, into a file every later run keeps.
+ */
+async function loadCompiled(relativePath) {
+  const path = join(PACKAGE_ROOT, 'dist', relativePath);
+  if (!existsSync(path)) {
+    throw new Error(
+      `${path} is missing. These tests run against the compiled CLI, so run \`npm run build\` before \`npm test\`.`,
+    );
+  }
+  return import(pathToFileURL(path).href);
+}
+
+const { writeClaudeContext } = await loadCompiled('generators/claudeContext.js');
+const { WritePlan } = await loadCompiled('core/writer.js');
+
+/** The CLI's own slug parser, so the gate below reads the shipped manifest the way `init` reads it. */
+const { parseRepoSlug } = await loadCompiled('core/paths.js');
+
+/**
+ * The plugin's identity, taken from the compiled CLI rather than spelled here: a record seeded under
+ * any other key is one the CLI correctly resolves nothing from, so the fixture would pin a machine
+ * with no plugin while claiming to pin one with it. Everything else below is spelled literally —
+ * choice 3 in the module header — because the *form* of these entries is what a run matches on.
+ */
+const { PLUGIN_KEY } = await loadCompiled('generators/projectSettings.js');
+
+concurrentSuite('init', () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
+
 test('a first init exits 0 and writes a schema-shaped harness.config.json', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
 
@@ -843,9 +897,6 @@ test('a re-run says the kept pre-push hook carries the set it was written with, 
     `the note still says --force rebuilds ${CONFIG_FILE}, which it no longer does:\n${note}`,
   );
 });
-
-/** The pair that reads a written hook back: the set its `case` label carries, and whether it drifted. */
-const { readProtectedCaseLabel, caseLabelMatches } = await loadCompiled('generators/githooks.js');
 
 /**
  * The hook reader's round trip, and it is one only because every label below was rendered by `init`
@@ -1200,9 +1251,6 @@ test('a command line that merely names the wrapper file is written into it, not 
   assert.doesNotMatch(stderr, /recurse forever/);
 });
 
-/** The pair that reads a written wrapper back: which file a key invokes, and the line inside it. */
-const { configuredWrapperFile, wrapperCommandLine, writeWrapperScripts } = await loadCompiled('generators/scripts.js');
-
 /**
  * The reader's round trip — and it is one only because every wrapper below was written by `init` in
  * this test rather than typed out as a fixture string: a parse graded against a hand-written wrapper
@@ -1420,56 +1468,6 @@ test("a wrapper reports its command's failure as one verdict line and exits with
   assert.doesNotMatch(failed.stdout, /^PASS: /m);
   // The command was reached: this is its failure being reported, not the wrapper refusing to run it.
   assert.equal(recorded(record).cwd, dir);
-});
-
-/**
- * The dev-server wrapper is the one that must **not** wait for its command, and the one whose
- * output a caller has to act on: the QA phase polls the port, checks that the pid it was given is
- * still alive before trusting an answer, and reads the log when the start failed.
- */
-test('the dev-server wrapper starts the server detached and prints a live pid and a readable log', async (t) => {
-  const dir = await fixtureFor(t, { files: recordingFixtureFiles(), dirs: [NESTED_DIR] });
-
-  await initOk(dir);
-
-  const startedAt = Date.now();
-  const result = await runBash(join(dir, NESTED_DIR), [
-    join(dir, SCRIPTS_DIR, 'start-dev-server.sh'),
-    DEV_SERVER_PORT,
-    '--extra',
-  ]);
-  const elapsed = Date.now() - startedAt;
-
-  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-  assert.ok(
-    elapsed < RETURNS_PROMPTLY_MS,
-    `the wrapper took ${elapsed}ms, so it waited for a server that stays up for ${DEV_SERVER_STUB_SECONDS}s`,
-  );
-
-  const pid = Number(/^STARTING: devServer \(pid (\d+)\)$/m.exec(result.stdout)?.[1]);
-  const logPath = /^LOG: (\S+)$/m.exec(result.stdout)?.[1];
-  assert.ok(Number.isInteger(pid), `the wrapper printed no pid:\n${result.stdout}`);
-  assert.ok(
-    logPath?.endsWith(`harness-dev-server-${DEV_SERVER_PORT}.log`),
-    `the wrapper printed no per-port log path:\n${result.stdout}`,
-  );
-  t.after(() => rm(logPath, { force: true }));
-  t.after(() => {
-    if (alive(pid)) process.kill(pid);
-  });
-
-  assert.ok(alive(pid), 'the pid the wrapper printed is not a running process');
-
-  // The port reached the command through the environment, and everything after it as arguments.
-  await eventually(
-    () => existsSync(logPath) && readFileSync(logPath, 'utf8').includes('port='),
-    `nothing was written to ${logPath}`,
-  );
-  assert.match(readFileSync(logPath, 'utf8'), new RegExp(`^port=${DEV_SERVER_PORT} args=--extra$`, 'm'));
-
-  // And the pid is the whole of what was started: signalling it leaves no orphan behind.
-  process.kill(pid);
-  await eventually(() => !alive(pid), 'the process the wrapper printed outlived the signal sent to it');
 });
 
 test('--qa writes the browser wiring, and it declares exactly the servers the profile starts', async (t) => {
@@ -4663,8 +4661,6 @@ function nestedScriptedAppFiles({ scripts = { typecheck: 'echo typecheck', test:
  * and each family's entry is asserted **whole** rather than by segment: an entry may be a path (the
  * Android family's is), and `src`, `main` are not manifest names the sentence has to promise.
  */
-const { READ_MANIFESTS } = await loadCompiled('detect/presets.js');
-
 function readManifestNames() {
   return READ_MANIFESTS.split(',').map((entry) => entry.trim()).filter((entry) => entry !== '');
 }
@@ -5204,25 +5200,6 @@ const KEPT_PROJECT_FILE_NOTE = 'was kept as it stands, so the setup-pending bann
 /** The same note's dry-run wording: the conditional a run that wrote nothing is owed. */
 const KEPT_PROJECT_FILE_NOTE_DRY =
   'would be kept as it stands, so the setup-pending banner would not be written into it';
-
-/**
- * A compiled generator, imported for the one wording no command line reaches yet: the banner a
- * declined offer records. The offer is an *input* to this generator, so rendering both wordings is
- * the only way to assert that neither leaves its reader without a way out of the block — and a
- * banner is written once, at setup, into a file every later run keeps.
- */
-async function loadCompiled(relativePath) {
-  const path = join(PACKAGE_ROOT, 'dist', relativePath);
-  if (!existsSync(path)) {
-    throw new Error(
-      `${path} is missing. These tests run against the compiled CLI, so run \`npm run build\` before \`npm test\`.`,
-    );
-  }
-  return import(pathToFileURL(path).href);
-}
-
-const { writeClaudeContext } = await loadCompiled('generators/claudeContext.js');
-const { WritePlan } = await loadCompiled('core/writer.js');
 
 /** What the generator would write into `.claude/CLAUDE.md` for one answer, without writing it. */
 function renderProjectFile(dir, analyzeOffer) {
@@ -5979,9 +5956,6 @@ test('the first step states the marketplace wiring: the entry it wrote, or both 
     );
   }
 });
-
-/** The CLI's own slug parser, so the gate below reads the shipped manifest the way `init` reads it. */
-const { parseRepoSlug } = await loadCompiled('core/paths.js');
 
 /** The account shape a slot has to name — the pattern `projectSettings.ts` resolves a slug against. */
 const OWNER_SHAPE = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/;
@@ -7646,6 +7620,12 @@ const REPO_PUSH_ENV_PATH = '.claude/push-notify.env';
  */
 const PUSH_URL = 'https://example.invalid/t0p1c-appears-nowhere-else';
 
+/** An ntfy topic chosen the way {@link PUSH_URL} is: legal as a topic name, and in no fixture path. */
+const TOPIC = 'harness-t0p1c-nowhere-else-9f3';
+
+/** Neither a topic name nor a URL, and — for the not-echoed assertions — in no message this CLI prints. */
+const UNRECOGNISED_DESTINATION = 'not a destination';
+
 /** The two keys the notifier recognises, asserted by name because the file is a contract with it. */
 const PUSH_URL_KEY = 'HARNESS_PUSH_URL';
 const PUSH_CMD_KEY = 'HARNESS_PUSH_CMD';
@@ -7684,7 +7664,12 @@ async function modeOf(path) {
  *
  * Every subprocess here has a pipe for stdin, so each takes the non-interactive path the interaction
  * rule promises (`docs/cli.md` §2): the flags are the whole interface, and the first arm is also the
- * proof that a run nobody can ask never blocks on the question.
+ * proof that a run nobody can ask never blocks on the question. For the same reason the terminal
+ * re-ask of an unrecognised destination is not reachable here; it is covered by the hand-run gate in
+ * `docs/development.md` §5 instead.
+ *
+ * `PUSH_DESTINATION_FORMS` is imported rather than spelled out, an exception to choice 3 in this
+ * file's header: the assertion is that two surfaces print one wording, not what that wording is.
  */
 test('push notifications are opt-in, and an opt-in without an endpoint writes nothing at all', async (t) => {
   await t.test('a run that was never asked writes nothing outside the repository', async (subtest) => {
@@ -7727,6 +7712,141 @@ test('push notifications are opt-in, and an opt-in without an endpoint writes no
     assert.ok(!stdout.includes(PUSH_URL), `the endpoint was printed back on stdout:\n${stdout}`);
     assert.ok(!stderr.includes(PUSH_URL), `the endpoint was printed back on stderr:\n${stderr}`);
     assert.ok(stdout.includes(machine.file), `the run does not say where it wrote the settings:\n${stdout}`);
+  });
+
+  await t.test('a topic given through the flag is written as its ntfy.sh address', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+
+    const { stdout, stderr } = await initOk(dir, ['--notifications', '--push-url', TOPIC], {
+      XDG_CONFIG_HOME: machine.home,
+    });
+
+    const content = readFileSync(machine.file, 'utf8');
+    assert.match(content, new RegExp(`^HARNESS_PUSH_URL=https://ntfy\\.sh/${TOPIC}$`, 'm'));
+    assert.equal(await modeOf(machine.file), 0o600, 'the file holding a push credential is readable beyond its owner');
+    assert.equal(await modeOf(machine.dir), 0o700, 'the directory holding a push credential is not 0700');
+    assert.ok(!stdout.includes(TOPIC), `the topic was printed back on stdout:\n${stdout}`);
+    assert.ok(!stderr.includes(TOPIC), `the topic was printed back on stderr:\n${stderr}`);
+    // A bare topic also passes the parse-time check `parseInitFlags` makes on every --push-url.
+    assert.ok(!stderr.includes('init: --push-url takes'), `the parser refused a topic name:\n${stderr}`);
+  });
+
+  await t.test('the ntfy.sh/<topic> host form is written as the same address', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+
+    await initOk(dir, ['--notifications', '--push-url', `ntfy.sh/${TOPIC}`], { XDG_CONFIG_HOME: machine.home });
+
+    assert.match(readFileSync(machine.file, 'utf8'), new RegExp(`^HARNESS_PUSH_URL=https://ntfy\\.sh/${TOPIC}$`, 'm'));
+  });
+
+  await t.test("another service's URL is accepted as well, and single-quoted where a shell would split it", async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+    const url = 'https://example.invalid/hook?a=1&b=2';
+
+    const { stdout, stderr } = await initOk(dir, ['--notifications', '--push-url', url], {
+      XDG_CONFIG_HOME: machine.home,
+    });
+
+    assert.ok(
+      readFileSync(machine.file, 'utf8').split('\n').includes(`${PUSH_URL_KEY}='${url}'`),
+      'the URL was not written single-quoted',
+    );
+    assert.ok(!stdout.includes(url), `the URL was printed back on stdout:\n${stdout}`);
+    assert.ok(!stderr.includes(url), `the URL was printed back on stderr:\n${stderr}`);
+  });
+
+  await t.test('a --push-url that is neither form is refused before anything is written', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+
+    const { status, stdout, stderr } = await runCli(dir, ['init', '--notifications', '--push-url', UNRECOGNISED_DESTINATION], {
+      XDG_CONFIG_HOME: machine.home,
+    });
+
+    assert.equal(status, 1, `init exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(stderr.includes('--push-url'), `the refusal does not name the flag:\n${stderr}`);
+    assert.ok(stderr.includes('ntfy'), `the refusal does not offer the ntfy topic form:\n${stderr}`);
+    assert.ok(!stdout.includes(UNRECOGNISED_DESTINATION), `the value was printed back on stdout:\n${stdout}`);
+    assert.ok(!stderr.includes(UNRECOGNISED_DESTINATION), `the value was printed back on stderr:\n${stderr}`);
+    assert.equal(existsSync(machine.dir), false, `a refused run created ${machine.dir}`);
+    assert.equal(await exists(dir, CONFIG_FILE), false, 'a refused run wrote the config');
+  });
+
+  await t.test('the same value is refused without --notifications too', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+
+    const { status, stdout, stderr } = await runCli(dir, ['init', '--push-url', UNRECOGNISED_DESTINATION], {
+      XDG_CONFIG_HOME: machine.home,
+    });
+
+    assert.equal(status, 1, `init exited ${status}\n${stdout}\n${stderr}`);
+    assert.equal(existsSync(machine.dir), false, `a refused run created ${machine.dir}`);
+  });
+
+  await t.test('a hand-written settings file is not re-pointed by a later topic', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+    mkdirSync(machine.dir, { mode: 0o700 });
+    writeFileSync(machine.file, `# set up by hand\n${PUSH_URL_KEY}=${PUSH_URL}\n`, { mode: 0o600 });
+    const before = readFileSync(machine.file, 'utf8');
+
+    await initOk(dir, ['--notifications', '--push-url', TOPIC], { XDG_CONFIG_HOME: machine.home });
+
+    assert.equal(readFileSync(machine.file, 'utf8'), before, 'a re-run re-pointed a hand-written settings file');
+  });
+
+  await t.test('a plain re-run leaves a configured machine exactly as it was', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+    const env = { XDG_CONFIG_HOME: machine.home };
+    await initOk(dir, ['--notifications', '--push-url', PUSH_URL], env);
+    const before = readFileSync(machine.file, 'utf8');
+
+    await initOk(dir, [], env);
+
+    assert.equal(readFileSync(machine.file, 'utf8'), before, 'a plain re-run rewrote the settings file');
+  });
+
+  await t.test('a refused destination leaves a configured machine exactly as it was', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+    const env = { XDG_CONFIG_HOME: machine.home };
+    await initOk(dir, ['--notifications', '--push-url', PUSH_URL], env);
+    const before = readFileSync(machine.file, 'utf8');
+
+    const { status } = await runCli(dir, ['init', '--notifications', '--push-url', UNRECOGNISED_DESTINATION], env);
+
+    assert.equal(status, 1);
+    assert.equal(readFileSync(machine.file, 'utf8'), before, 'a refused re-run degraded the settings file');
+  });
+
+  await t.test('the question and the guided note describe the accepted forms in one wording', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await machineHome(subtest);
+
+    const { stdout } = await initOk(dir, ['--notifications'], { XDG_CONFIG_HOME: machine.home });
+
+    const question = stdout.split('\n').find((line) => line.includes('Where should notifications be posted?'));
+    assert.ok(question?.includes(PUSH_DESTINATION_FORMS), `the question does not carry the shared wording:\n${stdout}`);
+    assert.ok(
+      stdout.split(PUSH_DESTINATION_FORMS).length - 1 >= 2,
+      `the shared wording is not on both the question and the guided note:\n${stdout}`,
+    );
+    for (const expected of ['ntfy', 'App Store', 'https://']) {
+      assert.ok(stdout.includes(expected), `stdout does not mention ${expected}:\n${stdout}`);
+    }
+  });
+
+  await t.test('--help names the flag with the shared placeholder', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { stdout } = await runCli(dir, ['init', '--help']);
+
+    assert.ok(stdout.includes('--push-url <url-or-ntfy-topic>'), `--help does not show the placeholder:\n${stdout}`);
   });
 
   await t.test('the opt-in without an endpoint writes nothing and prints the guided setup', async (subtest) => {
@@ -7862,14 +7982,6 @@ test('every question and every closing entry is separated from the line above it
     assert.doesNotMatch(stdout, /\n\n/, `the git-init question is separated twice:\n${stdout}`);
   });
 });
-
-/**
- * The plugin's identity, taken from the compiled CLI rather than spelled here: a record seeded under
- * any other key is one the CLI correctly resolves nothing from, so the fixture would pin a machine
- * with no plugin while claiming to pin one with it. Everything else below is spelled literally —
- * choice 3 in the module header — because the *form* of these entries is what a run matches on.
- */
-const { PLUGIN_KEY } = await loadCompiled('generators/projectSettings.js');
 
 /** The agent runner's plugin directory under `CLAUDE_CONFIG_DIR`, and the record inside it. */
 const CLAUDE_PLUGINS_DIR = 'plugins';
@@ -8200,4 +8312,214 @@ test('init --force carries the profile\'s resolved-plugin-root entries forward, 
     assert.ok(stdout.includes(GRADED_CARRY), `a run that resolved a root does not say so:\n${stdout}`);
     assert.ok(!stdout.includes(CARRIED_UNVERIFIED), `a run that graded the entries calls the carry unverified:\n${stdout}`);
   });
+});
+
+/** The switch under test, and the fragments of the two lines it adds to the run's report. */
+const PLUGIN_ROOT_ENTRIES = '--plugin-root-entries';
+const KEPT_NO_EFFECT = `${PLUGIN_ROOT_ENTRIES} had no effect`;
+const INSTALL_STEP = 'claude plugin install';
+
+/**
+ * `init --plugin-root-entries`: the entries `doctor`'s `plugin-permissions` check dictates, written
+ * into a profile this run generates — the remote job's route to a profile its own plugin install can
+ * run under. Whether the render lands stays the write engine's `create-if-absent` answer.
+ */
+test('init --plugin-root-entries writes the plugin-root entries doctor dictates into a generated profile', async (t) => {
+  await t.test('a first run writes them, and doctor then grades the profile green with no stray and no missing line', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+
+    await initOk(dir, ['--qa', PLUGIN_ROOT_ENTRIES], machine.env);
+
+    const allow = allowEntries(dir);
+    assert.ok(allow.includes(helperEntry(machine.root)), `the helper entry at the planted root was not written:\n${allow.join('\n')}`);
+    // The planted root is the install root, where doctor requires no read rule: the written set is
+    // exactly the required set, which the graded pass below confirms from doctor's side.
+    assert.ok(!allow.includes(readEntry(machine.root)), 'a read rule doctor does not require at the install root was written');
+    const doctor = await runCli(dir, ['doctor'], machine.env);
+    assert.match(doctor.stdout, PLUGIN_PERMISSIONS_GRADED, `doctor does not grade the written entries green:\n${doctor.stdout}`);
+    assert.ok(!doctor.stdout.includes('dead weight'), `doctor names a stray entry the switch wrote:\n${doctor.stdout}`);
+  });
+
+  await t.test('without the switch no plugin-root entry is written', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+
+    await initOk(dir, ['--qa'], machine.env);
+
+    assert.ok(!allowEntries(dir).includes(helperEntry(machine.root)), 'an unswitched init wrote a plugin-root entry');
+  });
+
+  await t.test('over a kept profile it changes nothing and says so, in a real run and a dry run alike', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+    await initOk(dir, ['--qa'], machine.env);
+    const kept = text(dir, PROFILE_FILE);
+
+    const real = await initOk(dir, [PLUGIN_ROOT_ENTRIES], machine.env);
+    assert.equal(text(dir, PROFILE_FILE), kept, 'the switch changed a profile the write engine keeps');
+    assert.ok(real.stdout.includes(KEPT_NO_EFFECT), `the run does not say the switch had no effect:\n${real.stdout}`);
+
+    const dry = await initOk(dir, [PLUGIN_ROOT_ENTRIES, '--dry-run'], machine.env);
+    assert.equal(text(dir, PROFILE_FILE), kept, 'a dry run changed the profile');
+    assert.ok(dry.stdout.includes(KEPT_NO_EFFECT), `the preview does not say the switch would have no effect:\n${dry.stdout}`);
+  });
+
+  await t.test('with no root recorded it warns, names the install step, and writes the unswitched profile', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest, { record: false });
+    await initOk(dir, ['--qa'], machine.env);
+    const unswitched = text(dir, PROFILE_FILE);
+    await rm(join(dir, PROFILE_FILE));
+
+    const { stdout, stderr } = await initOk(dir, ['--qa', PLUGIN_ROOT_ENTRIES], machine.env);
+
+    assert.ok(stderr.includes(PLUGIN_ROOT_ENTRIES) && stderr.includes(INSTALL_STEP), `no warning names the missing install:\n${stderr}`);
+    assert.equal(text(dir, PROFILE_FILE), unswitched, 'the switch changed a profile it had no root to add to');
+    assert.ok(!stdout.includes(KEPT_NO_EFFECT), `a freshly written profile is reported as kept:\n${stdout}`);
+  });
+
+  await t.test('--force over pasted entries leaves each line exactly once', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest);
+    await initOk(dir, ['--qa'], machine.env);
+    allowInProfile(dir, [helperEntry(machine.root)]);
+
+    await initOk(dir, ['--force', PLUGIN_ROOT_ENTRIES], machine.env);
+
+    const allow = allowEntries(dir);
+    assert.equal(
+      allow.filter((entry) => entry === helperEntry(machine.root)).length,
+      1,
+      `the generated and the carried line were both written:\n${allow.join('\n')}`,
+    );
+  });
+});
+
+/** The two workflows remote execution runs on, as the adopter's repository names them. */
+const WORKFLOW_RUN_FILE = '.github/workflows/harness-run.yml';
+const WORKFLOW_RESUME_FILE = '.github/workflows/harness-resume.yml';
+
+/** The shipped templates they are written from, read straight out of the package. */
+const WORKFLOW_TEMPLATES = join(PACKAGE_ROOT, 'templates', 'github', 'workflows');
+
+/** A `{{token}}` as the renderer defines one; a GitHub `${{ expr }}` never matches it. */
+const RENDER_TOKEN = /\{\{[A-Za-z][A-Za-z0-9_]*\}\}/;
+
+/** Turn remote execution on in a wired fixture, through the command an adopter uses. */
+async function enableRemoteExecution(dir) {
+  const result = await runCli(dir, ['config', 'set', 'execution.target', 'github-actions']);
+  assert.equal(result.status, 0, `config set exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+}
+
+test('the GitHub workflows arrive with execution.target github-actions, and only with it', async (t) => {
+  await t.test('with no execution key init writes no .github path and names none', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { stdout } = await initOk(dir);
+
+    assert.ok(!(await exists(dir, '.github')), 'init wrote a .github path with remote execution off');
+    assert.ok(!stdout.includes('.github'), `the action log names a .github path:\n${stdout}`);
+    assert.ok(!stdout.includes('--check-github'), `the report carries the remote-execution block:\n${stdout}`);
+  });
+
+  await t.test('turned on, init writes both files from their templates and reports the GitHub-side steps', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    await initOk(dir);
+    await enableRemoteExecution(dir);
+
+    const { stdout } = await initOk(dir);
+
+    const version = readJson(join(PACKAGE_ROOT, 'package.json')).version;
+    const runTemplate = readFileSync(join(WORKFLOW_TEMPLATES, 'harness-run.yml'), 'utf8');
+    assert.ok(runTemplate.includes('{{cliVersion}}'), 'the run template no longer carries {{cliVersion}}');
+    assert.equal(text(dir, WORKFLOW_RUN_FILE), runTemplate.replaceAll('{{cliVersion}}', version));
+    assert.ok(!RENDER_TOKEN.test(text(dir, WORKFLOW_RUN_FILE)), 'a {{token}} survived into harness-run.yml');
+    assert.equal(
+      text(dir, WORKFLOW_RESUME_FILE),
+      readFileSync(join(WORKFLOW_TEMPLATES, 'harness-resume.yml'), 'utf8'),
+      'harness-resume.yml is not a verbatim copy of its template',
+    );
+
+    // The commit line is the one `docs/remote-execution.md` → `## 7. Turning it on` step 3 prints.
+    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'doctor --check-github', 'git commit -m "Add the harness workflows"']) {
+      assert.ok(stdout.includes(name), `the closing report does not name ${name}:\n${stdout}`);
+    }
+  });
+
+  await t.test('a second init changes nothing, keeps an edited workflow, and --force replaces it after a .bak', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    await initOk(dir);
+    await enableRemoteExecution(dir);
+    await initOk(dir);
+    const rendered = text(dir, WORKFLOW_RUN_FILE);
+
+    const before = await snapshotTree(dir);
+    const { stdout } = await initOk(dir);
+    assert.deepEqual(await snapshotTree(dir), before, 'a second init changed the tree');
+    assert.ok(!stdout.includes('--check-github'), `a re-run that kept both workflows printed the remote-execution block:\n${stdout}`);
+
+    appendFileSync(join(dir, WORKFLOW_RUN_FILE), '# tuned by hand\n', 'utf8');
+    const edited = text(dir, WORKFLOW_RUN_FILE);
+    await initOk(dir);
+    assert.equal(text(dir, WORKFLOW_RUN_FILE), edited, 'a plain re-run rewrote an edited workflow');
+    assert.ok(!(await exists(dir, `${WORKFLOW_RUN_FILE}.bak`)), 'a plain re-run wrote a .bak');
+
+    await initOk(dir, ['--force']);
+    assert.equal(text(dir, `${WORKFLOW_RUN_FILE}.bak`), edited, 'the .bak does not hold the edited workflow');
+    assert.equal(text(dir, WORKFLOW_RUN_FILE), rendered, '--force did not regenerate the workflow');
+  });
+});
+
+});
+
+// Outside the suite, so it runs alone within this file: choice 5 in the header.
+/**
+ * The dev-server wrapper is the one that must **not** wait for its command, and the one whose
+ * output a caller has to act on: the QA phase polls the port, checks that the pid it was given is
+ * still alive before trusting an answer, and reads the log when the start failed.
+ */
+test('the dev-server wrapper starts the server detached and prints a live pid and a readable log', async (t) => {
+  const dir = await fixtureFor(t, { files: recordingFixtureFiles(), dirs: [NESTED_DIR] });
+
+  await initOk(dir);
+
+  const startedAt = Date.now();
+  const result = await runBash(join(dir, NESTED_DIR), [
+    join(dir, SCRIPTS_DIR, 'start-dev-server.sh'),
+    DEV_SERVER_PORT,
+    '--extra',
+  ]);
+  const elapsed = Date.now() - startedAt;
+
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.ok(
+    elapsed < RETURNS_PROMPTLY_MS,
+    `the wrapper took ${elapsed}ms, so it waited for a server that stays up for ${DEV_SERVER_STUB_SECONDS}s`,
+  );
+
+  const pid = Number(/^STARTING: devServer \(pid (\d+)\)$/m.exec(result.stdout)?.[1]);
+  const logPath = /^LOG: (\S+)$/m.exec(result.stdout)?.[1];
+  assert.ok(Number.isInteger(pid), `the wrapper printed no pid:\n${result.stdout}`);
+  assert.ok(
+    logPath?.endsWith(`harness-dev-server-${DEV_SERVER_PORT}.log`),
+    `the wrapper printed no per-port log path:\n${result.stdout}`,
+  );
+  t.after(() => rm(logPath, { force: true }));
+  t.after(() => {
+    if (alive(pid)) process.kill(pid);
+  });
+
+  assert.ok(alive(pid), 'the pid the wrapper printed is not a running process');
+
+  // The port reached the command through the environment, and everything after it as arguments.
+  await eventually(
+    () => existsSync(logPath) && readFileSync(logPath, 'utf8').includes('port='),
+    `nothing was written to ${logPath}`,
+  );
+  assert.match(readFileSync(logPath, 'utf8'), new RegExp(`^port=${DEV_SERVER_PORT} args=--extra$`, 'm'));
+
+  // And the pid is the whole of what was started: signalling it leaves no orphan behind.
+  process.kill(pid);
+  await eventually(() => !alive(pid), 'the process the wrapper printed outlived the signal sent to it');
 });

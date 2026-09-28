@@ -1,6 +1,6 @@
 /**
  * The "derived at runtime" resolution class of `docs/config.md` §1, implemented once — path
- * resolution and the package's own layout.
+ * resolution, the package's own layout, and the one reader of the package's own manifest.
  *
  * **The rule this module exists to enforce: every path below is resolved on each run and is
  * never written into a template.** A file that hardcodes one of these is wrong even when the
@@ -19,7 +19,8 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
-import { EXIT, HarnessError } from './errors.js';
+import { EXIT, HarnessError, internal } from './errors.js';
+import { isJsonObject, readJsonFile } from './json.js';
 
 /** `<work_root>` — the directory holding the repository, and therefore its sibling worktrees. */
 export function workRoot(repoRoot: string): string {
@@ -106,6 +107,25 @@ const PACKAGE_ROOT: string = resolve(import.meta.dirname, '..', '..');
  */
 export function packageRoot(): string {
   return PACKAGE_ROOT;
+}
+
+/**
+ * This package's own manifest, which a packaging fault alone can make unreadable. The one reader
+ * of it, shared here because three areas need it: `retrieval/` (the runtime check, the peer set
+ * and the runtime install's pin), the `docs` command and the workflow generator's version pin.
+ */
+export function ownManifest(): { [key: string]: unknown } {
+  const manifestPath = join(packageRoot(), 'package.json');
+  const manifest = readJsonFile(manifestPath);
+  if (!isJsonObject(manifest)) throw internal(`this CLI's own manifest could not be read at ${manifestPath}`);
+  return manifest;
+}
+
+/** A string field of this package's own manifest, read through {@link ownManifest}. */
+export function ownManifestString(key: 'name' | 'version'): string {
+  const value = ownManifest()[key];
+  if (typeof value !== 'string' || value === '') throw internal(`this CLI's own manifest carries no ${key}`);
+  return value;
 }
 
 /** The generator templates shipped with the package. */

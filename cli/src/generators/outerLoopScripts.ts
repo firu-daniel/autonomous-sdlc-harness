@@ -1,6 +1,8 @@
 /**
- * Generator: the outer-loop scripts — the run watcher, the git wrappers, the worktree tooling and
- * the shared library they all source — written into the adopter's configured `scriptsDir`.
+ * Generator: the outer-loop scripts — the run watcher, the git wrappers, the worktree tooling, the
+ * flow walker with its gate library and flow graph, the test-suite runner, and the shared library
+ * they all source —
+ * written into the adopter's configured `scriptsDir`.
  *
  * **The rule this module exists to enforce: {@link OUTER_LOOP_SCRIPTS} is the single declaration of
  * which outer-loop files ship, where each one lands, what mode it carries and which of them an
@@ -55,18 +57,22 @@ export interface OuterLoopScript {
    * The subdirectory of `scriptsDir` the file lands in, mirrored in the template tree. Absent means
    * directly in `scriptsDir`, which is where every *invoked* script lives.
    */
-  readonly subdir?: 'lib';
+  readonly subdir?: 'lib' | 'flows';
   /**
    * The file mode. `0o755` for a script something executes; `0o644` for one that is only ever
-   * sourced, because an executable bit on a sourced library invites a caller to run it instead.
+   * sourced or read as data, because an executable bit on a sourced library invites a caller to run
+   * it instead.
    */
   readonly mode: number;
   /**
    * **The input to the permission profile's entries for these scripts, and the only one.** `true`
-   * exactly when a *dispatched agent* is the thing that runs the file — the git wrappers an agent
-   * is told to commit, push and refresh its branch through, and the scratch runner it executes a
-   * probe or a mutation check with. The watcher, the daemon wrappers and
-   * the worktree and cleanup scripts are run by the watcher process or by a person, so they are
+   * exactly when a *dispatched agent* or *the orchestrating session* is the thing that runs the
+   * file — the git wrappers an agent is told to commit, push and refresh its branch through, the
+   * scratch runner it executes a probe or a mutation check with, the flow walker the
+   * orchestrating session steps a flow with, and the test-suite runner that session grades a gate
+   * round with. The watcher, the daemon wrappers, the remote-run
+   * script and the worktree and cleanup scripts are run by the watcher process (or the remote job)
+   * or by a person, so they are
    * `false`: the flag records which of those two runs a script, and the profile follows it so an
    * agent is not handed an entry for a script nothing dispatches it to run.
    *
@@ -76,9 +82,11 @@ export interface OuterLoopScript {
    * allow from a command carrying `$(…)`, a backtick, `|`, `<`, a non-`${IDENT}` braced form, or a
    * `>` that is neither a descriptor duplication nor a redirection to the literal `/dev/null`), so a
    * row that must not be agent-runnable needs an entry in
-   * that guard's `DENY_SCRIPT_BASENAMES` as well as `agentInvocable: false` here. Only three of
-   * the `false` rows carry that entry today — `autonomous-watcher.sh`, `restart-watcher.sh` and
-   * `cleanup-merged-worktrees.sh`. For the worktree scripts, the notifier, the stream formatter and
+   * that guard's `DENY_SCRIPT_BASENAMES` as well as `agentInvocable: false` here. The `false` rows
+   * that carry that entry are `autonomous-watcher.sh`, `restart-watcher.sh`,
+   * `cleanup-merged-worktrees.sh` and `remote-run.sh` — the last because a run that could dispatch
+   * runs could start runs about itself (the guard is `plugin/hooks/autonomous-script-allowlist-guard.sh`).
+   * For the worktree scripts, the notifier, the stream formatter and
    * the docs-retrieval server launcher — which the agent runner starts from `.mcp.json` —
    * `false` is a calling convention rather than a gate: the guard auto-allows them, deliberately.
    *
@@ -120,7 +128,8 @@ export const DOCS_SEARCH_SERVER_SCRIPT_NAME = 'docs-search-server.sh';
 
 /**
  * The whole outer-loop set, in the order `init` writes it: the shared library first, because every
- * other row sources it.
+ * other row sources it, and each further library or data file before the script that sources or
+ * reads it.
  *
  * **Declared once, here.** One row is one line, and adding a script is adding its template plus its
  * row — no condition threaded through the writer, no second list to keep in step.
@@ -137,6 +146,14 @@ export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze(
   // regenerated, which is the whole point of shipping it as a script rather than as an interpreter
   // allow entry.
   Object.freeze({ file: 'scratch-run.sh', mode: 0o755, agentInvocable: true }),
+  // Sourced and read by `flow-walker.sh` from its own directory, never run.
+  Object.freeze({ file: 'flow-walker-gates.sh', subdir: 'lib', mode: 0o644, agentInvocable: false }),
+  Object.freeze({ file: 'task_plan_writing.graph.json', subdir: 'flows', mode: 0o644, agentInvocable: false }),
+  // Run by the orchestrating session; no `DENY_SCRIPT_BASENAMES` entry, because it must be reachable.
+  Object.freeze({ file: 'flow-walker.sh', mode: 0o755, agentInvocable: true }),
+  // Run by the orchestrating session in the Run gates phase; no `DENY_SCRIPT_BASENAMES` entry,
+  // because it must be reachable.
+  Object.freeze({ file: 'run-test-suite.sh', mode: 0o755, agentInvocable: true }),
   Object.freeze({ file: 'create-worktree.sh', mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'setup-worktree.sh', mode: 0o755, agentInvocable: false }),
   // Started by the agent runner from `.mcp.json`, never by a dispatched agent's Bash call, so `false`
@@ -148,6 +165,9 @@ export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze(
   Object.freeze({ file: NOTIFY_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: WATCHER_SCRIPT_NAME, mode: 0o755, agentInvocable: false }),
   Object.freeze({ file: 'restart-watcher.sh', mode: 0o755, agentInvocable: false }),
+  // Run by the watcher, the remote job or a person. Carries a `DENY_SCRIPT_BASENAMES` entry: a run that
+  // could dispatch runs could start runs about itself.
+  Object.freeze({ file: 'remote-run.sh', mode: 0o755, agentInvocable: false }),
 ] as const);
 
 /** The templates' subdirectory under `cli/templates/`, addressed as {@link readTemplate} wants it. */

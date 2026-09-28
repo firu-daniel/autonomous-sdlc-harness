@@ -66,10 +66,61 @@ The negative case is worth stating because it works mechanically and is still wr
 
 ## 3. Manifest facts a contributor must not rediscover
 
-Five measured behaviours and one shipped contract, each of which costs a round if it is met by surprise:
+Six measured behaviours and one shipped contract, each of which costs a round if it is met by surprise:
 
 - **`hooks/hooks.json` needs the `{"hooks": { … }}` wrapper.** A bare event map — `{"PreToolUse": [ … ]}` — fails validation with `hooks: Invalid input: expected record, received undefined`. The event names go one level down, inside `hooks`.
 - **Plugin hooks append to an adopter's own hooks; they do not override them.** A hook declared by this plugin composes with whatever the adopter has in their own settings, so the CLI never needs to write guard hooks into user settings to make them take effect. Related and easy to get backwards: `${CLAUDE_PLUGIN_ROOT}` **expands** inside a hook `command` string declared here, and **does not** expand in a settings-file-defined hook — which is the reason the guards live in `hooks.json` rather than in generated settings.
+- **The token sits inside double quotes together with the path it prefixes: `bash "${CLAUDE_PLUGIN_ROOT}/hooks/<guard>.sh"`.** Measured against `claude` **2.1.282** on 2026-09-25. The unquoted form, `bash ${CLAUDE_PLUGIN_ROOT}/hooks/<guard>.sh`, was validated from a copy of `plugin/` at `<tmp>/plugin` with that `hooks.json` restored:
+
+  ```
+  claude plugin validate --strict <tmp>/plugin
+  ```
+
+  It exited 1 with six warnings, one per guard, and `--strict` turned them into the failure of gate `1a`:
+
+  ```
+  Validating plugin manifest: <tmp>/plugin/.claude-plugin/plugin.json
+
+  Validating hooks: <tmp>/plugin/hooks/hooks.json
+
+  ⚠ Found 6 warnings:
+
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/autonomous-protected-branch-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/git-commit-branch-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/git-rewrite-branch-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/autonomous-script-allowlist-guard.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/allow-safe-compounds.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+    ❯ hooks.PreToolUse: Shell command uses ${CLAUDE_PLUGIN_ROOT} without quotes: bash ${CLAUDE_PLUGIN_ROOT}/hooks/allow-qa-credentials-read.sh. If the expanded path contains a space the command can split into several words and fail. Wrap the placeholder in double quotes, or use exec form: {"command": "<executable>", "args": ["${CLAUDE_PLUGIN_ROOT}/..."]}.
+
+  ✘ Validation failed (--strict treats warnings as errors)
+  ```
+
+  With the quoted form, `claude plugin validate --strict plugin` exits 0 and prints, with the checkout root written as `<checkout>`:
+
+  ```
+  Validating plugin manifest: <checkout>/plugin/.claude-plugin/plugin.json
+
+  ✔ Validation passed
+  ```
+
+  **Shell form was kept over exec form.** Quoting changes only word boundaries, it is correct whether the runtime substitutes the token or the shell expands it, and it needs no field beyond the `matcher` / `type` / `command` set `plugin/hooks/README.md` allows; exec form adds `args`. What exec form would change was read, not run: from the hooks documentation the CLI's own schema tip links to (`/hooks#exec-form-and-shell-form`, read 2026-09-25), the CLI changelog, and the hook runner inside the 2.1.282 binary:
+  - **Invocation.** With `args` present, `command` is resolved on `PATH` and spawned with `args` as its argument vector and no shell; without it, the string goes to `sh -c` on macOS and Linux (the documentation).
+  - **Stdin, exit status and stdout.** The runner writes the hook payload to the child's stdin, and reads its stdout and exit status, on one code path after either spawn (the binary). No exec-form hook was run to confirm it.
+  - **Versions.** `args` was added in 2.1.139 (changelog: *"Added hook `args: string[]` field (exec form)"*). What an earlier `claude` does with a hook entry carrying `args` was not established.
+
+  **A plugin loaded from a path containing a space still refuses what the guard exists to refuse.** A copy of `plugin/` at `<tmp>/harness plugin copy/plugin` was loaded into a `claude -p` session run from `<fixture>`, a throwaway repository on `main` with a `harness.config.json` and a branch `feat_x`. The installed plugin was switched off for that session, so the session's `init` record listed the copy as the only `autonomous-sdlc-harness` plugin (`"source":"autonomous-sdlc-harness@inline"`):
+
+  ```
+  claude -p --plugin-dir "<tmp>/harness plugin copy/plugin" --settings '{"enabledPlugins":{"autonomous-sdlc-harness@autonomous-sdlc-harness":false}}' --permission-mode default --allowedTools 'Bash(git merge:*)' --output-format stream-json --verbose --include-hook-events '<prompt: run git merge feat_x and nothing else>'
+  ```
+
+  Ten `PreToolUse` hooks started on `git merge feat_x`. One answered `deny`, and the tool result was:
+
+  ```
+  PreToolUse:Bash hook error: Blocked: push/merge/rebase while HEAD is on protected branch 'main' (protected set: main). The autonomous flow never operates on a protected branch.
+  ```
+
+  `main` did not move. The same session without `--plugin-dir` started four `PreToolUse` hooks, none of which returned a decision, so the six extra hooks and the `deny` came from the spaced-path copy.
 - **A `permissions.allow` entry was not able to pre-approve a command whose script path is written `${CLAUDE_PLUGIN_ROOT}/scripts/<name>.sh`.** Measured against `claude` **2.1.227**, on a session that could **not** be isolated from the measuring machine's own hooks — read the hook caveat that follows the runs below before treating this as a property of `claude` itself. The runs used a throwaway fixture outside this tree — `<scratch>/plugin-root/scripts/probe.sh`, two lines, printing `PROBE OK` — and settings files differing only in their `permissions.allow` list. Each run was `env CLAUDE_PLUGIN_ROOT=<scratch>/plugin-root claude -p --permission-mode default --settings <scratch>/<name>.json '<prompt>'`, the prompt instructing one verbatim Bash command and nothing else:
   - `allow: ["Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/:*)"]`, command `bash ${CLAUDE_PLUGIN_ROOT}/scripts/probe.sh` — **blocked; the script never ran.** On its own this attributes nothing: the entry is a directory prefix, and the by-product below records that form missing even as a literal path, so this run and the next are consistent with the entry form alone. The attribution is the fourth run's.
   - `allow: []`, same command — **blocked.** The entry bought nothing.
@@ -109,9 +160,9 @@ The repo-scoped side of the same boundary — what belongs in the committed `har
 
 ## 5. Verifying a change
 
-Eleven gates. Run each **without a pipe** and read the exit status: piping into a pager or into `head` returns the *pager's* status, not the tool's, so a failing gate reads as a passing one.
+Twelve gates. Run each **without a pipe** and read the exit status: piping into a pager or into `head` returns the *pager's* status, not the tool's, so a failing gate reads as a passing one.
 
-**Six of the eleven run unattended, and `scripts/run-gates.sh` is how.** It runs gates 1, 2, 3, 4, 6 and 11 — every gate below that a process can run without a terminal, a browser, a model session or a network — grades each one the way this section says to grade it, and prints the remaining five, gates 5, 7, 8, 9 and 10, rather than passing over them. **Gate 11 is the one conditional member of that six:** it runs unattended **where the retrieval model cache is provisioned**, and where the cache is empty it is printed with the gates the script cannot run and counted among neither the passes nor the failures — so the script's exit status never depends on a several-hundred-megabyte download. `commands.test` in `harness.config.json` points at it, so a branch review's verification is the automatable half of this section rather than gate 4 alone. It is hand-written and is not in the set `init --force` regenerates; the `scripts/test.sh` that wraps it is generated and is not this file. Running the gates by hand, as written below, stays correct and is what the script's own text is checked against.
+**Six of the twelve run unattended, and `scripts/run-gates.sh` is how.** It runs gates 1, 2, 3, 4, 6 and 11 — every gate below that a process can run without a terminal, a browser, a model session or a network — grades each one the way this section says to grade it, and prints the remaining six, gates 5, 7, 8, 9, 10 and 12, rather than passing over them. **Gate 11 is the one conditional member of that six:** it runs unattended **where the retrieval model cache is provisioned**, and where the cache is empty it is printed with the gates the script cannot run and counted among neither the passes nor the failures — so the script's exit status never depends on a several-hundred-megabyte download. `commands.test` in `harness.config.json` points at it, so a branch review's verification is the automatable half of this section rather than gate 4 alone. It is hand-written and is not in the set `init --force` regenerates; the `scripts/test.sh` that wraps it is generated and is not this file. Running the gates by hand, as written below, stays correct and is what the script's own text is checked against.
 
 **One standing exemption, stated here so no gate has to restate it.** `examples/notes-app/` is two
 things with different obligations, and its own README draws the line (*"The capture is frozen; the
@@ -133,7 +184,7 @@ claude plugin validate --strict plugin
 claude plugin validate --strict .
 ```
 
-Both must report `Validation passed` with zero warnings. The first checks the plugin manifest, its hooks file and its components; the second checks the marketplace manifest and the entry it declares.
+Both must report `Validation passed` with zero warnings. The first checks the plugin manifest, its hooks file and its components; the second checks the marketplace manifest and the entry it declares. Only the first grades the command strings in `hooks/hooks.json`: on `claude` 2.1.282, `claude plugin validate --strict .` prints only `Validating marketplace manifest: …` and `✔ Validation passed`, both with the unquoted `hooks.json` of §3 and with the quoted one.
 
 **Gate 2 — CLI build and run.** From the repository root:
 
@@ -163,14 +214,20 @@ npm unlink                    # from cli/, removes the global link again
 
 The middle line must print the version and exit 0. Measured on 2026-08-26 against `0.1.0`: it printed `0.1.0`. `npm link` writes outside this checkout — a global link and a `node_modules` symlink — so the third line is part of the leg rather than cleanup a reader may skip.
 
-**Gate 3 — configuration schema.** From the repository root:
+**Gate 3 — configuration and flow-graph schemas.** From the repository root:
 
 ```
 npm run validate:config
 npm run validate:config:negative
+npm run validate:flow-graph
+npm run validate:flow-graph:negative
+bash scripts/check-flow-graph.sh
+bash scripts/check-flow-graph.sh --negatives
 ```
 
 The first validates the worked example against the schema. The second asserts the inverse case once per fixture, one chained assertion for each document `schemas/negative/` wires into it: `ajv test … --invalid` passes only when a fixture is read *and* rejected, so a green run means **every** wired fixture was still refused — not merely that something exited non-zero — and each assertion prints the keyword path that rejected its own fixture, naming the constraint that fixture proves. A red one means either the schema started accepting a fixture or a fixture could not be loaded, and the message says which: `<file> failed test` and exit 1 for the first, `Cannot find data file …` and exit 2 for the second. Neither red case prints a keyword path — do not go looking for one.
+
+The last four lines cover the flow graph, `cli/templates/scripts/flows/task_plan_writing.graph.json`. `npm run validate:flow-graph` validates that graph and every check fixture against `schemas/flow-graph.schema.json`; `npm run validate:flow-graph:negative` asserts, with the same `ajv test … --invalid` form as above, that each schema negative is read and rejected. `bash scripts/check-flow-graph.sh` runs the checks the schema cannot express against the graph and exits 1 with one stderr line per finding; `--negatives` runs them against each check fixture and exits 1 when a fixture passes every check **or** fails only on another check's id, and when a check has no fixture. The check ids are that script's header block `THE CONTRACT` and are not restated here. The two fixture families live apart on purpose: the schema negatives are the `flow-graph-schema-*.json` files in `schemas/negative/`, which the schema rejects; the check fixtures are in `schemas/flow-graph-check/`, schema-valid by design and rejected by the checker, one check each. The checker reads the plugin documents it compares against at run time rather than copying any of them: the closed directive set in `plugin/instructions/run_mode_instructions.md`, the task-engine template in `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3 Templates`, and the planning core's `## Setup (once per session)` table and cap sentences.
 
 **Gate 4 — `init` against a throwaway fixture.** From the repository root:
 
@@ -180,7 +237,55 @@ npm test
 
 This gate needs `jq` 1.5 or newer on `PATH`: the outer-loop library reaches a configuration only through `jq`, and the library reader this suite exercises reports its absence as exit `2` with no message of its own. It does not need gate 2's build — `cli/package.json` runs `pretest`, so `npm test` compiles `cli/src/` before it runs and always grades the source in the tree.
 
-Every test builds its **own** fixture repository under the system temp directory and removes it in process; nothing is written inside this checkout and no fixture is committed. The gate is red if a first `init` produces a configuration the schema rejects, if a second `init` on the same tree changes anything the first one wrote, or if a `--dry-run` writes at all — idempotence and dry-run purity are asserted before any other behaviour, because a writer aimed at a repository that fails either is destructive rather than merely wrong.
+Every test gets its **own** fixture repository under the system temp directory, a copy of a seeded template its test process builds once, and removes it in process; the template is never handed to a test, nothing is written inside this checkout and no fixture is committed. The gate is red if a first `init` produces a configuration the schema rejects, if a second `init` on the same tree changes anything the first one wrote, or if a `--dry-run` writes at all — idempotence and dry-run purity are asserted before any other behaviour, because a writer aimed at a repository that fails either is destructive rather than merely wrong.
+
+**Run time, measured.** Measured by hand on 2026-09-26 on a 10-core macOS host (Darwin arm64, `os.availableParallelism()` 10), Node v22.23.2, git 2.50.1 (Apple Git-155), outside any headless session and with no other heavy process running, one host command each, from the repository root:
+
+```
+bash scripts/measure-suite.sh --ref fe17b4e2293f --runs 1
+```
+
+```
+bash scripts/measure-suite.sh --runs 1
+```
+
+`fe17b4e2293f` is the `dev` commit before the template-copied fixtures and the concurrent suites. Both before columns were measured at it, and both after columns at the branch's own `HEAD`, from the branch's worktree with the branch's own `scripts/measure-suite.sh`, the before run taken right after the after run. Each figure is the script's own `measure-suite:` line rounded to whole seconds:
+
+| Where | `npm test` before (`fe17b4e2293f`) | `npm test` after | `run-gates.sh` before (`fe17b4e2293f`) | `run-gates.sh` after |
+|---|---|---|---|---|
+| host, 10 cores | 170 s | 118 s (−31%) | 208 s | 135 s (−35%) |
+| `--cpus 4` | not yet measured | not yet measured | not yet measured | not yet measured |
+| `--cpus 2` | not yet measured | not yet measured | not yet measured | not yet measured |
+
+One run per side is deliberate. A measurement taken inside a harness session is unstable and unpredictable: other sessions can be running their own tests and other processes on the same machine at the same time, and the session taking the measurement adds to the load itself. So these figures are taken by hand, outside any headless session, on a machine with no other heavy process running. `uptime` read a 1-minute load average of 2.47 just before the after run and 2.25 just before the before run. Repeating the measurement inside a run would not make it more trustworthy. Both `npm test` runs exited 0. Every `run-gates.sh` run, before and after, exited 1 on the same single failure, `11 docs-retrieval relevance floor`, and no other. Nothing was lost between the two commits. This command, run from `cli/` at each commit, reported 787 tests passing before and 791 after, with none failing:
+
+```
+node --test --test-reporter=spec test/
+```
+
+The four it adds are `fixture-template.test.mjs`'s three cases and one entry for the new helper `helpers/concurrency.mjs`, which `node --test` counts as a test file with no tests in it. Beside them are the three suites the concurrent files now open. No case name was removed, and every test file present at the before commit has the same number of `assert.` calls at both commits.
+
+The restricted rows model the hosted runner's **core count**. GitHub's standard hosted Linux runner has 4 vCPUs for a public repository, which this one is, and 2 for a private one, so 4 is the modelled count and 2 sits beside it. Those rows need a `docker`-compatible container runtime, and without one `--cpus` exits 3. These commands fill them:
+
+```
+bash scripts/measure-suite.sh --cpus 4
+```
+
+```
+bash scripts/measure-suite.sh --cpus 2
+```
+
+```
+bash scripts/measure-suite.sh --ref fe17b4e2293f --cpus 4
+```
+
+Once taken, those figures model the core count and not the hosted runner's per-core speed, because the container runs Linux on the host's own architecture.
+
+**Where the time goes.** Every case is a serial chain of subprocesses: the CLI's own start and its git probes, and, before the template copy, about fourteen git processes to seed each fixture. The work is CPU-bound, so wall time at `n` cores is bounded below by the suite's CPU time over `n`. `init.test.mjs`, `doctor.test.mjs` and `stack-presets.test.mjs` run their cases concurrently under one bound (`cli/test/helpers/concurrency.mjs`). This turns it off and runs every case in series again, which is the first step when diagnosing a failure:
+
+```
+HARNESS_TEST_CONCURRENCY=1 npm test
+```
 
 Rehearsing it by hand means running `node cli/dist/cli.js init --cwd <scratch>` twice against a scratch git repository **outside** this checkout; the second run reports every artifact as kept. Do not aim it at this repository — gate 2 says why.
 
@@ -198,11 +303,11 @@ It **exits 0** against a freshly wired repository **that has a remote**, warning
 **Gate 6 — self-containment.** Nothing in this tree may name a location on the machine that wrote it, and no generator template may have been committed into the adopter's own dot-namespace. Run this **before committing, on the machine you are committing from**. From the tree root:
 
 ```
-grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist
+grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs | grep -v '^\./\.git:[0-9][0-9]*:'
 find . -name '.claude' -type d -not -path './examples/notes-app/.claude' -not -path './.claude'
 ```
 
-Those two must print nothing — and this is the one gate read from its **output** rather than its exit status, because `grep` exits 1 precisely when it finds nothing, which is the passing case here.
+Those two must print nothing — and this is the one gate read from its **output** rather than its exit status, because `grep` exits 1 precisely when it finds nothing, which is the passing case here — and why the first command may carry a pipe despite §5's opening rule: its anchored `grep -v` drops only the line of the root `.git`, which in a linked worktree is a one-line `gitdir:` pointer **file** naming `<main checkout>` that `--exclude-dir=.git` does not skip, so a nested `.git` file, or any file quoting a `gitdir:` line, is still printed. `--exclude-dir=test_run_logs` skips the Run gates phase's logs, which are machine-local and never committed, while this gate exists to stop a machine path reaching a commit — and the log of the current run is being written while the gate reads the tree, so without it a gate run would fail on its own log.
 
 `$HOME` is inside double quotes and so is expanded by the shell: the first command searches for the home path of **the user running it**, which is why it is a pre-commit self-check rather than an audit of the tree. Run against a clean clone by anyone else it passes unconditionally, because another author's home path is not theirs — it says nothing about what is committed. To sweep a tree you did not write, widen it to the general shapes, `grep -rnE '/(Users|home)/[a-z]' . --exclude-dir=node_modules --exclude-dir=dist`, and read the hits by eye: that form has legitimate matches — the fictional `/Users/me` and `/home/ada` paths in `docs/watcher.md`, `cli/test/daemon.test.mjs` and `cli/src/daemon/units.ts` — so it is not a print-nothing gate.
 
@@ -279,9 +384,9 @@ Every rung above the schema default is silent here, so `init` writes `main` into
 node cli/dist/cli.js init --cwd <scratch-gitless> --qa
 ```
 
-Four questions, in this order: create the repository, which driver the interactive test phase should run, whether to run the analysis in this repository's first session, and whether to set up push notifications — the endpoint asked for inside that last one's yes. The analysis question is put where its answer is needed, before anything is written: it is the input to the generated `.claude/CLAUDE.md`'s setup-pending block. Answer the first with a word that is neither yes nor no *before* answering `y`: it is put a second time, and the re-ask is reachable no other way. Then type a driver name that is **not** the bracketed default; then `n` to the analysis, whose bracketed default is **yes**, so `n` is the answer that exercises the declined path; then `y`, and an endpoint.
+Four questions, in this order: create the repository, which driver the interactive test phase should run, whether to run the analysis in this repository's first session, and whether to set up push notifications — the endpoint asked for inside that last one's yes. The analysis question is put where its answer is needed, before anything is written: it is the input to the generated `.claude/CLAUDE.md`'s setup-pending block. Answer the first with a word that is neither yes nor no *before* answering `y`: it is put a second time, and the re-ask is reachable no other way. Then type a driver name that is **not** the bracketed default; then `n` to the analysis, whose bracketed default is **yes**, so `n` is the answer that exercises the declined path; then `y`. To the destination question, first answer `not a destination`: the question is put again, and the line before it does not print the typed value back. Then answer with a bare ntfy topic name. This is the only place the destination re-ask and the typed-topic path are exercised, because the subprocess suite hands `init` a pipe.
 
-Each question is put once, the first twice for the re-ask, and the run **exits 0** having recorded what was typed rather than what it would have defaulted to: `harness.config.json` carries the driver that was typed, `${XDG_CONFIG_HOME:-$HOME/.config}/autonomous-sdlc-harness/push.env` exists at `0600` inside a `0700` directory and holds `HARNESS_PUSH_URL`, and the endpoint appears nowhere in what the run itself prints — your own typing echoing back is the terminal, not the run. On a **first** `init` into an empty scratch directory the declined answer leaves `.claude/CLAUDE.md` carrying the setup-pending block in its declined wording — the sections are yours to write by hand, the command still fills them if you change your mind, **and the block can be deleted by hand once those sections are written**, which is the decliner's only route out of a block that otherwise loads in every session — where an accepted answer leaves the accepted wording instead; the wired tree is the same either way. Then, from a second empty scratch directory:
+Each question is put once, the first twice for the re-ask and the destination twice for its own, and the run **exits 0** having recorded what was typed rather than what it would have defaulted to: `harness.config.json` carries the driver that was typed, `${XDG_CONFIG_HOME:-$HOME/.config}/autonomous-sdlc-harness/push.env` exists at `0600` inside a `0700` directory and holds `HARNESS_PUSH_URL=https://ntfy.sh/<the topic>`, and the topic appears nowhere in what the run itself prints — your own typing echoing back is the terminal, not the run. On a **first** `init` into an empty scratch directory the declined answer leaves `.claude/CLAUDE.md` carrying the setup-pending block in its declined wording — the sections are yours to write by hand, the command still fills them if you change your mind, **and the block can be deleted by hand once those sections are written**, which is the decliner's only route out of a block that otherwise loads in every session — where an accepted answer leaves the accepted wording instead; the wired tree is the same either way. Then, from a second empty scratch directory:
 
 ```
 node cli/dist/cli.js init --cwd <scratch-2> --qa --git-init --non-interactive
@@ -569,6 +674,124 @@ Record all four, the `claude` line being the version leg (v) ran under. Record t
 **Where the results go.** Each leg's command and exact output is recorded in `docs/retrieval.md` → `## Measured, and how`, item (d), dated and carrying leg (vi)'s platform; the placeholder that item once held is filled by the 2026-09-22 run. Leg (iii)'s figures are the one exception and do **not** live in item (d): the wall times, their spread and cause, the per-chunk and per-phase breakdown and the `du` figure are in `docs/retrieval-eval-results.md` → `## Cold build and index size`, under their own host and corpus stamp, and item (d) cites them there. What item (d) carries by name from leg (iii) is the **chunk count**, because that is what shows the corpus floor was met. A Linux run also settles `docs/retrieval.md`'s Linux question under `## Still open`. A run that could not execute this gate says so in its Done summary, naming the legs it could not run and why.
 
 **Gate 11 — docs-retrieval relevance floor.** `scripts/run-gates.sh` runs it as `node evals/docs-retrieval/check-floor.mjs`, which drives the docs-retrieval eval over the committed **`fixture-catalog`** corpus — that corpus alone — for every arm the eval's arm table has a search mode for, and grades each arm's recall@5 and MRR against the values recorded in `evals/docs-retrieval/floor.json`. It loads the **real** embedder and reranker: `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` is set nowhere on that path and the eval refuses to produce a number while it is set, so unlike every retrieval case in gate 4 this gate exercises the models gate 10 installs. **A failure means retrieval got worse**: a measured figure below a recorded floor, on a corpus that moves only when this eval moves, so the change is a property of the retrieval code rather than of the documents. **An empty model cache is reported, not counted as a failure** — the module exits with a status reserved for that case, the script prints it as `BLOCKED` and lists it with the gates it cannot run, and it pushes the gate onto neither the passes nor the failures, so a machine without the hand-provisioned cache still reads a true green. A shortfall is not exempt: it fails the script. The floor policy itself — the margin between a measured figure and its recorded floor, why the graded corpus is `fixture-catalog` alone, and when a floor is re-recorded — is stated in `docs/retrieval-eval.md` → `## The regression floor`, which `floor.json`'s own `see` field names.
+
+**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a throwaway **private** repository created for the purpose — never this repository, for the reason gate 2 gives — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Ten observations, after a setup that is itself the first.
+
+**Setup.**
+
+```
+gh repo create <owner>/<scratch-repo> --private --clone
+```
+
+Then, from the new repository's root, with at least one commit on its default branch:
+
+```
+npx --yes autonomous-sdlc-harness@<version> init --non-interactive
+npx --yes autonomous-sdlc-harness@<version> config set execution.target github-actions
+npx --yes autonomous-sdlc-harness@<version> init
+git add <each path the two init runs reported writing>
+git commit -m "Adopt the harness"
+git push origin <default branch>
+gh secret set CLAUDE_CODE_OAUTH_TOKEN
+npx --yes autonomous-sdlc-harness@<version> doctor --check-github
+```
+
+Where the second `init` reports it could not resolve the plugin's owner, re-run it with `--marketplace <owner>/<repo>`, as `docs/remote-execution.md` → `## 7. Turning it on` step 2 says. Each observation below names what passes and what to record; a failure is recorded with its command and exact message, never retried until it passes. The job's own log is read with `gh run view <run id> --log`, and the run ids with `gh run list --workflow harness-run.yml`.
+
+**(i) Adoption.** Passes when `doctor --check-github` reports `PASS remote-execution` and `PASS remote-github`. Record both lines, and every `WARN` it prints — `HARNESS_PUSH_URL` unset warns and is not a failure of this observation.
+
+**(ii) The first job, and its plugin-root entries.** In a `claude` session in the scratch repository, drop a small task with `/autonomous-sdlc-harness:branch-prompt`, then let the watcher dispatch it in one pass:
+
+```
+bash <scriptsDir>/autonomous-watcher.sh tick
+gh run list --workflow harness-run.yml
+```
+
+Passes when a run titled `harness run <branch>` starts a job on `ubuntu-latest`, its `init --plugin-root-entries` step leaves no tracked file changed, and its `Preflight with doctor` step reports `PASS plugin-permissions` — the check that the job's plugin install produces a root `init` can resolve. Record the run id, the runner label from the job log, and the `plugin-permissions` line verbatim.
+
+**(iii) The self-pause chain, and the `GITHUB_TOKEN` dispatch exception.** Before the drop, make the self-pause small, and give the task enough work to outlast it:
+
+```
+gh variable set HARNESS_SELF_PAUSE_AFTER_MINUTES --body 5
+```
+
+Passes when the job drops its own `PAUSE`, ends with decision `continue`, its `remote-run.sh continue` step dispatches, and a **new** `harness run <branch>` run starts whose job restores the previous bundle and resumes from the pushed ledger. That second run starting is the evidence that a `workflow_dispatch` sent with `GITHUB_TOKEN` starts a run. Record both run ids, the `continue` step's output, the second job's `restore` line, and whether a push the first job made started any other workflow. Record too the `harness-state` artifact's `expires_at` from `gh api repos/<owner>/<scratch-repo>/actions/runs/<first run id>/artifacts`, which shows whether `retention-days: 400` was capped at the repository's retention or refused (`docs/remote-execution.md` §6).
+
+**(iv) A `pause` dispatch.** While a job is running, run `/autonomous-sdlc-harness:branch-pause <branch>` in the session, then relay it and read the marker run:
+
+```
+bash <scriptsDir>/autonomous-watcher.sh tick
+gh run view <pause run id>
+gh api repos/<owner>/<scratch-repo>/actions/runs/<pause run id>/timing
+```
+
+Passes when the `harness pause <branch>` run's job is **skipped**, its billable time is zero, and within `REMOTE_CONTROL_POLL_SECS` of it the running job finds it, yields at its next clean checkpoint and ends with decision `stop`, re-dispatching nothing. Record the `timing` answer verbatim and the job-log line where the pause was found. Where the billable figure is not zero, record it: `docs/remote-execution.md` §6 already states that cost.
+
+**(v) `gh workflow enable` and `disable` under the job's token.** The disable is reached by one hand-started poller tick with nothing waiting:
+
+```
+gh workflow enable harness-resume.yml
+gh workflow run harness-resume.yml
+gh workflow view harness-resume.yml
+```
+
+Passes when the tick's `remote-run.sh poll` disables the poller itself and the last command reports it disabled. The enable is reached only by a job that ends on a usage pause with decision `wait-poller`; set `REMOTE_WAIT_MAX_SECS` to `0` so that any usage pause on a hosted runner goes to the poller, and record the `continue` step's output of the first such job. A gate run that meets no usage pause records the enable as **not observed**, never inferred from the disable. Record each succeeded or its exact refusal. While that job is still running, after its `Upload the state bundle` step, record whether `gh api repos/<owner>/<repo>/actions/runs/<in-progress run id>/artifacts` lists `harness-state` before the run completes: the poller's post-disable re-check rests on it (`docs/remote-execution.md` §6).
+
+**(vi) The step's `timeout-minutes` expression.** The run workflow computes the harness step's `timeout-minutes` from an expression over `env`. Passes when observation (ii)'s job ran that step at all — GitHub rejects a workflow it cannot parse before any job starts. Record whether the workflow was accepted, and, if it was rejected, the message GitHub reported on the run page or from `gh run view <run id>`.
+
+**(vii) A self-hosted runner.** Register one under a label of your choosing (`docs/remote-execution.md` → `## 8. Choosing a runner`), leave observation (iii)'s five-minute variable set, then point the harness at it and drop a second task:
+
+```
+gh variable set HARNESS_RUNNER --body <label>
+```
+
+Passes when the job runs on that runner and **no** self-pause occurs past the five minutes. Record the runner name from the job log and the run's duration.
+
+**(viii) Stopping, then resuming.** While a job is running:
+
+```
+bash <scriptsDir>/remote-run.sh stop <branch>
+gh run list --workflow harness-run.yml
+bash <scriptsDir>/remote-run.sh sync <branch>
+```
+
+Passes when a `harness stop <branch>` run appears, the running job is cancelled, and no new `harness run <branch>` run follows it. Then run `/autonomous-sdlc-harness:branch-resume <branch>` in the session and one more `tick`; passes when that dispatch starts a job that resumes from the pushed ledger. Record the `stop` output, the run list after it, and the resumed job's `restore` line — or, where the resume is refused, the exact refusal.
+
+**(ix) Both credentials.**
+
+```
+gh secret set ANTHROPIC_API_KEY
+```
+
+With `CLAUDE_CODE_OAUTH_TOKEN` still set, drop a task and let it run to its first session. Sync it, then read the session's stream log under `<stateDir>/autonomous_logs/`. Record the `system` event the session opens with, verbatim, and which credential it names. `docs/remote-execution.md` → `## 9. Credentials and billing` states that `ANTHROPIC_API_KEY` wins; this observation confirms or corrects it.
+
+**(x) The interactive-test phase is skipped.** Turn the phase on in the scratch repository, re-run `init`, and push both. The re-run is not optional: turning the phase on changes the files `init` writes (at least `.gitignore`), and the job fails at its `init --plugin-root-entries` step when that step changes a tracked file.
+
+```
+npx --yes autonomous-sdlc-harness@<version> config set phases.qa true
+```
+
+```
+npx --yes autonomous-sdlc-harness@<version> init
+```
+
+```
+git add harness.config.json <each path the init run reported writing>
+```
+
+```
+git commit -m "Turn on the interactive-test phase"
+```
+
+```
+git push origin <default branch>
+```
+
+Then drop a small task and let it run to the end. Passes when the run ends at "ready for review" with its ledger's `E` entry `[-]` and `P2` `[x]`, the ledger's `## Run mode` block carrying `remote-skipped: qa`, the Done summary carrying the `QA (Phase E): skipped` line, and the `completed` notification's detail naming the skip and `/autonomous-sdlc-harness:branch-qa-test <branch>` (`docs/remote-execution.md` → `## 3.` → *The interactive-test phase*). Record the ledger's `## Run mode` block and the notification text verbatim.
+
+**Teardown.** Deregister the self-hosted runner, then delete the scratch repository with `gh repo delete <owner>/<scratch-repo>`.
+
+**Where the results go.** A dated paragraph under this gate, as gate 10's opens, carrying the CLI version, the `claude` version the job installed and each observation's recorded output; and for each behaviour an observation settled, its row in `docs/remote-execution.md` → `## 6. What is not verified here` is moved from *not verified* to *verified on <date>*, citing this gate. A behaviour an observation corrected rather than confirmed changes the design text it rests on, not only that row. A run that could not execute an observation names it and why.
 
 ---
 

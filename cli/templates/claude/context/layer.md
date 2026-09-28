@@ -9,7 +9,7 @@
 - What this layer is responsible for and — just as usefully — what it is not, so a task that has drifted into it is recognisable.
 - What it may depend on, and which direction a dependency between layers is allowed to point.
 - Naming and file-layout rules that apply inside it.
-- What "done" means here: the tests to write, the checks to run, the bar a review holds the change to.
+- What "done" means here: the tests to write, the checks to run, the bar a review holds the change to — including **the one command that runs a single test file of this layer on its own**, or the statement that this layer has none. The harness runs the full test command once per Run gates phase, never per change, so a unit that wrote a test runs only that file, through this command. Where the test wrapper's line accepts a path, `bash <scriptsDir>/test.sh <file>` is the command to name, because it is already allow-listed.
 
 **One generic example — the shape a rule takes here**
 

@@ -172,6 +172,17 @@ const CLARIFICATIONS_DIR = 'clarifications';
  */
 const SCRATCH_DIR = 'scratch';
 
+/**
+ * The full output of each Run gates run, one log per round, which is machine-local because it
+ * carries machine paths — the property that keeps it out of every commit.
+ *
+ * Named here as a string and checked against {@link STATE_DIR_ENTRIES} by {@link treeDirectory} for
+ * the reason {@link LOGS_DIR} gives, and ignored **by its contents** with a negation for its README
+ * for the reason the directories above are. Its logs sit one level down, under a `<branch>`
+ * subdirectory, which the contents glob covers.
+ */
+const TEST_RUN_LOGS_DIR = 'test_run_logs';
+
 /** One contents-ignored directory as declared here: its name, and the role a diagnosis names it by. */
 interface ContentsIgnoredRow {
   readonly dir: string;
@@ -192,11 +203,13 @@ const CONTENTS_IGNORED_DIRS: readonly ContentsIgnoredRow[] = Object.freeze([
   Object.freeze({ dir: CLARIFICATIONS_DIR, role: 'the park-and-ask channel' }),
   Object.freeze({ dir: INBOX_DIR, role: "the unattended loop's drop point for prompts" }),
   Object.freeze({ dir: SCRATCH_DIR, role: 'the throwaway-probe directory' }),
+  Object.freeze({ dir: TEST_RUN_LOGS_DIR, role: 'the test-run log directory' }),
 ]);
 
 /**
- * The unattended loop's stop, pause and dispatch-count control files, written **flat** at the root
- * of the run-artifact tree while a run is in flight.
+ * The unattended loop's stop, pause and dispatch-count control files, and the flow walker's
+ * machine-local state file, written **flat** at the root of the run-artifact tree while a run is in
+ * flight.
  *
  * They must never be committed, and the tree around them is what makes that easy to get wrong: it is
  * otherwise a committed tree, so a single `git add <stateDir>/` takes whichever of these happen to
@@ -209,6 +222,7 @@ const CONTENTS_IGNORED_DIRS: readonly ContentsIgnoredRow[] = Object.freeze([
  */
 const RUN_CONTROL_ARTIFACTS: readonly string[] = Object.freeze([
   '.dispatch_counter',
+  '.flow_walker_state',
   'STOP',
   'AUTONOMOUS_STOP',
   'PAUSE',
@@ -571,6 +585,7 @@ export function writeRepoRootFiles({ repoRoot, config, plan }: RepoRootOptions):
   const logs = contentsIgnoredDirectory(stateDir, LOGS_DIR);
   const inbox = contentsIgnoredDirectory(stateDir, INBOX_DIR);
   const scratch = contentsIgnoredDirectory(stateDir, SCRATCH_DIR);
+  const testRunLogs = contentsIgnoredDirectory(stateDir, TEST_RUN_LOGS_DIR);
   const clarifications = clarificationsIgnoreRules(stateDir);
   const pushEnv = normalizeRepoDir(config.pushEnvPath ?? PUSH_ENV_PATH);
   // The phase, not the driver: every driver reads a credentials file, so the ignore rule below is
@@ -613,6 +628,8 @@ export function writeRepoRootFiles({ repoRoot, config, plan }: RepoRootOptions):
     inboxReadmeException: inbox.readmeException,
     scratchGlob: scratch.contents,
     scratchReadmeException: scratch.readmeException,
+    testRunLogsGlob: testRunLogs.contents,
+    testRunLogsReadmeException: testRunLogs.readmeException,
     // Derived from the configuration's own filename, so a rename moves its ignore rule with it.
     configBackupFile: `${CONFIG_FILENAME}.bak`,
     qaBrowserArtifacts,
