@@ -38,3 +38,9 @@ The case is meant to prove the `runBash` bound. Its result should not depend on 
 - [ ] Same file, the doc comment on `CHILD_TEST_TIMEOUT_MS` (currently *"The child runner's per-test timeout, over the child fixture's `init` plus the bound below it."*): state why it is large. Under Node 20.19.5 it bounds the child **file's** whole run, including its fixture seeding and `init` on a loaded gate host, and it must never fire before `CHILD_BOUND_MS`. If it did, the child's TAP would name the file and leave the watcher group running, which is exactly what this case asserts cannot happen.
 - [ ] `docs/development.md` → the paragraph beginning `**A hung case cannot hold the gate.**`: change the parenthetical *"`cli/test/test-timeout.test.mjs` bounds its hung child at 2 seconds, inside its own 30-second `--test-timeout`"* to say *"240-second"*.
 - [ ] Optional, informational: the case's assertion messages already include the child's stdout. No change is needed to make a future failure diagnosable from the full `npm test` output.
+
+**Deviations from plan:**
+
+- Named-test run skipped: neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, so the row-`G.4` check took the fix-site fallback. The fix site still read `const CHILD_TEST_TIMEOUT_MS = 30_000;`, so the fix was implemented; the named case's pass rests on the Run gates phase, not on a run in this unit.
+- The `docs/development.md` bullet (*"30-second"* → *"240-second"*) was not applied: that file is outside the `cli` layer's path scope this unit was dispatched with. It needs a `general`-layer (catch-all) dispatch. The `general`-layer dispatch then applied it: `docs/development.md` now reads *"inside its own 240-second `--test-timeout`"*.
+- The doc comment also names the parent suite's `--test-timeout` (`cli/package.json` → `scripts.test`, now `1800000`) as the ceiling 240 000 stays below.

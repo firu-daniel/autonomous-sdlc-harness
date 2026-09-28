@@ -21,8 +21,14 @@ import { createFixture } from './helpers/fixture.mjs';
 
 const CHILD_TEST_NAME = 'a watch loop that never returns';
 
-/** The child runner's per-test timeout, over the child fixture's `init` plus the bound below it. */
-const CHILD_TEST_TIMEOUT_MS = 30_000;
+/**
+ * The child runner's `--test-timeout`. Under Node 20.19.5 it bounds the child **file's** whole run —
+ * start-up, its own fixture seeding and `init` on a loaded gate host — and it must never fire before
+ * `CHILD_BOUND_MS`: if it did, the child's TAP would name the file and leave the watcher group
+ * running, which is what this case asserts cannot happen. Kept below the parent suite's own
+ * `--test-timeout` (`cli/package.json` → `scripts.test`).
+ */
+const CHILD_TEST_TIMEOUT_MS = 240_000;
 
 /**
  * The child's explicit `runBash` bound, which is what reaps: under Node 20.19.5 a `--test-timeout`
