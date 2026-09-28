@@ -369,8 +369,9 @@ export interface CheckContext {
    */
   readonly probeGithub: boolean;
   /**
-   * Whether `doctor --remote-job` graded the profile for a remote job: {@link PROFILE_PATHS_CHECK} and
-   * {@link PLUGIN_PERMISSIONS_CHECK} fail where they otherwise warn, and the latter also grades
+   * Whether `doctor --remote-job` graded the profile for a remote job: {@link PROFILE_PATHS_CHECK},
+   * {@link PROFILE_TRACKED_CHECK} and {@link PLUGIN_PERMISSIONS_CHECK} fail where they otherwise warn,
+   * and the last also grades
    * `permissions.additionalDirectories`. `false` in every default run.
    */
   readonly remoteJob: boolean;

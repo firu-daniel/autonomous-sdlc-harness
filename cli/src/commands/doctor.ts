@@ -41,7 +41,8 @@
  *   and {@link CHECK_REGISTRY_FLAG} and {@link CHECK_GITHUB_FLAG}, reads that change nothing anywhere
  *   and so are not suppressed by `--dry-run`. A POST fired by every `doctor` — in CI, from an `&&` chain, from the
  *   run daemon before it starts a run — would cost the command every property above.
- *   {@link REMOTE_JOB_FLAG} reaches no network either: it changes two checks' grades and nothing else.
+ *   {@link REMOTE_JOB_FLAG} reaches no network either: it changes three profile checks' grades, and what `plugin-permissions` grades,
+ *   and nothing else.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -91,8 +92,8 @@ const CHECK_GITHUB_FLAG = '--check-github';
 
 /**
  * An option this command takes of its own: it grades the permission profile for a remote job, where
- * `profile-paths` and `plugin-permissions` fail instead of warning and the profile's
- * `additionalDirectories` must carry every plugin root.
+ * `profile-paths`, `profile-tracked` and `plugin-permissions` fail instead of warning and the
+ * profile's `additionalDirectories` must carry every plugin root.
  *
  * A flag rather than a probe of the job's environment, so an operator's own shell cannot trip it by
  * inheriting a variable; the remote workflow's preflight passes it.
@@ -181,10 +182,11 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   'which runner HARNESS_RUNNER selects. A call that times out or cannot reach GitHub warns rather than',
   'fails. Every call is a read, so --dry-run does not suppress it either.',
   '',
-  `${REMOTE_JOB_FLAG} turns two warnings into failures: profile-paths, when no rule in the profile covers`,
-  'this checkout, and plugin-permissions, when an entry a plugin root needs is missing or no plugin',
-  'root resolves; it also requires every plugin root in permissions.additionalDirectories. The remote',
-  'workflow passes it, so its preflight stops before a session that would park. It reaches no network.',
+  `${REMOTE_JOB_FLAG} turns three warnings into failures: profile-paths, when no rule in the profile`,
+  'covers this checkout; profile-tracked, when the profile is committed at HEAD; and plugin-permissions,',
+  'when an entry a plugin root needs is missing or no plugin root resolves. It also requires every plugin',
+  'root in permissions.additionalDirectories. The remote workflow passes it, so its preflight stops before',
+  'a session that would park. It reaches no network.',
   '',
   'Exit status is the contract — branch on it rather than on the report text:',
   '  0  no check failed: every check passed, or the only findings were warnings',
