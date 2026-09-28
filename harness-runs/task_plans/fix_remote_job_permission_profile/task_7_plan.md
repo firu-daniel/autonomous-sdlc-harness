@@ -27,3 +27,9 @@
 - `commands.typecheck` passes (the watcher is outside the compiler; this confirms nothing else moved).
 - Reading `spawn_engine`, every added line sits under the `JOB_MODE` test, so a local launch cannot change — and the change adds no `mapfile` and no `set -e`.
 - `bash -n cli/templates/scripts/autonomous-watcher.sh` exits 0.
+
+**Deviations from plan:**
+
+- The `cli/test/watcher-remote-job.test.mjs` cases were not executed by the implementer: `.claude/context/conventions.md` → `## The testing bar` states no single-file test command, so per `unit_loop_core.md` → `## The test-run rule` the run is deferred to the Run gates phase. The pass claim rests on reading only. Untested assumption carried by the de-duplication case: the profile's `{{stateDirAbs}}` (`join(repoRoot, stateDir)` in `permissionProfile.ts`) is the same string as the watcher's `hr_state_path "$MAIN_REPO"`, modulo a trailing slash, which the comparison strips.
+- `bash -n cli/templates/scripts/autonomous-watcher.sh` was refused by the permission layer (approval required) and not run; the syntax claim rests on reading the edit. Deferred to the Run gates phase.
+- The file header of `watcher-remote-job.test.mjs` does not enumerate what job mode passes, so it was left unchanged.

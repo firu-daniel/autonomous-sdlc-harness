@@ -197,6 +197,7 @@ test('none: the launch line, the start and stop records, and the parked detail',
     const after = (flag) => argv[argv.indexOf(flag) + 1];
     assert.equal(after('--settings'), join(j.dir, '.claude', 'settings.autonomous.json'));
     assert.ok(argv.includes('--permission-mode'), argv.join(' '));
+    // The profile's only additionalDirectories entry is the state directory, so it is not repeated.
     const addDirs = argv.flatMap((arg, i) => (arg === '--add-dir' ? [argv[i + 1]] : []));
     assert.deepEqual(addDirs, [j.dir, join(j.dir, STATE_DIR)]);
     assert.equal(j.notifications().some((n) => n.event === 'launched'), false);
@@ -214,6 +215,37 @@ test('none: the launch line, the start and stop records, and the parked detail',
     assert.equal(parked.length, 1);
     assert.match(parked[0].detail, new RegExp(`/autonomous-sdlc-harness:branch-answer ${j.branch}`));
     j.assertLaneUntouched();
+  });
+});
+
+test("add-dir: job mode appends the profile's additionalDirectories after the two fixed ones", async (t) => {
+  const j = await createJobFixture(t);
+  if (j === null) return;
+
+  const profilePath = join(j.dir, '.claude', 'settings.autonomous.json');
+  const original = readFileSync(profilePath, 'utf8');
+  const addDirs = () => {
+    const argv = j.argv();
+    return argv.flatMap((arg, i) => (arg === '--add-dir' ? [argv[i + 1]] : []));
+  };
+
+  await t.test('an extra entry is passed once, after the worktree and the state directory', async () => {
+    const pluginRoot = join(j.dir, 'plugin root');
+    const profile = JSON.parse(original);
+    profile.permissions.additionalDirectories.push(pluginRoot, '');
+    await writeFile(profilePath, `${JSON.stringify(profile, null, 2)}\n`, 'utf8');
+    const result = await j.job([j.branch, 'task', 'none']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.deepEqual(addDirs(), [j.dir, join(j.dir, STATE_DIR), pluginRoot]);
+  });
+
+  await t.test('a profile without the key still launches with the two', async () => {
+    const profile = JSON.parse(original);
+    delete profile.permissions.additionalDirectories;
+    await writeFile(profilePath, `${JSON.stringify(profile, null, 2)}\n`, 'utf8');
+    const result = await j.job([j.branch, 'task', 'none']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.deepEqual(addDirs(), [j.dir, join(j.dir, STATE_DIR)]);
   });
 });
 

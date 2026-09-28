@@ -1697,9 +1697,14 @@ lane_release_if_idle() {
 #     --effort "<agentEffort>" \
 #     --output-format stream-json --verbose \
 #     --add-dir <worktree> \
-#     --add-dir <MAIN_REPO>/<state_dir>
+#     --add-dir <MAIN_REPO>/<state_dir> \
+#     [--add-dir <dir> ...]
 #
-# and NEVER a permission-bypass flag: the profile's deny floor is what keeps an
+# where the bracketed tail is JOB MODE ONLY: one --add-dir per
+# permissions.additionalDirectories entry of the profile, in file order, minus
+# empty entries and the two directories above; outside job mode the line ends at
+# the state directory. See spawn_engine for why the profile's list is repeated.
+# And NEVER a permission-bypass flag: the profile's deny floor is what keeps an
 # unattended run in its lane, and bypassing it makes every refusal decorative.
 # Both run-setting flags are CONDITIONAL: an unset key leaves its flag off the
 # line entirely rather than passing an empty argument.
@@ -1857,6 +1862,32 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
     effort_args=(--effort "$AGENT_EFFORT")
   fi
 
+  # JOB MODE ONLY: every permissions.additionalDirectories entry of the profile
+  # (the plugin roots `init --plugin-root-entries` wrote) also goes on the line as
+  # an --add-dir, because a job session was refused reads under a root the profile
+  # file already granted. `init` stays the one producer of the list. File order;
+  # an empty entry and one equal to the two directories already passed are
+  # skipped. An absent, unparseable or keyless profile adds nothing and never
+  # blocks the launch — `doctor --remote-job` refuses an unusable profile earlier.
+  local extra_dir_args extra_dirs_logged
+  extra_dir_args=()
+  extra_dirs_logged=""
+  if [ "$JOB_MODE" = "1" ]; then
+    local profile_dirs profile_dir
+    profile_dirs="$(jq -r '.permissions.additionalDirectories[]? // empty' "$SETTINGS_PROFILE" 2>/dev/null)" || profile_dirs=""
+    while IFS= read -r profile_dir; do
+      [ -n "$profile_dir" ] || continue
+      case "${profile_dir%/}" in
+        "${worktree%/}" | "${main_state%/}") continue ;;
+      esac
+      extra_dir_args+=(--add-dir "$profile_dir")
+      extra_dirs_logged="${extra_dirs_logged} '${profile_dir}'"
+    done <<EOF
+$profile_dirs
+EOF
+    [ -z "$extra_dirs_logged" ] || log "job mode: '$branch' also gets --add-dir from the profile's additionalDirectories:${extra_dirs_logged}"
+  fi
+
   # The formatter is the tail of the pipeline; a passthrough keeps the raw events
   # in the log rather than breaking the pipe when it is not runnable.
   local formatter="$FORMAT_STREAM"
@@ -1889,7 +1920,10 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
     cd "$worktree" || exit 97
     # `--add-dir "$worktree"` is NOT redundant with the profile: that file grants
     # the sibling-worktree glob through Edit/Write/Read rules, not through
-    # additionalDirectories.
+    # additionalDirectories. The job-mode extras after the two fixed --add-dir
+    # flags duplicate the profile's additionalDirectories on purpose: a job
+    # session was refused reads under a directory that file granted, and a
+    # launch flag does not depend on how the settings file is merged.
     #
     # The run is streamed as JSON events through the formatter so the per-run log
     # shows the orchestrator heartbeat and the sub-agent dispatches LIVE and
@@ -1908,7 +1942,8 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
       ${effort_args[@]+"${effort_args[@]}"} \
       --output-format stream-json --verbose \
       --add-dir "$worktree" \
-      --add-dir "$main_state" 2>>"$log_path" |
+      --add-dir "$main_state" \
+      ${extra_dir_args[@]+"${extra_dir_args[@]}"} 2>>"$log_path" |
       tee -a "${log_path%.log}.stream.jsonl" |
       "$formatter" >>"$log_path"
     rc=${PIPESTATUS[0]}
