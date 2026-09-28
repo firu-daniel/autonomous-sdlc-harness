@@ -34,4 +34,14 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **A decision rule's outcome is a proposal to the maintainer, not a settled future: record the verdict and the change it names, but never write the change into other documents as pending work until the maintainer has decided to execute it.** _(taught by: feat_arm_a_real_catalog_measurement)_
 
+## Unattended control loops
+
+- **A process that turns off a shared switch another actor can turn on must check the enabling condition again after switching it off, and switch it back on if needed, so an enable that races its check is never undone.** _(taught by: feat_remote_execution_github_actions)_
+
+- **Every automatic retry in an unattended path is bounded by a count or a deadline. When the bound is reached, send exactly one notification naming the error and the manual way on, then stop retrying.** _(taught by: feat_remote_execution_github_actions)_
+
+- **State held only in an expiring store (an artifact, a cache) must be reported plainly as expired when it expires, and never treated as absent or as a fresh start.** _(taught by: feat_remote_execution_github_actions)_
+
+- **A new execution environment must state, for every configurable phase, whether that phase runs there. A phase switched off in this repository is not thereby unsupported for every adopter.** _(taught by: feat_remote_execution_github_actions)_
+
 _Written by `autonomous-sdlc-harness init`, and yours from there on: a re-run never touches a ledger that already exists._

@@ -40,3 +40,11 @@ The stub today answers every `run list` and artifact query with one fixed value,
 - [ ] **The constraint case.** Same, but after the disable A is still `in_progress` with **no** artifact (an ordinary long job). Assert the tick ends with `workflow disable` as its last enable/disable call — the poller is not kept enabled for a job that never paused.
 - [ ] **In-progress, already uploaded, first pass.** A's run is `in_progress` and already carries a usage-paused bundle at the first listing: assert no `workflow disable` is sent at all and A is not dispatched.
 - [ ] Existing `poll` cases stay green unchanged.
+
+**Deviations from plan:**
+- The post-disable re-check skips every branch this tick already dispatched (`POLL_DISPATCHED`). The plan's "a run that is due now is still waiting" would otherwise re-enable the poller whenever the re-listing does not yet show the dispatched run, and a later tick could dispatch that branch a second time.
+- In the no-dispatch evaluation, a due run counts as waiting only if it would pass the chain-limit and engine checks. A run that would be refused is not waiting, and no notification is sent for it. Otherwise a chain-limited run would re-enable the poller on every tick, and each tick would send another `failed` notification.
+- The plan's `has_bundle` refactor is `bundle_listed`, which returns 0 when the bundle is present, 1 when it is absent and 2 when the lookup failed. `has_bundle` now wraps it and keeps its exit-3 behaviour for `sync` and `restore`.
+- The download-and-read logic is split into `poll_fetch` and `poll_usage_paused`, which both passes share. On an unfinished run, a failed path resolve or `mkdir` counts as waiting, the same as a failed download.
+- `cli` layer only: the `**Docs.**` sub-step (`docs/remote-execution.md`, `docs/development.md`) is outside this dispatch's path scope and is left to the `general` layer's dispatch.
+- An extra test covers a failed re-enable: it asserts one `paused` notification for the branch that became waiting, and exit 0.

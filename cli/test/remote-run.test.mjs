@@ -24,7 +24,12 @@
  * **For `continue` and `poll`, the rule is that a re-dispatch carries the bundle's own `chain` plus
  * one, and nothing is sent for a branch that is stopped, under `HARNESS_REMOTE_STOP`, or at the chain
  * limit**: a `continue` case records at most one `workflow run`, and a branch whose `harness stop` run
- * is newer than its newest `harness run` run gets no `workflow run` and no `workflow enable`. Most
+ * is newer than its newest `harness run` run gets no `workflow run` and no `workflow enable`. A
+ * `poll` never dispatches a run that is not yet `completed`, counts one carrying a usage-paused
+ * bundle as waiting, and after its own disable re-lists once and re-enables the poller when such a
+ * run appeared meanwhile — never for a running job with no bundle. The stub models "meanwhile": once
+ * its log holds a `workflow disable`, it answers `run list` and the artifact list from
+ * `STUB_RUN_LIST_AFTER_DISABLE` and `STUB_ARTIFACTS_AFTER_DISABLE` when those are set. Most
  * cases replace the fixture's `autonomous-notify.sh` with a recorder, as the watcher suite does, so no
  * desktop banner fires; the failed-enable case keeps the real notifier and records through
  * `HARNESS_PUSH_CMD`, with `XDG_CONFIG_HOME` pointed into the fixture so no machine push file is read.
@@ -50,8 +55,13 @@ const CLARIFY_DIR = `${STATE_DIR}/clarifications/feat_x`;
 const PAYLOAD_MAX = 65535;
 
 const STUB = `#!/usr/bin/env node
-const { appendFileSync } = require('node:fs');
+const { appendFileSync, readFileSync } = require('node:fs');
 const args = process.argv.slice(2);
+const disabled = (() => {
+  try { return readFileSync(process.env.STUB_LOG, 'utf8').includes('["workflow","disable"'); } catch { return false; }
+})();
+const after = (name) => (disabled && process.env[name + '_AFTER_DISABLE'] !== undefined
+  ? process.env[name + '_AFTER_DISABLE'] : process.env[name]);
 appendFileSync(process.env.STUB_LOG, JSON.stringify(args) + '\\n');
 const line = args.join(' ');
 const failOn = process.env.STUB_FAIL_ON;
@@ -59,13 +69,13 @@ if (failOn && line.startsWith(failOn)) {
   process.stderr.write((process.env.STUB_FAIL_STDERR || 'stub failure') + '\\nsecond line\\n');
   process.exit(4);
 }
-if (line.startsWith('run list')) process.stdout.write(process.env.STUB_RUN_LIST || '[]');
+if (line.startsWith('run list')) process.stdout.write(after('STUB_RUN_LIST') || '[]');
 if (line.startsWith('repo view')) process.stdout.write(process.env.STUB_REPO_VIEW || '{}');
 if (line.startsWith('run view')) process.stdout.write(process.env.STUB_RUN_VIEW || '{}');
 if (args[0] === 'api') {
   const parts = args[1].split('/');
   const id = parts[parts.length - 2];
-  const names = JSON.parse(process.env.STUB_ARTIFACTS || '{}')[id] || [];
+  const names = JSON.parse(after('STUB_ARTIFACTS') || '{}')[id] || [];
   process.stdout.write(JSON.stringify({ artifacts: names.map((name) => ({ name, expired: false })) }));
 }
 if (line.startsWith('run download')) {
@@ -1004,6 +1014,76 @@ test('poll dispatches a due branch whose harness stop run is older than its newe
   assert.deepEqual(workflowRuns(fx), [
     'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f chain=3',
   ]);
+});
+
+const workflowCalls = (fx) => joined(fx).filter((line) => line.startsWith('workflow '));
+const DISPATCH_B = 'workflow run harness-run.yml --ref feat_b -f action=run -f branch=feat_b -f engine=task -f resume=pause -f chain=3';
+
+/**
+ * feat_b completed and due; feat_a's job still running with no artifact at the first listing. After
+ * the disable, feat_b's dispatched run is listed and — when `aPaused` — feat_a's job has uploaded a
+ * usage-paused bundle and enabled the poller.
+ */
+function interleaveEnv(fx, aPaused) {
+  const a = ghRun(711, 'in_progress', 3, 'harness run feat_a');
+  const b = ghRun(702, 'completed', 2, 'harness run feat_b');
+  const env = syncEnv({
+    runs: [a, b],
+    artifacts: { 702: ['harness-state'] },
+    bundles: { 702: usageBundle(fx, 'b', true), 711: usageBundle(fx, 'a', false) },
+  });
+  env.STUB_RUN_LIST_AFTER_DISABLE = JSON.stringify([ghRun(703, 'queued', 4, 'harness run feat_b'), a, b]);
+  if (aPaused) env.STUB_ARTIFACTS_AFTER_DISABLE = JSON.stringify({ 702: ['harness-state'], 711: ['harness-state'] });
+  return env;
+}
+
+test('poll re-enables the poller when a finishing job uploaded a usage-paused bundle during the tick', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const result = await remoteRun(fx, ['poll'], interleaveEnv(fx, true));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(workflowCalls(fx), [DISPATCH_B, 'workflow disable harness-resume.yml', 'workflow enable harness-resume.yml']);
+  assert.match(result.stdout, /feat_a became waiting during this tick; re-enabled harness-resume\.yml/);
+  assert.deepEqual(notes(), []);
+});
+
+test('poll keeps the poller disabled for a job that is still running with no bundle', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const result = await remoteRun(fx, ['poll'], interleaveEnv(fx, false));
+  assert.equal(result.status, 0, result.stderr);
+  const toggles = workflowCalls(fx).filter((line) => !line.startsWith('workflow run'));
+  assert.equal(toggles[toggles.length - 1], 'workflow disable harness-resume.yml');
+  assert.deepEqual(workflowCalls(fx), [DISPATCH_B, 'workflow disable harness-resume.yml']);
+  assert.deepEqual(notes(), []);
+});
+
+test('poll whose re-enable fails sends one paused notification for the branch that became waiting, and exits 0', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const result = await remoteRun(fx, ['poll'], {
+    ...interleaveEnv(fx, true), STUB_FAIL_ON: 'workflow enable', STUB_FAIL_STDERR: 'HTTP 403: forbidden',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const sent = notes();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].event, 'paused');
+  assert.equal(sent[0].branch, 'feat_a');
+  assert.match(sent[0].detail, /HTTP 403: forbidden/);
+  assert.match(sent[0].detail, /autonomous-sdlc-harness:branch-resume feat_a/);
+});
+
+test('poll counts an unfinished run already carrying a usage-paused bundle as waiting, and never dispatches it', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const result = await remoteRun(fx, ['poll'], syncEnv({
+    runs: [ghRun(711, 'in_progress', 3, 'harness run feat_a')],
+    artifacts: { 711: ['harness-state'] },
+    bundles: { 711: usageBundle(fx, 'a', true) },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(workflowCalls(fx), []);
+  assert.deepEqual(notes(), []);
 });
 
 /** 2026-01-01T00:00:10Z, as an epoch second. */

@@ -139,14 +139,24 @@
 # fails CLOSED in `continue`: nothing sent, one `paused` naming gh's error.
 #
 # `poll`: `HARNESS_REMOTE_STOP` set exits 0 with nothing sent. Otherwise one
-# listing; each branch's newest `harness run <branch>` run decides. Skipped,
-# not waiting: a stopped branch, a run not yet `completed` (its own `continue`
-# will decide), a bundle that cannot be downloaded (one line), and anything but
-# `status: paused` / `pause_reason: usage` with an integer `usage_resume_at`.
-# Due (reset passed): re-dispatched under the same chain limit — a refusal is
-# one `failed` and not waiting; a dispatch that fails is one line and still
-# waiting. Reset ahead: waiting. No branch waiting after the tick: `gh workflow
-# disable WORKFLOW_RESUME_FILE`. Bundles download to
+# listing; each branch's newest `harness run <branch>` run decides. A run not
+# yet `completed` is never dispatched (its own `continue` will decide): with no
+# `harness-state` artifact it is skipped, not waiting; with one whose bundle
+# says `status: paused` / `pause_reason: usage` it is waiting, because the job
+# uploads before its `continue` step enables the poller; an artifact lookup or
+# download that fails for it is one line and waiting. For a `completed` run,
+# skipped, not waiting: a stopped branch, a bundle that cannot be downloaded
+# (one line), and anything but `status: paused` / `pause_reason: usage` with an
+# integer `usage_resume_at`. Due (reset passed): re-dispatched under the same
+# chain limit — a refusal is one `failed` and not waiting; a dispatch that
+# fails is one line and still waiting. Reset ahead: waiting. No branch waiting
+# after the tick: `gh workflow disable WORKFLOW_RESUME_FILE`, then one fresh
+# listing evaluated by the same rules with nothing sent or notified, skipping
+# the branches this tick dispatched — a due run that would be dispatched counts
+# as waiting there. A branch waiting now re-enables the poller, closing the
+# window in which a finishing job enabled it before the disable; a re-listing
+# that fails is one line and the poller stays disabled; a re-enable that fails
+# is one `paused` per waiting branch. Bundles download to
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` in the checkout,
 # skipped when that directory already holds its status.json.
 #
@@ -349,6 +359,11 @@
 #              scripts/remote-run.sh poll -> 0; `run download`, `workflow run
 #              ... -f resume=pause`, then `workflow disable harness-resume.yml`;
 #              with usage_resume_at far ahead -> no dispatch, no disable
+#   interleave that due run plus an `in_progress` `harness run feat_y` run
+#              with no artifact, and a stub that, once its log holds `workflow
+#              disable`, lists `harness-state` for feat_y's run with a
+#              paused / usage bundle -> the feat_x dispatch, `workflow disable`,
+#              then `workflow enable harness-resume.yml`; no feat_y dispatch
 #
 #   the job's reads: a `run list` answer whose run has `displayTitle` `harness
 #   pause feat_x` and `createdAt` `2026-01-01T00:00:10Z` (epoch 1767225610):
@@ -757,16 +772,27 @@ titled_runs() {
     | sort_by([.createdAt, .databaseId]) | reverse'
 }
 
-# has_bundle <run_id> — 0 when the run carries an unexpired state artifact.
-has_bundle() {
+# bundle_listed <run_id> — 0 when the run carries an unexpired state artifact,
+# 1 when it does not, 2 with GH_ERR set when the lookup failed. Never exits.
+bundle_listed() {
   local count
-  gh_call api "repos/{owner}/{repo}/actions/runs/$1/artifacts" || gh_fail "reading the artifacts of run $1 failed"
+  gh_call api "repos/{owner}/{repo}/actions/runs/$1/artifacts" || return 2
   count=$(printf '%s' "$GH_OUT" | jq --arg n "$STATE_ARTIFACT_NAME" \
-    '[.artifacts[]? | select(.name == $n and (.expired != true))] | length' 2>/dev/null) || {
-    GH_ERR="its artifact list is not the expected JSON"
-    gh_fail "reading the artifacts of run $1 failed"
-  }
+    '[.artifacts[]? | select(.name == $n and (.expired != true))] | length' 2>/dev/null)
+  case "$count" in
+    ''|*[!0-9]*) GH_ERR="its artifact list is not the expected JSON"; return 2 ;;
+  esac
   [ "$count" -gt 0 ]
+}
+
+# has_bundle <run_id> — bundle_listed, exiting 3 when the lookup failed.
+has_bundle() {
+  bundle_listed "$1"
+  case $? in
+    0) return 0 ;;
+    1) return 1 ;;
+  esac
+  gh_fail "reading the artifacts of run $1 failed"
 }
 
 set_or_fail() {
@@ -1259,35 +1285,70 @@ verb_continue() {
   return 0
 }
 
-# poll_branch <run_id> <state> — one branch's newest `harness run` run; the
-# global branch names it. Returns 0 when the branch is still waiting.
+# poll_fetch <run_id> — POLL_STATUS_FILE is the status.json of the run's
+# bundle, downloaded unless its directory already holds it. 1 on failure, with
+# one line said.
+POLL_STATUS_FILE=""
+poll_fetch() {
+  local id="$1" download
+  POLL_STATUS_FILE=""
+  download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$id") || {
+    echo "remote-run.sh: poll: cannot resolve '$root/harness.config.json' for $branch" >&2
+    return 1
+  }
+  POLL_STATUS_FILE="$download/$HR_REMOTE_STATUS_FILE"
+  [ ! -f "$POLL_STATUS_FILE" ] || return 0
+  if ! mkdir -p "$download"; then
+    echo "remote-run.sh: poll: cannot create '$download' for $branch" >&2
+    return 1
+  fi
+  if ! gh_call run download "$id" -n "$STATE_ARTIFACT_NAME" -D "$download"; then
+    echo "remote-run.sh: poll: the bundle of run $id ($branch) cannot be downloaded: $GH_ERR"
+    return 1
+  fi
+}
+
+# poll_usage_paused — 0 when POLL_STATUS_FILE says paused / usage.
+poll_usage_paused() {
+  local status reason
+  status=$(hr_remote_status_get "$POLL_STATUS_FILE" status) || status=""
+  reason=$(hr_remote_status_get "$POLL_STATUS_FILE" pause_reason) || reason=""
+  [ "$status" = paused ] && [ "$reason" = usage ]
+}
+
+# poll_branch <run_id> <state> <may_dispatch> — one branch's newest `harness
+# run` run; the global branch names it. Returns 0 when the branch is waiting.
+# With may_dispatch 0 nothing is sent and nothing notified: a due run that
+# would be dispatched counts as waiting, one that would be refused does not.
 poll_branch() {
-  local id="$1" state="$2" download status_file status reason at engine_value now
+  local id="$1" state="$2" may_dispatch="$3" at engine_value now
   remote_branch_stopped "$branch"
   case $? in
     0) echo "remote-run.sh: poll: $branch is stopped ($STOPPED_LINE); skipped"; return 1 ;;
     2) echo "remote-run.sh: poll: the stop-marker check for $branch failed ($GH_ERR); skipped"; return 1 ;;
   esac
-  [ "$state" = completed ] || return 1
-  download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$id") || {
-    echo "remote-run.sh: poll: cannot resolve '$root/harness.config.json'; $branch skipped" >&2
-    return 1
-  }
-  status_file="$download/$HR_REMOTE_STATUS_FILE"
-  if [ ! -f "$status_file" ]; then
-    if ! mkdir -p "$download"; then
-      echo "remote-run.sh: poll: cannot create '$download'; $branch skipped" >&2
-      return 1
+  if [ "$state" != completed ]; then
+    # Never dispatched from here: the job's own `continue` step enables the
+    # poller after its upload, and a later tick sees the run completed.
+    bundle_listed "$id"
+    case $? in
+      1) return 1 ;;
+      2) echo "remote-run.sh: poll: reading the artifacts of unfinished run $id ($branch) failed ($GH_ERR); counted as waiting"; return 0 ;;
+    esac
+    if ! poll_fetch "$id"; then
+      echo "remote-run.sh: poll: unfinished run $id ($branch) counted as waiting"
+      return 0
     fi
-    if ! gh_call run download "$id" -n "$STATE_ARTIFACT_NAME" -D "$download"; then
-      echo "remote-run.sh: poll: the bundle of run $id ($branch) cannot be downloaded; skipped: $GH_ERR"
-      return 1
-    fi
+    poll_usage_paused || return 1
+    echo "remote-run.sh: poll: $branch's unfinished run $id carries a usage-paused bundle; waiting"
+    return 0
   fi
-  status=$(hr_remote_status_get "$status_file" status) || status=""
-  reason=$(hr_remote_status_get "$status_file" pause_reason) || reason=""
-  at=$(hr_remote_status_get "$status_file" usage_resume_at) || at=""
-  [ "$status" = paused ] && [ "$reason" = usage ] || return 1
+  if ! poll_fetch "$id"; then
+    echo "remote-run.sh: poll: $branch skipped"
+    return 1
+  fi
+  poll_usage_paused || return 1
+  at=$(hr_remote_status_get "$POLL_STATUS_FILE" usage_resume_at) || at=""
   case "$at" in
     ''|*[!0-9]*) echo "remote-run.sh: poll: $branch is usage-paused with no readable usage_resume_at; skipped"; return 1 ;;
   esac
@@ -1296,26 +1357,83 @@ poll_branch() {
     echo "remote-run.sh: poll: $branch waits for its usage reset at $at"
     return 0
   fi
-  next_chain_var "$status_file"
+  next_chain_var "$POLL_STATUS_FILE"
   case $? in
-    1) notify failed "$branch" "Not resumed by the poller: chain unreadable in status.json."; return 1 ;;
-    2) notify failed "$branch" "Not resumed by the poller: chain limit reached ($NEXT_CHAIN over HARNESS_MAX_CHAIN $MAX_CHAIN)."; return 1 ;;
+    1) [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: chain unreadable in status.json."; return 1 ;;
+    2) [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: chain limit reached ($NEXT_CHAIN over HARNESS_MAX_CHAIN $MAX_CHAIN)."; return 1 ;;
   esac
-  engine_value=$(hr_remote_status_get "$status_file" engine) || engine_value=""
+  engine_value=$(hr_remote_status_get "$POLL_STATUS_FILE" engine) || engine_value=""
   if ! valid_engine "$engine_value"; then
-    notify failed "$branch" "Not resumed by the poller: engine '$engine_value' in status.json is not task, user_review or docs."
+    [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: engine '$engine_value' in status.json is not task, user_review or docs."
     return 1
+  fi
+  if [ "$may_dispatch" -eq 0 ]; then
+    echo "remote-run.sh: poll: $branch is due; the next tick dispatches it"
+    return 0
   fi
   if redispatch "$engine_value" "$NEXT_CHAIN"; then
     echo "remote-run.sh: poll: dispatched $branch --resume pause --chain $NEXT_CHAIN"
+    POLL_DISPATCHED="$POLL_DISPATCHED$branch "
     return 1
   fi
   echo "remote-run.sh: poll: dispatching $branch failed ($REDISPATCH_ERR); still waiting"
   return 0
 }
 
+# poll_pass <may_dispatch> — poll_branch over each branch's newest `harness run`
+# run in ALL_RUNS, skipping a branch this tick already dispatched. POLL_WAITING
+# lists the waiting branches, space-separated, and POLL_WAITING_COUNT counts
+# them. 1 when ALL_RUNS is unreadable.
+POLL_WAITING=""
+POLL_WAITING_COUNT=0
+POLL_DISPATCHED=" "
+poll_pass() {
+  local entries b id state
+  POLL_WAITING=""
+  POLL_WAITING_COUNT=0
+  entries=$(printf '%s' "$ALL_RUNS" | jq -r '
+    [.[] | select((.displayTitle // "") | startswith("harness run "))]
+    | group_by(.displayTitle)
+    | map(sort_by([.createdAt, .databaseId]) | last)
+    | .[] | [(.displayTitle | ltrimstr("harness run ")), (.databaseId | tostring), (.status // "")] | @tsv' 2>/dev/null) || {
+    GH_ERR="its run list is not the expected JSON"
+    return 1
+  }
+  while IFS=$'\t' read -r b id state; do
+    valid_branch "$b" || continue
+    case "$POLL_DISPATCHED" in *" $b "*) continue ;; esac
+    branch="$b"
+    if poll_branch "$id" "$state" "$1"; then
+      POLL_WAITING="$POLL_WAITING$b "
+      POLL_WAITING_COUNT=$((POLL_WAITING_COUNT + 1))
+    fi
+  done <<EOF
+$entries
+EOF
+}
+
+# poll_recheck — after the disable: one fresh listing, evaluated without
+# dispatching; re-enables the poller when a branch became waiting meanwhile.
+poll_recheck() {
+  local b
+  ALL_RUNS_LISTED=0
+  if ! list_all_runs || ! poll_pass 0; then
+    echo "remote-run.sh: poll: the re-check after disabling $WORKFLOW_RESUME_FILE could not list the runs ($GH_ERR); it stays disabled"
+    return 0
+  fi
+  [ "$POLL_WAITING_COUNT" -gt 0 ] || return 0
+  if gh_call workflow enable "$WORKFLOW_RESUME_FILE"; then
+    for b in $POLL_WAITING; do
+      echo "remote-run.sh: poll: $b became waiting during this tick; re-enabled $WORKFLOW_RESUME_FILE"
+    done
+    return 0
+  fi
+  for b in $POLL_WAITING; do
+    notify paused "$b" "Auto-resume is unavailable: re-enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $b after the usage reset."
+  done
+}
+
 verb_poll() {
-  local entries b id state waiting=0
   if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
     echo "remote-run.sh: poll: remote stop is set; nothing dispatched"
     return 0
@@ -1326,29 +1444,14 @@ verb_poll() {
   fi
   hr_remote_names_var
   list_all_runs || gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
-  entries=$(printf '%s' "$ALL_RUNS" | jq -r '
-    [.[] | select((.displayTitle // "") | startswith("harness run "))]
-    | group_by(.displayTitle)
-    | map(sort_by([.createdAt, .databaseId]) | last)
-    | .[] | [(.displayTitle | ltrimstr("harness run ")), (.databaseId | tostring), (.status // "")] | @tsv' 2>/dev/null) || {
-    GH_ERR="its run list is not the expected JSON"
-    gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
-  }
-  while IFS=$'\t' read -r b id state; do
-    valid_branch "$b" || continue
-    branch="$b"
-    if poll_branch "$id" "$state"; then
-      waiting=$((waiting + 1))
-    fi
-  done <<EOF
-$entries
-EOF
-  if [ "$waiting" -gt 0 ]; then
-    echo "remote-run.sh: poll: $waiting branch(es) still waiting; $WORKFLOW_RESUME_FILE stays enabled"
+  poll_pass 1 || gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
+  if [ "$POLL_WAITING_COUNT" -gt 0 ]; then
+    echo "remote-run.sh: poll: $POLL_WAITING_COUNT branch(es) still waiting; $WORKFLOW_RESUME_FILE stays enabled"
     return 0
   fi
   gh_call workflow disable "$WORKFLOW_RESUME_FILE" || gh_fail "disabling $WORKFLOW_RESUME_FILE failed"
   echo "remote-run.sh: poll: no branch is waiting; disabled $WORKFLOW_RESUME_FILE"
+  poll_recheck
 }
 
 verb_pause_requested() {
