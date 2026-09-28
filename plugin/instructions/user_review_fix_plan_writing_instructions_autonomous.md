@@ -129,8 +129,8 @@ If a hook fails, surface the error — do not bypass it with a hook-skip flag an
 
 **Record the run mode on the create and re-seed paths.** All three cases above carry it, and the case decision itself is untouched — this adds a block to what is written, never a change to what decides between the three:
 
-- **create** — the `## Run mode` block is written for the active round — its `phases:` line included — in the same write as the template, and `R4` is seeded `[-]` rather than `[ ]` on **either** ground: `qa` among the recorded skipped ids, or `phases.qa` `false` on that recorded `phases:` line;
-- **re-seed** — the same, both grounds re-evaluated **and re-recorded** for the **new** round in the same write as the fresh all-`[ ]` `R1–R5`, so the new round inherits the run mode and the configuration as they stand now instead of the prior round's markers;
+- **create** — the `## Run mode` block is written for the active round — its `phases:` line included — in the same write as the template, and `R4` is seeded `[-]` rather than `[ ]` on **any** of three grounds: `qa` among the recorded skipped ids, `phases.qa` `false` on that recorded `phases:` line, or `qa` on the recorded `remote-skipped:` line, written from this round's launch prompt's remote-job clause;
+- **re-seed** — the same, all three grounds re-evaluated **and re-recorded** for the **new** round in the same write as the fresh all-`[ ]` `R1–R5`, so the new round inherits the run mode, the configuration and its own execution environment as they stand now instead of the prior round's markers — a round run locally after a remote one is not excluded;
 - **same-round resume** — nothing is rewritten: the existing "read, do NOT reset" rule stands for the block exactly as for every entry around it, and the wrapper's exit 3 still means no commit.
 
 The block's shape, the three markers, the `[-]`-eligible set and the seeding rule are canonical-doc §1.3–§1.5's and none of them is restated here; what a directive id is belongs to `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md`.

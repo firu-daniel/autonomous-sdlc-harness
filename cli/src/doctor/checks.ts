@@ -2317,10 +2317,13 @@ const DAEMON_PATH_CHECK: Check = {
  *
  * **Every finding is reported, and the grade is the worst of them.** Two `fail`s: no
  * `harness-run.yml`, because no remote run can be dispatched; and no `gh`, because the watcher
- * dispatches through it. Two `warn`s: no `harness-resume.yml`, because a usage-paused hosted run then
- * waits for `/autonomous-sdlc-harness:branch-resume`; and a `harness-run.yml` that
+ * dispatches through it. Three `warn`s: no `harness-resume.yml`, because a usage-paused hosted run then
+ * waits for `/autonomous-sdlc-harness:branch-resume`; a `harness-run.yml` that
  * `origin/<defaultBranch>` does not carry, because GitHub dispatches only a workflow its default
- * branch has — the run starts once it is pushed, so nothing is broken here.
+ * branch has — the run starts once it is pushed, so nothing is broken here; and `phases.qa` true,
+ * because a remote run skips the interactive-test phase and the branch still reaches review — the
+ * phase is then owed a local run. It needs no GitHub answer, so it is asked here rather than in
+ * {@link REMOTE_GITHUB_CHECK}.
  *
  * `gh` is resolved on **this shell's** `PATH`. Whether the installed daemon's `PATH` reaches it is
  * {@link DAEMON_PATH_CHECK}'s question, answered there through {@link requiredBinaries}' conditional
@@ -2373,6 +2376,12 @@ const REMOTE_EXECUTION_CHECK: Check = {
     if (!resolvesOnPath(gh)) {
       failures.push(
         `${gh} does not resolve on this shell's PATH, and the watcher dispatches every remote run through it (${REMOTE_RUN_SCRIPT}): install the GitHub CLI (https://cli.github.com) and run \`gh auth login\`, or point ${GH_CLI_VARIABLE} at it`,
+      );
+    }
+
+    if (ctx.config.phases?.qa === true) {
+      warnings.push(
+        "phases.qa is true, but a remote run skips the interactive-test phase — GitHub Actions jobs have no browser wiring, application dependencies or QA credentials for it (docs/remote-execution.md → §3, The interactive-test phase): run /autonomous-sdlc-harness:branch-qa-test <branch> locally before merging a remote run's branch",
       );
     }
 

@@ -5283,6 +5283,49 @@ test('the remote-execution check grades local evidence and fails only what stops
     const line = reportLine(stderr, 'warn', 'remote-execution');
     assert.ok(line?.includes('GitHub dispatches only a workflow its default branch carries'), stderr);
   });
+
+  const QA_SKIP = 'a remote run skips the interactive-test phase';
+  const setQa = async (dir, value) => {
+    const edit = await runCli(dir, ['config', 'set', 'phases.qa', value]);
+    assert.equal(edit.status, 0, `config set phases.qa ${value}\n${edit.stdout}\n${edit.stderr}`);
+  };
+
+  await t.test('on, with phases.qa true, warns that the QA phase is skipped and names branch-qa-test', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    await setQa(dir, 'true');
+    const stub = await ghStub(subtest);
+
+    const { stdout, stderr } = await doctorWithStub(dir, stub);
+
+    const line = reportLine(stderr, 'warn', 'remote-execution');
+    assert.ok(line?.includes(QA_SKIP), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('/autonomous-sdlc-harness:branch-qa-test'), line);
+  });
+
+  await t.test('on, with phases.qa false, passes without the QA warning', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    await setQa(dir, 'false');
+    const stub = await ghStub(subtest);
+
+    const { stdout, stderr } = await doctorWithStub(dir, stub);
+
+    const line = reportLine(stdout, 'pass', 'remote-execution');
+    assert.ok(line !== undefined && !line.includes(QA_SKIP), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('local, with phases.qa true, raises nothing new', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    await setQa(dir, 'true');
+    const stub = await ghStub(subtest);
+
+    const { stdout, stderr } = await doctorWithStub(dir, stub);
+
+    const line = reportLine(stdout, 'pass', 'remote-execution');
+    assert.ok(line?.includes('local execution; remote execution is off'), `${stdout}\n${stderr}`);
+    assert.ok(!`${stdout}\n${stderr}`.includes(QA_SKIP), `${stdout}\n${stderr}`);
+  });
 });
 
 test('daemon-path names gh when remote execution is on, and not when it is off', { skip: NO_BACKEND }, async (t) => {

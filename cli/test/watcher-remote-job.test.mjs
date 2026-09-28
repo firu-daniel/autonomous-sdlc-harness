@@ -510,6 +510,35 @@ test('auto-resume: bounded, and reset by a user action', async (t) => {
   });
 });
 
+test('phases.qa: a job tells the task and user_review engines the QA phase is skipped, and says so on completion', async (t) => {
+  const SKIP_CLAUSE = /executes in a GitHub Actions job \(execution: github-actions\), where the interactive-test phase is unsupported/;
+  const SKIP_DETAIL = /interactive tests skipped \(unsupported on GitHub Actions\): run \/autonomous-sdlc-harness:branch-qa-test feat_x locally/;
+
+  for (const qa of [true, false]) {
+    await t.test(`phases.qa ${qa}`, async (t) => {
+      const j = await createJobFixture(t);
+      if (j === null) return;
+      const configPath = join(j.dir, 'harness.config.json');
+      const config = JSON.parse(readFileSync(configPath, 'utf8'));
+      await writeFile(configPath, `${JSON.stringify({ ...config, phases: { ...config.phases, qa } }, null, 2)}\n`, 'utf8');
+
+      for (const engine of ['task', 'user_review', 'docs']) {
+        const before = j.notifications().length;
+        const result = await j.job([j.branch, engine, 'none']);
+        assert.equal(result.status, 0, `${engine}: ${result.stdout}\n${result.stderr}`);
+        assert.equal(lastLine(result.stdout), 'job: completed stop', engine);
+
+        const expectSkip = qa && engine !== 'docs';
+        assert.equal(SKIP_CLAUSE.test(j.prompts().at(-1)), expectSkip, `${engine}: prompt clause`);
+        const completed = j.notifications().slice(before).filter((n) => n.event === 'completed');
+        assert.equal(completed.length, 1, `${engine}: one completed notification`);
+        assert.equal(SKIP_DETAIL.test(completed[0].detail ?? ''), expectSkip, `${engine}: completed detail`);
+      }
+      j.assertLaneUntouched();
+    });
+  }
+});
+
 test('status prints the four job-mode tunables with their defaults', async (t) => {
   const j = await createJobFixture(t);
   if (j === null) return;

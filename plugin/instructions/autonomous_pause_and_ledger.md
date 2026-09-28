@@ -63,6 +63,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - skipped: <directive ids, comma-separated, or `none`>
 - ignored: <verbatim directive> (<reason>) — one line per ignored directive; omit the line entirely when there are none
 - phases: parity=<true|false>, qa=<true|false>, docs=<true|false>   (from harness.config.json, read at this write; an unset flag is false)
+- remote-skipped: <run-mode directive ids this run's execution environment cannot run — today only `qa` — comma-separated, or `none`>   (from the launch prompt's remote-job clause, read at this write; `none` for a local run)
 
 ## Planning
 - [ ] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
@@ -94,6 +95,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - skipped: <directive ids, comma-separated, or `none`>
 - ignored: <verbatim directive> (<reason>) — one line per ignored directive; omit the line entirely when there are none
 - phases: parity=<true|false>, qa=<true|false>, docs=<true|false>   (from harness.config.json, read at this write; an unset flag is false)
+- remote-skipped: <run-mode directive ids this run's execution environment cannot run — today only `qa` — comma-separated, or `none`>   (from the launch prompt's remote-job clause, read at this write; `none` for a local run)
 
 ## Fix planning
 - [ ] R1. Fix plan written & converged (parity + architecture gates PASS)
@@ -112,13 +114,15 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
   with no file, say — its `[x]` asserts that one of them was reached, **not which**: *which* is answerable from
   the branch, the artifact being there or not, whereas *whether the phase ran at all* is answerable only here,
   and that is the distinction this marker set exists to carry.
-- `[-]` — **skipped before the run began.** The phase never ran, no artifact exists, and none is owed. Two
-  provenances put an entry here and there is no third: an **authored run-mode directive** naming the phase,
-  and a **`phases.*` flag that is `false`** in `harness.config.json`. Both are knowable at ledger-creation
-  time, because the ledger is created after the configuration has been read. Both are also **recorded** at
-  that moment — the run mode on the block's `skipped:` line, the configuration on its `phases:` line — so a
-  later reader, and the Done summary's arms, read a `[-]`'s provenance off the ledger rather than re-deriving
-  it from a file that may have changed since.
+- `[-]` — **skipped before the run began.** The phase never ran, no artifact exists, and none is owed. Three
+  provenances put an entry here and there is no fourth: an **authored run-mode directive** naming the phase,
+  a **`phases.*` flag that is `false`** in `harness.config.json`, and an **execution-environment exclusion**
+  — the run executes where the phase cannot run, which the launch prompt's remote-job clause states. All
+  three are knowable at ledger-creation time, because the ledger is created after the configuration and the
+  launch prompt have been read. All three are also **recorded** at that moment — the run mode on the block's
+  `skipped:` line, the configuration on its `phases:` line, the execution environment on its
+  `remote-skipped:` line — so a later reader, and the Done summary's arms, read a `[-]`'s provenance off the
+  ledger rather than re-deriving it from a file or a prompt that may have changed since.
 
 `[-]` is admissible on **exactly** the entries a run mode **or a `phases.*` flag** can switch off — `A1.5g`,
 `A1.5f`, `A2g`, `A2f`, `P2` and `E` in the task-engine template, and `R4` in the user-review-engine template
@@ -131,12 +135,15 @@ and no flag gates, and `P1` and `R1` are the **gate-bearing** entries — each c
 flips. The **docs** phase, which the `docs` id and `phases.docs` each switch off, has **no ledger entry of
 its own**, so there is nothing to mark for it.
 
-Membership is **unchanged** by the second provenance: the three `phases.*` flags reach a subset of what the
-four ids reach. Which switch reaches which entry:
+Membership is **unchanged** by the second and third provenances: the three `phases.*` flags reach a subset of
+what the four ids reach, and the `remote-skipped:` line reaches a subset of what `qa` reaches. Which switch
+reaches which entry:
 1. `parity` / `phases.parity` → `A1.5g`, `A1.5f`.
 2. `architecture` → `A2g`, `A2f`. **Run mode only** — the configuration schema declares no `architecture`
    flag, so this pair has one provenance where the others have two.
 3. `qa` / `phases.qa` → `P2` and `E` in the task-engine template, and `R4` in the user-review-engine one.
+   `remote-skipped: qa` → `E` and `R4` only, **never `P2`**: the UI-test plan is what the later local QA run
+   executes, so in a remote job the `P2` loop still runs and flips `[x]`.
 4. `docs` / `phases.docs` → nothing, the docs phase having no ledger entry of its own.
 
 Two mechanisms, so a reader never has to guess which applies:
@@ -152,24 +159,38 @@ Two mechanisms, so a reader never has to guess which applies:
   applies. `R4` — the QA entry the `qa` id and `phases.qa` each switch off whole — is the **one**
   `[-]`-eligible entry in that template.
 
-`P2` is in the seeded set and **not** in the passed-by-exclusion one, under **either** provenance: it names
+`P2` is in the seeded set and **not** in the passed-by-exclusion one, under **either** the run-mode or the
+`phases.qa` provenance (the execution-environment one never reaches it, item 3 above): it names
 the UI-test-plan loop *itself*, which `qa` and `phases.qa` each switch off whole, so under either exclusion
 nothing ever flips it — and a `P2` left `[ ]` would make §1.7's first-`[ ]` rule land the resume squarely on a
 phase that cannot run, the exact defect the third marker removes.
 
-**Keep the three provenances apart.** `E` and `R4` already read `[x] … / no_ui`, and `P2` `… — or no_ui`.
+**Keep the four provenances apart.** `E` and `R4` already read `[x] … / no_ui`, and `P2` `… — or no_ui`.
 `no_ui` is the **flow's own finding** that there is nothing to test; a **run mode** is an **authored**
 exclusion decided for this branch; a **`phases.*` flag** is a **repository-level** exclusion that holds for
-every branch of every run. The first is the flow's own and is not a `[-]`; the second and third both are.
-All three are non-re-entrant, and each owes the reader a **different disclosure** — which the flow's Done
-summary words, not this file.
+every branch of every run; a **remote-job exclusion** is an **execution-environment** exclusion that holds
+for the run (or, in the user-review engine, the round) whose ledger recorded it — a resume keeps it (§1.4),
+and only a fresh user-review round launched locally, or a local QA-testing run of the branch, runs the phase.
+The first is the flow's own and
+is not a `[-]`; the other three are. All four are non-re-entrant, and each owes the reader a **different
+disclosure** — which the flow's Done summary words, not this file. The remote-job exclusion's disclosure
+also owes the reader **a local route to close the gap**, and it is worded by the autonomous fork that drives
+the run, not by this file and not by a core.
 
 **The `## Run mode` block** carries the run mode itself **and, on its `phases:` line, the configuration the
-same write seeded from**. It deliberately holds **no checkboxes**, so §1.7's first-`[ ]` scan cannot mistake
-any of its lines for a phase entry. Both
-data lines are written **affirmatively even when there is nothing to exclude** (`skipped: none`; every
-`phases.*` recorded, false included), which is what keeps *this branch has no run mode* distinguishable from
-*nobody read one*. For what a directive id is, which ids exist, and what makes a directive ignored, see
+same write seeded from, and on its `remote-skipped:` line, the execution-environment exclusion the same write
+seeded from**. It deliberately holds **no checkboxes**, so §1.7's first-`[ ]` scan cannot mistake
+any of its lines for a phase entry. All three
+data lines — `skipped:`, `phases:`, `remote-skipped:` — are written **affirmatively even when there is nothing
+to exclude** (`skipped: none`; every `phases.*` recorded, false included; `remote-skipped: none`), which is
+what keeps *this branch has no run mode* distinguishable from *nobody read one*, and *this run executed where
+QA cannot run* distinguishable from *nobody recorded where it ran*. A ledger created before the
+`remote-skipped:` line existed carries none, and a reader treats that absence as `none`. That line carries
+**run-mode directive ids** (`${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md`'s vocabulary),
+never ledger entry ids such as `E` or `R4`, and the only id it can carry today is `qa`: every reader of it —
+§1.3 item 3, §1.4's seeding, the autonomous forks' Done-summary override — keys on that literal. §1.8's completion
+check compares only the `phases:` line with the live `harness.config.json`: the `remote-skipped:` line has no
+live counterpart, so it is never a §1.8 disagreement. For what a directive id is, which ids exist, and what makes a directive ignored, see
 `${CLAUDE_PLUGIN_ROOT}/instructions/run_mode_instructions.md` — none of that is restated here.
 
 **Planning entries are coarse on purpose.** Planning converges as a unit (a revision re-runs
@@ -186,11 +207,14 @@ convergence, not the iteration count (the existing `>= 5` caps own that).
 **Task engine — the `planner fork's Setup` creates the ledger once per branch, idempotently.** If
 `<state_dir>/flow_progress/<branch>_progress.md` already exists (a resume), do NOT recreate or reset it — read
 it. The task engine has exactly one ledger per branch and it only ever grows monotonically. On the create
-path the fork writes the `## Run mode` block — the run mode it read at its own Setup, and on the `phases:`
-line the flags it read from `harness.config.json` — and, in that **same write**, seeds a `[-]`-eligible entry
-as `[-]` rather than `[ ]` when **either** a `skipped:` id names it **or** the `phases.*` flag gating it is
-`false` in `harness.config.json` (§1.3 maps switch to entry). The
-configuration is read before the ledger is written, so both provenances are known at that one write. Because a
+path the fork writes the `## Run mode` block — the run mode it read at its own Setup, on the `phases:`
+line the flags it read from `harness.config.json`, and on the `remote-skipped:` line the phase ids the launch
+prompt's remote-job clause excludes (`none` when it carries no such clause) — and, in that **same write**,
+seeds a `[-]`-eligible entry as `[-]` rather than `[ ]` when a `skipped:` id names it, **or** the `phases.*`
+flag gating it is `false` in `harness.config.json`, **or** the recorded `remote-skipped:` line names `qa` and
+the entry is `E` — never `P2` (§1.3 maps switch to entry). The configuration and the launch prompt are read
+before the ledger is written, so all three provenances are known at that one write, and a resume, which
+re-reads the recorded block rather than the prompt, keeps the `remote-skipped:` line. Because a
 resume does **not** re-read or reset the ledger (the rule just above), the block recorded at creation is what
 governs the branch from then on.
 
@@ -208,10 +232,12 @@ existing ledger's header round to the **active round** (the latest `<branch>_rev
 §1.7 skips the entire fix cycle — **silently voiding the round**.
 
 On the **create** and **re-seed** paths alike the `## Run mode` block is derived for the active round from the
-run mode the fork read at its Setup and the flags it read from `harness.config.json`, in the same write as the
-fresh all-`[ ]` `R1–R5`, and `R4` is seeded `[-]` when **either** a `skipped:` id names it **or** `phases.qa`
-is `false` in `harness.config.json`. On the **same-round resume** path the block is read, never rewritten —
-like every entry around it.
+run mode the fork read at its Setup, the flags it read from `harness.config.json` and **that round's** launch
+prompt's remote-job clause, in the same write as the fresh all-`[ ]` `R1–R5`, and `R4` is seeded `[-]` when a
+`skipped:` id names it, **or** `phases.qa` is `false` in `harness.config.json`, **or** the recorded
+`remote-skipped:` line names `qa`. Because the re-seed re-records that line from the round's own launch
+prompt, a round run locally after a remote one is not excluded. On the **same-round resume** path the block
+is read, never rewritten — like every entry around it.
 
 **Tie-break.** Where the prompt's current run mode diverges from the recorded block — a prompt edited
 mid-branch — **the recorded block wins**, and the divergence is reported on the run's disclosure line.
@@ -299,7 +325,7 @@ see the warning above). This makes every flip safe to re-run on a resumed run.
 ### 1.7 Resume-from-ledger (every fork, on every (re-)entry)
 1. Read `<state_dir>/flow_progress/<branch>_progress.md`.
 2. The **first `[ ]` phase entry** is the resume point. A `[-]` entry is not a `[ ]` entry, so a phase
-   excluded before the run began — by a run mode or by a `phases.*` flag — is provably never the resume point
+   excluded before the run began — by a run mode, a `phases.*` flag or the execution environment — is provably never the resume point
    — not on this entry and not on any later one.
 3. **Skip every `[x]` and every `[-]` phase** — no reviewer re-dispatch, no review regeneration, no
    re-commit.

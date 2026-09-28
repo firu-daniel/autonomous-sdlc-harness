@@ -627,7 +627,7 @@ Record all four, the `claude` line being the version leg (v) ran under. Record t
 
 **Gate 11 — docs-retrieval relevance floor.** `scripts/run-gates.sh` runs it as `node evals/docs-retrieval/check-floor.mjs`, which drives the docs-retrieval eval over the committed **`fixture-catalog`** corpus — that corpus alone — for every arm the eval's arm table has a search mode for, and grades each arm's recall@5 and MRR against the values recorded in `evals/docs-retrieval/floor.json`. It loads the **real** embedder and reranker: `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` is set nowhere on that path and the eval refuses to produce a number while it is set, so unlike every retrieval case in gate 4 this gate exercises the models gate 10 installs. **A failure means retrieval got worse**: a measured figure below a recorded floor, on a corpus that moves only when this eval moves, so the change is a property of the retrieval code rather than of the documents. **An empty model cache is reported, not counted as a failure** — the module exits with a status reserved for that case, the script prints it as `BLOCKED` and lists it with the gates it cannot run, and it pushes the gate onto neither the passes nor the failures, so a machine without the hand-provisioned cache still reads a true green. A shortfall is not exempt: it fails the script. The floor policy itself — the margin between a measured figure and its recorded floor, why the graded corpus is `fixture-catalog` alone, and when a floor is re-recorded — is stated in `docs/retrieval-eval.md` → `## The regression floor`, which `floor.json`'s own `see` field names.
 
-**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a throwaway **private** repository created for the purpose — never this repository, for the reason gate 2 gives — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Nine observations, after a setup that is itself the first.
+**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a throwaway **private** repository created for the purpose — never this repository, for the reason gate 2 gives — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Ten observations, after a setup that is itself the first.
 
 **Setup.**
 
@@ -716,6 +716,30 @@ gh secret set ANTHROPIC_API_KEY
 ```
 
 With `CLAUDE_CODE_OAUTH_TOKEN` still set, drop a task and let it run to its first session. Sync it, then read the session's stream log under `<stateDir>/autonomous_logs/`. Record the `system` event the session opens with, verbatim, and which credential it names. `docs/remote-execution.md` → `## 9. Credentials and billing` states that `ANTHROPIC_API_KEY` wins; this observation confirms or corrects it.
+
+**(x) The interactive-test phase is skipped.** Turn the phase on in the scratch repository, re-run `init`, and push both. The re-run is not optional: turning the phase on changes the files `init` writes (at least `.gitignore`), and the job fails at its `init --plugin-root-entries` step when that step changes a tracked file.
+
+```
+npx --yes autonomous-sdlc-harness@<version> config set phases.qa true
+```
+
+```
+npx --yes autonomous-sdlc-harness@<version> init
+```
+
+```
+git add harness.config.json <each path the init run reported writing>
+```
+
+```
+git commit -m "Turn on the interactive-test phase"
+```
+
+```
+git push origin <default branch>
+```
+
+Then drop a small task and let it run to the end. Passes when the run ends at "ready for review" with its ledger's `E` entry `[-]` and `P2` `[x]`, the ledger's `## Run mode` block carrying `remote-skipped: qa`, the Done summary carrying the `QA (Phase E): skipped` line, and the `completed` notification's detail naming the skip and `/autonomous-sdlc-harness:branch-qa-test <branch>` (`docs/remote-execution.md` → `## 3.` → *The interactive-test phase*). Record the ledger's `## Run mode` block and the notification text verbatim.
 
 **Teardown.** Deregister the self-hosted runner, then delete the scratch repository with `gh repo delete <owner>/<scratch-repo>`.
 

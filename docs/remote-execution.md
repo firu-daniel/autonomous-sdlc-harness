@@ -29,7 +29,7 @@ From a drop to a pushed branch:
 5. **The run.** `autonomous-watcher.sh job <branch> <engine> <resume>` launches one session through the watcher's own `spawn_engine` and supervises it (§3). It writes `status.json` with decision `continue` before the launch, so a job killed mid-run still leaves a bundle that says *continue*.
 6. **The end of the job.** Under `always()`: `push-branch.sh`, then `remote-run.sh save` and the upload of the bundle as the Actions artifact `harness-state`. Under `!cancelled()`: `remote-run.sh continue`. Under `cancelled()`: a best-effort `failed` notification.
 7. **The decision.** `continue` reads the bundle's `decision`. `continue` re-dispatches the same workflow with `resume: pause` and `chain` one higher; `wait-poller` enables `harness-resume.yml`; `stop` does nothing, because job mode has already notified.
-8. **Done.** A run that completes ends with status `completed`, decision `stop`, a `completed` notification and its branch pushed. No pull request is opened (§5).
+8. **Done.** A run that completes ends with status `completed`, decision `stop`, a `completed` notification and its branch pushed. No pull request is opened (§5). With `phases.qa` on, the interactive-test phase was skipped rather than run, and the branch still owes it a local run (§3, *The interactive-test phase*).
 
 ```mermaid
 flowchart LR
@@ -167,6 +167,22 @@ When the usage gate pauses a run, the job has two ways to resume it, and chooses
 **The enable is unverified.** Whether `GITHUB_TOKEN` with `actions: write` may enable and disable a workflow was not confirmed (§6). If the enable fails, the job's `paused` notification says auto-resume is unavailable, and the run waits for `/autonomous-sdlc-harness:branch-resume`. It never falls back on the local watcher.
 
 **Not built:** an external scheduler calling `repository_dispatch` at the exact reset time adds a dependency outside GitHub, and an environment wait timer is fixed per environment rather than per run. A `schedule` trigger cannot serve as a one-shot timer either: it is a recurring cron read from the default branch, and scheduling a specific time would mean committing a cron line to a protected branch.
+
+### The interactive-test phase
+
+**Decision:** a remote run skips the interactive-test phase — Phase E of a task run, Phase QA (`R4`) of a user-review round — and still ends at "ready for review". **Reason:** the job can run none of what the phase needs. The runner has no display, and `cli/templates/repo/mcp.json` declares both browser servers (`playwright`, `chrome-devtools`) with no headless flag. The job installs none of the application's own dependencies beyond `setup-worktree.sh`, so `commands.devServer` may not start. And the gitignored `qa.credentialsPath` file is not in the job, so every auth-gated test would report `blocked`. The UI-test plan is still written, so the local run has a plan to execute. A docs run has no such phase and is unaffected.
+
+**What the run records.** With `phases.qa` true, job mode adds one clause to the task and `user_review` launch prompts (`autonomous-watcher.sh` → the header's `JOB MODE` block), and a local launch gets none. From it:
+
+- the ledger's `## Run mode` block carries `remote-skipped: qa`, and the phase's entry (`E`, or `R4`) is seeded `[-]`, while a task run's UI-test plan entry `P2` still runs and flips `[x]`. The line's contract is `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3`. It binds this run only: a later round of the same branch run locally re-records the line and is not excluded;
+- the Done summary's QA line reads `QA (Phase E): skipped — this run executed on GitHub Actions …` (`QA (Phase QA): … this round …` for a user-review round) and ends by naming the local route. Each autonomous fork's `## Override K — remote-job QA skip (autonomous fork only)` owns that wording;
+- the single `completed` notification's detail reads `ready for review; interactive tests skipped (unsupported on GitHub Actions): run /autonomous-sdlc-harness:branch-qa-test <branch> locally`. No second event is sent.
+
+`doctor`'s `remote-execution` check warns whenever remote execution is on and `phases.qa` is true, so a plain `doctor`, `doctor --check-github` and the job's own `Preflight with doctor` step all print it. It is a `warn`, so it fails none of them.
+
+**The local route.** Run `/autonomous-sdlc-harness:branch-qa-test <branch>` before merging, either in the mirror after `remote-run.sh sync` or in any checkout of the pushed branch.
+
+**Not built:** running the phase in the job. It needs three things: the browser servers launched headless in job mode (or wrapped in `xvfb-run`), a step that installs the adopter application's own dependencies, and a secret written to `qa.credentialsPath`. This repository runs with `phases.qa` false, so none of the three could be exercised here, and each would ship unverified.
 
 ---
 
