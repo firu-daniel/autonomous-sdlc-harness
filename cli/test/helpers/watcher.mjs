@@ -12,9 +12,11 @@
  *
  * ## Three non-obvious choices
  *
- * 1. **The stub sleeps before its body runs.** The pass writes the session's `pid` to the registry
- *    right after spawning it, and the session's exit classification writes the same file; both are
- *    read-modify-rename, so a stub that exited at once could lose one of the two updates.
+ * 1. **The stub sleeps before its body runs.** Not for the registry: its writes are serialized, so
+ *    the pass's post-spawn `pid` write and the session's exit classification both survive whichever
+ *    lands first. The sleep keeps a session launched in a pass `running` for the rest of that pass:
+ *    `tick` goes on to `resume_paused_runs`, the inbox pass and `lane_release_if_idle`, which all
+ *    read the record's status, and a stub that exited at once would be classified under them.
  * 2. **The notifier is replaced, not stubbed through an environment variable.** The recorder is the
  *    file the watcher executes, so no desktop banner or push can leave the machine whatever a host's
  *    push settings hold.

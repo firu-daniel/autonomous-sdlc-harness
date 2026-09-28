@@ -30,6 +30,7 @@ import { join } from 'node:path';
 import { before, after, test } from 'node:test';
 
 import { createFixture, runBash, runCli } from './helpers/fixture.mjs';
+import { createWatcherFixture } from './helpers/watcher.mjs';
 
 /** The library's path under the default `scriptsDir` — the contract, spelled out once. */
 const LIB_PATH = 'scripts/lib/harness-run-lib.sh';
@@ -43,6 +44,9 @@ const PAIR_WRITES = 40;
 /** Case (d)'s reader count per round, and its round count (choice 2 in the header). */
 const READERS = 24;
 const CREATE_ROUNDS = 5;
+
+/** The watcher-pair case's round count: each round races the usage gate's pair against a pause. */
+const WATCHER_PAIR_ROUNDS = 25;
 
 /** A branch with a slash, so a record keyed on a path fragment would show. */
 const BRANCH = 'feat/x';
@@ -184,5 +188,39 @@ test('an odd count of key/value arguments, or none, writes nothing', async () =>
     const set = await libCall('hr_registry_set "$@"', [file, ...args]);
     assert.equal(set.status, 1, `hr_registry_set ${args.join(' ')} exited ${set.status}`);
     assert.equal(readFileSync(file, 'utf8'), unchanged, `hr_registry_set ${args.join(' ')} changed the registry`);
+  }
+});
+
+test("the usage gate's paired write and a local pause classification both survive, every round", async (t) => {
+  const fixture = await createWatcherFixture(t);
+  if (fixture === null) return;
+  const watcher = join(fixture.dir, 'scripts/autonomous-watcher.sh');
+  const logPath = join(fixture.dir, 'sdlc-harness', 'autonomous_logs', `${fixture.branch}.log`);
+  writeFileSync(join(fixture.dir, 'sdlc-harness', 'PAUSE_ACK'), '');
+  const env = {
+    AUTO_TAIL_TERMINAL: '0',
+    USAGE_LANE_STATE_ENABLED: '0',
+    USAGE_LANE_LOCK_ENABLED: '0',
+    HOME: join(fixture.dir, 'home'),
+    XDG_CONFIG_HOME: join(fixture.dir, 'home', '.config'),
+    XDG_STATE_HOME: join(fixture.dir, 'home', '.local', 'state'),
+  };
+  // The watcher header's REPRO form: source the written watcher, then call one of its functions.
+  const watcherCall = (script, args) =>
+    runBash(fixture.dir, ['-c', `. "$1" status >/dev/null; shift; ${script}`, '_', watcher, ...args], env);
+
+  for (let round = 0; round < WATCHER_PAIR_ROUNDS; round += 1) {
+    await fixture.seedRecord({ status: 'running' });
+    const resumeAt = String(2_000_000_000 + round);
+    const [gate, classify] = await Promise.all([
+      watcherCall('registry_set "$1" paused_by usage usage_resume_at "$2"', [fixture.branch, resumeAt]),
+      watcherCall('classify_run_exit "$1" "$2" "$3" 0', [fixture.branch, fixture.dir, logPath]),
+    ]);
+    assert.equal(gate.status, 0, `round ${round}: the gate's write exited ${gate.status}: ${gate.stderr}`);
+    assert.equal(classify.status, 0, `round ${round}: classify_run_exit exited ${classify.status}: ${classify.stderr}`);
+    const record = fixture.record();
+    assert.equal(record.status, 'paused', `round ${round}: the pause classification was lost`);
+    assert.equal(record.paused_by, 'usage', `round ${round}: the gate's paused_by was lost`);
+    assert.match(record.usage_resume_at ?? '', /^[0-9]+$/, `round ${round}: usage_resume_at is not numeric`);
   }
 });

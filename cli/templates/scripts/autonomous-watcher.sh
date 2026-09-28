@@ -101,9 +101,9 @@
 # newest events across every live run and applies it to ALL of them, through the
 # ordinary pause protocol and nothing else:
 #
-#   * IT NEVER KILLS A RUN, and it never invents a mechanism. It drops
-#     `<state_dir>/PAUSE` into each running working copy, tags the record
-#     `paused_by=usage` and records `usage_resume_at`; the engine yields at its
+#   * IT NEVER KILLS A RUN, and it never invents a mechanism. It tags each running
+#     record `paused_by=usage` with its `usage_resume_at`, then drops
+#     `<state_dir>/PAUSE` into its working copy; the engine yields at its
 #     next clean checkpoint, writes PAUSE_ACK, and classify_run_exit marks it
 #     `paused` — the same path a hand-dropped PAUSE takes. Once the window has
 #     reset the gate drops `<state_dir>/RESUME`, and the pause-resume pass above
@@ -1219,8 +1219,9 @@ notify() {
 #                       gate, and empty otherwise — which is the whole of how a
 #                       gate pause is told apart from a hand-dropped one. A hand
 #                       pause is never auto-resumed precisely because it has no
-#                       value here. Written the moment the PAUSE is REQUESTED,
-#                       while the record is still `running`, and cleared by a
+#                       value here. Written together with `usage_resume_at` in
+#                       one write, BEFORE the PAUSE is dropped, while the record
+#                       is still `running`, and cleared by a
 #                       real resume, by the gate's stale-tag sweep, and by
 #                       launch_run on a reused branch key — see the gate for why
 #                       clearing it any earlier than those strands the run.
@@ -1228,7 +1229,7 @@ notify() {
 #                       BINDING worst-state window reset (the overage window's
 #                       while `isUsingOverage`) plus USAGE_RESUME_MARGIN_SECS.
 #                       The ONLY state the wall-clock resume reads, and written
-#                       and cleared together with `paused_by`.
+#                       and cleared together with `paused_by`, in one write.
 #   remote_stopped_at   the epoch second `remote-run.sh stop` sent the branch's
 #                       stop marker and asked GitHub to cancel its runs. Written
 #                       by `remote-run.sh stop` alone, only on an existing
@@ -1244,7 +1245,7 @@ notify() {
 #                       `user` job mode did, on a `harness pause <branch>` run;
 #                       `overload` nobody requested it — the run's own
 #                       API-overload self-pause. `user` and `budget` are written
-#                       when the PAUSE is dropped, while still `running`;
+#                       before the PAUSE is dropped, while still `running`;
 #                       classify_run_exit settles the reason as the run pauses,
 #                       `user` first, then `usage`, then `budget`. Cleared when
 #                       job mode relaunches the run — plus `killed`, a registry-only
@@ -1290,7 +1291,8 @@ notify() {
 # -----------------------------------------------------------------------------
 # The bodies are lib/harness-run-lib.sh's THE RUN REGISTRY, shared with every
 # script that reads or writes this file; these wrappers bind them to $REGISTRY.
-# registry_set <branch> <key> <value>; registry_get <branch> <key>.
+# registry_set <branch> <key> <value> [<key> <value> …] — every pair in one
+# write; registry_get <branch> <key>.
 registry_init() { hr_registry_init "$REGISTRY"; }
 registry_set() { hr_registry_set "$REGISTRY" "$@"; }
 registry_get() { hr_registry_get "$REGISTRY" "$@"; }
@@ -2206,8 +2208,7 @@ classify_run_exit() {
           reason=overload
         fi
       fi
-      registry_set "$branch" pause_reason "$reason"
-      registry_set "$branch" status paused
+      registry_set "$branch" pause_reason "$reason" status paused
       log "run '$branch' paused (PAUSE honored, reason $reason) — rc=$rc"
       if [ "$reason" = "user" ]; then
         notify paused "$branch" "$log_path" "paused as you asked — run /autonomous-sdlc-harness:branch-resume $branch to continue"
@@ -3724,8 +3725,7 @@ usage_gate() {
       # one case where the question cannot be ANSWERED, and there the tag stays.
       if [ -z "$wt" ] ||
         { [ -n "$state_abs" ] && [ ! -f "$state_abs/PAUSE" ] && [ ! -f "$state_abs/PAUSE_ACK" ]; }; then
-        registry_set "$b" paused_by ""
-        registry_set "$b" usage_resume_at ""
+        registry_set "$b" paused_by "" usage_resume_at ""
       fi
       continue
     fi
@@ -3749,8 +3749,7 @@ usage_gate() {
     # Cleared TOGETHER with the trigger: the pause-resume pass owns the relaunch
     # from here, and a tag left behind would make the next hand pause look like
     # this gate's.
-    registry_set "$b" paused_by ""
-    registry_set "$b" usage_resume_at ""
+    registry_set "$b" paused_by "" usage_resume_at ""
   done <<EOF
 $(registry_branches)
 EOF
@@ -3828,11 +3827,14 @@ EOF
         log "usage auto-pause: the state directory in '$wt' is unresolvable — cannot pause '$b'"
         continue
       fi
+      # Tagged BEFORE the engine acknowledges, on purpose — see invariant 2 — and
+      # so before PAUSE exists: an engine acknowledging a PAUSE whose tag is not
+      # yet recorded is classified `overload`. Both keys land in one write. A tag
+      # whose `touch` then fails is a `running` record with no PAUSE, which the
+      # stale-tag sweep in (1) clears on the next pass.
+      registry_set "$b" paused_by usage usage_resume_at "$resume_at"
       mkdir -p "$wt/$state_rel" 2>/dev/null || true
       touch "$wt/$state_rel/PAUSE"
-      # Tagged BEFORE the engine acknowledges, on purpose — see invariant 2.
-      registry_set "$b" paused_by usage
-      registry_set "$b" usage_resume_at "$resume_at"
       log "usage auto-pause (state=$state, trigger=$USAGE_PAUSE_TRIGGER): dropped $state_rel/PAUSE in $wt (auto-resume ~$(stall_human_time "$resume_at"))"
     done <<EOF
 $(registry_branches)
@@ -4041,8 +4043,8 @@ job_control_poll() {
   registry_set "$branch" control_polled_at "$before"
   if [ "$rc" = "0" ]; then
     JOB_USER_PAUSE_DROPPED=1
-    touch "$state_abs/PAUSE"
     registry_set "$branch" pause_reason user
+    touch "$state_abs/PAUSE"
     log "job: a 'harness pause $branch' run was created at or after $since — dropped PAUSE (reason user)"
   fi
   job_write_status "$branch" "$remote_status" continue "job started"
@@ -4056,8 +4058,8 @@ job_budget_pass() {
   after="$(job_int "${REMOTE_SELF_PAUSE_AFTER_SECS:-}")" || return 0
   [ $(($(date +%s) - JOB_START_EPOCH)) -ge "$after" ] || return 0
   JOB_BUDGET_PAUSE_DROPPED=1
-  touch "$state_abs/PAUSE"
   [ "$(registry_get "$branch" pause_reason)" = "user" ] || registry_set "$branch" pause_reason budget
+  touch "$state_abs/PAUSE"
   log "job: ${after}s of the hosted time budget have passed — dropped PAUSE (reason budget)"
 }
 
@@ -4103,8 +4105,8 @@ job_auto_resume() {
   # is one-shot: put it back, so the relaunched session still yields at its next
   # clean checkpoint instead of running on until the step timeout kills it.
   if [ "$JOB_BUDGET_PAUSE_DROPPED" = "1" ]; then
-    touch "$state_abs/PAUSE"
     registry_set "$branch" pause_reason budget
+    touch "$state_abs/PAUSE"
     log "job: the hosted time budget's PAUSE was pending at the resume of '$branch' after $why — re-dropped it"
   fi
   notify resumed "$branch" "$log_path" "automatic resume $count/$REMOTE_AUTO_RESUME_MAX after $why ($(job_label))"

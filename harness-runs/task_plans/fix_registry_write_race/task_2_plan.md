@@ -46,3 +46,10 @@
 - Read `usage_gate`'s pause loop: no `touch …/PAUSE` precedes the `registry_set` that writes `paused_by`. Grep the job functions: in each of the three, the `pause_reason` write comes before its `touch "$state_abs/PAUSE"`.
 - Grep `usage_gate` and `classify_run_exit` for two consecutive single-pair `registry_set` calls on `paused_by`/`usage_resume_at` or `pause_reason`/`status`, and find none.
 - `bash scripts/typecheck.sh` passes.
+
+**Deviations from plan:**
+
+- The new `cli/test/registry-writer.test.mjs` case, and Task 1's cases in the same file, were not run: no conventions document (`.claude/context/conventions.md`, `.claude/context/cli.md`) states a single-file test command, so the run is skipped per `unit_loop_core.md` → `## The test-run rule` (3) and deferred to the Run gates phase. The "passes" bullet rests on reading, not execution.
+- `bash -n` over `cli/templates/scripts/autonomous-watcher.sh` was attempted as a syntax check and refused by the permission layer; the watcher edits rest on reading the diff. `bash scripts/typecheck.sh` ran and passed, but compiles `cli/src` only.
+- Outside the listed targets, the watcher header's usage-gate bullet (*"IT NEVER KILLS A RUN"*) described the pause as drop-then-tag; reworded to tag-then-drop so it matches the new order.
+- `cli/test/helpers/watcher.mjs` choice 1: the sleep is kept. Stated reason: `tick` runs `resume_paused_runs`, the inbox pass and `lane_release_if_idle` after a launch, and each reads the record's status; a stub exiting at once would be classified under them mid-pass.
