@@ -59,7 +59,8 @@
 #   2. THE RUN REGISTRY writes the registry file its caller names. Fence: that
 #      file is `<root>/<state_dir>/autonomous_logs/registry.json`, resolved
 #      through `hr_state_path`, plus the lock directory `<file>.lock` (and its
-#      `.stale.*` move-aside while a stale one is broken) and the temp files
+#      `.stale.*` move-aside and `.break` mutex while a stale one is broken)
+#      and the temp files
 #      `.registry.*` in the registry's own directory. Written only by
 #      `hr_registry_init`, `hr_registry_set` and the `hr_registry_lock` /
 #      `hr_registry_unlock` pair `hr_registry_set` calls.
@@ -1134,12 +1135,24 @@ hr_push_env_files() {
 # old is a crashed holder; a waiter polls every 0.05 s for up to 12 s — past the
 # stale age, so a waiter that arrives just after a crash breaks the lock rather
 # than giving up. Both are constants here, not environment values: the header
-# allows policy-carrying environment values for the lane only. Breaking renames
-# the lock aside before emptying it, as `hr_lane_acquire` does, and restores it
-# when the `owner` it moved is not the one it judged stale — a second breaker
-# that re-took the lock between the judgement and the rename. A write that
-# cannot take the lock prints one stderr line naming it, writes nothing and
-# returns 1.
+# allows policy-carrying environment values for the lane only.
+#
+# BREAKERS ARE SERIALIZED, AND NONE RENAMES A LIVE LOCK. A waiter that judges
+# the lock stale takes a second `mkdir` mutex, `<file>.lock.break`, judges the
+# lock's age again under it, and only then renames the lock aside and empties
+# it, as `hr_lane_acquire` does. A lock re-taken since the first judgement is
+# fresh, so the second leaves it alone. Between the second judgement and the
+# rename, nothing but a breaker or the lock's own holder frees the path:
+# breakers are serialized, and the holder of a lock that old is dead by the
+# stale rule. The watchdog can kill a breaker inside the mutex, so a mutex 10 s
+# old is removed by the next waiter. That removal is the one window left open.
+# Two waiters that judge one abandoned mutex old together can both remove it,
+# and the second can remove the fresh mutex the first has just taken. Two
+# breakers then judge the lock at once, so reaching it takes a breaker killed
+# inside the mutex, a stale lock and three concurrent writers.
+#
+# A write that cannot take the lock prints one stderr line naming it, writes
+# nothing and returns 1.
 #
 # ONE CALL, SEVERAL KEYS. `hr_registry_set <file> <branch> <key> <value> [<key>
 # <value> …]` writes every pair in one `jq` pass under one lock and one `mv`.
@@ -1187,7 +1200,7 @@ hr_registry_init() {
 # stale one (see the section comment). 0 when held; 1, with one stderr line,
 # when the wait ceiling passed.
 hr_registry_lock() {
-  local lock="${1-}.lock" token="${2-}" polls=0 start="" now m seen moved stale
+  local lock="${1-}.lock" token="${2-}" polls=0 start="" now m stale bm
   # 12 — the wait ceiling and 10 — the stale age, both in seconds. The wait is
   # judged by the clock, because each poll's forks cost more than its sleep;
   # 240 polls is the ceiling only when `date` gives no epoch.
@@ -1210,21 +1223,28 @@ hr_registry_lock() {
       [ "$polls" -lt 240 ] || break
     fi
     if [ "$m" -gt 0 ] && [ "$now" -gt 0 ] && [ $((now - m)) -ge 10 ]; then
-      seen=""
-      [ -r "$lock/owner" ] && { IFS= read -r seen <"$lock/owner" || :; } 2>/dev/null
-      stale="$lock.stale.${token##*.}"
-      if mv "$lock" "$stale" 2>/dev/null; then
-        moved=""
-        [ -r "$stale/owner" ] && { IFS= read -r moved <"$stale/owner" || :; } 2>/dev/null
-        if [ "$moved" != "$seen" ] && [ ! -e "$lock" ]; then
-          mv "$stale" "$lock" 2>/dev/null || :
+      if mkdir "$lock.break" 2>/dev/null; then
+        # One breaker at a time: judge the age again under the mutex, so a
+        # lock re-taken since the judgement above is fresh and left alone.
+        m=$(hr_lane_mtime "$lock")
+        now=$(date +%s 2>/dev/null) || now=0
+        case "$now" in '' | *[!0-9]*) now=0 ;; esac
+        if [ "$m" -gt 0 ] && [ "$now" -gt 0 ] && [ $((now - m)) -ge 10 ]; then
+          stale="$lock.stale.${token##*.}"
+          if mv "$lock" "$stale" 2>/dev/null; then
+            rm -f "$stale/owner" 2>/dev/null || :
+            rmdir "$stale" 2>/dev/null || :
+          fi
         fi
-        if [ -d "$stale" ]; then
-          rm -f "$stale/owner" 2>/dev/null || :
-          rmdir "$stale" 2>/dev/null || :
-        fi
+        rmdir "$lock.break" 2>/dev/null || :
         polls=$((polls + 1))
         continue
+      fi
+      # Another breaker holds the mutex. One the watchdog killed inside it
+      # left it behind: a mutex 10 s old is removed here.
+      bm=$(hr_lane_mtime "$lock.break")
+      if [ "$bm" -gt 0 ] && [ $((now - bm)) -ge 10 ]; then
+        rmdir "$lock.break" 2>/dev/null || :
       fi
     fi
     sleep 0.05

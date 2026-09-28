@@ -88,3 +88,8 @@ A breaker the watchdog kills while it holds the mutex leaves the mutex behind. S
   > 3. **Case (e) gives many breakers one stale lock at once, but it does not show the race closed.** Whether two breakers interleave is scheduling, as in case (d), so a pass shows only that the rounds did not hit the window. The closure rests on the construction stated in the library's `THE RUN REGISTRY.` section: one breaker at a time judges the age again under the break mutex, and a re-taken lock is fresh. Case (f) covers that mutex's own staleness rule.
 
   This test file is the one this fix edits, so it is the only test the fix runs. The full suite runs later, in the Run gates phase.
+
+**Deviations from plan:**
+
+- Implementation: the `hr_registry_lock` block, the `local` line, the section comment and the two test cases landed as specified. The library header's write-exception 2 fence now names the `.break` mutex beside the `.stale.*` move-aside, so the fence covers every path the code writes.
+- Evidence downgrade: cases `(e)` and `(f)` in `cli/test/registry-writer.test.mjs` were **not executed** by the implementer. Neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command. The claim that they pass rests on reading the code, not on a run. They are deferred to the Run gates phase. `bash scripts/typecheck.sh` ran and printed `PASS: typecheck`. It does not cover `cli/templates/`.

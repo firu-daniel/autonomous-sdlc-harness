@@ -13,7 +13,7 @@
  * Every registry lives in a directory of its own, so the lock directory and the writer's temp file
  * are the only things that could be left beside it.
  *
- * ## Two non-obvious choices
+ * ## Three non-obvious choices
  *
  * 1. **Concurrency is real processes, started together with `Promise.all`.** A background subshell
  *    inside one `bash` would share its parent's `$$`, which is exactly the case the lock's per-call
@@ -22,6 +22,11 @@
  * 2. **Case (d) cannot be forced to lose, only given the chance.** Whether a reader's create lands
  *    after the writer's rename is scheduling, so it is repeated over several rounds; it proves the
  *    create never truncates only to the extent the rounds hit the window.
+ * 3. **Case (e) gives many breakers one stale lock at once, but it does not show the race closed.**
+ *    Whether two breakers interleave is scheduling, as in case (d), so a pass shows only that the
+ *    rounds did not hit the window. The closure rests on the construction stated in the library's
+ *    `THE RUN REGISTRY.` section: one breaker at a time judges the age again under the break mutex,
+ *    and a re-taken lock is fresh. Case (f) covers that mutex's own staleness rule.
  */
 
 import assert from 'node:assert/strict';
@@ -168,6 +173,44 @@ test('(c) a stale lock is broken, and no lock directory is left behind', async (
 
   const set = await libCall('hr_registry_set "$@"', [file, BRANCH, 'status', 'running']);
   assert.equal(set.status, 0, `hr_registry_set exited ${set.status} past a stale lock: ${set.stderr}`);
+  assert.equal(readRegistry(file).runs[BRANCH].status, 'running');
+  assertNothingLeftBeside(dir);
+});
+
+test('(e) many writers arriving at one stale lock all survive, and no lock directory is left behind', async () => {
+  const { dir, file } = freshRegistry();
+  const init = await libCall('hr_registry_init "$1"', [file]);
+  assert.equal(init.status, 0, `hr_registry_init exited ${init.status}: ${init.stderr}`);
+  const lock = `${file}.lock`;
+  mkdirSync(lock);
+  writeFileSync(join(lock, 'owner'), 'a-writer-that-crashed\n');
+  const aged = await runBash(fixtureDir, ['-c', 'touch -t 200001010000 "$1"', '_', lock]);
+  assert.equal(aged.status, 0, `touch -t exited ${aged.status}: ${aged.stderr}`);
+
+  const results = await Promise.all(
+    Array.from({ length: WRITERS }, (_, i) => libCall('hr_registry_set "$@"', [file, BRANCH, `key_${i}`, `v_${i}`])),
+  );
+  results.forEach((result, i) => assert.equal(result.status, 0, `writer ${i} exited ${result.status}: ${result.stderr}`));
+
+  const record = readRegistry(file).runs[BRANCH];
+  const missing = Array.from({ length: WRITERS }, (_, i) => i).filter((i) => record[`key_${i}`] !== `v_${i}`);
+  assert.deepEqual(missing, [], `${missing.length} of ${WRITERS} writes past one stale lock were lost`);
+  assertNothingLeftBeside(dir);
+});
+
+test('(f) a break mutex left by a killed breaker is aged out, and the stale lock behind it is broken', async () => {
+  const { dir, file } = freshRegistry();
+  const init = await libCall('hr_registry_init "$1"', [file]);
+  assert.equal(init.status, 0, `hr_registry_init exited ${init.status}: ${init.stderr}`);
+  const lock = `${file}.lock`;
+  mkdirSync(lock);
+  writeFileSync(join(lock, 'owner'), 'a-writer-that-crashed\n');
+  mkdirSync(`${lock}.break`);
+  const aged = await runBash(fixtureDir, ['-c', 'touch -t 200001010000 "$1" "$2"', '_', lock, `${lock}.break`]);
+  assert.equal(aged.status, 0, `touch -t exited ${aged.status}: ${aged.stderr}`);
+
+  const set = await libCall('hr_registry_set "$@"', [file, BRANCH, 'status', 'running']);
+  assert.equal(set.status, 0, `hr_registry_set exited ${set.status} past a stale break mutex: ${set.stderr}`);
   assert.equal(readRegistry(file).runs[BRANCH].status, 'running');
   assertNothingLeftBeside(dir);
 });
