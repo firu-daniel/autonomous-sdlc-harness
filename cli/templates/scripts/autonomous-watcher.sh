@@ -360,7 +360,9 @@
 #     resume_paused_runs relaunching it, when the reset falls before
 #     HARNESS_JOB_DEADLINE_EPOCH and the runner is self-hosted or the wait is at
 #     most REMOTE_WAIT_MAX_SECS, else `wait-poller`. A wait still paused
-#     REMOTE_WAIT_MAX_SECS past the later of that reset and its own start ends
+#     REMOTE_WAIT_MAX_SECS past the gate's last chance to resume it — the later
+#     of that reset and its own start, plus USAGE_CHECK_INTERVAL_SECS and
+#     POLL_INTERVAL_SECS, the most the throttled gate can lag the reset — ends
 #     in `wait-poller` with one notification, on every runner; with no pause
 #     requested — the run's own API-overload
 #     self-pause (`overload`) -> auto-resume, else `stop`. `failed` ->
@@ -4329,10 +4331,13 @@ run_job() {
             if [ "$status" = "running" ]; then
               registry_set "$branch" pause_reason ""
             elif [ "$status" = "paused" ] &&
-              [ "$(date +%s)" -gt $((usage_wait_ra + REMOTE_WAIT_MAX_SECS)) ]; then
-              # The bound on the wait itself, self-hosted included: past the
-              # reset it waited on by REMOTE_WAIT_MAX_SECS with no resume, the
-              # job hands the run over rather than waiting on nothing.
+              [ "$(date +%s)" -gt $((usage_wait_ra + USAGE_CHECK_INTERVAL_SECS + POLL_INTERVAL_SECS + REMOTE_WAIT_MAX_SECS)) ]; then
+              # The bound on the wait itself, self-hosted included. It is measured
+              # from the gate's last chance to resume, not from the reset: the gate
+              # is throttled to USAGE_CHECK_INTERVAL_SECS and runs after a
+              # POLL_INTERVAL_SECS sleep, so its resume can lag the reset by both.
+              # REMOTE_WAIT_MAX_SECS past that with no resume, the job hands the
+              # run over rather than waiting on nothing.
               decision=wait-poller
               detail="usage limit reached; the in-job usage wait passed its bound (REMOTE_WAIT_MAX_SECS=${REMOTE_WAIT_MAX_SECS}s past the reset) without a resume"
               notify paused "$branch" "$log_path" "usage limit: the in-job wait passed ${REMOTE_WAIT_MAX_SECS}s after the reset without a resume — run /autonomous-sdlc-harness:branch-resume $branch to continue"
