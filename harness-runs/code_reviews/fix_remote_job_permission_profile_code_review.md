@@ -28,7 +28,7 @@ One cross-unit consequence of the gitignore decision reaches a plugin asset that
 Each entry resolves to `harness-runs/code_reviews/fix_remote_job_permission_profile_code_review/finding_<K>.md` through its `**Finding K**` reference. The leading `N.` is the fix order. `K` is the finding's stable identity.
 
 1. [x] **Finding 2** — Name `profile-tracked` among the checks `--remote-job` moves, in `doctor --help` and three doc comments _(layer: cli)_
-2. [ ] **Finding 5** — Stop `profile-tracked`'s pass text claiming the profile is ignored _(layer: cli)_
+2. [x] **Finding 5** — Stop `profile-tracked`'s pass text claiming the profile is ignored _(layer: cli)_
 3. [ ] **Finding 3** — Give the `plugin-permissions` failure a job remedy under `--remote-job` instead of "init does not generate them" _(layer: cli)_
 4. [ ] **Finding 1** — Point `qa-tester`'s `browser_route` grant check at the main checkout's profile _(layer: plugin)_
 5. [ ] **Finding 4** — Re-render the workflows by deleting them and running a plain `init`, not `init --force` _(layer: general)_

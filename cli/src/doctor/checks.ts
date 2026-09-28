@@ -4004,7 +4004,7 @@ const PROFILE_TRACKED_CHECK: Check = {
   run: (ctx) => {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (!pathAtRef(ctx.repoRoot, 'HEAD', PROFILE_PATH)) {
-      return pass(`${PROFILE_PATH} is not in the tree HEAD names: it is machine-local and ignored, so each checkout and each remote job generates its own`);
+      return pass(`${PROFILE_PATH} is not in the tree HEAD names, so no clone and no remote job receives this machine's copy; each generates its own`);
     }
     const finding = `${PROFILE_PATH} is committed at HEAD: it carries this machine's absolute paths, and a remote job keeps a committed one rather than generating its own. Stop tracking it: ${profileUntrackRemedy(ctx)}`;
     return ctx.remoteJob ? fail(finding) : warn(finding);
