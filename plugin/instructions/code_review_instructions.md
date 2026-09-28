@@ -2,11 +2,13 @@
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<N>`, which this file's own text resolves): they resolve from the adopting repository's `harness.config.json`, are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<N>`, `<log>`, which this file's own text resolves): `<repo_root>` is derived at runtime and the rest resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
+| `<repo_root>` | derived at runtime | The absolute root of the checkout this session runs in. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in, including the gate wrapper step 6 runs. |
 | `<layer_path_map>` | config value | `layers[].path` together with `layers[].conventions` — the paths a scope hint narrows a re-review to, and the rules document that layer is reviewed against. |
 | `<parity_vocabulary>` / `<reference_impl>` | config value | `parity.referenceName` / `parity.referenceImplPath` — the name of the reference implementation this project is kept in parity with, and the path to it. Read **only** when `phases.parity` is `true`. |
 
@@ -29,13 +31,21 @@ The tokens below are neither Mode-contract **bindings** (this file declares none
 
 5. **After the user approves**, the review is already on disk — the `branch-reviewer` agent writes the **index** at `<state_dir>/code_reviews/<branch>_code_review.md` plus per-finding files at `<state_dir>/code_reviews/<branch>_code_review/finding_<N>.md` (folder name mirrors any round suffix: `<branch>_code_review_2/` for round 2). Do not write or duplicate the review yourself.
 
-6. **Branch statistics on a clean pass only.** If the index's `## Phase 2 Readiness — Ordered Fix List` has **no** `[ ]` entries to fix — a clean pass; note a Nice to Have finding is a readiness entry too, so it is not a clean pass — dispatch the `statistics-plan-writer` agent now so a clean branch gets its `pre-user-review` statistics immediately, with the **first-write** prompt:
+6. **Branch statistics on a clean pass only.** If the index's `## Phase 2 Readiness — Ordered Fix List` has **no** `[ ]` entries to fix — a clean pass; note a Nice to Have finding is a readiness entry too, so it is not a clean pass — a clean branch gets its `pre-user-review` statistics now, in two steps:
 
-   ```
-   Write branch statistics. Branch: <branch>. Story index: <state_dir>/story_plans/<branch>_story_plan.md. Output: <state_dir>/branch_statistics/<branch>/statistics.md.
-   ```
+   1. **Run the gates**, because the implementers this branch's plan dispatched ran no suite (`${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`). From `<repo_root>`, run `bash <scripts_dir>/run-test-suite.sh task_supervised` and read only its stdout line:
+      - `pass` → step 2.
+      - `fail <log>` → write no statistics. Tell the user the gates failed, name `<log>`, and stop. Once the failure is fixed, `/autonomous-sdlc-harness:branch-implement-review` re-runs the gates in its Phase 3 — a clean pass has no fix flow to return to.
+      - No stdout line → report the wrapper's one stderr line and stop.
+      - If the tool layer moves the run to the background, or the command prints `pending`, re-issue the same command with `--wait` before the label, as a plain foreground command, after each `pending` until it prints the verdict line — the mechanism of `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `### G.1 Run the gates`. No `Monitor` and no `sleep`. A `--wait` refusal is the no-line case.
 
-   Dispatch with the first-write (pre-user-review) prompt above — the `statistics-plan-writer` agent owns the counting and the output format. Relay the returned `success_rate` / `statistics_file` to the user.
+   2. **Dispatch the `statistics-plan-writer` agent** with the **first-write** prompt:
+
+      ```
+      Write branch statistics. Branch: <branch>. Story index: <state_dir>/story_plans/<branch>_story_plan.md. Output: <state_dir>/branch_statistics/<branch>/statistics.md.
+      ```
+
+      Dispatch with the first-write (pre-user-review) prompt above — the `statistics-plan-writer` agent owns the counting and the output format. Relay the returned `success_rate` / `statistics_file` to the user.
 
    **If there ARE findings to fix, do NOT write statistics here.** The statistics write for a non-clean review happens after the fixes land — in the `/autonomous-sdlc-harness:branch-implement-review` fix flow (`${CLAUDE_PLUGIN_ROOT}/instructions/code_review_fixes_instructions.md`), once every review item is `[x]`. Writing here as well would double-write.
 

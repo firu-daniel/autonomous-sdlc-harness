@@ -82,6 +82,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - [ ] C2m.    Skeptic meta-review PASS — or not owed (C2.1 returned PASS, so C2.2 never ran)
 - [ ] C2f.    Skeptic findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [ ] E.      QA passed (UI-test index all [x] / no_ui)
+- [ ] G.      Run gates passed (the test-suite wrapper printed pass)
 - [ ] D.      Branch statistics committed & pushed
 ```
 
@@ -101,6 +102,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 ## Fixing
 - [ ] R3. All fix-plan findings implemented (fix-plan index all [x])
 - [ ] R4. QA passed (UI-test index all [x] / no_ui / no-op augment)
+- [ ] RG. Run gates passed (the test-suite wrapper printed pass)
 - [ ] R5. Post-user-review statistics committed
 ```
 
@@ -124,8 +126,8 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 `A1.5f`, `A2g`, `A2f`, `P2` and `E` in the task-engine template, and `R4` in the user-review-engine template
 — and on **no other entry**, because every other entry either names a step inside the **safety floor**, which
 **neither switch** can turn off (`Bg`/`Bm` the branch review and its meta-review, `C`/`C2g`/`C2m`/`C2f` the
-fixes and skeptic phases, `R2`/`R3` the fix-plan commit and its fix loop, `D`/`R5` the statistics
-bookkeeping), or names something **neither switch** reaches: `P3` and `A` name steps no directive addresses
+fixes and skeptic phases, `R2`/`R3` the fix-plan commit and its fix loop, `G`/`RG` the run gates, a step no directive addresses and
+no flag gates, `D`/`R5` the statistics bookkeeping), or names something **neither switch** reaches: `P3` and `A` name steps no directive addresses
 and no flag gates, and `P1` and `R1` are the **gate-bearing** entries — each contains the two plan gates the
 `parity` / `architecture` ids and the `phases.parity` flag *do* switch off, yet each still runs and still
 flips. The **docs** phase, which the `docs` id and `phases.docs` each switch off, has **no ledger entry of
@@ -195,13 +197,13 @@ resume does **not** re-read or reset the ledger (the rule just above), the block
 governs the branch from then on.
 
 **User-review engine — the `fix-plan fork's Setup` creates OR re-seeds the ledger per round.** Each
-user-review round is a fresh `R1–R5` fix cycle against the same branch/worktree, and the ledger is committed,
+user-review round is a fresh `R1–R5` + `RG` fix cycle against the same branch/worktree, and the ledger is committed,
 so the *previous* round's all-`[x]` ledger is present at the next round's start. Decide by comparing the
 existing ledger's header round to the **active round** (the latest `<branch>_review[_<n>].md`):
 - exists **and** header round **==** active round → **resume** (read it, do NOT reset — a pause/park resume
   within the same round);
 - exists with an **older** header round (a fresh round) → **re-seed**: overwrite from the template with the
-  new round number (fresh all-`[ ]` `R1–R5`), so §1.7 does not skip the new round as already-done;
+  new round number (fresh all-`[ ]` `R1–R5` and `RG`), so §1.7 does not skip the new round as already-done;
 - absent → **create** from the template with the active round.
 
 ⚠️ The round comparison is **load-bearing**: without it a round-≥2 run reads the stale all-`[x]` ledger and
@@ -209,7 +211,7 @@ existing ledger's header round to the **active round** (the latest `<branch>_rev
 
 On the **create** and **re-seed** paths alike the `## Run mode` block is derived for the active round from the
 run mode the fork read at its Setup and the flags it read from `harness.config.json`, in the same write as the
-fresh all-`[ ]` `R1–R5`, and `R4` is seeded `[-]` when **either** a `skipped:` id names it **or** `phases.qa`
+fresh all-`[ ]` `R1–R5` and `RG`, and `R4` is seeded `[-]` when **either** a `skipped:` id names it **or** `phases.qa`
 is `false` in `harness.config.json`. On the **same-round resume** path the block is read, never rewritten —
 like every entry around it.
 
@@ -232,7 +234,7 @@ one; on the same-round resume path there is nothing to commit (wrapper exit 3).
 
 ### 1.5 Who flips
 The **driving fork** flips only its own entries — the **planner** flips `P1–P3`, the **orchestrator** flips
-`A–D`, the **fix-plan fork** flips `R1–R2`, the **fixes fork** flips `R3–R5`. **Sub-agents never touch the
+`A–D`, `G` included, the **fix-plan fork** flips `R1–R2`, the **fixes fork** flips `R3–R5`, `RG` included. **Sub-agents never touch the
 ledger** (implementers, reviewers, committers stay single-purpose). Flip points are named in each fork's thin
 override.
 
@@ -313,6 +315,13 @@ see the warning above). This makes every flip safe to re-run on a resumed run.
 5. `PAUSE_PROGRESS.md` (§2) is read only as a **human-readable hint / audit trail** — the ledger is
    authoritative. This composes with the clarification park/resume (`Override 2(a)`): the top-level answered pairs
    the watcher resumed for are consumed as `Override 2(a)` states; the ledger independently says which phase to be in.
+
+**The Run gates entries.** `G` and `RG` have no detail index: within that phase the resume point is the
+phase's own derivation, `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` →
+`## Phase G — Run gates` → `### G.0 Resolve the round`, which this file does not restate. A ledger created
+before the Run gates phase shipped carries no `G.` / `RG.` line; a resume whose first `[ ]` entry is `D.` /
+`R5.` on such a ledger runs Phase G before Phase D. There is no entry to flip, so it records no flip, and
+§1.8's predicate is unaffected — it reads only the entries present.
 
 This is what makes resume deterministic and answers "will the fork know where to resume" — it also removes
 the naive re-run of the non-checkbox review phases that the existing clarification park/resume otherwise

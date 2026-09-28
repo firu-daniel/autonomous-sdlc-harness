@@ -97,7 +97,8 @@
 # a negation for that directory's own README — so a probe cannot be committed by
 # accident. The other half of that duty belongs to the agent rather than to this
 # script: a MUTATION CHECK is REVERTED before the task's own verification runs,
-# because the committer will see that suite and it has to be clean.
+# because the Run gates phase runs the full suite over the committed tree, and a
+# mutation left in place fails it.
 #
 # IT IS DELIBERATELY NOT A WRAPPER. It carries no adopter command line — it is
 # not a `WRAPPER_SCRIPTS` row, answers to no `commands.*` key, and has no

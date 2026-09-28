@@ -288,6 +288,7 @@ const OUTER_LOOP_SCRIPT_FILES = [
   'restart-watcher.sh',
   'docs-search-server.sh',
   'flow-walker.sh',
+  'run-test-suite.sh',
 ];
 
 /** A left-over template token — none may survive into a generated file. */

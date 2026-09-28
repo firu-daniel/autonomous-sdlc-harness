@@ -33,9 +33,9 @@
  * entry each. Every row here has a file at its final path and name, so revising a contract is an
  * edit in place rather than a second layout.
  *
- * Four of this tree's directories are runtime surfaces whose *contents* are machine-local — the two
- * the run daemon writes, the park-and-ask clarification channel, and the scratch directory an agent
- * writes a probe file into — but which of them an ignore rule
+ * Five of this tree's directories are runtime surfaces whose *contents* are machine-local — the two
+ * the run daemon writes, the park-and-ask clarification channel, the scratch directory an agent
+ * writes a probe file into, and the per-round test-run logs — but which of them an ignore rule
  * may cover is settled in the generator that writes the repository's ignore file
  * (`generators/repoRoot.ts`), not here: a directory with a row in {@link STATE_DIR_ENTRIES} has a
  * committed README and is therefore ignored **by its contents** with a negation for that file, because
@@ -102,6 +102,12 @@ export const STATE_DIR_ENTRIES: ReadonlyArray<StateDirEntry> = Object.freeze([
   Object.freeze({ dir: 'improvement_observations' }),
   Object.freeze({ dir: 'clarification_digests' }),
   Object.freeze({ dir: 'dispatch_additions' }),
+  // The Run gates phase, which every flow runs, so none of the four is gated. The first is the fifth
+  // runtime surface whose contents are machine-local; the other three are committed.
+  Object.freeze({ dir: 'test_run_logs' }),
+  Object.freeze({ dir: 'test_fix_plans' }),
+  Object.freeze({ dir: 'test_fix_plan_reviews' }),
+  Object.freeze({ dir: 'test_fix_point_reviews' }),
   // The interactive-test phase.
   Object.freeze({ dir: 'qa_reviews', phase: 'qa' }),
   Object.freeze({ dir: 'qa_review_point_reviews', phase: 'qa' }),
