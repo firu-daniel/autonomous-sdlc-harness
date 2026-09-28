@@ -35,7 +35,7 @@ Two findings remain:
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Clear `paused_by` and `usage_resume_at` in one `registry_set` call in `launch_run`, `launch_remote_run` and `run_job`'s fresh-launch defaults. _(layer: cli)_
+1. [x] **Finding 2** — Clear `paused_by` and `usage_resume_at` in one `registry_set` call in `launch_run`, `launch_remote_run` and `run_job`'s fresh-launch defaults. _(layer: cli)_
 2. [ ] **Finding 1** — In `hr_registry_lock`, serialize stale-lock breakers behind `<file>.lock.break` and judge the age again under it. Amend the section comment and add cases `(e)` and `(f)`. _(layer: cli)_
 
 ---

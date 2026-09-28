@@ -2052,8 +2052,7 @@ launch_run() {
   registry_set "$branch" stall_restarts 0
   registry_set "$branch" stall_warned ""
   registry_set "$branch" stall_killing ""
-  registry_set "$branch" paused_by ""
-  registry_set "$branch" usage_resume_at ""
+  registry_set "$branch" paused_by "" usage_resume_at ""
   registry_set "$branch" resume_kind ""
   registry_set "$branch" park_loop_cycles 0
 
@@ -2083,8 +2082,7 @@ launch_remote_run() {
   registry_set "$branch" stall_restarts 0
   registry_set "$branch" stall_warned ""
   registry_set "$branch" stall_killing ""
-  registry_set "$branch" paused_by ""
-  registry_set "$branch" usage_resume_at ""
+  registry_set "$branch" paused_by "" usage_resume_at ""
   registry_set "$branch" resume_kind ""
   registry_set "$branch" park_loop_cycles 0
 
@@ -4204,8 +4202,7 @@ run_job() {
   registry_set "$branch" stall_restarts 0
   registry_set "$branch" stall_warned ""
   registry_set "$branch" stall_killing ""
-  registry_set "$branch" paused_by ""
-  registry_set "$branch" usage_resume_at ""
+  registry_set "$branch" paused_by "" usage_resume_at ""
   registry_set "$branch" resume_kind ""
   registry_set "$branch" park_loop_cycles 0
   registry_set "$branch" auto_resumes 0
