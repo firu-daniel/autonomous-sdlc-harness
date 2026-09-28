@@ -159,7 +159,7 @@ This override is one of the autonomous-fork commit points that collectively keep
 **What is NOT changed:**
 
 - **Every end-of-branch reviewer still runs in full** — A1.5 (`business-parity-reviewer`), A2 (`architecture-reviewer`), B (`branch-reviewer` + the B.2 `review-plan-reviewer` meta-review), C2 (`skeptic-reviewer` + the C2.2 meta-review), and the Phase E QA pass, each subject to the phase gate the core already carries for it. Only the *per-unit* layer reviewer **between an implementer and its committer** is dropped; the generate→fix structure of A1.5 / A2 / B+C / C2 / E is otherwise intact (their fix loops just commit the implementer's output directly, without an interposed re-review).
-- The implementer runs `<typecheck_cmd>` and only the test files its unit wrote, per `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`; the Run gates phase is the verification gate. The per-unit reviewers were **read-only static reviewers, not a build gate**, so dropping them removes static re-review redundancy, not a verification gate.
+- The implementer runs `<typecheck_cmd>` and only the test files `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule` admits; the Run gates phase is the verification gate. The per-unit reviewers were **read-only static reviewers, not a build gate**, so dropping them removes static re-review redundancy, not a verification gate.
 
 **Deliberate tradeoffs (stated plainly):**
 

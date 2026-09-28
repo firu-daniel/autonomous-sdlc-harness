@@ -122,3 +122,10 @@ The user explicitly **rejected** these alternatives. Do not implement any of the
 - Run the part-F grep sweep again after the edits. Every enumeration of the close markers should name both.
 - Grep `unit_loop_core.md` → `## The test-run rule` and confirm the exception names row `G.4`, `<test_file_cmd>` and "the file(s) the finding names", and that it excludes `<test_cmd>` and gate scripts.
 - Grep `committer.md` for `mark <unit token> already passing — ` and confirm `record disposition of ` does not appear in the new template.
+
+**Deviations from plan:**
+- `claude plugin validate --strict plugin` was not executed: the call was refused by the permission layer in this session (it requires approval). That verification rests on reading the edited files, and on the fact that the change adds no frontmatter key and no manifest field. The other three verification bullets (the grep sweeps) were run.
+- Part B's fix-site fallback also covers a finding whose `**Failing test:**` line reads `none — <gate name>`. That is the spelling part F gives the writer.
+- One more point-1 restatement was corrected outside the files the plan listed: `plugin/instructions/plan_orchestration_instructions_autonomous.md` said the implementer runs "only the test files its unit wrote". It now points at the test files `## The test-run rule` admits.
+- Part A's `<test_file_cmd>` skip clause (point 3) now also states that it applies to point 1's row-`G.4` run.
+- The loop's already-passing route is written as a `#### The already-passing close` subsection under the byte-identical `### The dispositioned outcome` heading, not as a loose paragraph. This gives step 3 and row `G.4` a heading to cite.

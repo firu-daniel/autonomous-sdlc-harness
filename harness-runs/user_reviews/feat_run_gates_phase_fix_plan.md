@@ -15,7 +15,7 @@
 Each entry resolves to a self-contained `harness-runs/user_reviews/feat_run_gates_phase_fix_plan/finding_<K>.md` file via its `**Finding K**` reference. Sorted lowest blast-radius first, wider changes last.
 
 1. [x] **Finding 2** — Let `test-fix-plan-writer` add an advice-only "suspected shared cause" note to a finding, and order the likely root-cause finding first, without ever merging findings. _(layer: plugin)_
-2. [ ] **Finding 1** — Give a row `G.4` unit a before/after check of its own named test, through a narrow exception to the test-run rule, plus a new `already passing — ` close marker that takes the dispositioned route under its own commit record. _(layer: plugin)_
+2. [x] **Finding 1** — Give a row `G.4` unit a before/after check of its own named test, through a narrow exception to the test-run rule, plus a new `already passing — ` close marker that takes the dispositioned route under its own commit record. _(layer: plugin)_
 
 ---
 
