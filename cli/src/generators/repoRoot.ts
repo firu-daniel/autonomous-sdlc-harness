@@ -1,6 +1,7 @@
 /**
  * Generator: the files `init` writes at the adopting repository's own root — the ignore rules for
- * the machine-local files the harness configures by path, the line-ending attributes that keep its
+ * the machine-local files the harness configures by path and for the permission profile it
+ * generates, the line-ending attributes that keep its
  * shell assets runnable, the browser wiring the interactive test phase needs, and the docs-retrieval
  * server's wiring.
  *
@@ -82,6 +83,7 @@ import { INDEX_DIR_NAME } from '../retrieval/store.js';
 import { PUSH_ENV_PATH, QA_CREDENTIALS_PATH } from './harnessConfig.js';
 import { DOCS_SEARCH_SERVER_SCRIPT_NAME } from './outerLoopScripts.js';
 import {
+  PROFILE_PATH,
   QA_TEMPLATE_PATH as QA_PROFILE_FRAGMENT,
   RETRIEVAL_TEMPLATE_PATH as RETRIEVAL_PROFILE_FRAGMENT,
 } from './permissionProfile.js';
@@ -617,6 +619,8 @@ export function writeRepoRootFiles({ repoRoot, config, plan }: RepoRootOptions):
     pushEnvPath: pushEnv,
     qaCredentialsPath: credentials,
     clientEnvPath: clientEnv,
+    // Ungated: the profile is machine-specific whatever `execution.target` says.
+    permissionProfilePath: PROFILE_PATH,
     logsGlob: logs.contents,
     logsReadmeException: logs.readmeException,
     // One token carrying seven rules: the names are declared once, above, and the template holds one

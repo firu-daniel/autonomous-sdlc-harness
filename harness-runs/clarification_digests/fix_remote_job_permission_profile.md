@@ -1,0 +1,16 @@
+## question_1 — The task plan hit the 5-revision review cap with one residual Must Fix: extend, accept, or stop?
+- **raised by:** planning loop (`task-plan-reviewer`, plan-review mode) — the walker's `<escalate>` at the 5-revision cap (`reason: cap`, node `plan_review`); latest findings `harness-runs/task_plan_reviews/fix_remote_job_permission_profile/review_3.md`
+- **asked:** Q1 — accept the plan with the one residual Must Fix folded in, or stop? The residual Must Fix (review_3.md → Must Fix 1): `task_9_plan.md` has `docs/cli.md` give the three profile-untrack commands inline in bullet prose, while the lessons ledger → `## Adopter-facing documentation` requires every adopter-run command in a fenced block, one per line. Still-open Should Fix items the writer had left untouched across rounds:
+  - `task_11_plan.md` says it ships "eighth"; the index and Context say ninth.
+  - `task_11_plan.md` Verification bullet 3 (`grep -n "git push origin" cli/src/doctor/checks.ts`) can't pass as written, because `JJ_REPOSITORY_CHECK` also matches.
+  - `task_3_plan.md` doesn't say which `PluginRootEntriesOutcome` a render reports when every entry was filtered by `FORBIDDEN_IN_ENTRY`, or whether that root still goes into `additionalDirectories`. This has been raised in 4 rounds.
+
+  Options: (a) Extend (recommended) — the writer folds in Must Fix 1 plus any named Should Fix items and the plan goes through its gates again in a new walk; (b) Accept as-is — proceed to implementation with the plan unchanged; (c) Stop — leave the branch parked for a hand revision or a rewritten task prompt.
+- **answered:** "allow 3 more planning rounds"
+- **carries beyond this branch:** nothing beyond this branch
+
+## question_2 — Run gates gate 11 failed on a stale machine-level retrieval runtime: re-install and resume, or stop?
+- **raised by:** Phase G — Run gates (`test-fix-plan-writer`, round 2), `fixable: 0` → the core's `<escalate>`; latest findings `harness-runs/test_fix_plans/fix_remote_job_permission_profile_task_round_2.md` → `## Not fixable on this branch`
+- **asked:** Q1 — gate 11 (the docs-retrieval relevance floor) refused the installed retrieval runtime: `retrievalRuntimeState()` in `cli/src/retrieval/runtime.ts` requires the installed runtime's version to match the checkout's, the cached runtime under `<home>/.cache/autonomous-sdlc-harness/retrieval/runtime` was `0.2.0` while `cli/package.json` has been `0.4.0` since the version bump on `main` (#35). The branch touches neither `cli/src/retrieval/` nor `evals/`, and the fix is a machine-level, network-needing setup step an unattended run must not take on its own. Options: (a) Re-install the runtime at the current CLI version, then resume (recommended) — the resumed run derives gate round 3 and runs the gates once more; (b) Stop here — leave the branch parked with Run gates and Phase D unfinished.
+- **answered:** "(a) — the retrieval runtime is re-installed at 0.4.0 on this machine. Resume and run gate round 3."
+- **carries beyond this branch:** a retrieval runtime cached at an older CLI version fails gate 11 on every branch after a version bump until it is re-installed at the checkout's version — a machine-level setup step, not a branch fix.

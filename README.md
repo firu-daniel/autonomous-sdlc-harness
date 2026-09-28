@@ -164,13 +164,19 @@ Two direct routes reach the same drop. The first is the command itself, typed in
 
 The second is a file named `<branch>_task_prompt.md` written into `<state_dir>/autonomous_inbox/` ([`docs/config.md`](docs/config.md) §3). The next poll pass acts on either, as [`docs/watcher.md`](docs/watcher.md) §1 describes.
 
-**F. A teammate clones.** `git clone` → open the repository in Claude Code → **accept the workspace trust dialog** → the plugin resolves from the keys `init` committed into `.claude/settings.json`, with `/reload-plugins` for a session that was already open. Then verify:
+**F. A teammate clones.** `git clone` → open the repository in Claude Code → **accept the workspace trust dialog** → the plugin resolves from the keys `init` committed into `.claude/settings.json`, with `/reload-plugins` for a session that was already open. Then generate this clone's permission profile — it carries one checkout's absolute paths, so it is ignored rather than committed and each clone makes its own:
+
+```bash
+npx autonomous-sdlc-harness init
+```
+
+Then verify:
 
 ```bash
 npx autonomous-sdlc-harness doctor
 ```
 
-Which keys are written is [`docs/cli.md`](docs/cli.md) §2. No `init` re-run is needed: `harness.config.json` and the permission profile are committed.
+Which keys are written is [`docs/cli.md`](docs/cli.md) §2. `harness.config.json` is committed; the permission profile is not committed, which is why the teammate runs `init` once.
 
 ## How it is measured
 

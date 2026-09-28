@@ -333,34 +333,58 @@ test('a deleted run watcher warns and leaves the exit status at 0', async (t) =>
   assert.match(stdout, CLEAN_SUMMARY);
 });
 
-test('a sibling worktree is covered by the profile\'s worktree pattern and does not warn', async (t) => {
-  const dir = await wiredFixture(t);
-  // `init`'s own first commit is what makes the next two steps possible at all — `git worktree add`
-  // cannot prepare a checkout from a repository with no commit, and the profile has to be *committed*
-  // for the second checkout to carry it. This case used to make that commit by hand; it is now the
-  // wiring run's, so the precondition is checked rather than re-created.
+/**
+ * A linked worktree of a wired repository, made the way an adopter's run makes one, with the
+ * worktree's own copy of the profile removed. `init`'s own first commit is what lets `git worktree
+ * add` prepare it; the worktree's run loads the main checkout's profile, so removing the worktree's
+ * copy — a no-op once the profile is ignored — is what proves the main checkout's is the one graded.
+ */
+async function wiredWorktree(t, dir) {
   await configuredBranchWithCommit(dir);
-
-  // A real second checkout, made the way an adopter's run makes one, rather than a hand-written
-  // profile: the assertion is about the glob the generator actually emitted, and only a worktree at a
-  // path that glob matches — `<work_root>/<project>-*`, `core/paths.ts` — exercises it.
+  // A real second checkout at a path the emitted glob — `<work_root>/<project>-*`, `core/paths.ts` —
+  // matches, since the assertion is about the glob the generator actually emitted.
   const worktree = `${dir}-feature_x`;
   await runGit(dir, ['worktree', 'add', '-b', 'feature_x', worktree]);
   t.after(() => rm(worktree, { recursive: true, force: true }));
+  await rm(join(worktree, PROFILE_FILE), { force: true });
+  return worktree;
+}
 
-  // What makes this case the one the check used to get wrong: the committed profile carries no
+test('a sibling worktree is covered by the profile\'s worktree pattern and does not warn', async (t) => {
+  const dir = await wiredFixture(t);
+  const worktree = await wiredWorktree(t, dir);
+
+  // What makes this case the one the check used to get wrong: the main checkout's profile carries no
   // occurrence of this checkout's path at all, so the pattern is the only thing that can cover it.
-  const profile = readFileSync(join(worktree, PROFILE_FILE), 'utf8');
+  const profile = readFileSync(join(dir, PROFILE_FILE), 'utf8');
   assert.ok(!profile.includes(worktree), `${PROFILE_FILE} names the worktree literally, so this case proves nothing`);
 
   const { status, stdout, stderr } = await runCli(worktree, ['doctor']);
 
-  // The remediation is what makes a false warning here expensive rather than merely noisy: `init
-  // --force` inside a worktree regenerates the *committed* profile against the worktree's own path
-  // and leaves the main checkout named by nothing.
+  // A false warning here is expensive rather than merely noisy: its remedy, `init --force` inside the
+  // worktree, writes a profile naming the worktree that no run ever loads.
   assert.doesNotMatch(stderr, warnLine('profile-paths'), `doctor warned about the profile's paths in a worktree the profile covers\n${stderr}`);
   assert.equal(status, 0, `doctor exited ${status} in a sibling worktree of a wired repository\n${stdout}\n${stderr}`);
   assert.match(stdout, CLEAN_SUMMARY);
+  assert.ok(
+    passDetail(stdout, 'permission-profile').includes(join(dir, PROFILE_FILE)),
+    `the permission-profile check did not grade the main checkout's profile\n${stdout}`,
+  );
+});
+
+test('a sibling worktree whose main checkout has no profile fails, naming the main checkout as where to run init', async (t) => {
+  const dir = await wiredFixture(t);
+  const worktree = await wiredWorktree(t, dir);
+  await rm(join(dir, PROFILE_FILE), { force: true });
+
+  const { status, stdout, stderr } = await runCli(worktree, ['doctor']);
+
+  assert.equal(status, 1, `doctor exited ${status} with no profile in the main checkout\n${stdout}\n${stderr}`);
+  const line = reportLine(stderr, 'fail', 'permission-profile') ?? '';
+  assert.match(stderr, failLine('permission-profile'), stderr);
+  assert.ok(line.includes(`at ${dir} — run`), `the failure does not name the main checkout as where to run init\n${line}`);
+  assert.ok(!line.includes(join(worktree, PROFILE_FILE)), `the failure names the worktree's profile path\n${line}`);
+  assert.ok(!line.includes(`${worktree} — run`), `the failure sends the operator to the worktree\n${line}`);
 });
 
 test('a profile generated for another directory still warns, and leaves the exit status at 0', async (t) => {
@@ -2590,6 +2614,7 @@ test('the notifications check reports which settings file is in effect, and neve
     assert.match(stderr, /--test-notification/);
     // Both, because a refusal that names a subset sends an operator to `--help` for the rest.
     assert.match(stderr, /--check-registry/);
+    assert.match(stderr, /--remote-job/);
   });
 
   await t.test('--test-notification with no notifier warns, sends nothing and moves no exit status', async (subtest) => {
@@ -4645,11 +4670,13 @@ async function marketplaceLocationFixture(t, scriptNames) {
  *   the rows recorded for this plugin, in file order. An empty list writes no file at all, which is
  *   the machine where the plugin was never enabled.
  * @param {string | undefined} installLocation
- *   the marketplace's install location, written into `known_marketplaces.json` as a `directory`
- *   source. Omitted writes **no** such file, which is the machine where the two roots coincide —
- *   the fallback, and the state every case that does not name one is pinning.
+ *   the marketplace's install location, written into `known_marketplaces.json`. Omitted writes
+ *   **no** such file, which is the machine where the two roots coincide — the fallback.
+ * @param {{ github: string } | undefined} githubSource
+ *   when given, the marketplace entry is recorded as a GitHub source of that `<owner>/<repo>`
+ *   rather than a `directory` one — the runner's shape, where the two roots coincide too.
  */
-async function claudeConfigHome(t, rows = [], installLocation = undefined) {
+async function claudeConfigHome(t, rows = [], installLocation = undefined, githubSource = undefined) {
   const fixture = await createFixture({ git: false });
   t.after(fixture.cleanup);
   const write = (name, value) => {
@@ -4658,9 +4685,9 @@ async function claudeConfigHome(t, rows = [], installLocation = undefined) {
   };
   if (rows.length > 0) write(INSTALLED_PLUGINS_FILE, { version: 2, plugins: { [PLUGIN_KEY]: rows } });
   if (installLocation !== undefined) {
-    write(KNOWN_MARKETPLACES_FILE, {
-      [MARKETPLACE_NAME]: { source: { source: 'directory', path: installLocation }, installLocation },
-    });
+    const source =
+      githubSource === undefined ? { source: 'directory', path: installLocation } : { source: 'github', repo: githubSource.github };
+    write(KNOWN_MARKETPLACES_FILE, { [MARKETPLACE_NAME]: { source, installLocation } });
   }
   return { env: { CLAUDE_CONFIG_DIR: fixture.dir }, root: fixture.dir };
 }
@@ -4669,10 +4696,9 @@ async function claudeConfigHome(t, rows = [], installLocation = undefined) {
  * The helper-script `permissions.allow` entries the check requires at `root`, in the order it
  * requires them.
  *
- * One per helper script and **no read grant**: reads under the install root were measured to succeed
- * under a profile naming no rule over it, so a fixture that granted one here would let a check that
- * required it go on passing. The read grant a **runtime** root does require is
- * {@link pluginReadEntry}, added per case rather than folded in here.
+ * One per helper script and **no read grant**: the read grant is required at the runtime root only —
+ * including one that is also the install root — and not at an install root distinct from it, so it
+ * is {@link pluginReadEntry}, added per case rather than folded in here.
  */
 function pluginEntries(root, scriptNames = []) {
   return scriptNames.map((name) => `Bash(bash ${root}/scripts/${name}:*)`);
@@ -4724,20 +4750,13 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     assert.match(stdout, CLEAN_SUMMARY);
 
     const lines = reportLines(stderr);
-    for (const entry of pluginEntries(root, HELPERS)) {
+    // The one root is the runtime root by fallback, so it owes the read grant as well as the helpers.
+    for (const entry of [pluginReadEntry(root), ...pluginEntries(root, HELPERS)]) {
       assert.ok(lines.includes(entry), `the check did not print ${entry} as a line of its own:\n${stderr}`);
     }
     // The names come from reading the directory, so a file in it that is not a helper must not
     // become an entry — the assertion that separates a directory read from a hardcoded list.
     assert.ok(!stderr.includes(NOT_A_HELPER), `a file that is not a helper script produced an entry:\n${stderr}`);
-    // No read grant is demanded here, and demanding one is the regression this pins: the sixteen
-    // reads measured under the install root on 2026-08-26 succeeded under a profile naming no rule
-    // over it, so an entry printed here would be one every correct adoption is warned at forever.
-    assert.deepEqual(
-      lines.filter((entry) => entry.startsWith('Read(')),
-      [],
-      `the check demanded a read grant at the install root:\n${stderr}`,
-    );
     // The finding is the profile's, not the machine's: nothing is written anywhere.
     assert.deepEqual(await readdir(home.root), [CLAUDE_PLUGINS_DIR], `doctor wrote under ${home.root}`);
     assert.deepEqual(await snapshotTree(dir), before, 'doctor wrote to the repository it was asked about');
@@ -4747,7 +4766,7 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     const dir = await wiredFixture(subtest, ['--qa']);
     const root = await pluginInstallRootFixture(subtest, HELPERS);
     const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: root }]);
-    allowInProfile(dir, pluginEntries(root, HELPERS));
+    allowInProfile(dir, [pluginReadEntry(root), ...pluginEntries(root, HELPERS)]);
 
     const { status, stdout, stderr } = await runCli(dir, ['doctor'], home.env);
 
@@ -4755,14 +4774,12 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     assert.match(stdout, passLine('plugin-permissions'));
     assert.doesNotMatch(stderr, warnLine('plugin-permissions'));
 
-    // The install-root read grant is a note on the passing line rather than a requirement, and it is
-    // printed in the generated profile's own two-slash spelling: a file rule anchors at the
-    // filesystem root with `//` and the absolute path brings its own leading slash, while a `Bash`
-    // rule is a command string and carries one. Pinning the printed form to the entries `init` itself
-    // wrote is what makes normalising that double slash fail here, rather than pass because the check
-    // and this file's expectation were changed together.
-    const line = detailLine(stdout, passLine('plugin-permissions'));
-    assert.ok(line.includes(`Read(/${root}/**)`), `the passing line did not name the read grant it does not require:\n${line}`);
+    // The read grant the check accepted is the generated profile's own two-slash spelling: a file
+    // rule anchors at the filesystem root with `//` and the absolute path brings its own leading
+    // slash, while a `Bash` rule is a command string and carries one. Pinning that form to the
+    // entries `init` itself wrote is what makes normalising the double slash fail here, rather than
+    // pass because the check and this file's expectation were changed together.
+    assert.match(pluginReadEntry(root), /^Read\(\/\/[^/]/);
     const generatedReads = readJson(join(dir, PROFILE_FILE)).permissions.allow.filter((entry) =>
       entry.startsWith('Read('),
     );
@@ -4791,30 +4808,34 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     assert.ok(!stderr.includes(elsewhere), `the check resolved the user-scope root over this repository's:\n${stderr}`);
   }));
 
-  subtests.push(t.test('the interactive-test phase off grades nothing here, and a profile carrying nothing passes', async (subtest) => {
+  subtests.push(t.test('the interactive-test phase off still owes the read grant at a root that is both, and no helper entry', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const root = await pluginInstallRootFixture(subtest, HELPERS);
     const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: root }]);
 
-    // Nothing has been pasted into this profile, and nothing needs to be: the helper scripts are the
-    // interactive-test phase's alone, and no read grant is required at the install root — the sixteen
-    // reads measured there on 2026-08-26 succeeded under a profile naming no rule over it. So the
-    // check has an empty requirement set and says so, the way `daemon-path` does on a host with no
-    // service manager, rather than warning at an adoption that is complete.
+    // The helper scripts are the interactive-test phase's alone, but the read grant is not: the one
+    // root here is the runtime root by fallback, and a root that was both was refused every `Read`
+    // of its instruction files on 2026-09-28. The regression this pins is the *not graded* pass that
+    // run's preflight printed.
     const { status, stdout, stderr } = await runCli(dir, ['doctor'], home.env);
 
-    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
-    assert.match(stdout, passLine('plugin-permissions'));
-    assert.doesNotMatch(stderr, warnLine('plugin-permissions'));
+    assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+    assert.match(stderr, warnLine('plugin-permissions'));
+    const lines = reportLines(stderr);
+    assert.ok(lines.includes(pluginReadEntry(root)), `the read grant was gated on phases.qa:\n${stderr}`);
+    assert.deepEqual(
+      lines.filter((entry) => entry.startsWith('Bash(bash ')),
+      [],
+      `a helper entry was required with phases.qa off:\n${stderr}`,
+    );
+    assert.doesNotMatch(detailLine(stderr, warnLine('plugin-permissions')), /not graded/);
 
-    const line = detailLine(stdout, passLine('plugin-permissions'));
-    assert.match(line, /not graded/);
-    assert.match(line, /phases\.qa is off/);
-    for (const name of HELPERS) {
-      assert.ok(!line.includes(name), `the passing line named a helper script with phases.qa off:\n${line}`);
-    }
-    // And no entry at all, of either kind — the read grant included: there is nothing to paste.
-    assert.ok(!/Read\(|Bash\(bash /.test(line), `the check printed an entry with nothing graded:\n${line}`);
+    allowInProfile(dir, [pluginReadEntry(root)]);
+    const pasted = await runCli(dir, ['doctor'], home.env);
+
+    assert.equal(pasted.status, 0, `doctor exited ${pasted.status}\n${pasted.stdout}\n${pasted.stderr}`);
+    assert.match(pasted.stdout, passLine('plugin-permissions'));
+    assert.doesNotMatch(pasted.stderr, warnLine('plugin-permissions'));
   }));
 
   subtests.push(t.test('a machine where the plugin is not enabled names the step and invents no path', async (subtest) => {
@@ -4879,7 +4900,7 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     const staleEntry = pluginEntries(stale, [HELPERS[0]])[0];
     // A wrapper's own entry: repo-root-absolute, and byte-shaped exactly like a plugin helper's.
     const wrapperEntry = `Bash(bash ${dir}/scripts/test.sh:*)`;
-    allowInProfile(dir, [...pluginEntries(root, HELPERS), staleEntry, wrapperEntry]);
+    allowInProfile(dir, [pluginReadEntry(root), ...pluginEntries(root, HELPERS), staleEntry, wrapperEntry]);
 
     const { status, stdout, stderr } = await runCli(dir, ['doctor'], home.env);
 
@@ -4920,7 +4941,7 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     assert.ok(!lines.includes(staleEntry), `the entry to delete was printed as a line to paste:\n${stderr}`);
   }));
 
-  subtests.push(t.test('with nothing graded here at all, the same entry is still named', async (subtest) => {
+  subtests.push(t.test('with the interactive-test phase off, the same entry is still named beside the read grant owed', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const root = await pluginInstallRootFixture(subtest, HELPERS);
     const stale = await pluginInstallRootFixture(subtest, HELPERS);
@@ -4930,19 +4951,49 @@ test('the plugin-permissions check prints the entries to paste, and never above 
 
     const { status, stdout, stderr } = await runCli(dir, ['doctor'], home.env);
 
-    // The disposition with nothing to require is the one an entry can hide behind: phases.qa is off,
-    // so no line is owed at either root, and this is the only place the profile's dead weight is
-    // reported at all.
-    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
-    assert.match(stdout, passLine('plugin-permissions'));
-    const line = detailLine(stdout, passLine('plugin-permissions'));
-    assert.match(line, /not graded/);
-    assert.ok(line.includes(staleEntry), `the not-graded line did not name the entry no root resolves:\n${line}`);
+    // phases.qa is off, so the read grant is the only line owed, and the warning that asks for it is
+    // the disposition that now carries the profile's dead weight.
+    assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+    assert.match(stderr, warnLine('plugin-permissions'));
+    const lines = reportLines(stderr);
+    assert.ok(lines.includes(pluginReadEntry(root)), `the warning did not print the read grant owed:\n${stderr}`);
+    const line = detailLine(stderr, warnLine('plugin-permissions'));
+    assert.ok(line.includes(staleEntry), `the warning did not name the entry no root resolves:\n${line}`);
+    assert.ok(!lines.includes(staleEntry), `the entry to delete was printed as a line to paste:\n${stderr}`);
   }));
 
-  // The seven cases above write no `known_marketplaces.json`, so the runtime root falls back to the
-  // install root and the two coincide — the git-sourced adoption, and the state their "no read
-  // grant, five helper entries" assertions pin. The three below are the machine where they differ.
+  // The cases above write no `known_marketplaces.json`, so the runtime root falls back to the
+  // install root and the two coincide — the git-sourced adoption — and each owes the read grant
+  // there. The GitHub-sourced case below records that shape explicitly; the three after it are the
+  // machine where the two roots differ.
+
+  subtests.push(t.test('a GitHub-sourced marketplace with the interactive-test phase off warns for the read grant at its one root', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const root = await pluginInstallRootFixture(subtest, HELPERS);
+    // The runner's shape: the marketplace is a GitHub source, whose install location is a clone
+    // the runtime does not substitute, so the one plugin root is both install and runtime root.
+    const location = await pluginInstallRootFixture(subtest, []);
+    const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: root }], location, {
+      github: 'example-owner/example-marketplace',
+    });
+
+    const { status, stdout, stderr } = await runCli(dir, ['doctor'], home.env);
+
+    assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+    assert.match(stderr, warnLine('plugin-permissions'));
+    const lines = reportLines(stderr);
+    assert.ok(lines.includes(pluginReadEntry(root)), `the read grant at the one root was not required:\n${stderr}`);
+    assert.ok(!stderr.includes(location), `the GitHub source's install location was graded as a root:\n${stderr}`);
+    assert.deepEqual(
+      lines.filter((entry) => entry.startsWith('Bash(bash ')),
+      [],
+      `a helper entry was required with phases.qa off:\n${stderr}`,
+    );
+    // The report says why the rule changed, so an operator who never pasted it knows it is new.
+    const line = detailLine(stderr, warnLine('plugin-permissions'));
+    assert.match(line, /including where it is also the install root/);
+    assert.match(line, /2026-09-28/);
+  }));
 
   /** A helper the runtime root ships and the install snapshot does not, so the union is not either listing. */
   const EXTRA_HELPER = 'poll-dev-server.sh';
@@ -5045,6 +5096,158 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     assert.equal(pastedRun.status, 0, `doctor exited ${pastedRun.status}\n${pastedRun.stdout}\n${pastedRun.stderr}`);
     assert.match(pastedRun.stdout, passLine('plugin-permissions'));
     assert.doesNotMatch(pastedRun.stderr, warnLine('plugin-permissions'));
+  }));
+
+  await Promise.all(subtests);
+});
+
+/**
+ * `doctor --remote-job`: the remote job's preflight, under which a profile that cannot work on the
+ * runner is a `fail` — exit 1, so the job stops before it spends a session — where a default run warns.
+ *
+ * Each case also runs the same fixture **without** the flag, and asserts the warning and exit 0 that
+ * run keeps: the flag is what moves the grade, never the fixture.
+ */
+test('doctor --remote-job fails an unusable profile where a default run warns', { concurrency: CASE_CONCURRENCY }, async (t) => {
+  const subtests = [];
+
+  /** The runner's shape: a GitHub-sourced marketplace whose one plugin root is both install and runtime root. */
+  async function runnerHome(subtest) {
+    const root = await pluginInstallRootFixture(subtest, []);
+    const location = await pluginInstallRootFixture(subtest, []);
+    const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: root }], location, {
+      github: 'example-owner/example-marketplace',
+    });
+    return { root, env: home.env };
+  }
+
+  /** Add directories to the generated profile's `permissions.additionalDirectories`. */
+  function grantDirectories(dir, directories) {
+    editJson(dir, PROFILE_FILE, (profile) => {
+      profile.permissions.additionalDirectories = [...(profile.permissions.additionalDirectories ?? []), ...directories];
+    });
+  }
+
+  subtests.push(t.test('a profile rendered for another root fails profile-paths, naming the untrack route', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const { root, env } = await runnerHome(subtest);
+    allowInProfile(dir, [pluginReadEntry(root)]);
+    grantDirectories(dir, [root]);
+    // The same one-edit move as the default-run case above, re-pointing every path at a prefix name.
+    const profilePath = join(dir, PROFILE_FILE);
+    writeFileSync(profilePath, readFileSync(profilePath, 'utf8').split(basename(dir)).join(`moved-${basename(dir)}`), 'utf8');
+    const branch = readJson(join(dir, CONFIG_FILE)).defaultBranch;
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], env);
+
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} on a profile generated elsewhere\n${job.stdout}\n${job.stderr}`);
+    const line = detailLine(job.stderr, failLine('profile-paths'));
+    assert.ok(line.includes(`git rm --cached ${PROFILE_FILE}`), `the failure does not name the untrack command:\n${line}`);
+    assert.ok(line.includes(`git push --no-verify origin ${branch}`), `the failure does not name the default-branch push:\n${line}`);
+    assert.ok(!line.includes('git push origin '), `the failure prints a push the pre-push hook refuses:\n${line}`);
+    // The local remedy rewrites a tracked file, which the job refuses.
+    assert.ok(!line.includes('init --force'), `the failure prints init --force under --remote-job:\n${line}`);
+
+    const local = await runCli(dir, ['doctor'], env);
+    assert.match(local.stderr, warnLine('profile-paths'));
+    assert.doesNotMatch(local.stderr, failLine('profile-paths'));
+  }));
+
+  subtests.push(t.test('the runner-shaped profile lacking the Read grant fails plugin-permissions, naming the Read line', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const { root, env } = await runnerHome(subtest);
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], env);
+
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} with the Read grant missing\n${job.stdout}\n${job.stderr}`);
+    assert.match(job.stderr, failLine('plugin-permissions'));
+    assert.ok(reportLines(job.stderr).includes(pluginReadEntry(root)), `the failure did not print the Read line:\n${job.stderr}`);
+    const readLine = reportLine(job.stderr, 'fail', 'plugin-permissions');
+    assert.ok(!readLine.includes('does not generate'), `the job's failure kept the local-machine remedy:\n${readLine}`);
+    assert.ok(readLine.includes('profile-tracked'), `the job's failure did not name profile-tracked:\n${readLine}`);
+
+    const local = await runCli(dir, ['doctor'], env);
+    assert.equal(local.status, 0, `doctor exited ${local.status} on a condition that only warns\n${local.stdout}\n${local.stderr}`);
+    assert.match(local.stderr, warnLine('plugin-permissions'));
+  }));
+
+  subtests.push(t.test('the Read grant without the root in additionalDirectories fails, naming the directory', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const { root, env } = await runnerHome(subtest);
+    allowInProfile(dir, [pluginReadEntry(root)]);
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], env);
+
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} with the directory missing\n${job.stdout}\n${job.stderr}`);
+    assert.match(job.stderr, failLine('plugin-permissions'));
+    assert.ok(reportLines(job.stderr).includes(root), `the failure did not print the directory to add:\n${job.stderr}`);
+    const directoryLine = reportLine(job.stderr, 'fail', 'plugin-permissions');
+    assert.ok(!directoryLine.includes('does not generate'), `the job's failure kept the local-machine remedy:\n${directoryLine}`);
+    assert.ok(directoryLine.includes('profile-tracked'), `the job's failure did not name profile-tracked:\n${directoryLine}`);
+
+    // Outside the flag the directory is not graded, so the same profile passes.
+    const local = await runCli(dir, ['doctor'], env);
+    assert.equal(local.status, 0, `doctor exited ${local.status}\n${local.stdout}\n${local.stderr}`);
+    assert.match(local.stdout, passLine('plugin-permissions'));
+  }));
+
+  subtests.push(t.test('the Read grant and the directory both present pass, saying the shell grant was graded', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const { root, env } = await runnerHome(subtest);
+    allowInProfile(dir, [pluginReadEntry(root)]);
+    grantDirectories(dir, [root]);
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], env);
+
+    assert.equal(job.status, 0, `doctor --remote-job exited ${job.status}\n${job.stdout}\n${job.stderr}`);
+    assert.match(job.stdout, passLine('plugin-permissions'));
+    assert.match(detailLine(job.stdout, passLine('plugin-permissions')), /additionalDirectories/);
+    assert.match(job.stdout, passLine('profile-paths'));
+  }));
+
+  subtests.push(t.test('a profile committed at HEAD fails profile-tracked, naming the untrack route, where a default run warns', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const { root, env } = await runnerHome(subtest);
+    allowInProfile(dir, [pluginReadEntry(root)]);
+    grantDirectories(dir, [root]);
+    const branch = readJson(join(dir, CONFIG_FILE)).defaultBranch;
+
+    // The ignored, untracked profile `init` leaves is the passing state, and the job is otherwise clean.
+    const untracked = await runCli(dir, ['doctor', '--remote-job'], env);
+    assert.equal(untracked.status, 0, `doctor --remote-job exited ${untracked.status}\n${untracked.stdout}\n${untracked.stderr}`);
+    assert.match(untracked.stdout, passLine('profile-tracked'));
+
+    await runGit(dir, ['add', '--force', '--', PROFILE_FILE]);
+    await runGit(dir, ['commit', '--quiet', '-m', 'Commit the permission profile']);
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], env);
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} on a committed profile\n${job.stdout}\n${job.stderr}`);
+    const failed = detailLine(job.stderr, failLine('profile-tracked'));
+
+    const local = await runCli(dir, ['doctor'], env);
+    assert.equal(local.status, 0, `doctor exited ${local.status} on a condition that only warns\n${local.stdout}\n${local.stderr}`);
+    assert.doesNotMatch(local.stderr, failLine('profile-tracked'));
+    const warned = detailLine(local.stderr, warnLine('profile-tracked'));
+
+    for (const line of [failed, warned]) {
+      assert.ok(line.includes(`git rm --cached ${PROFILE_FILE}`), `the line does not name the untrack command:\n${line}`);
+      assert.ok(line.includes(`git push --no-verify origin ${branch}`), `the line does not name the default-branch push:\n${line}`);
+      assert.ok(!line.includes('git push origin '), `the line prints a push the pre-push hook refuses:\n${line}`);
+    }
+  }));
+
+  subtests.push(t.test('no plugin record fails plugin-permissions, where a default run warns', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const home = await claudeConfigHome(subtest);
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], home.env);
+
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} with no plugin record\n${job.stdout}\n${job.stderr}`);
+    assert.match(job.stderr, failLine('plugin-permissions'));
+
+    const local = await runCli(dir, ['doctor'], home.env);
+    assert.equal(local.status, 0, `doctor exited ${local.status} on a condition that only warns\n${local.stdout}\n${local.stderr}`);
+    assert.match(local.stderr, warnLine('plugin-permissions'));
   }));
 
   await Promise.all(subtests);
@@ -5317,6 +5520,8 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-execution');
     assert.ok(line?.includes('GitHub dispatches only a workflow its default branch carries'), stderr);
+    assert.ok(line.includes('git push --no-verify origin'), line);
+    assert.ok(line.includes('gh auth refresh -s workflow'), line);
   });
 
   const QA_SKIP = 'a remote run skips the interactive-test phase';

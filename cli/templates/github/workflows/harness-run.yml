@@ -345,7 +345,7 @@ jobs:
 
       - name: Preflight with doctor
         if: env.HARNESS_STOPPED != '1'
-        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor
+        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --remote-job
 
       - name: Bootstrap the checkout
         if: env.HARNESS_STOPPED != '1'

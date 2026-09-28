@@ -9,8 +9,10 @@
  * renderer (`cli/src/core/templating.ts`) sees nothing else; no input or secret expression inside a
  * `run:` block (script injection); `continue` under `!cancelled()` and the upload and final push
  * under `always()`; the upload step's artifact name and `remote-run.sh`'s `STATE_ARTIFACT_NAME` are
- * both `cli/src/remote/githubActions.ts` → `STATE_ARTIFACT_NAME`; and no configured directory frozen
- * into the file.
+ * both `cli/src/remote/githubActions.ts` → `STATE_ARTIFACT_NAME`; no configured directory frozen
+ * into the file; and the `Preflight with doctor` step runs `doctor --remote-job` after the step
+ * generating the job's permission profile and before the harness runs — the option spelled as
+ * `cli/src/commands/doctor.ts` → `REMOTE_JOB_FLAG` declares it, which that module does not export.
  *
  * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; the permissions exactly
  * `contents: read` and `actions: write`; `remote-run.sh poll` its only call into the script family;
@@ -155,6 +157,20 @@ test('the poller uploads its state under POLL_STATE_ARTIFACT_NAME, the name remo
   assert.match(step, /^\s*if: always\(\)/m);
   const script = readFileSync(join(PACKAGE_ROOT, 'templates', 'scripts', 'remote-run.sh'), 'utf8');
   assert.match(script, new RegExp(`^POLL_STATE_ARTIFACT_NAME='${POLL_STATE_ARTIFACT_NAME}'$`, 'm'));
+});
+
+test('the preflight runs doctor --remote-job, after the profile is generated and before the harness runs', () => {
+  const names = steps().map((s) => /- name: (.*)$/m.exec(s)[1]);
+  const at = (name) => {
+    const i = names.indexOf(name);
+    assert.notEqual(i, -1, `a step is named ${name}`);
+    return i;
+  };
+  const preflight = at('Preflight with doctor');
+  assert.ok(at("Generate the job's permission profile") < preflight);
+  assert.ok(preflight < at('Run the harness'));
+  const [body] = runBodies(steps()[preflight].split('\n'));
+  assert.equal(body, 'npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --remote-job');
 });
 
 test('no configured directory is frozen into the file', () => {

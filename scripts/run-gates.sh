@@ -47,6 +47,9 @@ gate() {
     local status=$?
     failed+=("$name")
     echo "  FAIL  $name (exit $status)"
+    # A TAP runner reports each failure inline as it happens and only counts in its closing
+    # summary, so the tail below alone never names a failing test. `|| true`: no match is normal.
+    grep -E '^[[:space:]]*not ok ' "$log" | sed 's/^/        /' || true
     sed 's/^/        /' "$log" | tail -25
   fi
 }
