@@ -24,6 +24,8 @@ Machine-local values do not belong there. What varies per machine rather than pe
 
 What decides the side is variance, not secrecy. A repo-relative *path* to a gitignored credentials file is not machine-local: the path is the same for everyone who clones, and only the file's contents differ. So the path stays a config value while the file itself is never committed — which is why `qa.credentialsPath` and `pushEnvPath` are both declared here, and why neither of the files they point at is.
 
+Remote execution splits along the same line. The committed key `execution.target` says **whether** a run goes remote; everything about **how** — the runner label, the credentials, the push target and the remote tunables — is **GitHub repository variables and secrets**, because those values belong to whoever owns the GitHub repository and some of them are secret. None of them is a `harness.config.json` key; [`remote-execution.md`](remote-execution.md) is the list of record.
+
 The split is not arbitrary — three properties of `userConfig` make it the wrong home for repo-scoped configuration:
 
 - **It is per *user*.** Two developers on one repository could hold different layer lists or different test commands, and nothing would reconcile them. Values the team must agree on cannot live in a store whose whole design is per-person.
@@ -154,6 +156,7 @@ One row per key; each row stands on its own. The five required top-level keys ar
 | `deploy.target` | string | — | Which environment or site of that provider the deploy command deploys to; carried into the agent prompts that need the deploy identifier, not into the generated wrapper. |
 | `deploy.command` | string | — | The deploy command itself. Keep any identifier it needs out of this string when that identifier is a secret. |
 | `design.source` | `"figma"` \| `"penpot"` \| `"none"` | — | Which design tool holds the project's design source of truth — where the designs a change is built against live; `"none"` means the project has no design source at all, which is a decision rather than an unmade one. **Nothing reads this key in this release**: it is declared ahead of its reader, on the §2 principle that a config key costs an adopter nothing until something reads it. That reader is the **design-source coupling** — an adapter that reads design tokens and frame/node structure into the flow's inputs; `ARCHITECTURE.md` `## 8. Declaring a seam before building it` states what that interface is and is not. It therefore has no default, so an absent value reads as *not yet decided* rather than as a silently assumed tool. |
+| `execution.target` | `"local"` \| `"github-actions"` | `local` | Where an unattended run executes: on this machine, or in a GitHub Actions job. With `github-actions`, `init` writes the two workflows (`harness-run.yml` and `harness-resume.yml`), the run watcher dispatches every inbox drop to GitHub Actions instead of launching it, and `doctor` reports the remote setup — `remote-execution` on every run, `remote-github` under `--check-github`. An absent key is `local` and changes nothing. The settings a remote run needs beyond this key live on GitHub, not in this file (§2); the rest is [`remote-execution.md`](remote-execution.md). |
 
 A Default cell showing a value on a required key is the value `init` seeds; the key still has to be present in the finished file.
 

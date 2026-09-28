@@ -1,0 +1,32 @@
+### Task 24 — State the remote job's pause triggers and resumes in the pause protocol and the flow document
+
+**Goal:** Keep the plugin's own statements of the pause protocol and of the flow's scope true once a run can execute in a GitHub Actions job. **The run's own behaviour does not change** — the forks still honour `PAUSE` at a clean checkpoint, still self-pause on overload, still write `PAUSE_ACK` — so what changes is who drops `PAUSE`, who resumes, and where the watcher that does both runs.
+
+**Depends on:** Task 10, which gave the watcher's job mode (run inside the job: `autonomous-watcher.sh job`) the behaviours stated here: on a GitHub-hosted runner it drops `PAUSE` itself at the measured self-pause point (`pause_reason: budget`) and the next job resumes from the ledger; a pause the user sends from their machine arrives as a dispatched `action: pause` run the job polls for (`pause_reason: user`); a usage pause is waited out in the job when cheap, otherwise resumed by the `harness-resume.yml` poller; and a non-zero exit or an overload self-pause is resumed from the ledger at most `REMOTE_AUTO_RESUME_MAX` times. Task 12, whose local watcher relays the user's `PAUSE`, `RESUME` and answers for a remote run. Task 21, which deny-listed `remote-run.sh`. Task 11, which, for a remote run only, commits a dropped user review with the fixed subject `chore: add user review for <branch>` and pushes it before dispatching; the local path still never commits it.
+
+### Targets
+
+- `plugin/instructions/autonomous_pause_and_ledger.md` — `### 2.0` (register row 44) and `### 2.5`'s **Who resumes.** paragraph (register row 56).
+- `plugin/docs/AUTONOMOUS_FLOW.md` — the owner table (register row 55) and `## Out of scope in this release` (register rows 67 and 68).
+- `plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md` — the **"What would you do differently, or what is next?"** paragraph (register row 69).
+- `plugin/instructions/user_review_fix_plan_writing_instructions_autonomous.md` — `## Override 3 — commit the fix plan + source review after the gates converge`, the **"Why a commit is needed here."** paragraph (register row 73).
+
+**Work:**
+
+- [ ] `### 2.0`: retitle to four triggers (the heading is cited — grep `plugin/` for `2.0 The three pause triggers` and repoint every citer byte-identically in the same edit), and add a table row **Job time budget (remote execution, GitHub-hosted runner)** | the job's watcher | drops `<state_dir>/PAUSE` → run honours it (§2.2) | **yes** — the next chained job resumes from the ledger. In the **Usage limit** row, say the watcher that detects it is the local daemon for a local run and the job's own watcher for a remote one, and that a remote run's resume comes from the job or the poller rather than from `RESUME` being dropped locally. State once, under the table, that a remote run's operator pause reaches it as a relayed request and is honoured by the same §2.2 path, and that nothing in §2.2 or §2.4 changes.
+- [ ] `### 2.5` **Who resumes.**: keep the local rule, and add the remote exception — in a remote job an overload self-pause is resumed from the ledger automatically, a bounded number of times, after a delay, and only past that bound does it wait for `/autonomous-sdlc-harness:branch-resume`. Keep the paragraph's reasoning (an outage has no predictable reset) and say the bound is what answers it there.
+- [ ] `AUTONOMOUS_FLOW.md` owner table: add a row **Remote execution — dispatch, the job, its state bundle and the resume poller** | `remote-run.sh` in `<scripts_dir>`, `autonomous-watcher.sh job`, and the two workflows `init` writes into `.github/workflows/` when `execution.target` is `github-actions`; the harness repository's `docs/remote-execution.md` is its format of record. In `## Out of scope in this release`: the **No forge coupling** bullet keeps its claim about pull requests and triggers but no longer says nothing consults a code-hosting platform — an opted-in run is dispatched to GitHub Actions, and its triggers remain file drops; the **Single machine, git only** bullet becomes one machine by default, or a GitHub Actions job when opted in, git only, and says the usage lane stays scoped to the local machine.
+- [ ] The whiteboard paragraph's summary of that list follows the two bullet changes, in its own words.
+- [ ] Override 3's **"Why a commit is needed here."**: qualify, in place, the clause that the source review file the watcher copied in "is likewise never committed" (and the quoted "the flow's normal commits") as the **local** case, and add that for a run with `execution.target` `github-actions` the watcher has already committed the review as `chore: add user review for <branch>` and pushed it before dispatch (Task 11), because a job boundary before the flow's own commit would otherwise lose it; Override 3's staging of that already-tracked, unchanged file is a no-op, so its procedure, trigger and commit are unchanged. Change no other sentence of the override.
+
+**Verification:**
+
+- `grep -rn "three pause triggers" plugin/` prints nothing, and every citer of the retitled heading resolves (`plugin/docs/README.md`'s `AUTONOMOUS_FLOW` citer sweep and the heading grep both run clean).
+- `bash scripts/check-command-spelling.sh` (gate 6d) and `bash scripts/test.sh` exit 0.
+- No sentence in the three pause-and-flow files describes a change to what the run itself does when it pauses.
+- Re-run the story index's derivation entry 6: its hit in `user_review_fix_plan_writing_instructions_autonomous.md` is the qualified sentence, and Override 3's `git add` list is byte-identical to before.
+
+**Deviations from plan:**
+
+- `bash scripts/test.sh` exited 1 on two gates this task's diff does not touch: 6a matched only the gitignored `harness-runs/scratch/t3-test.log` (an earlier task's scratch log carrying absolute paths), and 11 refused because the docs-retrieval runtime is not installed in this checkout. Gate 6d (`bash scripts/check-command-spelling.sh`) exited 0 and `bash scripts/typecheck.sh` passed.
+- The owner-table row names `docs/remote-execution.md` as the format of record as the Work bullet asks; that file does not exist yet — Tasks 28–29, in the later `general` layer, create it.

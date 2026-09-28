@@ -1,0 +1,9 @@
+# plugin review — 4. The interactive-test (QA) phase has no remote path — iteration 1
+
+Iteration 0's Must Fix (the `remote-skipped:` id vocabulary) and its Should Fix (the "local re-run" overstatement) are both resolved in the working tree. The template line now reads "run-mode directive ids … today only `qa`", the block paragraph states the vocabulary and names the readers that key on `qa`, and "**Keep the four provenances apart.**" now says that a resume keeps the exclusion (§1.4).
+
+## Should Fix
+1. **§1.4's task-engine create path still calls the recorded values "phase ids", which is the vocabulary §1.3 now rules out** — `plugin/instructions/autonomous_pause_and_ledger.md` (`### 1.4 Creation`, task-engine paragraph) — "on the `remote-skipped:` line the phase ids the launch prompt's remote-job clause excludes"
+   §1.3 now says the line carries "**run-mode directive ids** … never ledger entry ids such as `E` or `R4`, and the only id it can carry today is `qa`". The creation act that actually writes the line still describes its content as "phase ids". Iteration 0's Must Fix was about this same ambiguity: a writer that takes "phase ids" to mean ledger entry ids records `remote-skipped: E`, and then no reader matches it. The §1.3 template governs the shape and now spells out `qa`, so a writer that follows the template records the right value, and no consumer decision turns on this sentence alone. But the two sections now disagree on what the line holds. The user-review re-seed paragraph in the same subsection avoids the problem because it names no vocabulary.
+   Confirmation rests on reading §1.3 and §1.4 side by side. Nothing was executed.
+   **Fix:** Replace "the phase ids the launch prompt's remote-job clause excludes" with "the run-mode directive ids the launch prompt's remote-job clause excludes (§1.3: today only `qa`)". Or drop the noun and cite §1.3 for the line's content.

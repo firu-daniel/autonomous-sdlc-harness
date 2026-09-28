@@ -38,8 +38,8 @@
  * - **A default run sends nothing.** The `notifications` check is a pure read of whichever settings
  *   file the notifier resolves; everything here with network reach is behind a flag —
  *   {@link TEST_NOTIFICATION_FLAG}, a delivery, which no default run and no `--dry-run` run makes,
- *   and {@link CHECK_REGISTRY_FLAG}, a metadata read that changes nothing anywhere and so is not
- *   suppressed by `--dry-run`. A POST fired by every `doctor` — in CI, from an `&&` chain, from the
+ *   and {@link CHECK_REGISTRY_FLAG} and {@link CHECK_GITHUB_FLAG}, reads that change nothing anywhere
+ *   and so are not suppressed by `--dry-run`. A POST fired by every `doctor` — in CI, from an `&&` chain, from the
  *   run daemon before it starts a run — would cost the command every property above.
  */
 
@@ -80,12 +80,21 @@ const TEST_NOTIFICATION_FLAG = '--test-notification';
 const CHECK_REGISTRY_FLAG = '--check-registry';
 
 /**
+ * An option this command takes of its own: it turns on the `remote-github` check's `gh` queries and
+ * changes no other check.
+ *
+ * Off by default for {@link CHECK_REGISTRY_FLAG}'s reason: a default run answers the same in CI,
+ * offline and in an `&&` chain, and asking GitHub is a network round trip per question.
+ */
+const CHECK_GITHUB_FLAG = '--check-github';
+
+/**
  * Every option this command takes of its own, in the order `--help` lists them.
  *
  * Declared as the list rather than spelled into the refusal message, so the message a mistyped flag
  * gets names whatever the command actually accepts and cannot fall behind it.
  */
-const OWN_FLAGS: readonly string[] = Object.freeze([TEST_NOTIFICATION_FLAG, CHECK_REGISTRY_FLAG]);
+const OWN_FLAGS: readonly string[] = Object.freeze([TEST_NOTIFICATION_FLAG, CHECK_REGISTRY_FLAG, CHECK_GITHUB_FLAG]);
 
 /**
  * The event word the test send carries.
@@ -129,6 +138,8 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   '                       autonomous-notify.sh, after the report',
   `  ${CHECK_REGISTRY_FLAG}     Ask the registry whether each pinned MCP server package can be`,
   '                       fetched, inside the browser-wiring check',
+  `  ${CHECK_GITHUB_FLAG}       Ask GitHub, through gh, whether the remote-execution setup is`,
+  '                       complete, inside the remote-github check',
   '',
   'A default run sends nothing: the notifications check reads which settings file the notifier',
   `resolves and prints no value from it, and only ${TEST_NOTIFICATION_FLAG} delivers a message. The`,
@@ -145,6 +156,12 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   'each pin is looked up with `npm view <spec> version` — a metadata read that fetches and installs',
   'nothing — and one that cannot be reached warns. It never changes the exit status, and --dry-run',
   'does not suppress it: a metadata read changes nothing, here or anywhere else.',
+  '',
+  `${CHECK_GITHUB_FLAG} is off by default for the same reason. With it on and execution.target`,
+  'github-actions, remote-github asks gh whether it is authenticated, whether GitHub knows',
+  'harness-run.yml and harness-resume.yml, which secret names are set (names only, never values) and',
+  'which runner HARNESS_RUNNER selects. A call that times out or cannot reach GitHub warns rather than',
+  'fails. Every call is a read, so --dry-run does not suppress it either.',
   '',
   'Exit status is the contract — branch on it rather than on the report text:',
   '  0  no check failed: every check passed, or the only findings were warnings',
@@ -171,16 +188,18 @@ interface DoctorOptions {
   /**
    * Whether {@link TEST_NOTIFICATION_FLAG} was given: the run's only action, and its only side effect.
    *
-   * Still both, with a second flag beside it: {@link CHECK_REGISTRY_FLAG} reaches a network but reads
-   * metadata, so it changes nothing on this machine, in the repository or at the endpoint — which is
-   * also why it is the one of the two `--dry-run` does not suppress.
+   * Still both, with two flags beside it: {@link CHECK_REGISTRY_FLAG} and {@link CHECK_GITHUB_FLAG}
+   * reach a network but only read, so they change nothing on this machine, in the repository or at
+   * the endpoint — which is also why `--dry-run` suppresses neither.
    */
   readonly testNotification: boolean;
   /**
    * Whether {@link CHECK_REGISTRY_FLAG} was given: the browser-wiring check's registry probe, which
-   * is otherwise off and is the only question in a `doctor` run that reaches a network by itself.
+   * is otherwise off.
    */
   readonly checkRegistry: boolean;
+  /** Whether {@link CHECK_GITHUB_FLAG} was given: the remote-github check's `gh` queries, otherwise off. */
+  readonly checkGithub: boolean;
 }
 
 /**
@@ -197,6 +216,7 @@ interface DoctorOptions {
 function parseOptions(argv: readonly string[]): DoctorOptions {
   let testNotification = false;
   let checkRegistry = false;
+  let checkGithub = false;
   for (const token of argv) {
     if (token === TEST_NOTIFICATION_FLAG) {
       testNotification = true;
@@ -206,13 +226,17 @@ function parseOptions(argv: readonly string[]): DoctorOptions {
       checkRegistry = true;
       continue;
     }
+    if (token === CHECK_GITHUB_FLAG) {
+      checkGithub = true;
+      continue;
+    }
     throw new HarnessError(
       token.startsWith('-')
-        ? `doctor: unknown option ${JSON.stringify(token)} — the options doctor takes of its own are ${OWN_FLAGS.join(' and ')}; run \`npx autonomous-sdlc-harness doctor --help\` for them and for the global options it accepts`
+        ? `doctor: unknown option ${JSON.stringify(token)} — the options doctor takes of its own are ${OWN_FLAGS.join(', ')}; run \`npx autonomous-sdlc-harness doctor --help\` for them and for the global options it accepts`
         : `doctor: unexpected argument ${JSON.stringify(token)} — doctor takes no arguments, and checks the repository containing the current directory (or --cwd)`,
     );
   }
-  return { testNotification, checkRegistry };
+  return { testNotification, checkRegistry, checkGithub };
 }
 
 /** `Summary: 9 pass, 3 warn, 0 fail — exit 0 (no check failed; warnings do not fail the command)`. */
@@ -374,7 +398,7 @@ function sendTestNotification(ctx: CommandContext, checks: CheckContext): void {
 async function run(ctx: CommandContext): Promise<number> {
   const options = parseOptions(ctx.argv);
 
-  const checks = buildCheckContext(ctx.cwd, options.checkRegistry);
+  const checks = buildCheckContext(ctx.cwd, options.checkRegistry, options.checkGithub);
   const results = runChecks(checks);
   const width = Math.max(...results.map((result) => result.id.length));
 

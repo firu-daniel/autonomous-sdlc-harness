@@ -20,7 +20,7 @@
  * key at any level (mirroring `additionalProperties: false`, which is set at *every* level, so an
  * unknown key is a typo rather than a setting that is silently ignored); every declared key has the
  * declared type; every string key is non-empty (the schema's `minLength: 1`); `forge`, `agentEffort`,
- * `qa.driver`, `design.source`, `detection.preset` and `detection.review.verdict` each hold one of
+ * `qa.driver`, `design.source`, `execution.target`, `detection.preset` and `detection.review.verdict` each hold one of
  * the values their schema `enum` lists; `stateDir`
  * satisfies **both** of its clauses; `layers` is non-empty, each entry is complete with a legal
  * `name`, and at least one entry is the catch-all row the schema's `contains` clause requires;
@@ -49,6 +49,7 @@ import {
   CONFIG_VERSION,
   DESIGN_SOURCES,
   DETECTION_PRESET_NAMES,
+  EXECUTION_TARGETS,
   FORGE_KINDS,
   isNoneSentinel,
   isPlaceholder,
@@ -99,6 +100,7 @@ const TOP_LEVEL_KEYS = [
   'parity',
   'deploy',
   'design',
+  'execution',
 ] as const;
 
 /** The schema's top-level `required`. */
@@ -137,6 +139,7 @@ const PARITY_KEYS = ['referenceName', 'referenceImplPath', 'toolchainCommands'] 
 const PARITY_STRING_KEYS = ['referenceName', 'referenceImplPath'] as const;
 const DEPLOY_KEYS = ['provider', 'target', 'command'] as const;
 const DESIGN_KEYS = ['source'] as const;
+const EXECUTION_KEYS = ['target'] as const;
 
 /** A plain object — not `null`, not an array. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -267,8 +270,9 @@ function checkBoolean(parent: Record<string, unknown>, key: string, prefix: stri
  * mobile application does not have, a value outside `agentEffort`'s set is never refused by the
  * runtime either: it warns, ignores the flag and runs at its own default, so the run costs a level
  * the file did not choose, an unfilled `design.source` is likewise a decision not yet made —
- * nothing reports that a change has no stated design source of truth — and the two `detection`
- * enums record what a run and a review concluded, which nothing re-derives afterwards.
+ * nothing reports that a change has no stated design source of truth — a misspelt `execution.target`
+ * reads as local everywhere, so runs stay on this machine with nothing saying why — and the two
+ * `detection` enums record what a run and a review concluded, which nothing re-derives afterwards.
  */
 function checkEnum(
   parent: Record<string, unknown>,
@@ -653,6 +657,18 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
       'design',
       DESIGN_SOURCES,
       'The key is optional and nothing reads it in this release; set "none" to say the project has no design source of truth at all — a change is built against no design — rather than leaving the decision unmade.',
+      problems,
+    );
+  }
+
+  const execution = section(value, 'execution', EXECUTION_KEYS, problems);
+  if (execution !== undefined) {
+    checkEnum(
+      execution,
+      'target',
+      'execution',
+      EXECUTION_TARGETS,
+      'The key is optional and leaving it out keeps runs on this machine. Every reader treats a value other than "github-actions" as local, so a misspelt target would silently keep runs on this machine rather than send them where the file says.',
       problems,
     );
   }

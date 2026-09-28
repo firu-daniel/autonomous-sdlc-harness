@@ -126,6 +126,12 @@ const GIT_CHECK_IGNORE_ARGS: readonly string[] = Object.freeze([
   PATHSPEC_SEPARATOR,
 ]);
 
+/**
+ * The object-existence probe, minus the object. `-e` makes the exit status the whole answer; the
+ * `<ref>:<path>` name is appended as **one** argv element by {@link pathAtRef}.
+ */
+const GIT_OBJECT_EXISTS_ARGS: readonly string[] = Object.freeze(['cat-file', '-e']);
+
 /** The prefix `git` prints on a remote-tracking branch, stripped before the name is reported. */
 const ORIGIN_PREFIX = 'origin/';
 
@@ -565,6 +571,30 @@ export function commitsAhead(repoRoot: string, baseRef: string, tipRef: string):
   if (output === '') return undefined;
   const count = Number(output);
   return Number.isInteger(count) && count >= 0 ? count : undefined;
+}
+
+/**
+ * Whether the tree `ref` names carries `repoRelativePath` — `git cat-file -e <ref>:<path>`.
+ *
+ * **Read-only, and it issues no fetch**, so the answer is the ref as this checkout last saw it: for a
+ * remote-tracking ref, the remote as of the last fetch. Making it current is the caller's remedy to
+ * name, never this probe's to do.
+ *
+ * Every non-zero status is `false` — a ref that does not resolve, a path it does not carry, no `git`
+ * at all — on the discipline {@link configuredRemotes} states: the one caller, `doctor`'s
+ * `remote-execution` check, grades a ref it cannot read exactly as a ref without the file, and
+ * whether the ref exists at all is the `remote` check's line.
+ *
+ * The `<ref>:<path>` name is built by string join and passed as **one argv element** (module header,
+ * invariant 1).
+ */
+export function pathAtRef(repoRoot: string, ref: string, repoRelativePath: string): boolean {
+  try {
+    runGit([...GIT_OBJECT_EXISTS_ARGS, `${ref}:${repoRelativePath}`], repoRoot);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

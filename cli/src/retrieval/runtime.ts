@@ -15,12 +15,17 @@
  * location. So `init` installs the peers and this CLI, at its own version, into
  * {@link retrievalRuntimeDir}, and nothing in this package resolves a peer against a second base.
  *
- * **The declared mirror.** `cli/templates/scripts/docs-search-server.sh` is the one mirror of three
- * literals this module owns — {@link RETRIEVAL_CACHE_DIRNAME}, {@link RETRIEVAL_RUNTIME_DIRNAME} and
- * {@link RUNTIME_CLI_RELATIVE} — spelled there as the path
- * `$(hr_cache_dir)/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js`, which it
- * `exec`s. `hr_cache_dir` itself mirrors `machineCacheDir()`, declared in `machine/paths.ts` →
- * choice 2. A change to any of the three literals is an edit to that script in the same change; a
+ * **The declared mirrors.** Two files outside the package spell literals this module owns:
+ * - `cli/templates/scripts/docs-search-server.sh` mirrors all three — {@link RETRIEVAL_CACHE_DIRNAME},
+ *   {@link RETRIEVAL_RUNTIME_DIRNAME} and {@link RUNTIME_CLI_RELATIVE} — as the path
+ *   `$(hr_cache_dir)/retrieval/runtime/node_modules/autonomous-sdlc-harness/dist/cli.js`, which it
+ *   `exec`s. `hr_cache_dir` itself mirrors `machineCacheDir()`, declared in `machine/paths.ts` →
+ *   choice 2.
+ * - `cli/templates/github/workflows/harness-run.yml` mirrors {@link RETRIEVAL_CACHE_DIRNAME} in the
+ *   `actions/cache` path `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval`, in both
+ *   the `run` and the `warm` job; its prefix mirrors `machineCacheDir()`, declared in the same choice.
+ *
+ * A change to a mirrored literal is an edit to every file that mirrors it, in the same change; a
  * mirror this header does not declare is a defect (`.claude/context/conventions.md` →
  * `## Configuration is the source of truth…`, the persisted-key bullet).
  */
@@ -30,7 +35,7 @@ import { dirname, join } from 'node:path';
 
 import { HarnessError, internal } from '../core/errors.js';
 import { isJsonObject, readJsonFile } from '../core/json.js';
-import { packageRoot } from '../core/paths.js';
+import { ownManifest, ownManifestString, packageRoot } from '../core/paths.js';
 import { machineCacheDir } from '../machine/paths.js';
 
 /** The directory under `machineCacheDir()` every retrieval artifact lives in. */
@@ -56,21 +61,6 @@ export function retrievalRuntimeDir(): string {
 /** `<machineCacheDir()>/retrieval/models` — the model weights, shared by every repository and worktree. */
 export function retrievalModelCacheDir(): string {
   return join(machineCacheDir(), RETRIEVAL_CACHE_DIRNAME, RETRIEVAL_MODELS_DIRNAME);
-}
-
-/** This package's own manifest, which a packaging fault alone can make unreadable. */
-function ownManifest(): { [key: string]: unknown } {
-  const manifestPath = join(packageRoot(), 'package.json');
-  const manifest = readJsonFile(manifestPath);
-  if (!isJsonObject(manifest)) throw internal(`this CLI's own manifest could not be read at ${manifestPath}`);
-  return manifest;
-}
-
-/** A string field of this package's own manifest. */
-export function ownManifestString(key: 'name' | 'version'): string {
-  const value = ownManifest()[key];
-  if (typeof value !== 'string' || value === '') throw internal(`this CLI's own manifest carries no ${key}`);
-  return value;
 }
 
 /**

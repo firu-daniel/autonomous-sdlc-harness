@@ -25,9 +25,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { ownManifestString } from '../core/paths.js';
 import { modelFilesPresent, RETRIEVAL_STUB_ENV, stubModelsSelected } from './models.js';
 import {
-  ownManifestString,
   retrievalCliEntry,
   retrievalModelCacheDir,
   retrievalPeers,

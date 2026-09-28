@@ -342,6 +342,19 @@
           "description": "Which design tool holds the project's design source of truth. 'none' means no design source at all: no design file a change is built against, rather than a decision not yet made. Deliberately has no default, because nothing reads this key in this release: an absent value must read as 'not yet decided' rather than as a silent assumption of one tool, and a default here would oblige the configuration model's defaults to carry a value no generator writes."
         }
       }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where an unattended run executes. Read by init (which writes the GitHub Actions workflows), by doctor, and by the run watcher (which dispatches instead of launching).",
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": ["local", "github-actions"],
+          "default": "local",
+          "description": "Where an unattended run executes: on this machine, or in a GitHub Actions job the watcher dispatches."
+        }
+      }
     }
   }
 }
