@@ -65,6 +65,7 @@ import { isJsonObject, type JsonObject, type JsonValue } from '../core/json.js';
 import { packageRoot, parseRepoSlug } from '../core/paths.js';
 import { PLUGIN_NAME } from '../core/pluginIdentity.js';
 import type { WritePlan } from '../core/writer.js';
+import { PROFILE_PATH } from './permissionProfile.js';
 
 /** The marketplace's name, mirroring `.claude-plugin/marketplace.json`'s `name`. */
 export const MARKETPLACE_NAME = 'autonomous-sdlc-harness';
@@ -396,7 +397,7 @@ export function writeProjectSettings({ repoRoot, plan, flags }: ProjectSettingsO
     marketplaceSlug,
     warnings,
     notes: [
-      `${SETTINGS_PATH} is committed, and committing it is the whole of the onboarding step: a teammate clones the repository, opens it in the agent runner, accepts the workspace trust dialog, and the plugin resolves from these keys — run /reload-plugins if the session was already open — and then runs doctor. There is no second init: the config and the permission profile are committed too.`,
+      `${SETTINGS_PATH} is committed, and committing it is the whole of the plugin's onboarding step: a teammate clones the repository, opens it in the agent runner, accepts the workspace trust dialog, and the plugin resolves from these keys — run /reload-plugins if the session was already open. The config is committed too, but ${PROFILE_PATH} is not: it is machine-local and the managed .gitignore block ignores it, so the teammate then runs \`npx autonomous-sdlc-harness init\` once to generate theirs, and then doctor.`,
     ],
   };
 }
