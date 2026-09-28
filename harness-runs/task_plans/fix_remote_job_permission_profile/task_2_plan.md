@@ -39,3 +39,8 @@ It returns `{ kind: 'read', rule: readRule(root) }` first **iff** `options.isRun
 - The edited cases in `cli/test/doctor.test.mjs` and `cli/test/init.test.mjs` pass, the new GitHub-sourced case among them.
 - `commands.typecheck` passes — the removed `isInstallRoot` option leaves no caller behind (`grep -rn "isInstallRoot" cli/src` returns nothing).
 - The `plugin-permissions` report on a GitHub-sourced record with `phases.qa` off names the missing `Read` line and says why the rule changed; on a directory-sourced record it still requires no `Read` at the install snapshot.
+
+**Deviations from plan:**
+- The first Verification bullet (the edited `doctor.test.mjs` and `init.test.mjs` cases pass) was not executed: neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, so the run is deferred to the Run gates phase. The claim rests on reading the check's new dispositions against each edited assertion, plus `node --check` over both files; `commands.typecheck` was run and passed, and `grep -rn "isInstallRoot" cli/src` returns nothing.
+- `cli/test/init.test.mjs` → the `PLUGIN_PERMISSIONS_GRADED` doc comment also edited: it described the removed *not graded* pass as a live disposition.
+- `checks.ts`: the unreadable-config and no-helper-found clauses of the removed *not graded* disposition were folded into the existing `partial` clause, which both surviving dispositions already carry, and the `readRule` import it no longer uses was dropped.

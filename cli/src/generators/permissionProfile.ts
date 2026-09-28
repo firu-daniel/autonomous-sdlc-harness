@@ -1247,17 +1247,20 @@ export function pluginRootHelpers(roots: readonly string[], qaOn: boolean): read
 }
 
 /**
- * The entries one root requires: {@link readRule} unless it is the install root — reads there were
- * measured to succeed ungranted (`doctor/checks.ts`, `PLUGIN_PERMISSIONS_CHECK`) — then
- * {@link bashScriptRule} for each of `helpers`, in that order. The one per-root builder, called by
- * that check and by {@link generatedPluginRootEntries}.
+ * The entries one root requires: {@link readRule} iff it is the runtime root
+ * ({@link pluginRuntimeRoot}), including where that is also the install root, then
+ * {@link bashScriptRule} for each of `helpers`, in that order. Only an install root distinct from the
+ * runtime root is exempt from the read: it is the one shape measured to read ungranted (2026-08-26,
+ * a `directory`-sourced marketplace), while a single root that was both was refused every `Read` on
+ * a GitHub-sourced one (2026-09-28) — both cited in `doctor/checks.ts`, `PLUGIN_PERMISSIONS_CHECK`.
+ * The one per-root builder, called by that check and by {@link generatedPluginRootEntries}.
  */
 export function pluginRootEntries(
   root: string,
-  options: { readonly isInstallRoot: boolean; readonly helpers: readonly string[] },
+  options: { readonly isRuntimeRoot: boolean; readonly helpers: readonly string[] },
 ): readonly PluginRootEntry[] {
   return [
-    ...(options.isInstallRoot ? [] : [{ kind: 'read' as const, rule: readRule(root) }]),
+    ...(options.isRuntimeRoot ? [{ kind: 'read' as const, rule: readRule(root) }] : []),
     ...options.helpers.map((name) => ({ kind: 'helper' as const, rule: bashScriptRule(pluginHelperPath(root, name)) })),
   ];
 }
@@ -1281,12 +1284,12 @@ function generatedPluginRootEntries(
 ): readonly string[] | undefined {
   const roots = resolvedPluginRoots(repoRoot);
   if (roots.length === 0) return undefined;
-  const installRoot = pluginInstallRoot(repoRoot);
-  const install = installRoot === undefined ? undefined : normalizedRoot(installRoot);
+  const runtimeRoot = pluginRuntimeRoot(repoRoot);
+  const runtime = runtimeRoot === undefined ? undefined : normalizedRoot(runtimeRoot);
   const helpers = pluginRootHelpers(roots, config.phases?.qa === true);
 
   return roots
-    .flatMap((root) => pluginRootEntries(root, { isInstallRoot: root === install, helpers }))
+    .flatMap((root) => pluginRootEntries(root, { isRuntimeRoot: root === runtime, helpers }))
     .map(({ rule }) => rule)
     .filter((rule) => {
       const forbidden = FORBIDDEN_IN_ENTRY.find(([needle]) => rule.includes(needle));

@@ -8050,9 +8050,8 @@ const ONE_ORPHAN_AGREES = /1 `permissions\.allow` entry in \S+ names an absolute
 
 /**
  * `doctor`'s `plugin-permissions` line, as the reporter emits it on stdout — pinned to the arm that
- * **graded** the entries (`carries all …`) rather than to any pass, because the same check passes
- * with `not graded at this machine's plugin root` when no root resolves, and a fixture that had
- * quietly slipped into that state would satisfy a bare `PASS` while grading nothing.
+ * **graded** the entries (`carries all …`) rather than to any pass, so a check that regained a
+ * disposition grading nothing could not satisfy it with a bare `PASS`.
  */
 const PLUGIN_PERMISSIONS_GRADED = /^PASS\s+plugin-permissions\s+.*carries all/m;
 
@@ -8365,9 +8364,10 @@ test('init --plugin-root-entries writes the plugin-root entries doctor dictates 
 
     const allow = allowEntries(dir);
     assert.ok(allow.includes(helperEntry(machine.root)), `the helper entry at the planted root was not written:\n${allow.join('\n')}`);
-    // The planted root is the install root, where doctor requires no read rule: the written set is
-    // exactly the required set, which the graded pass below confirms from doctor's side.
-    assert.ok(!allow.includes(readEntry(machine.root)), 'a read rule doctor does not require at the install root was written');
+    // The planted root is the install root and, with no marketplace record, the runtime root by
+    // fallback, so doctor requires a read rule there: the written set is exactly the required set,
+    // which the graded pass below confirms from doctor's side.
+    assert.ok(allow.includes(readEntry(machine.root)), `the read rule at the planted root was not written:\n${allow.join('\n')}`);
     const doctor = await runCli(dir, ['doctor'], machine.env);
     assert.match(doctor.stdout, PLUGIN_PERMISSIONS_GRADED, `doctor does not grade the written entries green:\n${doctor.stdout}`);
     assert.ok(!doctor.stdout.includes('dead weight'), `doctor names a stray entry the switch wrote:\n${doctor.stdout}`);

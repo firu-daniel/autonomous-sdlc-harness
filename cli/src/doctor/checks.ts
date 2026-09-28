@@ -162,7 +162,6 @@ import {
   pluginRootEntryTarget,
   pluginRootHelpers,
   PROFILE_PATH,
-  readRule,
   renderProfile,
   TEMPLATE_PATH as PROFILE_TEMPLATE_PATH,
 } from '../generators/permissionProfile.js';
@@ -4052,15 +4051,18 @@ function namesHelperScript(entry: string): boolean {
  *   because those scripts are the interactive-test phase's alone. With the phase off this check says
  *   nothing whatever about them: a warning nobody with that phase off can act on is one they learn
  *   to skip.
- * - A `Read` rule at a runtime root that differs from the install root, **not** phase-gated:
- *   instruction files and samples are read by every unattended run, interactive-test phase or not.
- * - **No `Read` rule over the install root**, and the asymmetry is a measurement rather than a
- *   taste. Measured 2026-08-26, under a generated profile naming no rule over either root: sixteen
- *   `Read` calls under the install root succeeded, over eight distinct instruction files, while ten
- *   under the runtime root were refused in the same run.
- *
- * With nothing left to grade — the phase off at a single root — it reports **not graded** and names
- * which, rather than a pass an adopter would read as coverage.
+ * - A `Read` rule at the **runtime root**, including where it is also the install root, **not**
+ *   phase-gated: instruction files and samples are read by every unattended run, interactive-test
+ *   phase or not. So every resolved root set carries at least one required entry.
+ * - **No `Read` rule over an install root distinct from the runtime root**, and the asymmetry is a
+ *   measurement rather than a taste. Measured 2026-08-26 on a `directory`-sourced marketplace, under
+ *   a generated profile naming no rule over either root: sixteen `Read` calls under the install root
+ *   — a cache snapshot the runtime does not substitute — succeeded, over eight distinct instruction
+ *   files, while ten under the runtime root were refused in the same run. Observed 2026-09-28 in
+ *   Gate 12 round 1, on a GitHub-hosted runner with a GitHub-sourced marketplace, where one root is
+ *   both: every `Read` of `<root>/instructions/*.md` asked for permission, and `cat`/`ls` were
+ *   refused as outside "the allowed working directory". An install root that is also the runtime
+ *   root is therefore not exempt.
  *
  * The helper names come from **reading `<root>/scripts/`** ({@link pluginRootHelpers}) at each
  * graded root and taking the union, never from a list kept here: they are declared once, in the
@@ -4094,8 +4096,8 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.profile === undefined) return unevaluated(`${PROFILE_PATH} could not be read (see the permission-profile check)`);
 
-    // Read here rather than beside `missing` below, because both the not-graded and the no-root
-    // dispositions return above that point and each interpolates a count out of it. A pure read of
+    // Read here rather than beside `missing` below, because the no-root disposition returns above
+    // that point and interpolates a count out of it. A pure read of
     // the profile: it neither writes nor throws on a malformed one, and `missing` is still computed
     // from it where it always was.
     const allowed = permissionEntries(ctx.profile, 'allow');
@@ -4139,7 +4141,7 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
       if (target === undefined || isUnderDirectory(target, here)) return [];
       return resolvedRoots.some((root) => isUnderDirectory(target, root)) ? [] : [`${entry} — ${target}`];
     });
-    // Carried into all three surviving dispositions, so what the report says about dead weight does
+    // Carried into both surviving dispositions, so what the report says about dead weight does
     // not depend on which arm this machine happens to be in. Empty set, empty clause — as `partial`.
     const stray =
       strays.length === 0
@@ -4165,9 +4167,9 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
           ? `the directory this marketplace is sourced from (the only root that resolved: ${installedPluginsPath()} records no install root)`
           : `the one plugin root this machine resolves, recorded in ${installedPluginsPath()}`,
       // The builder `init --plugin-root-entries` writes through too, so the two cannot differ. The
-      // read rule is outside the phase gate and absent at the install root: reads there were measured
-      // to succeed ungranted, ten at the runtime root to be refused.
-      required: pluginRootEntries(root, { isInstallRoot: root === installRoot, helpers }).map(({ kind, rule }) => ({
+      // read rule is outside the phase gate and required at the runtime root, including where it is
+      // also the install root; only an install root distinct from it is exempt.
+      required: pluginRootEntries(root, { isRuntimeRoot: root === runtimeRoot, helpers }).map(({ kind, rule }) => ({
         rule,
         symptom:
           kind === 'read'
@@ -4177,32 +4179,20 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
     }));
     const required = groups.flatMap((group) => group.required);
 
-    if (required.length === 0) {
-      const reason = !phaseKnown
-        ? `${CONFIG_FILENAME} could not be read, so the phase the helper scripts belong to is unknown (see the config check)`
-        : qaOn
-          ? `no helper script was found under ${pluginScriptsDir(firstRoot)}: a plugin root with no scripts directory is a broken or partial install, and re-enabling the plugin is what repairs it`
-          : "phases.qa is off, and the helper scripts are that phase's alone";
-      return pass(`not graded at this machine's plugin root (${firstRoot}), because ${reason}.${stray}`);
-    }
-
-    // Two graded roots and no helper name under either is still a broken install, and the read rule
-    // alone would otherwise let it pass in silence once pasted.
-    const partial =
-      qaOn && helpers.length === 0
-        ? ' No helper script was found under any graded root, so none is required here: that is a broken or partial install, which re-enabling the plugin repairs.'
+    // A root that resolves always carries the runtime root's `Read`, so `required` is never empty
+    // here; what the helper entries could not be graded against is said on both dispositions.
+    const partial = !phaseKnown
+      ? ` ${CONFIG_FILENAME} could not be read, so the phase the helper scripts belong to is unknown and no helper entry was graded (see the config check).`
+      : qaOn && helpers.length === 0
+        ? ` No helper script was found under ${split ? 'any graded root' : pluginScriptsDir(firstRoot)}, so none is required here: that is a broken or partial install, which re-enabling the plugin repairs.`
         : '';
     // Stated once, in both dispositions, because an operator reading either has to know why a line
-    // they already pasted at one root reappears at the other, and why only one root carries a read
-    // rule. `coincide` is the ordinary machine: one directory, one set of entries, no read rule.
-    const coincide = !split && installRoot !== undefined;
+    // they already pasted at one root reappears at the other, and which root carries a read rule.
     const why =
       (split
         ? ` Both roots are graded because a helper named in an instruction file is resolved by the agent itself while one named in an agent definition body has \`\${CLAUDE_PLUGIN_ROOT}\` substituted by the runtime, and on this machine those two routes were measured to land on different directories.`
         : '') +
-      (coincide
-        ? ''
-        : ` The \`Read\` entry is graded at the runtime root and not at the install root because reads at the install root were measured (2026-08-26) to succeed under a profile naming no rule over it, while ten at the runtime root were refused in that same run; it is outside the \`phases.qa\` gate, because instruction files and samples are read by every run.`);
+      ` The \`Read\` entry is required at the runtime root, including where it is also the install root, and outside the \`phases.qa\` gate, because instruction files and samples are read by every run: on 2026-09-28 a GitHub-hosted runner whose one plugin root was both was refused every \`Read\` of its instruction files under a profile naming no rule over it. It is not required at an install root distinct from the runtime root${split ? ', as here' : ''}: reads there were measured (2026-08-26, a \`directory\`-sourced marketplace) to succeed under a profile naming no rule over it, while ten at the runtime root were refused in that same run.`;
 
     const missing = required.filter((entry) => !allowed.includes(entry.rule));
 
@@ -4225,7 +4215,7 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
       )
       .join('; ');
     return pass(
-      `${PROFILE_PATH} carries all ${required.length} \`permissions.allow\` ${entryWord(required.length)} this machine's plugin ${split ? 'roots need' : 'root needs'} — ${carried}.${why}${partial}${stray}${coincide ? ` \`${readRule(firstRoot)}\` is deliberately not one of them — measured 2026-08-26, reads under that root succeed under a profile carrying no rule naming it.` : ''}`,
+      `${PROFILE_PATH} carries all ${required.length} \`permissions.allow\` ${entryWord(required.length)} this machine's plugin ${split ? 'roots need' : 'root needs'} — ${carried}.${why}${partial}${stray}`,
     );
   },
 };
