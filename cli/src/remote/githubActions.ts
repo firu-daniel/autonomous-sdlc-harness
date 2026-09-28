@@ -3,7 +3,7 @@
  *
  * **The rule this module exists to enforce: every remote-execution name has one owner, and a copy
  * anywhere else in `cli/src` imports it.** The workflow file names and paths, the template directory,
- * the repository secret and variable names, the state-artifact name and the `gh` test-seam variable
+ * the repository secret and variable names, the two artifact names and the `gh` test-seam variable
  * are declared here once; the generator that writes the workflows and the `doctor` checks that grade
  * them read these constants rather than retyping a literal.
  *
@@ -40,6 +40,9 @@ export const WORKFLOW_TEMPLATE_DIR = 'github/workflows';
 
 /** The Actions artifact every job uploads its state bundle as. */
 export const STATE_ARTIFACT_NAME = 'harness-state';
+
+/** The Actions artifact each resume-poller tick uploads its carried state as, for the next tick. */
+export const POLL_STATE_ARTIFACT_NAME = 'harness-poll-state';
 
 /** Repository variable naming the `runs-on` label; unset means `ubuntu-latest`. */
 export const RUNNER_VARIABLE = 'HARNESS_RUNNER';

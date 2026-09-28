@@ -14,7 +14,8 @@
  *
  * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; the permissions exactly
  * `contents: read` and `actions: write`; `remote-run.sh poll` its only call into the script family;
- * `HARNESS_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block.
+ * `HARNESS_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block;
+ * its state upload under `always()` named `POLL_STATE_ARTIFACT_NAME`, as `remote-run.sh` spells it.
  */
 
 import assert from 'node:assert/strict';
@@ -24,6 +25,7 @@ import test from 'node:test';
 
 import { PACKAGE_ROOT } from './helpers/fixture.mjs';
 import {
+  POLL_STATE_ARTIFACT_NAME,
   STATE_ARTIFACT_NAME,
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RUN_FILE,
@@ -141,6 +143,18 @@ test('the uploaded artifact is the one remote-run.sh downloads: STATE_ARTIFACT_N
   assert.match(upload, new RegExp(`^\\s*name: ${STATE_ARTIFACT_NAME}$`, 'm'));
   const script = readFileSync(join(PACKAGE_ROOT, 'templates', 'scripts', 'remote-run.sh'), 'utf8');
   assert.match(script, new RegExp(`^STATE_ARTIFACT_NAME='${STATE_ARTIFACT_NAME}'$`, 'm'));
+});
+
+test('the poller uploads its state under POLL_STATE_ARTIFACT_NAME, the name remote-run.sh downloads, always', () => {
+  const at = RESUME_LINES.findIndex((line) => line.includes('actions/upload-artifact'));
+  assert.notEqual(at, -1);
+  let start = at;
+  while (!/^\s*- name:/.test(RESUME_LINES[start])) start--;
+  const step = [RESUME_LINES[start], ...blockUnder(start, RESUME_LINES)].join('\n');
+  assert.match(step, new RegExp(`^\\s*name: ${POLL_STATE_ARTIFACT_NAME}$`, 'm'));
+  assert.match(step, /^\s*if: always\(\)/m);
+  const script = readFileSync(join(PACKAGE_ROOT, 'templates', 'scripts', 'remote-run.sh'), 'utf8');
+  assert.match(script, new RegExp(`^POLL_STATE_ARTIFACT_NAME='${POLL_STATE_ARTIFACT_NAME}'$`, 'm'));
 });
 
 test('no configured directory is frozen into the file', () => {

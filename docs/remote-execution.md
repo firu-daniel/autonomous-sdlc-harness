@@ -162,6 +162,8 @@ When the usage gate pauses a run, the job has two ways to resume it, and chooses
 - **Wait in the job** when the reset falls before the job's deadline and either the runner is self-hosted, or the wait is at most `REMOTE_WAIT_MAX_SECS` (default 600). The gate's own resume then relaunches the run in the same job. A self-hosted job's wait costs nothing; a hosted job bills for every minute it waits, but a short wait is still cheaper than a new job's setup plus the poller's latency.
 - **Hand it to the poller** otherwise: the job ends with decision `wait-poller`, so billing stops with it, and `continue` enables `harness-resume.yml`. The poller is a `schedule` workflow, every 30 minutes as shipped, whose one step is `remote-run.sh poll`: it downloads each branch's latest bundle, dispatches `resume: pause` for every usage-paused run whose recorded reset has passed, and **disables itself** once no run is left waiting. A job that ends on a usage pause uploads its bundle before it enables the poller, so a tick that disables re-lists the runs once and re-enables the poller when a still-running job's usage-paused bundle appeared meanwhile; such a run is never dispatched until its run has completed. An ordinary running job carries no bundle until its final steps and never keeps the poller enabled. Ticks are therefore paid only while something is paused. On a private repository each tick is billed at least one minute while the poller is enabled — up to 48 minutes a day at the shipped interval — and a run resumes up to one interval after its reset; on a public repository the ticks cost nothing. The interval is the adopter's to edit in the workflow file.
 
+**A re-dispatch that keeps failing is bounded.** A failed dispatch is retried on later ticks until `HARNESS_POLL_MAX_DISPATCH_FAILURES` dispatches of the same paused run have failed (default 3, counting the first), or until the recorded reset is more than `HARNESS_POLL_GIVE_UP_AFTER_MINUTES` (default 360) in the past, whichever comes first. The poller then sends one `paused` notification naming `gh`'s error and `/autonomous-sdlc-harness:branch-resume <branch>`, and stops counting that branch as waiting, so it can disable itself. The count travels from one tick to the next in the `harness-poll-state` artifact, kept 7 days. A new run of the branch starts the count again. If the artifact is lost, the deadline bound alone still ends the retries.
+
 **The enable is unverified.** Whether `GITHUB_TOKEN` with `actions: write` may enable and disable a workflow was not confirmed (§6). If the enable fails, the job's `paused` notification says auto-resume is unavailable, and the run waits for `/autonomous-sdlc-harness:branch-resume`. It never falls back on the local watcher.
 
 **Not built:** an external scheduler calling `repository_dispatch` at the exact reset time adds a dependency outside GitHub, and an environment wait timer is fixed per environment rather than per run. A `schedule` trigger cannot serve as a one-shot timer either: it is a recurring cron read from the default branch, and scheduling a specific time would mean committing a cron line to a protected branch.
@@ -331,6 +333,8 @@ All are set on the GitHub repository (Settings → Secrets and variables → Act
 | `HARNESS_RUNNER` | variable | `runs-on` in both workflows | `ubuntu-latest` | no (§8) |
 | `HARNESS_REMOTE_STOP` | variable | every job and every poller tick | empty | no. Any value stops every job and tick before it launches or dispatches anything (§3) |
 | `HARNESS_MAX_CHAIN` | variable | `remote-run.sh continue` and `poll` | 24 | no (§3, *Runs longer than a job*) |
+| `HARNESS_POLL_MAX_DISPATCH_FAILURES` | variable | `remote-run.sh poll`: failed re-dispatches of one paused run before the poller gives up on it | 3 | no (§3, *Resuming without the local watcher*) |
+| `HARNESS_POLL_GIVE_UP_AFTER_MINUTES` | variable | `remote-run.sh poll`: minutes after the recorded reset past which the poller gives up | 360 | no (§3, *Resuming without the local watcher*) |
 | `HARNESS_STEP_TIMEOUT_MINUTES` | variable | `harness-run.yml`'s time budget | 330 hosted, 7170 self-hosted | no |
 | `HARNESS_SELF_PAUSE_AFTER_MINUTES` | variable | as above, hosted runners only | 240 | no |
 | `STALL_WARN_SECS` | variable | the watcher's stall watchdog, in job mode | 1200 | no |
@@ -347,7 +351,7 @@ All are set on the GitHub repository (Settings → Secrets and variables → Act
 | `REMOTE_AUTO_RESUME_DELAY_SECS` | variable | job mode: the wait before each automatic resume | 300 | no |
 | `REMOTE_CONTROL_POLL_SECS` | variable | job mode: how often the job looks for a `harness pause` run | 60 | no |
 
-The list of record is the `env:` block of the `run` job in `harness-run.yml`; a tunable the watcher reads and that block does not map is not reachable from a repository variable.
+The list of record is the `env:` block of the `run` job in `harness-run.yml`, and for the poller's own variables that of the `poll` job in `harness-resume.yml`; a tunable the watcher reads and that block does not map is not reachable from a repository variable.
 
 ### Your own allow entries
 

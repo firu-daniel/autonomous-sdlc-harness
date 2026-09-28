@@ -29,7 +29,12 @@
  * bundle as waiting, and after its own disable re-lists once and re-enables the poller when such a
  * run appeared meanwhile — never for a running job with no bundle. The stub models "meanwhile": once
  * its log holds a `workflow disable`, it answers `run list` and the artifact list from
- * `STUB_RUN_LIST_AFTER_DISABLE` and `STUB_ARTIFACTS_AFTER_DISABLE` when those are set. Most
+ * `STUB_RUN_LIST_AFTER_DISABLE` and `STUB_ARTIFACTS_AFTER_DISABLE` when those are set. A dispatch
+ * that keeps failing is retried until a count or a deadline bound, then notified once and no longer
+ * waiting; the count is carried between ticks the way GitHub carries it — the test copies a tick's
+ * `poll_state/current/` aside and serves it as the next tick's `harness-poll-state` artifact, listed
+ * under `STUB_RESUME_RUN_LIST`, and `STUB_FAIL_TIMES` fails `STUB_FAIL_ON` only for its first calls
+ * as counted in the stub's own log. Most
  * cases replace the fixture's `autonomous-notify.sh` with a recorder, as the watcher suite does, so no
  * desktop banner fires; the failed-enable case keeps the real notifier and records through
  * `HARNESS_PUSH_CMD`, with `XDG_CONFIG_HOME` pointed into the fixture so no machine push file is read.
@@ -65,11 +70,15 @@ const after = (name) => (disabled && process.env[name + '_AFTER_DISABLE'] !== un
 appendFileSync(process.env.STUB_LOG, JSON.stringify(args) + '\\n');
 const line = args.join(' ');
 const failOn = process.env.STUB_FAIL_ON;
-if (failOn && line.startsWith(failOn)) {
+const failTimes = process.env.STUB_FAIL_TIMES;
+const failedSoFar = () => readFileSync(process.env.STUB_LOG, 'utf8').split('\\n').filter(Boolean)
+  .filter((entry) => JSON.parse(entry).join(' ').startsWith(failOn)).length;
+if (failOn && line.startsWith(failOn) && (failTimes === undefined || failedSoFar() <= Number(failTimes))) {
   process.stderr.write((process.env.STUB_FAIL_STDERR || 'stub failure') + '\\nsecond line\\n');
   process.exit(4);
 }
-if (line.startsWith('run list')) process.stdout.write(after('STUB_RUN_LIST') || '[]');
+if (line.startsWith('run list --workflow harness-resume.yml')) process.stdout.write(process.env.STUB_RESUME_RUN_LIST || '[]');
+else if (line.startsWith('run list')) process.stdout.write(after('STUB_RUN_LIST') || '[]');
 if (line.startsWith('repo view')) process.stdout.write(process.env.STUB_REPO_VIEW || '{}');
 if (line.startsWith('run view')) process.stdout.write(process.env.STUB_RUN_VIEW || '{}');
 if (args[0] === 'api') {
@@ -945,6 +954,13 @@ function usageBundle(fx, name, due, chain = '2') {
   });
 }
 
+const POLL_STATE_CURRENT = `${STATE_DIR}/autonomous_logs/poll_state/current`;
+
+/** The poller state `poll` wrote for the next tick. */
+function pollState(fx) {
+  return JSON.parse(readFileSync(join(fx.dir, POLL_STATE_CURRENT, 'poll_state.json'), 'utf8'));
+}
+
 test('poll dispatches the due branch and keeps the poller for the one still waiting', async (t) => {
   const fx = await remoteFixture(t);
   recordNotifications(fx);
@@ -978,14 +994,24 @@ test('poll with only a due branch dispatches it, then disables the poller', asyn
   ]);
 });
 
-test('poll with HARNESS_REMOTE_STOP set sends nothing', async (t) => {
+test('poll with HARNESS_REMOTE_STOP set sends nothing, and carries the poller state unchanged', async (t) => {
   const fx = await remoteFixture(t);
+  const carried = { feat_a: { run_id: '701', failures: '2', notified: '' } };
+  const previous = join(fx.dir, STATE_DIR, 'stub', 'poll_states', 'stop');
+  mkdirSync(previous, { recursive: true });
+  writeFileSync(join(previous, 'poll_state.json'), JSON.stringify(carried));
   const result = await remoteRun(fx, ['poll'], {
-    ...syncEnv({ runs: [ghRun(701, 'completed', 1, 'harness run feat_a')], artifacts: { 701: ['harness-state'] }, bundles: { 701: usageBundle(fx, 'a', true) } }),
+    ...syncEnv({
+      runs: [ghRun(701, 'completed', 1, 'harness run feat_a')],
+      artifacts: { 701: ['harness-state'], 5001: ['harness-poll-state'] },
+      bundles: { 701: usageBundle(fx, 'a', true), 5001: previous },
+    }),
+    STUB_RESUME_RUN_LIST: JSON.stringify([{ databaseId: 5001, createdAt: '2026-01-01T00:00:00Z' }]),
     HARNESS_REMOTE_STOP: '1',
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(calls(fx), []);
+  assert.ok(calls(fx).every((argv) => argv[0] !== 'workflow'), joined(fx).join('\n'));
+  assert.deepEqual(pollState(fx), carried);
 });
 
 test('poll skips a due branch whose harness stop run is newer, and disables itself when it was the only one waiting', async (t) => {
@@ -1084,6 +1110,132 @@ test('poll counts an unfinished run already carrying a usage-paused bundle as wa
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(workflowCalls(fx), []);
   assert.deepEqual(notes(), []);
+});
+
+/** A usage-paused bundle whose reset passed a minute ago: due, and inside the give-up deadline. */
+function recentDueBundle(fx, name) {
+  return loopBundle(fx, name, {
+    decision: 'wait-poller', status: 'paused', pause_reason: 'usage', chain: '2',
+    usage_resume_at: String(Math.floor(Date.now() / 1000) - 60),
+  });
+}
+
+/**
+ * One tick over feat_x's completed run `runId`. `served`, when given, is the previous tick's state
+ * directory, listed as poller run 5000 + `tick`'s `harness-poll-state` artifact.
+ */
+function pollTick(fx, { tick, runId, bundleDir, served = null, extra = {} }) {
+  const artifacts = { [runId]: ['harness-state'] };
+  const bundles = { [runId]: bundleDir };
+  const resumeRuns = [];
+  if (served !== null) {
+    const stateRun = 5000 + tick;
+    artifacts[stateRun] = ['harness-poll-state'];
+    bundles[stateRun] = served;
+    resumeRuns.push({ databaseId: stateRun, createdAt: '2026-01-01T00:00:00Z' });
+  }
+  return remoteRun(fx, ['poll'], {
+    ...syncEnv({ runs: [ghRun(runId, 'completed', 1)], artifacts, bundles }),
+    STUB_RESUME_RUN_LIST: JSON.stringify(resumeRuns),
+    ...extra,
+  });
+}
+
+/** What the upload step does: keep this tick's written state for the next tick to download. */
+function uploadState(fx, tick) {
+  const dir = join(fx.dir, STATE_DIR, 'stub', 'poll_states', `tick${tick}`);
+  cpSync(join(fx.dir, POLL_STATE_CURRENT), dir, { recursive: true });
+  return dir;
+}
+
+const disables = (fx) => joined(fx).filter((line) => line.startsWith('workflow disable'));
+const FAILING_DISPATCH = { STUB_FAIL_ON: 'workflow run', STUB_FAIL_STDERR: 'HTTP 404: harness-run.yml not found' };
+
+test('poll gives up on a dispatch that always fails: one paused notification at the limit, then it disables itself', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const b = recentDueBundle(fx, 'x');
+  let served = null;
+  for (let tick = 1; tick <= 3; tick++) {
+    const result = await pollTick(fx, { tick, runId: 801, bundleDir: b, served, extra: FAILING_DISPATCH });
+    assert.equal(result.status, 0, result.stderr);
+    if (tick < 3) {
+      assert.deepEqual(notes(), [], `tick ${tick}`);
+      assert.deepEqual(disables(fx), [], `tick ${tick}`);
+      assert.equal(pollState(fx).feat_x.failures, String(tick));
+    }
+    served = uploadState(fx, tick);
+  }
+  const sent = notes();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].event, 'paused');
+  assert.equal(sent[0].branch, 'feat_x');
+  assert.match(sent[0].detail, /HTTP 404: harness-run\.yml not found/);
+  assert.match(sent[0].detail, /after 3 attempts/);
+  assert.match(sent[0].detail, /autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.deepEqual(disables(fx), ['workflow disable harness-resume.yml']);
+  assert.equal(pollState(fx).feat_x.notified, '1');
+
+  // The poller re-enabled by another branch: the same state sends no second notification or attempt.
+  const again = await pollTick(fx, { tick: 4, runId: 801, bundleDir: b, served, extra: FAILING_DISPATCH });
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(notes().length, 1);
+  assert.equal(workflowRuns(fx).length, 3);
+});
+
+test('poll retries a dispatch that fails once, then drops the branch\'s state when it succeeds', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const b = recentDueBundle(fx, 'x');
+  const extra = { ...FAILING_DISPATCH, STUB_FAIL_TIMES: '1' };
+  const first = await pollTick(fx, { tick: 1, runId: 801, bundleDir: b, extra });
+  assert.equal(first.status, 0, first.stderr);
+  assert.deepEqual(notes(), []);
+  assert.deepEqual(disables(fx), []);
+  assert.deepEqual(pollState(fx), { feat_x: { run_id: '801', failures: '1', notified: '' } });
+
+  const second = await pollTick(fx, { tick: 2, runId: 801, bundleDir: b, served: uploadState(fx, 1), extra });
+  assert.equal(second.status, 0, second.stderr);
+  assert.equal(workflowRuns(fx).length, 2);
+  assert.ok(workflowRuns(fx)[1].includes('-f resume=pause'), workflowRuns(fx)[1]);
+  assert.deepEqual(notes(), []);
+  assert.deepEqual(pollState(fx), {});
+  assert.deepEqual(disables(fx), ['workflow disable harness-resume.yml']);
+});
+
+test('poll gives up on the first failed dispatch past the deadline, with no carried state', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const result = await pollTick(fx, { tick: 1, runId: 801, bundleDir: usageBundle(fx, 'x', true), extra: FAILING_DISPATCH });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(notes().length, 1);
+  assert.equal(notes()[0].event, 'paused');
+  assert.match(notes()[0].detail, /after 1 attempts/);
+  assert.deepEqual(disables(fx), ['workflow disable harness-resume.yml']);
+});
+
+test('poll restarts the failure count for a newer run of the branch', async (t) => {
+  const fx = await remoteFixture(t);
+  const notes = recordNotifications(fx);
+  const served = join(fx.dir, STATE_DIR, 'stub', 'poll_states', 'old');
+  mkdirSync(served, { recursive: true });
+  writeFileSync(join(served, 'poll_state.json'), JSON.stringify({ feat_x: { run_id: '700', failures: '2', notified: '' } }));
+  const result = await pollTick(fx, { tick: 1, runId: 701, bundleDir: recentDueBundle(fx, 'x'), served, extra: FAILING_DISPATCH });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(notes(), []);
+  assert.deepEqual(pollState(fx), { feat_x: { run_id: '701', failures: '1', notified: '' } });
+  assert.deepEqual(disables(fx), []);
+});
+
+test('poll with a give-up bound that is not a non-negative integer exits 1 and dispatches nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  recordNotifications(fx);
+  for (const name of ['HARNESS_POLL_MAX_DISPATCH_FAILURES', 'HARNESS_POLL_GIVE_UP_AFTER_MINUTES']) {
+    const result = await pollTick(fx, { tick: 1, runId: 801, bundleDir: usageBundle(fx, 'x', true), extra: { [name]: 'x' } });
+    assert.equal(result.status, 1, name);
+    assert.match(result.stderr, new RegExp(name));
+  }
+  assert.deepEqual(workflowCalls(fx), []);
 });
 
 /** 2026-01-01T00:00:10Z, as an epoch second. */

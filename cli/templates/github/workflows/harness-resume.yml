@@ -32,9 +32,19 @@
 #   Secrets: HARNESS_PUSH_URL (optional notifications: the poller's own failed
 #     notice when it cannot resume a run).
 #   Variables: HARNESS_RUNNER, HARNESS_REMOTE_STOP (any value: the tick
-#     dispatches nothing), HARNESS_MAX_CHAIN (the automatic-dispatch limit).
-#   harness.config.json, at run time: `scriptsDir`. No configured value is
-#     frozen into this file.
+#     dispatches nothing), HARNESS_MAX_CHAIN (the automatic-dispatch limit),
+#     HARNESS_POLL_MAX_DISPATCH_FAILURES (failed re-dispatches of one paused
+#     run before the poller gives up on it; 3 when unset) and
+#     HARNESS_POLL_GIVE_UP_AFTER_MINUTES (minutes after the usage reset past
+#     which it gives up; 360 when unset).
+#   harness.config.json, at run time: `scriptsDir` and `stateDir`. No
+#     configured value is frozen into this file.
+#   The previous tick's `harness-poll-state` artifact, which `poll` downloads.
+#     The job's `actions: write` covers listing and downloading its own
+#     workflow's artifacts.
+#
+# WHAT IT WRITES. The `harness-poll-state` artifact: the failed-dispatch count
+#   `poll` carries to the next tick, kept 7 days.
 #
 # THE RULE EVERY EDIT KEEPS. Every GitHub expression has a space after its
 # opening braces, and every value reaches a shell line through `env:`. `init`
@@ -43,8 +53,9 @@
 #
 # DECLARED MIRRORS — a rename on either side is an edit to both:
 #   cli/src/remote/githubActions.ts   WORKFLOW_RESUME_FILE, HARNESS_RUNNER,
-#                                     HARNESS_REMOTE_STOP, HARNESS_PUSH_URL
-#   cli/src/config/model.ts           DEFAULTS.scriptsDir
+#                                     HARNESS_REMOTE_STOP, HARNESS_PUSH_URL,
+#                                     POLL_STATE_ARTIFACT_NAME
+#   cli/src/config/model.ts           DEFAULTS.scriptsDir, DEFAULTS.stateDir
 
 name: harness-resume
 
@@ -72,6 +83,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
       HARNESS_MAX_CHAIN: ${{ vars.HARNESS_MAX_CHAIN }}
+      HARNESS_POLL_MAX_DISPATCH_FAILURES: ${{ vars.HARNESS_POLL_MAX_DISPATCH_FAILURES }}
+      HARNESS_POLL_GIVE_UP_AFTER_MINUTES: ${{ vars.HARNESS_POLL_GIVE_UP_AFTER_MINUTES }}
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
       HARNESS_PUSH_URL: ${{ secrets.HARNESS_PUSH_URL }}
     steps:
@@ -91,7 +104,21 @@ jobs:
             exit 1
           fi
           scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
-          echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
+          state_dir=$(jq -r '.stateDir // "sdlc-harness"' harness.config.json)
+          {
+            echo "SCRIPTS_DIR=${scripts_dir%/}"
+            echo "POLL_STATE_DIR=${state_dir%/}/autonomous_logs/poll_state/current"
+          } >> "$GITHUB_ENV"
 
       - name: Resume the runs whose usage window has reset
         run: bash "$SCRIPTS_DIR/remote-run.sh" poll
+
+      - name: Upload the poller state
+        if: always() && env.POLL_STATE_DIR != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-poll-state
+          path: ${{ env.POLL_STATE_DIR }}
+          overwrite: true
+          if-no-files-found: ignore
+          retention-days: 7

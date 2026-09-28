@@ -95,6 +95,12 @@
 # environment the workflows set:
 #   HARNESS_MAX_CHAIN    the automatic-dispatch limit; `24` when empty. Not a
 #                        non-negative integer: nothing is dispatched
+#   HARNESS_POLL_MAX_DISPATCH_FAILURES   `poll` only: failed re-dispatches of
+#                        one paused run before it gives up; `3` when empty
+#   HARNESS_POLL_GIVE_UP_AFTER_MINUTES   `poll` only: minutes after a run's
+#                        `usage_resume_at` past which a failed re-dispatch gives
+#                        up; `360` when empty. Either one not a non-negative
+#                        integer: nothing is dispatched
 #   HARNESS_REMOTE_STOP  non-empty: nothing is dispatched
 #   HARNESS_REMOTE_SLUG  exported as `HARNESS_REPO_SLUG` before a notification,
 #                        so it names the repository rather than a runner path
@@ -138,6 +144,16 @@
 # step. It runs ahead of every dispatch and every enable. A listing that fails
 # fails CLOSED in `continue`: nothing sent, one `paused` naming gh's error.
 #
+# `poll` FIRST CARRIES ITS STATE: the newest run of `WORKFLOW_RESUME_FILE` other
+# than `GITHUB_RUN_ID` (bounded) carrying an unexpired `harness-poll-state`
+# artifact is downloaded to `<state_dir>/autonomous_logs/poll_state/previous/`;
+# any failure to find or read it is one line and an empty state. Its
+# `poll_state.json` is {"<branch>": {"run_id", "failures", "notified"}}; an
+# entry whose `run_id` is not the branch's newest `harness run` run is dropped,
+# so a new run restarts the count. `poll` writes the state to `poll_state/
+# current/` on every exit, `HARNESS_REMOTE_STOP` included, and the poller
+# uploads that directory.
+#
 # `poll`: `HARNESS_REMOTE_STOP` set exits 0 with nothing sent. Otherwise one
 # listing; each branch's newest `harness run <branch>` run decides. A run not
 # yet `completed` is never dispatched (its own `continue` will decide): with no
@@ -147,9 +163,14 @@
 # download that fails for it is one line and waiting. For a `completed` run,
 # skipped, not waiting: a stopped branch, a bundle that cannot be downloaded
 # (one line), and anything but `status: paused` / `pause_reason: usage` with an
-# integer `usage_resume_at`. Due (reset passed): re-dispatched under the same
-# chain limit — a refusal is one `failed` and not waiting; a dispatch that
-# fails is one line and still waiting. Reset ahead: waiting. No branch waiting
+# integer `usage_resume_at`, and a run whose state entry says `notified`. Due
+# (reset passed): re-dispatched under the same chain limit — a refusal is one
+# `failed` and not waiting; a success drops the branch's state entry. A
+# dispatch that fails counts one more failure for that run and is still
+# waiting, until the count reaches `HARNESS_POLL_MAX_DISPATCH_FAILURES` or the
+# reset is over `HARNESS_POLL_GIVE_UP_AFTER_MINUTES` in the past: then exactly
+# one `paused` naming the dispatch error and the resume command, the entry
+# marked `notified`, and not waiting. Reset ahead: waiting. No branch waiting
 # after the tick: `gh workflow disable WORKFLOW_RESUME_FILE`, then one fresh
 # listing evaluated by the same rules with nothing sent or notified, skipping
 # the branches this tick dispatched — a due run that would be dispatched counts
@@ -258,13 +279,15 @@
 # `restore`, that download directory, the job restore, `answer_<n>.md` and the
 # `park_loop_cycles` rewrite of `remote_status.json`, all in the job's
 # checkout; for `save`, <out_dir> and the step summary; for `poll`, its
-# download directories. `pause-requested` and `run-created-at` write nothing.
+# download directories and `<state_dir>/autonomous_logs/poll_state/previous/`
+# and `current/`. `pause-requested` and `run-created-at` write nothing.
 #
 # MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
 # rename there is an edit here, byte for byte:
 #   WORKFLOW_RUN_FILE    mirrors  WORKFLOW_RUN_FILE
 #   WORKFLOW_RESUME_FILE mirrors  WORKFLOW_RESUME_FILE
 #   STATE_ARTIFACT_NAME  mirrors  STATE_ARTIFACT_NAME
+#   POLL_STATE_ARTIFACT_NAME mirrors POLL_STATE_ARTIFACT_NAME
 #   HARNESS_GH_CLI       mirrors  GH_CLI_VARIABLE (the binary run as `gh`)
 #
 # `set -u` WITHOUT `-e`: every refusal is reported with its own exit code rather
@@ -359,6 +382,12 @@
 #              scripts/remote-run.sh poll -> 0; `run download`, `workflow run
 #              ... -f resume=pause`, then `workflow disable harness-resume.yml`;
 #              with usage_resume_at far ahead -> no dispatch, no disable
+#   no dispatch  that due bundle with usage_resume_at a minute ago and a stub
+#              failing `workflow run`: three ticks, each serving the previous
+#              tick's poll_state/current/ as run <id>'s `harness-poll-state`
+#              under `run list --workflow harness-resume.yml` -> ticks 1-2 no
+#              notification, no disable; tick 3 one `paused` naming the error
+#              and branch-resume, then `workflow disable harness-resume.yml`
 #   interleave that due run plus an `in_progress` `harness run feat_y` run
 #              with no artifact, and a stub that, once its log holds `workflow
 #              disable`, lists `harness-state` for feat_y's run with a
@@ -387,6 +416,7 @@ fi
 WORKFLOW_RUN_FILE='harness-run.yml'
 WORKFLOW_RESUME_FILE='harness-resume.yml'
 STATE_ARTIFACT_NAME='harness-state'
+POLL_STATE_ARTIFACT_NAME='harness-poll-state'
 GH="${HARNESS_GH_CLI:-gh}"
 
 # How many runs `status` prints, and how many `run list` returns for status
@@ -396,6 +426,17 @@ RUN_LIST_LIMIT=50
 # The one listing of every branch's runs that the stop marker and `poll` read.
 ALL_RUNS_LIMIT=100
 MAX_CHAIN_DEFAULT=24
+# `poll`'s count bound on one paused run's failed re-dispatches: three ticks (90
+# minutes at the shipped `*/30`) ride out a transient GitHub error, and a
+# persistent one costs at most three billed ticks for that branch.
+POLL_MAX_DISPATCH_FAILURES_DEFAULT=3
+# `poll`'s deadline bound, in minutes after `usage_resume_at`. Stateless, so it
+# ends the retries when the carried count is lost; six hours is past what the
+# count bound reaches at any interval up to two hours.
+POLL_GIVE_UP_AFTER_MINUTES_DEFAULT=360
+# How many of the poller's own runs `poll` searches for the previous tick's
+# state artifact; each one without it costs an artifact lookup.
+POLL_STATE_RUNS_LIMIT=10
 
 # GitHub's documented limit on a `workflow_dispatch` inputs payload: "The
 # maximum payload for inputs is 65,535 characters."
@@ -772,12 +813,13 @@ titled_runs() {
     | sort_by([.createdAt, .databaseId]) | reverse'
 }
 
-# bundle_listed <run_id> — 0 when the run carries an unexpired state artifact,
-# 1 when it does not, 2 with GH_ERR set when the lookup failed. Never exits.
+# bundle_listed <run_id> [<artifact_name>] — 0 when the run carries an unexpired
+# artifact of that name (the state artifact when omitted), 1 when it does not, 2
+# with GH_ERR set when the lookup failed. Never exits.
 bundle_listed() {
   local count
   gh_call api "repos/{owner}/{repo}/actions/runs/$1/artifacts" || return 2
-  count=$(printf '%s' "$GH_OUT" | jq --arg n "$STATE_ARTIFACT_NAME" \
+  count=$(printf '%s' "$GH_OUT" | jq --arg n "${2:-$STATE_ARTIFACT_NAME}" \
     '[.artifacts[]? | select(.name == $n and (.expired != true))] | length' 2>/dev/null)
   case "$count" in
     ''|*[!0-9]*) GH_ERR="its artifact list is not the expected JSON"; return 2 ;;
@@ -1285,6 +1327,100 @@ verb_continue() {
   return 0
 }
 
+# POLL_STATE — the poller state carried between ticks, one object keyed by
+# branch: {"<branch>": {"run_id", "failures", "notified"}}, every value a string.
+POLL_STATE='{}'
+POLL_STATE_FILE_NAME='poll_state.json'
+
+poll_state_get() {
+  printf '%s' "$POLL_STATE" | jq -r --arg b "$1" --arg f "$2" '.[$b][$f] // "" | tostring'
+}
+
+poll_state_put() {
+  POLL_STATE=$(printf '%s' "$POLL_STATE" | jq -c --arg b "$1" --arg r "$2" --arg f "$3" --arg n "$4" \
+    '.[$b] = {run_id: $r, failures: $f, notified: $n}')
+}
+
+poll_state_drop() {
+  POLL_STATE=$(printf '%s' "$POLL_STATE" | jq -c --arg b "$1" 'del(.[$b])')
+}
+
+# poll_state_load — POLL_STATE from the newest other run of the poller carrying
+# the poll-state artifact. Any failure is one line and an empty state.
+poll_state_load() {
+  local previous ids id found="" file parsed
+  POLL_STATE='{}'
+  previous=$(hr_state_path "$root" autonomous_logs/poll_state/previous) || {
+    echo "remote-run.sh: poll: cannot resolve the poller state directory; starting from an empty state"
+    return 0
+  }
+  if ! gh_call run list --workflow "$WORKFLOW_RESUME_FILE" --json databaseId,createdAt --limit "$POLL_STATE_RUNS_LIMIT"; then
+    echo "remote-run.sh: poll: listing the runs of $WORKFLOW_RESUME_FILE failed ($GH_ERR); starting from an empty state"
+    return 0
+  fi
+  ids=$(printf '%s' "$GH_OUT" | jq -r --arg self "${GITHUB_RUN_ID-}" '
+    [.[] | select((.databaseId | tostring) != $self)]
+    | sort_by([.createdAt, .databaseId]) | reverse | .[].databaseId | tostring' 2>/dev/null) || {
+    echo "remote-run.sh: poll: the run list of $WORKFLOW_RESUME_FILE is not the expected JSON; starting from an empty state"
+    return 0
+  }
+  for id in $ids; do
+    bundle_listed "$id" "$POLL_STATE_ARTIFACT_NAME"
+    case $? in
+      0) found="$id"; break ;;
+      2) echo "remote-run.sh: poll: reading the artifacts of poller run $id failed ($GH_ERR); starting from an empty state"; return 0 ;;
+    esac
+  done
+  if [ -z "$found" ]; then
+    echo "remote-run.sh: poll: no earlier poller run carries $POLL_STATE_ARTIFACT_NAME; starting from an empty state"
+    return 0
+  fi
+  if ! mkdir -p "$previous" || ! rm -f "$previous/$POLL_STATE_FILE_NAME"; then
+    echo "remote-run.sh: poll: cannot create '$previous'; starting from an empty state"
+    return 0
+  fi
+  if ! gh_call run download "$found" -n "$POLL_STATE_ARTIFACT_NAME" -D "$previous"; then
+    echo "remote-run.sh: poll: downloading the poller state of run $found failed ($GH_ERR); starting from an empty state"
+    return 0
+  fi
+  file="$previous/$POLL_STATE_FILE_NAME"
+  parsed=$(jq -c 'if type == "object" then with_entries(select(.value | type == "object")) else error("not an object") end' \
+    "$file" 2>/dev/null)
+  if [ -z "$parsed" ]; then
+    echo "remote-run.sh: poll: '$file' is not a poller state object; starting from an empty state"
+    return 0
+  fi
+  POLL_STATE="$parsed"
+  echo "remote-run.sh: poll: carried the poller state of run $found"
+}
+
+# poll_state_write — POLL_STATE into `current/`, which the poller uploads.
+poll_state_write() {
+  local current
+  current=$(hr_state_path "$root" autonomous_logs/poll_state/current) \
+    && mkdir -p "$current" \
+    && printf '%s\n' "$POLL_STATE" >"$current/$POLL_STATE_FILE_NAME" \
+    || echo "remote-run.sh: poll: writing the poller state failed; the next tick starts from an empty state" >&2
+}
+
+# poll_bounds_var — POLL_MAX_FAILURES and POLL_GIVE_UP_MINUTES from the
+# environment. 1 with POLL_BOUND_BAD naming the value that is not a
+# non-negative integer.
+POLL_MAX_FAILURES=""
+POLL_GIVE_UP_MINUTES=""
+POLL_BOUND_BAD=""
+poll_bounds_var() {
+  POLL_MAX_FAILURES="${HARNESS_POLL_MAX_DISPATCH_FAILURES:-$POLL_MAX_DISPATCH_FAILURES_DEFAULT}"
+  POLL_GIVE_UP_MINUTES="${HARNESS_POLL_GIVE_UP_AFTER_MINUTES:-$POLL_GIVE_UP_AFTER_MINUTES_DEFAULT}"
+  case "$POLL_MAX_FAILURES" in
+    *[!0-9]*) POLL_BOUND_BAD="HARNESS_POLL_MAX_DISPATCH_FAILURES '$POLL_MAX_FAILURES'"; return 1 ;;
+  esac
+  case "$POLL_GIVE_UP_MINUTES" in
+    *[!0-9]*) POLL_BOUND_BAD="HARNESS_POLL_GIVE_UP_AFTER_MINUTES '$POLL_GIVE_UP_MINUTES'"; return 1 ;;
+  esac
+  return 0
+}
+
 # poll_fetch <run_id> — POLL_STATUS_FILE is the status.json of the run's
 # bundle, downloaded unless its directory already holds it. 1 on failure, with
 # one line said.
@@ -1321,7 +1457,11 @@ poll_usage_paused() {
 # With may_dispatch 0 nothing is sent and nothing notified: a due run that
 # would be dispatched counts as waiting, one that would be refused does not.
 poll_branch() {
-  local id="$1" state="$2" may_dispatch="$3" at engine_value now
+  local id="$1" state="$2" may_dispatch="$3" at engine_value now failures
+  if [ "$may_dispatch" -eq 1 ] && [ -n "$(poll_state_get "$branch" run_id)" ] \
+    && [ "$(poll_state_get "$branch" run_id)" != "$id" ]; then
+    poll_state_drop "$branch"
+  fi
   remote_branch_stopped "$branch"
   case $? in
     0) echo "remote-run.sh: poll: $branch is stopped ($STOPPED_LINE); skipped"; return 1 ;;
@@ -1342,6 +1482,10 @@ poll_branch() {
     poll_usage_paused || return 1
     echo "remote-run.sh: poll: $branch's unfinished run $id carries a usage-paused bundle; waiting"
     return 0
+  fi
+  if [ "$(poll_state_get "$branch" run_id)" = "$id" ] && [ "$(poll_state_get "$branch" notified)" = 1 ]; then
+    echo "remote-run.sh: poll: $branch's run $id was already reported as not re-dispatchable; skipped"
+    return 1
   fi
   if ! poll_fetch "$id"; then
     echo "remote-run.sh: poll: $branch skipped"
@@ -1374,9 +1518,22 @@ poll_branch() {
   if redispatch "$engine_value" "$NEXT_CHAIN"; then
     echo "remote-run.sh: poll: dispatched $branch --resume pause --chain $NEXT_CHAIN"
     POLL_DISPATCHED="$POLL_DISPATCHED$branch "
+    poll_state_drop "$branch"
     return 1
   fi
-  echo "remote-run.sh: poll: dispatching $branch failed ($REDISPATCH_ERR); still waiting"
+  failures=$(poll_state_get "$branch" failures)
+  case "$failures" in
+    ''|*[!0-9]*) failures=0 ;;
+  esac
+  failures=$((10#$failures + 1))
+  if [ "$failures" -ge "$((10#$POLL_MAX_FAILURES))" ] \
+    || [ "$now" -gt "$((10#$at + 10#$POLL_GIVE_UP_MINUTES * 60))" ]; then
+    poll_state_put "$branch" "$id" "$failures" 1
+    notify paused "$branch" "The resume poller could not re-dispatch $branch ($REDISPATCH_ERR) after $failures attempts; automatic resume has stopped. Run $RESUME_HINT $branch."
+    return 1
+  fi
+  poll_state_put "$branch" "$id" "$failures" ""
+  echo "remote-run.sh: poll: dispatching $branch failed ($REDISPATCH_ERR), attempt $failures of $POLL_MAX_FAILURES; still waiting"
   return 0
 }
 
@@ -1433,18 +1590,31 @@ poll_recheck() {
   done
 }
 
+# verb_poll writes the poller state on every exit, so the next tick inherits
+# the count whatever this one met.
 verb_poll() {
+  poll_state_load
   if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
+    poll_state_write
     echo "remote-run.sh: poll: remote stop is set; nothing dispatched"
     return 0
   fi
   if ! max_chain_var; then
+    poll_state_write
     echo "remote-run.sh: poll: HARNESS_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer; nothing dispatched" >&2
     exit "$EXIT_USAGE"
   fi
+  if ! poll_bounds_var; then
+    poll_state_write
+    echo "remote-run.sh: poll: $POLL_BOUND_BAD is not a non-negative integer; nothing dispatched" >&2
+    exit "$EXIT_USAGE"
+  fi
   hr_remote_names_var
-  list_all_runs || gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
-  poll_pass 1 || gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
+  if ! list_all_runs || ! poll_pass 1; then
+    poll_state_write
+    gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
+  fi
+  poll_state_write
   if [ "$POLL_WAITING_COUNT" -gt 0 ]; then
     echo "remote-run.sh: poll: $POLL_WAITING_COUNT branch(es) still waiting; $WORKFLOW_RESUME_FILE stays enabled"
     return 0
