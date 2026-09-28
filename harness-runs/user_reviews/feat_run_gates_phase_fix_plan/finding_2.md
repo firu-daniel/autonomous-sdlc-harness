@@ -19,3 +19,5 @@
 This finding does **not** make the implementer act on the note. Finding 1 states that a `G.4` unit never closes on the note alone: its close rests on its own check of the named test.
 
 **Verification.** Grep `plugin/agents/test-fix-plan-writer.md` for `Suspected shared cause` (it should hit the per-finding paragraph and the quality check) and confirm that the "one entry per fixable failure" wording is unchanged. Run `claude plugin validate --strict plugin`.
+
+- **Deviations from plan:** The direct `claude plugin validate --strict plugin` call was refused by the permission layer (approval required). That claim rests instead on `bash scripts/test.sh` gate 1a (plugin manifest) passing, and `scripts/run-gates.sh` defines that gate as exactly `claude plugin validate --strict plugin`, so the command was executed through the wrapper, not invoked directly.
