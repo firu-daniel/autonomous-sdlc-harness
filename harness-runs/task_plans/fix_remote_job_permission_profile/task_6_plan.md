@@ -23,3 +23,9 @@
 - The new test in `cli/test/workflow-templates.test.mjs` passes, and the file's existing tests still do.
 - `grep -n "doctor --remote-job" cli/templates/github/workflows/harness-run.yml` returns the preflight step.
 - The argument the step passes is byte-identical to the option name `cli/src/commands/doctor.ts` declares (`REMOTE_JOB_FLAG`, Task 4) — compare the two by reading, since a misspelling here is refused by `doctor` as an unknown option and fails every job at the preflight. The end-to-end proof on a real runner is the Gate 12 re-run, which is out of this branch's scope.
+
+**Deviations from plan:**
+
+- The header of `harness-run.yml` carries no description of the preflight (its sections are the input contract, the edit rules, the mirrors, what it reads, the self-pause, the timeout, the plugin pin and retention), so there was nothing to extend and the header is unchanged.
+- Verification bullet 1 (the new test passes, the file's other tests still do) was not executed: neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, so the run is deferred to the Run gates phase. The claim rests on reading the test against the template, not on a run.
+- Verification bullet 3 was met by reading: `REMOTE_JOB_FLAG = '--remote-job'` in `cli/src/commands/doctor.ts`, which does not export it, so the new test asserts the literal and its header names the constant it mirrors.

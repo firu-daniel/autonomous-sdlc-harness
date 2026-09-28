@@ -29,7 +29,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_job_permission_pr
 4. [x] **Task 3** — Make `init --plugin-root-entries` grant shell reads over the plugin roots, and keep its notes true _(layer: cli)_ _(points: 20)_
 5. [x] **Task 4** — Add `doctor --remote-job`, under which an unusable profile fails the preflight _(layer: cli)_ _(points: 18)_
 6. [x] **Task 5** — Add the `profile-tracked` doctor check _(layer: cli)_ _(points: 10)_
-7. [ ] **Task 6** — Run the job's preflight as `doctor --remote-job` _(layer: cli)_ _(points: 5)_
+7. [x] **Task 6** — Run the job's preflight as `doctor --remote-job` _(layer: cli)_ _(points: 5)_
 8. [ ] **Task 7** — Pass the profile's `additionalDirectories` as `--add-dir` at a job-mode launch _(layer: cli)_ _(points: 15)_
 9. [ ] **Task 11** — Make `init`'s remote-execution note and `doctor`'s `remote-execution` remedy print the setup push that works _(layer: cli)_ _(points: 18)_
 10. [ ] **Task 8** — Correct `docs/remote-execution.md` §1, §4, §6 and §7 _(layer: general)_ _(points: 15)_
