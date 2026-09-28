@@ -35,3 +35,21 @@
 - **category:** optimization
 - **evidence:** Task 23 — 54083e0 — "acceptance walk recorded in the story index" (staged only `harness-runs/story_plans/feat_run_gates_phase_story_plan.md` and `harness-runs/task_plans/feat_run_gates_phase/task_23_plan.md`)
 - **cost this run:** one unit closed with no work file committed
+
+# User-review fix round 1 — G.4 already-passing close; test-fix-plan-writer shared-cause note
+
+## The writer's lessons-ledger append is outside every commit's explicit path list in the user-review fix-plan fork
+- **category:** silent-failure
+- **evidence:** after the `user-review-fix-plan-writer` initial-write dispatch (its `## Process` step 6 appends to `harness-runs/lessons.md`), `git status --short` showed ` M harness-runs/lessons.md`; the fork's Override 3 staging list (fix-plan index, source review, per-finding folder, two gate folders) does not name it, and no later step in the fix flow stages it. The orchestrator committed it by a separate wrapper call, dd51ed8 `chore: Record user-review lessons for feat_run_gates_phase`.
+- **cost this run:** one extra, off-contract commit; left alone, the tracked tree would have stayed dirty through Phase A and Phase D
+- **hypothesis:** (guess) the lessons-ledger write was added to the writer after Override 3's path list was fixed
+
+## `claude plugin validate --strict plugin` refused to the implementer in both Phase A units
+- **category:** tooling-gap
+- **evidence:** the Item 2 and Item 1 `layer-implementer` returns each report the direct call was refused for approval; Item 2 got the same check indirectly through `bash scripts/test.sh` gate 1a, and Item 1 did not run it (recorded as a deviation in `harness-runs/user_reviews/feat_run_gates_phase_fix_plan/finding_1.md`)
+- **cost this run:** Item 1 (11 files, `plugin/` agent + instruction contracts) committed without the manifest gate its finding asked for
+
+## Test gate 11 fails in an implementer run because the retrieval runtime is not installed in the worktree
+- **category:** tooling-gap
+- **evidence:** Item 2 `layer-implementer` return: `bash scripts/test.sh` 19 gates passed, gate 11 (docs-retrieval relevance floor) failed with "missing: autonomous-sdlc-harness"
+- **cost this run:** Item 2 committed with a red test command whose failure is unrelated to the edit
