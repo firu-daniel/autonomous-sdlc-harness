@@ -53,6 +53,10 @@
 #   * the run registry (`<state_dir>/autonomous_logs/registry.json`, shaped
 #     `{"runs": {"<branch>": {"status": …}}}`) is the SOURCE OF TRUTH: a record
 #     whose status is `running`, `parked` or `park_loop` is a run in flight;
+#   * a record whose `execution` is `github-actions` is the exception: that run
+#     executes on GitHub, beyond the local process tree a restart tears down, so
+#     it is listed as `remote (not affected by a restart): <branch> <status>`
+#     and never blocks;
 #   * a process probe for the agent binary — `${HARNESS_AGENT_CLI:-claude}`, the
 #     same variable the watcher launches through — is a BACKSTOP, for a run OF
 #     THIS PROJECT whose record has not been written yet or was written by a
@@ -127,6 +131,10 @@
 #   idle          printf '%s' '{"runs":{"feat_x":{"status":"completed"}}}' > "$reg"
 #                 rm -f "$w/calls"; run
 #                                -> those same two lines and exit 0
+#   remote        printf '%s' '{"runs":{"feat_r":{"status":"running","execution":"github-actions"}}}' > "$reg"
+#                 rm -f "$w/calls"; run
+#                                -> the remote line for feat_r, no refusal,
+#                                   the restart proceeds, exit 0
 #   never ran     rm -f "$reg"; run     -> the restart proceeds, exit 0
 #   unreadable    printf 'x' > "$reg"; run
 #                                -> "cannot prove no run is in flight", exit 2
@@ -233,6 +241,7 @@ fi
 active=""
 unknown=""
 registry=""
+remote=""
 
 # The library's 1/2 split is kept apart here, because the two mean different
 # things to an operator: a repository with NO configuration has no harness
@@ -258,10 +267,21 @@ else
   # document that has no such wrapper is a registry this cannot enumerate, so
   # `jq` fails and the refusal below fires. Reading such a file as "no active
   # runs" is the one misreading that costs a run.
-  elif ! active="$(jq -r '.runs | to_entries[] | select(.value.status == "running" or .value.status == "parked" or .value.status == "park_loop") | "\(.value.status) \(.key)"' "$registry" 2>/dev/null)"; then
+  elif ! active="$(jq -r '.runs | to_entries[] | select((.value.status == "running" or .value.status == "parked" or .value.status == "park_loop") and (.value.execution != "github-actions")) | "\(.value.status) \(.key)"' "$registry" 2>/dev/null)"; then
     active=""
     unknown="'$registry' could not be read as a run registry (invalid JSON, or no .runs wrapper)"
+  else
+    remote="$(jq -r '.runs | to_entries[] | select((.value.status == "running" or .value.status == "parked" or .value.status == "park_loop") and (.value.execution == "github-actions")) | "\(.key) \(.value.status)"' "$registry" 2>/dev/null || true)"
   fi
+fi
+
+if [ -n "$remote" ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    printf 'restart-watcher.sh: remote (not affected by a restart): %s\n' "$line"
+  done <<EOF
+$remote
+EOF
 fi
 
 # The backstop probe. The basename is matched so a binary named by an absolute

@@ -6,27 +6,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/autonomous-protected-branch-guard.sh"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/autonomous-protected-branch-guard.sh\""
           },
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/git-commit-branch-guard.sh"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/git-commit-branch-guard.sh\""
           },
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/git-rewrite-branch-guard.sh"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/git-rewrite-branch-guard.sh\""
           },
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/autonomous-script-allowlist-guard.sh"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/autonomous-script-allowlist-guard.sh\""
           },
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/allow-safe-compounds.sh"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/allow-safe-compounds.sh\""
           },
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/allow-qa-credentials-read.sh"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/allow-qa-credentials-read.sh\""
           }
         ]
       }

@@ -12,7 +12,7 @@
 **Date:** 2026-04-18
 **Reviewed:** the whole branch diff against the default branch — the stored `RecentSearchRecord` and the read/write path behind `searchService` (Task 1), the panel and its extracted `SearchPanelRecentLabel` (Task 2), and the root-level entry-point registration and documentation (Task 3), plus the tests that ship with them.
 
-Every accompanying test the touched layers' conventions documents require is present and green: the record's stored round-trip and the extracted label's own test. The entry point registered at the repository root resolves and the panel is reachable end to end from a cold start, which is the story index's second `Top risks:` entry. **When `phases.parity` is `true`**, the stored keys `query_text` / `searched_at`, the read limit and the one-tap re-run behaviour were cross-checked against the `<parity_vocabulary>` implementation's own recent-searches panel and match — the read *ordering* does not, and that is Finding 1. The three findings below are what is left.
+Every accompanying test the touched layers' conventions documents require is present. Whether they pass is the Run gates phase's to establish, because this review runs no suite: the record's stored round-trip and the extracted label's own test. The entry point registered at the repository root resolves and the panel is reachable end to end from a cold start, which is the story index's second `Top risks:` entry. **When `phases.parity` is `true`**, the stored keys `query_text` / `searched_at`, the read limit and the one-tap re-run behaviour were cross-checked against the `<parity_vocabulary>` implementation's own recent-searches panel and match — the read *ordering* does not, and that is Finding 1. The three findings below are what is left.
 
 ---
 

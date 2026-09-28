@@ -22,6 +22,10 @@
  * 3. **Nothing here asserts against a key table.** The command has none — every refusal comes from
  *    the structural check run over the result of the edit — so these tests exercise the same route an
  *    adopter's own mistake takes rather than a list that would have to be kept in step with it.
+ *
+ * **`execution.target` takes exactly `local` or `github-actions`, and nothing else under `execution`.**
+ * Every reader treats any other value as local, so a misspelt target is refused at `set` rather than
+ * stored as a remote setting that silently keeps runs on this machine.
  */
 
 import assert from 'node:assert/strict';
@@ -284,6 +288,46 @@ test('set refuses a value outside the legal set for a key, and a layer list with
     );
     assert.deepEqual(await snapshotTree(dir), before, `a refused set of ${key} changed the tree`);
   }
+});
+
+/** The `execution.target` values the refusal must name, as the check renders them. */
+const EXECUTION_TARGETS_RENDERED = '"local", "github-actions"';
+
+test('set execution.target github-actions is stored and read back by get', async (t) => {
+  const dir = await wiredFixture(t);
+  // A fresh init writes no execution key, which is what keeps local execution the untouched default.
+  assert.equal('execution' in readJson(join(dir, CONFIG_FILE)), false, 'init wrote an execution key');
+
+  await configOk(dir, ['set', 'execution.target', 'github-actions']);
+
+  const { stdout } = await configOk(dir, ['get', 'execution.target']);
+  assert.equal(stdout.trim(), 'github-actions');
+});
+
+test('set execution.target to a value outside the enum is refused, names both values, and writes nothing', async (t) => {
+  const dir = await wiredFixture(t);
+  const before = await snapshotTree(dir);
+
+  const { status, stderr } = await runCli(dir, ['config', 'set', 'execution.target', 'gitlab']);
+
+  assert.notEqual(status, 0, 'config set execution.target gitlab was accepted');
+  assert.ok(
+    stderr.includes(`"gitlab" is not one of ${EXECUTION_TARGETS_RENDERED}`),
+    `the refusal is not the enum's own:\n${stderr}`,
+  );
+  assert.deepEqual(await snapshotTree(dir), before, 'a refused set of execution.target changed the tree');
+  assert.equal(existsSync(join(dir, BACKUP_FILE)), false, `${BACKUP_FILE} was written for a refused set`);
+});
+
+test('set of an undeclared key under execution is refused as unknown, and writes nothing', async (t) => {
+  const dir = await wiredFixture(t);
+  const before = await snapshotTree(dir);
+
+  const { status, stderr } = await runCli(dir, ['config', 'set', 'execution.runner', 'x']);
+
+  assert.notEqual(status, 0, 'config set execution.runner x was accepted');
+  assert.match(stderr, /execution\.runner: unknown key/);
+  assert.deepEqual(await snapshotTree(dir), before, 'a refused set of execution.runner changed the tree');
 });
 
 test('set stores a legal value for a key init writes no line for', async (t) => {

@@ -15,4 +15,4 @@ const rows = await store.query('recent_searches', {
 });
 ```
 
-Then delete the in-memory sort in `SearchPanel` (".sort(") — it is redundant once the read is ordered, and leaving it in keeps the panel looking correct on a small store, which is the reason this shipped. Re-run Task 1's own `**Verification:**` step ("`fetchRecentSearches` returns records in most-recent-first order for a store holding more documents than `limit`") against a store seeded with more than `limit` records rather than the two-record fixture.
+Then delete the in-memory sort in `SearchPanel` (".sort(") — it is redundant once the read is ordered, and leaving it in keeps the panel looking correct on a small store, which is the reason this shipped. Then extend Task 1's test, `src/data/search/records/recentSearchRecord.test.ts`, with a case that seeds the store with more than `limit` records and asserts that `fetchRecentSearches` returns them most-recent-first, because the two-record fixture is too small to show this defect. That test file is one this fix edits, so it is the only test the fix runs; the full suite runs later, in the Run gates phase.

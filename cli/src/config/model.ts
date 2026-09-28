@@ -137,6 +137,12 @@ export interface HarnessDesign {
   source?: HarnessDesignSource;
 }
 
+/** Where an unattended run executes. Read through {@link remoteExecutionApplies}, never by comparing the value in place. */
+export interface HarnessExecution {
+  /** Where an unattended run executes: on this machine, or in a GitHub Actions job the watcher dispatches. */
+  target?: HarnessExecutionTarget;
+}
+
 /**
  * `harness.config.json`, in memory.
  *
@@ -192,6 +198,8 @@ export interface HarnessConfig {
   deploy?: HarnessDeploy;
   /** Design-source-of-truth settings. */
   design?: HarnessDesign;
+  /** Execution-target settings. */
+  execution?: HarnessExecution;
 }
 
 /**
@@ -209,6 +217,10 @@ export interface HarnessConfig {
  * resolved ({@link AGENT_EFFORT_LEVELS}). In every case a value here would be a value no generator
  * writes.
  *
+ * `execution` is the one section here that no generator seeds: `buildConfig` writes no `execution`
+ * key, so a fresh `init` file is unchanged, and {@link remoteExecutionApplies} falls back to
+ * `execution.target` below instead.
+ *
  * `as const` makes these literals, so a caller copies rather than aliases them —
  * `[...DEFAULTS.protectedBranches]`, `{ ...DEFAULTS.phases }` — and no generator can mutate the
  * defaults out from under the next one.
@@ -225,6 +237,7 @@ export const DEFAULTS = {
   clientEnvPrefix: null,
   phases: { qa: false, docs: false, parity: false },
   qa: { driver: 'web-playwright', portSeed: 3001 },
+  execution: { target: 'local' },
 } as const;
 
 /**
@@ -474,6 +487,15 @@ export const DESIGN_SOURCES = ['figma', 'penpot', 'none'] as const;
 export type HarnessDesignSource = (typeof DESIGN_SOURCES)[number];
 
 /**
+ * The schema's `execution.target` `enum`, mirrored verbatim: where an unattended run executes.
+ *
+ * Exported for the same reason as {@link FORGE_KINDS}: one list, imported, not restated.
+ */
+export const EXECUTION_TARGETS = ['local', 'github-actions'] as const;
+
+export type HarnessExecutionTarget = (typeof EXECUTION_TARGETS)[number];
+
+/**
  * The one lookup from a typed-in string to a {@link HarnessQaDriver}: `--qa-driver`'s parse-time
  * check and the config generator's check of an answer given at a prompt both go through it, so a
  * value is judged on the same terms wherever it was typed.
@@ -528,6 +550,21 @@ export function browserWiringApplies(config: HarnessConfig): boolean {
  */
 export function retrievalApplies(config: HarnessConfig): boolean {
   return config.phases?.docs === true && config.docs?.retrieval === true;
+}
+
+/**
+ * Does this config send unattended runs to a GitHub Actions job rather than run them on this machine?
+ *
+ * **Declared once, here, because every consumer has to agree**: the workflow generator, `doctor`'s
+ * `remote-execution` and `remote-github` checks, and — as the shell mirror `hr_execution_target` —
+ * the watcher. A drift between them would write workflows the watcher never dispatches to, or
+ * dispatch to workflows nothing wrote. Import it; do not re-spell it.
+ *
+ * The `?? DEFAULTS.execution.target` is load-bearing: an absent key is the schema default `local`,
+ * which is what keeps a config written before this key existed on the local path.
+ */
+export function remoteExecutionApplies(config: HarnessConfig): boolean {
+  return (config.execution?.target ?? DEFAULTS.execution.target) === 'github-actions';
 }
 
 /** The schema's `qa.portSeed` bounds, mirrored verbatim. */
