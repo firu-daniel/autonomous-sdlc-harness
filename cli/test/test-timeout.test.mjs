@@ -5,7 +5,10 @@
  * leaves no process of its fixture behind.** One case writes a child test file that runs the
  * written watcher's endless `watch` loop through `runBash`'s bounded form
  * (`helpers/fixture.mjs`, choice 6), runs it in a child `node --test`, and reads the child's TAP
- * and the process table.
+ * and the process table. The child runs under the parent's environment **minus `NODE_TEST_CONTEXT`**:
+ * the runner sets it in every test-file subprocess, and a nested `node --test` that inherits it does
+ * not run as a top-level TAP runner — a probe run outside the runner passes where this case, left
+ * inheriting it, fails.
  *
  * These run against the **compiled** CLI at `dist/cli.js`, because `init` is what writes the
  * watcher into the child's fixture; `npm run build` precedes `npm test`.
@@ -49,6 +52,12 @@ function execResult(command, args, options = {}) {
   });
 }
 
+/** The parent's environment minus the runner's child marker, plus `extra`. */
+function topLevelRunnerEnv(extra) {
+  const { NODE_TEST_CONTEXT: _childMarker, ...env } = process.env;
+  return { ...env, ...extra };
+}
+
 function childSource() {
   const helpers = new URL('./helpers/', import.meta.url);
   return [
@@ -79,7 +88,7 @@ test('a hung watcher case fails by name with a timeout and leaves no process beh
   const child = await execResult(
     process.execPath,
     ['--test', `--test-timeout=${CHILD_TEST_TIMEOUT_MS}`, childPath],
-    { cwd: dir, env: { ...process.env, HUNG_FIXTURE_RECORD: recordPath } },
+    { cwd: dir, env: topLevelRunnerEnv({ HUNG_FIXTURE_RECORD: recordPath }) },
   );
   if (/^ok \d+ - .* # SKIP/m.test(child.stdout)) {
     t.skip('the child skipped its watcher fixture: bash or jq does not resolve on PATH');
@@ -87,8 +96,8 @@ test('a hung watcher case fails by name with a timeout and leaves no process beh
   }
 
   assert.notEqual(child.status, 0, `the child run exited 0\n${child.stdout}\n${child.stderr}`);
-  assert.match(child.stdout, new RegExp(`^not ok \\d+ - ${CHILD_TEST_NAME}$`, 'm'), child.stdout);
-  assert.match(child.stdout, /timed out|cancelled/, child.stdout);
+  assert.match(child.stdout, new RegExp(`^not ok \\d+ - ${CHILD_TEST_NAME}$`, 'm'), `${child.stdout}\n${child.stderr}`);
+  assert.match(child.stdout, /timed out|cancelled/, `${child.stdout}\n${child.stderr}`);
 
   const fixtureDir = readFileSync(recordPath, 'utf8');
   assert.notEqual(fixtureDir, '', 'the child never recorded its watcher fixture');

@@ -12,7 +12,7 @@
 
 **This section is the single source of truth for the per-item fix loop.** The loop walks the `[ ]` entries below from top to bottom. Only the committing role flips a marker to `[x]`. `[ ]` markers anywhere else, such as sub-step bullets inside the per-finding files, are informational only. Each entry resolves to one self-contained `finding_<K>.md` in `fix_registry_write_race_task_round_2/`.
 
-1. [ ] **Finding 1** — Strip `NODE_TEST_CONTEXT` from the hung-watcher case's nested `node --test` environment, so the child prints TAP that names its case. _(layer: cli)_
+1. [x] **Finding 1** — Strip `NODE_TEST_CONTEXT` from the hung-watcher case's nested `node --test` environment, so the child prints TAP that names its case. _(layer: cli)_
 
 ---
 

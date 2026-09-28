@@ -48,7 +48,7 @@ Nothing else in `cli/test` spawns `node --test`, and nothing in the repository m
 
 **Fix.**
 
-- [ ] `cli/test/test-timeout.test.mjs`: build the nested runner's environment without `NODE_TEST_CONTEXT`. For example, add a small module-level helper beside `execResult`:
+- [x] `cli/test/test-timeout.test.mjs`: build the nested runner's environment without `NODE_TEST_CONTEXT`. For example, add a small module-level helper beside `execResult`:
 
   ```js
   /** The parent's environment minus the runner's child marker, so the nested `node --test` runs as a top-level runner and prints TAP. */
@@ -59,5 +59,7 @@ Nothing else in `cli/test` spawns `node --test`, and nothing in the repository m
   ```
 
   Then change the call's options to `{ cwd: dir, env: topLevelRunnerEnv({ HUNG_FIXTURE_RECORD: recordPath }) }`. Leave `CHILD_TEST_TIMEOUT_MS` (240 000), `CHILD_BOUND_MS` (2 000), `REAP_GRACE_MS` and every assertion unchanged.
-- [ ] Same file, module header: add one sentence saying the child runs under the parent's environment **minus `NODE_TEST_CONTEXT`**. The runner sets that variable in every test-file subprocess, and a nested `node --test` that inherits it does not run as a top-level TAP runner. That is why a probe outside the runner passes while the case fails inside it. The cli layer's rule on module headers (`.claude/context/cli.md` → `## What "done" means here`, last bullet) asks for this: the header states the rule, so it must name the condition the case depends on.
-- [ ] Optional, informational: append `\n${child.stderr}` to the two `assert.match(child.stdout, …)` messages, as the `assert.notEqual` message already does. A future failure then shows the nested runner's stderr, including a recursion warning, in the gate output.
+- [x] Same file, module header: add one sentence saying the child runs under the parent's environment **minus `NODE_TEST_CONTEXT`**. The runner sets that variable in every test-file subprocess, and a nested `node --test` that inherits it does not run as a top-level TAP runner. That is why a probe outside the runner passes while the case fails inside it. The cli layer's rule on module headers (`.claude/context/cli.md` → `## What "done" means here`, last bullet) asks for this: the header states the rule, so it must name the condition the case depends on.
+- [x] Optional, informational: append `\n${child.stderr}` to the two `assert.match(child.stdout, …)` messages, as the `assert.notEqual` message already does. A future failure then shows the nested runner's stderr, including a recursion warning, in the gate output.
+
+**Deviations from plan:** The case was not executed after the fix: neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, and `commands.test` is deferred to the Run gates phase. The fix rests on reading the diff plus a passing `bash scripts/typecheck.sh`. The optional third sub-step was applied.
