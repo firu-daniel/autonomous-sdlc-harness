@@ -40,7 +40,7 @@
 
 Each entry resolves to `harness-runs/skeptic_reviews/fix_remote_job_permission_profile_skeptic_review/finding_<K>.md` through its `**Finding K**` reference. The leading `N.` is the fix order, and `K` is the finding's stable identity.
 
-1. [ ] **Finding 1** — Say that the upgrade's plain `init` also merges the profile's ignore rule into `.gitignore`, and commit `.gitignore` with the workflows _(layer: general)_
+1. [x] **Finding 1** — Say that the upgrade's plain `init` also merges the profile's ignore rule into `.gitignore`, and commit `.gitignore` with the workflows _(layer: general)_
 
 ---
 
