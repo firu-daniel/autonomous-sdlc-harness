@@ -7,6 +7,11 @@
  * the bundle contract says it carries.** Every case points `XDG_STATE_HOME` at an empty directory
  * inside the fixture and passes `USAGE_LANE_STATE_ENABLED=1`, so a lane write that job mode failed
  * to force off would land there and be seen.
+ *
+ * **A usage-paused run never leaves the job waiting on nothing:** it ends with a usable
+ * `usage_resume_at` in the bundle, repaired to the gate's one-hour fallback when the value was
+ * lost, or with the in-job wait's bound fired. The `usage:` cases assert both on the written
+ * `remote_status.json` and the notification recorder, and none of them waits on the fallback hour.
  */
 
 import assert from 'node:assert/strict';
@@ -496,6 +501,82 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
     const paused = j.notifications().filter((n) => n.event === 'paused');
     assert.equal(paused.length, 1);
     assert.match(paused[0].detail, /reset at ~/);
+    assert.equal(j.prompts().length, 1);
+  });
+
+  await t.test('a usage_resume_at lost after the gate paused -> repaired to the fallback, wait-poller', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    const lib = join(j.dir, 'scripts', 'lib', 'harness-run-lib.sh');
+    // The exact stranded record: tagged `usage`, PAUSE and PAUSE_ACK present, no reset time.
+    const loseResumeAt =
+      `. ${shellQuote(lib)}; ` +
+      `hr_registry_set "$STATE/autonomous_logs/registry.json" feat_x usage_resume_at ""`;
+    await j.setStub(
+      `${rateLimitRejected(2)}; for i in $(seq 1 100); do if [ -f "$STATE/PAUSE" ]; then ${loseResumeAt}; : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`,
+    );
+    const result = await j.job([j.branch, 'task', 'none'], {
+      USAGE_CHECK_INTERVAL_SECS: '1',
+      USAGE_RESUME_MARGIN_SECS: '0',
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(lastLine(result.stdout), 'job: paused wait-poller');
+    assert.equal(j.status().pause_reason, 'usage');
+    assert.match(j.status().usage_resume_at, /^\d+$/);
+    assert.ok(
+      Number(j.status().usage_resume_at) >= nowSecs() + 3600 - 30,
+      `usage_resume_at ${j.status().usage_resume_at} is not the one-hour fallback`,
+    );
+    const paused = j.notifications().filter((n) => n.event === 'paused');
+    assert.equal(paused.length, 1, JSON.stringify(paused));
+    assert.match(paused[0].detail, /the recorded reset time was lost/);
+    assert.equal(j.prompts().length, 1);
+  });
+
+  await t.test('a relaunch held off past the reset -> the in-job wait bound fires, wait-poller', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    // The kill switch is GLOBAL_STOP — `<state_dir>/AUTONOMOUS_STOP` in the job's own checkout —
+    // and kill_switch_active makes resume_paused_runs return before it relaunches anything, so
+    // the gate's RESUME stands unconsumed and the record stays `paused` with both tags cleared.
+    await j.setStub(
+      `${rateLimitRejected(2)}; for i in $(seq 1 100); do if [ -f "$STATE/PAUSE" ]; then : > "$STATE/AUTONOMOUS_STOP"; : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`,
+    );
+    const result = await j.job([j.branch, 'task', 'none'], {
+      USAGE_RESUME_MARGIN_SECS: '0',
+      REMOTE_WAIT_MAX_SECS: '2',
+      USAGE_CHECK_INTERVAL_SECS: '1',
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+    // The bound path writes no log line of its own; the gate's resume during the wait is the
+    // line that must follow the wait's. The immediate wait-poller path logs neither.
+    const log = j.watcherLog();
+    const waiting = log.search(/is usage-paused — waiting in the job for/);
+    assert.ok(waiting >= 0, log);
+    const gateResume = log.search(/usage auto-resume: the window reset recorded for 'feat_x' has passed/);
+    assert.ok(gateResume > waiting, log);
+
+    const paused = j.notifications().filter((n) => n.event === 'paused');
+    assert.ok(paused.length >= 2, JSON.stringify(paused));
+    assert.ok(
+      paused.slice(0, -1).some((n) => /waiting in the job/.test(n.detail)),
+      JSON.stringify(paused),
+    );
+
+    assert.equal(lastLine(result.stdout), 'job: paused wait-poller');
+
+    const last = paused.at(-1).detail;
+    assert.match(last, /the in-job wait passed 2s after the reset without a resume/);
+    assert.match(last, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+    assert.doesNotMatch(last, /usage limit reached — resumes automatically after/);
+
+    assert.equal(j.status().pause_reason, 'usage');
+    assert.equal(j.status().usage_resume_at, '');
+    assert.match(j.status().detail, /the in-job usage wait passed its bound/);
+    // `paused_by` is not a bundle field; the registry the bundle was written from carries it.
+    assert.equal(j.record().paused_by, '');
+    assert.equal(existsSync(join(j.dir, STATE_DIR, 'RESUME')), true, 'the gate never dropped RESUME');
     assert.equal(j.prompts().length, 1);
   });
 });
