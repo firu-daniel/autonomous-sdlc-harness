@@ -332,10 +332,14 @@ git commit -m "Stop tracking the machine-local permission profile"
 git push --no-verify origin <default branch>
 ```
 
-It lands on the default branch because every run's branch is cut from `origin/<default branch>`, so an untrack pushed only to a run branch covers that one run; and it skips the hook for the same reason as the push above. Then re-render the workflows so the job's preflight is `doctor --remote-job`, and commit and push them as above:
+It lands on the default branch because every run's branch is cut from `origin/<default branch>`, so an untrack pushed only to a run branch covers that one run; and it skips the hook for the same reason as the push above. Then re-render the two workflows so the job's preflight is `doctor --remote-job`. Delete them and run a plain `init`, which re-creates each one under create-if-absent at this CLI's version and touches nothing else. Re-apply any timeout, runner or cron tuning from the deleted copies in git history, then commit and push them as above. `init --force` would re-render them too, but it also regenerates every other generated file after a `.bak`, including `.claude/CLAUDE.md` and the conventions documents the analyze command filled.
 
 ```
-npx autonomous-sdlc-harness init --force
+git rm .github/workflows/harness-run.yml .github/workflows/harness-resume.yml
+```
+
+```
+npx autonomous-sdlc-harness init
 ```
 
 **4. Set a credential secret.** One of the two is required (§9 says which one billing follows). For a Claude subscription, make a long-lived token, then store it; `gh secret set` asks for the value, so it stays out of your shell history:
