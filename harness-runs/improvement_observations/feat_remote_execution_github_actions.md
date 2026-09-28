@@ -28,3 +28,36 @@
 - **category:** tooling-gap
 - **evidence:** `stale-rule` — `.claude/context/conventions.md` → `## Commit-message policy`: Task 11 adds the watcher commit subject `chore: add user review for <branch>`, absent from the fixed-form list. `stale-rule` — `.claude/context/cli.md` → `## Naming and file layout`, "One template subdirectory per adopter-side home": Tasks 15–17 add `cli/templates/github/`. `stale-rule` — `.claude/context/cli.md` → `## Naming and file layout`, the `cli/src/` area list: Task 2 adds `remote/`, and `retrieval/` from an earlier branch is also missing.
 - **cost this run:** each owes a follow-up restatement of the named rule — a supervised `/autonomous-sdlc-harness:harness-analyze` re-run or a hand edit.
+
+# User-review fix round 1 — poller race and retry bound, state-bundle retention and expiry, QA declared unsupported remotely
+
+## Per-layer reviewers of a multi-layer finding write the same `review_<i>.md` name into one shared folder
+- **category:** silent-failure
+- **evidence:** every Phase A item carried two or three layers (`_(layer: cli, general)_`, `_(layer: cli, plugin, general)_`), each layer's `layer-reviewer` was dispatched with the same `findings_folder: harness-runs/user_review_fix_plan_point_reviews/feat_remote_execution_github_actions_fix_plan/item_<K>/`, and `iteration` restarts at 0 per layer (`plugin/instructions/unit_loop_core.md` step 3). On Finding 2 the cli reviewer (PASS) left a Nice to Have in `item_2/review_0.md`, which the general implementer then quoted; the general reviewer's FAIL at iteration 0 was written to the same `item_2/review_0.md` (mtime 10:56), replacing it. On Finding 3, `item_3/review_0.md` went from 2881 bytes (11:22, cli) to 5670 bytes (11:55, general). On Finding 4 the general reviewer wrote `item_4/review_0_general.md` instead, and both it and the next implementer returned a note that the naming collides.
+- **cost this run:** at least one layer's per-unit review file on Finding 2 is no longer on disk, so the D.2 Nice-to-Have scan and any later round count see one file where two reviews ran.
+- **hypothesis:** the folder is keyed per unit while the counter is per layer.
+
+## The configured test gate stayed red for every implementer this round, on the same two gates as the task run
+- **category:** tooling-gap
+- **evidence:** all 12 `layer-implementer` returns in Phase A (Findings 1–4, first and fix iterations) reported `bash scripts/test.sh` → `run-gates: 2 failed, 18 passed`: gate 6a on the gitignored `harness-runs/scratch/t3-test.log` (dated 2026-09-25), and gate 11 on "the retrieval runtime is not installed". Gate 4 (`npm test`) passed in each.
+- **cost this run:** no fix commit this round has a clean `commands.test` result behind it; each implementer carried a "not caused by this change" caveat, and the scratch log is still on disk.
+
+## Read-only checks and doc fetches were gated again for the implementers
+- **category:** tooling-gap
+- **evidence:** Finding 3's cli implementer could not run `bash -n` or `curl` and its fetch of the `actions/upload-artifact` v4 README was refused, so the claim that `retention-days: 400` is capped rather than rejected is recorded as unverified; Finding 3's general implementer had `curl` to docs.github.com refused and carried the storage/cache/disk figures from the user review; Finding 1's general implementer had no web access and marked its `docs/remote-execution.md` §6 row "None retrieved".
+- **cost this run:** two new §6 "not verified" rows and one set of carried-forward figures in `docs/remote-execution.md`; shell syntax checked only through the test suite.
+
+## Row UR-A's commit_prefix rule was overridden by the committer on every fix commit
+- **category:** agent-contract
+- **evidence:** `plugin/instructions/unit_loop_core.md` → `#### Row UR-A` maps `## Must Fix` → `fix`, and all four commit dispatches passed `commit_prefix: fix`; each `committer` return declined it, citing `.claude/context/conventions.md` → `## Commit-message policy` (review-fix commits take no prefix), and committed unprefixed: `15314fc`, `ab309d9`, `51bec02`, `583e6e3`.
+- **cost this run:** four committer returns carried the same override note; subjects match the policy, not the loop's rule.
+
+## The fix-plan writer's lessons-ledger append was left for an unrelated fix commit to sweep up
+- **category:** silent-failure
+- **evidence:** the initial `user-review-fix-plan-writer` dispatch appended four lines under `## Unattended control loops` in the tracked `harness-runs/lessons.md`; the fix-plan convergence commit `f778317` stages only the fix-plan index, its folder, the source review and the two gate folders, so `git status` showed ` M harness-runs/lessons.md` entering Phase A. The Finding 1 `committer` staged it into `15314fc` and noted it carried all four lessons, not only Finding 1's.
+- **cost this run:** the round's lessons landed in a finding's fix commit rather than the plan commit, and Phase A started on a dirty tracked tree.
+
+## Finding 4 needed 3 per-unit review rounds
+- **category:** optimization
+- **evidence:** `harness-runs/user_review_fix_plan_point_reviews/feat_remote_execution_github_actions_fix_plan/item_4/` holds `review_0.md` (plugin, iteration 0), `review_0_general.md` (general, iteration 0) and `review_1.md` (plugin, iteration 1), plus PASS rounds that wrote no file. Sorted in that order: round 1 vs round 0 — 2 net-new findings, 0 re-raised; round 2 vs round 1 — 1 net-new, 0 re-raised. Two layer reviewers share this root, so consecutive entries are not always the same reviewer.
+- **cost this run:** 2 extra implementer and 2 extra reviewer dispatches on Finding 4.
