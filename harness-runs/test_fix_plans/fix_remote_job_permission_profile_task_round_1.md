@@ -14,7 +14,7 @@
 
 Each entry resolves to a self-contained `fix_remote_job_permission_profile_task_round_1/finding_<K>.md` file via its `**Finding K**` reference. Sorted lowest blast-radius first.
 
-1. [ ] **Finding 1** — Replace the home-directory path quoted in the branch's task prompt with a `<home>` placeholder. _(layer: general)_
+1. [x] **Finding 1** — Replace the home-directory path quoted in the branch's task prompt with a `<home>` placeholder. _(layer: general)_
 2. [ ] **Finding 2** — Make gate 4's log name its failing tests; the two `npm test` failures are named and fixed from the next round's log. _(layer: general)_
 
 ---

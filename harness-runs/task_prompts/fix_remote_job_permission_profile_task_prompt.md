@@ -18,7 +18,7 @@ Scratch repository `firu-daniel/harness-gate12` (private, a small TypeScript lib
 matters is quoted here.
 
 **Run 1 (`36425634480`) — the committed profile.** `init` had written and the adoption commit had carried
-`.claude/settings.autonomous.json`, with this Mac's absolute paths (`//Users/daniel/Work/harness-gate12/**` and its
+`.claude/settings.autonomous.json`, with this Mac's absolute paths (`//<home>/Work/harness-gate12/**` and its
 `-*` siblings). In the job, the `Generate the job's permission profile` step ran `init --plugin-root-entries`, which
 reported `Summary: 65 kept, 35 ensured` — the profile was kept, not generated. `Preflight with doctor` then printed:
 
