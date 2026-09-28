@@ -40,10 +40,13 @@ before anything is loaded — a run that fails one refuses by name rather than p
   retrieval gate; the refusal names the cache directory and every missing file.
 - **The stub is unset**: `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` is empty or absent. Set, it swaps
   both models for deterministic hash stubs, and the eval refuses to write any figure while it is set.
-- **The retrieval runtime is installed**: `retrievalRuntimeState().installed` is true. In a clone of
-  this repository the workspace's own install provides it — the optional peers are repeated under
-  `devDependencies` — and elsewhere the harness's retrieval setup installs them
-  (`docs/retrieval.md` → the **Setup** paragraph).
+- **The retrieval packages resolve from this checkout's build**: `unresolvedRetrievalPeers()`
+  (`cli/src/retrieval/runtime.ts`), read from `cli/dist`, is empty. In a clone of this repository
+  that is the workspace's own `npm ci`, because the optional peers are repeated under
+  `devDependencies`; the refusal names every missing package and that command. The machine-wide
+  runtime `init` installs (`docs/retrieval.md` → the **Setup** paragraph) is not a precondition:
+  every pass — `run.mjs`, the cold build, and the query-log pass, whose server is `docs serve`
+  spawned from this checkout's `cli/dist/cli.js` — loads this checkout's build.
 
 And one step, because the runner imports the **compiled** retrieval modules under
 `cli/dist/retrieval/` — the real interfaces, never a copy of them — so the build has to have run:

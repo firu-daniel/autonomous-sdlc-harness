@@ -48,7 +48,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_gate_11_eval_local_build
 1. [x] **Task 1** — Export `unresolvedRetrievalPeers()` from `cli/src/retrieval/runtime.ts`, the predicate for whether this installation resolves its own peers _(layer: cli)_ _(points: 10)_
 2. [x] **Task 2** — Replace the eval's runtime refusal with a local-peers refusal, after recording the pre-fix mismatch _(layer: general)_ _(points: 15)_
 3. [x] **Task 3** — Grade missing local peers as `BLOCKED` in `check-floor.mjs` and `run-gates.sh`, and record the acceptance probes _(layer: general)_ _(points: 20)_
-4. [ ] **Task 4** — Describe what gate 11 now depends on in `docs/development.md`, `docs/retrieval-eval.md` and `docs/cli.md` _(layer: general)_ _(points: 15)_
+4. [x] **Task 4** — Describe what gate 11 now depends on in `docs/development.md`, `docs/retrieval-eval.md` and `docs/cli.md` _(layer: general)_ _(points: 15)_
 
 ## Scope register
 
