@@ -241,6 +241,16 @@ This gate needs `jq` 1.5 or newer on `PATH`: the outer-loop library reaches a co
 
 Every test gets its **own** fixture repository under the system temp directory, a copy of a seeded template its test process builds once, and removes it in process; the template is never handed to a test, nothing is written inside this checkout and no fixture is committed. The gate is red if a first `init` produces a configuration the schema rejects, if a second `init` on the same tree changes anything the first one wrote, or if a `--dry-run` writes at all — idempotence and dry-run purity are asserted before any other behaviour, because a writer aimed at a repository that fails either is destructive rather than merely wrong.
 
+**A hung case cannot hold the gate.** `npm test` runs `node --test --test-timeout=1800000` (`cli/package.json` → `scripts.test`). Under Node 20.19.5 that flag bounds each test **file's** whole run as well as each case, so it is sized above a whole file's wall time on a loaded host, where files run in parallel; it is a backstop against a gate that never ends, and the case-level bound is `runBash`'s `timeoutMs` below. That expiry alone names the hung **file** rather than the case in the TAP output and leaves the file's detached processes running, because under Node 20.19.5 it kills the file's process without aborting the test's signal (`cli/test/helpers/fixture.mjs` → choice 6; no case in the suite drives that expiry — `cli/test/test-timeout.test.mjs` bounds its hung child at 2 seconds, inside its own 240-second `--test-timeout`, so it proves the `runBash` bound below and not this). So the watcher suites also bound each shell run below that timeout — `tick` in `cli/test/helpers/watcher.mjs` and every watcher run in `cli/test/watcher-remote-job.test.mjs` except *"a job killed mid-run leaves running / continue"*, which spawns and kills its own process group — through `runBash`'s `timeoutMs`, which kills the run's whole process group and fails the case by name, leaving no watcher behind.
+
+**How the job-mode usage race is shown closed.** From `cli/`:
+
+```
+HARNESS_JOB_USAGE_REPEAT=40 node --test --test-timeout=1800000 test/watcher-remote-job.test.mjs
+```
+
+It runs the case *"a reset 2 seconds ahead -> the run completes in the same job"* as N concurrent job-mode watchers, each on its own fixture, each driving a stub that polls for `PAUSE` every 0.1 s and exits once it appears — the load that exposed the race. A pass is every repetition ending `job: completed stop`; a failure names its repetition. The figure is taken by hand, outside any headless session, on an otherwise idle machine, and recorded here with the date, the host, the Node version, N and the pass count. **Not yet measured.**
+
 **Run time, measured.** Measured by hand on 2026-09-26 on a 10-core macOS host (Darwin arm64, `os.availableParallelism()` 10), Node v22.23.2, git 2.50.1 (Apple Git-155), outside any headless session and with no other heavy process running, one host command each, from the repository root:
 
 ```
