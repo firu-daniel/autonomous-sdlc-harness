@@ -5,7 +5,7 @@
  * in `cli/src/retrieval/runtime.ts`, and only on a path that retrieves** — and, with it, the half of
  * the task prompt's Acceptance 1 that a fresh adopter's install contains none of those packages.
  *
- * ## Four cases, and why each is needed
+ * ## Five cases, and why each is needed
  *
  * - **(a) Source guard.** What an ordinary verb loads cannot all be reached behaviourally — a module
  *   only one untested branch imports would pass (b) — so the source is guarded as well
@@ -17,6 +17,9 @@
  *   one runner this suite shares, and a control case proves the hook is live.
  * - **(c) Manifest.** No `dependencies` key, and every peer optional.
  * - **(d) `retrievalRuntimeState`**, in-process, against a planted cache under a temp `XDG_CACHE_HOME`.
+ * - **(e) `unresolvedRetrievalPeers`**, under the refusing hook in a child and unhooked in process. It
+ *   guards that the predicate answers from resolution through the loader's own base, and that a
+ *   refused resolution is reported by name rather than thrown.
  */
 
 import assert from 'node:assert/strict';
@@ -197,4 +200,24 @@ test('(d) retrievalRuntimeState answers from the planted runtime alone', async (
   await plant(join(cliPackageDir, 'package.json'), JSON.stringify({ name: MANIFEST.name, version: otherVersion }));
   const stale = runtime.retrievalRuntimeState();
   assert.deepEqual(stale, { installed: false, version: otherVersion, missing: [MANIFEST.name] });
+});
+
+test('(e) unresolvedRetrievalPeers lists every peer a resolve hook refuses, and none without it', async (t) => {
+  const runtimeUrl = pathToFileURL(join(PACKAGE_ROOT, 'dist', 'retrieval', 'runtime.js')).href;
+  const dir = await scratchDir(t);
+  const probe = join(dir, 'probe.mjs');
+  await writeFile(
+    probe,
+    `import { unresolvedRetrievalPeers } from ${JSON.stringify(runtimeUrl)};
+process.stdout.write(JSON.stringify(unresolvedRetrievalPeers()));
+`,
+  );
+
+  const hooked = await runCliFrom(probe, dir, [], { NODE_OPTIONS: await writeHook(dir) });
+  assert.equal(hooked.status, 0, `the probe exited ${hooked.status}:\n${hooked.stderr}`);
+  assert.deepEqual(JSON.parse(hooked.stdout), PEER_NAMES);
+
+  const runtime = await import(runtimeUrl);
+  // cli/package.json repeats every peer under devDependencies, so each resolves wherever this suite runs.
+  assert.deepEqual(runtime.unresolvedRetrievalPeers(), []);
 });

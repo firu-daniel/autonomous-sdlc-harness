@@ -28,3 +28,8 @@
 - Case `(e)` is this task's own test, so the unit runs it only through a single-file test command a conventions document states (`plugin/instructions/unit_loop_core.md` → `## The test-run rule`, point 3). None is stated, so its run is deferred to the Run gates phase and the return says so. The unit instead exercises the same two assertions through a scratch probe, `bash scripts/scratch-run.sh harness-runs/scratch/<probe>.mjs`. Unhooked, the probe prints `[]`. It then spawns a child under a peer-refusing `--import` hook, which prints all five peer names in manifest order. The probe file is deleted afterwards.
 - `retrievalCliEntry()` from the rebuilt `cli/dist` still answers `source: 'this-installation'` in this workspace. That is the same answer it gave at the branch point, which shows the refactor changed nothing it returns.
 - `grep -n "import.meta.resolve" cli/src/retrieval/runtime.ts` finds one call site, inside `unresolvedRetrievalPeers`, and none left in `retrievalCliEntry`.
+
+**Deviations from plan:**
+
+- Case `(e)` in `cli/test/retrieval-loading.test.mjs` was not run: no conventions document states a single-file test command, so it is deferred to the Run gates phase. Its two assertions rest on the scratch probe run through `bash scripts/scratch-run.sh`, which printed `[]` unhooked and all five peers in manifest order under the refusing hook. The probe was deleted afterwards.
+- Case `(e)` also asserts the hooked child exits `0` before parsing its stdout, so a crash reports its stderr instead of a JSON parse error.
