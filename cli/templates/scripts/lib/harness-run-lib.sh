@@ -58,8 +58,11 @@
 #      and are written only by the `hr_lane_*` functions.
 #   2. THE RUN REGISTRY writes the registry file its caller names. Fence: that
 #      file is `<root>/<state_dir>/autonomous_logs/registry.json`, resolved
-#      through `hr_state_path`, and it is written only by `hr_registry_init`
-#      and `hr_registry_set`.
+#      through `hr_state_path`, plus the lock directory `<file>.lock` (and its
+#      `.stale.*` move-aside while a stale one is broken) and the temp files
+#      `.registry.*` in the registry's own directory. Written only by
+#      `hr_registry_init`, `hr_registry_set` and the `hr_registry_lock` /
+#      `hr_registry_unlock` pair `hr_registry_set` calls.
 #   3. THE REMOTE STATE BUNDLE writes the files its format lists. Fence: inside
 #      `<root>/<state_dir>/` (resolved through `hr_state_dir`), only
 #      `autonomous_logs/remote_status.json`, `clarifications/<branch>/`,
@@ -71,8 +74,8 @@
 #      there but a writer's own failed temp file is ever removed.
 #
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
-# `hr_remote_status_write`, `hr_remote_bundle_write` or
-# `hr_remote_bundle_restore` function still gets a library that only reads. The
+# `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
+# `hr_remote_bundle_write` or `hr_remote_bundle_restore` function still gets a library that only reads. The
 # lane's ceilings are the only environment values here that carry policy, because
 # the lane is machine-scoped and has no configuration key to carry them; each is
 # named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
@@ -165,7 +168,9 @@
 # because callers capture stdout. The one pass-through is the registry's two
 # writers, `hr_registry_init` and `hr_registry_set`, which leave the shell's,
 # `mktemp`'s and `jq`'s own stderr on a failed write to the caller, as the
-# watcher's bodies they replaced did — that stream is the watcher's log. That silence is why the lane reports a lock it BROKE through a
+# watcher's bodies they replaced did — that stream is the watcher's log — and
+# add one line of their own, naming the lock, when `hr_registry_set` cannot
+# take the registry lock. That silence is why the lane reports a lock it BROKE through a
 # variable instead of a log line — the caller owns the log.
 #
 # NAMING. Every function is prefixed `hr_`; every variable this file touches
@@ -1110,31 +1115,168 @@ hr_push_env_files() {
 # Each function takes the registry file as its first argument — the caller
 # resolves it as `hr_state_path <root> autonomous_logs/registry.json` — and is
 # write exception 2 in the header. Every value is written as a JSON string;
-# every write stamps `branch` and `updated_at` on the record and replaces the
-# file through a `mktemp` + `mv`. No shell option is assumed: the caller may set
-# `-e`, `-u` or neither.
+# every write stamps `branch` and `updated_at` on the record. No shell option is
+# assumed: the caller may set `-e`, `-u` or neither.
+#
+# EVERY WRITE IS A LOCKED READ-MODIFY-WRITE. Every script sharing the file
+# writes it, and so does the watcher's own `( … ) &` engine subshell, so two
+# unserialized writers each read the same record and the second `mv` silently
+# drops the first one's key. The lock is a `mkdir` of `<file>.lock` holding an
+# `owner` file with a per-call token — the `mktemp` name of that call's temp
+# file, because `$$` inside a subshell is the parent's pid and bash 3.2 has no
+# per-subshell pid variable — and only a call whose token is still in `owner`
+# releases it.
+#
+# STALENESS IS THE LOCK DIRECTORY'S AGE, NEVER A PID. The stall watchdog kills
+# the engine subshell mid-write, so a dead holder is expected, and a pid says
+# nothing about a lock the killed subshell took under its parent's `$$`. A write
+# is one `jq` over a file of a few records, well under a second, so a lock 10 s
+# old is a crashed holder; a waiter polls every 0.05 s for up to 12 s — past the
+# stale age, so a waiter that arrives just after a crash breaks the lock rather
+# than giving up. Both are constants here, not environment values: the header
+# allows policy-carrying environment values for the lane only. Breaking renames
+# the lock aside before emptying it, as `hr_lane_acquire` does, and restores it
+# when the `owner` it moved is not the one it judged stale — a second breaker
+# that re-took the lock between the judgement and the rename. A write that
+# cannot take the lock prints one stderr line naming it, writes nothing and
+# returns 1.
+#
+# ONE CALL, SEVERAL KEYS. `hr_registry_set <file> <branch> <key> <value> [<key>
+# <value> …]` writes every pair in one `jq` pass under one lock and one `mv`.
+# A caller writing two keys that a concurrent reader must never see apart — a
+# status and the reason for it — MUST pass them in one call.
+#
+# READERS TAKE NO LOCK. The temp file sits beside the registry, so the `mv` is a
+# same-filesystem rename and `hr_registry_get`, `hr_registry_branches` and any
+# other `jq` over the file see the old record or the new one, never a partial
+# one. `hr_registry_init` creates the file by `ln`-ing a complete temp file to
+# the registry name, which fails when the name exists, so a reader's create
+# never truncates a registry a writer has just created.
 # ---------------------------------------------------------------------------
 
-# Create an empty registry at <file> when none exists.
-hr_registry_init() {
-  local file="${1-}"
-  [ -n "$file" ] || return 1
-  [ -f "$file" ] || printf '{"runs":{}}\n' >"$file"
+# The directory holding <file> — where its temp files go, so every `mv` over it
+# is a same-filesystem rename.
+hr_registry_dir() {
+  local file="${1-}" dir
+  case "$file" in
+    */*)
+      dir="${file%/*}"
+      [ -n "$dir" ] || dir=/
+      ;;
+    *) dir=. ;;
+  esac
+  printf '%s\n' "$dir"
 }
 
-# hr_registry_set <file> <branch> <key> <value>
+# Create an empty registry at <file> when none exists. Atomic: the name is
+# either absent or a complete `{"runs":{}}` — never truncated, never partial.
+hr_registry_init() {
+  local file="${1-}" dir tmp
+  [ -n "$file" ] || return 1
+  [ -f "$file" ] && return 0
+  dir=$(hr_registry_dir "$file")
+  tmp=$(mktemp "$dir/.registry.XXXXXX") || return 1
+  if printf '{"runs":{}}\n' >"$tmp"; then
+    ln "$tmp" "$file" 2>/dev/null || :
+  fi
+  rm -f "$tmp"
+  [ -f "$file" ]
+}
+
+# hr_registry_lock <file> <token> — take `<file>.lock` for <token>, breaking a
+# stale one (see the section comment). 0 when held; 1, with one stderr line,
+# when the wait ceiling passed.
+hr_registry_lock() {
+  local lock="${1-}.lock" token="${2-}" polls=0 start="" now m seen moved stale
+  # 12 — the wait ceiling and 10 — the stale age, both in seconds. The wait is
+  # judged by the clock, because each poll's forks cost more than its sleep;
+  # 240 polls is the ceiling only when `date` gives no epoch.
+  while :; do
+    if mkdir "$lock" 2>/dev/null; then
+      if printf '%s\n' "$token" >"$lock/owner" 2>/dev/null; then
+        return 0
+      fi
+      rm -f "$lock/owner" 2>/dev/null || :
+      rmdir "$lock" 2>/dev/null || :
+      break
+    fi
+    m=$(hr_lane_mtime "$lock")
+    now=$(date +%s 2>/dev/null) || now=0
+    case "$now" in '' | *[!0-9]*) now=0 ;; esac
+    [ -n "$start" ] || start="$now"
+    if [ "$now" -gt 0 ]; then
+      [ $((now - start)) -lt 12 ] || break
+    else
+      [ "$polls" -lt 240 ] || break
+    fi
+    if [ "$m" -gt 0 ] && [ "$now" -gt 0 ] && [ $((now - m)) -ge 10 ]; then
+      seen=""
+      [ -r "$lock/owner" ] && { IFS= read -r seen <"$lock/owner" || :; } 2>/dev/null
+      stale="$lock.stale.${token##*.}"
+      if mv "$lock" "$stale" 2>/dev/null; then
+        moved=""
+        [ -r "$stale/owner" ] && { IFS= read -r moved <"$stale/owner" || :; } 2>/dev/null
+        if [ "$moved" != "$seen" ] && [ ! -e "$lock" ]; then
+          mv "$stale" "$lock" 2>/dev/null || :
+        fi
+        if [ -d "$stale" ]; then
+          rm -f "$stale/owner" 2>/dev/null || :
+          rmdir "$stale" 2>/dev/null || :
+        fi
+        polls=$((polls + 1))
+        continue
+      fi
+    fi
+    sleep 0.05
+    polls=$((polls + 1))
+  done
+  printf 'hr_registry_set: could not take the registry lock %s\n' "$lock" >&2
+  return 1
+}
+
+# hr_registry_unlock <file> <token> — release `<file>.lock` only while its
+# `owner` still holds <token>; a lock broken and re-taken is someone else's.
+hr_registry_unlock() {
+  local lock="${1-}.lock" token="${2-}" owner=""
+  [ -r "$lock/owner" ] && { IFS= read -r owner <"$lock/owner" || :; } 2>/dev/null
+  [ -n "$token" ] && [ "$owner" = "$token" ] || return 0
+  rm -f "$lock/owner" 2>/dev/null || :
+  rmdir "$lock" 2>/dev/null || :
+}
+
+# hr_registry_set <file> <branch> <key> <value> [<key> <value> …]
+# 1, writing nothing, on no key/value pair or an odd count of them. Each pair
+# reaches `jq` as `--arg kN` / `--arg vN` — jq 1.5 has no `$ARGS` — and only
+# those generated names enter the program text, never a value.
 hr_registry_set() {
-  local file="${1-}" branch="${2-}" key="${3-}" value="${4-}" tmp
-  hr_registry_init "$file" || :
-  tmp="$(mktemp)" || return 1
-  if jq --arg b "$branch" --arg k "$key" --arg v "$value" --arg now "$(date '+%Y-%m-%dT%H:%M:%S')" '
-    .runs[$b] = ((.runs[$b] // {}) + {($k): $v, "branch": $b, "updated_at": $now})
-  ' "$file" >"$tmp"; then
-    mv "$tmp" "$file"
-  else
+  local file="${1-}" branch="${2-}" dir tmp fields="" i=0 status=0
+  local -a args
+  [ -n "$file" ] && [ "$#" -ge 4 ] && [ $(($# % 2)) -eq 0 ] || return 1
+  shift 2
+  args=(--arg b "$branch" --arg now "$(date '+%Y-%m-%dT%H:%M:%S')")
+  while [ "$#" -gt 0 ]; do
+    args+=(--arg "k$i" "$1" --arg "v$i" "$2")
+    fields="$fields(\$k$i): \$v$i, "
+    i=$((i + 1))
+    shift 2
+  done
+  dir=$(hr_registry_dir "$file")
+  tmp=$(mktemp "$dir/.registry.XXXXXX") || return 1
+  if ! hr_registry_lock "$file" "$tmp"; then
     rm -f "$tmp"
     return 1
   fi
+  hr_registry_init "$file" || :
+  if jq "${args[@]}" "
+    .runs[\$b] = ((.runs[\$b] // {}) + {$fields\"branch\": \$b, \"updated_at\": \$now})
+  " "$file" >"$tmp"; then
+    mv "$tmp" "$file" || status=1
+  else
+    status=1
+  fi
+  [ "$status" -eq 0 ] || rm -f "$tmp"
+  hr_registry_unlock "$file" "$tmp"
+  return "$status"
 }
 
 # hr_registry_get <file> <branch> <key>   -> the value, or nothing

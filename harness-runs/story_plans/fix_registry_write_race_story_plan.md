@@ -42,7 +42,7 @@ Manual setup required:
 
 Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/fix_registry_write_race/task_<K>_plan.md`. Entries are ordered bottom-up by ship sequence, with the catch-all `general` layer last.
 
-1. [ ] **Task 1** — Serialize `hr_registry_set` behind a `mkdir` lock, add multi-key writes and an atomic create, proven by a concurrent-writer suite _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Serialize `hr_registry_set` behind a `mkdir` lock, add multi-key writes and an atomic create, proven by a concurrent-writer suite _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Write the watcher's paired registry keys in one call, and record every pause tag or reason before its `PAUSE` _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Batch `remote-run.sh`'s registry writes, and race a `stop` against watcher writes _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Repair a usage pause whose `usage_resume_at` was lost, and bound the job-mode usage wait by `REMOTE_WAIT_MAX_SECS` _(layer: cli)_ _(points: 20)_
