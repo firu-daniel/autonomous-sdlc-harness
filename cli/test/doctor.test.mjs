@@ -5199,6 +5199,37 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
     assert.match(job.stdout, passLine('profile-paths'));
   }));
 
+  subtests.push(t.test('a profile committed at HEAD fails profile-tracked, naming the untrack route, where a default run warns', async (subtest) => {
+    const dir = await wiredFixture(subtest);
+    const { root, env } = await runnerHome(subtest);
+    allowInProfile(dir, [pluginReadEntry(root)]);
+    grantDirectories(dir, [root]);
+    const branch = readJson(join(dir, CONFIG_FILE)).defaultBranch;
+
+    // The ignored, untracked profile `init` leaves is the passing state, and the job is otherwise clean.
+    const untracked = await runCli(dir, ['doctor', '--remote-job'], env);
+    assert.equal(untracked.status, 0, `doctor --remote-job exited ${untracked.status}\n${untracked.stdout}\n${untracked.stderr}`);
+    assert.match(untracked.stdout, passLine('profile-tracked'));
+
+    await runGit(dir, ['add', '--force', '--', PROFILE_FILE]);
+    await runGit(dir, ['commit', '--quiet', '-m', 'Commit the permission profile']);
+
+    const job = await runCli(dir, ['doctor', '--remote-job'], env);
+    assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} on a committed profile\n${job.stdout}\n${job.stderr}`);
+    const failed = detailLine(job.stderr, failLine('profile-tracked'));
+
+    const local = await runCli(dir, ['doctor'], env);
+    assert.equal(local.status, 0, `doctor exited ${local.status} on a condition that only warns\n${local.stdout}\n${local.stderr}`);
+    assert.doesNotMatch(local.stderr, failLine('profile-tracked'));
+    const warned = detailLine(local.stderr, warnLine('profile-tracked'));
+
+    for (const line of [failed, warned]) {
+      assert.ok(line.includes(`git rm --cached ${PROFILE_FILE}`), `the line does not name the untrack command:\n${line}`);
+      assert.ok(line.includes(`git push --no-verify origin ${branch}`), `the line does not name the default-branch push:\n${line}`);
+      assert.ok(!line.includes('git push origin '), `the line prints a push the pre-push hook refuses:\n${line}`);
+    }
+  }));
+
   subtests.push(t.test('no plugin record fails plugin-permissions, where a default run warns', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const home = await claudeConfigHome(subtest);

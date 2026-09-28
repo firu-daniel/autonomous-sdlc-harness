@@ -3916,7 +3916,7 @@ const PROFILE_CHECK: Check = {
  * untrack pushed only to a run branch covers that one run, and the next branch carries the profile
  * again. The push and its `--no-verify` reason are `core/defaultBranchPush.ts`'s, spelled nowhere here.
  *
- * Called by {@link PROFILE_PATHS_CHECK} under `--remote-job`, and by `PROFILE_TRACKED_CHECK`.
+ * Called by {@link PROFILE_PATHS_CHECK} under `--remote-job`, and by {@link PROFILE_TRACKED_CHECK}.
  */
 function profileUntrackRemedy(ctx: CheckContext): string {
   const configured = ctx.config?.defaultBranch;
@@ -3975,6 +3975,31 @@ const PROFILE_PATHS_CHECK: Check = {
       : warn(
           `neither a path nor a pattern in ${PROFILE_PATH} covers this repository root (${ctx.repoRoot}): the profile was generated for another location, so a run loading it would find its edit, write, read and script rules matching nothing here — re-run \`${CLI} init --force\` from the checkout the profile should be generated for, which writes a .bak sibling before regenerating it`,
         );
+  },
+};
+
+/**
+ * Is the permission profile carried by the tree `HEAD` names?
+ *
+ * `pass` when it is not; `warn` when it is; **`fail` under `--remote-job`** ({@link CheckContext.remoteJob}).
+ * A committed profile reaches every clone and every job, and a job cannot replace it: its
+ * create-if-absent `init` keeps a present file, and the step that runs `init` refuses a rewrite of a
+ * tracked one. On a person's machine the committed file may still name this checkout, so nothing stops
+ * yet. Both non-pass grades print {@link profileUntrackRemedy}, the one route that works in both places.
+ *
+ * Asks about `ctx.repoRoot`, the checkout `doctor` runs in, not the main checkout the profile is read
+ * from in a linked worktree: what is committed is a property of the tree, not of where it is loaded.
+ */
+const PROFILE_TRACKED_CHECK: Check = {
+  id: 'profile-tracked',
+  title: 'the permission profile is machine-local, not committed',
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (!pathAtRef(ctx.repoRoot, 'HEAD', PROFILE_PATH)) {
+      return pass(`${PROFILE_PATH} is not in the tree HEAD names: it is machine-local and ignored, so each checkout and each remote job generates its own`);
+    }
+    const finding = `${PROFILE_PATH} is committed at HEAD: it carries this machine's absolute paths, and a remote job keeps a committed one rather than generating its own. Stop tracking it: ${profileUntrackRemedy(ctx)}`;
+    return ctx.remoteJob ? fail(finding) : warn(finding);
   },
 };
 
@@ -4750,6 +4775,9 @@ const RETRIEVAL_INDEX_CHECK: Check = {
  * the watcher dispatches to GitHub rather than spawns here, and `remote-github` follows that because it
  * asks GitHub the half of the same question local evidence cannot answer.
  *
+ * `profile-tracked` sits under `profile-paths` because the two name the same file carried somewhere it
+ * does not belong, and a committed profile is the usual reason a job's `profile-paths` fails.
+ *
  * `plugin-permissions` closes the profile block for the same shape of reason: it is the only profile
  * question whose other half is not in the repository at all — the plugin's machine-local install
  * root — so it is answerable only once the profile itself has been read, and a reader whose
@@ -4790,6 +4818,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
   PLUGIN_WIRING_CHECK,
   PROFILE_CHECK,
   PROFILE_PATHS_CHECK,
+  PROFILE_TRACKED_CHECK,
   PROFILE_BROWSER_DENY_CHECK,
   PROFILE_DENY_FLOOR_CHECK,
   PLUGIN_PERMISSIONS_CHECK,

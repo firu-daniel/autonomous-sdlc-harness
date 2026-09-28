@@ -613,9 +613,11 @@ export function commitsAhead(repoRoot: string, baseRef: string, tipRef: string):
  * name, never this probe's to do.
  *
  * Every non-zero status is `false` — a ref that does not resolve, a path it does not carry, no `git`
- * at all — on the discipline {@link configuredRemotes} states: the one caller, `doctor`'s
- * `remote-execution` check, grades a ref it cannot read exactly as a ref without the file, and
- * whether the ref exists at all is the `remote` check's line.
+ * at all — on the discipline {@link configuredRemotes} states. Both callers are `doctor` checks, and
+ * each reads `false` as the right answer: `remote-execution` grades a ref it cannot read exactly as a
+ * ref without the file, and whether the ref exists at all is the `remote` check's line;
+ * `profile-tracked` asks about `HEAD`, and a `HEAD` that does not resolve — a repository with no
+ * commit — reads as not tracked, which is correct because nothing is committed.
  *
  * The `<ref>:<path>` name is built by string join and passed as **one argv element** (module header,
  * invariant 1).

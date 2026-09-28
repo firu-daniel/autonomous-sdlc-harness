@@ -42,3 +42,8 @@
 - `PROFILE_TRACKED_CHECK`'s remedy text contains `git push --no-verify origin` and no `git push origin ` form.
 - `grep -rn "no-verify origin" cli/src` still finds the spelling only in `cli/src/core/defaultBranchPush.ts`.
 - `grep -n "profile-tracked" cli/src/doctor/checks.ts` shows the id once, in the check, and the check sits after `profile-paths` in `CHECKS`.
+
+**Deviations from plan:**
+
+- The `cli/test/doctor.test.mjs` case was written but not run: neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, so the run is deferred to the Run gates phase (`unit_loop_core.md` → `## The test-run rule`, point 3). The bullet *"The new cases … pass"* rests instead on a throwaway scratch probe (`bash scripts/scratch-run.sh` over a `.mjs` under `harness-runs/scratch/`, deleted after) that drove the compiled CLI against a temp fixture and observed: fresh `init` → `PASS profile-tracked`, exit 0; profile force-added and committed → `WARN profile-tracked` naming `git rm --cached .claude/settings.autonomous.json` and `git push --no-verify origin master`, exit 0; same under `--remote-job` → `FAIL profile-tracked`, exit 1.
+- The three grades live in one subtest inside the `doctor --remote-job` block rather than three cases, so the job-shaped fixture (plugin Read grant and directory present) proves the `--remote-job` exit 1 comes from `profile-tracked` alone.
