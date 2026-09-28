@@ -86,6 +86,19 @@
 # So the job installs the plugin, then refuses to run, naming both versions,
 # when `claude plugin list --json` reports a version other than this file's
 # rendered CLI version.
+#
+# WHY retention-days IS SET. The `harness-state` bundle is the only remote copy
+# of a run's clarifications and carried counts; a run parked or paused longer
+# than its retention cannot be answered and loses those counts. 400 is the
+# largest retention any repository can configure, and `actions/upload-artifact`
+# caps a larger `retention-days` at the repository's own maximum, so the value
+# means "as long as this repository allows" — the same bound as leaving it
+# unset. It is explicit so that lowering it is a visible edit. The real bound is
+# the repository's Artifact and log retention setting, which
+# `autonomous-sdlc-harness doctor --check-github` reads. The cap (rather than a
+# rejection) is carried from the action's `@actions/artifact` retention code
+# and could not be re-checked against its v4 README when this file was written
+# (no network access); Gate 12 records the real behaviour.
 
 name: harness-run
 run-name: harness ${{ inputs.action }} ${{ inputs.branch }}
@@ -369,6 +382,7 @@ jobs:
           name: harness-state
           path: ${{ runner.temp }}/harness-state
           overwrite: true
+          retention-days: 400
 
       - name: Continue, wait or stop
         if: ${{ !cancelled() && env.SCRIPTS_DIR != '' }}

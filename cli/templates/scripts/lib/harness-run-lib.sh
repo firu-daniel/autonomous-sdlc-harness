@@ -1183,7 +1183,9 @@ hr_registry_branches() {
 #   branch, engine          the run's branch; `task` | `user_review` | `docs`
 #   status                  `running` | `parked` | `park_loop` | `paused` | `completed` | `failed`
 #   pause_reason            `usage` | `budget` | `user` | `overload` | empty. The registry's
-#                           registry-only `killed` is never written here
+#                           registry-only `killed` and `expired` are never written
+#                           here: `sync` derives each from a run and its artifact
+#                           list, not from a bundle
 #   usage_resume_at         the epoch second a usage pause may resume at, or empty
 #   park_loop_cycles, resume_max_question_index, auto_resumes, stall_restarts
 #                           the counters that must survive a job boundary

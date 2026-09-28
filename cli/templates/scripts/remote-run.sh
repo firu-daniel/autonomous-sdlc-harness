@@ -25,7 +25,8 @@
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status: printed; for sync: the record is
 #        current (including "no run listed yet", which writes nothing); for
-#        restore: restored, or no previous bundle under --resume none|pause;
+#        restore: restored, or no previous bundle (or an expired one, with a
+#        `::warning::` line) under --resume none|pause;
 #        for save: ALWAYS, whatever happened; for continue: whatever it
 #        decided — every outcome a person must act on is a notification; for
 #        poll: the tick finished; for pause-requested: such a run exists; for
@@ -40,7 +41,8 @@
 #        working copy is missing, or a downloaded bundle is unrecognised
 #        (sync, restore); the inputs payload is over the limit; a named answer
 #        file is missing. For restore under --resume answer, "nothing more":
-#        no previous bundle, `HARNESS_INPUT_ANSWERS` not an object of
+#        no previous bundle, the previous bundle expired (the message names
+#        its expiry and the resume command), `HARNESS_INPUT_ANSWERS` not an object of
 #        positive-integer keys to strings, or an answer whose `question_<n>.md`
 #        is not at the top level of the previous bundle — nothing is restored
 #        and no answer is written
@@ -65,16 +67,20 @@
 # `GITHUB_STEP_SUMMARY` (save) are the runner's own.
 #
 # `restore` SELECTS the newest `completed` run titled `harness run <branch>`,
-# other than `GITHUB_RUN_ID`, carrying an unexpired `harness-state` artifact;
-# downloads it to `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/`
+# other than `GITHUB_RUN_ID`, carrying a `harness-state` artifact — walking
+# past a run with none, and stopping at one whose artifact has expired, since
+# an older copy would be staler state. An expired one restores nothing: under
+# --resume answer it exits 2; otherwise it prints a `::warning::` line naming
+# the run, the expiry and the lost counts and clarification history, and the
+# job continues from the committed ledger. An unexpired one it downloads to `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/`
 # (skipped when that directory already holds its status.json); and restores it
 # in `job` mode — on every --resume kind, `none` included, because a reused
 # branch keeps its clarification history. Then, under --resume answer, it
 # writes each `"<n>": "<text>"` entry to `clarifications/<branch>/answer_<n>.md`
 # with the exact bytes, after checking every entry first; and with
 # `HARNESS_INPUT_PARK_LOOP_CLEAR` exactly `true` it sets `park_loop_cycles` to
-# "0" in the restored `autonomous_logs/remote_status.json`. No previous bundle
-# is an ordinary first job (exit 0, one line) except under --resume answer.
+# "0" in the restored `autonomous_logs/remote_status.json`. No bundle in any
+# run is an ordinary first job (exit 0, one line) except under --resume answer.
 #
 # `save` WRAPS `hr_remote_bundle_write` into <out_dir>, and with
 # `GITHUB_STEP_SUMMARY` set appends a Markdown table of the bundle's `status`,
@@ -200,35 +206,47 @@
 # `status` WRITES NOTHING AT ALL — no registry (it does not even create an
 # absent one), no download, no file. It prints the branch's newest runs titled
 # `harness run <branch>` or `harness pause <branch>` (bounded), the record's
-# `status`, `pause_reason`, `remote_run_url` and `remote_synced_at`, and whether
-# a `harness run` finished after the last sync.
+# `status`, `pause_reason`, `remote_run_url` and `remote_synced_at`, whether
+# a `harness run` finished after the last sync, and — reading the newest
+# finished run's artifact list — a line naming its bundle's expiry and the
+# way on when that bundle has expired.
 #
 # `sync` READS THE NEWEST `harness run <branch>` RUN. Any status but
 # `completed` (queued, in_progress, waiting, requested, pending) sets the record
 # `running` and downloads nothing. Otherwise that run — the newest finished one
-# — decides, in exactly one of four cases, tested in this order:
+# — decides, in exactly one of five cases, tested in this order:
 #   1. its id is the record's `remote_run_id`: already applied. Only
 #      `remote_synced_at` is written; nothing is downloaded or restored, so an
-#      answer written into the mirror since the last sync survives
-#   2. it carries an unexpired `harness-state` artifact: downloaded (skipped
+#      answer written into the mirror since the last sync survives — unless
+#      the record is `parked`, `park_loop` or `paused` (not already `expired`)
+#      and that run's bundle has expired since: then as case 2
+#   2. its `harness-state` artifact is listed only as expired: `paused` /
+#      `expired`, `remote_run_id` / `remote_run_url` at this run, and
+#      `remote_detail` naming the expiry and the way on (resume from the
+#      committed ledger, or re-drop the task); nothing restored. The mirror's
+#      question files stay, but no job can take an answer to them
+#   3. it carries an unexpired `harness-state` artifact: downloaded (skipped
 #      when the download directory already holds its status.json), restored in
 #      `mirror` mode into the record's `worktree`, `run.log` copied to the main
 #      checkout's `autonomous_logs/<branch>.remote.log`, and `status`,
 #      `pause_reason`, `usage_resume_at`, `park_loop_cycles`, `remote_run_id`,
 #      `remote_run_url`, `remote_detail` and `remote_synced_at` written
-#   3. no artifact, while some bundle exists (`remote_run_id` is set, or an
+#   4. no artifact, while some bundle exists (`remote_run_id` is set, or an
 #      older finished run carries one): a job that died before its upload.
 #      `paused` / `killed`, `remote_run_id` / `remote_run_url` re-pointed at
 #      THIS run, nothing restored — so a later sync with no newer run is case 1
-#   4. no bundle in any run and an empty `remote_run_id`: `failed`. Not
+#   5. no bundle in any run and an empty `remote_run_id`: `failed`. Not
 #      `paused`: with no bundle anywhere a pause resume has nothing to restore,
 #      and re-dropping the artifact is the recovery
 #
-# THE `killed` MAPPING. A finished run whose bundle still says `running` (a
-# kill, a timeout with no chain left) syncs as `status: paused`, `pause_reason:
-# killed`. `killed` is registry-only — `status.json` never carries it. It is
-# `paused` rather than `failed` because a `failed` record has no resume path,
-# while the ledger on the branch is intact and a resume continues from it.
+# THE `killed` AND `expired` MAPPINGS. A finished run whose bundle still says
+# `running` (a kill, a timeout with no chain left) syncs as `status: paused`,
+# `pause_reason: killed`; one whose bundle has expired syncs as `status:
+# paused`, `pause_reason: expired`. Both are registry-only — `status.json`
+# never carries either, because `sync` derives them from the run and its
+# artifact list, never from a bundle. Both are `paused` rather than `failed`
+# because a `failed` record has no resume path, while the ledger on the branch
+# is intact and a resume continues from it.
 #
 # THE WORKFLOW INPUT CONTRACT (the workflow template declares the same inputs):
 #
@@ -355,6 +373,12 @@
 #   first job  a `run list` answer with no finished run: --resume none -> 0;
 #              --resume answer -> 2
 #   own run    GITHUB_RUN_ID=<the bundle run's id> -> that run is skipped
+#   expired    the artifact list answering {"artifacts":[{"name":"harness-state",
+#              "expired":true,"expires_at":"2026-01-02T00:00:00Z"}]}: --resume
+#              pause -> 0, a `::warning::` line, no `run download`, no older
+#              bundle restored; --resume answer -> 2, names the expiry and
+#              branch-resume; sync -> the record is paused / expired; status
+#              -> prints the expired line, "$r" byte-identical
 #   save       bash scripts/remote-run.sh save feat_x /tmp/b -> 0; /tmp/b holds
 #              status.json, clarifications/feat_x/, flow_walker_state (and
 #              PAUSE_PROGRESS.md, run.log when present); with
@@ -837,6 +861,42 @@ has_bundle() {
   gh_fail "reading the artifacts of run $1 failed"
 }
 
+# bundle_state <run_id> — BUNDLE_STATE is `present` (an unexpired state
+# artifact is listed), `expired` (only expired copies are) or `none`; when
+# expired, BUNDLE_EXPIRES_AT is the latest listed `expires_at`. Exits 3 when
+# the lookup failed, as has_bundle does. has_bundle alone cannot tell expired
+# from absent: it reads both as "no bundle".
+BUNDLE_STATE=""
+BUNDLE_EXPIRES_AT=""
+bundle_state() {
+  local answer
+  BUNDLE_STATE=""
+  BUNDLE_EXPIRES_AT=""
+  gh_call api "repos/{owner}/{repo}/actions/runs/$1/artifacts" || gh_fail "reading the artifacts of run $1 failed"
+  answer=$(printf '%s' "$GH_OUT" | jq -r --arg n "$STATE_ARTIFACT_NAME" '
+    [.artifacts[]? | select(.name == $n)] as $a
+    | if ($a | map(select(.expired != true)) | length) > 0 then "present"
+      elif ($a | length) > 0 then "expired\t" + ([$a[] | .expires_at // empty | tostring] | sort | last // "")
+      else "none" end' 2>/dev/null)
+  case "$answer" in
+    present|none) BUNDLE_STATE="$answer" ;;
+    expired$'\t'*)
+      BUNDLE_STATE=expired
+      BUNDLE_EXPIRES_AT="${answer#*$'\t'}"
+      [ -n "$BUNDLE_EXPIRES_AT" ] || BUNDLE_EXPIRES_AT="an unlisted date"
+      ;;
+    *)
+      GH_ERR="its artifact list is not the expected JSON"
+      gh_fail "reading the artifacts of run $1 failed"
+      ;;
+  esac
+}
+
+# expired_line <run_id> — the way on for a bundle bundle_state found expired.
+expired_line() {
+  printf '%s' "the state bundle of run $1 expired on $BUNDLE_EXPIRES_AT: resume from the committed ledger with $RESUME_HINT $branch, or re-drop the task"
+}
+
 set_or_fail() {
   hr_registry_set "$registry" "$branch" "$1" "$2" || {
     echo "remote-run.sh: writing $1 of $branch to '$registry' failed" >&2
@@ -864,6 +924,24 @@ verb_status() {
   else
     echo "remote-run.sh: no run finished after the last sync"
   fi
+  if [ -n "$finished_id" ]; then
+    bundle_state "$finished_id"
+    [ "$BUNDLE_STATE" != expired ] || echo "remote-run.sh: $(expired_line "$finished_id")"
+  fi
+}
+
+# sync_expired <run_id> <url> <now> — the record `paused` / `expired` at that
+# run, from BUNDLE_EXPIRES_AT; nothing restored.
+sync_expired() {
+  local line
+  line=$(expired_line "$1")
+  set_or_fail status paused
+  set_or_fail pause_reason expired
+  set_or_fail remote_run_id "$1"
+  set_or_fail remote_run_url "$2"
+  set_or_fail remote_detail "$line"
+  set_or_fail remote_synced_at "$3"
+  echo "remote-run.sh: $line"
 }
 
 verb_sync() {
@@ -894,15 +972,33 @@ verb_sync() {
   fi
 
   synced_id=$(hr_registry_get "$registry" "$branch" remote_run_id)
-  # Case 1 — already applied.
+  # Case 1 — already applied. A record still waiting on this run's bundle is
+  # re-checked: once it expires, the job can no longer take an answer.
   if [ "$id" = "$synced_id" ]; then
+    case "$(hr_registry_get "$registry" "$branch" status)/$(hr_registry_get "$registry" "$branch" pause_reason)" in
+      paused/expired) ;;
+      parked/*|park_loop/*|paused/*)
+        bundle_state "$id"
+        if [ "$BUNDLE_STATE" = expired ]; then
+          sync_expired "$id" "$url" "$now"
+          return 0
+        fi
+        ;;
+    esac
     set_or_fail remote_synced_at "$now"
     echo "remote-run.sh: run $id of $branch is the one last synced; the mirror is current"
     return 0
   fi
 
-  # Case 2 — a newer run with a bundle.
-  if has_bundle "$id"; then
+  # Case 2 — a newer run whose bundle has expired.
+  bundle_state "$id"
+  if [ "$BUNDLE_STATE" = expired ]; then
+    sync_expired "$id" "$url" "$now"
+    return 0
+  fi
+
+  # Case 3 — a newer run with a bundle.
+  if [ "$BUNDLE_STATE" = present ]; then
     hr_remote_names_var
     download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$id") || {
       echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
@@ -955,7 +1051,7 @@ verb_sync() {
     return 0
   fi
 
-  # Case 3 — a newer run with no bundle, while some bundle exists.
+  # Case 4 — a newer run with no bundle, while some bundle exists.
   local bundle_exists=0
   if [ -n "$synced_id" ]; then
     bundle_exists=1
@@ -975,7 +1071,7 @@ verb_sync() {
     return 0
   fi
 
-  # Case 4 — no bundle in any run.
+  # Case 5 — no bundle in any run.
   set_or_fail status failed
   set_or_fail remote_detail "no run of $branch ever uploaded a state bundle; newest: $url"
   set_or_fail remote_synced_at "$now"
@@ -992,10 +1088,17 @@ restore_refuse() {
   exit "$EXIT_REFUSED"
 }
 
-# previous_bundle_run — the id of the newest finished `harness run <branch>`
-# run, other than this job's own, carrying a state artifact; empty when none.
+# previous_bundle_run — PREV_RUN_ID is the newest finished `harness run
+# <branch>` run, other than this job's own, carrying a state artifact, and
+# PREV_RUN_STATE is `present`, `expired` or empty when no run carries one. A
+# run with no artifact is walked past; an expired one stops the walk, because
+# an older copy is staler state. Exits 3 when gh fails.
+PREV_RUN_ID=""
+PREV_RUN_STATE=""
 previous_bundle_run() {
   local ids id
+  PREV_RUN_ID=""
+  PREV_RUN_STATE=""
   gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" \
     --json databaseId,displayTitle,status,createdAt --limit "$RUN_LIST_LIMIT" \
     || gh_fail "listing the runs of '$branch' failed"
@@ -1006,8 +1109,10 @@ previous_bundle_run() {
     gh_fail "listing the runs of '$branch' failed"
   }
   for id in $ids; do
-    if has_bundle "$id"; then
-      printf '%s\n' "$id"
+    bundle_state "$id"
+    if [ "$BUNDLE_STATE" != none ]; then
+      PREV_RUN_ID="$id"
+      PREV_RUN_STATE="$BUNDLE_STATE"
       return 0
     fi
   done
@@ -1030,10 +1135,14 @@ verb_restore() {
       || restore_refuse "HARNESS_INPUT_ANSWERS is not an object of positive-integer keys to strings; nothing written"
   fi
 
-  id=$(previous_bundle_run)
-  [ "$?" -eq 0 ] || exit "$EXIT_GH"
+  previous_bundle_run
+  id="$PREV_RUN_ID"
   hr_remote_names_var
-  if [ -z "$id" ]; then
+  if [ "$PREV_RUN_STATE" = expired ]; then
+    [ "$resume" != answer ] \
+      || restore_refuse "the state bundle of run $id expired on $BUNDLE_EXPIRES_AT, so its questions can no longer be answered here: resume from the committed ledger with $RESUME_HINT $branch, or re-drop the task; nothing written"
+    echo "::warning::remote-run.sh: the state bundle of run $id expired on $BUNDLE_EXPIRES_AT: the park-loop, auto-resume and stall counts and the clarification history it carried are lost; this job continues from the committed ledger"
+  elif [ -z "$id" ]; then
     [ "$resume" != answer ] \
       || restore_refuse "--resume answer, but no finished run of $branch carries a state bundle; nothing written"
     echo "remote-run.sh: no previous bundle for $branch; this is its first job"

@@ -39,6 +39,12 @@
  * desktop banner fires; the failed-enable case keeps the real notifier and records through
  * `HARNESS_PUSH_CMD`, with `XDG_CONFIG_HOME` pointed into the fixture so no machine push file is read.
  *
+ * **For an expired state bundle, the rule is that it is told from an absent one and never read as a
+ * first job**: a `STUB_ARTIFACTS` entry is a name (listed unexpired) or a whole `{name, expired,
+ * expires_at}` artifact. `restore` stops at an expired bundle rather than falling back to an older
+ * copy, `sync` records `paused` / `expired` with the way on, and `status` names the expiry and writes
+ * nothing.
+ *
  * **For the job's read verbs `pause-requested` and `run-created-at`, the rule is that a failed read is
  * exit 3 and never an answer**, so job mode, which pauses only on exit 0, cannot pause on a gh fault.
  */
@@ -85,7 +91,7 @@ if (args[0] === 'api') {
   const parts = args[1].split('/');
   const id = parts[parts.length - 2];
   const names = JSON.parse(after('STUB_ARTIFACTS') || '{}')[id] || [];
-  process.stdout.write(JSON.stringify({ artifacts: names.map((name) => ({ name, expired: false })) }));
+  process.stdout.write(JSON.stringify({ artifacts: names.map((entry) => (typeof entry === 'string' ? { name: entry, expired: false } : entry)) }));
 }
 if (line.startsWith('run download')) {
   const source = JSON.parse(process.env.STUB_BUNDLES || '{}')[args[2]];
@@ -538,6 +544,65 @@ test('status leaves the registry and every file under the state directory byte-i
   assert.deepEqual(await snapshotTree(fx.dir, { exclude: ['.git', 'stub'] }), before);
 });
 
+test('sync with the newest bundle expired records paused / expired with the way on, restoring nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx);
+  const result = await remoteRun(fx, ['sync', 'feat_x'], syncEnv({
+    runs: [ghRun(102, 'completed', 2), ghRun(101, 'completed', 1)],
+    artifacts: { 101: ['harness-state'], 102: [{ name: 'harness-state', expired: true, expires_at: '2026-01-02T00:00:00Z' }] },
+    bundles: { 101: bundle(fx, 'a'), 102: bundle(fx, 'b') },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  const rec = record(fx);
+  assert.equal(rec.status, 'paused');
+  assert.equal(rec.pause_reason, 'expired');
+  assert.equal(rec.remote_run_id, '102');
+  assert.equal(rec.remote_run_url, runUrl(102));
+  assert.equal(rec.remote_detail, 'the state bundle of run 102 expired on 2026-01-02T00:00:00Z: resume from the committed ledger with /autonomous-sdlc-harness:branch-resume feat_x, or re-drop the task');
+  assert.deepEqual(downloads(fx), []);
+  assert.equal(existsSync(mirror(fx, 'question_1.md')), false);
+});
+
+test('sync of an already-applied parked record whose bundle has since expired flips it to paused / expired', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx);
+  const a = bundle(fx, 'a');
+  assert.equal((await remoteRun(fx, ['sync', 'feat_x'], syncEnv({
+    runs: [ghRun(101, 'completed', 1)], artifacts: { 101: ['harness-state'] }, bundles: { 101: a },
+  }))).status, 0);
+  assert.equal(record(fx).status, 'parked');
+
+  const result = await remoteRun(fx, ['sync', 'feat_x'], syncEnv({
+    runs: [ghRun(101, 'completed', 1)],
+    artifacts: { 101: [{ name: 'harness-state', expired: true, expires_at: '2026-01-02T00:00:00Z' }] },
+    bundles: { 101: a },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  const rec = record(fx);
+  assert.equal(rec.status, 'paused');
+  assert.equal(rec.pause_reason, 'expired');
+  assert.equal(rec.remote_run_id, '101');
+  assert.ok(rec.remote_detail.includes('/autonomous-sdlc-harness:branch-resume feat_x'), rec.remote_detail);
+  assert.ok(existsSync(mirror(fx, 'question_1.md')), 'the mirror question files were removed');
+  assert.equal(downloads(fx).length, 1);
+});
+
+test('status prints the expired line and leaves every file under the state directory byte-identical', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx, { status: 'parked', remote_run_id: '101', remote_run_url: runUrl(101), remote_synced_at: '5' });
+  const before = await snapshotTree(fx.dir, { exclude: ['.git', 'stub'] });
+  const registryBefore = readFileSync(join(fx.dir, REGISTRY));
+
+  const result = await remoteRun(fx, ['status', 'feat_x'], syncEnv({
+    runs: [ghRun(101, 'completed', 1)],
+    artifacts: { 101: [{ name: 'harness-state', expired: true, expires_at: '2026-01-02T00:00:00Z' }] },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /the state bundle of run 101 expired on 2026-01-02T00:00:00Z: resume from the committed ledger with \/autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.deepEqual(readFileSync(join(fx.dir, REGISTRY)), registryBefore);
+  assert.deepEqual(await snapshotTree(fx.dir, { exclude: ['.git', 'stub'] }), before);
+});
+
 test('status and sync refuse a local record, or no record, with exit 2 and call nothing', async (t) => {
   const fx = await remoteFixture(t);
   for (const verb of ['status', 'sync']) {
@@ -670,6 +735,46 @@ test('restore never selects the current GITHUB_RUN_ID', async (t) => {
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(downloads(fx).map((line) => line.split(' ')[2]), ['501']);
   assert.equal(readFileSync(join(fx.dir, WALKER), 'utf8'), 'old walker\n');
+});
+
+const EXPIRES_AT = '2026-01-02T00:00:00Z';
+const EXPIRED_STATE = { name: 'harness-state', expired: true, expires_at: EXPIRES_AT };
+
+/** Run 402 finished newest with an expired bundle; the older run 401 still carries one. */
+function expiredRestoreEnv(fx, extra = {}) {
+  return {
+    ...syncEnv({
+      runs: [ghRun(402, 'completed', 2), ghRun(401, 'completed', 1)],
+      artifacts: { 401: ['harness-state'], 402: [EXPIRED_STATE] },
+      bundles: { 401: jobBundle(fx, 'older'), 402: jobBundle(fx, 'gone') },
+    }),
+    GITHUB_RUN_ID: '999',
+    ...extra,
+  };
+}
+
+test('restore --resume answer with the newest bundle expired exits 2 naming the expiry, writing and downloading nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'answer'],
+    expiredRestoreEnv(fx, { HARNESS_INPUT_ANSWERS: JSON.stringify({ 1: 'yes\n' }) }));
+  assert.equal(result.status, 2, result.stderr);
+  assert.ok(result.stderr.includes(`run 402 expired on ${EXPIRES_AT}`), result.stderr);
+  assert.ok(result.stderr.includes('/autonomous-sdlc-harness:branch-resume feat_x'), result.stderr);
+  assert.deepEqual(downloads(fx), []);
+  assert.equal(existsSync(mirror(fx, 'answer_1.md')), false);
+  assert.equal(existsSync(join(fx.dir, REMOTE_STATUS)), false);
+});
+
+test('restore --resume pause with the newest bundle expired warns, restores nothing, and never falls back to an older bundle', async (t) => {
+  const fx = await remoteFixture(t);
+  const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'pause'], expiredRestoreEnv(fx));
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^::warning::.*run 402 expired on 2026-01-02T00:00:00Z.*committed ledger/m);
+  assert.doesNotMatch(result.stdout, /first job/);
+  assert.deepEqual(downloads(fx), []);
+  assert.equal(existsSync(join(fx.dir, REMOTE_STATUS)), false);
+  assert.equal(existsSync(join(fx.dir, WALKER)), false);
+  assert.equal(existsSync(mirror(fx, 'question_1.md')), false);
 });
 
 test('restore usage errors exit 1 and call nothing', async (t) => {

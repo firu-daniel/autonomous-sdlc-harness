@@ -1243,7 +1243,10 @@ notify() {
 #                       job mode relaunches the run — plus `killed`, a registry-only
 #                       value `remote-run.sh sync` derives when a finished run's
 #                       bundle still says `running`, or a finished run left no
-#                       bundle; `status.json` never carries it. `killed` maps to
+#                       bundle, and `expired`, a registry-only value it derives
+#                       when a finished run's bundle has expired (the job can no
+#                       longer take an answer, and the carried counts are lost);
+#                       `status.json` never carries either. Both map to
 #                       `paused` rather than `failed` because a `failed` record
 #                       has no resume path, while the ledger on the branch is
 #                       intact

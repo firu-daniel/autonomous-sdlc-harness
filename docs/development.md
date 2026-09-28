@@ -667,7 +667,7 @@ Passes when a run titled `harness run <branch>` starts a job on `ubuntu-latest`,
 gh variable set HARNESS_SELF_PAUSE_AFTER_MINUTES --body 5
 ```
 
-Passes when the job drops its own `PAUSE`, ends with decision `continue`, its `remote-run.sh continue` step dispatches, and a **new** `harness run <branch>` run starts whose job restores the previous bundle and resumes from the pushed ledger. That second run starting is the evidence that a `workflow_dispatch` sent with `GITHUB_TOKEN` starts a run. Record both run ids, the `continue` step's output, the second job's `restore` line, and whether a push the first job made started any other workflow.
+Passes when the job drops its own `PAUSE`, ends with decision `continue`, its `remote-run.sh continue` step dispatches, and a **new** `harness run <branch>` run starts whose job restores the previous bundle and resumes from the pushed ledger. That second run starting is the evidence that a `workflow_dispatch` sent with `GITHUB_TOKEN` starts a run. Record both run ids, the `continue` step's output, the second job's `restore` line, and whether a push the first job made started any other workflow. Record too the `harness-state` artifact's `expires_at` from `gh api repos/<owner>/<scratch-repo>/actions/runs/<first run id>/artifacts`, which shows whether `retention-days: 400` was capped at the repository's retention or refused (`docs/remote-execution.md` §6).
 
 **(iv) A `pause` dispatch.** While a job is running, run `/autonomous-sdlc-harness:branch-pause <branch>` in the session, then relay it and read the marker run:
 

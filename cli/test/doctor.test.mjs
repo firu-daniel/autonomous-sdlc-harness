@@ -5328,6 +5328,7 @@ const GH_CALLS = Object.freeze({
   secrets: ['secret', 'list', '--json', 'name'],
   resume: ['workflow', 'view', 'harness-resume.yml'],
   variables: ['variable', 'list', '--json', 'name,value'],
+  retention: ['api', 'repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention'],
 });
 
 /** The answer-file stem the stub derives from its argv: spaces and commas become underscores. */
@@ -5369,10 +5370,13 @@ function answerGh(stub, overrides = {}) {
     secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }, { name: 'HARNESS_PUSH_URL' }]) },
     resume: { out: 'Harness resume - harness-resume.yml\n' },
     variables: { out: '[]' },
+    retention: { out: JSON.stringify({ days: 90, maximum_allowed_days: 400 }) },
   };
   for (const [call, args] of Object.entries(GH_CALLS)) {
     const answer = { ...healthy[call], ...(overrides[call] ?? {}) };
     const stem = join(stub.answers, ghAnswerKey(args));
+    // An `api` path's slashes make the stem a nested path under the answers directory.
+    mkdirSync(dirname(stem), { recursive: true });
     for (const [field, value] of Object.entries(answer)) {
       writeFileSync(`${stem}.${field}`, field === 'kill' ? '' : String(value));
     }
@@ -5472,8 +5476,8 @@ test('the remote-github check asks GitHub only under --check-github and grades e
   const failing = [
     ['gh does not spawn', {}, `${FIXTURE_GH_CLI}-absent`, 'install the GitHub CLI', 0],
     ['gh auth status exits non-zero', { auth: { err: 'You are not logged into any GitHub hosts.\n', status: 1 } }, undefined, 'gh auth login', 1],
-    ['GitHub does not know harness-run.yml', { run: { err: 'could not find any workflows named harness-run.yml\n', status: 1 } }, undefined, "push .github/workflows/harness-run.yml to the repository's default branch", 5],
-    ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 5],
+    ['GitHub does not know harness-run.yml', { run: { err: 'could not find any workflows named harness-run.yml\n', status: 1 } }, undefined, "push .github/workflows/harness-run.yml to the repository's default branch", 6],
+    ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 6],
   ];
   for (const [name, overrides, ghName, expected, calls] of failing) {
     await t.test(`fails when ${name}`, async (subtest) => {
@@ -5496,6 +5500,8 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     ['HARNESS_REMOTE_STOP is set', { variables: { out: JSON.stringify([{ name: 'HARNESS_REMOTE_STOP', value: '1' }]) } }, 'every remote start and continuation is stopped'],
     ['a gh call is stopped past its bound', { secrets: { kill: true } }, 'cannot tell which repository secrets are set: `gh secret list --json name` gave no answer, because it was stopped before it answered (timed out)'],
     ['gh cannot reach GitHub', { auth: { err: 'error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n', status: 1 } }, 'cannot tell whether gh is authenticated'],
+    ['the repository keeps artifacts for fewer than 30 days', { retention: { out: JSON.stringify({ days: 7 }) } }, 'the repository keeps artifacts for 7 days, so a remote run parked or paused longer than that loses its state bundle: raise it under Settings → Actions → General → Artifact and log retention'],
+    ['the retention answer is in a shape it does not read', { retention: { out: JSON.stringify({ days: 'ninety' }) } }, 'cannot tell how long the repository keeps artifacts: `gh api repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention` answered in a shape this check does not read'],
   ];
   for (const [name, overrides, expected] of warning) {
     await t.test(`warns when ${name}`, async (subtest) => {
@@ -5509,4 +5515,28 @@ test('the remote-github check asks GitHub only under --check-github and grades e
       assert.ok(reportLine(stderr, 'warn', 'remote-github')?.includes(expected), `${stdout}\n${stderr}`);
     });
   }
+
+  await t.test('a 90-day artifact retention passes and names it', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub);
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(reportLine(stdout, 'pass', 'remote-github')?.includes('the repository keeps artifacts for 90 days'), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('a refused retention read is a note and does not lower the grade', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { retention: { err: 'HTTP 403: Must have admin rights to Repository.\n', status: 1 } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'remote-github');
+    assert.ok(line?.includes('artifact retention not checked: `gh api repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention` needs admin access (it exited 1: HTTP 403: Must have admin rights to Repository.)'), `${stdout}\n${stderr}`);
+    assert.equal(reportLine(stderr, 'warn', 'remote-github'), undefined, stderr);
+  });
 });

@@ -259,6 +259,17 @@ const REFRESH_SCRIPT = 'refresh-branch.sh';
 const REMOTE_RUN_SCRIPT = 'remote-run.sh';
 
 /**
+ * The `gh api` path {@link REMOTE_GITHUB_CHECK} reads the repository's artifact retention from; `gh`
+ * fills `{owner}` and `{repo}` from the checkout's remote. Local, not a `remote/githubActions.ts`
+ * export: that module owns the names `cli/src` shares with the shell and YAML mirrors, and no shell or
+ * YAML file spells this endpoint.
+ */
+const ARTIFACT_RETENTION_ENDPOINT = 'repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention';
+
+/** Below this many days of artifact retention {@link REMOTE_GITHUB_CHECK} warns; argued there. */
+const ARTIFACT_RETENTION_WARN_DAYS = 30;
+
+/**
  * How a check answers.
  *
  * - `pass` — the thing checked is as it should be.
@@ -2430,6 +2441,19 @@ function ghJsonEntries(stdout: string): ReadonlyMap<string, string> | undefined 
   return entries;
 }
 
+/** The positive-integer `days` of an artifact-retention answer, or `undefined` for any other shape. */
+function retentionDaysOf(stdout: string): number | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isJsonObject(parsed as JsonValue)) return undefined;
+  const days = (parsed as { readonly days?: unknown }).days;
+  return typeof days === 'number' && Number.isInteger(days) && days > 0 ? days : undefined;
+}
+
 /**
  * What GitHub says about the remote setup — asked only under {@link CheckContext.probeGithub}.
  *
@@ -2441,9 +2465,18 @@ function ghJsonEntries(stdout: string): ReadonlyMap<string, string> | undefined 
  * - `fail` — `gh` does not spawn or `gh auth status` refuses (nothing further is asked); GitHub does
  *   not know `harness-run.yml`; neither credential secret is set.
  * - `warn` — `HARNESS_PUSH_URL` absent; `harness-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
- *   set; and any call that timed out, could not reach GitHub, or answered in a shape not understood —
- *   *cannot tell* is not *missing*, so it never fails.
+ *   set; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; and any call that timed
+ *   out, could not reach GitHub, or answered in a shape not understood — *cannot tell* is not
+ *   *missing*, so it never fails.
  * - both credential secrets present is a note, not a finding: billing follows `ANTHROPIC_API_KEY`.
+ * - the retention read refused (typically HTTP 403: the endpoint needs admin access) is a note too —
+ *   the read is best-effort, and a collaborator without admin can still run remotely.
+ *
+ * **Why 30 days.** A parked run waits on a human answer and a usage-paused one on a reset, and the
+ * `harness-state` bundle is the only remote copy of either; once the repository's retention expires
+ * it, the run can no longer be answered and loses its carried counts. Thirty days covers an ordinary
+ * absence — a holiday — while GitHub's own default of 90 passes; below it, an ordinary absence can
+ * cost a parked run its question.
  */
 const REMOTE_GITHUB_CHECK: Check = {
   id: 'remote-github',
@@ -2523,10 +2556,27 @@ const REMOTE_GITHUB_CHECK: Check = {
       }
     }
 
+    const retention = ask(['api', ARTIFACT_RETENTION_ENDPOINT]);
+    if (retention.answer === undefined) return fail(noSpawn);
+    let retentionDays: number | undefined;
+    if (retention.answer.kind === 'unknown') {
+      warnings.push(cannotTell(retention.call, retention.answer.why, 'how long the repository keeps artifacts'));
+    } else if (retention.answer.kind === 'refused') {
+      notes.push(`artifact retention not checked: ${retention.call} needs admin access (${retention.answer.why})`);
+    } else {
+      retentionDays = retentionDaysOf(retention.answer.stdout);
+      if (retentionDays === undefined) {
+        warnings.push(`cannot tell how long the repository keeps artifacts: ${retention.call} answered in a shape this check does not read`);
+      } else if (retentionDays < ARTIFACT_RETENTION_WARN_DAYS) {
+        warnings.push(`the repository keeps artifacts for ${retentionDays} days, so a remote run parked or paused longer than that loses its state bundle: raise it under Settings → Actions → General → Artifact and log retention`);
+      }
+    }
+
     const noted = notes.length > 0 ? `; ${notes.join('; ')}` : '';
     if (failures.length > 0) return fail(`${[...failures, ...warnings].join('; ')}${noted}`);
     if (warnings.length > 0) return warn(`${warnings.join('; ')}${noted}`);
-    return pass(`gh is authenticated, GitHub knows ${WORKFLOW_RUN_FILE} and ${WORKFLOW_RESUME_FILE}, a credential secret and ${PUSH_URL_SECRET} are set, and remote runs use ${runner as string}${noted}`);
+    const kept = retentionDays === undefined ? '' : `, and the repository keeps artifacts for ${retentionDays} days`;
+    return pass(`gh is authenticated, GitHub knows ${WORKFLOW_RUN_FILE} and ${WORKFLOW_RESUME_FILE}, a credential secret and ${PUSH_URL_SECRET} are set, and remote runs use ${runner as string}${kept}${noted}`);
   },
 };
 
