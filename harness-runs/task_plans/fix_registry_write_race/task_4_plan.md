@@ -52,3 +52,8 @@
 - Read `run_job`'s `usage)` arm: every path through it either relaunches, `break`s, or reaches a comparison against a bound derived from values captured at wait start. There is no path whose only exit is `status` changing on its own.
 - Grep the watcher for `now + 3600` and find none outside the named constant's definition.
 - `bash scripts/typecheck.sh` passes. The behaviour is exercised end to end by Task 5, which drives both the job-mode and the local `tick` paths through this helper.
+
+**Deviations from plan:**
+- Evidence downgrade: `bash scripts/typecheck.sh` passed, but it compiles `cli/src` only and does not cover `cli/templates/`. The extra `bash -n` syntax check on `autonomous-watcher.sh` was refused (needs approval), so the watcher's syntax has only been checked by reading it. Task 5's run through the Run gates phase is the first to execute it.
+- The `+ 3600` grep matches two header comments under the verification recipes (`"$(( $(date +%s) + 3600 ))"`). They are fixture values giving a reset one hour in the future, not the fallback, so they were left as they are. No `now + 3600` remains.
+- In the `usage)` arm the bound is also checked on the first waiting iteration, after its `usage_gate` / `resume_paused_runs`. That is harmless because the bound lies at least `REMOTE_WAIT_MAX_SECS` past the wait's start. The captured base is stored as one value, max(`ra`, wait start), in `usage_wait_ra`.
