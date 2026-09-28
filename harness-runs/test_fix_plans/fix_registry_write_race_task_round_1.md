@@ -14,7 +14,7 @@
 
 Order: Finding 1 is the likely root cause of both file-level cancellations and comes first. Finding 2 is probably cleared by it, but it keeps its own entry and can be implemented alone. Finding 3 is a separate timer in one test file.
 
-1. [ ] **Finding 1** — Raise the suite's `--test-timeout` above a whole test file's wall time, because Node 20.19.5 applies it per file (`docs-retrieval.test.mjs` cancelled). _(layer: cli, general)_
+1. [x] **Finding 1** — Raise the suite's `--test-timeout` above a whole test file's wall time, because Node 20.19.5 applies it per file (`docs-retrieval.test.mjs` cancelled). _(layer: cli, general)_
 2. [ ] **Finding 2** — `doctor.test.mjs` cancelled by the same per-file `--test-timeout` expiry. _(layer: cli, general)_
 3. [ ] **Finding 3** — Give the hung-watcher case's child `node --test` a file timeout its fixture setup cannot exhaust. _(layer: cli, general)_
 

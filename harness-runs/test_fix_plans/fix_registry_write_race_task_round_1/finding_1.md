@@ -41,3 +41,9 @@ The case-level guarantee Task 6 wanted does not rely on this flag. Every watcher
 - [ ] Confirm that no tracked file outside `harness-runs/` still names `300000` as the suite timeout. The four sites above are the complete list at plan time.
 
 Finding 2 (`doctor.test.mjs`) has the same cause and the same edit. If this finding lands first, Finding 2 only confirms it.
+
+**Deviations from plan:**
+
+- `cli` layer, row-`G.4` check: no single-file test command is stated in `.claude/context/cli.md` or `.claude/context/conventions.md`, so `cli/test/docs-retrieval.test.mjs` was not run. The fix-site fallback was taken instead: `cli/package.json` → `scripts.test` still read `--test-timeout=300000`, so the fix was not already present and was implemented. Whether the file now finishes inside the new bound is deferred to the Run gates phase.
+- `cli` layer: the `cli/package.json` and `cli/test/watcher-remote-job.test.mjs` sub-steps landed here. The `docs/development.md` sub-steps are outside `cli/` and belong to this unit's `general` layer dispatch.
+- `general` layer, row-`G.4` check: no single-file test command is stated in `.claude/context/conventions.md`, so the fix-site fallback was taken. `docs/development.md` still read `--test-timeout=300000` at both sites, so the fix was not already present and was implemented. The confirm sub-step ran `git grep -nE "test-timeout=300000|300 seconds|300000"` outside `harness-runs/`; the only remaining matches are numeric data in `docs/retrieval-eval-results.md`, none of them a suite timeout. The file's run under the new bound is deferred to the Run gates phase.

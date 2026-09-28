@@ -15,7 +15,7 @@
  *
  * **Every watcher this file starts is bounded and reaped, so a hang fails by name.** Each `runBash`
  * call carries `timeoutMs: WATCHER_RUN_TIMEOUT_MS` and `t.signal`. The value sits below the per-test
- * timeout (`--test-timeout=300000`), because that expiry kills this file's process and leaves the
+ * timeout (`--test-timeout=1800000`), because that expiry kills this file's process and leaves the
  * watcher's detached group running (`helpers/fixture.mjs` → choice 6); and far above the longest
  * honest run here, a few one-second poll intervals, so only a hang reaches it. The case *"a job
  * killed mid-run leaves running / continue"* spawns and kills its own group, and is not bounded here.
@@ -33,7 +33,7 @@
  * is taken by hand, outside any harness session (`harness-runs/lessons.md` → *"A wall-clock figure
  * in a document of record is never one a run measured inside its own session"*). From `cli/`:
  *
- *     HARNESS_JOB_USAGE_REPEAT=40 node --test --test-timeout=300000 test/watcher-remote-job.test.mjs
+ *     HARNESS_JOB_USAGE_REPEAT=40 node --test --test-timeout=1800000 test/watcher-remote-job.test.mjs
  */
 
 import assert from 'node:assert/strict';
