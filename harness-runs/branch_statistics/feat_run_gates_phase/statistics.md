@@ -2,11 +2,11 @@
 
 ## Summary
 
-- `success_rate`: **`100%`** — headline metric.
+- `success_rate`: **`96.8%`** — headline metric.
 - `story_points_total`: `309` — denominator (sum of every task's `_(points: <N>)_` story-point estimate in the story index's `## Phase 2 Readiness — Ordered Fix List`).
-- `issue_cost_total`: `0` — subtraction (sum of each user-review observation's severity weight, in story-point units).
+- `issue_cost_total`: `10` — subtraction (sum of each user-review observation's severity weight, in story-point units).
 - `story_plan_tasks`: `23` — retained raw count of `## Phase 2 Readiness — Ordered Fix List` task entries.
-- `user_review_issues`: `0` — retained raw count of observations across all `feat_run_gates_phase_review*.md` user-review files.
+- `user_review_issues`: `2` — retained raw count of observations across all `feat_run_gates_phase_review*.md` user-review files.
 
 Formula:
 
@@ -14,7 +14,7 @@ Formula:
 success_rate = round(clamp((story_points_total - issue_cost_total) / story_points_total, 0, 1) * 100, 1) percent
 ```
 
-Worked example: `issue_cost_total` is `0`, so the **no issues** rule applies: `round(clamp((309 - 0) / 309, 0, 1) * 100, 1)` = `100%`.
+Worked example: `round(clamp((309 - 10) / 309, 0, 1) * 100, 1)` = `round(96.7637…, 1)` = `96.8%`.
 
 Edge cases (the rate is always computed via the formula, then adjusted by these rules):
 
@@ -56,15 +56,20 @@ Per-source raw numbers and per-issue costs are retained so the metric can be ref
     - **sum (`story_points_total`)**: `309`
   - `dispositioned_points`: `0` — no commit in `dev..HEAD` (`git log --format='%h %s%n%b' dev..HEAD`) carries the `record disposition of ` record, so no task here was closed without a fix, and no unpointed token was matched.
   - (Back-compat: not triggered — every entry carries a `_(points: …)_` tag. Had none, `story_points_total` would fall back to `story_plan_tasks` = `23`.)
-- **User-review source** — `user_review_issues`: `0`, `issue_cost_total`: `0` (per user-review file, then summed)
-  - glob `harness-runs/user_reviews/feat_run_gates_phase_review*.md` — matched no files (pre-user-review write: no user review exists yet for this branch).
-  - **total**: `0` observations → `issue_cost_total` `0`
-  - Each file's observation count is the count of whatever top-level enumeration that file uses, taken from the first of four arms to return non-zero and never summed across arms: (1) numbered `##`–`####` headings with required trailing punctuation, `grep -cE '^#{2,4} +[0-9]+[.):]'`; (2) top-level numbered/bulleted list items, `grep -cE '^[0-9]+\.|^[-*][[:space:]]'`; (3) an explicit per-observation marker the file itself uses, with the matching grep recorded beside the count; (4) `1`, reserved for a file with no enumeration of any kind. No file was matched, so no arm was evaluated.
+- **User-review source** — `user_review_issues`: `2`, `issue_cost_total`: `10` (per user-review file, then summed)
+  - glob `harness-runs/user_reviews/feat_run_gates_phase_review*.md` matched one file; `feat_run_gates_phase_fix_plan.md` and the `feat_run_gates_phase_fix_plan/` directory are excluded by the pattern.
+  - `harness-runs/user_reviews/feat_run_gates_phase_review.md`: `2` observations → cost `10`. Counted by **arm 1, numbered headings** — `grep -cE '^#{2,4} +[0-9]+[.):]' <file>` → `2`; arm 2 (`grep -cE '^[0-9]+\.|^[-*][[:space:]]'` → `5`, the un-indented sub-bullets inside observation 1) is not evaluated into the count, since arm 1 returned non-zero. Each observation's assigned weight beside it:
+    1. one regression that fails many tests runs a full fix unit for every failing test, even after the first fix has cleared them → **Minor** `5`
+    2. let the test fix plan writer flag a suspected shared cause, as advice only → **Minor** `5`
+  - **total**: `2` observations → `issue_cost_total` `10`
+  - Each file's observation count is the count of whatever top-level enumeration that file uses, taken from the first of four arms to return non-zero and never summed across arms: (1) numbered `##`–`####` headings with required trailing punctuation, `grep -cE '^#{2,4} +[0-9]+[.):]'`; (2) top-level numbered/bulleted list items, `grep -cE '^[0-9]+\.|^[-*][[:space:]]'`; (3) an explicit per-observation marker the file itself uses, with the matching grep recorded beside the count; (4) `1`, reserved for a file with no enumeration of any kind. The arm and its grep are recorded beside each file's count above.
   - Each observation is weighted in story-point units: **Major** `15` (explicit `[major]` marker, or the observation describes a broken/incorrect user-facing flow, a missing/client-only authorization gate, data loss/corruption/unprotected data, or an absent whole ported behaviour — the deciding phrase is quoted beside the observation), **Trivial** `2` (explicit `[trivial]` marker), **Minor** `5` (the default for every observation without a Major/Trivial classification).
+
+**Why both took the Minor default.** Neither observation carries an explicit `[major]` or `[trivial]` marker. Observation 1 describes redundant work — *"The best outcome is nine wasted units"* — with a blocker or an invented edit named only as possible worse outcomes, not a flow reported as broken end-to-end; no authorization gate, data loss or absent ported behaviour is described. Observation 2 is a cheap advisory addition. Both therefore take the Minor default.
 
 ## Status
 
-- status: `pre-user-review` — `pre-user-review` means this file was written right after the branch (code) review with no user review yet (`issue_cost_total` `0` → `100%`); `post-user-review` means it was re-written after user-review fixes, with the issues from the `feat_run_gates_phase_review*.md` files counted and weighted.
+- status: `post-user-review` — `pre-user-review` means this file was written right after the branch (code) review with no user review yet (`issue_cost_total` `0` → `100%`); `post-user-review` means it was re-written after user-review fixes, with the issues from the `feat_run_gates_phase_review*.md` files counted and weighted.
 - last_updated: `2026-09-28`
 
 ## Notes
