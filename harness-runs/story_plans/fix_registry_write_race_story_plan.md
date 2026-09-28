@@ -44,7 +44,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/fix_registr
 
 1. [x] **Task 1** — Serialize `hr_registry_set` behind a `mkdir` lock, add multi-key writes and an atomic create, proven by a concurrent-writer suite _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Write the watcher's paired registry keys in one call, and record every pause tag or reason before its `PAUSE` _(layer: cli)_ _(points: 20)_
-3. [ ] **Task 3** — Batch `remote-run.sh`'s registry writes, and race a `stop` against watcher writes _(layer: cli)_ _(points: 10)_
+3. [x] **Task 3** — Batch `remote-run.sh`'s registry writes, and race a `stop` against watcher writes _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Repair a usage pause whose `usage_resume_at` was lost, and bound the job-mode usage wait by `REMOTE_WAIT_MAX_SECS` _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Drive the lost-reset record through job mode and through the local watcher's `tick` _(layer: cli)_ _(points: 15)_
 6. [ ] **Task 6** — Give `node --test` a per-test timeout and `runBash` a process-group kill-on-timeout, proven by a deliberately hung watcher _(layer: cli)_ _(points: 15)_

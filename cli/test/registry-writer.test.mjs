@@ -48,6 +48,10 @@ const CREATE_ROUNDS = 5;
 /** The watcher-pair case's round count: each round races the usage gate's pair against a pause. */
 const WATCHER_PAIR_ROUNDS = 25;
 
+/** The stop-race case's round count, and the watcher writes raced against each round's `stop`. */
+const STOP_RACE_ROUNDS = 10;
+const STOP_RACE_WRITERS = 8;
+
 /** A branch with a slash, so a record keyed on a path fragment would show. */
 const BRANCH = 'feat/x';
 
@@ -222,5 +226,50 @@ test("the usage gate's paired write and a local pause classification both surviv
     assert.equal(record.status, 'paused', `round ${round}: the pause classification was lost`);
     assert.equal(record.paused_by, 'usage', `round ${round}: the gate's paused_by was lost`);
     assert.match(record.usage_resume_at ?? '', /^[0-9]+$/, `round ${round}: usage_resume_at is not numeric`);
+  }
+});
+
+test("a remote-run.sh stop racing the watcher's writes loses neither, every round", async (t) => {
+  const fixture = await createFixture({ files: { 'package.json': { name: 'fixture-project', private: true, version: '0.0.0', scripts: { test: 'echo test' } } } });
+  t.after(fixture.cleanup);
+  const { dir } = fixture;
+  const init = await runCli(dir, ['init']);
+  assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
+  const configPath = join(dir, 'harness.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.execution = { target: 'github-actions' };
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+  // A `gh` that accepts every call and lists no active run, in the style of `cli/test/remote-run.test.mjs` → `STUB`.
+  const logsDir = join(dir, 'sdlc-harness', 'autonomous_logs');
+  mkdirSync(logsDir, { recursive: true });
+  const stub = join(dir, 'sdlc-harness', 'gh-stub');
+  writeFileSync(stub, "#!/usr/bin/env node\nif (process.argv.slice(2).join(' ').startsWith('run list')) process.stdout.write('[]');\n", { mode: 0o755 });
+  const registry = join(logsDir, 'registry.json');
+  const env = {
+    HARNESS_GH_CLI: stub,
+    AUTO_TAIL_TERMINAL: '0',
+    USAGE_LANE_STATE_ENABLED: '0',
+    USAGE_LANE_LOCK_ENABLED: '0',
+    HOME: join(dir, 'home'),
+    XDG_CONFIG_HOME: join(dir, 'home', '.config'),
+    XDG_STATE_HOME: join(dir, 'home', '.local', 'state'),
+  };
+  const watcher = join(dir, 'scripts/autonomous-watcher.sh');
+
+  for (let round = 0; round < STOP_RACE_ROUNDS; round += 1) {
+    writeFileSync(registry, `${JSON.stringify({ runs: { feat_x: { branch: 'feat_x', status: 'running' } } })}\n`);
+    const [stop, ...writes] = await Promise.all([
+      runBash(dir, ['scripts/remote-run.sh', 'stop', 'feat_x'], env),
+      ...Array.from({ length: STOP_RACE_WRITERS }, (_, i) =>
+        runBash(dir, ['-c', '. "$1" status >/dev/null; registry_set feat_x "$2" "$3"', '_', watcher, `key_${i}`, `v_${i}`], env)),
+    ]);
+    assert.equal(stop.status, 0, `round ${round}: stop exited ${stop.status}: ${stop.stderr}`);
+    writes.forEach((w, i) => assert.equal(w.status, 0, `round ${round}: watcher write ${i} exited ${w.status}: ${w.stderr}`));
+    const record = JSON.parse(readFileSync(registry, 'utf8')).runs.feat_x;
+    assert.equal(record.status, 'failed', `round ${round}: the stop's status was lost`);
+    assert.match(record.remote_stopped_at ?? '', /^[0-9]+$/, `round ${round}: remote_stopped_at is not numeric`);
+    const missing = Array.from({ length: STOP_RACE_WRITERS }, (_, i) => i).filter((i) => record[`key_${i}`] !== `v_${i}`);
+    assert.deepEqual(missing, [], `round ${round}: watcher writes were lost`);
   }
 });

@@ -33,3 +33,8 @@
 - Your new case in `cli/test/registry-writer.test.mjs` passes, and so do Task 1's and Task 2's cases, unchanged.
 - Grep `remote-run.sh` for two consecutive `set_or_fail` lines, and for a chained `hr_registry_set … && hr_registry_set`, and find neither.
 - `bash scripts/typecheck.sh` passes.
+
+**Deviations from plan:**
+
+- No single-file test command is stated in `.claude/context/conventions.md` or `.claude/context/cli.md`; the new case and Task 1's and Task 2's cases were run with the stated runner on one file, `node --test test/registry-writer.test.mjs` from `cli/`, after `bash scripts/typecheck.sh` had built `cli/dist`. All 7 cases passed.
+- `set_or_fail` is kept for the one lone write left (`remote_synced_at` in `verb_sync`'s already-applied case). The finished-bundle block's two command-substitution values are read into the locals `resume_at` and `cycles` first; a failed read gives an empty value, as `|| :` did before.
