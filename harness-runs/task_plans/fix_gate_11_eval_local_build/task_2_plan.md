@@ -28,3 +28,74 @@
 - `grep -n "retrievalRuntimeState" evals/docs-retrieval/*.mjs` prints nothing.
 - `git diff` on `index-build.mjs` shows the stub and model-cache refusals unchanged.
 - **No machine path entered the record:** `grep -nE '/Users/|/home/|/private/|/var/folders/' harness-runs/task_plans/fix_gate_11_eval_local_build/task_2_plan.md` prints no line except this bullet's own, which quotes the pattern. Gate `6a` reads all of `harness-runs/`.
+
+**Pre-fix record:**
+
+Taken at commit `bc95ff8` (Task 1 landed, `index-build.mjs` untouched), after `bash scripts/typecheck.sh` rebuilt `cli/dist` (`PASS: typecheck`). Local `cli/package.json` version `0.4.0`; planted runtime version `0.3.0` — the two differ. Output as the probe printed it, redacted by the probe.
+
+`bash scripts/scratch-run.sh harness-runs/scratch/gate11-probe.mjs mismatch`:
+
+```
+case: mismatch
+local version: 0.4.0
+planted runtime version: 0.3.0
+check-floor exit 1
+--- stdout ---
+
+--- stderr ---
+file://<repo>/evals/docs-retrieval/index-build.mjs:54
+    throw new Error(
+          ^
+
+Error: eval: the retrieval runtime is not installed, so the optional peers cannot be loaded; missing: autonomous-sdlc-harness. Run the harness's retrieval setup to install them
+    at assertRealModelsAreAvailable (file://<repo>/evals/docs-retrieval/index-build.mjs:54:11)
+    at buildIndex (file://<repo>/evals/docs-retrieval/index-build.mjs:73:3)
+    at runEval (file://<repo>/evals/docs-retrieval/run.mjs:130:25)
+    at checkFloor (file://<repo>/evals/docs-retrieval/check-floor.mjs:137:24)
+    at main (file://<repo>/evals/docs-retrieval/check-floor.mjs:165:28)
+    at file://<repo>/evals/docs-retrieval/check-floor.mjs:169:9
+
+Node.js v20.19.5
+```
+
+`bash scripts/scratch-run.sh harness-runs/scratch/gate11-probe.mjs empty`:
+
+```
+case: empty
+local version: 0.4.0
+check-floor exit 3
+--- stdout ---
+
+--- stderr ---
+check-floor: the retrieval model cache under <scratch cache>/autonomous-sdlc-harness/retrieval/models is incomplete, so no figure can be taken; missing: Xenova/bge-small-en-v1.5/config.json, Xenova/bge-small-en-v1.5/tokenizer.json, Xenova/bge-small-en-v1.5/tokenizer_config.json, Xenova/bge-small-en-v1.5/onnx/model_quantized.onnx, Xenova/ms-marco-MiniLM-L-6-v2/config.json, Xenova/ms-marco-MiniLM-L-6-v2/tokenizer.json, Xenova/ms-marco-MiniLM-L-6-v2/tokenizer_config.json, Xenova/ms-marco-MiniLM-L-6-v2/onnx/model_quantized.onnx. Run npx autonomous-sdlc-harness docs fetch-models
+```
+
+**After this task:**
+
+`bash scripts/typecheck.sh` → `PASS: typecheck`. Exit `1`, not `4`: the status is Task 3's. All five peers and `npm ci` are named.
+
+`bash scripts/scratch-run.sh harness-runs/scratch/gate11-probe.mjs peers-absent`:
+
+```
+case: peers-absent
+local version: 0.4.0
+check-floor exit 1
+--- stdout ---
+
+--- stderr ---
+file://<repo>/evals/docs-retrieval/index-build.mjs:62
+    throw new Error(
+          ^
+
+Error: eval: the retrieval packages cannot be resolved from this checkout's build under cli/dist, so no real-model number can be taken; missing: @electric-sql/pglite, @electric-sql/pglite-pg_textsearch, @electric-sql/pglite-pgvector, @huggingface/transformers, @modelcontextprotocol/sdk. Run npm ci at the repository root to install them
+    at assertRealModelsAreAvailable (file://<repo>/evals/docs-retrieval/index-build.mjs:62:11)
+    at buildIndex (file://<repo>/evals/docs-retrieval/index-build.mjs:82:3)
+    at runEval (file://<repo>/evals/docs-retrieval/run.mjs:130:25)
+    at checkFloor (file://<repo>/evals/docs-retrieval/check-floor.mjs:137:24)
+    at main (file://<repo>/evals/docs-retrieval/check-floor.mjs:165:28)
+    at file://<repo>/evals/docs-retrieval/check-floor.mjs:169:9
+
+Node.js v20.19.5
+```
+
+`grep -n "retrievalRuntimeState" evals/docs-retrieval/*.mjs` prints nothing (exit `1`). `git diff` on `index-build.mjs` leaves the stub and model-cache refusals' lines untouched.
