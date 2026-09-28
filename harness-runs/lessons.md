@@ -36,4 +36,10 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **A wall-clock figure in a document of record is never one a run measured inside its own session: record figures taken by hand, outside any headless session, on an otherwise idle machine. A plan never makes repeated in-run timing runs its acceptance evidence.** _(taught by: chore_test_suite_run_time)_
 
+## Loop design
+
+- **A per-failure fix unit confirms its own named failure still reproduces before it edits, so a failure an earlier unit's fix already cleared is closed rather than re-fixed or given an invented edit.** _(taught by: feat_run_gates_phase)_
+
+- **A new reason to close a unit gets its own marker and commit record; never route it through an existing marker whose stated meaning is a different cause.** _(taught by: feat_run_gates_phase)_
+
 _Written by `autonomous-sdlc-harness init`, and yours from there on: a re-run never touches a ledger that already exists._
