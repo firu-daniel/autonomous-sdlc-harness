@@ -168,6 +168,7 @@ import {
   pluginRootEntries,
   pluginRootEntryTarget,
   pluginRootHelpers,
+  PLUGIN_ROOT_ENTRIES_FLAG,
   PROFILE_PATH,
   renderProfile,
   TEMPLATE_PATH as PROFILE_TEMPLATE_PATH,
@@ -4299,10 +4300,11 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
     const jobClause = ctx.remoteJob
       ? ' Under --remote-job this is a failure: the plugin was installed and the profile generated moments earlier on a machine that exists for one run, so a gap here is a launch that parks rather than an operator\'s paste.'
       : '';
+    const jobRemedy = ` In a remote job \`${CLI} init ${PLUGIN_ROOT_ENTRIES_FLAG}\`, which the job's setup step runs, writes these into the profile it generates, so a profile lacking them is one that step did not generate — a committed copy its create-if-absent run kept, which the profile-tracked check names the untrack route for — or one whose plugin root carries a character the permission guard matches literally, which that step warned about in its own log. The lines below are what is missing:`;
 
     if (missing.length === 0 && missingDirectories.length > 0) {
       return fail(
-        `${PROFILE_PATH} carries every \`permissions.allow\` entry this machine's plugin ${split ? 'roots need' : 'root needs'}, but its \`permissions.additionalDirectories\` lacks ${missingDirectories.length === 1 ? 'the plugin root' : `${missingDirectories.length} plugin roots`}, so a shell command in a run is refused a read under ${missingDirectories.length === 1 ? 'it' : 'them'} as outside the allowed working directory.${jobClause}${stray} Add each line below to that list as its own string, unquoted exactly as it stands:${directoryBlock}`,
+        `${PROFILE_PATH} carries every \`permissions.allow\` entry this machine's plugin ${split ? 'roots need' : 'root needs'}, but its \`permissions.additionalDirectories\` lacks ${missingDirectories.length === 1 ? 'the plugin root' : `${missingDirectories.length} plugin roots`}, so a shell command in a run is refused a read under ${missingDirectories.length === 1 ? 'it' : 'them'} as outside the allowed working directory.${jobClause}${stray}${jobRemedy}${directoryBlock}`,
       );
     }
 
@@ -4313,7 +4315,7 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
         .filter(({ rules }) => rules.length > 0)
         .map(({ group, rules }) => renderRootGroup(group.label, group.root, rules));
       return (ctx.remoteJob ? fail : warn)(
-        `${PROFILE_PATH} is missing ${missing.length} of the ${required.length} \`permissions.allow\` ${entryWord(required.length)} this machine's plugin ${split ? 'roots need' : 'root needs'}, so an unattended run ${symptoms}. \`${CLI} init\` does not generate ${missing.length === 1 ? 'it' : 'them'} — a root is machine-local and the install root carries the plugin version, so an entry written once goes stale on an upgrade and this check re-derives ${split ? 'both' : 'it'} instead.${why}${partial}${jobClause}${stray} Add each line below to ${directoryBlock === '' ? 'that list' : 'that list, or to `permissions.additionalDirectories` under its own heading,'} as its own string, unquoted exactly as it stands:\n${blocks.join('\n\n')}${directoryBlock}`,
+        `${PROFILE_PATH} is missing ${missing.length} of the ${required.length} \`permissions.allow\` ${entryWord(required.length)} this machine's plugin ${split ? 'roots need' : 'root needs'}, so an unattended run ${symptoms}.${ctx.remoteJob ? '' : ` \`${CLI} init\` does not generate ${missing.length === 1 ? 'it' : 'them'} — a root is machine-local and the install root carries the plugin version, so an entry written once goes stale on an upgrade and this check re-derives ${split ? 'both' : 'it'} instead.`}${why}${partial}${jobClause}${stray}${ctx.remoteJob ? jobRemedy : ` Add each line below to ${directoryBlock === '' ? 'that list' : 'that list, or to `permissions.additionalDirectories` under its own heading,'} as its own string, unquoted exactly as it stands:`}\n${blocks.join('\n\n')}${directoryBlock}`,
       );
     }
 

@@ -5162,6 +5162,9 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
     assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} with the Read grant missing\n${job.stdout}\n${job.stderr}`);
     assert.match(job.stderr, failLine('plugin-permissions'));
     assert.ok(reportLines(job.stderr).includes(pluginReadEntry(root)), `the failure did not print the Read line:\n${job.stderr}`);
+    const readLine = reportLine(job.stderr, 'fail', 'plugin-permissions');
+    assert.ok(!readLine.includes('does not generate'), `the job's failure kept the local-machine remedy:\n${readLine}`);
+    assert.ok(readLine.includes('profile-tracked'), `the job's failure did not name profile-tracked:\n${readLine}`);
 
     const local = await runCli(dir, ['doctor'], env);
     assert.equal(local.status, 0, `doctor exited ${local.status} on a condition that only warns\n${local.stdout}\n${local.stderr}`);
@@ -5178,6 +5181,9 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
     assert.equal(job.status, 1, `doctor --remote-job exited ${job.status} with the directory missing\n${job.stdout}\n${job.stderr}`);
     assert.match(job.stderr, failLine('plugin-permissions'));
     assert.ok(reportLines(job.stderr).includes(root), `the failure did not print the directory to add:\n${job.stderr}`);
+    const directoryLine = reportLine(job.stderr, 'fail', 'plugin-permissions');
+    assert.ok(!directoryLine.includes('does not generate'), `the job's failure kept the local-machine remedy:\n${directoryLine}`);
+    assert.ok(directoryLine.includes('profile-tracked'), `the job's failure did not name profile-tracked:\n${directoryLine}`);
 
     // Outside the flag the directory is not graded, so the same profile passes.
     const local = await runCli(dir, ['doctor'], env);
