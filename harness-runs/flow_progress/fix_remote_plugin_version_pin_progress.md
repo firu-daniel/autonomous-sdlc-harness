@@ -25,4 +25,4 @@ Source: harness-runs/task_prompts/fix_remote_plugin_version_pin_task_prompt.md â
 - [x] C2f.    Skeptic findings fixed (findings index all [x] â€” or no index, the review having passed clean)
 - [-] E.      QA passed (UI-test index all [x] / no_ui)
 - [x] G.      Run gates passed (the test-suite wrapper printed pass)
-- [ ] D.      Branch statistics committed & pushed
+- [x] D.      Branch statistics committed & pushed
