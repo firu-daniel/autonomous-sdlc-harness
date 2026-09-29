@@ -24,3 +24,8 @@
 
 - `bash -n scripts/probe-plugin-cli.sh` exits 0.
 - `bash scripts/probe-plugin-cli.sh`, run without a pipe, prints the five `$ ` headers in the order above, each followed by an `exit status:` line. Run it in a clean checkout, then run `git status --porcelain` to confirm it changed nothing.
+
+**Deviations from plan:**
+
+- `bash -n scripts/probe-plugin-cli.sh` was refused by the permission profile (approval required) and not run. The syntax claim rests on the full `bash scripts/probe-plugin-cli.sh` run on Claude Code 2.1.284, which parsed the whole file and printed the five `$ ` headers in order, each followed by `exit status: 0`; `git status --porcelain` afterwards listed only the new script.
+- Each probed command runs with stdin from `/dev/null`, so a subcommand that prompts cannot hang the probe. The plan did not state this.
