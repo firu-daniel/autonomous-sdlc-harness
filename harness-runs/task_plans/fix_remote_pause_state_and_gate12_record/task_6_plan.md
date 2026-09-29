@@ -70,3 +70,8 @@ This task changes no file but `docs/development.md`.
 - Every observation (i)–(xi) is named in the round-2 paragraph with exactly one outcome word. None is recorded as passed without a quoted log line, answer or state from the record above.
 - Every command this task adds sits in its own fenced block, one command per line (`harness-runs/lessons.md` → *"Every command an adopter is meant to run sits in a fenced block…"*).
 - The heading **Gate 12 — remote execution against a real GitHub repository.** and the section heading `## 5. Verifying a change` are byte-identical to before, because other documents cite both.
+
+**Deviations from plan:**
+
+- (v) and (xi) each have mixed results in the record. To keep exactly one outcome word per observation, each takes the word its own pass condition decides. (v) is **passed**: its pass condition is the disable, and the enable and the artifact listing are described as "never reached". (xi) is **not observed**: its pass condition ends at P1 converging. The half of (iii) that concerns the push is written as "had nothing to answer it" rather than as a second outcome word.
+- The amended (iii) names the probe workflow `.github/workflows/push-probe.yml`. It requires `HARNESS_GIT_TOKEN` to be unset, and it reads the probe's runs with `gh run list --workflow push-probe.yml --branch <branch>`, so the setup push's own run of the probe on the default branch is not counted.

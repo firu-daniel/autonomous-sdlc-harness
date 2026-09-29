@@ -693,7 +693,7 @@ npm ci
 
 A shortfall is not exempt: it fails the script. The floor policy itself — the margin between a measured figure and its recorded floor, why the graded corpus is `fixture-catalog` alone, and when a floor is re-recorded — is stated in `docs/retrieval-eval.md` → `## The regression floor`, which `floor.json`'s own `see` field names.
 
-**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a throwaway **private** repository created for the purpose — never this repository, for the reason gate 2 gives and for those gate 2's **This repository cannot host its own remote runs.** states — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Ten observations, after a setup that is itself the first.
+**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a throwaway **private** repository created for the purpose — never this repository, for the reason gate 2 gives and for those gate 2's **This repository cannot host its own remote runs.** states — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Eleven observations, after a setup that is itself the first.
 
 **Round 1 — 2026-09-28, CLI 0.4.0.** Run by hand against the scratch repository `firu-daniel/harness-gate12` (private, a small TypeScript library, `phases.qa`, `docs` and `parity` off, `execution.target: github-actions`), with one task dropped. It did not get past observation (ii): every run's session parked on its first read of a plugin instruction file. Run `36425634480`: the adoption commit had carried `.claude/settings.autonomous.json` with the adopting machine's absolute paths; the job's `init --plugin-root-entries` kept it; the preflight `doctor` printed `WARN  profile-paths  neither a path nor a pattern in .claude/settings.autonomous.json covers this repository root (/home/runner/work/harness-gate12/harness-gate12) …` and `PASS  plugin-permissions  not graded at this machine's plugin root (/home/runner/.claude/plugins/cache/autonomous-sdlc-harness/autonomous-sdlc-harness/0.4.0), because phases.qa is off, and the helper scripts are that phase's alone.` and exited 0; the session then parked asking for read access to the plugin's instruction files, every `Read` under the plugin cache asking permission and `cat`/`ls` refused as outside *"the allowed working directory `/home/runner/work/harness-gate12/harness-gate12`"*. Run `36426447207`: the profile untracked and gitignored in the scratch repository, so the job's `init` created one for the runner and `doctor` gave `PASS profile-paths` — but the generated profile carried no plugin-root entry, and the session parked the same way. Run `36428382006`: a `Read` rule and an `additionalDirectories` entry for the plugin cache added to the committed `.claude/settings.json`, which the session confirmed were in the file at `HEAD`; the same refusals, and the park-loop guard stopped the run. The eight findings, and what 0.4.1 changed for each:
 
@@ -706,7 +706,14 @@ A shortfall is not exempt: it fails the script. The floor policy itself — the 
 7. The `workflow` token scope was not mentioned → *Setup*, `docs/remote-execution.md` → `## 7. Turning it on` and `init`'s printed steps give `gh auth refresh -s workflow` before the push.
 8. Nothing said this repository cannot host its own remote runs → gate 2 states it, under **This repository cannot host its own remote runs.**
 
-The fixes ship in 0.4.1; none has been observed on a runner. **The re-run on 0.4.1 starts from observation (i)**, and every observation is re-recorded.
+The fixes shipped in 0.4.1, and round 2, below, ran on it.
+
+**Round 2 — 2026-09-29, CLI 0.4.1.** Run by hand against the scratch repository `firu-daniel/harness-gate12-r2` (private, a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off, `execution.target: github-actions`), adopted with `npx autonomous-sdlc-harness@0.4.1 init`, with one task dropped as `feat_invoice_totals`. Observation (i) is **reached — lines not recorded**: jobs ran to "branch ready for review" under 0.4.1's plugin-root grants, but the `doctor --check-github` lines were not carried into this repository. Observation (ii) is **reached — lines not recorded** on the same evidence: the preflight's `PASS` lines were not carried either. Observation (iii) **passed**: with `HARNESS_SELF_PAUSE_AFTER_MINUTES=5` the job dropped `PAUSE` at exactly 300 s (`reason budget`); `continue` logged `dispatched action=run engine=task resume=pause`, and a new `harness run <branch>` run restored the bundle and resumed; the artifact's `expires_at` was 90 days after creation, with `artifact-and-log-retention` at `{"days":90,"maximum_allowed_days":400}`; whether a push started another workflow had nothing to answer it, because the repository had no other workflow; and the chain exposed finding 1 below. Observation (iv) **passed**: both jobs of the `harness pause` run were `skipped`, `timing` answered `"billable":{"UBUNTU":{"total_ms":0,"jobs":2,…}}`, and the running job found the run 47 s after its creation and ended with decision `stop`. Observation (v) **passed** on its disable, which logged `poll: no branch is waiting; disabled harness-resume.yml` and left the workflow's state `disabled_manually`; its enable and its in-progress artifact listing were never reached, because no job ended on a usage pause. Observation (vi) **passed**: every `harness-run.yml` run was accepted and its `Run the harness` step ran. Observation (vii) was **skipped**. Observation (viii) **passed**: `remote-run.sh stop` dispatched the marker, cancelled the running job, whose post-steps still saved and uploaded the bundle, and started nothing new; a later resume restored that cancelled job's bundle. Observation (ix) was **skipped**, because no API key was available. Observation (x) was **skipped**; running the interactive-test phase remotely is `ROADMAP.md`'s *Cloud QA* row. Observation (xi) is **not observed**, because its pass condition ends at P1 converging and the operator stopped the run before P1. What it reached: a task leaving three security limits undecided made the task-plan writer park before writing a draft (`question_1.md`, `job: parked stop`); an `answer_1.md` was written **by hand** into the worktree clarifications directory, the file `/autonomous-sdlc-harness:branch-answer` writes, without running that command; one `tick` logged `relayed the answers (1) of parked remote run`; and the next job logged `restored the bundle of run <id>`, `wrote answer_1.md for <branch>` and `resuming parked run '<branch>' (answers 1)`, then passed `answered` to the walker and dispatched the writer with the answers attached, without re-parking. One 240-minute job took the task from planning to "branch ready for review" in 30 m 35 s, with every enabled phase `[x]`. The `claude` version the job installed was not carried into this repository. The behaviours the round settled are moved to `docs/remote-execution.md` → `## 6. What is not verified here` → `### Verified in Gate 12 round 2`. The two findings, and what this branch changed for each:
+
+1. A pause during planning lost the untracked planning drafts, because each job starts in a fresh checkout: three consecutive jobs each ran the task-plan writer and paused before any reviewer, only the ledger reached the branch, the second job's bundle held exactly four files, and the run's own `PAUSE_PROGRESS.md` recorded that *"the untracked story index and per-task files from the first session were not on disk (the checkout was fresh)"* → the state bundle carries the untracked planning drafts, and a job restore puts them back without overwriting, as `docs/remote-execution.md` → `### Runs longer than a job` states.
+2. Every run printed *"Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/upload-artifact@v4."* → both workflow templates pin Node 24 majors, listed in each header's `# ACTION PINS.` block.
+
+What still owes a first recording: (i)'s and (ii)'s verbatim lines; (iii)'s push half; (v)'s enable and its in-progress artifact listing; (vii), (ix) and (x); (xi)'s convergence and the `/autonomous-sdlc-harness:branch-answer` command itself; (iii)'s `expires_at` on the `upload-artifact` major the templates now pin; and, in the next round's (ii), that no `Node.js 20 is deprecated` notice appears.
 
 **Setup.**
 
@@ -760,7 +767,37 @@ Passes when a run titled `harness run <branch>` starts a job on `ubuntu-latest`,
 gh variable set HARNESS_SELF_PAUSE_AFTER_MINUTES --body 5
 ```
 
-Passes when the job drops its own `PAUSE`, ends with decision `continue`, its `remote-run.sh continue` step dispatches, and a **new** `harness run <branch>` run starts whose job restores the previous bundle and resumes from the pushed ledger. That second run starting is the evidence that a `workflow_dispatch` sent with `GITHUB_TOKEN` starts a run. Record both run ids, the `continue` step's output, the second job's `restore` line, and whether a push the first job made started any other workflow. Record too the `harness-state` artifact's `expires_at` from `gh api repos/<owner>/<scratch-repo>/actions/runs/<first run id>/artifacts`, which shows whether `retention-days: 400` was capped at the repository's retention or refused (`docs/remote-execution.md` §6).
+Give the push half something to trigger: with `HARNESS_GIT_TOKEN` unset, commit one trivial workflow triggered `on: push` to the scratch repository's default branch, as `.github/workflows/push-probe.yml`:
+
+```yaml
+name: push probe
+on: push
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo pushed
+```
+
+```
+git add .github/workflows/push-probe.yml
+```
+
+```
+git commit -m "Add a push probe workflow"
+```
+
+```
+git push --no-verify origin <default branch>
+```
+
+After the first job has pushed, list the probe's runs on the task's branch:
+
+```
+gh run list --workflow push-probe.yml --branch <branch>
+```
+
+Passes when the job drops its own `PAUSE`, ends with decision `continue`, its `remote-run.sh continue` step dispatches, and a **new** `harness run <branch>` run starts whose job restores the previous bundle and resumes from the pushed ledger. That second run starting is the evidence that a `workflow_dispatch` sent with `GITHUB_TOKEN` starts a run. Record both run ids, the `continue` step's output, the second job's `restore` line, and whether a push the first job made started a run of `push-probe.yml`, with that last command's output verbatim. Record too the `harness-state` artifact's `expires_at` from `gh api repos/<owner>/<scratch-repo>/actions/runs/<first run id>/artifacts`, which shows whether `retention-days: 400` was capped at the repository's retention or refused (`docs/remote-execution.md` §6).
 
 **(iv) A `pause` dispatch.** While a job is running, run `/autonomous-sdlc-harness:branch-pause <branch>` in the session, then relay it and read the marker run:
 
@@ -833,6 +870,30 @@ git push --no-verify origin <default branch>
 ```
 
 Then drop a small task and let it run to the end. Passes when the run ends at "ready for review" with its ledger's `E` entry `[-]` and `P2` `[x]`, the ledger's `## Run mode` block carrying `remote-skipped: qa`, the Done summary carrying the `QA (Phase E): skipped` line, and the `completed` notification's detail naming the skip and `/autonomous-sdlc-harness:branch-qa-test <branch>` (`docs/remote-execution.md` → `## 3.` → *The interactive-test phase*). Record the ledger's `## Run mode` block and the notification text verbatim.
+
+**(xi) A remote park answered and resumed.** Drop a task that leaves a decision undecided — a limit it names without setting — so the task-plan writer parks, and wait for the job log's `job: parked stop`. Then sync the branch:
+
+```
+bash <scriptsDir>/remote-run.sh sync <branch>
+```
+
+Answer the question in the session:
+
+```
+/autonomous-sdlc-harness:branch-answer <branch>
+```
+
+Relay the answers and read the next run:
+
+```
+bash <scriptsDir>/autonomous-watcher.sh tick
+```
+
+```
+gh run list --workflow harness-run.yml
+```
+
+Passes when the tick relays the answers; the next job logs its `restore` line, `wrote answer_<n>.md for <branch>` and `resuming parked run '<branch>' (answers <n>)`; the run does not re-park on the same question; and P1 converges, meaning the ledger's `P1` flips `[x]` and `chore: Add task plan for <branch>` lands on the branch. Record the relay line, those three job-log lines and the commit.
 
 **Teardown.** Deregister the self-hosted runner, then delete the scratch repository with `gh repo delete <owner>/<scratch-repo>`.
 
