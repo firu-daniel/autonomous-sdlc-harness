@@ -8,7 +8,7 @@ Branch `fix_remote_plugin_version_pin`, reviewed 2026-09-29 against `dev` (imple
 
 1. [x] **Finding 1** — Move the duplicated YAML-scalar unquote into one `cli/src/core/` owner _(layer: cli)_
 2. [x] **Finding 2** — Give the `npx autonomous-sdlc-harness@<version>` prefix one producer in doctor's version warning _(layer: cli)_
-3. [ ] **Finding 3** — Declare the template mirror of the upgrade route in `githubWorkflows.ts`'s header _(layer: cli)_
+3. [x] **Finding 3** — Declare the template mirror of the upgrade route in `githubWorkflows.ts`'s header _(layer: cli)_
 
 ## Must Fix
 

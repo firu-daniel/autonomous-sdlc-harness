@@ -33,6 +33,12 @@
  *    file; every other edit to either file survives only in its `.bak`. The runner and the timeouts
  *    are repository variables, which the re-render does not touch.
  *
+ * **Declared mirror.** `cli/templates/github/workflows/harness-run.yml`'s `Install the pinned plugin`
+ * step spells the route {@link upgradeWorkflowsCommand} produces,
+ * `npx autonomous-sdlc-harness@<version> init --upgrade-workflows`, as a literal the compiler cannot
+ * reach, and declares the mirror in its own `# DECLARED MIRRORS` block: a change to
+ * {@link UPGRADE_WORKFLOWS_FLAG} or to that route is an edit to that line too.
+ *
  * Both files are `create-if-absent`: the adopter tunes the cron, the timeouts and the runner, and a
  * re-run keeps that edit; `--force` replaces each after a `.bak` (`core/writer.ts`'s re-run table).
  */
