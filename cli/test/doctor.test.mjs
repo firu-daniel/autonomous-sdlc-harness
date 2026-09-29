@@ -5563,6 +5563,19 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(!`${stdout}\n${stderr}`.includes(UPGRADE_ROUTE), `${stdout}\n${stderr}`);
   });
 
+  await t.test('on, with a comment after the pin, still reads the pin', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    rewritePins(dir, '$& # pinned by hand');
+    const stub = await ghStub(subtest);
+
+    const { stdout, stderr } = await doctorWithStub(dir, stub);
+
+    const line = reportLine(stdout, 'pass', 'remote-execution');
+    assert.ok(line?.includes("rendered for this CLI's own version"), `${stdout}\n${stderr}`);
+    assert.ok(!`${stdout}\n${stderr}`.includes(UPGRADE_ROUTE), `${stdout}\n${stderr}`);
+  });
+
   await t.test('on, with the pin lines removed, notes it and does not fail on that account', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await pushWorkflows(dir);

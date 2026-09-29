@@ -70,12 +70,12 @@ export const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';
  */
 export const CLI_VERSION_VARIABLE = 'HARNESS_CLI_VERSION';
 
-const CLI_VERSION_LINE = new RegExp(`^[ \\t]*${CLI_VERSION_VARIABLE}:[ \\t]*(.*?)[ \\t]*$`);
+const CLI_VERSION_LINE = new RegExp(`^[ \\t]*${CLI_VERSION_VARIABLE}:[ \\t]*(.*?)(?:[ \\t]+#.*)?[ \\t]*$`);
 
 /**
  * Every version a workflow's text is pinned to: the value of each `<indent>HARNESS_CLI_VERSION: <value>`
- * line, quotes stripped, distinct and in file order; `[]` when no such line exists. Pure — the caller
- * reads the file.
+ * line, a trailing ` # comment` and the quotes stripped, distinct and in file order; `[]` when no such
+ * line exists. Pure — the caller reads the file.
  */
 export function renderedCliVersions(text: string): readonly string[] {
   const versions: string[] = [];
