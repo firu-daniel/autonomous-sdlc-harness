@@ -1,0 +1,10 @@
+## Implementers could not run the test file they edited, so a hanging test reached the Run gates phase
+- **category:** tooling-gap
+- **evidence:** The Task 3 `layer-implementer` (commit 2d80e79) edited `cli/test/workflow-templates.test.mjs` and reported its single-file run as skipped because no single-file test command is stated in `.claude/context/cli.md` or `.claude/context/conventions.md` (`unit_loop_core.md` → `## The test-run rule` point 3). The G.4 implementer for the round-1 test fix (commit c535d26) returned the same skip for the same file. Run gates round 1 then returned `fail harness-runs/test_run_logs/fix_remote_pause_state_and_gate12_record/task_round_1.log`: the test fix plan `harness-runs/test_fix_plans/fix_remote_pause_state_and_gate12_record_task_round_1.md` diagnoses an unbounded backwards walk in that same test file, cancelled at the runner's 30-minute file limit (1014 of 1015 tests passed). Round 2 printed `pass`.
+- **cost this run:** one extra Run gates round, spent mostly waiting out a 30-minute test-file timeout, plus 5 dispatches (test-fix-plan-writer, architecture-reviewer, 2 committers, 1 implementer).
+- **hypothesis:** a single-file test command stated in a conventions document would have let the Task 3 implementer see the hang before its commit.
+
+## Story-task commits carry a prefix the commit-message policy designates `none` for
+- **category:** agent-contract
+- **evidence:** `unit_loop_core.md` → `## Substitution table` row `A` derives `commit_prefix` from the branch name (`fix_` → `fix`), so this run's task commits 2d80e79, 384281b, ec95b22 and d5f792f have subjects starting `fix:`. `.claude/context/conventions.md` → `## Commit-message policy` designates **`none`** for the "Adding new work — a story task's commit" class and says `chore` is the only prefix token in use. This run's review-fix commits (0b1bd9c, 527e4f9, f76c9e9, c535d26) passed `none` under the fix rows' designation rule and carry no prefix.
+- **cost this run:** four commit subjects on the branch do not follow the adopter's stated policy.

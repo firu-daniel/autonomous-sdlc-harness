@@ -1272,7 +1272,9 @@ notify() {
 #                       bundle still says `running`, or a finished run left no
 #                       bundle, and `expired`, a registry-only value it derives
 #                       when a finished run's bundle has expired (the job can no
-#                       longer take an answer, and the carried counts are lost);
+#                       longer take an answer, and the carried counts and any
+#                       planning drafts not yet committed that it carried are
+#                       lost);
 #                       `status.json` never carries either. Both map to
 #                       `paused` rather than `failed` because a `failed` record
 #                       has no resume path, while the ledger on the branch is

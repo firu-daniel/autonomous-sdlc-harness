@@ -38,6 +38,22 @@
 #                                     runtime sits in `retrieval/`
 #   cli/src/retrieval/runtime.ts      RETRIEVAL_CACHE_DIRNAME, that `retrieval/`
 #
+# ACTION PINS.
+#   actions/checkout@v5
+#   actions/setup-node@v5
+#   actions/cache/restore@v5
+#   actions/cache@v5
+#   actions/upload-artifact@v6
+# Each is the lowest major whose own action.yml declares `runs.using: node24`,
+# per a maintainer's lookups of each action's action.yml and release notes on
+# 2026-09-29T08:21Z (UTC). Each of those majors' release notes requires Actions
+# Runner 2.327.1 or newer; a GitHub-hosted runner already has it, and a
+# self-hosted one must run it (docs/remote-execution.md, section 8). A major
+# tag, not a commit sha: every action here is GitHub's own `actions/`
+# organisation, the owner of the runner and GITHUB_TOKEN this job already
+# trusts, and a major tag takes the action's own patch and security releases
+# where a sha would freeze your copy. Pin shas in your copy if you want them.
+#
 # WHAT IT READS.
 #   Secrets: CLAUDE_CODE_OAUTH_TOKEN and/or ANTHROPIC_API_KEY (one is required;
 #     billing follows the API key when both are set), HARNESS_GIT_TOKEN (optional:
@@ -72,12 +88,12 @@
 # the step timeout. The job-level timeout-minutes is the self-hosted limit; a
 # hosted job is stopped at its own limit whatever that says.
 #
-# WHY THE TIMEOUT IS COMPUTED INTO GITHUB_ENV. Whether a step's timeout-minutes
-# accepts an expression over `runner.environment` could not be checked against
-# GitHub's workflow-syntax documentation when this file was written (no network
-# access), so the first step computes every budget value from
-# `runner.environment` into GITHUB_ENV, and the harness step reads a single
-# `env` value. Gate 12 records the real behaviour.
+# WHY THE TIMEOUT IS COMPUTED INTO GITHUB_ENV. The first step computes every
+# budget value from `runner.environment` into GITHUB_ENV, so the harness step's
+# timeout-minutes reads a single `env` value rather than an expression over the
+# runner kind. Gate 12 round 2, on 2026-09-29, found every harness-run.yml run
+# accepted and its `Run the harness` step run: the expression-valued
+# timeout-minutes is accepted.
 #
 # THE PLUGIN PIN. `claude plugin marketplace add --help` and
 # `claude plugin install --help` (Claude Code 2.1.282) offer no ref or version:
@@ -88,17 +104,19 @@
 # rendered CLI version.
 #
 # WHY retention-days IS SET. The `harness-state` bundle is the only remote copy
-# of a run's clarifications and carried counts; a run parked or paused longer
-# than its retention cannot be answered and loses those counts. 400 is the
+# of a run's clarifications, uncommitted planning drafts and carried counts; a
+# run parked or paused longer than its retention cannot be answered and loses
+# those drafts and counts. 400 is the
 # largest retention any repository can configure, and `actions/upload-artifact`
 # caps a larger `retention-days` at the repository's own maximum, so the value
 # means "as long as this repository allows" — the same bound as leaving it
 # unset. It is explicit so that lowering it is a visible edit. The real bound is
 # the repository's Artifact and log retention setting, which
-# `autonomous-sdlc-harness doctor --check-github` reads. The cap (rather than a
-# rejection) is carried from the action's `@actions/artifact` retention code
-# and could not be re-checked against its v4 README when this file was written
-# (no network access); Gate 12 records the real behaviour.
+# `autonomous-sdlc-harness doctor --check-github` reads. Gate 12 round 2, on
+# 2026-09-29, observed the cap rather than a rejection on `actions/upload-artifact@v4`:
+# the artifact's `expires_at` fell 90 days after its creation, with the
+# repository's artifact-and-log-retention at {"days":90,"maximum_allowed_days":400}.
+# That was v4; the v6 pinned above has not yet been observed by a gate round.
 
 name: harness-run
 run-name: harness ${{ inputs.action }} ${{ inputs.branch }}
@@ -248,7 +266,7 @@ jobs:
 
       - name: Check out the run's branch
         if: env.HARNESS_STOPPED != '1'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
@@ -280,9 +298,11 @@ jobs:
 
       - name: Set up Node
         if: env.HARNESS_STOPPED != '1'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
+          # v5 caches by package.json's packageManager; the job installs nothing through npm's cache, and a lockfile-less repository must not fail this step.
+          package-manager-cache: false
 
       - name: Install the claude CLI when absent
         if: env.HARNESS_STOPPED != '1'
@@ -327,7 +347,7 @@ jobs:
 
       - name: Restore the docs-retrieval cache
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
           key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}
@@ -377,7 +397,7 @@ jobs:
 
       - name: Upload the state bundle
         if: always() && env.SCRIPTS_DIR != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: harness-state
           path: ${{ runner.temp }}/harness-state
@@ -411,7 +431,7 @@ jobs:
 
       - name: Check out the dispatched ref
         if: env.HARNESS_STOPPED != '1'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Read the configuration
         id: config
@@ -430,13 +450,15 @@ jobs:
 
       - name: Set up Node
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
+          # As in the run job: no npm cache is used, and a lockfile-less repository must not fail this step.
+          package-manager-cache: false
 
       - name: Restore and save the docs-retrieval cache
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
           key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}
