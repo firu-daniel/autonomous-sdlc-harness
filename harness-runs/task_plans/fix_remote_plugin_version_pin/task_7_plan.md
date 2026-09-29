@@ -70,3 +70,5 @@
 - `git grep -n -e "Delete them and run a plain" -e "cannot be pinned by a ref" -- docs/remote-execution.md` returns nothing. The old route and the old row wording are both gone.
 - Each command in `### Upgrading` sits alone in its own fenced block, and the `### Upgrading` heading text is exactly the anchor Task 4's messages cite.
 - The version string and help lines in the §6 row are the ones this run's `bash scripts/probe-plugin-cli.sh` printed, not remembered ones.
+
+**Deviations from plan:** The §6 row carries the probe's version, date and command, and points at a new `### The plugin-install probe` subsection under `## 6.`, which quotes the help lines in fenced blocks and holds the established and not-established records. Verbatim multi-line help output does not fit in a table cell. The probe on Claude Code 2.1.284 also printed a `claude plugin tag` command that creates `{name}--v{version}` tags. That line is quoted there as matching the release tag's shape, and the runtime's use of such tags is still recorded as not established.
