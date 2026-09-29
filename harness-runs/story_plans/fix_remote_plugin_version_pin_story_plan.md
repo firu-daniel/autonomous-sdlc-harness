@@ -41,7 +41,7 @@ Through 0.4.2 the `Install the pinned plugin` step of `cli/templates/github/work
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_plugin_version_pin/task_<K>_plan.md`. Entries are in bottom-up ship order: the `cli` layer first, then the catch-all `general` layer last.
 
 1. [x] **Task 1** — Add the workflow pin reader and an upgrade mode to the workflow generator _(layer: cli)_ _(points: 12)_
-2. [ ] **Task 2** — Add `init --upgrade-workflows` and report what it re-rendered _(layer: cli)_ _(points: 15)_
+2. [x] **Task 2** — Add `init --upgrade-workflows` and report what it re-rendered _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Have `doctor`'s `remote-execution` check warn on a workflow rendered for another version _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Install the plugin from the release tag in `harness-run.yml`, with a test that drives two versions _(layer: cli)_ _(points: 18)_
 5. [ ] **Task 5** — Add `scripts/tag-release.sh`, which creates the release tag the job installs from _(layer: general)_ _(points: 10)_

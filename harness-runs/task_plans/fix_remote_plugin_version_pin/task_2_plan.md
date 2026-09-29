@@ -41,3 +41,9 @@ This task owns the flag, the wiring and the report. What gets replaced, and when
 - `bash scripts/typecheck.sh` exits 0.
 - Run `cli/test/init.test.mjs`, the file this task edits, through the single-file test command the conventions document gives, if it gives one. Cases (a)–(e) pass. Case (a) is the end-to-end exercise of Task 1's generator mode, and case (b) is the idempotence assertion `.claude/context/conventions.md` → `## What accompanies a new unit of each kind` requires of a written artifact.
 - `node cli/dist/cli.js init --help`, run after `npm run build`, lists `--upgrade-workflows` with its summary. The row is the table's single source, so no other edit is needed for it to appear.
+
+**Deviations from plan:**
+
+- Case (a) also appends a comment line to `harness-resume.yml`. With only the cron retuned, the carried-cron re-render equals the file byte for byte, so Task 1's generator does not replace it and writes no `harness-resume.yml.bak`. Cases (a) and (b) both require that `.bak`.
+- The "no workflow to upgrade" warning goes into `init`'s `warnings` list. `reportLines` then emits it through `ctx.report.warn` together with the run's other caveats, not as a separate `ctx.report.warn` call at the generator's call site.
+- `.claude/context/conventions.md` → `## The testing bar` names the runner, `node --test`, but states no single-file command. `cli/test/init.test.mjs` was run as `node --test test/init.test.mjs` from `cli/`, which applies that runner to the one file this unit edited.
