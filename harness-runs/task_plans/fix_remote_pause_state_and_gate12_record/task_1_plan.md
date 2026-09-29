@@ -68,3 +68,9 @@
 - `commands.typecheck` exits 0.
 - `grep -n "HR_REMOTE_PLANNING" cli/templates/scripts/lib/harness-run-lib.sh` shows every new name assigned inside a function that owns it, and none read before it is assigned.
 - The header's `NOTHING IN THE BUNDLE IS EVER COMMITTED` sentence no longer claims every bundle file is gitignored.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/lib/harness-run-lib.sh` was refused by the permission layer (approval required) — deferred to the Run gates phase. Syntax and bash 3.2 compatibility rest instead on a scratch probe (`harness-runs/scratch/planning_bundle_probe.mjs`, run through `scripts/scratch-run.sh`) that sourced the library under `/bin/bash` and exercised write, job restore (`2 1`, committed index kept), mirror restore (`0 0`, nothing placed), a hostile bundle (`3 0`, out-of-set file and symlink ignored) and `hr_remote_planning_paths ""` (rc 1, empty value).
+- The `outer-loop-scripts.test.mjs` single-file run was skipped: no conventions document (`.claude/context/cli.md`, `.claude/context/conventions.md`) states a single-file test command — deferred to the Run gates phase per `## The test-run rule` point 3.
+- Hostile-bundle case: a file reached through a `..` segment cannot be created on the filesystem, so the case plants a symlinked entry under `planning/task_plans/feat/x/` in its place; the restorer's `..` check stays in the code.

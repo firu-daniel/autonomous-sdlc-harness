@@ -468,6 +468,86 @@ test('the remote state bundle carries a run through a job restore and a mirror r
   assert.deepEqual(mirrorTree.filter((key) => key.endsWith('.log')), [], 'the mirror restore placed the run log');
 });
 
+test('the remote state bundle carries the planning drafts, and a job restore places them only where nothing exists', async (t) => {
+  // A draft never overwrites the checkout's copy, never reaches a mirror, and never lands outside the planning paths.
+  const source = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(source);
+  const registry = join(source, REMOTE.registry);
+  const set = await libCall(source, 'hr_registry_set "$@"', [registry, REMOTE_BRANCH, 'status', 'paused']);
+  assert.equal(set.status, 0, `hr_registry_set exited ${set.status}: ${set.stderr}`);
+
+  const drafts = {
+    [`story_plans/${REMOTE_BRANCH}_story_plan.md`]: 'draft index\n',
+    [`task_plans/${REMOTE_BRANCH}/task_1_plan.md`]: 'task 1\n',
+    [`task_plan_reviews/${REMOTE_BRANCH}/review_0.md`]: 'review 0\n',
+  };
+  for (const [path, content] of Object.entries(drafts)) plant(source, `${STATE_DIR}/${path}`, content);
+
+  const bundle = join(source, 'bundle-out');
+  const written = await libCall(source, 'hr_remote_bundle_write "$@"', [source, REMOTE_BRANCH, registry, bundle]);
+  assert.equal(written.status, 0, `hr_remote_bundle_write exited ${written.status}: ${written.stderr}`);
+  const bundleTree = await snapshotTree(bundle);
+  const bundleFiles = Object.keys(bundleTree).filter((key) => statSync(join(bundle, key)).isFile());
+  assert.deepEqual(
+    bundleFiles.filter((key) => key.startsWith('planning/')),
+    Object.keys(drafts).map((path) => `planning/${path}`).sort(),
+    'the bundle does not carry exactly the planted drafts under planning/',
+  );
+  assert.deepEqual(
+    bundleFiles.filter((key) => !key.startsWith('planning/')),
+    ['status.json'],
+    'the planning drafts changed the bundle\'s top-level entries',
+  );
+
+  const job = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(job);
+  const committed = `${STATE_DIR}/story_plans/${REMOTE_BRANCH}_story_plan.md`;
+  plant(job, committed, 'committed index\n');
+  const intoJob = await libCall(
+    job,
+    'hr_remote_bundle_restore "$@" || exit $?; printf "%s %s\\n" "$HR_REMOTE_PLANNING_PLACED" "$HR_REMOTE_PLANNING_KEPT"',
+    [bundle, job, REMOTE_BRANCH, 'job'],
+  );
+  assert.equal(intoJob.status, 0, `the job restore exited ${intoJob.status}: ${intoJob.stderr}`);
+  assert.equal(text(job, `${STATE_DIR}/task_plans/${REMOTE_BRANCH}/task_1_plan.md`), 'task 1\n');
+  assert.equal(text(job, `${STATE_DIR}/task_plan_reviews/${REMOTE_BRANCH}/review_0.md`), 'review 0\n');
+  assert.equal(text(job, committed), 'committed index\n', 'the job restore overwrote the checkout\'s committed story index');
+  assert.equal(intoJob.stdout, '2 1\n', 'HR_REMOTE_PLANNING_PLACED / HR_REMOTE_PLANNING_KEPT are not 2 / 1');
+
+  const mirror = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(mirror);
+  const beforeMirror = await snapshotTree(mirror);
+  const intoMirror = await libCall(
+    mirror,
+    'hr_remote_bundle_restore "$@" || exit $?; printf "%s %s\\n" "$HR_REMOTE_PLANNING_PLACED" "$HR_REMOTE_PLANNING_KEPT"',
+    [bundle, mirror, REMOTE_BRANCH, 'mirror'],
+  );
+  assert.equal(intoMirror.status, 0, `the mirror restore exited ${intoMirror.status}: ${intoMirror.stderr}`);
+  assert.equal(intoMirror.stdout, '0 0\n', 'the mirror restore counted a planning draft');
+  const mirrorNew = Object.keys(await snapshotTree(mirror)).filter((key) => !(key in beforeMirror));
+  for (const path of Object.keys(drafts)) {
+    assert.ok(!mirrorNew.includes(`${STATE_DIR}/${path}`), `the mirror restore placed ${path}`);
+  }
+
+  // A `..` segment cannot be created as a file name, so the escape is attempted through a symlink instead.
+  plant(source, `bundle-out/planning/story_plans/other_story_plan.md`, 'outside the set\n');
+  mkdirSync(join(bundle, 'planning', 'task_plans', REMOTE_BRANCH), { recursive: true });
+  plant(source, 'outside-target.md', 'escaped\n');
+  symlinkSync(join(source, 'outside-target.md'), join(bundle, 'planning', 'task_plans', REMOTE_BRANCH, 'linked.md'));
+  const hostile = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(hostile);
+  const intoHostile = await libCall(
+    hostile,
+    'hr_remote_bundle_restore "$@" || exit $?; printf "%s %s\\n" "$HR_REMOTE_PLANNING_PLACED" "$HR_REMOTE_PLANNING_KEPT"',
+    [bundle, hostile, REMOTE_BRANCH, 'job'],
+  );
+  assert.equal(intoHostile.status, 0, `the hostile restore exited ${intoHostile.status}: ${intoHostile.stderr}`);
+  const hostileTree = Object.keys(await snapshotTree(hostile));
+  assert.ok(!hostileTree.some((key) => key.endsWith('other_story_plan.md')), 'a file outside the planning set was placed');
+  assert.ok(!hostileTree.some((key) => key.endsWith('linked.md')), 'a symlinked bundle entry was placed');
+  assert.equal(intoHostile.stdout, '3 0\n', 'the hostile entries were counted');
+});
+
 test('a bundle whose status.json carries an unrecognised schema restores nothing and exits 2', async (t) => {
   const bundle = await fixtureFor(t, {
     git: false,
