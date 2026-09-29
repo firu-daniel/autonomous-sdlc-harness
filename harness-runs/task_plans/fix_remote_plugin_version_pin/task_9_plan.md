@@ -42,3 +42,10 @@
 - Every command in `## 7. Releasing` sits alone in its own fenced block (the ledger's adopter-documentation lesson).
 - The script usage in §7 matches `scripts/tag-release.sh`'s own `Usage:` and `Exit:` lines. Read them side by side.
 - The heading reads exactly `## 7. Releasing`, the anchor Task 4's header cites.
+
+**Deviations from plan:**
+
+- §7 step 1 cites the bump commit `729af00` rather than the inline `git show --stat 729af00`: the verification bullet requires every command in §7 to sit in its own fenced block, and that command is provenance, not a release step.
+- §7 step 4 names `npm publish --workspace cli` in its own fenced block, quoted from `cli/README.md` → **No lockfile of its own.**, the one source in the tree that states a publish command; the section says no file states a release procedure for it.
+- The backfill is stated as a decision ("The decision is to backfill …"), because only `autonomous-sdlc-harness--v0.1.0` exists among the local tags and the backfill runs are a maintainer's terminal action.
+- Gate 12's "What still owes a first recording" line gains (xii), so the owed-recording list stays complete after the observation is added.
