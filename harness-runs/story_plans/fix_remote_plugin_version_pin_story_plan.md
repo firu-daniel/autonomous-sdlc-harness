@@ -47,7 +47,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_plugin_version_pi
 5. [x] **Task 5** — Add `scripts/tag-release.sh`, which creates the release tag the job installs from _(layer: general)_ _(points: 10)_
 6. [x] **Task 6** — Add `scripts/probe-plugin-cli.sh`, which records what the agent-runner CLI accepts for a plugin install _(layer: general)_ _(points: 5)_
 7. [x] **Task 7** — Document the pinned install and the upgrade route in `docs/remote-execution.md` _(layer: general)_ _(points: 18)_
-8. [ ] **Task 8** — Document `--upgrade-workflows` and the version warning in `docs/cli.md` _(layer: general)_ _(points: 10)_
+8. [x] **Task 8** — Document `--upgrade-workflows` and the version warning in `docs/cli.md` _(layer: general)_ _(points: 10)_
 9. [ ] **Task 9** — Document the release steps, the catalogue version and the Gate 12 observation in `docs/development.md` _(layer: general)_ _(points: 15)_
 
 ## Scope register
