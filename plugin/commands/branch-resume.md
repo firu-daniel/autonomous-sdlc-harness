@@ -61,7 +61,7 @@ The only script it invokes is `<scripts_dir>/remote-run.sh sync`, for a remote r
    - **Remote record** synced as `paused` with `pause_reason: expired` — its state bundle expired — is
      resumable the same way, from the committed ledger; say that its carried park-loop, auto-resume and
      stall counts, its clarification history and any planning drafts not yet committed that it carried are
-     lost, so the resumed run's planning writer starts again from the committed ledger.
+     lost; a run that was still planning runs its planning writer again from the committed ledger.
 4. From the registry record for `<branch>`, read the `worktree` field. Write an empty
    `<worktree>/<state_dir>/RESUME`.
 5. Report: the watcher will detect RESUME within a poll tick (its configured interval, and its parallel-run
