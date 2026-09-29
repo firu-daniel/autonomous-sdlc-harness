@@ -18,6 +18,10 @@
  * `contents: read` and `actions: write`; `remote-run.sh poll` its only call into the script family;
  * `HARNESS_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block;
  * its state upload under `always()` named `POLL_STATE_ARTIFACT_NAME`, as `remote-run.sh` spells it.
+ *
+ * For both: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
+ * pin the file dropped or a bumped `uses:` the header forgot fails; and every `uses:` value is a major
+ * tag of a GitHub `actions/` action, never a sha or a branch — the pinning decision that header states.
  */
 
 import assert from 'node:assert/strict';
@@ -148,10 +152,11 @@ test('the uploaded artifact is the one remote-run.sh downloads: STATE_ARTIFACT_N
 });
 
 test('the poller uploads its state under POLL_STATE_ARTIFACT_NAME, the name remote-run.sh downloads, always', () => {
-  const at = RESUME_LINES.findIndex((line) => line.includes('actions/upload-artifact'));
+  const at = RESUME_LINES.findIndex((line) => /^\s*(?:- )?uses:\s*actions\/upload-artifact@/.test(line));
   assert.notEqual(at, -1);
   let start = at;
-  while (!/^\s*- name:/.test(RESUME_LINES[start])) start--;
+  while (start >= 0 && !/^\s*- name:/.test(RESUME_LINES[start])) start--;
+  assert.ok(start >= 0, 'the upload-artifact uses: line sits inside a named step');
   const step = [RESUME_LINES[start], ...blockUnder(start, RESUME_LINES)].join('\n');
   assert.match(step, new RegExp(`^\\s*name: ${POLL_STATE_ARTIFACT_NAME}$`, 'm'));
   assert.match(step, /^\s*if: always\(\)/m);
@@ -203,6 +208,34 @@ test('the poller runs remote-run.sh poll and nothing else of the family', () => 
 test('the poller passes the push secret through env, so its failed notice can be delivered', () => {
   assert.match(RESUME_TEXT, /^ {6}HARNESS_PUSH_URL: \$\{\{ secrets\.HARNESS_PUSH_URL \}\}$/m);
 });
+
+/** The `#   actions/…@…` lines under `# ACTION PINS.`, up to a bare `#` or the next upper-case heading. */
+function actionPins(lines) {
+  const start = lines.indexOf('# ACTION PINS.');
+  assert.notEqual(start, -1, 'the header carries an ACTION PINS block');
+  const pins = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i] === '#' || /^# [A-Z][A-Z_]+[ .]/.test(lines[i])) break;
+    const m = /^# {3}(actions\/\S+@\S+)$/.exec(lines[i]);
+    if (m !== null) pins.push(m[1]);
+  }
+  return pins;
+}
+
+const usesValues = (lines) =>
+  lines.map((l) => /^\s*(?:- )?uses:\s*(\S+)\s*$/.exec(l)?.[1]).filter((v) => v !== undefined);
+
+for (const [file, lines] of [
+  [WORKFLOW_RUN_FILE, LINES],
+  [WORKFLOW_RESUME_FILE, RESUME_LINES],
+]) {
+  test(`${file}: the ACTION PINS header names exactly the uses: values, each a major tag of an actions/ action`, () => {
+    const uses = usesValues(lines);
+    assert.ok(uses.length > 0, 'the file carries a uses: line');
+    assert.deepEqual(new Set(actionPins(lines)), new Set(uses));
+    for (const value of uses) assert.match(value, /^actions\/[a-z-]+(\/[a-z-]+)?@v[0-9]+$/);
+  });
+}
 
 test('the poller carries no template token, and every expression is spaced and outside run blocks', () => {
   assert.doesNotMatch(RESUME_TEXT, /\{\{[A-Za-z]/);

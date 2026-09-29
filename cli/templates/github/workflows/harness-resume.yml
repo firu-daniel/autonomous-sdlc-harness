@@ -17,9 +17,12 @@
 # That also makes moot GitHub's disabling of scheduled workflows in a public
 # repository after 60 days without activity.
 #
-# UNVERIFIED: whether GITHUB_TOKEN with `actions: write` may enable and disable
-# a workflow. If it may not, the pausing job's `paused` notification says
-# auto-resume is unavailable, and the run waits for
+# Gate 12 round 2, on 2026-09-29, verified that `gh workflow disable` succeeds
+# under GITHUB_TOKEN with `actions: write`: a hand-started tick logged
+# `poll: no branch is waiting; disabled harness-resume.yml`, and the workflow's
+# state became `disabled_manually`. UNVERIFIED: the enable, because no job
+# ended on a usage pause. If it is refused, the pausing job's `paused`
+# notification says auto-resume is unavailable, and the run waits for
 # /autonomous-sdlc-harness:branch-resume.
 #
 # THE INTERVAL IS YOURS TO EDIT. On a private repository every tick is billed
@@ -56,6 +59,19 @@
 #                                     HARNESS_REMOTE_STOP, HARNESS_PUSH_URL,
 #                                     POLL_STATE_ARTIFACT_NAME
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir, DEFAULTS.stateDir
+#
+# ACTION PINS.
+#   actions/checkout@v5
+#   actions/upload-artifact@v6
+# Each is the lowest major whose own action.yml declares `runs.using: node24`,
+# per a maintainer's lookups of each action's action.yml and release notes on
+# 2026-09-29T08:21Z (UTC). Each of those majors' release notes requires Actions
+# Runner 2.327.1 or newer; a GitHub-hosted runner already has it, and a
+# self-hosted one must run it (docs/remote-execution.md, section 8). A major
+# tag, not a commit sha: both are GitHub's own `actions/` organisation, the
+# owner of the runner and GITHUB_TOKEN this job already trusts, and a major tag
+# takes the action's own patch and security releases where a sha would freeze
+# your copy. Pin shas in your copy if you want them.
 
 name: harness-resume
 
@@ -89,7 +105,7 @@ jobs:
       HARNESS_PUSH_URL: ${{ secrets.HARNESS_PUSH_URL }}
     steps:
       - name: Check out the default branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.repository.default_branch }}
 
@@ -115,7 +131,7 @@ jobs:
 
       - name: Upload the poller state
         if: always() && env.POLL_STATE_DIR != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: harness-poll-state
           path: ${{ env.POLL_STATE_DIR }}
