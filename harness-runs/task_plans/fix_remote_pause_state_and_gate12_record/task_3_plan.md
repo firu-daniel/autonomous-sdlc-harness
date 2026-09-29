@@ -62,3 +62,8 @@ An adopter who wants shas can pin their copy. Dependabot updates either form.
 - `grep -n "Gate 12 records\|UNVERIFIED\|could not be checked\|could not be re-checked" cli/templates/github/workflows/harness-run.yml cli/templates/github/workflows/harness-resume.yml` reaches only the enable half of `harness-resume.yml`'s paragraph, and nothing in `harness-run.yml`.
 - `grep -n "carried counts" cli/templates/github/workflows/harness-run.yml` shows the planning drafts named in the same sentence as each hit.
 - No header line introduced here carries `{{` straight after a letter. The template renderer would read it as a token (`TWO RULES EVERY EDIT KEEPS`).
+
+- **Deviations from plan:**
+  - The `workflow-templates.test.mjs` single-file run was not executed: neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command (the latter names the `node --test` runner only), so it is skipped per `unit_loop_core.md` → `## The test-run rule` point 3 and deferred to the Run gates phase. Evidence instead: a scratch probe (`harness-runs/scratch/pins_probe.mjs`, run through `scripts/scratch-run.sh`) applying the new case's parse and assertions to both templates: pin set equals `uses:` set in each, every value matches the pin regex, `cliVersion` the only token in `harness-run.yml` and none in `harness-resume.yml`. The new case itself has not been executed.
+  - `actions/upload-artifact` is pinned at `v6`, not `v5`: the record shows `runs.using: 'node20'` at `v5`, and `v6` is the lowest major declaring `node24`. Every other action takes `v5`.
+  - Both `setup-node@v5` steps set `package-manager-cache: false`: the recorded `v5.0.0` notes list automatic caching on a `packageManager` field as a breaking change.
