@@ -30,3 +30,5 @@ If `plugin install` resolves `@autonomous-sdlc-harness` against the project-scop
   ```
 
   This test file is the one the fix edits, so it is the only suite the fix runs. The full suite runs in the Run gates phase.
+
+**Deviations from plan:** `cli/test/workflow-plugin-pin.test.mjs` could not load at HEAD — its `LINES` read joined `PACKAGE_ROOT` with `WORKFLOW_TEMPLATE_DIR` (`github/workflows`) and omitted the `templates` segment, so `node --test` failed with ENOENT on `cli/github/workflows/harness-run.yml` before any case ran. Added `'templates'` to that `join`, matching `cli/test/workflow-templates.test.mjs` → `TEXT`; without it the added `install-cwd` assertion could not be run.

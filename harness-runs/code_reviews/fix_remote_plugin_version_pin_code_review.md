@@ -19,7 +19,7 @@
 
 1. [x] **Finding 3** — Re-wrap the run-on line in the `REMOTE_EXECUTION_CHECK` doc comment _(layer: cli)_
 2. [x] **Finding 2** — Strip a trailing YAML comment when reading the `HARNESS_CLI_VERSION` pin _(layer: cli)_
-3. [ ] **Finding 1** — Run `claude plugin install` from `$RUNNER_TEMP`, outside the checkout, like the marketplace add _(layer: cli)_
+3. [x] **Finding 1** — Run `claude plugin install` from `$RUNNER_TEMP`, outside the checkout, like the marketplace add _(layer: cli)_
 
 ---
 

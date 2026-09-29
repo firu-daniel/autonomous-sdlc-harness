@@ -102,9 +102,11 @@
 # THE PLUGIN PIN. The job clones the marketplace repository at the release tag
 # autonomous-sdlc-harness--v<HARNESS_CLI_VERSION> (docs/development.md, section 7)
 # and adds the clone as a directory source, so what it installs is the tag's
-# plugin whatever the default branch carries. The clone is the plugin's runtime
-# root and the runner's cache is its install root; `init --plugin-root-entries`
-# grants both and `doctor --remote-job` grades both. The check after install
+# plugin whatever the default branch carries. Both the add and the install run
+# from $RUNNER_TEMP, outside the checkout, so the committed .claude/settings.json's
+# project-scope entry of the same name is not in view while installing. The
+# clone is the plugin's runtime root and the runner's cache is its install
+# root; `init --plugin-root-entries` grants both and `doctor --remote-job` grades both. The check after install
 # stays as the guard: the job refuses to run, naming both versions and the
 # upgrade route, when `claude plugin list --json` reports another version. What
 # the agent-runner CLI was measured to accept is recorded in
@@ -351,8 +353,7 @@ jobs:
             echo "::error::$source_repo has no release tag $tag, so the plugin this workflow was rendered for cannot be installed. If $HARNESS_CLI_VERSION was released, its release is missing the tag; otherwise, $upgrade_route."
             exit 1
           fi
-          (cd "$RUNNER_TEMP" && claude plugin marketplace add ./harness-marketplace)
-          claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness
+          (cd "$RUNNER_TEMP" && claude plugin marketplace add ./harness-marketplace && claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness)
           installed=$(claude plugin list --json | jq -r '[.[] | select(.id == "autonomous-sdlc-harness@autonomous-sdlc-harness" and .scope == "user")][0].version // empty')
           if [ "$installed" != "$HARNESS_CLI_VERSION" ]; then
             echo "::error::the installed plugin is version '${installed:-none}', but this workflow was rendered for $HARNESS_CLI_VERSION and cloned $tag; $upgrade_route."

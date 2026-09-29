@@ -18,7 +18,7 @@ import test from 'node:test';
 import { PACKAGE_ROOT, runBash, runGit } from './helpers/fixture.mjs';
 import { WORKFLOW_RUN_FILE, WORKFLOW_TEMPLATE_DIR } from '../dist/remote/githubActions.js';
 
-const LINES = readFileSync(join(PACKAGE_ROOT, WORKFLOW_TEMPLATE_DIR, WORKFLOW_RUN_FILE), 'utf8').split('\n');
+const LINES = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_RUN_FILE), 'utf8').split('\n');
 const PLUGIN_KEY = 'autonomous-sdlc-harness@autonomous-sdlc-harness';
 const UPGRADE_ROUTE = 'init --upgrade-workflows';
 
@@ -53,6 +53,7 @@ case "$1 $2" in
     (cd "$4" && pwd -P) > "$state/marketplace"
     ;;
   'plugin install')
+    pwd -P > "$state/install-cwd"
     market=$(cat "$state/marketplace")
     source=$(jq -r '.plugins[0].source' "$market/.claude-plugin/marketplace.json")
     jq -r '.version' "$market/$source/.claude-plugin/plugin.json" > "$state/version"
@@ -133,6 +134,7 @@ test('(a) a workflow rendered for 9.0.0 installs 9.0.0 while the default branch 
   assert.equal(recorded, join(w.runnerTemp, 'harness-marketplace'));
   assert.notEqual(recorded, 'acme/harness');
   assert.equal(readFileSync(join(w.state, 'version'), 'utf8').trim(), '9.0.0');
+  assert.equal(readFileSync(join(w.state, 'install-cwd'), 'utf8').trim(), w.runnerTemp);
 });
 
 test('(b) a version with no release tag refuses, naming the tag and the upgrade route', async (t) => {
