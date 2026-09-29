@@ -52,3 +52,8 @@
 - Run `cli/test/workflow-plugin-pin.test.mjs`, the file this task creates, through the single-file test command the conventions document gives, if it gives one. All three cases pass. Case (a) is the acceptance criterion *"a job rendered for version N installs plugin version N while this repository's `main` carries version N+1"*, driven by a real clone of a two-version repository.
 - `git grep -n '\${{' -- cli/templates/github/workflows/harness-run.yml` shows no expression inside the changed step's `run:` body, and the step names no input or secret expression.
 - The step's own refusal text and Task 2's `upgradeWorkflowsCommand` name the same command, `npx autonomous-sdlc-harness@<version> init --upgrade-workflows`. Check this by reading both, never from memory.
+
+**Deviations from plan:**
+
+- The run of `cli/test/workflow-plugin-pin.test.mjs` was not made: neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, so it is deferred to the Run gates phase. What it rests on instead: `node --check` on the file, and a scratch probe (`harness-runs/scratch/pin_step_syntax.mjs`) that extracted the step's `run: |` body from the template and passed `bash -n`. The three cases themselves are unexecuted.
+- `docs/remote-execution.md` → `## 6. What is not verified here`, row *"The plugin cannot be pinned by a ref at install"*, still cites the `--help` measurement as "recorded in `harness-run.yml`'s header"; the header now points to section 6 for it instead, as this plan asks. That row is outside the `cli` layer; Task 7's `**§6.**` sub-step rewrites it.
