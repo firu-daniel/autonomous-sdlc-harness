@@ -44,7 +44,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_plugin_version_pi
 2. [x] **Task 2** — Add `init --upgrade-workflows` and report what it re-rendered _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Have `doctor`'s `remote-execution` check warn on a workflow rendered for another version _(layer: cli)_ _(points: 10)_
 4. [x] **Task 4** — Install the plugin from the release tag in `harness-run.yml`, with a test that drives two versions _(layer: cli)_ _(points: 18)_
-5. [ ] **Task 5** — Add `scripts/tag-release.sh`, which creates the release tag the job installs from _(layer: general)_ _(points: 10)_
+5. [x] **Task 5** — Add `scripts/tag-release.sh`, which creates the release tag the job installs from _(layer: general)_ _(points: 10)_
 6. [ ] **Task 6** — Add `scripts/probe-plugin-cli.sh`, which records what the agent-runner CLI accepts for a plugin install _(layer: general)_ _(points: 5)_
 7. [ ] **Task 7** — Document the pinned install and the upgrade route in `docs/remote-execution.md` _(layer: general)_ _(points: 18)_
 8. [ ] **Task 8** — Document `--upgrade-workflows` and the version warning in `docs/cli.md` _(layer: general)_ _(points: 10)_

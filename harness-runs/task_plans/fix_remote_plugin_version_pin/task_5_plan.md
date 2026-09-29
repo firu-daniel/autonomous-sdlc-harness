@@ -37,3 +37,9 @@
 - `bash scripts/tag-release.sh 0.3.0 --dry-run` exits 1 and says the version was never published to `main`.
 - `bash scripts/tag-release.sh 0.4 --dry-run` and `bash scripts/tag-release.sh 0.4.2 --bogus` each exit 2.
 - `bash -n scripts/tag-release.sh` exits 0.
+
+**Deviations from plan:**
+
+- `bash -n scripts/tag-release.sh` was refused by the permission profile ("This command requires approval"), in both absolute- and repo-relative-path spellings. The syntax claim rests instead on the five `--dry-run` / bad-usage runs above, each of which executed the script to its expected exit (0, 0, 1, 2, 2); the create-and-push branch after the `[ -t 0 ]` check was parsed but not executed.
+- `chmod 755 scripts/tag-release.sh` was refused the same way, so the file is written mode 644 while its siblings `scripts/publish-main.sh` and `scripts/run-gates.sh` are tracked 100755. The documented invocation is `bash scripts/tag-release.sh`, which does not need the bit; an operator wanting parity runs `git update-index --chmod=+x scripts/tag-release.sh` before the commit.
+- The walk skips `jq` for a commit whose `plugin.json` blob equals the previous commit's, which changes no result: an unchanged blob carries an unchanged version.
