@@ -2358,9 +2358,10 @@ const DAEMON_PATH_CHECK: Check = {
  * {@link renderedCliVersions}) to a version other than this CLI's — never a `fail`, because the job
  * installs its pin and the adopter may stay on it deliberately; the remedy is
  * `generators/githubWorkflows.ts` → {@link upgradeWorkflowsCommand}, the alternative `doctor` at the
- * pin, both prefixed by that module's {@link pinnedCliCommand} so the two cannot name different packages, and under `--remote-job` the job runs `doctor` at its own pin, so this cannot arise there. A file
- * with no pin, or unreadable, is a note. No `harness-resume.yml`, because a usage-paused hosted run then
- * waits for `/autonomous-sdlc-harness:branch-resume`; a `harness-run.yml` that
+ * pin, both prefixed by that module's {@link pinnedCliCommand} so the two cannot name different
+ * packages, and under `--remote-job` the job runs `doctor` at its own pin, so this cannot arise
+ * there. A file with no pin, or unreadable, is a note. No `harness-resume.yml`, because a usage-paused
+ * hosted run then waits for `/autonomous-sdlc-harness:branch-resume`; a `harness-run.yml` that
  * `origin/<defaultBranch>` does not carry, because GitHub dispatches only a workflow its default
  * branch has — the run starts once it is pushed, so nothing is broken here, and its remedy's push
  * skips the hook because the `pre-push` hook `init` wired refuses every push to the default branch
