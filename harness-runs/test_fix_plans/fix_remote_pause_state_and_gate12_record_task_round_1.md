@@ -12,7 +12,7 @@
 
 **This section is the single source of truth for the fix loop.** The loop walks the `[ ]` entries below from top to bottom, and only the committing role flips an entry to `[x]`. `[ ]` markers anywhere else, including sub-step bullets inside the per-finding files, are informational only.
 
-1. [ ] **Finding 1** — Anchor the poller-upload test on the `uses:` line and bound its walk back to the step's `- name:`, so the `# ACTION PINS.` header line can no longer send it into an endless loop. _(layer: cli)_
+1. [x] **Finding 1** — Anchor the poller-upload test on the `uses:` line and bound its walk back to the step's `- name:`, so the `# ACTION PINS.` header line can no longer send it into an endless loop. _(layer: cli)_
 
 ---
 

@@ -36,3 +36,7 @@ The `harness-run.yml` counterpart is safe: `stepCarrying('actions/upload-artifac
 - [ ] Keep every other assertion in that test unchanged: the `name: POLL_STATE_ARTIFACT_NAME` match, the `if: always()` match and the `remote-run.sh` `POLL_STATE_ARTIFACT_NAME=` match.
 
 Do not change `cli/templates/github/workflows/harness-resume.yml`. Its `# ACTION PINS.` header is exactly what the `ACTION PINS header names exactly the uses: values` test requires.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the row-`G.4` single-file run of `cli/test/workflow-templates.test.mjs` was not executed, because neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command. Took the fix-site fallback instead: reading the fix site showed the locator still used `line.includes('actions/upload-artifact')` and the walk back had no lower bound, so the fix was not yet in place and was implemented as specified. That the named test now passes rests on reading the code (the locator now matches only `harness-resume.yml`'s `uses: actions/upload-artifact@v6` line, not the `#   actions/upload-artifact@v6` header comment). The run is deferred to the Run gates phase.

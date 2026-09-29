@@ -152,10 +152,11 @@ test('the uploaded artifact is the one remote-run.sh downloads: STATE_ARTIFACT_N
 });
 
 test('the poller uploads its state under POLL_STATE_ARTIFACT_NAME, the name remote-run.sh downloads, always', () => {
-  const at = RESUME_LINES.findIndex((line) => line.includes('actions/upload-artifact'));
+  const at = RESUME_LINES.findIndex((line) => /^\s*(?:- )?uses:\s*actions\/upload-artifact@/.test(line));
   assert.notEqual(at, -1);
   let start = at;
-  while (!/^\s*- name:/.test(RESUME_LINES[start])) start--;
+  while (start >= 0 && !/^\s*- name:/.test(RESUME_LINES[start])) start--;
+  assert.ok(start >= 0, 'the upload-artifact uses: line sits inside a named step');
   const step = [RESUME_LINES[start], ...blockUnder(start, RESUME_LINES)].join('\n');
   assert.match(step, new RegExp(`^\\s*name: ${POLL_STATE_ARTIFACT_NAME}$`, 'm'));
   assert.match(step, /^\s*if: always\(\)/m);
