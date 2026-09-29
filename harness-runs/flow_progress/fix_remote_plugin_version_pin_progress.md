@@ -7,7 +7,7 @@ Source: harness-runs/task_prompts/fix_remote_plugin_version_pin_task_prompt.md â
 - remote-skipped: none   (from the launch prompt's remote-job clause, read at this write; `none` for a local run)
 
 ## Planning
-- [ ] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
+- [x] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
 - [-] P2. UI-test plan converged (ui-tests-plan-reviewer PASS) â€” or no_ui
 - [ ] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
 
