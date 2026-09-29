@@ -464,7 +464,7 @@ sudo ./svc.sh install
 sudo ./svc.sh start
 ```
 
-**Install the prerequisites beside it**, for the user the service runs as: `git`, `jq` 1.5 or newer, `gh`, Node, the `claude` CLI, and whatever toolchain your own `commands.*` lines need, since the job bootstraps the checkout and runs your verification commands there. The job stops before launch, naming what is missing, when `jq` or `gh` is absent. It runs `actions/setup-node` for Node, and installs the `claude` CLI with npm when it does not resolve — which needs write access to npm's global prefix — so installing it yourself avoids that:
+**Install the prerequisites beside it**, for the user the service runs as: `git`, `jq` 1.5 or newer, `gh`, Node, the `claude` CLI, and whatever toolchain your own `commands.*` lines need, since the job bootstraps the checkout and runs your verification commands there. The runner application itself must be version 2.327.1 or newer: every action the two workflows pin (each header's `# ACTION PINS.` block) runs on Node 24 and names that minimum in its release notes, so leave the runner's automatic update on, or update it by hand before re-rendering the workflows. The job stops before launch, naming what is missing, when `jq` or `gh` is absent. It runs `actions/setup-node` for Node, and installs the `claude` CLI with npm when it does not resolve — which needs write access to npm's global prefix — so installing it yourself avoids that:
 
 ```
 npm install -g @anthropic-ai/claude-code
