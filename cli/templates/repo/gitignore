@@ -9,8 +9,13 @@
 {{pushEnvPath}}
 {{qaCredentialsPath}}
 {{clientEnvPath}}
-# The per-machine settings file the agent runner writes beside the committed profiles.
+# The per-machine settings file the agent runner writes.
 .claude/settings.local.json
+# The unattended run's permission profile. It names this checkout's absolute paths, so a copy is
+# wrong on every other clone; the watcher and `doctor` read it from the main checkout only - a linked
+# worktree carries none - and a remote job's own `init` generates its own. A copy an earlier release
+# committed stays tracked despite this rule until it is untracked by hand - `doctor` reports that state.
+{{permissionProfilePath}}
 # The presence-only marker one user's "don't ask again" answer writes to silence the change-request
 # offer. It lives at the main worktree's root and is checked there from every worktree of this
 # checkout, so one answer covers them all - its existence is the whole signal, so it has no

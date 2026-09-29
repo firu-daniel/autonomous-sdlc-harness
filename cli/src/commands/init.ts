@@ -107,6 +107,12 @@ import {
   type HarnessConfig,
   type HarnessQaDriver,
 } from '../config/model.js';
+import {
+  defaultBranchPushCommand,
+  defaultBranchPushReason,
+  WORKFLOW_SCOPE_COMMAND,
+  WORKFLOW_SCOPE_REASON,
+} from '../core/defaultBranchPush.js';
 import { EXIT, HarnessError } from '../core/errors.js';
 import { commitAll, hasCommits, initRepository, probeRepoRoot } from '../core/git.js';
 import { readJsonFile } from '../core/json.js';
@@ -2443,7 +2449,10 @@ async function run(ctx: CommandContext): Promise<number> {
  * one of the two workflows; `workflowPaths` names those, repo-relative.
  *
  * Commands stand on their own lines so each can be pasted. The push comes first because GitHub
- * dispatches a `workflow_dispatch` workflow only once it exists on the default branch.
+ * dispatches a `workflow_dispatch` workflow only once it exists on the default branch. It skips the
+ * hook because the `pre-push` hook this run wired refuses every push to the default branch, and the
+ * `workflow`-scope step precedes it because a `gh` token without that scope cannot push a workflow
+ * file over HTTPS. Both commands and both reasons are `core/defaultBranchPush.ts`'s, spelled nowhere here.
  */
 function reportGithubSteps(
   ctx: CommandContext,
@@ -2456,11 +2465,12 @@ function reportGithubSteps(
 
   ctx.report.step('remote execution');
   ctx.report.info(
-    `1. This run ${wrote} ${workflowPaths.join(' and ')}. Commit and push ${workflowPaths.length === 1 ? 'it' : 'both'} to GitHub's default branch (assumed \`${defaultBranch}\` below) — a workflow_dispatch workflow can be dispatched only once it exists there:`,
+    `1. This run ${wrote} ${workflowPaths.join(' and ')}. Commit and push ${workflowPaths.length === 1 ? 'it' : 'both'} to GitHub's default branch (assumed \`${defaultBranch}\` below) — a workflow_dispatch workflow can be dispatched only once it exists there. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(defaultBranch)}`,
   );
   command(`git add ${workflowPaths.join(' ')}`);
   command('git commit -m "Add the harness workflows"');
-  command(`git push origin ${defaultBranch}`);
+  command(WORKFLOW_SCOPE_COMMAND);
+  command(defaultBranchPushCommand(defaultBranch));
   ctx.report.info('');
   ctx.report.info(
     `2. Set one credential secret: ${OAUTH_TOKEN_SECRET} for subscription billing, or ${API_KEY_SECRET} for API billing. When both are set, billing follows ${API_KEY_SECRET}:`,

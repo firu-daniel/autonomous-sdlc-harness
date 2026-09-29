@@ -731,7 +731,7 @@ const { parseRepoSlug } = await loadCompiled('core/paths.js');
  * with no plugin while claiming to pin one with it. Everything else below is spelled literally —
  * choice 3 in the module header — because the *form* of these entries is what a run matches on.
  */
-const { PLUGIN_KEY } = await loadCompiled('generators/projectSettings.js');
+const { MARKETPLACE_NAME, PLUGIN_KEY } = await loadCompiled('generators/projectSettings.js');
 
 concurrentSuite('init', () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
 
@@ -2858,6 +2858,59 @@ test('a repository wired before the backup rule existed gains it inside its own 
     `${CONFIG_BACKUP_PATH} is still untracked-and-visible in a repository the re-run reported extending`,
   );
   assert.deepEqual(await ignoredAmong(dir, [CONFIG_FILE]), [], `the rule reaches ${CONFIG_FILE}, which is committed`);
+});
+
+/**
+ * The permission profile names this checkout's absolute paths, so the managed block ignores it for
+ * every adopter — not only a remote-execution one — and the first commit never carries it.
+ */
+test('the managed ignore block ignores the permission profile, once, and a re-run leaves it alone', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+
+  assert.ok(await exists(dir, PROFILE_FILE), `${PROFILE_FILE} was not written, so asking git about it proves nothing`);
+  const ignore = text(dir, GITIGNORE_FILE);
+  const lines = ignore.split('\n');
+  const header = lines.findIndex((line) => line.includes(GITIGNORE_MARKER));
+  assert.notEqual(header, -1, `the generated ${GITIGNORE_FILE} has no managed block:\n${ignore}`);
+  const blockEnd = lines.findIndex((line, index) => index > header && line.trim() === '');
+  const block = lines.slice(header + 1, blockEnd === -1 ? lines.length : blockEnd);
+  assert.equal(
+    block.filter((line) => line.trim() === PROFILE_FILE).length,
+    1,
+    `${PROFILE_FILE} is not in the managed block exactly once:\n${ignore}`,
+  );
+  assert.equal(
+    lines.filter((line) => line.trim() === PROFILE_FILE).length,
+    1,
+    `${PROFILE_FILE} appears outside the managed block too:\n${ignore}`,
+  );
+  assert.deepEqual(await ignoredAmong(dir, [PROFILE_FILE]), [PROFILE_FILE], `git does not ignore ${PROFILE_FILE}`);
+  assert.deepEqual(await ignoredAmong(dir, [SETTINGS_FILE]), [], `the rule reaches ${SETTINGS_FILE}, which is committed`);
+
+  await initOk(dir);
+  assert.equal(text(dir, GITIGNORE_FILE), ignore, `the second init changed ${GITIGNORE_FILE}`);
+});
+
+/**
+ * The closing notes agree with the rule above: the profile is gitignored, so a teammate generates
+ * theirs, and a copy an earlier release committed is sent to `doctor` rather than to a command
+ * spelled here — the untrack route has one producer, in `doctor`.
+ */
+test("init's closing notes say the profile is gitignored and name the teammate's own init", async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+
+  const { stdout, stderr } = await initOk(dir);
+
+  const output = `${stdout}\n${stderr}`;
+  for (const stale of ['is committed, and it is machine-specific', 'There is no second init', 'the permission profile are committed']) {
+    assert.ok(!output.includes(stale), `the closing notes still say the profile is committed (${stale}):\n${output}`);
+  }
+  assert.ok(output.includes('npx autonomous-sdlc-harness init'), `the closing notes do not name the teammate's init:\n${output}`);
+  const [profileNote] = output.split('\n').filter((line) => line.includes(`${PROFILE_FILE} is gitignored`));
+  assert.ok(profileNote !== undefined, `no closing note says ${PROFILE_FILE} is gitignored:\n${output}`);
+  assert.ok(profileNote.includes('doctor'), `the profile note does not send a committed copy to doctor:\n${profileNote}`);
+  assert.ok(!profileNote.includes('git rm --cached'), `the profile note spells an untrack command of its own:\n${profileNote}`);
 });
 
 /**
@@ -7986,6 +8039,7 @@ test('every question and every closing entry is separated from the line above it
 /** The agent runner's plugin directory under `CLAUDE_CONFIG_DIR`, and the record inside it. */
 const CLAUDE_PLUGINS_DIR = 'plugins';
 const INSTALLED_PLUGINS_FILE = 'installed_plugins.json';
+const KNOWN_MARKETPLACES_FILE = 'known_marketplaces.json';
 
 /** One helper the plugin ships, read back off the root's own `scripts/` by `doctor`. */
 const PLUGIN_HELPER = 'reserve-qa-user.sh';
@@ -8018,9 +8072,8 @@ const ONE_ORPHAN_AGREES = /1 `permissions\.allow` entry in \S+ names an absolute
 
 /**
  * `doctor`'s `plugin-permissions` line, as the reporter emits it on stdout — pinned to the arm that
- * **graded** the entries (`carries all …`) rather than to any pass, because the same check passes
- * with `not graded at this machine's plugin root` when no root resolves, and a fixture that had
- * quietly slipped into that state would satisfy a bare `PASS` while grading nothing.
+ * **graded** the entries (`carries all …`) rather than to any pass, so a check that regained a
+ * disposition grading nothing could not satisfy it with a bare `PASS`.
  */
 const PLUGIN_PERMISSIONS_GRADED = /^PASS\s+plugin-permissions\s+.*carries all/m;
 
@@ -8032,7 +8085,7 @@ const PLUGIN_PERMISSIONS_GRADED = /^PASS\s+plugin-permissions\s+.*carries all/m;
  * sits outside every repository, so a case that forgot it would grade whatever plugin the account
  * running the suite happens to have enabled.
  */
-async function pluginMachine(t, { record = true } = {}) {
+async function pluginMachine(t, { record = true, githubMarketplace = false } = {}) {
   const root = await fixtureFor(t, { git: false });
   mkdirSync(join(root, 'scripts'), { recursive: true });
   writeFileSync(join(root, 'scripts', PLUGIN_HELPER), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
@@ -8043,6 +8096,16 @@ async function pluginMachine(t, { record = true } = {}) {
     writeFileSync(
       join(home, CLAUDE_PLUGINS_DIR, INSTALLED_PLUGINS_FILE),
       `${JSON.stringify({ version: 2, plugins: { [PLUGIN_KEY]: [{ scope: 'user', installPath: root }] } }, null, 2)}\n`,
+      'utf8',
+    );
+  }
+  if (githubMarketplace) {
+    // The runner's shape: a GitHub-sourced marketplace, so the runtime root falls back to the install root.
+    const installLocation = await fixtureFor(t, { git: false });
+    mkdirSync(join(home, CLAUDE_PLUGINS_DIR), { recursive: true });
+    writeFileSync(
+      join(home, CLAUDE_PLUGINS_DIR, KNOWN_MARKETPLACES_FILE),
+      `${JSON.stringify({ [MARKETPLACE_NAME]: { source: { source: 'github', repo: 'owner/repo' }, installLocation } }, null, 2)}\n`,
       'utf8',
     );
   }
@@ -8318,6 +8381,8 @@ test('init --force carries the profile\'s resolved-plugin-root entries forward, 
 const PLUGIN_ROOT_ENTRIES = '--plugin-root-entries';
 const KEPT_NO_EFFECT = `${PLUGIN_ROOT_ENTRIES} had no effect`;
 const INSTALL_STEP = 'claude plugin install';
+/** The `_README` line the switch adds, by its opening words. */
+const PLUGIN_ROOT_README = 'THE PLUGIN-ROOT ENTRIES WERE WRITTEN';
 
 /**
  * `init --plugin-root-entries`: the entries `doctor`'s `plugin-permissions` check dictates, written
@@ -8333,12 +8398,39 @@ test('init --plugin-root-entries writes the plugin-root entries doctor dictates 
 
     const allow = allowEntries(dir);
     assert.ok(allow.includes(helperEntry(machine.root)), `the helper entry at the planted root was not written:\n${allow.join('\n')}`);
-    // The planted root is the install root, where doctor requires no read rule: the written set is
-    // exactly the required set, which the graded pass below confirms from doctor's side.
-    assert.ok(!allow.includes(readEntry(machine.root)), 'a read rule doctor does not require at the install root was written');
+    // The planted root is the install root and, with no marketplace record, the runtime root by
+    // fallback, so doctor requires a read rule there: the written set is exactly the required set,
+    // which the graded pass below confirms from doctor's side.
+    assert.ok(allow.includes(readEntry(machine.root)), `the read rule at the planted root was not written:\n${allow.join('\n')}`);
     const doctor = await runCli(dir, ['doctor'], machine.env);
     assert.match(doctor.stdout, PLUGIN_PERMISSIONS_GRADED, `doctor does not grade the written entries green:\n${doctor.stdout}`);
     assert.ok(!doctor.stdout.includes('dead weight'), `doctor names a stray entry the switch wrote:\n${doctor.stdout}`);
+  });
+
+  await t.test('on a GitHub-sourced install with QA off it grants a read and a shell-readable directory over the root, once', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const machine = await pluginMachine(subtest, { githubMarketplace: true });
+
+    await initOk(dir, [PLUGIN_ROOT_ENTRIES], machine.env);
+
+    const profile = readJson(join(dir, PROFILE_FILE));
+    assert.ok(
+      profile.permissions.allow.includes(readEntry(machine.root)),
+      `the read rule at the fallback runtime root was not written:\n${profile.permissions.allow.join('\n')}`,
+    );
+    const directories = profile.permissions.additionalDirectories;
+    assert.ok(directories[0].endsWith(`/${STATE_DIR}`), `the state-directory entry is no longer first:\n${directories.join('\n')}`);
+    assert.ok(directories.indexOf(machine.root) > 0, `the plugin root is not in additionalDirectories after the state directory:\n${directories.join('\n')}`);
+    const readme = profile._README.filter((line) => line.includes(PLUGIN_ROOT_README));
+    assert.equal(readme.length, 1, `the _README does not explain the entries once:\n${profile._README.join('\n')}`);
+    assert.ok(
+      readme[0].includes('permissions.allow') && readme[0].includes('permissions.additionalDirectories'),
+      `the _README line does not name both halves:\n${readme[0]}`,
+    );
+
+    const written = text(dir, PROFILE_FILE);
+    await initOk(dir, [PLUGIN_ROOT_ENTRIES], machine.env);
+    assert.equal(text(dir, PROFILE_FILE), written, 'a second init changed the profile');
   });
 
   await t.test('without the switch no plugin-root entry is written', async (subtest) => {
@@ -8441,10 +8533,23 @@ test('the GitHub workflows arrive with execution.target github-actions, and only
       'harness-resume.yml is not a verbatim copy of its template',
     );
 
-    // The commit line is the one `docs/remote-execution.md` → `## 7. Turning it on` step 3 prints.
-    for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'doctor --check-github', 'git commit -m "Add the harness workflows"']) {
+    // The commit, scope and push lines, with the `git add` line checked by its prefix, are the four
+    // commands `docs/remote-execution.md` → `## 7. Turning it on` step 3 prints.
+    const { defaultBranch } = readJson(join(dir, 'harness.config.json'));
+    const names = [
+      'CLAUDE_CODE_OAUTH_TOKEN',
+      'ANTHROPIC_API_KEY',
+      'doctor --check-github',
+      'git add ',
+      'git commit -m "Add the harness workflows"',
+      'gh auth refresh -s workflow',
+      `git push --no-verify origin ${defaultBranch}`,
+    ];
+    for (const name of names) {
       assert.ok(stdout.includes(name), `the closing report does not name ${name}:\n${stdout}`);
     }
+    // The pre-push hook init installs refuses this form.
+    assert.ok(!stdout.includes('git push origin '), `the closing report prints a push the hook refuses:\n${stdout}`);
   });
 
   await t.test('a second init changes nothing, keeps an edited workflow, and --force replaces it after a .bak', async (subtest) => {

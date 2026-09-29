@@ -12,11 +12,15 @@
  * `evals/docs-retrieval/floor.json` → `see` names it: the margin, why the graded corpus is
  * {@link FLOOR_CORPUS} alone, and when a floor is re-recorded. This module compares numbers.
  *
- * **Three exit statuses, because `scripts/run-gates.sh` tells them apart by status alone:** `0` every
- * floor met, `1` a shortfall or a drift between the two sources, and {@link MODEL_CACHE_ABSENT} when
- * the machine-shared model cache is empty — which that script reports as blocked rather than counting
- * among its failures, an empty cache being a provisioning gap rather than a regression
- * (`docs/development.md` §5, gate 11).
+ * **Four exit statuses, because `scripts/run-gates.sh` tells them apart by status alone:** `0` every
+ * floor met, `1` a shortfall or a drift between the two sources, {@link MODEL_CACHE_ABSENT} when the
+ * machine-shared model cache is empty, and {@link LOCAL_PEERS_ABSENT} when this checkout's build
+ * cannot resolve the retrieval packages. That script reports both of the last two as blocked rather
+ * than counting them among its failures (`docs/development.md` §5, gate 11): an empty cache is a
+ * provisioning gap rather than a regression, and so is a checkout where `npm ci` has not run — and the
+ * gates that need that same install (`2a build`, `4 npm test`) go red on their own where it has not.
+ * The accepted cost: an install missing only a package this gate alone loads reports blocked, not
+ * failed.
  *
  * It is reached as `node evals/docs-retrieval/check-floor.mjs` from inside `scripts/run-gates.sh`,
  * whose commands run as a bash subprocess with no per-command permission check. {@link checkFloor}
@@ -28,9 +32,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { modelFilesPresent } from '../../cli/dist/retrieval/models.js';
-import { retrievalModelCacheDir } from '../../cli/dist/retrieval/runtime.js';
+import { retrievalModelCacheDir, unresolvedRetrievalPeers } from '../../cli/dist/retrieval/runtime.js';
 import { parseArgs } from './args.mjs';
 import { ARMS } from './arms.mjs';
+import { LOCAL_INSTALL_COMMAND } from './index-build.mjs';
 import { runEval } from './run.mjs';
 
 /** The one corpus this gate grades: committed, and moving only when this eval moves. */
@@ -41,6 +46,9 @@ export const FLOOR_PATH = 'evals/docs-retrieval/floor.json';
 
 /** The status reserved for an empty model cache, and reserved for nothing else. */
 export const MODEL_CACHE_ABSENT = 3;
+
+/** The status reserved for a checkout whose build cannot resolve the retrieval packages, and reserved for nothing else. */
+export const LOCAL_PEERS_ABSENT = 4;
 
 /** The command that fills an empty cache, named in the blocked message rather than described. */
 const FETCH_MODELS_COMMAND = 'npx autonomous-sdlc-harness docs fetch-models';
@@ -118,6 +126,16 @@ export async function checkFloor({ cacheDir = retrievalModelCacheDir(), floorPat
         `taken; missing: ${models.missing.join(', ')}. Run ${FETCH_MODELS_COMMAND}`,
     );
     return MODEL_CACHE_ABSENT;
+  }
+
+  const missing = unresolvedRetrievalPeers();
+  if (missing.length > 0) {
+    console.error(
+      `check-floor: the retrieval packages cannot be resolved from this checkout's build under cli/dist, ` +
+        `so no figure can be taken; missing: ${missing.join(', ')}. Run ${LOCAL_INSTALL_COMMAND} at the ` +
+        `repository root`,
+    );
+    return LOCAL_PEERS_ABSENT;
   }
 
   const letters = gradedArms().map((arm) => arm.letter);

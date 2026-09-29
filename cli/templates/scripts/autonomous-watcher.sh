@@ -101,20 +101,25 @@
 # newest events across every live run and applies it to ALL of them, through the
 # ordinary pause protocol and nothing else:
 #
-#   * IT NEVER KILLS A RUN, and it never invents a mechanism. It drops
-#     `<state_dir>/PAUSE` into each running working copy, tags the record
-#     `paused_by=usage` and records `usage_resume_at`; the engine yields at its
+#   * IT NEVER KILLS A RUN, and it never invents a mechanism. It tags each running
+#     record `paused_by=usage` with its `usage_resume_at`, then drops
+#     `<state_dir>/PAUSE` into its working copy; the engine yields at its
 #     next clean checkpoint, writes PAUSE_ACK, and classify_run_exit marks it
 #     `paused` — the same path a hand-dropped PAUSE takes. Once the window has
 #     reset the gate drops `<state_dir>/RESUME`, and the pause-resume pass above
 #     re-launches the run with no further involvement from here.
+#   * A TAGGED PAUSE WHOSE RESET TIME IS MISSING IS GIVEN THE FALLBACK — the
+#     same hour the pause side assumes when no reset was reported — written,
+#     logged and reported once, and it then resumes on the wall clock like any
+#     other.
 #   * A RUN PAUSED BY HAND IS NEVER AUTO-RESUMED. The resume side acts on the
 #     `paused_by=usage` tag alone, and a hand pause carries no tag.
 #   * WHILE A PAUSE IS IN EFFECT THE HOLD MARKER IS UP, which is what defers a
 #     fresh inbox drop (it stays in the inbox) and skips the watchdog above:
 #     launching into a full window spends a run on an immediate refusal. A
 #     REMOTE drop is dispatched through the hold — the job gates itself (see
-#     REMOTE DISPATCH).
+#     REMOTE DISPATCH). The hold is bounded by each pause's recorded or repaired
+#     `usage_resume_at`: it comes down on the pass that drops RESUME.
 #   * THE WINDOW TYPES ARE ASSESSED INDEPENDENTLY — the 5-hour one and the
 #     rolling weekly one — so a 5-hour window that has just reset cannot mask a
 #     weekly window sitting at its cap. The worst state across every window of
@@ -349,11 +354,17 @@
 #     advances it to the epoch taken just before its query; a failed poll
 #     advances nothing and pauses nothing.
 #   * THE DECISION, when the run leaves `running`: `paused` for `budget` ->
-#     `continue`; for `user` -> `stop`; by the usage gate (`usage`) -> WAIT IN
-#     THE JOB, the gate's own auto-resume and resume_paused_runs relaunching it,
-#     when the reset falls before HARNESS_JOB_DEADLINE_EPOCH and the runner is
-#     self-hosted or the wait is at most REMOTE_WAIT_MAX_SECS, else
-#     `wait-poller`; with no pause requested — the run's own API-overload
+#     `continue`; for `user` -> `stop`; by the usage gate (`usage`) -> a lost
+#     `usage_resume_at` is first given the gate's fallback and reported as
+#     assumed, then WAIT IN THE JOB, the gate's own auto-resume and
+#     resume_paused_runs relaunching it, when the reset falls before
+#     HARNESS_JOB_DEADLINE_EPOCH and the runner is self-hosted or the wait is at
+#     most REMOTE_WAIT_MAX_SECS, else `wait-poller`. A wait still paused
+#     REMOTE_WAIT_MAX_SECS past the gate's last chance to resume it — the later
+#     of that reset and its own start, plus USAGE_CHECK_INTERVAL_SECS and
+#     POLL_INTERVAL_SECS, the most the throttled gate can lag the reset — ends
+#     in `wait-poller` with one notification, on every runner; with no pause
+#     requested — the run's own API-overload
 #     self-pause (`overload`) -> auto-resume, else `stop`. `failed` ->
 #     auto-resume unless the stall watchdog gave up, else `stop`. Every other
 #     status -> `stop`. An empty HARNESS_JOB_DEADLINE_EPOCH bounds nothing.
@@ -1024,6 +1035,11 @@ USAGE_WARNING_DEBOUNCE="${USAGE_WARNING_DEBOUNCE:-2}"
 # than at it: the reported instant is the account's, not this machine's, and a
 # resume that lands a moment early is refused and costs the run its session.
 USAGE_RESUME_MARGIN_SECS="${USAGE_RESUME_MARGIN_SECS:-120}"
+# The resume time the gate assumes, from now, for a pause with no reported reset
+# and for a usage-paused record whose `usage_resume_at` was lost. Assigned
+# plainly, with no environment override: it is a guess at a missing value, not a
+# policy knob.
+USAGE_FALLBACK_RESUME_SECS=3600
 # The weekly window's own trigger threshold, as a fraction of its reported
 # utilization. Its `allowed_warning` fires from about half the weekly budget
 # onward — informational, not a signal that anything is about to be refused — so
@@ -1219,8 +1235,9 @@ notify() {
 #                       gate, and empty otherwise — which is the whole of how a
 #                       gate pause is told apart from a hand-dropped one. A hand
 #                       pause is never auto-resumed precisely because it has no
-#                       value here. Written the moment the PAUSE is REQUESTED,
-#                       while the record is still `running`, and cleared by a
+#                       value here. Written together with `usage_resume_at` in
+#                       one write, BEFORE the PAUSE is dropped, while the record
+#                       is still `running`, and cleared by a
 #                       real resume, by the gate's stale-tag sweep, and by
 #                       launch_run on a reused branch key — see the gate for why
 #                       clearing it any earlier than those strands the run.
@@ -1228,7 +1245,10 @@ notify() {
 #                       BINDING worst-state window reset (the overage window's
 #                       while `isUsingOverage`) plus USAGE_RESUME_MARGIN_SECS.
 #                       The ONLY state the wall-clock resume reads, and written
-#                       and cleared together with `paused_by`.
+#                       and cleared together with `paused_by`, in one write. A
+#                       tagged `paused` record found without a usable value
+#                       has it written alone, by usage_resume_at_var's repair:
+#                       now plus USAGE_FALLBACK_RESUME_SECS.
 #   remote_stopped_at   the epoch second `remote-run.sh stop` sent the branch's
 #                       stop marker and asked GitHub to cancel its runs. Written
 #                       by `remote-run.sh stop` alone, only on an existing
@@ -1244,7 +1264,7 @@ notify() {
 #                       `user` job mode did, on a `harness pause <branch>` run;
 #                       `overload` nobody requested it — the run's own
 #                       API-overload self-pause. `user` and `budget` are written
-#                       when the PAUSE is dropped, while still `running`;
+#                       before the PAUSE is dropped, while still `running`;
 #                       classify_run_exit settles the reason as the run pauses,
 #                       `user` first, then `usage`, then `budget`. Cleared when
 #                       job mode relaunches the run — plus `killed`, a registry-only
@@ -1290,7 +1310,8 @@ notify() {
 # -----------------------------------------------------------------------------
 # The bodies are lib/harness-run-lib.sh's THE RUN REGISTRY, shared with every
 # script that reads or writes this file; these wrappers bind them to $REGISTRY.
-# registry_set <branch> <key> <value>; registry_get <branch> <key>.
+# registry_set <branch> <key> <value> [<key> <value> …] — every pair in one
+# write; registry_get <branch> <key>.
 registry_init() { hr_registry_init "$REGISTRY"; }
 registry_set() { hr_registry_set "$REGISTRY" "$@"; }
 registry_get() { hr_registry_get "$REGISTRY" "$@"; }
@@ -1697,9 +1718,14 @@ lane_release_if_idle() {
 #     --effort "<agentEffort>" \
 #     --output-format stream-json --verbose \
 #     --add-dir <worktree> \
-#     --add-dir <MAIN_REPO>/<state_dir>
+#     --add-dir <MAIN_REPO>/<state_dir> \
+#     [--add-dir <dir> ...]
 #
-# and NEVER a permission-bypass flag: the profile's deny floor is what keeps an
+# where the bracketed tail is JOB MODE ONLY: one --add-dir per
+# permissions.additionalDirectories entry of the profile, in file order, minus
+# empty entries and the two directories above; outside job mode the line ends at
+# the state directory. See spawn_engine for why the profile's list is repeated.
+# And NEVER a permission-bypass flag: the profile's deny floor is what keeps an
 # unattended run in its lane, and bypassing it makes every refusal decorative.
 # Both run-setting flags are CONDITIONAL: an unset key leaves its flag off the
 # line entirely rather than passing an empty argument.
@@ -1857,6 +1883,32 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
     effort_args=(--effort "$AGENT_EFFORT")
   fi
 
+  # JOB MODE ONLY: every permissions.additionalDirectories entry of the profile
+  # (the plugin roots `init --plugin-root-entries` wrote) also goes on the line as
+  # an --add-dir, because a job session was refused reads under a root the profile
+  # file already granted. `init` stays the one producer of the list. File order;
+  # an empty entry and one equal to the two directories already passed are
+  # skipped. An absent, unparseable or keyless profile adds nothing and never
+  # blocks the launch — `doctor --remote-job` refuses an unusable profile earlier.
+  local extra_dir_args extra_dirs_logged
+  extra_dir_args=()
+  extra_dirs_logged=""
+  if [ "$JOB_MODE" = "1" ]; then
+    local profile_dirs profile_dir
+    profile_dirs="$(jq -r '.permissions.additionalDirectories[]? // empty' "$SETTINGS_PROFILE" 2>/dev/null)" || profile_dirs=""
+    while IFS= read -r profile_dir; do
+      [ -n "$profile_dir" ] || continue
+      case "${profile_dir%/}" in
+        "${worktree%/}" | "${main_state%/}") continue ;;
+      esac
+      extra_dir_args+=(--add-dir "$profile_dir")
+      extra_dirs_logged="${extra_dirs_logged} '${profile_dir}'"
+    done <<EOF
+$profile_dirs
+EOF
+    [ -z "$extra_dirs_logged" ] || log "job mode: '$branch' also gets --add-dir from the profile's additionalDirectories:${extra_dirs_logged}"
+  fi
+
   # The formatter is the tail of the pipeline; a passthrough keeps the raw events
   # in the log rather than breaking the pipe when it is not runnable.
   local formatter="$FORMAT_STREAM"
@@ -1889,7 +1941,10 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
     cd "$worktree" || exit 97
     # `--add-dir "$worktree"` is NOT redundant with the profile: that file grants
     # the sibling-worktree glob through Edit/Write/Read rules, not through
-    # additionalDirectories.
+    # additionalDirectories. The job-mode extras after the two fixed --add-dir
+    # flags duplicate the profile's additionalDirectories on purpose: a job
+    # session was refused reads under a directory that file granted, and a
+    # launch flag does not depend on how the settings file is merged.
     #
     # The run is streamed as JSON events through the formatter so the per-run log
     # shows the orchestrator heartbeat and the sub-agent dispatches LIVE and
@@ -1908,7 +1963,8 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
       ${effort_args[@]+"${effort_args[@]}"} \
       --output-format stream-json --verbose \
       --add-dir "$worktree" \
-      --add-dir "$main_state" 2>>"$log_path" |
+      --add-dir "$main_state" \
+      ${extra_dir_args[@]+"${extra_dir_args[@]}"} 2>>"$log_path" |
       tee -a "${log_path%.log}.stream.jsonl" |
       "$formatter" >>"$log_path"
     rc=${PIPESTATUS[0]}
@@ -1998,8 +2054,7 @@ launch_run() {
   registry_set "$branch" stall_restarts 0
   registry_set "$branch" stall_warned ""
   registry_set "$branch" stall_killing ""
-  registry_set "$branch" paused_by ""
-  registry_set "$branch" usage_resume_at ""
+  registry_set "$branch" paused_by "" usage_resume_at ""
   registry_set "$branch" resume_kind ""
   registry_set "$branch" park_loop_cycles 0
 
@@ -2029,8 +2084,7 @@ launch_remote_run() {
   registry_set "$branch" stall_restarts 0
   registry_set "$branch" stall_warned ""
   registry_set "$branch" stall_killing ""
-  registry_set "$branch" paused_by ""
-  registry_set "$branch" usage_resume_at ""
+  registry_set "$branch" paused_by "" usage_resume_at ""
   registry_set "$branch" resume_kind ""
   registry_set "$branch" park_loop_cycles 0
 
@@ -2171,8 +2225,7 @@ classify_run_exit() {
           reason=overload
         fi
       fi
-      registry_set "$branch" pause_reason "$reason"
-      registry_set "$branch" status paused
+      registry_set "$branch" pause_reason "$reason" status paused
       log "run '$branch' paused (PAUSE honored, reason $reason) — rc=$rc"
       if [ "$reason" = "user" ]; then
         notify paused "$branch" "$log_path" "paused as you asked — run /autonomous-sdlc-harness:branch-resume $branch to continue"
@@ -3633,6 +3686,34 @@ usage_paused_count() {
   jq -r '[.runs | to_entries[] | select(.value.status=="paused" and .value.paused_by=="usage")] | length' "$REGISTRY" 2>/dev/null
 }
 
+# usage_resume_at_var <branch> — sets USAGE_RESUME_AT to the record's usable
+# `usage_resume_at` epoch and USAGE_RESUME_REPAIRED=0, returning 0. A record that
+# is `paused` with `paused_by=usage` and no usable value has LOST it: it gets
+# now + USAGE_FALLBACK_RESUME_SECS, written and logged, with
+# USAGE_RESUME_REPAIRED=1. Anything else — an untagged record above all, so a hand
+# pause is never given a time — is left alone, with USAGE_RESUME_AT empty and a
+# return of 1. Call it UNSUBSTITUTED: `log` writes to stdout.
+usage_resume_at_var() {
+  local b="$1" raw
+  USAGE_RESUME_AT=""
+  USAGE_RESUME_REPAIRED=0
+  raw="$(registry_get "$b" usage_resume_at)"
+  case "$raw" in
+    '' | *[!0-9]*) ;;
+    *)
+      USAGE_RESUME_AT="$((10#$raw))"
+      return 0
+      ;;
+  esac
+  [ "$(registry_get "$b" status)" = "paused" ] || return 1
+  [ "$(registry_get "$b" paused_by)" = "usage" ] || return 1
+  USAGE_RESUME_AT=$(($(date +%s) + USAGE_FALLBACK_RESUME_SECS))
+  USAGE_RESUME_REPAIRED=1
+  registry_set "$b" usage_resume_at "$USAGE_RESUME_AT"
+  log "usage: '$b' is usage-paused with no usable usage_resume_at ('$raw') — assuming the gate's fallback, resume ~$(stall_human_time "$USAGE_RESUME_AT")"
+  return 0
+}
+
 # The gate itself, throttled to USAGE_CHECK_INTERVAL_SECS and run in three parts,
 # in this order: the resume side and the stale-tag cleanup, then the assessment
 # and the pauses it justifies, then the hold marker. Resume-before-pause is what
@@ -3649,7 +3730,7 @@ usage_gate() {
   # Every one of these is initialized, not merely declared: `set -u` makes a
   # DECLARED-BUT-UNSET name an error on first read, and several of the branches
   # below are reached without every name having been assigned in that iteration.
-  local b status pb ra wt state_rel="" state_abs=""
+  local b status pb ra wt lp state_rel="" state_abs=""
   while IFS= read -r b; do
     [ -n "$b" ] || continue
     # The auto-resume side skips a remote run: its job gates itself, and
@@ -3689,17 +3770,31 @@ usage_gate() {
       # one case where the question cannot be ANSWERED, and there the tag stays.
       if [ -z "$wt" ] ||
         { [ -n "$state_abs" ] && [ ! -f "$state_abs/PAUSE" ] && [ ! -f "$state_abs/PAUSE_ACK" ]; }; then
-        registry_set "$b" paused_by ""
-        registry_set "$b" usage_resume_at ""
+        registry_set "$b" paused_by "" usage_resume_at ""
       fi
       continue
     fi
 
     [ "$status" = "paused" ] || continue
-    ra="$(registry_get "$b" usage_resume_at)"
-    # No usable resume time is not a reason to resume: leave it paused and let an
-    # operator's own RESUME be the trigger, exactly as for a hand pause.
-    case "$ra" in '' | *[!0-9]*) continue ;; esac
+    # A tagged pause with no usable resume time has LOST it; left alone it would
+    # never resume and would hold the launch hold up for good. The helper gives it
+    # the fallback time and this pass reports that once — the repaired value is
+    # usable and in the future, so no later pass notifies again. In job mode a
+    # lost value is left to run_job's `usage)` arm, which repairs it and owns the
+    # job's notifications; repairing here as well would send two for one pause.
+    if [ "$JOB_MODE" = "1" ]; then
+      ra="$(registry_get "$b" usage_resume_at)"
+      case "$ra" in '' | *[!0-9]*) continue ;; esac
+    else
+      usage_resume_at_var "$b" || continue
+      ra="$USAGE_RESUME_AT"
+      if [ "$USAGE_RESUME_REPAIRED" = "1" ]; then
+        lp="$(registry_get "$b" log_path)"
+        [ -n "$lp" ] || lp="$LOGS_DIR/$b.log"
+        notify paused "$b" "$lp" "usage pause lost its recorded reset time — assuming ~$(stall_human_time "$ra") and resuming then; drop ${state_rel:-<state_dir>}/RESUME in ${wt:-its working copy} to resume sooner"
+        continue
+      fi
+    fi
     [ "$now" -ge "$ra" ] || continue
     if [ -z "$wt" ] || [ ! -d "$wt" ] || [ -z "$state_abs" ]; then
       # The trigger cannot be placed where the run would read it. Leave BOTH tags
@@ -3714,8 +3809,7 @@ usage_gate() {
     # Cleared TOGETHER with the trigger: the pause-resume pass owns the relaunch
     # from here, and a tag left behind would make the next hand pause look like
     # this gate's.
-    registry_set "$b" paused_by ""
-    registry_set "$b" usage_resume_at ""
+    registry_set "$b" paused_by "" usage_resume_at ""
   done <<EOF
 $(registry_branches)
 EOF
@@ -3773,7 +3867,7 @@ EOF
     # pauses would never be resumed by the wall clock. An hour is the fallback:
     # long enough not to thrash, short enough that a wrong guess costs one hour.
     case "$resume_at" in '' | *[!0-9]*) resume_at=0 ;; esac
-    [ "$resume_at" -le 0 ] && resume_at=$((now + 3600))
+    [ "$resume_at" -le 0 ] && resume_at=$((now + USAGE_FALLBACK_RESUME_SECS))
     while IFS= read -r b; do
       [ -n "$b" ] || continue
       # The pause side skips a remote run: its job gates itself.
@@ -3793,11 +3887,14 @@ EOF
         log "usage auto-pause: the state directory in '$wt' is unresolvable — cannot pause '$b'"
         continue
       fi
+      # Tagged BEFORE the engine acknowledges, on purpose — see invariant 2 — and
+      # so before PAUSE exists: an engine acknowledging a PAUSE whose tag is not
+      # yet recorded is classified `overload`. Both keys land in one write. A tag
+      # whose `touch` then fails is a `running` record with no PAUSE, which the
+      # stale-tag sweep in (1) clears on the next pass.
+      registry_set "$b" paused_by usage usage_resume_at "$resume_at"
       mkdir -p "$wt/$state_rel" 2>/dev/null || true
       touch "$wt/$state_rel/PAUSE"
-      # Tagged BEFORE the engine acknowledges, on purpose — see invariant 2.
-      registry_set "$b" paused_by usage
-      registry_set "$b" usage_resume_at "$resume_at"
       log "usage auto-pause (state=$state, trigger=$USAGE_PAUSE_TRIGGER): dropped $state_rel/PAUSE in $wt (auto-resume ~$(stall_human_time "$resume_at"))"
     done <<EOF
 $(registry_branches)
@@ -3808,7 +3905,9 @@ EOF
   # --- (3) The launch hold: up while a usage pause is in effect OR being
   # initiated, down otherwise. Derived from the registry every pass rather than
   # toggled, so a marker left behind by a watcher that died mid-pause is cleared
-  # by the next one instead of holding the inbox forever.
+  # by the next one instead of holding the inbox forever. A tagged pause stops
+  # counting on the pass whose part (1) drops RESUME and clears both tags, so
+  # the hold is bounded by the recorded or repaired `usage_resume_at`.
   local held
   held="$(usage_paused_count)"
   case "$held" in '' | *[!0-9]*) held=0 ;; esac
@@ -4006,8 +4105,8 @@ job_control_poll() {
   registry_set "$branch" control_polled_at "$before"
   if [ "$rc" = "0" ]; then
     JOB_USER_PAUSE_DROPPED=1
-    touch "$state_abs/PAUSE"
     registry_set "$branch" pause_reason user
+    touch "$state_abs/PAUSE"
     log "job: a 'harness pause $branch' run was created at or after $since — dropped PAUSE (reason user)"
   fi
   job_write_status "$branch" "$remote_status" continue "job started"
@@ -4021,16 +4120,22 @@ job_budget_pass() {
   after="$(job_int "${REMOTE_SELF_PAUSE_AFTER_SECS:-}")" || return 0
   [ $(($(date +%s) - JOB_START_EPOCH)) -ge "$after" ] || return 0
   JOB_BUDGET_PAUSE_DROPPED=1
-  touch "$state_abs/PAUSE"
   [ "$(registry_get "$branch" pause_reason)" = "user" ] || registry_set "$branch" pause_reason budget
+  touch "$state_abs/PAUSE"
   log "job: ${after}s of the hosted time budget have passed — dropped PAUSE (reason budget)"
 }
 
-# job_usage_wait_ok <branch> — 0 when a usage pause is waited out in the job.
-# An empty usage_resume_at means the gate has already dropped RESUME.
+# job_usage_wait_ok <branch> — 0 when a usage pause is waited out in the job;
+# leaves usage_resume_at_var's USAGE_RESUME_AT and USAGE_RESUME_REPAIRED set.
+# With no usable usage_resume_at: `paused_by=usage` still set means the value was
+# LOST, and the decision is made on the helper's repaired epoch — an hour out,
+# so `wait-poller` on a hosted runner at the default REMOTE_WAIT_MAX_SECS;
+# `paused_by` empty means the gate already dropped
+# RESUME, so 0, and the next resume_paused_runs relaunches the run.
 job_usage_wait_ok() {
   local ra deadline
-  ra="$(job_int "$(registry_get "$1" usage_resume_at)")" || return 0
+  usage_resume_at_var "$1" || return 0
+  ra="$USAGE_RESUME_AT"
   deadline="$(job_int "${HARNESS_JOB_DEADLINE_EPOCH:-}")" || deadline=""
   if [ -n "$deadline" ] && [ "$ra" -ge "$deadline" ]; then
     return 1
@@ -4068,8 +4173,8 @@ job_auto_resume() {
   # is one-shot: put it back, so the relaunched session still yields at its next
   # clean checkpoint instead of running on until the step timeout kills it.
   if [ "$JOB_BUDGET_PAUSE_DROPPED" = "1" ]; then
-    touch "$state_abs/PAUSE"
     registry_set "$branch" pause_reason budget
+    touch "$state_abs/PAUSE"
     log "job: the hosted time budget's PAUSE was pending at the resume of '$branch' after $why — re-dropped it"
   fi
   notify resumed "$branch" "$log_path" "automatic resume $count/$REMOTE_AUTO_RESUME_MAX after $why ($(job_label))"
@@ -4099,8 +4204,7 @@ run_job() {
   registry_set "$branch" stall_restarts 0
   registry_set "$branch" stall_warned ""
   registry_set "$branch" stall_killing ""
-  registry_set "$branch" paused_by ""
-  registry_set "$branch" usage_resume_at ""
+  registry_set "$branch" paused_by "" usage_resume_at ""
   registry_set "$branch" resume_kind ""
   registry_set "$branch" park_loop_cycles 0
   registry_set "$branch" auto_resumes 0
@@ -4168,6 +4272,7 @@ run_job() {
 
   # The supervision loop: the header's JOB MODE block states each decision.
   local status reason ra when decision="stop" detail="" usage_waiting=0 restarts
+  local wait_ok=1 usage_wait_start=0 usage_wait_ra=0
   while :; do
     status="$(registry_get "$branch" status)"
     case "$status" in
@@ -4194,25 +4299,49 @@ run_job() {
             break
             ;;
           usage)
-            ra="$(registry_get "$branch" usage_resume_at)"
-            when="the reset"
-            [ -n "$ra" ] && when="the reset at ~$(stall_human_time "$ra")"
             if [ "$usage_waiting" = "0" ]; then
-              if ! job_usage_wait_ok "$branch"; then
+              # Decided BEFORE `ra` is read, so a lost value is repaired first and
+              # both notifications name the repaired time.
+              wait_ok=1
+              job_usage_wait_ok "$branch" || wait_ok=0
+              ra="$USAGE_RESUME_AT"
+              when="the reset"
+              [ -n "$ra" ] && when="the reset at ~$(stall_human_time "$ra")"
+              [ "$USAGE_RESUME_REPAIRED" = "1" ] &&
+                when="the assumed reset at ~$(stall_human_time "$ra") (the recorded reset time was lost)"
+              if [ "$wait_ok" = "0" ]; then
                 decision=wait-poller
                 detail="usage limit reached; the resume poller resumes it after $when"
                 notify paused "$branch" "$log_path" "usage limit reached — resumes automatically after $when"
                 break
               fi
               usage_waiting=1
+              # Captured once: the gate's own resume clears usage_resume_at later
+              # in this same wait, and the bound below must not move with it.
+              usage_wait_start="$(date +%s)"
+              usage_wait_ra="$(job_int "$ra")" || usage_wait_ra=0
+              [ "$usage_wait_ra" -gt "$usage_wait_start" ] || usage_wait_ra="$usage_wait_start"
               log "job: '$branch' is usage-paused — waiting in the job for $when"
               notify paused "$branch" "$log_path" "usage limit reached — waiting in the job for $when"
             fi
             sleep "$POLL_INTERVAL_SECS"
             usage_gate
             resume_paused_runs
-            if [ "$(registry_get "$branch" status)" = "running" ]; then
+            status="$(registry_get "$branch" status)"
+            if [ "$status" = "running" ]; then
               registry_set "$branch" pause_reason ""
+            elif [ "$status" = "paused" ] &&
+              [ "$(date +%s)" -gt $((usage_wait_ra + USAGE_CHECK_INTERVAL_SECS + POLL_INTERVAL_SECS + REMOTE_WAIT_MAX_SECS)) ]; then
+              # The bound on the wait itself, self-hosted included. It is measured
+              # from the gate's last chance to resume, not from the reset: the gate
+              # is throttled to USAGE_CHECK_INTERVAL_SECS and runs after a
+              # POLL_INTERVAL_SECS sleep, so its resume can lag the reset by both.
+              # REMOTE_WAIT_MAX_SECS past that with no resume, the job hands the
+              # run over rather than waiting on nothing.
+              decision=wait-poller
+              detail="usage limit reached; the in-job usage wait passed its bound (REMOTE_WAIT_MAX_SECS=${REMOTE_WAIT_MAX_SECS}s past the reset) without a resume"
+              notify paused "$branch" "$log_path" "usage limit: the in-job wait passed ${REMOTE_WAIT_MAX_SECS}s after the reset without a resume — run /autonomous-sdlc-harness:branch-resume $branch to continue"
+              break
             fi
             ;;
           *)
