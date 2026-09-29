@@ -67,9 +67,11 @@
 #   3. THE REMOTE STATE BUNDLE writes the files its format lists. Fence: inside
 #      `<root>/<state_dir>/` (resolved through `hr_state_dir`), only
 #      `autonomous_logs/remote_status.json`, `clarifications/<branch>/`,
-#      `PAUSE_PROGRESS.md`, `.flow_walker_state` and the move-aside directory
-#      `autonomous_logs/remote_superseded/`; outside it, only the caller-named
-#      `<out_dir>` of `hr_remote_bundle_write` and the caller-named `<out_json>`
+#      `PAUSE_PROGRESS.md`, `.flow_walker_state`, the move-aside directory
+#      `autonomous_logs/remote_superseded/` and, only where nothing exists yet,
+#      files under the eight planning paths `hr_remote_planning_paths` assigns;
+#      outside it, only the caller-named `<out_dir>` (its `planning/` included)
+#      of `hr_remote_bundle_write` and the caller-named `<out_json>`
 #      of `hr_remote_status_write`. Written only by `hr_remote_status_write`,
 #      `hr_remote_bundle_write` and `hr_remote_bundle_restore`, and nothing
 #      there but a writer's own failed temp file is ever removed.
@@ -183,7 +185,9 @@
 # `HR_LANE_RANK`, `HR_LANE_STATE`, `HR_LANE_RESUME_AT`, `HR_LANE_OBSERVED_AT`,
 # `HR_LANE_OBSERVED_REPO`, `HR_LANE_OWNER_SLUG`, `HR_LANE_OWNER_PID`,
 # `HR_LANE_OWNER_AT` and `HR_LANE_BROKEN_OWNER`, and the remote state bundle's
-# names, which `hr_remote_names_var` assigns. Every one of them is assigned
+# names, which `hr_remote_names_var` assigns, with `HR_REMOTE_PLANNING_PATHS`
+# (`hr_remote_planning_paths`) and `HR_REMOTE_PLANNING_PLACED` /
+# `HR_REMOTE_PLANNING_KEPT` (`hr_remote_bundle_restore`). Every one of them is assigned
 # before it is read by the function that owns it, so an inherited value from a
 # parent process is overwritten rather than believed.
 #
@@ -1327,18 +1331,43 @@ hr_registry_branches() {
 #   <bundle>/PAUSE_PROGRESS.md           when present
 #   <bundle>/flow_walker_state           <state_dir>/.flow_walker_state, WITHOUT its dot
 #   <bundle>/run.log                     <state_dir>/autonomous_logs/<branch>.log; never restored
+#   <bundle>/planning/<path>             each of these under <state_dir>, when present:
+#                                          story_plans/<branch>_story_plan.md
+#                                          task_plans/<branch>
+#                                          ui_test_plans/<branch>_ui_test_plan.md
+#                                          ui_test_plans/<branch>
+#                                          task_plan_reviews/<branch>
+#                                          business_parity_reviews/<branch>
+#                                          architecture_reviews/<branch>
+#                                          ui_test_plan_reviews/<branch>
 #
 # The walker state loses its dot because `actions/upload-artifact` skips hidden
-# files by default. NOTHING IN THE BUNDLE IS EVER COMMITTED: every file in it is
-# gitignored machine-local state, and the remote-status and move-aside paths sit
-# under `autonomous_logs/`, whose ignore rule already covers them.
+# files by default. THE BUNDLE ITSELF IS NEVER COMMITTED. Every file outside
+# `planning/` is gitignored machine-local state, and the remote-status and
+# move-aside paths sit under `autonomous_logs/`, whose ignore rule already
+# covers them. The files under `planning/` are untracked drafts that the flow
+# commits itself at its P1/P3 convergence; the bundle only carries them.
+#
+# THE PLANNING PATHS ARE A MIRROR of the contracts that write and stage them:
+# `plugin/instructions/task_plan_writing_instructions_autonomous.md` →
+# `## Override 3` and `## Override 4` staging lists, and
+# `<scripts_dir>/flows/task_plan_writing.graph.json` → each node's `findingsFolder`. A path
+# added there is an edit to `hr_remote_planning_paths`. Only planning is
+# carried because the walker's one graph is `task_plan_writing.graph.json`;
+# implementation-phase per-unit review folders never span a pause, which waits
+# for a clean tracked tree. `HR_REMOTE_STATE_SCHEMA` stays `'1'`: `planning/`
+# is additive, an older reader ignores it, and a newer reader of an older
+# bundle finds none.
 #
 # WHO READS EACH FILE. `status.json`: `remote-run.sh sync` / `status` (into the
 # local registry), `continue` / `poll` (the decision, `chain`, the reset time)
 # and the next job's seed. The clarification directory and `PAUSE_PROGRESS.md`:
 # the next job, and the user's local mirror. The walker state: the next job
-# only. `run.log`: the user only — `sync` copies it to the main checkout's logs
-# directory itself, and no restore places it.
+# only. `planning/`: the next job only, never a mirror — an untracked draft left
+# in the mirror would make its later fast-forward to `origin/<branch>` refuse,
+# because the draft's own convergence commit adds the same path. `run.log`: the
+# user only — `sync` copies it to the main checkout's logs directory itself,
+# and no restore places it.
 #
 # `status.json` — schema `HR_REMOTE_STATE_SCHEMA`; every value a JSON string:
 #   schema                  a reader that does not recognise it treats the bundle as absent
@@ -1372,6 +1401,27 @@ hr_remote_names_var() {
   HR_REMOTE_LOGS_DIR='autonomous_logs'
   HR_REMOTE_STATUS_SOURCE="$HR_REMOTE_LOGS_DIR/remote_status.json"
   HR_REMOTE_SUPERSEDED_DIR="$HR_REMOTE_LOGS_DIR/remote_superseded"
+  HR_REMOTE_PLANNING_DIR='planning'
+}
+
+# hr_remote_planning_paths <branch>
+#
+# Assigns `HR_REMOTE_PLANNING_PATHS`: the eight planning paths of the format
+# above, relative to <state_dir>, newline-separated, no trailing slash. 1 with
+# an empty value for an empty <branch>.
+hr_remote_planning_paths() {
+  local branch="${1-}"
+  HR_REMOTE_PLANNING_PATHS=''
+  [ -n "$branch" ] || return 1
+  HR_REMOTE_PLANNING_PATHS="story_plans/${branch}_story_plan.md
+task_plans/$branch
+ui_test_plans/${branch}_ui_test_plan.md
+ui_test_plans/$branch
+task_plan_reviews/$branch
+business_parity_reviews/$branch
+architecture_reviews/$branch
+ui_test_plan_reviews/$branch"
+  return 0
 }
 
 # hr_remote_status_write <registry_file> <branch> <out_json> <decision> <detail>
@@ -1475,10 +1525,12 @@ hr_remote_status_get() {
 # <root>'s configured state directory. `status.json` is the job's own
 # `autonomous_logs/remote_status.json` when present; otherwise it is written
 # from <branch>'s registry record with decision `stop`, because a job that never
-# wrote its status never decided to continue. 0 written; 1 a missing argument,
+# wrote its status never decided to continue. Each planning path present is
+# copied under `planning/`, whether or not the branch tracks it: the restore
+# never overwrites, so a tracked copy is inert. 0 written; 1 a missing argument,
 # a non-empty <out_dir> or a failed copy; 2 <root>'s configuration unresolvable.
 hr_remote_bundle_write() {
-  local root="${1-}" branch="${2-}" registry="${3-}" out="${4-}" state base clarify
+  local root="${1-}" branch="${2-}" registry="${3-}" out="${4-}" state base clarify rel dst
   [ -n "$root" ] && [ -n "$branch" ] && [ -n "$registry" ] && [ -n "$out" ] || return 1
   state=$(hr_state_dir "$root") || return 2
   hr_remote_names_var
@@ -1511,15 +1563,36 @@ hr_remote_bundle_write() {
   if [ -f "$base/$HR_REMOTE_LOGS_DIR/$branch.log" ]; then
     cp "$base/$HR_REMOTE_LOGS_DIR/$branch.log" "$out/$HR_REMOTE_LOG_FILE" 2>/dev/null || return 1
   fi
+  hr_remote_planning_paths "$branch" || return 1
+  while IFS= read -r rel; do
+    dst="$out/$HR_REMOTE_PLANNING_DIR/$rel"
+    if [ -f "$base/$rel" ]; then
+      mkdir -p "${dst%/*}" 2>/dev/null || return 1
+      cp "$base/$rel" "$dst" 2>/dev/null || return 1
+    elif [ -d "$base/$rel" ]; then
+      mkdir -p "${dst%/*}" 2>/dev/null || return 1
+      cp -R "$base/$rel" "$dst" 2>/dev/null || return 1
+    fi
+  done <<EOF
+$HR_REMOTE_PLANNING_PATHS
+EOF
   return 0
 }
 
 # hr_remote_bundle_restore <bundle_dir> <root> <branch> <mode>
 #
 # <mode> `job` places the clarification directory, `PAUSE_PROGRESS.md`, the
-# walker state (back under its dotted name) and `status.json` (as
-# `autonomous_logs/remote_status.json`); `mirror` places the first two only. The
-# run log is placed by neither.
+# walker state (back under its dotted name), the planning drafts and
+# `status.json` (as `autonomous_logs/remote_status.json`); `mirror` places the
+# first two only. The run log is placed by neither.
+#
+# A PLANNING DRAFT NEVER OVERWRITES. A regular file under `planning/` whose
+# path lies in `HR_REMOTE_PLANNING_PATHS` and has no `..` segment is placed only
+# where nothing exists, counted in `HR_REMOTE_PLANNING_PLACED`; one whose target
+# exists is left byte-identical — the checkout's copy is the branch's committed
+# record — and counted in `HR_REMOTE_PLANNING_KEPT`. A symlink, a non-regular
+# entry or a path outside the set counts in neither. Both are `0` at entry and
+# stay `0` in `mirror` mode.
 #
 # THE CLARIFICATION DIRECTORY IS REPLACED WHOLESALE, AND NOTHING IS DELETED. An
 # existing target is moved aside with one `mv` into
@@ -1535,7 +1608,9 @@ hr_remote_bundle_write() {
 # <branch>) or <root>'s configuration is unresolvable.
 hr_remote_bundle_restore() {
   local bundle="${1-}" root="${2-}" branch="${3-}" mode="${4-}"
-  local state base named target epoch aside n tmp
+  local state base named target epoch aside n tmp pdir file rel p inset
+  HR_REMOTE_PLANNING_PLACED=0
+  HR_REMOTE_PLANNING_KEPT=0
   [ -n "$bundle" ] && [ -n "$root" ] && [ -n "$branch" ] || return 1
   case "$mode" in
     job|mirror) ;;
@@ -1574,6 +1649,37 @@ hr_remote_bundle_restore() {
   if [ -f "$bundle/$HR_REMOTE_WALKER_FILE" ]; then
     mkdir -p "$base" 2>/dev/null || return 1
     cp "$bundle/$HR_REMOTE_WALKER_FILE" "$base/$HR_REMOTE_WALKER_SOURCE" 2>/dev/null || return 1
+  fi
+  pdir="$bundle/$HR_REMOTE_PLANNING_DIR"
+  if [ -d "$pdir" ] && [ ! -L "$pdir" ]; then
+    hr_remote_planning_paths "$branch" || return 1
+    # Process substitution, not a pipe: the loop must run in this shell so the
+    # counters and `return 1` reach the caller.
+    while IFS= read -r file; do
+      # Re-tested per line: a name holding a newline arrives split and fails here.
+      [ -f "$file" ] && [ ! -L "$file" ] || continue
+      rel=${file#"$pdir"/}
+      case "/$rel/" in
+        */../*) continue ;;
+      esac
+      inset=0
+      while IFS= read -r p; do
+        case "$rel" in
+          "$p"|"$p"/*) inset=1; break ;;
+        esac
+      done <<EOF
+$HR_REMOTE_PLANNING_PATHS
+EOF
+      [ "$inset" = 1 ] || continue
+      if [ -e "$base/$rel" ] || [ -L "$base/$rel" ]; then
+        HR_REMOTE_PLANNING_KEPT=$((HR_REMOTE_PLANNING_KEPT + 1))
+        continue
+      fi
+      target="$base/$rel"
+      mkdir -p "${target%/*}" 2>/dev/null || return 1
+      cp "$file" "$target" 2>/dev/null || return 1
+      HR_REMOTE_PLANNING_PLACED=$((HR_REMOTE_PLANNING_PLACED + 1))
+    done < <(find "$pdir" -type f 2>/dev/null)
   fi
   mkdir -p "$base/$HR_REMOTE_LOGS_DIR" 2>/dev/null || return 1
   tmp=$(mktemp "$base/$HR_REMOTE_STATUS_SOURCE.tmp.XXXXXX" 2>/dev/null) || return 1
