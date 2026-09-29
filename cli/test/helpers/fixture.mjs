@@ -18,7 +18,7 @@
  * why nothing here runs at import time: the module defines functions and resolves paths, and every
  * subprocess, temp directory and refusal happens inside a call a real test makes.
  *
- * ## Five non-obvious choices, and where each comes from
+ * ## Six non-obvious choices, and where each comes from
  *
  * 1. **The fixture directory is `realpath`-resolved.** `git rev-parse --show-toplevel` answers with
  *    the physical path, while `os.tmpdir()` is a symlink on macOS. Without this, every absolute path
@@ -47,9 +47,18 @@
  *    it, removed by `rmSync` on exit (choice 2). The one absolute path git stores in the copy is
  *    `remote.origin.url` in `.git/config`; it is rewritten to the fixture's own origin, and a copy
  *    in which it does not occur exactly once is refused rather than left pointing at a shared one.
+ * 6. **{@link runBash}'s bound kills a process group, and rejects.** `execFile`'s own `timeout`
+ *    kills only the direct child, and a non-interactive `bash`'s background jobs — a watcher's
+ *    engine subshells, its `sleep`s — share that child's process group and would outlive it. So a
+ *    bounded call starts `bash` as a group leader and sends `SIGKILL` to the negative pid, where a
+ *    group already gone is not an error. It rejects rather than resolves: a timed-out command is
+ *    not a result the command chose (choice 4), and a rejection fails the awaiting case naming the
+ *    command. Under Node 20.19.5 a `--test-timeout` expiry never aborts `t.signal`: the runner
+ *    kills the file's process first, which leaves a detached group running. `timeoutMs` below the
+ *    test timeout is the half that reaps (`cli/test/test-timeout.test.mjs`).
  */
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readdir, readFile, lstat, realpath, rm, writeFile } from 'node:fs/promises';
@@ -412,10 +421,108 @@ export async function runCliFrom(entry, dir, args = [], env = {}) {
  * @param {readonly string[]} args `bash`'s arguments — the script path, then the script's own.
  * @param {Record<string, string>} [env] applied over the isolated environment, for a script whose
  *   subject is what it passes on to its command.
+ * @param {{ timeoutMs?: number, signal?: AbortSignal }} [bound] opt-in (choice 6 in the module
+ *   header): with either, `bash` leads its own process group, and the bound passing or the signal
+ *   aborting kills that group and rejects with `runBash timed out after <n> ms: <argv>` or
+ *   `runBash aborted: <argv>`. With neither, this is {@link run} unchanged.
  * @returns {Promise<RunResult>}
  */
-export async function runBash(cwd, args, env = {}) {
-  return run('bash', args, cwd, env);
+export async function runBash(cwd, args, env = {}, { timeoutMs, signal } = {}) {
+  if (timeoutMs === undefined && signal === undefined) return run('bash', args, cwd, env);
+  if (timeoutMs !== undefined && !(Number.isInteger(timeoutMs) && timeoutMs > 0)) {
+    throw new Error(`runBash: timeoutMs must be a positive integer, got ${String(timeoutMs)}`);
+  }
+  return runBounded('bash', args, cwd, env, { timeoutMs, signal });
+}
+
+/** `process.kill` of a whole group, where a group already gone is not an error (choice 6). */
+function killGroup(pid) {
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
+}
+
+/**
+ * {@link run}'s bounded form, for {@link runBash} only: the child leads its own process group, and
+ * the bound or the signal kills that group and rejects (choice 6 in the module header).
+ *
+ * @param {string} command
+ * @param {readonly string[]} args
+ * @param {string} cwd
+ * @param {Record<string, string>} env
+ * @param {{ timeoutMs?: number, signal?: AbortSignal }} bound
+ * @returns {Promise<RunResult>}
+ */
+function runBounded(command, args, cwd, env, { timeoutMs, signal }) {
+  const argv = [command, ...args].join(' ');
+  return new Promise((resolveRun, rejectRun) => {
+    if (signal?.aborted) {
+      rejectRun(new Error(`runBash aborted: ${argv}`));
+      return;
+    }
+    const child = spawn(command, [...args], {
+      cwd,
+      detached: true,
+      env: { ...process.env, ...ISOLATED_ENV, ...env },
+    });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    /** @type {NodeJS.Timeout | undefined} */
+    let timer;
+
+    const settle = () => {
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    // Rejects at once rather than on `close`: a descendant that left the group could hold the pipes
+    // open, so the streams are destroyed here instead of awaited.
+    const stop = (message) => {
+      if (settled) return;
+      settle();
+      try {
+        killGroup(child.pid);
+      } catch (error) {
+        rejectRun(error);
+        return;
+      }
+      child.stdout.destroy();
+      child.stderr.destroy();
+      rejectRun(new Error(message));
+    };
+    const onAbort = () => stop(`runBash aborted: ${argv}`);
+
+    if (timeoutMs !== undefined) timer = setTimeout(() => stop(`runBash timed out after ${timeoutMs} ms: ${argv}`), timeoutMs);
+    signal?.addEventListener('abort', onAbort, { once: true });
+
+    const collect = (append) => (chunk) => {
+      append(chunk);
+      if (stdout.length + stderr.length > MAX_BUFFER) stop(`runBash output exceeded the ${MAX_BUFFER}-character buffer: ${argv}`);
+    };
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', collect((chunk) => { stdout += chunk; }));
+    child.stderr.on('data', collect((chunk) => { stderr += chunk; }));
+
+    child.on('error', (error) => {
+      if (settled) return;
+      settle();
+      rejectRun(error);
+    });
+    child.on('close', (code, signalName) => {
+      if (settled) return;
+      settle();
+      // The same split as `run`: an exit status resolves, a death by signal is not a result.
+      if (code === null) {
+        rejectRun(new Error(`runBash: ${argv} was killed by ${signalName}`));
+        return;
+      }
+      resolveRun({ status: code, stdout, stderr });
+    });
+  });
 }
 
 /** A file's fingerprint: its permission bits and the digest of its bytes. */

@@ -107,7 +107,9 @@
  *   one: by default nothing here generates one, and the once-open owner decision below is taken for
  *   the opt-in `init --plugin-root-entries` only, the default unchanged. Under that switch
  *   {@link generatedPluginRootEntries} reads the plugin records through {@link resolvedPluginRoots}
- *   on every run, forced or not, and still never tests whether the profile exists: whether the render
+ *   on every run, forced or not, and yields both halves of the grant: the `allow` entries, and each
+ *   root in `permissions.additionalDirectories`, without which a shell read under the root is refused
+ *   as outside the allowed working directories. It still never tests whether the profile exists: whether the render
  *   lands is the write engine's `create-if-absent` answer, which `init` hands back to
  *   {@link pluginRootEntriesNote}. On a forced run the generated lines are appended before the
  *   carry-forward, which skips any line already in `allow`, so each line has one producer — the rule
@@ -448,7 +450,8 @@ export interface RenderProfileOptions {
   readonly dryRun?: boolean;
   /**
    * `init --plugin-root-entries`: append the entries `doctor`'s `plugin-permissions` check requires at
-   * every plugin root this machine resolves ({@link generatedPluginRootEntries}). Absent means off,
+   * every plugin root this machine resolves, and each root to `permissions.additionalDirectories`
+   * ({@link generatedPluginRootEntries}). Absent means off,
    * and an off render reads no plugin record for this purpose.
    */
   readonly pluginRootEntries?: boolean;
@@ -1143,14 +1146,27 @@ function appendReadme(profile: JsonObject, line: string): void {
   readme.push(line);
 }
 
-/** Append generated `allow` entries after the template's own, adding none of them twice. */
-function appendAllow(profile: JsonObject, entries: readonly string[]): void {
-  const permissions = permissionsOf(profile);
-  const allow = permissions['allow'];
-  if (!Array.isArray(allow)) throw internal('the permission-profile template has no `permissions.allow` list to add to');
-  for (const entry of entries) {
-    if (!allow.includes(entry)) allow.push(entry);
+/** Append `values` to one `permissions` list after the template's own, adding none twice; returns how many were added. */
+function appendToPermissionList(profile: JsonObject, list: string, values: readonly string[]): number {
+  const target = permissionsOf(profile)[list];
+  if (!Array.isArray(target)) throw internal(`the permission-profile template has no \`permissions.${list}\` list to add to`);
+  let added = 0;
+  for (const value of values) {
+    if (target.includes(value)) continue;
+    target.push(value);
+    added += 1;
   }
+  return added;
+}
+
+/** Append generated `allow` entries after the template's own, adding none of them twice. */
+function appendAllow(profile: JsonObject, entries: readonly string[]): number {
+  return appendToPermissionList(profile, 'allow', entries);
+}
+
+/** Append directories after the template's own `additionalDirectories`, adding none twice. */
+function appendAdditionalDirectories(profile: JsonObject, directories: readonly string[]): number {
+  return appendToPermissionList(profile, 'additionalDirectories', directories);
 }
 
 /** What {@link appendToolchainAllowances} reads. */
@@ -1247,55 +1263,82 @@ export function pluginRootHelpers(roots: readonly string[], qaOn: boolean): read
 }
 
 /**
- * The entries one root requires: {@link readRule} unless it is the install root — reads there were
- * measured to succeed ungranted (`doctor/checks.ts`, `PLUGIN_PERMISSIONS_CHECK`) — then
- * {@link bashScriptRule} for each of `helpers`, in that order. The one per-root builder, called by
- * that check and by {@link generatedPluginRootEntries}.
+ * The entries one root requires: {@link readRule} iff it is the runtime root
+ * ({@link pluginRuntimeRoot}), including where that is also the install root, then
+ * {@link bashScriptRule} for each of `helpers`, in that order. Only an install root distinct from the
+ * runtime root is exempt from the read: it is the one shape measured to read ungranted (2026-08-26,
+ * a `directory`-sourced marketplace), while a single root that was both was refused every `Read` on
+ * a GitHub-sourced one (2026-09-28) — both cited in `doctor/checks.ts`, `PLUGIN_PERMISSIONS_CHECK`.
+ * The one per-root builder, called by that check and by {@link generatedPluginRootEntries}.
  */
 export function pluginRootEntries(
   root: string,
-  options: { readonly isInstallRoot: boolean; readonly helpers: readonly string[] },
+  options: { readonly isRuntimeRoot: boolean; readonly helpers: readonly string[] },
 ): readonly PluginRootEntry[] {
   return [
-    ...(options.isInstallRoot ? [] : [{ kind: 'read' as const, rule: readRule(root) }]),
+    ...(options.isRuntimeRoot ? [{ kind: 'read' as const, rule: readRule(root) }] : []),
     ...options.helpers.map((name) => ({ kind: 'helper' as const, rule: bashScriptRule(pluginHelperPath(root, name)) })),
   ];
 }
 
-/** What `--plugin-root-entries` did to the rendered profile: nothing asked, entries appended, or no root to name. */
-export type PluginRootEntriesOutcome = 'off' | 'appended' | 'no-root';
+/**
+ * The directories a plugin-root grant adds to `permissions.additionalDirectories`: every root given,
+ * normalized with {@link normalizedRoot}, de-duplicated, in input order. Called by the generator and
+ * by `doctor`, so the two cannot require different directories.
+ */
+export function pluginRootDirectories(roots: readonly string[]): readonly string[] {
+  return [...new Set(roots.map(normalizedRoot))];
+}
+
+/**
+ * What `--plugin-root-entries` did to the rendered profile: nothing asked, something appended, no
+ * root to name, or roots resolved and nothing written — every entry and directory screened out or
+ * already present.
+ */
+export type PluginRootEntriesOutcome = 'off' | 'appended' | 'no-root' | 'none-written';
 
 /** The switch as a message names it — and as `init`'s option row spells it. */
 export const PLUGIN_ROOT_ENTRIES_FLAG = '--plugin-root-entries';
 
+/** What {@link generatedPluginRootEntries} produces: the `allow` entries and the `additionalDirectories` roots. */
+interface GeneratedPluginRootGrant {
+  readonly entries: readonly string[];
+  readonly directories: readonly string[];
+}
+
 /**
  * The entries `doctor`'s `plugin-permissions` check requires at every root {@link resolvedPluginRoots}
- * returns, built by the same two functions it calls, or `undefined` when no root resolves. An entry
- * a root path would make unmatchable is warned about and left out rather than handed to
+ * returns, built by the same two functions it calls, plus those roots as
+ * {@link pluginRootDirectories} gives them — or `undefined` when no root resolves. An entry or a
+ * directory a root path would make unmatchable is warned about and left out rather than handed to
  * {@link assertRunnable}, which would bill a machine-local path to this CLI.
  */
 function generatedPluginRootEntries(
   repoRoot: string,
   config: HarnessConfig,
   warn: (message: string) => void,
-): readonly string[] | undefined {
+): GeneratedPluginRootGrant | undefined {
   const roots = resolvedPluginRoots(repoRoot);
   if (roots.length === 0) return undefined;
-  const installRoot = pluginInstallRoot(repoRoot);
-  const install = installRoot === undefined ? undefined : normalizedRoot(installRoot);
+  const runtimeRoot = pluginRuntimeRoot(repoRoot);
+  const runtime = runtimeRoot === undefined ? undefined : normalizedRoot(runtimeRoot);
   const helpers = pluginRootHelpers(roots, config.phases?.qa === true);
 
-  return roots
-    .flatMap((root) => pluginRootEntries(root, { isInstallRoot: root === install, helpers }))
+  const usable = (value: string, described: string): boolean => {
+    const forbidden = FORBIDDEN_IN_ENTRY.find(([needle]) => value.includes(needle));
+    if (forbidden === undefined) return true;
+    warn(
+      `${PLUGIN_ROOT_ENTRIES_FLAG} left out ${described} ${JSON.stringify(value)}: the plugin root it names contains ${forbidden[1]}, which the permission guard matches literally, so it would match nothing at run time`,
+    );
+    return false;
+  };
+
+  const entries = roots
+    .flatMap((root) => pluginRootEntries(root, { isRuntimeRoot: root === runtime, helpers }))
     .map(({ rule }) => rule)
-    .filter((rule) => {
-      const forbidden = FORBIDDEN_IN_ENTRY.find(([needle]) => rule.includes(needle));
-      if (forbidden === undefined) return true;
-      warn(
-        `${PLUGIN_ROOT_ENTRIES_FLAG} left out ${JSON.stringify(rule)}: the plugin root it names contains ${forbidden[1]}, which the permission guard matches literally, so the entry would match nothing at run time`,
-      );
-      return false;
-    });
+    .filter((rule) => usable(rule, 'the entry'));
+  const directories = pluginRootDirectories(roots).filter((directory) => usable(directory, 'the directory'));
+  return { entries, directories };
 }
 
 /**
@@ -1598,12 +1641,16 @@ export function renderProfile({
         `${PLUGIN_ROOT_ENTRIES_FLAG} was given but ${installedPluginsPath()} records no plugin root on this machine, so no plugin-root entry was written: run \`claude plugin install\` for this plugin before init, then run init again`,
       );
     } else {
-      outcome = 'appended';
-      appendAllow(profile, generated);
-      appendReadme(
-        profile,
-        `THE PLUGIN-ROOT ENTRIES WERE WRITTEN BY init ${PLUGIN_ROOT_ENTRIES_FLAG}: they name this machine's plugin roots, which carry the plugin version, so they go stale on an upgrade. The switch is for a profile that lives no longer than the install it names - a remote job's.`,
-      );
+      // Directories after the template's own, so its state-directory entry stays first.
+      const added =
+        appendAllow(profile, generated.entries) + appendAdditionalDirectories(profile, generated.directories);
+      outcome = added > 0 ? 'appended' : 'none-written';
+      if (added > 0) {
+        appendReadme(
+          profile,
+          `THE PLUGIN-ROOT ENTRIES WERE WRITTEN BY init ${PLUGIN_ROOT_ENTRIES_FLAG}: the Read and Bash entries in permissions.allow, and the roots in permissions.additionalDirectories that let a shell command read under them, name this machine's plugin roots, which carry the plugin version, so they go stale on an upgrade. The switch is for a profile that lives no longer than the install it names - a remote job's.`,
+        );
+      }
     }
   }
   pluginRootOutcome?.(outcome);
@@ -1707,7 +1754,7 @@ export function writePermissionProfile({
     repoPath: PROFILE_PATH,
     warnings,
     notes: [
-      `${PROFILE_PATH} is committed, and it is machine-specific: the absolute paths in it are this checkout's, so a copy of this repository somewhere else needs doctor to re-check them and init --force to regenerate them. Select it per run with the agent runner's settings flag; it is never installed as the interactive default.`,
+      `${PROFILE_PATH} is gitignored - the managed .gitignore block carries its rule - and machine-specific: the absolute paths in it are this checkout's, so a copy of this repository somewhere else generates its own with init. A copy an earlier release committed stays tracked until it is untracked by hand; doctor reports that state and prints the route. Select it per run with the agent runner's settings flag; it is never installed as the interactive default.`,
       ...notes,
     ],
     pluginRootEntries: outcome,

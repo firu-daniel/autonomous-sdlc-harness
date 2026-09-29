@@ -276,7 +276,7 @@
 # no job to stop and may complete before its cancel lands — trying every one even
 # after a failure. (3) Only when (1) and (2) all succeeded, and only when a
 # local registry record exists, it writes `remote_stopped_at` and sets `status`
-# to `failed` through `hr_registry_set`; a partial stop leaves the record alone
+# to `failed` in one `hr_registry_set` call; a partial stop leaves the record alone
 # and exits 3, so running `stop` again is the remedy.
 #
 # `warm` dispatches action=warm on GitHub's OWN default branch (`gh repo view
@@ -811,8 +811,7 @@ verb_stop() {
 
   registry=$(hr_state_path "$root" autonomous_logs/registry.json) || registry=""
   if [ -n "$registry" ] && [ -f "$registry" ] && [ -n "$(hr_registry_get "$registry" "$branch" branch)" ]; then
-    hr_registry_set "$registry" "$branch" remote_stopped_at "$stopped_at" \
-      && hr_registry_set "$registry" "$branch" status failed \
+    hr_registry_set "$registry" "$branch" remote_stopped_at "$stopped_at" status failed \
       || echo "remote-run.sh: stopped on GitHub, but the local record of $branch could not be updated" >&2
   fi
   echo "remote-run.sh: stopped $branch"
@@ -904,6 +903,17 @@ set_or_fail() {
   }
 }
 
+# set_many_or_fail <key> <value> [<key> <value> …] — every pair in one write, so
+# a concurrent reader never sees an outcome half-applied.
+set_many_or_fail() {
+  local keys="" i
+  hr_registry_set "$registry" "$branch" "$@" || {
+    for ((i = 1; i <= $#; i += 2)); do keys="$keys${keys:+, }${!i}"; done
+    echo "remote-run.sh: writing $keys of $branch to '$registry' failed" >&2
+    exit "$EXIT_USAGE"
+  }
+}
+
 verb_status() {
   local runs finished_id synced_id field
   list_runs
@@ -935,18 +945,14 @@ verb_status() {
 sync_expired() {
   local line
   line=$(expired_line "$1")
-  set_or_fail status paused
-  set_or_fail pause_reason expired
-  set_or_fail remote_run_id "$1"
-  set_or_fail remote_run_url "$2"
-  set_or_fail remote_detail "$line"
-  set_or_fail remote_synced_at "$3"
+  set_many_or_fail status paused pause_reason expired remote_run_id "$1" \
+    remote_run_url "$2" remote_detail "$line" remote_synced_at "$3"
   echo "remote-run.sh: $line"
 }
 
 verb_sync() {
   local worktree runs newest id state url synced_id now older download status_file
-  local status reason detail
+  local status reason detail resume_at cycles
   worktree=$(hr_registry_get "$registry" "$branch" worktree)
   if [ -z "$worktree" ] || [ ! -d "$worktree" ]; then
     echo "remote-run.sh: refused, nothing written: the mirror working copy '$worktree' of $branch is missing" >&2
@@ -965,8 +971,7 @@ verb_sync() {
   now=$(date +%s)
 
   if [ "$state" != completed ]; then
-    set_or_fail status running
-    set_or_fail remote_synced_at "$now"
+    set_many_or_fail status running remote_synced_at "$now"
     echo "remote-run.sh: run $id of $branch is $state; the record is running, nothing downloaded"
     return 0
   fi
@@ -1039,14 +1044,11 @@ verb_sync() {
       detail="the job ended mid-run (its bundle still says running): $url"
     fi
     [ -n "$detail" ] || detail="synced from $url"
-    set_or_fail status "$status"
-    set_or_fail pause_reason "$reason"
-    set_or_fail usage_resume_at "$(hr_remote_status_get "$status_file" usage_resume_at || :)"
-    set_or_fail park_loop_cycles "$(hr_remote_status_get "$status_file" park_loop_cycles || :)"
-    set_or_fail remote_run_id "$id"
-    set_or_fail remote_run_url "$url"
-    set_or_fail remote_detail "$detail"
-    set_or_fail remote_synced_at "$now"
+    resume_at=$(hr_remote_status_get "$status_file" usage_resume_at) || resume_at=""
+    cycles=$(hr_remote_status_get "$status_file" park_loop_cycles) || cycles=""
+    set_many_or_fail status "$status" pause_reason "$reason" usage_resume_at "$resume_at" \
+      park_loop_cycles "$cycles" remote_run_id "$id" remote_run_url "$url" \
+      remote_detail "$detail" remote_synced_at "$now"
     echo "remote-run.sh: synced run $id of $branch: $status${reason:+ ($reason)}"
     return 0
   fi
@@ -1061,20 +1063,17 @@ verb_sync() {
     done
   fi
   if [ "$bundle_exists" -eq 1 ]; then
-    set_or_fail status paused
-    set_or_fail pause_reason killed
-    set_or_fail remote_run_id "$id"
-    set_or_fail remote_run_url "$url"
-    set_or_fail remote_detail "run $id ended with no state bundle (killed, cancelled or replaced): $url"
-    set_or_fail remote_synced_at "$now"
+    set_many_or_fail status paused pause_reason killed remote_run_id "$id" remote_run_url "$url" \
+      remote_detail "run $id ended with no state bundle (killed, cancelled or replaced): $url" \
+      remote_synced_at "$now"
     echo "remote-run.sh: run $id of $branch left no bundle; the record is paused (killed), nothing restored"
     return 0
   fi
 
   # Case 5 — no bundle in any run.
-  set_or_fail status failed
-  set_or_fail remote_detail "no run of $branch ever uploaded a state bundle; newest: $url"
-  set_or_fail remote_synced_at "$now"
+  set_many_or_fail status failed \
+    remote_detail "no run of $branch ever uploaded a state bundle; newest: $url" \
+    remote_synced_at "$now"
   echo "remote-run.sh: no run of $branch carries a state bundle; the record is failed"
 }
 

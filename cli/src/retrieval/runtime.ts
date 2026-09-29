@@ -1,7 +1,8 @@
 /**
  * How the docs-retrieval packages reach this CLI: the optional peer set, the machine cache paths the
  * runtime installation and the model weights live at, the one predicate for "is the runtime
- * installed?", the loader and the entry resolver.
+ * installed?", the predicate for which peers this installation cannot resolve from its own location,
+ * the loader and the entry resolver.
  *
  * **The rule this module exists to enforce: a retrieval package is loaded only by a dynamic `import()`
  * in this module, and only on a path that retrieves.** The packages are optional peers
@@ -143,6 +144,37 @@ export async function loadRetrievalModule<T>(specifier: string): Promise<T> {
 }
 
 /**
+ * The name of every {@link retrievalPeers} entry `import.meta.resolve` throws on, in manifest order.
+ * Any throw counts — a missing module, a package-path error, a resolve hook's refusal. It resolves
+ * and loads nothing.
+ *
+ * It resolves from this module's own location, the base {@link loadRetrievalModule}'s `import()`
+ * resolves from, so an empty answer means the loader finds every peer.
+ *
+ * It is **not** the answer to "is the runtime installed?" — that is {@link retrievalRuntimeState}'s,
+ * and `doctor`'s `retrieval-dependencies` deliberately does not consult this one
+ * (`cli/src/doctor/checks.ts` → `RETRIEVAL_DEPENDENCIES_CHECK`'s doc comment).
+ *
+ * Call it only on a retrieval path: a resolve hook sees `import.meta.resolve` too.
+ *
+ * Consumers: {@link retrievalCliEntry} and, outside the package, the docs-retrieval eval's refusal —
+ * `evals/docs-retrieval/index-build.mjs` → `assertRealModelsAreAvailable` and
+ * `evals/docs-retrieval/check-floor.mjs` → `checkFloor`.
+ */
+export function unresolvedRetrievalPeers(): readonly string[] {
+  return retrievalPeers()
+    .filter(({ name }) => {
+      try {
+        import.meta.resolve(name);
+        return false;
+      } catch {
+        return true;
+      }
+    })
+    .map(({ name }) => name);
+}
+
+/**
  * The CLI entry a non-serving retrieval child process runs: this installation's `dist/cli.js` when
  * `import.meta.resolve` succeeds for every peer (resolution only), otherwise the runtime's entry when
  * that file exists, otherwise `undefined`. The runtime answer's `source` is {@link RETRIEVAL_RUNTIME_DIRNAME},
@@ -158,15 +190,7 @@ export async function loadRetrievalModule<T>(specifier: string): Promise<T> {
 export function retrievalCliEntry():
   | { entry: string; source: 'this-installation' | typeof RETRIEVAL_RUNTIME_DIRNAME }
   | undefined {
-  const resolvesHere = retrievalPeers().every(({ name }) => {
-    try {
-      import.meta.resolve(name);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-  if (resolvesHere) return { entry: join(packageRoot(), 'dist', 'cli.js'), source: 'this-installation' };
+  if (unresolvedRetrievalPeers().length === 0) return { entry: join(packageRoot(), 'dist', 'cli.js'), source: 'this-installation' };
   const runtimeEntry = join(retrievalRuntimeDir(), RUNTIME_CLI_RELATIVE);
   return existsSync(runtimeEntry) ? { entry: runtimeEntry, source: RETRIEVAL_RUNTIME_DIRNAME } : undefined;
 }

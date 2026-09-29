@@ -25,7 +25,7 @@ From a drop to a pushed branch:
 1. **The drop.** The user runs `/autonomous-sdlc-harness:branch-prompt` (or answers `Run it autonomously` to the task offer, which invokes it). The file lands in the main checkout's inbox exactly as it does for a local run.
 2. **Preparation.** The watcher's inbox pass reads `execution.target` from the configuration in effect for that drop, then does what it does locally: creates the working copy, copies the artifact in, commits it and pushes the branch. For a remote run a failed commit or push **blocks** the dispatch, because the job sees only what was pushed; locally it never blocks. The usage hold, the concurrency cap and the machine lane are skipped, since the job gates itself. The kill switch `AUTONOMOUS_STOP` still defers the drop.
 3. **Dispatch.** The watcher calls `remote-run.sh dispatch <branch> --engine <kind>`, which sends `workflow_dispatch` to `harness-run.yml` with `action: run` and `chain: 0`. The registry record is written with `execution: github-actions` and an empty `pid`; a run keeps the execution it started with for its whole life, and every later pass reads the record's field, never the current key. From here the local working copy is a **mirror** that only `remote-run.sh sync` fills.
-4. **The job's setup**, in the order `harness-run.yml` runs it: compute the time budget from `runner.environment`; stop if `HARNESS_REMOTE_STOP` is set; check out the branch; check for `jq` and `gh`; read `scriptsDir` and whether docs retrieval applies from `harness.config.json` at run time; set up Node; install the `claude` CLI when absent; refuse when neither credential secret is set; install the plugin and refuse on a version other than the one the workflow was rendered for; restore the retrieval cache when retrieval applies; generate the job's permission profile with `init --plugin-root-entries` and fail if that changed a tracked file; run `doctor` as a preflight; bootstrap the checkout with `setup-worktree.sh`; and `remote-run.sh restore` the previous job's state bundle.
+4. **The job's setup**, in the order `harness-run.yml` runs it: compute the time budget from `runner.environment`; stop if `HARNESS_REMOTE_STOP` is set; check out the branch; check for `jq` and `gh`; read `scriptsDir` and whether docs retrieval applies from `harness.config.json` at run time; set up Node; install the `claude` CLI when absent; refuse when neither credential secret is set; install the plugin and refuse on a version other than the one the workflow was rendered for; restore the retrieval cache when retrieval applies; generate the job's permission profile with `init --plugin-root-entries` and fail if that changed a tracked file; run `doctor --remote-job` as a preflight, which stops the job on a committed profile, on one whose paths name another checkout, or on a missing plugin-root grant (§4); bootstrap the checkout with `setup-worktree.sh`; and `remote-run.sh restore` the previous job's state bundle.
 5. **The run.** `autonomous-watcher.sh job <branch> <engine> <resume>` launches one session through the watcher's own `spawn_engine` and supervises it (§3). It writes `status.json` with decision `continue` before the launch, so a job killed mid-run still leaves a bundle that says *continue*.
 6. **The end of the job.** Under `always()`: `push-branch.sh`, then `remote-run.sh save` and the upload of the bundle as the Actions artifact `harness-state`. Under `!cancelled()`: `remote-run.sh continue`. Under `cancelled()`: a best-effort `failed` notification.
 7. **The decision.** `continue` reads the bundle's `decision`. `continue` re-dispatches the same workflow with `resume: pause` and `chain` one higher; `wait-poller` enables `harness-resume.yml`; `stop` does nothing, because job mode has already notified.
@@ -97,7 +97,7 @@ bash scripts/remote-run.sh stop <branch>
 
 ## 2. Why the job runs the watcher
 
-**The job runs `autonomous-watcher.sh job`, not `anthropics/claude-code-action`.** What the local watcher does for a local run, the job must do for itself, and the watcher is already the thing that does it: the launch line flag for flag (`--settings`, `--permission-mode`, the conditional `--model` and `--effort`, `--output-format stream-json`, the two `--add-dir`), the teed stream the usage gate parses, `classify_run_exit`, the park-loop guard and the stall watchdog. The action wraps its own launch and permission handling and exposes no teed stream to gate on, so each of those would have to be rebuilt around it.
+**The job runs `autonomous-watcher.sh job`, not `anthropics/claude-code-action`.** What the local watcher does for a local run, the job must do for itself, and the watcher is already the thing that does it: the launch line flag for flag (`--settings`, `--permission-mode`, the conditional `--model` and `--effort`, `--output-format stream-json`, the two `--add-dir` plus, in job mode only, one more per `permissions.additionalDirectories` entry of the profile), the teed stream the usage gate parses, `classify_run_exit`, the park-loop guard and the stall watchdog. The action wraps its own launch and permission handling and exposes no teed stream to gate on, so each of those would have to be rebuilt around it.
 
 **Job mode runs exactly one run, in the job's own checkout**, where the main checkout and the working copy are the same directory. It is refused unless `HARNESS_JOB_MODE=1`, which only the workflow sets, because the stall watchdog's `git reset --hard HEAD` would act on whatever checkout it ran in. It turns off the inbox pass, the cleanup sweep, the live-log window and both halves of the machine lane. The lane coordinates the repositories on one machine, and a hosted runner's lane directory would not outlive the job; the other three have nothing to act on in a single-run job. They are forced off after the tunables are read, so no environment value turns them back on.
 
@@ -159,8 +159,8 @@ It found 957 sub-agent dispatches, the longest 73.05 minutes and the 95th percen
 
 When the usage gate pauses a run, the job has two ways to resume it, and chooses per pause:
 
-- **Wait in the job** when the reset falls before the job's deadline and either the runner is self-hosted, or the wait is at most `REMOTE_WAIT_MAX_SECS` (default 600). The gate's own resume then relaunches the run in the same job. A self-hosted job's wait costs nothing; a hosted job bills for every minute it waits, but a short wait is still cheaper than a new job's setup plus the poller's latency.
-- **Hand it to the poller** otherwise: the job ends with decision `wait-poller`, so billing stops with it, and `continue` enables `harness-resume.yml`. The poller is a `schedule` workflow, every 30 minutes as shipped, whose one step is `remote-run.sh poll`: it downloads each branch's latest bundle, dispatches `resume: pause` for every usage-paused run whose recorded reset has passed, and **disables itself** once no run is left waiting. A job that ends on a usage pause uploads its bundle before it enables the poller, so a tick that disables re-lists the runs once and re-enables the poller when a still-running job's usage-paused bundle appeared meanwhile; such a run is never dispatched until its run has completed. An ordinary running job carries no bundle until its final steps and never keeps the poller enabled. Ticks are therefore paid only while something is paused. On a private repository each tick is billed at least one minute while the poller is enabled — up to 48 minutes a day at the shipped interval — and a run resumes up to one interval after its reset; on a public repository the ticks cost nothing. The interval is the adopter's to edit in the workflow file.
+- **Wait in the job** when the reset falls before the job's deadline and either the runner is self-hosted, or the wait is at most `REMOTE_WAIT_MAX_SECS` (default 600). The gate's own resume then relaunches the run in the same job. A self-hosted job's wait costs nothing; a hosted job bills for every minute it waits, but a short wait is still cheaper than a new job's setup plus the poller's latency. A pause whose recorded reset time was lost is first given the gate's one-hour fallback, so the choice is made on that time — on a hosted runner at the default, the poller. Every in-job wait, self-hosted included, is bounded: once it is still paused `REMOTE_WAIT_MAX_SECS` past the gate's last chance to resume it (the later of the reset and its own start, plus the gate's check interval and the job's poll interval, 75 seconds at the defaults), the job ends with decision `wait-poller` and one notification naming `/autonomous-sdlc-harness:branch-resume` as the way on.
+- **Hand it to the poller** otherwise, or when an in-job wait reaches that bound: the job ends with decision `wait-poller`, so billing stops with it, and `continue` enables `harness-resume.yml`. The poller is a `schedule` workflow, every 30 minutes as shipped, whose one step is `remote-run.sh poll`: it downloads each branch's latest bundle, dispatches `resume: pause` for every usage-paused run whose recorded reset has passed, and **disables itself** once no run is left waiting. A job that ends on a usage pause uploads its bundle before it enables the poller, so a tick that disables re-lists the runs once and re-enables the poller when a still-running job's usage-paused bundle appeared meanwhile; such a run is never dispatched until its run has completed. An ordinary running job carries no bundle until its final steps and never keeps the poller enabled. Ticks are therefore paid only while something is paused. On a private repository each tick is billed at least one minute while the poller is enabled — up to 48 minutes a day at the shipped interval — and a run resumes up to one interval after its reset; on a public repository the ticks cost nothing. The interval is the adopter's to edit in the workflow file.
 
 **A re-dispatch that keeps failing is bounded.** A failed dispatch is retried on later ticks until `HARNESS_POLL_MAX_DISPATCH_FAILURES` dispatches of the same paused run have failed (default 3, counting the first), or until the recorded reset is more than `HARNESS_POLL_GIVE_UP_AFTER_MINUTES` (default 360) in the past, whichever comes first. The poller then sends one `paused` notification naming `gh`'s error and `/autonomous-sdlc-harness:branch-resume <branch>`, and stops counting that branch as waiting, so it can disable itself. The count travels from one tick to the next in the `harness-poll-state` artifact, kept 7 days. A new run of the branch starts the count again. If the artifact is lost, the deadline bound alone still ends the retries.
 
@@ -210,7 +210,13 @@ When the usage gate pauses a run, the job has two ways to resume it, and chooses
 
 **Guards.** Unchanged in the job. The plugin's `PreToolUse` guards load with the installed plugin, and the job's `init` points `core.hooksPath` at the repository's hooks directory, so the pre-push hook refuses a protected branch there as it does locally. `push-branch.sh` still refuses protected branches, and the flow still never merges.
 
-**The permission profile.** `.claude/settings.autonomous.json` is gitignored and carries one checkout's absolute paths, so the job has none until it makes one. It runs `npx autonomous-sdlc-harness@<rendered version> init --plugin-root-entries`, which generates the profile for the job's own checkout path together with the `Read` and `Bash` entries for the plugin roots its install produced, and the step fails if `init` changed any tracked file. `doctor` then runs as a preflight, so any check `doctor` fails stops the job before launch rather than mid-run. Entries an adopter added to their own machine's profile do not travel; §7 says which of them can.
+**The permission profile.** `.claude/settings.autonomous.json` carries one checkout's absolute paths, and `init` writes it into the managed `.gitignore` block, so a job's checkout carries none until the job makes one. It runs `npx autonomous-sdlc-harness@<rendered version> init --plugin-root-entries`, which generates the profile for the job's own checkout path, adds a `Read` grant at the plugin's runtime root — required there even where the runtime root is also the install root, as it is for every GitHub-sourced marketplace — with, while `phases.qa` is true, the `Bash` entries for the interactive-test phase's helper scripts, and adds every resolved plugin root to `permissions.additionalDirectories`; the step fails if `init` changed any tracked file. In job mode the watcher repeats each of those roots as an `--add-dir` at launch (§2). `doctor --remote-job` then runs as a preflight, so any check it fails stops the job before launch rather than mid-run; under that option `profile-paths`, `plugin-permissions` and `profile-tracked` fail where a plain `doctor` only warns.
+
+**A profile an earlier release committed is not replaced.** `init` is create-if-absent, so the job's `init` keeps a tracked profile carrying another machine's paths, and the step that runs it refuses a rewrite of a tracked file. `profile-tracked` fails the preflight on it, and the remedy is the untrack in §7 step 3.
+
+**What a profile with no plugin-root grant cost — measured.** Gate 12 round 1, on 2026-09-28, ran three jobs on a GitHub-hosted runner (runs `36425634480`, `36426447207` and `36428382006`) under a profile carrying no plugin-root grant: every `Read` of the plugin's instruction files was refused, and `cat` and `ls` there were refused as *"outside the allowed working directory"* (`cli/src/doctor/checks.ts` → the doc comment on `PLUGIN_PERMISSIONS_CHECK`). No job has yet been observed reading the plugin root under the grant above.
+
+Entries an adopter added to their own machine's profile do not travel; §7 says what becomes of them.
 
 **The walker state.** `<state_dir>/.flow_walker_state` stays gitignored and is never committed. It is carried in the bundle as `flow_walker_state`, without its dot, because `actions/upload-artifact` skips hidden files by default, and a job restore puts it back under its dotted name; a mirror restore does not place it. `<state_dir>/.dispatch_counter` needs nothing, because every flow resets it on every session entry.
 
@@ -266,6 +272,7 @@ The design rests on these GitHub behaviours. None was verified against a real re
 | A `schedule` trigger is a recurring cron on the default branch, at most every 5 minutes, often late and sometimes dropped, and disabled in a public repository after 60 days without activity | The poller's shape, and its tolerance for a late or dropped tick | https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows, retrieved 2026-09-24 (carried) | A late tick delays a resume by one interval; the self-disabling poller is re-enabled by the next pausing job |
 | A `workflow_dispatch` inputs payload is limited to 65,535 characters | `dispatch --resume answer` refusing a larger payload | https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#onworkflow_dispatchinputs, quoted in `remote-run.sh` → `REMOTE_INPUT_PAYLOAD_MAX`; retrieval date not recorded there | A different limit moves the refusal point; the constant is the one place to change |
 | An environment wait timer is fixed per environment and may need a paid plan on a private repository | The decision not to build one (§3) | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment, retrieved 2026-09-24 (carried) | Nothing built depends on it |
+| A `permissions.allow` or `permissions.additionalDirectories` entry in the committed `.claude/settings.json` applies to the job's session | Nothing: the job's grants come from the profile it generates and the watcher's launch flags (§4) | Measured negative, not retrieved: in Gate 12 round 1 Run 3 (run `36428382006`, 2026-09-28) entries there naming a path outside the checkout did not apply in the job. Not measured for an entry that names no path | Nothing changes: the job's grants already come from its own profile and launch flags. Why the Run 3 entries did not apply was not established |
 
 ---
 
@@ -302,7 +309,41 @@ git commit -m "Add the harness workflows"
 ```
 
 ```
-git push origin <default branch>
+gh auth refresh -s workflow
+```
+
+```
+git push --no-verify origin <default branch>
+```
+
+Pushing a `.github/workflows/*.yml` file over HTTPS with a `gh` token needs the token's `workflow` scope, which the third command adds. The push to the default branch is refused by the `pre-push` hook `init` wires through `core.hooksPath`; `--no-verify` skips that hook for this one push, which you make on purpose and the harness never makes.
+
+**A repository adopted before this release** may carry `.claude/settings.autonomous.json` committed, which the job keeps and its preflight then fails under `profile-tracked` (§4). Stop tracking it, on the default branch:
+
+```
+git rm --cached .claude/settings.autonomous.json
+```
+
+```
+git commit -m "Stop tracking the machine-local permission profile"
+```
+
+```
+git push --no-verify origin <default branch>
+```
+
+It lands on the default branch because every run's branch is cut from `origin/<default branch>`, so an untrack pushed only to a run branch covers that one run; and it skips the hook for the same reason as the push above. Then re-render the two workflows so the job's preflight is `doctor --remote-job`. Delete them and run a plain `init`, which re-creates each one under create-if-absent at this CLI's version. It also merges this release's ignore rule for the profile, with its comment, into the managed `.gitignore` block, and nothing it already carries changes. Commit `.gitignore` with the workflows: left uncommitted, the job's own `init` makes the same change, and its setup step fails on any changed tracked file. Re-apply any timeout, runner or cron tuning from the deleted copies in git history, then stage all three and commit and push as above. `init --force` would re-render them too, but it also regenerates every other generated file after a `.bak`, including `.claude/CLAUDE.md` and the conventions documents the analyze command filled.
+
+```
+git rm .github/workflows/harness-run.yml .github/workflows/harness-resume.yml
+```
+
+```
+npx autonomous-sdlc-harness init
+```
+
+```
+git add .github/workflows/harness-run.yml .github/workflows/harness-resume.yml .gitignore
 ```
 
 **4. Set a credential secret.** One of the two is required (§9 says which one billing follows). For a Claude subscription, make a long-lived token, then store it; `gh secret set` asks for the value, so it stays out of your shell history:
@@ -371,7 +412,7 @@ All are set on the GitHub repository (Settings → Secrets and variables → Act
 | `USAGE_SEVEN_DAY_PAUSE_PCT` | variable | as above | 0.95 | no |
 | `PARK_LOOP_MAX_CYCLES` | variable | the watcher's park-loop guard, in job mode | 2 | no |
 | `PARK_LOOP_WINDOW_SECS` | variable | as above | 300 | no |
-| `REMOTE_WAIT_MAX_SECS` | variable | job mode: the longest usage-pause wait a hosted job takes in the job | 600 | no |
+| `REMOTE_WAIT_MAX_SECS` | variable | job mode: the longest usage-pause wait a hosted job takes in the job, and how far past the gate's last resume pass after the reset any in-job wait, self-hosted included, stays paused before it ends in `wait-poller` | 600 | no |
 | `REMOTE_AUTO_RESUME_MAX` | variable | job mode: automatic resumes per run after a failure or an overload pause | 2 | no |
 | `REMOTE_AUTO_RESUME_DELAY_SECS` | variable | job mode: the wait before each automatic resume | 300 | no |
 | `REMOTE_CONTROL_POLL_SECS` | variable | job mode: how often the job looks for a `harness pause` run | 60 | no |
@@ -380,7 +421,7 @@ The list of record is the `env:` block of the `run` job in `harness-run.yml`, an
 
 ### Your own allow entries
 
-Entries you added to this machine's `.claude/settings.autonomous.json` — typically to stop a stall on a command the generated profile did not allow — do not reach the job, which generates its own profile for its own checkout (§4). An entry that names no absolute path can move into the committed `.claude/settings.json`, which the runtime merges beside the profile passed with `--settings`, and then applies on every machine and in every job. An entry naming a path on this machine cannot travel; the remote run does without it.
+Entries you added to this machine's `.claude/settings.autonomous.json` — typically to stop a stall on a command the generated profile did not allow — do not reach the job, which generates its own profile for its own checkout (§4). An entry moved into the committed `.claude/settings.json` applies on a person's machine, where the runtime merges that file beside the profile passed with `--settings`. In the job it is not established: Gate 12 round 1 observed entries there naming a path outside the checkout not applying, and an entry naming no path is unmeasured there (§6). The job's plugin-root grants come from its generated profile and its launch flags (§4), not from that file.
 
 ---
 

@@ -3,7 +3,9 @@
  *
  * **The rule this module exists to enforce: this is the only pass whose numbers include the per-call
  * incremental refresh and the MCP round trip, and it takes them through the shipped server rather than
- * through the library.** `logQuery` is called from `cli/src/retrieval/server.ts` alone, so a runner
+ * through the library.** That server is `docs serve` spawned from this checkout's `cli/dist/cli.js`
+ * (`CLI_ENTRY`), not the machine-wide runtime `init` installs, so "shipped" names the code path and not
+ * an installed copy. `logQuery` is called from `cli/src/retrieval/server.ts` alone, so a runner
  * driving `searchDocs` directly — which is what arms B-E do — writes no record at all; and the server
  * hardcodes `mode: 'fused-rerank'` and accepts `query` and `k` only, so every record it can write is an
  * arm E record. Its latency is therefore reported here, separately from library-level arm E, and the gap
