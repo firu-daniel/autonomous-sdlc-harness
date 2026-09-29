@@ -57,9 +57,14 @@ import {
 /** The `init` flag that runs {@link writeGithubWorkflows} with {@link GithubWorkflowsOptions.upgrade}. */
 export const UPGRADE_WORKFLOWS_FLAG = '--upgrade-workflows';
 
+/** The one producer of the `npx <package>@<version>` prefix a version-pinned remedy command starts with. */
+export function pinnedCliCommand(version: string): string {
+  return `npx ${ownManifestString('name')}@${version}`;
+}
+
 /** The one producer of the command that re-renders both workflows at `version`. */
 export function upgradeWorkflowsCommand(version: string): string {
-  return `npx ${ownManifestString('name')}@${version} init ${UPGRADE_WORKFLOWS_FLAG}`;
+  return `${pinnedCliCommand(version)} init ${UPGRADE_WORKFLOWS_FLAG}`;
 }
 
 const CRON_LINE = /^\s*- cron: /;
