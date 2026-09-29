@@ -33,7 +33,7 @@ Three findings remain.
 Each entry resolves to `harness-runs/code_reviews/fix_remote_pause_state_and_gate12_record_code_review/finding_<K>.md` through its `**Finding K**` reference. The leading `N.` is the fix order. `K` is the finding's stable number.
 
 1. [x] **Finding 3** — Make `branch-resume`'s expired-bundle clause about the planning writer conditional on the run still planning _(layer: plugin)_
-2. [ ] **Finding 1** — Make Gate 12 observation (iii)'s push probe tell the watcher's own push from the job's _(layer: general)_
+2. [x] **Finding 1** — Make Gate 12 observation (iii)'s push probe tell the watcher's own push from the job's _(layer: general)_
 3. [ ] **Finding 2** — State the Actions Runner 2.327.1 minimum the Node 24 majors require, in both pins headers and the self-hosted setup _(layer: cli, general)_
 
 ---

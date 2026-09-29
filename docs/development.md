@@ -791,13 +791,25 @@ git commit -m "Add a push probe workflow"
 git push --no-verify origin <default branch>
 ```
 
-After the first job has pushed, list the probe's runs on the task's branch:
+After the first job has pushed, list the probe's runs on the task's branch with the commit each ran for:
 
 ```
-gh run list --workflow push-probe.yml --branch <branch>
+gh run list --workflow push-probe.yml --branch <branch> --json databaseId,headSha,event,createdAt
 ```
 
-Passes when the job drops its own `PAUSE`, ends with decision `continue`, its `remote-run.sh continue` step dispatches, and a **new** `harness run <branch>` run starts whose job restores the previous bundle and resumes from the pushed ledger. That second run starting is the evidence that a `workflow_dispatch` sent with `GITHUB_TOKEN` starts a run. Record both run ids, the `continue` step's output, the second job's `restore` line, and whether a push the first job made started a run of `push-probe.yml`, with that last command's output verbatim. Record too the `harness-state` artifact's `expires_at` from `gh api repos/<owner>/<scratch-repo>/actions/runs/<first run id>/artifacts`, which shows whether `retention-days: 400` was capped at the repository's retention or refused (`docs/remote-execution.md` §6).
+Then list the branch's commits:
+
+```
+git fetch origin <branch>
+```
+
+```
+git log --format='%H %s' origin/<branch>
+```
+
+One probe run is expected before any job ran. The watcher pushed the task-prompt commit, `chore: add task prompt for <branch>`, with your own `gh` credential, and that push is not a `GITHUB_TOKEN` push. Only a probe run whose `headSha` is a commit the first job pushed, which is any commit newer than that task-prompt commit, answers the push half.
+
+Passes when the job drops its own `PAUSE`, ends with decision `continue`, its `remote-run.sh continue` step dispatches, and a **new** `harness run <branch>` run starts whose job restores the previous bundle and resumes from the pushed ledger. That second run starting is the evidence that a `workflow_dispatch` sent with `GITHUB_TOKEN` starts a run. Record both run ids, the `continue` step's output, the second job's `restore` line, and whether any `push-probe.yml` run's `headSha` is a commit the first job pushed, with the `gh run list` and `git log` output verbatim. Record too the `harness-state` artifact's `expires_at` from `gh api repos/<owner>/<scratch-repo>/actions/runs/<first run id>/artifacts`, which shows whether `retention-days: 400` was capped at the repository's retention or refused (`docs/remote-execution.md` §6).
 
 **(iv) A `pause` dispatch.** While a job is running, run `/autonomous-sdlc-harness:branch-pause <branch>` in the session, then relay it and read the marker run:
 
