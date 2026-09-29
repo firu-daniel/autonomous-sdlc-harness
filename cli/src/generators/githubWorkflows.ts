@@ -44,6 +44,7 @@ import { remoteExecutionApplies, type HarnessConfig } from '../config/model.js';
 import { ownManifestString, readTemplate } from '../core/paths.js';
 import { renderTemplate } from '../core/templating.js';
 import type { WritePlan } from '../core/writer.js';
+import { unquoteYamlScalar } from '../core/yamlScalar.js';
 import {
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RESUME_PATH,
@@ -102,9 +103,7 @@ export interface GithubWorkflowsResult {
 
 /** The schedule a `- cron:` line carries, quotes stripped. */
 function cronExpression(line: string): string {
-  const value = line.replace(CRON_LINE, '').trim();
-  const quote = value[0];
-  return (quote === "'" || quote === '"') && value.length >= 2 && value.endsWith(quote) ? value.slice(1, -1) : value;
+  return unquoteYamlScalar(line.replace(CRON_LINE, '').trim());
 }
 
 /** Substitute `cron` for the template's `- cron:` line, at the template's indentation. */

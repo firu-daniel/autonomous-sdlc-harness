@@ -26,6 +26,8 @@
 
 import { spawnSync } from 'node:child_process';
 
+import { unquoteYamlScalar } from '../core/yamlScalar.js';
+
 /** The adopter-side directory GitHub reads workflows from. */
 export const WORKFLOWS_DIR = '.github/workflows';
 
@@ -80,9 +82,7 @@ export function renderedCliVersions(text: string): readonly string[] {
   for (const line of text.split(/\r?\n/)) {
     const match = CLI_VERSION_LINE.exec(line);
     if (match === null) continue;
-    let value = match[1] ?? '';
-    const quote = value[0];
-    if ((quote === "'" || quote === '"') && value.length >= 2 && value.endsWith(quote)) value = value.slice(1, -1);
+    const value = unquoteYamlScalar(match[1] ?? '');
     if (value !== '' && !versions.includes(value)) versions.push(value);
   }
   return versions;
