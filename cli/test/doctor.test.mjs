@@ -5524,6 +5524,75 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(line.includes('gh auth refresh -s workflow'), line);
   });
 
+  const PIN_LINE = /^([ \t]*HARNESS_CLI_VERSION:).*$/gm;
+  const STALE_PIN = '0.0.1';
+  const UPGRADE_ROUTE = 'init --upgrade-workflows';
+  const rewritePins = (dir, replace) => {
+    const path = join(dir, REMOTE_RUN_WORKFLOW);
+    const before = readFileSync(path, 'utf8');
+    const after = before.replace(PIN_LINE, replace);
+    assert.notEqual(after, before, 'harness-run.yml carries no HARNESS_CLI_VERSION line to rewrite');
+    writeFileSync(path, after, 'utf8');
+  };
+
+  await t.test('on, with harness-run.yml pinned to another version, warns with the upgrade route and the stay route', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    rewritePins(dir, `$1 '${STALE_PIN}'`);
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-execution');
+    assert.ok(line?.includes(UPGRADE_ROUTE), `${stdout}\n${stderr}`);
+    assert.ok(line.includes(STALE_PIN), line);
+    assert.ok(line.includes(`autonomous-sdlc-harness@${STALE_PIN} doctor`), line);
+    assert.ok(line.includes('git push --no-verify origin'), line);
+  });
+
+  await t.test('on, with harness-run.yml pinned to this version, passes and says so', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    const stub = await ghStub(subtest);
+
+    const { stdout, stderr } = await doctorWithStub(dir, stub);
+
+    const line = reportLine(stdout, 'pass', 'remote-execution');
+    assert.ok(line?.includes("rendered for this CLI's own version"), `${stdout}\n${stderr}`);
+    assert.ok(!`${stdout}\n${stderr}`.includes(UPGRADE_ROUTE), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('on, with the pin lines removed, notes it and does not fail on that account', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    rewritePins(dir, '');
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'remote-execution');
+    assert.ok(line?.includes('carries no HARNESS_CLI_VERSION line'), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('the upgrade route it names clears the warning', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    rewritePins(dir, `$1 '${STALE_PIN}'`);
+    const stub = await ghStub(subtest);
+
+    const before = await doctorWithStub(dir, stub);
+    assert.ok(reportLine(before.stderr, 'warn', 'remote-execution')?.includes(UPGRADE_ROUTE), `${before.stdout}\n${before.stderr}`);
+
+    const upgrade = await runCli(dir, ['init', '--upgrade-workflows']);
+    assert.equal(upgrade.status, 0, `init --upgrade-workflows exited ${upgrade.status}\n${upgrade.stdout}\n${upgrade.stderr}`);
+
+    const after = await doctorWithStub(dir, stub);
+    assert.ok(!`${after.stdout}\n${after.stderr}`.includes(UPGRADE_ROUTE), `${after.stdout}\n${after.stderr}`);
+    assert.ok(reportLine(after.stdout, 'pass', 'remote-execution')?.includes("rendered for this CLI's own version"), `${after.stdout}\n${after.stderr}`);
+  });
+
   const QA_SKIP = 'a remote run skips the interactive-test phase';
   const setQa = async (dir, value) => {
     const edit = await runCli(dir, ['config', 'set', 'phases.qa', value]);
