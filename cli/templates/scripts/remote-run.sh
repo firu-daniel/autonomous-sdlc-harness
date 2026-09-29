@@ -71,11 +71,15 @@
 # past a run with none, and stopping at one whose artifact has expired, since
 # an older copy would be staler state. An expired one restores nothing: under
 # --resume answer it exits 2; otherwise it prints a `::warning::` line naming
-# the run, the expiry and the lost counts and clarification history, and the
-# job continues from the committed ledger. An unexpired one it downloads to `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/`
+# the run, the expiry and the lost counts, clarification history and
+# uncommitted planning drafts, and the job continues from the committed ledger. An unexpired one it downloads to `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/`
 # (skipped when that directory already holds its status.json); and restores it
 # in `job` mode — on every --resume kind, `none` included, because a reused
-# branch keeps its clarification history. Then, under --resume answer, it
+# branch keeps its clarification history. A job-mode restore also places the
+# bundle's `planning/` drafts at their paths under the state directory, never
+# over a file the checkout already has, and when it placed or kept any prints
+# `placed <n> planning file(s) for <branch>; kept <n> the checkout already
+# carries`. Then, under --resume answer, it
 # writes each `"<n>": "<text>"` entry to `clarifications/<branch>/answer_<n>.md`
 # with the exact bytes, after checking every entry first; and with
 # `HARNESS_INPUT_PARK_LOOP_CLEAR` exactly `true` it sets `park_loop_cycles` to
@@ -230,7 +234,8 @@
 #      `mirror` mode into the record's `worktree`, `run.log` copied to the main
 #      checkout's `autonomous_logs/<branch>.remote.log`, and `status`,
 #      `pause_reason`, `usage_resume_at`, `park_loop_cycles`, `remote_run_id`,
-#      `remote_run_url`, `remote_detail` and `remote_synced_at` written
+#      `remote_run_url`, `remote_detail` and `remote_synced_at` written. A
+#      `mirror` restore places no planning draft
 #   4. no artifact, while some bundle exists (`remote_run_id` is set, or an
 #      older finished run carries one): a job that died before its upload.
 #      `paused` / `killed`, `remote_run_id` / `remote_run_url` re-pointed at
@@ -294,7 +299,8 @@
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
 # `<branch>.remote.log` in the main checkout, plus the mirror restore
 # `hr_remote_bundle_restore` performs in the record's `worktree`; for
-# `restore`, that download directory, the job restore, `answer_<n>.md` and the
+# `restore`, that download directory, the job restore (the planning drafts
+# among it), `answer_<n>.md` and the
 # `park_loop_cycles` rewrite of `remote_status.json`, all in the job's
 # checkout; for `save`, <out_dir> and the step summary; for `poll`, its
 # download directories and `<state_dir>/autonomous_logs/poll_state/previous/`
@@ -363,7 +369,8 @@
 #   flow_walker_state) and GITHUB_RUN_ID set to another id:
 #   restore    bash scripts/remote-run.sh restore feat_x --resume none   -> 0; the
 #              checkout carries clarifications/feat_x/question_1.md,
-#              .flow_walker_state and autonomous_logs/remote_status.json
+#              .flow_walker_state and autonomous_logs/remote_status.json, and
+#              places the bundle's planning/ drafts where the checkout has none
 #   answer     HARNESS_INPUT_ANSWERS='{"1":"Use B.\n"}' ... --resume answer -> 0;
 #              clarifications/feat_x/answer_1.md holds exactly `Use B.` + newline
 #   no question  HARNESS_INPUT_ANSWERS='{"2":"x"}' ... --resume answer
@@ -381,7 +388,7 @@
 #              -> prints the expired line, "$r" byte-identical
 #   save       bash scripts/remote-run.sh save feat_x /tmp/b -> 0; /tmp/b holds
 #              status.json, clarifications/feat_x/, flow_walker_state (and
-#              PAUSE_PROGRESS.md, run.log when present); with
+#              PAUSE_PROGRESS.md, run.log, planning/ when present); with
 #              GITHUB_STEP_SUMMARY=/tmp/s, /tmp/s gains the status table
 #   never started  no remote_status.json and no registry: save -> 0, /tmp/b
 #              empty
@@ -1140,7 +1147,7 @@ verb_restore() {
   if [ "$PREV_RUN_STATE" = expired ]; then
     [ "$resume" != answer ] \
       || restore_refuse "the state bundle of run $id expired on $BUNDLE_EXPIRES_AT, so its questions can no longer be answered here: resume from the committed ledger with $RESUME_HINT $branch, or re-drop the task; nothing written"
-    echo "::warning::remote-run.sh: the state bundle of run $id expired on $BUNDLE_EXPIRES_AT: the park-loop, auto-resume and stall counts and the clarification history it carried are lost; this job continues from the committed ledger"
+    echo "::warning::remote-run.sh: the state bundle of run $id expired on $BUNDLE_EXPIRES_AT: the park-loop, auto-resume and stall counts, the clarification history and any planning drafts not yet committed that it carried are lost; this job continues from the committed ledger"
   elif [ -z "$id" ]; then
     [ "$resume" != answer ] \
       || restore_refuse "--resume answer, but no finished run of $branch carries a state bundle; nothing written"
@@ -1163,7 +1170,11 @@ verb_restore() {
     fi
     hr_remote_bundle_restore "$download" "$root" "$branch" job
     case $? in
-      0) echo "remote-run.sh: restored the bundle of run $id into $root" ;;
+      0)
+        echo "remote-run.sh: restored the bundle of run $id into $root"
+        [ $((HR_REMOTE_PLANNING_PLACED + HR_REMOTE_PLANNING_KEPT)) -eq 0 ] \
+          || echo "remote-run.sh: placed $HR_REMOTE_PLANNING_PLACED planning file(s) for $branch; kept $HR_REMOTE_PLANNING_KEPT the checkout already carries"
+        ;;
       2) restore_refuse "the bundle in '$download' is unrecognised for $branch; nothing restored" ;;
       *) restore_fail "restoring '$download' into '$root' failed" ;;
     esac

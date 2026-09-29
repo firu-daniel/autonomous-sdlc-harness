@@ -57,7 +57,7 @@ Round 2 of Gate 12 ran a full delivery on a GitHub-hosted runner with CLI 0.4.1.
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_pause_state_and_gate12_record/task_<K>_plan.md`. The order is bottom-up in the configured layer order: `cli`, `plugin`, then the catch-all `general` last.
 
 1. [x] **Task 1** — Carry the untracked planning drafts in the remote state bundle and restore them in job mode without overwriting _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Report planning drafts in `remote-run.sh` restore and prove a pause-then-restore across two job checkouts continues the saved walk _(layer: cli)_ _(points: 15)_
+2. [x] **Task 2** — Report planning drafts in `remote-run.sh` restore and prove a pause-then-restore across two job checkouts continues the saved walk _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Move both workflow templates to action majors that run on Node 24 and make their headers true _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Name the lost planning drafts in `branch-resume`'s expired-bundle report _(layer: plugin)_ _(points: 5)_
 5. [ ] **Task 5** — State the planning-draft design and record round 2 in `docs/remote-execution.md` _(layer: general)_ _(points: 20)_

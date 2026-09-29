@@ -19,7 +19,8 @@
  * **For the job-side `restore` and `save`, the rule is that a job carries forward exactly the
  * previous job's bundle — never its own run's — and an answer lands with its exact bytes or not at
  * all**: every answer is checked against a top-level `question_<n>.md` before any is written, and
- * `save` exits 0 whatever it met.
+ * `save` exits 0 whatever it met. An uncommitted planning draft crosses a job boundary only into a
+ * job checkout, and never over a file that checkout already has.
  *
  * **For `continue` and `poll`, the rule is that a re-dispatch carries the bundle's own `chain` plus
  * one, and nothing is sent for a branch that is stopped, under `HARNESS_REMOTE_STOP`, or at the chain
@@ -51,11 +52,11 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createFixture, runBash, runCli, snapshotTree } from './helpers/fixture.mjs';
+import { createFixture, runBash, runCli, runGit, snapshotTree } from './helpers/fixture.mjs';
 
 const SCRIPT = 'scripts/remote-run.sh';
 const STATE_DIR = 'sdlc-harness';
@@ -769,7 +770,7 @@ test('restore --resume pause with the newest bundle expired warns, restores noth
   const fx = await remoteFixture(t);
   const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'pause'], expiredRestoreEnv(fx));
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /^::warning::.*run 402 expired on 2026-01-02T00:00:00Z.*committed ledger/m);
+  assert.match(result.stdout, /^::warning::.*run 402 expired on 2026-01-02T00:00:00Z.*planning drafts.*committed ledger/m);
   assert.doesNotMatch(result.stdout, /first job/);
   assert.deepEqual(downloads(fx), []);
   assert.equal(existsSync(join(fx.dir, REMOTE_STATUS)), false);
@@ -849,6 +850,98 @@ test('save moves aside a restored status.json whose run_id is not this job\'s, a
   const sent = notes();
   assert.equal(sent.length, 1);
   assert.equal(sent[0].event, 'failed');
+});
+
+const STORY_INDEX = `${STATE_DIR}/story_plans/feat_x_story_plan.md`;
+const TASK_DRAFT = `${STATE_DIR}/task_plans/feat_x/task_1_plan.md`;
+const WALK = ['--flow', 'task_plan_writing', '--branch', 'feat_x'];
+
+/** The `node:` value of the walker's output. */
+function pendingNode(stdout) {
+  const match = /^node: (.+)$/m.exec(stdout);
+  assert.ok(match, stdout);
+  return match[1];
+}
+
+/** Save, from `fx`, a job bundle holding a job-mode status and whatever the checkout carries. */
+async function saveJob(fx) {
+  remoteRecord(fx, { status: 'paused', engine: 'task' });
+  const wrote = await runBash(fx.dir, ['-c',
+    '. scripts/lib/harness-run-lib.sh && hr_remote_status_write "$1" feat_x "$2" stop "paused mid-planning"',
+    '_', REGISTRY, REMOTE_STATUS]);
+  assert.equal(wrote.status, 0, wrote.stderr);
+  const out = join(fx.dir, STATE_DIR, 'stub', 'out');
+  const saved = await remoteRun(fx, ['save', 'feat_x', out]);
+  assert.equal(saved.status, 0, saved.stderr);
+  return out;
+}
+
+/** Serve `out` as run 401's `harness-state` to `fx`, whose job is run 999, and restore it. */
+function restoreFrom(fx, out) {
+  return remoteRun(fx, ['restore', 'feat_x', '--resume', 'pause'], {
+    ...syncEnv({ runs: [ghRun(401, 'completed', 1)], artifacts: { 401: ['harness-state'] }, bundles: { 401: out } }),
+    GITHUB_RUN_ID: '999',
+  });
+}
+
+test('a walk paused mid-planning in one checkout continues in a fresh one, its pending reviewer\'s story index on disk', async (t) => {
+  const a = await remoteFixture(t);
+  const started = await runBash(a.dir, ['scripts/flow-walker.sh', 'start', ...WALK, '--skipped', 'none']);
+  assert.equal(started.status, 0, started.stderr);
+  const advanced = await runBash(a.dir, ['scripts/flow-walker.sh', 'next', ...WALK, '--outcome', 'returned', '--skipped', 'none']);
+  assert.equal(advanced.status, 0, advanced.stderr);
+  const pending = pendingNode(advanced.stdout);
+  assert.equal(pending, 'architecture_review');
+  mkdirSync(join(a.dir, STATE_DIR, 'story_plans'), { recursive: true });
+  mkdirSync(join(a.dir, STATE_DIR, 'task_plans', 'feat_x'), { recursive: true });
+  writeFileSync(join(a.dir, STORY_INDEX), '# feat_x story index\n');
+  writeFileSync(join(a.dir, TASK_DRAFT), '### Task 1\n');
+  const out = await saveJob(a);
+
+  const b = await remoteFixture(t);
+  const restored = await restoreFrom(b, out);
+  assert.equal(restored.status, 0, restored.stderr);
+  assert.match(restored.stdout, /placed 2 planning file\(s\) for feat_x; kept 0/);
+  for (const draft of [STORY_INDEX, TASK_DRAFT]) {
+    assert.deepEqual(readFileSync(join(b.dir, draft)), readFileSync(join(a.dir, draft)));
+  }
+  const current = await runBash(b.dir, ['scripts/flow-walker.sh', 'current', ...WALK]);
+  assert.equal(current.status, 0, current.stderr);
+  assert.match(current.stdout, /^action: dispatch$/m);
+  assert.equal(pendingNode(current.stdout), pending);
+  assert.deepEqual(downloads(b).map((line) => line.split(' ').slice(0, 5).join(' ')), ['run download 401 -n harness-state']);
+
+  // Control: the same bundle without planning/ restores a walk whose pending reviewer has no story index.
+  const bare = join(a.dir, STATE_DIR, 'stub', 'bare');
+  cpSync(out, bare, { recursive: true });
+  rmSync(join(bare, 'planning'), { recursive: true });
+  const c = await remoteFixture(t);
+  const control = await restoreFrom(c, bare);
+  assert.equal(control.status, 0, control.stderr);
+  assert.doesNotMatch(control.stdout, /planning file/);
+  const controlCurrent = await runBash(c.dir, ['scripts/flow-walker.sh', 'current', ...WALK]);
+  assert.equal(controlCurrent.status, 0, controlCurrent.stderr);
+  assert.equal(pendingNode(controlCurrent.stdout), pending);
+  assert.equal(existsSync(join(c.dir, STORY_INDEX)), false);
+});
+
+test('restore keeps a planning file the fresh checkout already carries, and reports it kept', async (t) => {
+  const a = await remoteFixture(t);
+  mkdirSync(join(a.dir, STATE_DIR, 'story_plans'), { recursive: true });
+  writeFileSync(join(a.dir, STORY_INDEX), 'draft from the paused job\n');
+  const out = await saveJob(a);
+
+  const b = await remoteFixture(t);
+  mkdirSync(join(b.dir, STATE_DIR, 'story_plans'), { recursive: true });
+  writeFileSync(join(b.dir, STORY_INDEX), 'committed on the branch\n');
+  await runGit(b.dir, ['add', '--force', STORY_INDEX]);
+  await runGit(b.dir, ['commit', '--quiet', '-m', 'story index']);
+
+  const restored = await restoreFrom(b, out);
+  assert.equal(restored.status, 0, restored.stderr);
+  assert.match(restored.stdout, /placed 0 planning file\(s\) for feat_x; kept 1/);
+  assert.equal(readFileSync(join(b.dir, STORY_INDEX), 'utf8'), 'committed on the branch\n');
+  assert.equal((await runGit(b.dir, ['status', '--porcelain', '--', STORY_INDEX])).stdout, '');
 });
 
 // ---------------------------------------------------------------------------

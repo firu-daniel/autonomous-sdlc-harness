@@ -60,3 +60,9 @@ This task calls those as they are, and changes nothing in the library.
 - `commands.typecheck` exits 0.
 - In the two-checkout case, the pending `node:` printed in B equals the one printed in A, and B's `downloads(fx)` shows exactly one `run download 401 -n harness-state …`. This is the end-to-end exercise of Task 1's writer and restorer through the verb the workflow actually calls.
 - `git diff cli/templates/scripts/autonomous-watcher.sh` touches only comment lines inside the `pause_reason` field description.
+
+**Deviations from plan:**
+
+- The kept-file case commits and reads `git status` through `runGit` from `cli/test/helpers/fixture.mjs` rather than a bare `execFileSync('git', …)`. The helper exists for this, and applies the fixture's isolated git configuration, which a bare `execFileSync` would not.
+- Evidence downgrade: `bash -n` on both scripts was refused by the permission layer, both times. The two scripts' syntax rests on reading the diff: the only code change is the `0)` arm of `verb_restore`'s `case`, rewritten as a multi-line arm ending in `;;`. `autonomous-watcher.sh` changes comment lines only, confirmed by `git diff -U0`.
+- Evidence downgrade: `remote-run.test.mjs` was not run. Neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command (test-run rule point 3), so the Run gates phase runs it. The only check made was `node --check cli/test/remote-run.test.mjs`, a parse check that exited 0. The walker output the new case asserts on (`action: dispatch`, `node:`) and the `architecture_review` pending node with parity off were confirmed by reading the `flow-walker.sh` OUTPUT header and `task_plan_writing.graph.json`, not by running them.
