@@ -12,7 +12,7 @@
 
 **This section is the single source of truth for the fix loop.** The loop walks the `[ ]` entries below top-to-bottom, and only the committing role flips a marker to `[x]`. `[ ]` markers anywhere else (e.g. sub-step bullets inside a per-finding file) are informational only.
 
-1. [ ] **Finding 1** — Delete the leftover scratch probe `harness-runs/scratch/t1_probe.mjs` that carries this checkout's absolute path. _(layer: general)_
+1. [x] **Finding 1** — Delete the leftover scratch probe `harness-runs/scratch/t1_probe.mjs` that carries this checkout's absolute path. _(layer: general)_
 
 ---
 

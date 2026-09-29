@@ -24,4 +24,6 @@ In the file itself, line 4 assigns `root` the absolute path of this checkout's `
 
 Do not edit `scripts/run-gates.sh` to exclude `scratch/`: the README makes deletion the contract, and a probe that hardcodes a machine path is exactly what the gate exists to surface.
 
+**Deviations from plan:** Gate 6a (`scripts/run-gates.sh` → `machine_path_hits`) was not re-run: the finding names no test file and a gate script is never run by an implementer, so re-running it is deferred to the Run gates phase. The fix-site fallback applied — the site still carried the defect, so `harness-runs/scratch/t1_probe.mjs` was deleted. The close rests on `ls` of `harness-runs/scratch/` (the probe is gone; `README.md`, `pin_step.sh`, `pin_step_syntax.mjs` untouched) and on `grep -rn` of the checkout's home prefix over that directory, which returned no hit.
+
 **Note for the committer.** The deleted file is untracked and gitignored, so this fix produces no change to the committed tree; there is nothing to stage for it.
