@@ -15,7 +15,7 @@ What is left is four Should Fix items, all prose in this one file. Two entries g
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 3** — Point A11's consequence at `## 7. Turning it on`, step 4, where `claude setup-token` actually appears _(layer: general)_
-2. [ ] **Finding 4** — Say that the subscription detour's count in §5 is net of the API-key action it replaces _(layer: general)_
+2. [x] **Finding 4** — Say that the subscription detour's count in §5 is net of the API-key action it replaces _(layer: general)_
 3. [ ] **Finding 2** — Trim refuted lead 7 to the part A7's evidence supports _(layer: general)_
 4. [ ] **Finding 1** — Grade S6 and A6 `partly true`, as the document's own verdict rule requires, in the entries and the summary table _(layer: general)_
 

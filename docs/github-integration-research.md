@@ -564,7 +564,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 ## 5. Adoption routes compared
 
-The count uses the unit `feat_github_native_adoption` set, from a repository with no harness file to a first run started by labelling an issue. One action is each click-through the adopter must choose, each paste or typed command, each commit, each secret, each setting and each merge. Navigating a form already counted is not counted again, and optional steps are left out. Counts are for an adopter with an Anthropic Console API key. A subscription token adds a codespace detour on every GitHub-side route (A11): create the codespace, install, `claude setup-token`, paste the URL, paste the code, then delete it. That is 5 more actions, or 2 on R2, where the codespace is already open.
+The count uses the unit `feat_github_native_adoption` set, from a repository with no harness file to a first run started by labelling an issue. One action is each click-through the adopter must choose, each paste or typed command, each commit, each secret, each setting and each merge. Navigating a form already counted is not counted again, and optional steps are left out. Counts are for an adopter with an Anthropic Console API key. A subscription token adds a codespace detour on every GitHub-side route (A11): create the codespace, install, `claude setup-token`, paste the URL, paste the code, then delete it. The detour replaces the route's *API key* action, so it adds 5 actions net, or 2 on R2, where the codespace is already open and the detour is only `claude setup-token`, the URL and the code.
 
 | Route | Actions, in order | Count | Hosts anything? | Rests on |
 |---|---|---|---|---|
