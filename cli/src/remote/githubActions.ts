@@ -11,12 +11,14 @@
  * Except in `generators/repoRoot.ts`, nothing here is consulted unless `config/model.ts` →
  * `remoteExecutionApplies(config)` is true: every other consumer tests that switch first. That one
  * is ungated because a gated rule would change `.gitignore` in the same run that turns remote
- * execution on.
+ * execution on. The issue-trigger names (`WORKFLOW_TRIGGER_*`, `TRIGGER_*`, `DEFAULT_TRIGGER_LABEL`)
+ * are gated tighter still: they are consulted only where `forgeTriggerApplies(config)` is true.
  *
  * **Shell and YAML mirrors that must agree byte for byte.** The compiler cannot reach them, so each
  * declares the mirror in its own header, and a rename here is an edit to each of them:
- * `cli/templates/scripts/remote-run.sh`, `cli/templates/github/workflows/harness-run.yml` and
- * `cli/templates/github/workflows/harness-resume.yml`. `cli/templates/scripts/autonomous-watcher.sh`
+ * `cli/templates/scripts/remote-run.sh`, `cli/templates/github/workflows/harness-run.yml`,
+ * `cli/templates/github/workflows/harness-resume.yml` and
+ * `cli/templates/github/workflows/harness-trigger.yml`. `cli/templates/scripts/autonomous-watcher.sh`
  * is not one: it reaches GitHub only through `remote-run.sh` and spells none of these names in code.
  *
  * **Why {@link GH_CLI_VARIABLE} exists.** Every real route into `gh` reaches the network, which no
@@ -40,6 +42,10 @@ export const WORKFLOW_RUN_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_RUN_FILE}`;
 export const WORKFLOW_RESUME_FILE = 'harness-resume.yml';
 export const WORKFLOW_RESUME_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_RESUME_FILE}`;
 
+/** The workflow that turns a labelled issue or a `repository_dispatch` event into a remote run. */
+export const WORKFLOW_TRIGGER_FILE = 'harness-trigger.yml';
+export const WORKFLOW_TRIGGER_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_TRIGGER_FILE}`;
+
 /** Under `cli/templates/`; stored without the dot, which `init` adds (`cli/templates/README.md`). */
 export const WORKFLOW_TEMPLATE_DIR = 'github/workflows';
 
@@ -54,6 +60,18 @@ export const RUNNER_VARIABLE = 'HARNESS_RUNNER';
 
 /** Repository variable: any non-empty value stops every job and poller tick before it launches. */
 export const REMOTE_STOP_VARIABLE = 'HARNESS_REMOTE_STOP';
+
+/** Repository variable naming the issue label that starts a run; unset or empty means {@link DEFAULT_TRIGGER_LABEL}. */
+export const TRIGGER_LABEL_VARIABLE = 'HARNESS_TRIGGER_LABEL';
+
+/** The issue label that starts a run when {@link TRIGGER_LABEL_VARIABLE} is unset or empty. */
+export const DEFAULT_TRIGGER_LABEL = 'harness';
+
+/** Repository variable: comma-separated bot logins that may start a run; unset or empty admits none. */
+export const TRIGGER_ALLOWED_BOTS_VARIABLE = 'HARNESS_TRIGGER_ALLOWED_BOTS';
+
+/** The `repository_dispatch` `event_type` the trigger workflow listens to. */
+export const TRIGGER_DISPATCH_EVENT_TYPE = 'harness-task';
 
 /** Repository secret for subscription billing. */
 export const OAUTH_TOKEN_SECRET = 'CLAUDE_CODE_OAUTH_TOKEN';

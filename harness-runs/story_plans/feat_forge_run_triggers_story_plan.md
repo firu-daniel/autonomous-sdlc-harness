@@ -41,7 +41,7 @@ Every GitHub name the trigger uses has one owner, `cli/src/remote/githubActions.
 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_triggers/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence in the configured layer order, `cli`, then `plugin`, then the catch-all `general`, which ships last.
 
-1. [ ] **Task 1** — Declare the issue-trigger names and the `forgeTriggerApplies` predicate _(layer: cli)_ _(points: 10)_
+1. [x] **Task 1** — Declare the issue-trigger names and the `forgeTriggerApplies` predicate _(layer: cli)_ _(points: 10)_
 2. [ ] **Task 2** — Move the inbox filename routing into the run library, and add the library's `forge` reader _(layer: cli)_ _(points: 10)_
 3. [ ] **Task 3** — Derive a branch name from an issue title in the run library _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Share the task-prompt placement between the watcher and a job _(layer: cli)_ _(points: 15)_
