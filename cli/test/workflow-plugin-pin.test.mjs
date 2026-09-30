@@ -2,8 +2,8 @@
  * The `Install the pinned plugin` step of the `harness-run.yml` template, run.
  *
  * **The rule these tests enforce: the install step installs the plugin at the workflow's version,
- * whatever the marketplace's default branch carries, and refuses naming the upgrade route when it
- * cannot.** The step's `run: |` body is taken from the template's own text and run with `bash`,
+ * whatever the marketplace's default branch carries, refuses naming the upgrade route when it
+ * cannot, and prints no detached-HEAD advice into the job log while doing so.** The step's `run: |` body is taken from the template's own text and run with `bash`,
  * against a stub `claude` first on `PATH`. The clone is real: `https://github.com/` is redirected
  * through `GIT_CONFIG_*` to a local bare repository with two plugin versions, so no case reaches
  * the network.
@@ -21,6 +21,7 @@ import { WORKFLOW_RUN_FILE, WORKFLOW_TEMPLATE_DIR } from '../dist/remote/githubA
 const LINES = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_RUN_FILE), 'utf8').split('\n');
 const PLUGIN_KEY = 'autonomous-sdlc-harness@autonomous-sdlc-harness';
 const UPGRADE_ROUTE = 'init --upgrade-workflows';
+const COMMIT_SET = "commit the paths its printed 'git add' names";
 
 const indentOf = (line) => line.length - line.trimStart().length;
 
@@ -144,6 +145,8 @@ test('(b) a version with no release tag refuses, naming the tag and the upgrade 
   const output = result.stdout + result.stderr;
   assert.ok(output.includes('autonomous-sdlc-harness--v9.2.0'), output);
   assert.ok(output.includes(UPGRADE_ROUTE), output);
+  assert.ok(output.includes(COMMIT_SET), output);
+  assert.ok(!output.includes('commit both'), output);
 });
 
 test('(c) an installed version other than the rendered one refuses, naming both and the upgrade route', async (t) => {
@@ -151,5 +154,15 @@ test('(c) an installed version other than the rendered one refuses, naming both 
   const result = await runStep(w, { HARNESS_CLI_VERSION: '9.0.0', STUB_REPORTED_VERSION: '9.1.0' });
   assert.notEqual(result.status, 0);
   const output = result.stdout + result.stderr;
-  for (const fragment of ['9.1.0', '9.0.0', UPGRADE_ROUTE]) assert.ok(output.includes(fragment), output);
+  for (const fragment of ['9.1.0', '9.0.0', UPGRADE_ROUTE, COMMIT_SET]) assert.ok(output.includes(fragment), output);
+  assert.ok(!output.includes('commit both'), output);
+});
+
+test('(d) the tag clone prints no detached-HEAD advice', async (t) => {
+  const w = await world(t);
+  const result = await runStep(w, { HARNESS_CLI_VERSION: '9.0.0' });
+  const output = result.stdout + result.stderr;
+  assert.equal(result.status, 0, output);
+  assert.ok(!output.includes('detached HEAD'), output);
+  assert.ok(!output.includes('advice.detachedHead'), output);
 });

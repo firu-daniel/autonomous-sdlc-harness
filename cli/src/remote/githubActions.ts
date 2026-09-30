@@ -5,10 +5,13 @@
  * anywhere else in `cli/src` imports it.** The workflow file names and paths, the template directory,
  * the repository secret and variable names, the two artifact names and the `gh` test-seam variable
  * and the rendered CLI-version pin are declared here once; the generator that writes the workflows and the `doctor` checks that grade
- * them read these constants rather than retyping a literal.
+ * them read these constants rather than retyping a literal, and so does `generators/repoRoot.ts`,
+ * which spells the two workflow `.bak` ignore rules whatever `execution.target` says.
  *
- * Nothing here is consulted unless `config/model.ts` → `remoteExecutionApplies(config)` is true:
- * every consumer tests that switch first.
+ * Except in `generators/repoRoot.ts`, nothing here is consulted unless `config/model.ts` →
+ * `remoteExecutionApplies(config)` is true: every other consumer tests that switch first. That one
+ * is ungated because a gated rule would change `.gitignore` in the same run that turns remote
+ * execution on.
  *
  * **Shell and YAML mirrors that must agree byte for byte.** The compiler cannot reach them, so each
  * declares the mirror in its own header, and a rename here is an edit to each of them:

@@ -157,7 +157,7 @@ import {
   pushEnvCandidates,
   type PushEnvCandidate,
 } from '../generators/notifications.js';
-import { pinnedCliCommand, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
+import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
 import { DOCS_SEARCH_SERVER_SCRIPT_NAME, outerLoopScriptsDir } from '../generators/outerLoopScripts.js';
 import {
   bashScriptRule,
@@ -2359,8 +2359,10 @@ const DAEMON_PATH_CHECK: Check = {
  * installs its pin and the adopter may stay on it deliberately; the remedy is
  * `generators/githubWorkflows.ts` → {@link upgradeWorkflowsCommand}, the alternative `doctor` at the
  * pin, both prefixed by that module's {@link pinnedCliCommand} so the two cannot name different
- * packages, and under `--remote-job` the job runs `doctor` at its own pin, so this cannot arise
- * there. A file with no pin, or unreadable, is a note. No `harness-resume.yml`, because a usage-paused
+ * packages. The warning also prints that module's {@link IN_FLIGHT_RUNS_NOTE}; its move route names
+ * no commit set of its own but the paths the upgrade's printed `git add` names; and its `push`
+ * fragment is a complete sentence in both of its forms, so the join adds no punctuation of its own.
+ * Under `--remote-job` the job runs `doctor` at its own pin, so this cannot arise there. A file with no pin, or unreadable, is a note. No `harness-resume.yml`, because a usage-paused
  * hosted run then waits for `/autonomous-sdlc-harness:branch-resume`; a `harness-run.yml` that
  * `origin/<defaultBranch>` does not carry, because GitHub dispatches only a workflow its default
  * branch has — the run starts once it is pushed, so nothing is broken here, and its remedy's push
@@ -2447,9 +2449,9 @@ const REMOTE_EXECUTION_CHECK: Check = {
       } else if (pins !== undefined && pins[0] !== undefined && pins.some((pin) => pin !== version)) {
         const push = branchUsable
           ? `run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`
-          : 'push them to the default branch';
+          : 'push them to the default branch.';
         warnings.push(
-          `${WORKFLOW_RUN_PATH} was rendered for ${nameList(pins)} (${CLI_VERSION_VARIABLE}), and this CLI is ${version}; the job installs and runs the version it names, so nothing is broken, and moving is your choice. To move to ${version}: run \`${upgradeWorkflowsCommand(version)}\`, commit ${WORKFLOW_RUN_PATH} and ${WORKFLOW_RESUME_PATH}, then ${push}. To stay on ${nameList(pins)}: run doctor at that version instead, \`${pinnedCliCommand(pins[0])} doctor\``,
+          `${WORKFLOW_RUN_PATH} was rendered for ${nameList(pins)} (${CLI_VERSION_VARIABLE}), and this CLI is ${version}; the job installs and runs the version it names, so nothing is broken, and moving is your choice. To move to ${version}: run \`${upgradeWorkflowsCommand(version)}\`, commit the paths its printed \`git add\` names, then ${push} ${IN_FLIGHT_RUNS_NOTE} To stay on ${nameList(pins)}: run doctor at that version instead, \`${pinnedCliCommand(pins[0])} doctor\``,
         );
       } else if (pins !== undefined) {
         pinnedHere = true;

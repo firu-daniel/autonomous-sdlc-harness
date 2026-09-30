@@ -39,6 +39,9 @@
  * reach, and declares the mirror in its own `# DECLARED MIRRORS` block: a change to
  * {@link UPGRADE_WORKFLOWS_FLAG} or to that route is an edit to that line too.
  *
+ * **This module owns {@link IN_FLIGHT_RUNS_NOTE}.** `init`'s upgrade report and `doctor`'s
+ * `remote-execution` version warning both print it, and neither re-spells it.
+ *
  * Both files are `create-if-absent`: the adopter tunes the cron, the timeouts and the runner, and a
  * re-run keeps that edit; `--force` replaces each after a `.bak` (`core/writer.ts`'s re-run table).
  */
@@ -72,6 +75,14 @@ export function pinnedCliCommand(version: string): string {
 export function upgradeWorkflowsCommand(version: string): string {
   return `${pinnedCliCommand(version)} init ${UPGRADE_WORKFLOWS_FLAG}`;
 }
+
+/**
+ * The upgrade route's one statement that an upgrade does not reach a run already in flight. One
+ * complete sentence ending in exactly one `.` and carrying no backtick, so a caller joins it with a
+ * space. Its citation is spelled as `harness-run.yml`'s `upgrade_route` spells it.
+ */
+export const IN_FLIGHT_RUNS_NOTE =
+  "An upgrade reaches only the runs dropped after it is pushed: each run's branch carries the workflows it was cut with, so a run already in flight finishes on the version it started with, and moving one on purpose is a separate step (docs/remote-execution.md, section 7, Upgrading).";
 
 const CRON_LINE = /^\s*- cron: /;
 
