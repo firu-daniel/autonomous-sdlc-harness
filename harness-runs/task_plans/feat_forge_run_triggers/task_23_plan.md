@@ -47,3 +47,9 @@ This is the prompt's acceptance 7, *"its row says which parts of the coupling re
 - `git grep -n -i -E "nothing reads (this key|it) in this release" -- docs/config.md README.md` finds only `design.source` text, which this branch leaves untouched (scope register row 13): the `design.source` row of `docs/config.md` → `## 5. Key reference`, and `README.md`'s *Design→code generation is out of scope.* bullet. No hit sits in the `forge` row or in the *Forge-agnostic* bullet.
 - `git grep -n "Still open" -- ROADMAP.md` shows the row naming `feat_forge_run_control` and no longer naming `feat_forge_run_triggers` as open.
 - Every link added resolves: `git ls-files docs/github-issue-trigger.md` lists the file.
+
+**Deviations from plan:**
+
+- `ROADMAP.md`: the row's trailing *"Seam declared (`forge`): nothing reads it yet."* was dropped rather than kept, because it contradicts the shipped reader; *"a remote run still ends at a pushed branch"* was kept as its own sentence.
+- `docs/config.md`: the plan's *"`none` records that there is no forge integration"* clause was not added, because the row's kept opening sentence already states it.
+- `docs/development.md`: `github-issue-trigger.md` is cited as a backticked path, not a Markdown link, matching that file's citation style (it carries no Markdown links).

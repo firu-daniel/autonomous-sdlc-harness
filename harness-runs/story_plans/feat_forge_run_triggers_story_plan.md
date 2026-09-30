@@ -63,7 +63,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_triggers/task
 20. [x] **Task 20** — Write `docs/github-issue-trigger.md`, the issue trigger's document of record _(layer: general)_ _(points: 20)_
 21. [x] **Task 21** — Bring `docs/remote-execution.md` level with the trigger, adopt and the GitHub-only route _(layer: general)_ _(points: 20)_
 22. [x] **Task 22** — Document the new verbs, the trigger workflow and the `forge` check in `docs/cli.md` and `docs/watcher.md` _(layer: general)_ _(points: 10)_
-23. [ ] **Task 23** — Update the `forge` row, the roadmap debt, `ROADMAP.md` and `README.md` _(layer: general)_ _(points: 10)_
+23. [x] **Task 23** — Update the `forge` row, the roadmap debt, `ROADMAP.md` and `README.md` _(layer: general)_ _(points: 10)_
 24. [ ] **Task 24** — Add Gate 12 observation (xiii): an issue label starts a run with the machine off _(layer: general)_ _(points: 8)_
 
 ## Scope register
