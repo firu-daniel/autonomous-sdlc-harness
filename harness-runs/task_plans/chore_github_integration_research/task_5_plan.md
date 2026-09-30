@@ -12,9 +12,9 @@
 
 **Work:**
 
-- [ ] Append `## 5. Adoption routes compared` after section 4, with the *Counting rule* paragraph below.
-- [ ] Add the *Routes table* below, then the closing sentence under it.
-- [ ] Check each count against the route's action list in the table's *Actions, in order* column, and each cited ID against section 4.
+- [x] Append `## 5. Adoption routes compared` after section 4, with the *Counting rule* paragraph below.
+- [x] Add the *Routes table* below, then the closing sentence under it.
+- [x] Check each count against the route's action list in the table's *Actions, in order* column, and each cited ID against section 4.
 
 ### Counting rule
 
@@ -42,3 +42,5 @@ Closing sentence: no GitHub-only route covers the supervised analysis (A12) or a
 - Section 5 follows section 4 and holds the rule, the table and the closing sentence.
 - Each count equals the number of actions in its row: R1 11, R2 14, R3 10, R4 9, R5 6, R6 12.
 - Every cited ID exists in sections 1–4.
+
+**Deviations from plan:** R1's *Rests on* cell cites `docs/remote-execution.md` § 7 as a relative link plus its heading, `## 7. Turning it on`, matching how the document already cites `remote-execution.md`; the target is the same section. Counts checked by splitting each row's *Actions, in order* cell on `, ` (R3's parenthetical comma accounted for): R1 11, R2 14, R3 10, R4 9, R5 6, R6 12.

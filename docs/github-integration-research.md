@@ -524,3 +524,22 @@ It cites rather than restates [`remote-execution.md`](remote-execution.md), whos
 - https://code.claude.com/docs/en/permission-modes#protected-paths — retrieved 2026-09-30: "`permissions.allow` rules in settings files do not pre-approve protected-path writes. The safety check runs before Claude Code evaluates allow rules from settings, so an entry such as `Edit(.claude/**)` in `~/.claude/settings.json` or `.claude/settings.json` does not change the per-mode outcome in the table above."
 
 **Consequence:** none for the other two branches. `docs/analyze.md` → `## 3. What it may write` records the same wall on 2.1.237; this measurement extends it to 2.1.285 and to Bash. This branch does not edit that file.
+
+## 5. Adoption routes compared
+
+The count uses the unit `feat_github_native_adoption` set, from a repository with no harness file to a first run started by labelling an issue. One action is each click-through the adopter must choose, each paste or typed command, each commit, each secret, each setting and each merge. Navigating a form already counted is not counted again, and optional steps are left out. Counts are for an adopter with an Anthropic Console API key. A subscription token adds a codespace detour on every GitHub-side route (A11): create the codespace, install, `claude setup-token`, paste the URL, paste the code, then delete it. That is 5 more actions, or 2 on R2, where the codespace is already open.
+
+| Route | Actions, in order | Count | Hosts anything? | Rests on |
+|---|---|---|---|---|
+| R1 Local install (today) | plugin marketplace add, plugin install, `init`, `config set execution.target`, `git add`, commit, `gh auth refresh -s workflow`, push, API key, secret, label an issue | 11 | no | `README.md`; [`remote-execution.md`](remote-execution.md) → `## 7. Turning it on` |
+| R2 Codespace setup | create codespace, install Claude Code, plugin commands, sign-in URL, sign-in code, `init` + `config set`, commit, push, open PR, merge, API key, secret, delete codespace, label an issue | 14 | no | A9, S2 |
+| R3 Prefilled thin callers + setup job | open link 1, commit, open link 2 (the poller needs its own file, A3), commit, API key, secret, PR setting (S4), **Run workflow** on setup, merge its PR, label an issue | 10 | no | A1, A3, A4, S1, S4 |
+| R4 Workflow-scoped PAT + setup job | open link, commit, create fine-grained PAT, `HARNESS_GIT_TOKEN` secret, API key, secret, **Run workflow** on setup, merge its PR, label an issue | 9 | no | S1, S2, A4 |
+| R5 Harness-hosted GitHub App | open install link, install, merge the app's setup PR, API key, secret, label an issue | 6 | yes: a server and a private key for every installation | A6 |
+| R6 Adopter-registered GitHub App | register app, generate key, install, key secret, client-ID variable, open link, commit, API key, secret, **Run workflow** on setup, merge, label an issue | 12 | no | A6 |
+| R7 Claude GitHub App | not applicable: installs `claude.yml`, not the harness | — | — | A8 |
+| R8 Marketplace listing | not a route: a listing installs nothing; as R3 or R4 | — | — | A2 |
+| R9 Workflow templates / template repository | not applicable to an existing repository of another owner | — | — | A5 |
+| R10 Copilot agents; Claude Code on the web | not evaluated further: vendor agents (A7); dropped by decision (A10) | — | — | A7, A10 |
+
+No GitHub-only route covers the supervised analysis (A12) or a subscription credential (A11) without a codespace, and a codespace setup (R2) costs more actions than the local install (R1). That is the finding `feat_github_native_adoption` was dropped on.
