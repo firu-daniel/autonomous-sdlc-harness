@@ -157,7 +157,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 **Verdict:** `verified`
 
-**Answer:** At most 25 top-level inputs (raised from 10 on 2025-12-04); a workflow file declaring 26 is refused as unparsable at dispatch time and is listed by its path instead of its `name:`. The payload limit is 65,535 characters, counted over the whole inputs object serialised as compact JSON — keys, quotes and all inputs together — and counted in characters, not bytes. `remote-run.sh` → `dispatch` already measures `${#payload}` of that same compact object, so its check matches.
+**Answer:** At most 25 top-level inputs (raised from 10 on 2025-12-04); a workflow file declaring 26 is refused as unparsable at dispatch time and is listed by its path instead of its `name:`. The payload limit is 65,535 characters, counted over the whole inputs object serialised as compact JSON — keys, quotes and all inputs together — and counted in characters, not bytes. `remote-run.sh` → `dispatch` measures `${#payload}` of that same compact object, which matches GitHub's count for the values measured here. Not measured: whether GitHub counts the backslash escapes that JSON adds (every `answers` value is itself a JSON string, so its quotes reach the payload as `\"`), and `${#payload}` counts characters only under a UTF-8 locale, bytes otherwise.
 
 **Evidence:**
 - https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onworkflow_dispatchinputs — retrieved 2026-09-30 — `on.workflow_dispatch.inputs`: "The maximum number of top-level properties for `inputs` is 25 ." (the page renders the space before the period) and "The maximum payload for `inputs` is 65,535 characters."
@@ -169,7 +169,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
   - `é` × 32,763 (65,536 bytes of JSON) → accepted; `é` × 65,525 (65,535 JSON characters, 131,060 bytes) → accepted; `é` × 65,526 → `inputs are too large.` (characters, not bytes).
 
 **Consequence:**
-- `feat_forge_run_control`: the 65,535-character limit it cites is right, and it applies to the whole inputs object, so a park answer posted as a comment and relayed as `answers` must fit together with the other inputs. The existing check in `remote-run.sh` is the one to reuse. A new `workflow_dispatch` input (the prompt's forge-reference candidate) takes one of the 25 slots; `harness-run.yml` declares 7 today (`docs/remote-execution.md` → `## 5.`).
+- `feat_forge_run_control`: the 65,535-character limit it cites is right, and it applies to the whole inputs object, so a park answer posted as a comment and relayed as `answers` must fit together with the other inputs. The existing check in `remote-run.sh` is the one to reuse, once a payload carrying escaped characters has been measured against it (see the Answer). A new `workflow_dispatch` input (the prompt's forge-reference candidate) takes one of the 25 slots; `harness-run.yml` declares 7 today (`docs/remote-execution.md` → `## 5.`).
 - `feat_github_native_adoption`: a settings form built from `workflow_dispatch` inputs has at most 25 fields, and all its values together are capped at 65,535 characters.
 - `docs/remote-execution.md` → `## 6.`'s row *"A `workflow_dispatch` inputs payload is limited to 65,535 characters"* is now measured. This branch does not edit that file; a later change can move the row.
 

@@ -18,7 +18,7 @@ Adversarial checks applied to a documentation-only branch:
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Qualify S5's "its check matches" claim to the values actually measured _(layer: general)_
+1. [x] **Finding 1** — Qualify S5's "its check matches" claim to the values actually measured _(layer: general)_
 
 ---
 
