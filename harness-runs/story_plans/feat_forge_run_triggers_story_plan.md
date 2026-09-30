@@ -45,7 +45,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_triggers/task
 2. [x] **Task 2** — Move the inbox filename routing into the run library, and add the library's `forge` reader _(layer: cli)_ _(points: 10)_
 3. [x] **Task 3** — Derive a branch name from an issue title in the run library _(layer: cli)_ _(points: 15)_
 4. [x] **Task 4** — Share the task-prompt placement between the watcher and a job _(layer: cli)_ _(points: 15)_
-5. [ ] **Task 5** — Let `create-worktree.sh` cut and push a branch without bootstrapping it _(layer: cli)_ _(points: 8)_
+5. [x] **Task 5** — Let `create-worktree.sh` cut and push a branch without bootstrapping it _(layer: cli)_ _(points: 8)_
 6. [ ] **Task 6** — Add `remote-run.sh start`: place a task prompt on a new branch and dispatch it _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — Add `remote-run.sh trigger` for a labelled GitHub issue _(layer: cli)_ _(points: 20)_
 8. [ ] **Task 8** — Extend `remote-run.sh trigger` to a `repository_dispatch` event _(layer: cli)_ _(points: 8)_
