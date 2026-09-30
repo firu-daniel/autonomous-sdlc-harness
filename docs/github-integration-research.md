@@ -39,7 +39,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 | [S3](#s3-which-events-raised-with-github_token-start-other-workflows-and-which-do-not--pushes-pr-creation-comments-labels) | Which `GITHUB_TOKEN` events start other workflows | `partly true` | triggers, control, adoption |
 | [S4](#s4-the-setting-allow-github-actions-to-create-and-approve-pull-requests-its-default-for-a-new-personal-repository-and-a-new-organisation-where-it-is-set-and-whether-a-workflow-can-read-it) | The "create and approve pull requests" setting | `verified` | control, adoption |
 | [S5](#s5-workflow_dispatch-the-limit-on-the-number-of-inputs-and-on-the-payload-size-the-code-assumes-65535-characters-remote-runsh--remote_input_payload_max) | `workflow_dispatch` input count and payload limits | `verified` | control, adoption |
-| [S6](#s6-the-maximum-length-of-an-issue-or-pr-comment-body) | Maximum comment body length | `verified` | control |
+| [S6](#s6-the-maximum-length-of-an-issue-or-pr-comment-body) | Maximum comment body length | `partly true` | control |
 | [T1](#t1-the-issues-events-activity-types-which-role-is-needed-to-apply-a-label--is-triage-enough-who-appears-as-sender-on-labeled) | `issues` types, the role to label, `sender` on `labeled` | `verified` | triggers |
 | [T2](#t2-does-an-issues-workflow-get-the-repositorys-secrets-and-a-write-token-when-the-issue-was-opened-by-someone-without-access) | Secrets and a write token for an `issues` workflow | `partly true` | triggers |
 | [T3](#t3-the-api-for-a-users-permission-on-a-repository-what-it-returns-for-an-organisation-member-an-outside-collaborator-and-a-bot-and-the-token-permission-it-needs) | The collaborator-permission API | `partly true` | triggers, control |
@@ -55,7 +55,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 | [A3](#a3-does-disabling-a-workflow-file-disable-every-trigger-in-it) | Disabling one trigger of a multi-trigger workflow | `verified` | adoption |
 | [A4](#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length) | The prefilled new-file link | `partly true` | adoption |
 | [A5](#a5-workflow-templates-template-repositories-and-other-ways-to-add-a-workflow-without-a-checkout) | Workflow templates and other no-checkout routes | `partly true` | adoption |
-| [A6](#a6-github-apps-what-one-needs-hosted-the-workflows-permission-a-thin-relay-and-hosting-cost) | GitHub Apps, a thin relay, hosting cost | `verified` | adoption |
+| [A6](#a6-github-apps-what-one-needs-hosted-the-workflows-permission-a-thin-relay-and-hosting-cost) | GitHub Apps, a thin relay, hosting cost | `partly true` | adoption |
 | [A7](#a7-copilot-cloud-agent-third-party-coding-agents-on-github-copilot-extensions) | Copilot agents and Copilot Extensions | `partly true` | adoption |
 | [A8](#a8-the-claude-github-app-what-it-installs-its-permissions-its-credentials) | The Claude GitHub App | `partly true` | adoption |
 | [A9](#a9-github-codespaces-claude-with-the-plugin-sign-in-setup-token-pushing-workflow-files-cost-a-readme-button) | GitHub Codespaces | `partly true` | adoption |
@@ -175,9 +175,9 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 ### S6. The maximum length of an issue or PR comment body.
 
-**Verdict:** `verified` for an issue comment created through the REST API; a PR review comment and a PR conversation comment were not measured separately.
+**Verdict:** `partly true` — verified for an issue comment created through the REST API; a PR review comment and a PR conversation comment were not measured separately.
 
-**Answer:** 262,144 bytes of UTF-8. The refusal text still says `maximum is 65536 characters`, which is the same cap expressed as 65,536 four-byte characters, but a body of plain ASCII is accepted up to 262,144 characters. docs.github.com states no limit on its REST pages.
+**Answer:** 262,144 bytes of UTF-8. The refusal text still says `maximum is 65536 characters`, which is the same cap expressed as 65,536 four-byte characters, but a body of plain ASCII is accepted up to 262,144 characters. docs.github.com states no limit on its REST pages. This is measured for an issue comment created through the REST API; the limit for a PR review comment and a PR conversation comment is unverified.
 
 **Evidence:**
 - https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28 and https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28 — retrieved 2026-09-30 — neither page states a body-length limit (a text search for "65536", "65,536", "maximum length" and "too long" found nothing).
@@ -472,9 +472,9 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 ### A6. GitHub Apps: what one needs hosted, the *Workflows* permission, a thin relay, and hosting cost.
 
-**Verdict:** `verified`, except the permission's UI wording.
+**Verdict:** `partly true` — verified, except the permission's UI wording.
 
-**Answer:** Receiving webhooks needs a server, and minting installation tokens needs the app's private key. A relay app hosted by the harness could dispatch runs without holding any adopter's credential, but it would hold a key that reaches every installation. Hosting starts at $0 on Cloudflare Workers Free, capped at 10 ms CPU per request, or $4 a month for a droplet. The adopter's own workflows already receive issue, comment and review events without an app.
+**Answer:** Receiving webhooks needs a server, and minting installation tokens needs the app's private key. A relay app hosted by the harness could dispatch runs without holding any adopter's credential, but it would hold a key that reaches every installation. Hosting starts at $0 on Cloudflare Workers Free, capped at 10 ms CPU per request, or $4 a month for a droplet. The adopter's own workflows already receive issue, comment and review events without an app. Not established: the permission's UI wording.
 
 **Evidence:**
 - https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/best-practices-for-creating-a-github-app — retrieved 2026-09-30: "The private key for your GitHub App grants access to every account that the app is installed on. It **must** be stored securely and never shared broadly."
