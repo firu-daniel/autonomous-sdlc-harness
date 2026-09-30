@@ -39,3 +39,9 @@
 - Run the edited `cli/test/doctor.test.mjs` under the conditions `unit_loop_core.md` → `## The test-run rule` (3) sets. The four new assertions hold, and the existing pin cases (`pinned to this version`, `a comment after the pin`, `the pin lines removed`, `the upgrade route it names clears the warning`) still pass.
 - Grep `cli/src` for `defaultBranchPushReason(` and read each call site. No template literal places a `.` directly after the call. Where one is followed by more text, that text starts after a space.
 - Grep `cli/src` for the sentence's distinctive fragment `finishes on the version it started with`. It appears once, in `githubWorkflows.ts`. Task 3 adds an import and no second copy.
+
+**Deviations from plan:**
+
+- The unusable-`defaultBranch` form is reachable in the suite: `editJson` sets `defaultBranch` to `''`, the config parses as an object, and `remote-execution` still grades the pin. So a new case, `'on, with harness-run.yml pinned to another version and defaultBranch unusable, joins the push fragment without a double full stop'`, carries the four assertions, along with one that the line includes `push them to the default branch.`. The four assertions live in a suite-local `assertMoveRoute(line)` that both cases call.
+- Verification's single-file run of `cli/test/doctor.test.mjs` was deferred to the Run gates phase. Neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, so the new assertions and the existing pin cases rest on reading the source and a passing `bash scripts/typecheck.sh`, not on execution.
+- `WORKFLOW_RESUME_PATH` keeps its import in `checks.ts`: `REMOTE_EXECUTION_CHECK` still uses it for the resume-presence check.

@@ -5534,6 +5534,12 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.notEqual(after, before, 'harness-run.yml carries no HARNESS_CLI_VERSION line to rewrite');
     writeFileSync(path, after, 'utf8');
   };
+  const assertMoveRoute = (line) => {
+    assert.ok(line.includes('a run already in flight finishes on the version it started with'), line);
+    assert.ok(!/\.\.\s/.test(line), line);
+    assert.ok(line.includes('commit the paths its printed `git add` names'), line);
+    assert.ok(!line.includes('commit .github/workflows/harness-run.yml and'), line);
+  };
 
   await t.test('on, with harness-run.yml pinned to another version, warns with the upgrade route and the stay route', async (subtest) => {
     const dir = await remoteFixture(subtest);
@@ -5549,6 +5555,25 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(line.includes(STALE_PIN), line);
     assert.ok(line.includes(`autonomous-sdlc-harness@${STALE_PIN} doctor`), line);
     assert.ok(line.includes('git push --no-verify origin'), line);
+    assertMoveRoute(line);
+  });
+
+  await t.test('on, with harness-run.yml pinned to another version and defaultBranch unusable, joins the push fragment without a double full stop', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    rewritePins(dir, `$1 '${STALE_PIN}'`);
+    // The config check fails on this, and the pin is still graded: doctor runs every check.
+    editJson(dir, CONFIG_FILE, (config) => {
+      config.defaultBranch = '';
+    });
+    const stub = await ghStub(subtest);
+
+    const { stdout, stderr } = await doctorWithStub(dir, stub);
+
+    const line = reportLine(stderr, 'warn', 'remote-execution');
+    assert.ok(line?.includes(UPGRADE_ROUTE), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('push them to the default branch.'), line);
+    assertMoveRoute(line);
   });
 
   await t.test('on, with harness-run.yml pinned to this version, passes and says so', async (subtest) => {
