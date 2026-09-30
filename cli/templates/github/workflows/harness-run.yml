@@ -346,10 +346,11 @@ jobs:
             echo "::error::.claude/settings.json names no marketplace source for autonomous-sdlc-harness. Run init locally with --marketplace <owner>/<repo> and commit the file."
             exit 1
           fi
-          upgrade_route="to run another version, re-render this repository's workflows with 'npx autonomous-sdlc-harness@<version> init --upgrade-workflows', then commit both and push them to the default branch (docs/remote-execution.md, section 7, Upgrading)"
+          upgrade_route="to run another version, re-render this repository's workflows with 'npx autonomous-sdlc-harness@<version> init --upgrade-workflows', then commit the paths its printed 'git add' names and push them to the default branch (docs/remote-execution.md, section 7, Upgrading)"
           tag="autonomous-sdlc-harness--v$HARNESS_CLI_VERSION"
           marketplace_dir="$RUNNER_TEMP/harness-marketplace"
-          if ! git clone --quiet --depth 1 --branch "$tag" "https://github.com/$source_repo.git" "$marketplace_dir"; then
+          # --quiet does not cover the detached-HEAD advice a tag checkout prints; only advice.detachedHead gates it.
+          if ! git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$tag" "https://github.com/$source_repo.git" "$marketplace_dir"; then
             echo "::error::$source_repo has no release tag $tag, so the plugin this workflow was rendered for cannot be installed. If $HARNESS_CLI_VERSION was released, its release is missing the tag; otherwise, $upgrade_route."
             exit 1
           fi
