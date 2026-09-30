@@ -15,7 +15,7 @@ table the body uses each one as an ordinary placeholder.
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
-| `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in, repo-relative; a script is invoked from the root of the checkout this session runs in. This file names two of them: `remote-run.sh`, which it invokes — its `sync` verb, for a remote record in step 2 — and `autonomous-watcher.sh`, **only** in the scope fence, as a file it must not modify and never invokes. It modifies neither. |
+| `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in, repo-relative; a script is invoked from the root of the checkout this session runs in. This file names two of them: `remote-run.sh`, which it invokes — its `adopt` verb, once, and its `sync` verb, for a remote record, both in step 2 — and `autonomous-watcher.sh`, **only** in the scope fence, as a file it must not modify and never invokes. It modifies neither. |
 
 ---
 
@@ -30,7 +30,7 @@ session** — the watcher marks the run `paused` and notifies. Resume later with
 `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`.
 
 Only a **running** run can honor a PAUSE (the engine must be alive to see it). This command writes ONE
-marker file and reports. The only script it invokes is `<scripts_dir>/remote-run.sh sync`, for a remote
+marker file and reports. The only scripts it invokes are `<scripts_dir>/remote-run.sh adopt`, once, and `<scripts_dir>/remote-run.sh sync`, for a remote
 record; it names `remote-run.sh stop` in its report and never runs it. It must NOT modify
 `<scripts_dir>/autonomous-watcher.sh`, `<scripts_dir>/remote-run.sh`, the engines, or the instruction forks.
 
@@ -48,12 +48,19 @@ own audit — the orchestrator only checks the file's **presence**, never its co
    `status: "running"`, target it; otherwise list the running candidates and ask via `AskUserQuestion`.
    Never guess when ambiguous. Enumerate with
    `jq -r '.runs | to_entries[] | select(.value.status=="running") | .key'`.
+   - **Runs started on GitHub are adopted first.** Before syncing, run `bash <scripts_dir>/remote-run.sh adopt` once. It writes a record and a mirror for every `harness run <branch>` run on GitHub whose branch is live, unprotected and unknown to the registry, then syncs each one. Handle its exit status as follows:
+     - exit 0: report each `adopted <branch>` line it printed, and nothing when it printed `nothing to adopt`;
+     - exit 2: remote execution is off, so say nothing;
+     - exit 3 or 4: report its message and carry on with the registry as it stands.
+
+     Never guess about a branch it did not adopt. An adopted run is an ordinary remote record from here on, and the sync below includes it.
    - **Remote records sync first.** Before building the candidate set — and before reading a prefix-named
      record — run `bash <scripts_dir>/remote-run.sh sync <branch>` for every record carrying
      `execution: github-actions` whose `status` is neither `completed` nor `failed`, then read the registry
      again, so a remote run that already finished is not "paused". A `sync` that exits non-zero is reported
      with its message, and that record is left out of the candidates — or, when the prefix named it, the
      command stops — never guessed about.
+   - **A prefix naming an unknown branch stops.** When the prefix names a branch the registry still does not hold after the adopt step, report that no run of that name is known locally or on GitHub, and stop — never write a file for an unknown branch.
 3. **State check.** Read the target's status with `jq -r '.runs["<branch>"].status'`. If it is not
    `running` (e.g. already `paused`, `parked`, `completed`, `failed`), report the actual status and stop —
    dropping PAUSE on a non-running run has no effect (nothing is alive to honor it).
