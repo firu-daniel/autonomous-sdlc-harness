@@ -559,10 +559,24 @@ git switch --detach origin/<branch>
 
 The switch is detached on purpose: `origin/<branch>` is where the run's jobs pushed, the local branch of that name lags it, and the run's mirror working copy may hold that branch checked out, which git refuses to switch a second checkout onto.
 
-The checkout below takes the same paths the upgrade's printed `git add` named and you committed. `.gitignore` is in it because the first upgrade after this release merges new ignore lines into it; append any other path that `git add` named to the same line. Once the branch carries the new workflows, its next job runs the new version's `init` (`cli/templates/github/workflows/harness-run.yml`, step `Generate the job's permission profile`, `init --plugin-root-entries`), which would merge the missing lines into the branch's tracked `.gitignore`. That step's `git status --porcelain --untracked-files=no` test then fails the job on a changed tracked file (`init … changed tracked files`). Checking out only the two workflows therefore fails the run's very next job.
+Take only the two workflows from the default branch. Once the branch carries them, its next job runs the new version's `init` (`cli/templates/github/workflows/harness-run.yml`, step `Generate the job's permission profile`, `init --plugin-root-entries`), which merges any ignore lines or settings keys the new version adds into the branch's tracked `.gitignore`, `.claude/settings.json` or `.mcp.json`. That step's `git status --porcelain --untracked-files=no` test then fails the job on a changed tracked file (`init … changed tracked files`). So run that `init` here first and commit what it merges, as the job's own error tells you to. Do not check those files out from the default branch: a checkout replaces the whole file, and would discard any edit the run itself made to it on its branch.
 
 ```
-git checkout origin/<default branch> -- .github/workflows/harness-run.yml .github/workflows/harness-resume.yml .gitignore
+git checkout origin/<default branch> -- .github/workflows/harness-run.yml .github/workflows/harness-resume.yml
+```
+
+```
+npx autonomous-sdlc-harness@<version> init
+```
+
+```
+git status --short
+```
+
+Stage every tracked file it lists as modified, the two workflows included:
+
+```
+git add <every path git status --short lists as modified>
 ```
 
 ```

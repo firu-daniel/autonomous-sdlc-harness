@@ -12,7 +12,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Take only the two workflows from the default branch in the in-flight move route, and produce the merged `.gitignore` / settings lines by running the new version's `init` on the branch _(layer: general)_
+1. [x] **Finding 1** — Take only the two workflows from the default branch in the in-flight move route, and produce the merged `.gitignore` / settings lines by running the new version's `init` on the branch _(layer: general)_
 
 ---
 
