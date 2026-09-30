@@ -15,7 +15,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { mkdir, rm, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -56,13 +56,13 @@ const taskDispatch = (branch, engine) =>
 /**
  * A watcher fixture adopted on `origin`'s default branch, with `execution.target` set to `target`
  * (or absent when `null`) and the bootstrap's install and build unset, so `create-worktree.sh` runs
- * offline.
+ * offline. `branch` is the run branch the fixture's record and working copy are read under.
  *
  * @param {import('node:test').TestContext} t
- * @param {{ target?: string | null }} [options]
+ * @param {{ target?: string | null, branch?: string }} [options]
  */
-async function createDispatchFixture(t, { target = 'github-actions' } = {}) {
-  const w = await createWatcherFixture(t);
+async function createDispatchFixture(t, { target = 'github-actions', branch } = {}) {
+  const w = await createWatcherFixture(t, branch === undefined ? undefined : { branch });
   if (w === null) return null;
 
   const configPath = join(w.dir, 'harness.config.json');
@@ -267,6 +267,26 @@ test('with the key absent the same drop launches the agent and sends nothing to 
   assert.equal('remote_dispatched_at' in record, false);
   const launched = f.notifications().filter((n) => n.event === 'launched');
   assert.deepEqual(launched.map((n) => n.detail), ['engine=task']);
+});
+
+test('with the key absent a drop routes through the library: task engine on its branch, junk rejected', async (t) => {
+  const f = await createDispatchFixture(t, { target: null, branch: 'feat_x_review' });
+  if (f === null) return;
+
+  await f.drop('feat_x_review_task_prompt.md', 'do the thing\n');
+  await f.drop('notes.md', 'not a drop\n');
+  await f.tick();
+
+  assert.equal(f.prompts().length, 1, 'expected exactly one launch, for the routable drop');
+  const record = f.record();
+  assert.equal(record.engine, 'task');
+  assert.equal(record.worktree, f.worktree);
+  assert.equal(await f.subject(), 'chore: add task prompt for feat_x_review');
+
+  assert.equal(f.inInbox('notes.md'), false, 'the unroutable drop was left in the inbox');
+  const archived = readdirSync(join(f.dir, STATE_DIR, 'autonomous_inbox', '.processed'));
+  assert.equal(archived.filter((name) => /^rejected_\d+_notes\.md$/.test(name)).length, 1);
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(f.dir, REGISTRY_PATH), 'utf8')).runs), ['feat_x_review']);
 });
 
 /** A remote record as launch_remote_run leaves it, with `fields` over it. */

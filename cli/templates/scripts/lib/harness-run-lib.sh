@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # harness-run-lib.sh — the one place every generated outer-loop script resolves
 # the repository it is operating on, reads that repository's
-# `harness.config.json` at run time, answers "is this branch protected?", and
+# `harness.config.json` at run time, answers "is this branch protected?",
+# routes an inbox filename to its engine and branch (`hr_inbox_route_var`), and
 # derives the anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
 # differently. It also implements the run registry's reads and writes for the
@@ -181,7 +182,8 @@
 # value WITHOUT a command substitution — a `$(…)` forks a subshell, and the
 # watcher calls these on every tick: `HR_CFG_PID`, `HR_CFG_ROOT`,
 # `HR_CFG_STATE`, `HR_CFG_FILE`, `HR_CFG_SCALARS`, `HR_CFG_LISTS`,
-# `HR_CFG_VALUE`, `HR_CFG_COMMAND_KEYS`, `HR_PROTECTED_DEFAULT`, and the lane's
+# `HR_CFG_VALUE`, `HR_CFG_COMMAND_KEYS`, `HR_PROTECTED_DEFAULT`,
+# `HR_INBOX_KIND`, `HR_INBOX_BRANCH`, and the lane's
 # `HR_LANE_RANK`, `HR_LANE_STATE`, `HR_LANE_RESUME_AT`, `HR_LANE_OBSERVED_AT`,
 # `HR_LANE_OBSERVED_REPO`, `HR_LANE_OWNER_SLUG`, `HR_LANE_OWNER_PID`,
 # `HR_LANE_OWNER_AT` and `HR_LANE_BROKEN_OWNER`, and the remote state bundle's
@@ -609,6 +611,7 @@ hr_config_load() {
       s("phases.qa";             try (.phases.qa     | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("phases.docs";           try (.phases.docs   | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("execution.target";      try .execution.target     catch null),
+      s("forge";                 try .forge                catch null),
       s("protectedBranches.present";
         try (if (.protectedBranches | type) == "array" then "1" else null end) catch null),
       l("protectedBranches";     try .protectedBranches    catch null)
@@ -873,6 +876,68 @@ hr_execution_target() {
       ;;
   esac
   return 2
+}
+
+# `forge` — which code-hosting platform the flow integrates with: `github`,
+# `gitlab` or `none`. THE ONE READER OF THE KEY IN THIS FAMILY, and the shell
+# mirror of `cli/src/config/model.ts` → `FORGE_KINDS`: change the enum there and
+# here together. 1 — printing nothing — when the key is absent: "not yet
+# decided", which is not `none`, and the schema withholds a default on purpose.
+# 2 — printing nothing — when the configuration is unresolvable or the value is
+# outside the enum, a refusal rather than a guess.
+hr_forge() {
+  local root="${1-}"
+  hr_config_load "$root" || return 2
+  hr_cfg_scalar_var "forge" || return 1
+  case "$HR_CFG_VALUE" in
+    github|gitlab|none)
+      printf '%s\n' "$HR_CFG_VALUE"
+      return 0
+      ;;
+  esac
+  return 2
+}
+
+# ---------------------------------------------------------------------------
+# Inbox routing — the one owner of the drop filename patterns.
+# ---------------------------------------------------------------------------
+
+# Route one inbox filename: set `HR_INBOX_KIND` (`task` | `user_review` |
+# `docs`) and `HR_INBOX_BRANCH`, and return 0; on no match return 1 with both
+# empty. Takes a basename, not a path.
+#
+# The task-prompt pattern is tested FIRST (the more specific suffix), but the
+# anchored SUFFIX regexes are mutually exclusive by construction: a filename
+# cannot end in more than one of `_task_prompt.md` / `_review[_<n>].md` /
+# `_docs.md`, so a branch whose own name contains `review` or `task_prompt`
+# cannot be mis-routed — `foo_review_task_prompt.md` is the task engine on branch
+# `foo_review`, and `foo_task_prompt_review.md` is the review engine on branch
+# `foo_task_prompt`. POSIX leftmost-longest matching of the greedy `(.+)` derives
+# the right branch from a round-suffixed name: `foo_review_2.md` -> branch `foo`
+# (the `_2` is consumed by the optional `(_[0-9]+)?`), while
+# `foo_review_2_review.md` -> branch `foo_review_2`. THE WATCHER DERIVES ONLY THE
+# BRANCH, never the round: the engine resolves the latest round itself, inside
+# the working copy, which is why nothing here has to remember one.
+hr_inbox_route_var() {
+  local fname="${1-}" branch
+  HR_INBOX_KIND=""
+  HR_INBOX_BRANCH=""
+  [ -n "$fname" ] || return 1
+  branch="$(printf '%s' "$fname" | sed -nE 's/^(.+)_task_prompt\.md$/\1/p')"
+  if [ -n "$branch" ]; then
+    HR_INBOX_KIND="task"
+  else
+    branch="$(printf '%s' "$fname" | sed -nE 's/^(.+)_review(_[0-9]+)?\.md$/\1/p')"
+    if [ -n "$branch" ]; then
+      HR_INBOX_KIND="user_review"
+    else
+      branch="$(printf '%s' "$fname" | sed -nE 's/^(.+)_docs\.md$/\1/p')"
+      [ -n "$branch" ] || return 1
+      HR_INBOX_KIND="docs"
+    fi
+  fi
+  HR_INBOX_BRANCH="$branch"
+  return 0
 }
 
 # ---------------------------------------------------------------------------

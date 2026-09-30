@@ -3067,18 +3067,8 @@ remote_commit_and_push() {
 #   ^(.+)_review(_[0-9]+)?\.md$  -> user_review engine, reuse-else-recreate
 #   ^(.+)_docs\.md$              -> docs        engine, a fresh working copy
 #
-# The task-prompt pattern is tested FIRST (the more specific suffix), but the
-# anchored SUFFIX regexes are mutually exclusive by construction: a filename
-# cannot end in more than one of `_task_prompt.md` / `_review[_<n>].md` /
-# `_docs.md`, so a branch whose own name contains `review` or `task_prompt`
-# cannot be mis-routed — `foo_review_task_prompt.md` is the task engine on branch
-# `foo_review`, and `foo_task_prompt_review.md` is the review engine on branch
-# `foo_task_prompt`. POSIX leftmost-longest matching of the greedy `(.+)` derives
-# the right branch from a round-suffixed name: `foo_review_2.md` -> branch `foo`
-# (the `_2` is consumed by the optional `(_[0-9]+)?`), while
-# `foo_review_2_review.md` -> branch `foo_review_2`. THE WATCHER DERIVES ONLY THE
-# BRANCH, never the round: the engine resolves the latest round itself, inside
-# the working copy, which is why nothing here has to remember one.
+# The library owns these patterns and their order: `hr_inbox_route_var` in
+# lib/harness-run-lib.sh, whose comment states why they cannot mis-route.
 #
 # A filename matching none of the three is logged and ARCHIVED rather than left
 # where it is, so it is not re-logged on every pass for as long as the watcher
@@ -3091,24 +3081,13 @@ process_inbox_file() {
 
   # (1) Route the filename to its pairing and derive <branch> — see above.
   local branch engine_kind
-  branch="$(printf '%s' "$fname" | sed -nE 's/^(.+)_task_prompt\.md$/\1/p')"
-  if [ -n "$branch" ]; then
-    engine_kind="task"
-  else
-    branch="$(printf '%s' "$fname" | sed -nE 's/^(.+)_review(_[0-9]+)?\.md$/\1/p')"
-    if [ -n "$branch" ]; then
-      engine_kind="user_review"
-    else
-      branch="$(printf '%s' "$fname" | sed -nE 's/^(.+)_docs\.md$/\1/p')"
-      if [ -n "$branch" ]; then
-        engine_kind="docs"
-      else
-        log "rejecting '$fname': not a <branch>_task_prompt.md / <branch>_review[_<n>].md / <branch>_docs.md file — skipping"
-        mv "$file" "$ARCHIVE_DIR/rejected_$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
-        return 0
-      fi
-    fi
+  if ! hr_inbox_route_var "$fname"; then
+    log "rejecting '$fname': not a <branch>_task_prompt.md / <branch>_review[_<n>].md / <branch>_docs.md file — skipping"
+    mv "$file" "$ARCHIVE_DIR/rejected_$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
+    return 0
   fi
+  branch="$HR_INBOX_BRANCH"
+  engine_kind="$HR_INBOX_KIND"
 
   # The central log every step below appends to. A branch derived from a FILENAME
   # cannot contain a `/`, so this name needs no sanitizing — unlike the

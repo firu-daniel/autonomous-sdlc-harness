@@ -311,6 +311,56 @@ test('hr_execution_target applies the schema default, reads the enum and refuses
   assert.equal(unknown.stdout, '', 'hr_execution_target printed a value for a target outside the enum');
 });
 
+test('hr_forge reads the enum, reports an absent key as undecided and refuses a value outside it', async (t) => {
+  const dir = await fixtureFor(t, {
+    files: { ...nodeProjectFiles(), 'harness.config.json': seededConfig() },
+  });
+  await initOk(dir);
+
+  // Each call is its own `bash`, so the per-process cache is cold and reads the file as rewritten.
+  const withForge = (forge) =>
+    writeFileSync(
+      join(dir, 'harness.config.json'),
+      `${JSON.stringify(forge === undefined ? seededConfig() : seededConfig({ forge }))}\n`,
+    );
+
+  withForge(undefined);
+  const absent = await sourceAndCall(dir, 'hr_forge');
+  assert.notEqual(absent.status, 2, 'hr_forge could not resolve the configuration — `jq` 1.5+ must be on PATH');
+  assert.equal(absent.status, 1, `hr_forge exited ${absent.status} with the key absent: ${absent.stderr}`);
+  assert.equal(absent.stdout, '', 'hr_forge printed a value for an absent key, which has no default');
+
+  withForge('github');
+  const github = await sourceAndCall(dir, 'hr_forge');
+  assert.equal(github.status, 0, `hr_forge exited ${github.status}: ${github.stderr}`);
+  assert.equal(github.stdout, 'github\n', 'hr_forge did not print the configured forge');
+
+  withForge('bitbucket');
+  const unknown = await sourceAndCall(dir, 'hr_forge');
+  assert.equal(unknown.status, 2, `hr_forge exited ${unknown.status} for a value outside the enum`);
+  assert.equal(unknown.stdout, '', 'hr_forge printed a value for a forge outside the enum');
+});
+
+test('hr_inbox_route_var routes each suffix to its engine and branch and refuses anything else', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+
+  // `sourceAndCall` appends the fixture directory as one argument; the wrapper ignores it.
+  const route = async (fname) => {
+    const reader = `route() { hr_inbox_route_var '${fname}'; printf '%s|%s|%s' "$?" "$HR_INBOX_KIND" "$HR_INBOX_BRANCH"; }; route`;
+    const { status, stdout, stderr } = await sourceAndCall(dir, reader);
+    assert.equal(status, 0, `routing ${fname} exited ${status}: ${stderr}`);
+    return stdout;
+  };
+
+  assert.equal(await route('foo_review_task_prompt.md'), '0|task|foo_review');
+  assert.equal(await route('foo_task_prompt_review.md'), '0|user_review|foo_task_prompt');
+  assert.equal(await route('foo_review_2.md'), '0|user_review|foo');
+  assert.equal(await route('foo_review_2_review.md'), '0|user_review|foo_review_2');
+  assert.equal(await route('foo_docs.md'), '0|docs|foo');
+  assert.equal(await route('notes.txt'), '1||', 'an unroutable name did not return 1 with both variables empty');
+});
+
 test('hr_registry_set then hr_registry_get round-trips a value through a fresh registry file', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(dir);
