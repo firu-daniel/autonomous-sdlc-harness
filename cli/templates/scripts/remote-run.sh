@@ -21,6 +21,7 @@
 #   remote-run.sh poll [--repo <root>]
 #   remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]
 #   remote-run.sh run-created-at <run_id> [--repo <root>]
+#   remote-run.sh start <branch> --prompt-file <file> [--repo <root>]
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status: printed; for sync: the record is
@@ -49,7 +50,25 @@
 #     3  gh failed: not found, or a non-zero exit — the first line of gh's
 #        stderr is named. For poll: the listing or the disable failed. For
 #        pause-requested and run-created-at, also an answer that is not the
-#        expected JSON; a caller never pauses on a failed read
+#        expected JSON; a caller never pauses on a failed read. For start, the
+#        dispatch failed AFTER the branch and its task prompt were pushed
+#     4  start only: placement failed — the branch cut, the copy, the commit
+#        or the push — and nothing was dispatched
+#
+# `start` IS THE ADAPTERS' ONE ENTRY: every trigger (an issue event, a forge
+# dispatch, anything later) reduces to a branch and a task text and ends here.
+# In order, stopping at the first failure: refuse a protected branch (2); refuse
+# a prompt file that is not a readable regular file (2); cut the branch from
+# `origin/<defaultBranch>` with `create-worktree.sh --no-bootstrap`; place the
+# file at `<state_dir>/task_prompts/<branch>_task_prompt.md` in that working
+# copy (the state directory resolved there, never in the main checkout), commit
+# it as `chore: add task prompt for <branch>` and confirm `origin/<branch>`
+# equals `HEAD` (each failure 4); then `dispatch --engine task --resume none
+# --chain 0`, composed by `verb_dispatch` itself. The placement is the library's
+# (`hr_task_prompt_rel`, `hr_place_artifact`, `hr_commit_placed`,
+# `hr_push_landed`), the same calls the watcher's inbox pass makes, so nothing
+# downstream can tell where a task came from. It writes no registry record: a
+# trigger job has no registry, and a local record for such a run is `adopt`'s.
 #
 # `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
 # its job, before and (under `always()`) after the harness step. Without
@@ -294,7 +313,9 @@
 # root's `harness.config.json`.
 #
 # WHAT IT NEVER DOES. It never launches a local session, never writes the
-# inbox, never pushes, and never watches a run it sent. Its only writes are the
+# inbox, and never watches a run it sent. Only `start` pushes, and only through
+# `create-worktree.sh` and `push-branch.sh`; its writes are the new working
+# copy and the prompt committed in it. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
 # `<branch>.remote.log` in the main checkout, plus the mirror restore
@@ -344,6 +365,16 @@
 #   gh fails   printf '%s\n' '#!/bin/sh' 'echo "boom" >&2' 'exit 4' > "$s"
 #              bash scripts/remote-run.sh pause feat_x        -> 3, names `boom`
 #   gh absent  HARNESS_GH_CLI=/nonexistent bash scripts/remote-run.sh warm   -> 3
+#
+#   start needs the adopted tree on origin's default branch (commit and push
+#   it first) and a prompt file outside the checkout, say /tmp/p.md:
+#   start      bash scripts/remote-run.sh start feat_x --prompt-file /tmp/p.md
+#              -> 0; origin/feat_x gains `chore: add task prompt for feat_x`,
+#                 then "$s.log" gains the same `workflow run` line as dispatch
+#   protected  bash scripts/remote-run.sh start main --prompt-file /tmp/p.md
+#              -> 2, log unchanged, nothing pushed
+#   no prompt  bash scripts/remote-run.sh start feat_y --prompt-file /nonexistent
+#              -> 2, log unchanged, nothing pushed
 #
 #   status and sync need a remote record, and a `run list` answer whose runs
 #   carry `displayTitle` `harness run feat_x` and a `url`:
@@ -478,6 +509,7 @@ EXIT_OK=0
 EXIT_USAGE=1
 EXIT_REFUSED=2
 EXIT_GH=3
+EXIT_PLACEMENT=4
 # pause-requested only: the read succeeded and found no pause.
 EXIT_NO_PAUSE=1
 
@@ -495,6 +527,7 @@ usage() {
   echo "       remote-run.sh poll [--repo <root>]" >&2
   echo "       remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]" >&2
   echo "       remote-run.sh run-created-at <run_id> [--repo <root>]" >&2
+  echo "       remote-run.sh start <branch> --prompt-file <file> [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -545,7 +578,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|restore|save|continue|poll|pause-requested|run-created-at) ;;
+  dispatch|pause|warm|stop|status|sync|restore|save|continue|poll|pause-requested|run-created-at|start) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -563,6 +596,7 @@ chain="0"
 repo_arg=""
 since_arg=""
 run_id_arg=""
+prompt_file=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -586,6 +620,10 @@ while [ "$#" -gt 0 ]; do
     --park-loop-clear)
       [ "$verb" = dispatch ] || usage "$1 is a dispatch option"
       park_loop_clear=1; shift ;;
+    --prompt-file)
+      [ "$verb" = start ] || usage "$1 is a start option"
+      [ "$#" -ge 2 ] && [ -n "$2" ] || usage "$1 needs a value"
+      prompt_file="$2"; shift 2 ;;
     -*)
       usage "unknown option '$1'" ;;
     *)
@@ -632,6 +670,10 @@ fi
 
 if [ "$verb" = save ] && [ -z "$out_dir" ]; then
   usage "save needs an <out_dir>"
+fi
+
+if [ "$verb" = start ] && [ -z "$prompt_file" ]; then
+  usage "start needs --prompt-file"
 fi
 
 if [ "$verb" = restore ]; then
@@ -727,12 +769,19 @@ case "$bundle_dir" in
   ''|/*) ;;
   *) bundle_dir="${PWD-.}/$bundle_dir" ;;
 esac
+case "$prompt_file" in
+  ''|/*) ;;
+  *) prompt_file="${PWD-.}/$prompt_file" ;;
+esac
 
 cd "$root" || setup_fail "cannot enter '$root'"
 
 # ---------------------------------------------------------------------------
 # The verbs.
 # ---------------------------------------------------------------------------
+
+# Appended to a failed dispatch's message; `start` sets it once its branch is pushed.
+dispatch_fail_note=""
 
 verb_dispatch() {
   local answers="" value n file payload
@@ -770,7 +819,7 @@ verb_dispatch() {
     exit "$EXIT_REFUSED"
   fi
 
-  gh_call workflow run "$WORKFLOW_RUN_FILE" --ref "$branch" "${inputs[@]}" || gh_fail "dispatch of '$branch' failed"
+  gh_call workflow run "$WORKFLOW_RUN_FILE" --ref "$branch" "${inputs[@]}" || gh_fail "dispatch of '$branch' failed$dispatch_fail_note"
   echo "remote-run.sh: dispatched action=run engine=$engine resume=$resume for $branch"
 }
 
@@ -1778,6 +1827,53 @@ verb_run_created_at() {
   printf '%s\n' "$epoch"
 }
 
+# placement_fail <step> — exit 4, naming the step; nothing was dispatched.
+placement_fail() {
+  echo "remote-run.sh: start of '$branch' failed at $1; nothing was dispatched" >&2
+  exit "$EXIT_PLACEMENT"
+}
+
+verb_start() {
+  local protected=0 status=0 worktree state_rel rel subject
+  hr_branch_is_protected "$root" "$branch" || protected=$?
+  case "$protected" in
+    0)
+      echo "remote-run.sh: refused, nothing written: $branch is protected" >&2
+      exit "$EXIT_REFUSED" ;;
+    2)
+      echo "remote-run.sh: refused, nothing written: cannot judge whether $branch is protected" >&2
+      exit "$EXIT_REFUSED" ;;
+  esac
+  if [ ! -f "$prompt_file" ] || [ ! -r "$prompt_file" ]; then
+    echo "remote-run.sh: refused, nothing written: the prompt file '$prompt_file' is not a readable regular file" >&2
+    exit "$EXIT_REFUSED"
+  fi
+
+  bash "$script_dir/create-worktree.sh" --no-bootstrap "$branch" >&2 || status=$?
+  [ "$status" -eq 0 ] || placement_fail "the branch cut (create-worktree.sh exited $status)"
+
+  worktree=$(hr_worktree_dir "$root" "$branch") || placement_fail "resolving the working copy"
+  state_rel=$(hr_state_dir "$worktree") || placement_fail "resolving the state directory in '$worktree'"
+  [ -n "$state_rel" ] || placement_fail "resolving the state directory in '$worktree'"
+  rel=$(hr_task_prompt_rel "$state_rel" "$branch")
+  subject=$(hr_task_prompt_subject "$branch")
+
+  hr_place_artifact "$worktree" "$prompt_file" "$rel" || placement_fail "copying the prompt to '$worktree/$rel'"
+  # 3 (nothing staged) cannot happen on a freshly cut branch, so it reads as 0.
+  status=0
+  hr_commit_placed "$script_dir/commit-on-branch.sh" "$worktree" "$rel" "$subject" >&2 || status=$?
+  [ "$status" -ne 1 ] || placement_fail "committing '$rel'"
+  hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 \
+    || placement_fail "pushing $branch (origin/$branch is not HEAD)"
+
+  engine=task
+  resume=none
+  chain=0
+  dispatch_fail_note="; $branch and its task prompt are already pushed to origin, so re-send with: remote-run.sh dispatch $branch --engine task"
+  verb_dispatch
+  echo "remote-run.sh: started $branch (worktree $worktree)"
+}
+
 case "$verb" in
   dispatch) verb_dispatch ;;
   pause) verb_pause ;;
@@ -1791,5 +1887,6 @@ case "$verb" in
   poll) verb_poll ;;
   pause-requested) verb_pause_requested ;;
   run-created-at) verb_run_created_at ;;
+  start) verb_start ;;
 esac
 exit "$EXIT_OK"
