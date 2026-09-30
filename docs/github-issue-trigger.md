@@ -26,7 +26,19 @@ npx autonomous-sdlc-harness config set execution.target github-actions
 npx autonomous-sdlc-harness init
 ```
 
-**3. Commit it and push it to GitHub's default branch.** GitHub runs an `issues` or `repository_dispatch` workflow only from the default branch (T1, T6). Add the two run workflows to the same commit when step 1 turned remote execution on. The `workflow` scope and `--no-verify` are explained in [`remote-execution.md`](remote-execution.md) → `## 7.` step 3.
+**A repository wired by an earlier release also needs its scripts brought current.** The trigger job runs `remote-run.sh trigger` from the scripts on the default branch, and `init` keeps existing outer-loop scripts as they are ([`cli.md`](cli.md) → `## 3. The re-run contract`). Scripts written before this release have no `trigger`, `start` or `adopt` verb. On such scripts the job fails with `remote-run.sh: unknown verb 'trigger'` and posts no comment on the issue, and `doctor`'s `forge` check does not see it. `--force` replaces the scripts, each after a `.bak`. What else it regenerates is listed in [`remote-execution.md`](remote-execution.md) → `### Upgrading`.
+
+```
+npx autonomous-sdlc-harness init --force
+```
+
+**3. Commit it and push it to GitHub's default branch.** GitHub runs an `issues` or `repository_dispatch` workflow only from the default branch (T1, T6). Add the two run workflows to the same commit when step 1 turned remote execution on, and every file under your scripts directory that `init --force` replaced in step 2, which this lists:
+
+```
+git status --short
+```
+
+The `workflow` scope and `--no-verify` are explained in [`remote-execution.md`](remote-execution.md) → `## 7.` step 3.
 
 ```
 git add .github/workflows/harness-trigger.yml
