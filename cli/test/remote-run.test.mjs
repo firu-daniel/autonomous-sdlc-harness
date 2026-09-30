@@ -326,11 +326,11 @@ function remoteRecord(fx, extra = {}) {
 }
 
 /** A bundle directory in Task 4's format, under the stub's directory, for `run download` to copy. */
-function bundle(fx, name, { status = 'parked', questions = ['question_1.md'], detail = 'parked on a question' } = {}) {
+function bundle(fx, name, { status = 'parked', questions = ['question_1.md'], detail = 'parked on a question', engine = 'task' } = {}) {
   const dir = join(fx.dir, STATE_DIR, 'stub', 'bundles', name);
   mkdirSync(join(dir, 'clarifications', 'feat_x'), { recursive: true });
   writeFileSync(join(dir, 'status.json'), JSON.stringify({
-    schema: '1', branch: 'feat_x', engine: 'task', status, pause_reason: '', usage_resume_at: '',
+    schema: '1', branch: 'feat_x', engine, status, pause_reason: '', usage_resume_at: '',
     park_loop_cycles: '0', resume_max_question_index: '', auto_resumes: '', stall_restarts: '',
     chain: '0', control_polled_at: '', decision: 'stop', detail, run_id: '', run_url: '', written_at: '1',
   }));
@@ -387,6 +387,15 @@ test('sync applies a parked bundle, and a second sync of the same run downloads 
   assert.equal(second.status, 0, second.stderr);
   assert.equal(downloads(fx).length, 1, 'the second sync downloaded again');
   assert.deepEqual(stable(record(fx)), stable(rec));
+});
+
+test('sync takes the engine the downloaded bundle names', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx, { engine: 'task' });
+  const env = syncEnv({ runs: [ghRun(101, 'completed', 1)], artifacts: { 101: ['harness-state'] }, bundles: { 101: bundle(fx, 'e', { engine: 'docs' }) } });
+  const result = await remoteRun(fx, ['sync', 'feat_x'], env);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(record(fx).engine, 'docs');
 });
 
 test('an answer written into the mirror survives a second sync of the same run', async (t) => {

@@ -347,8 +347,11 @@
 #      `mirror` mode into the record's `worktree`, `run.log` copied to the main
 #      checkout's `autonomous_logs/<branch>.remote.log`, and `status`,
 #      `pause_reason`, `usage_resume_at`, `park_loop_cycles`, `remote_run_id`,
-#      `remote_run_url`, `remote_detail` and `remote_synced_at` written. A
-#      `mirror` restore places no planning draft
+#      `remote_run_url`, `remote_detail` and `remote_synced_at` written, and
+#      `engine` when the bundle names `task`, `user_review` or `docs` — which
+#      is what corrects the placeholder `task` of a record `adopt` wrote while
+#      that run's job was still running. A `mirror` restore places no
+#      planning draft
 #   4. no artifact, while some bundle exists (`remote_run_id` is set, or an
 #      older finished run carries one): a job that died before its upload.
 #      `paused` / `killed`, `remote_run_id` / `remote_run_url` re-pointed at
@@ -1157,7 +1160,7 @@ sync_expired() {
 
 verb_sync() {
   local worktree runs newest id state url synced_id now older download status_file
-  local status reason detail resume_at cycles
+  local status reason detail resume_at cycles engine_value
   worktree=$(hr_registry_get "$registry" "$branch" worktree)
   if [ -z "$worktree" ] || [ ! -d "$worktree" ]; then
     echo "remote-run.sh: refused, nothing written: the mirror working copy '$worktree' of $branch is missing" >&2
@@ -1251,9 +1254,16 @@ verb_sync() {
     [ -n "$detail" ] || detail="synced from $url"
     resume_at=$(hr_remote_status_get "$status_file" usage_resume_at) || resume_at=""
     cycles=$(hr_remote_status_get "$status_file" park_loop_cycles) || cycles=""
-    set_many_or_fail status "$status" pause_reason "$reason" usage_resume_at "$resume_at" \
-      park_loop_cycles "$cycles" remote_run_id "$id" remote_run_url "$url" \
-      remote_detail "$detail" remote_synced_at "$now"
+    engine_value=$(hr_remote_status_get "$status_file" engine) || engine_value=""
+    if valid_engine "$engine_value"; then
+      set_many_or_fail status "$status" pause_reason "$reason" usage_resume_at "$resume_at" \
+        park_loop_cycles "$cycles" remote_run_id "$id" remote_run_url "$url" \
+        remote_detail "$detail" remote_synced_at "$now" engine "$engine_value"
+    else
+      set_many_or_fail status "$status" pause_reason "$reason" usage_resume_at "$resume_at" \
+        park_loop_cycles "$cycles" remote_run_id "$id" remote_run_url "$url" \
+        remote_detail "$detail" remote_synced_at "$now"
+    fi
     echo "remote-run.sh: synced run $id of $branch: $status${reason:+ ($reason)}"
     return 0
   fi
