@@ -52,3 +52,7 @@ Every other `--force` `.bak` stays visible, and `cli/src/generators/repoRoot.ts`
 - Read the rendered block in the test fixture's `.gitignore`. The three lines sit under their own comment, carry no leading `/`, and no line in the block is a bare `*.bak`.
 - Grep `cli/src/generators/repoRoot.ts` for the literal `harness-run.yml`. There is no hit, because the names come from `remote/githubActions.ts`, which owns them.
 - Read the amended `cli/src/remote/githubActions.ts` header. Its consumer list names `generators/repoRoot.ts`, and its gating sentence names the `repoRoot.ts` exception with its one-clause reason, so no sentence in the header still promises that every consumer tests `remoteExecutionApplies` first.
+
+**Deviations from plan:**
+
+- Verification bullet 1 (run the edited `cli/test/init.test.mjs`) was not executed. No conventions document states a single-file test command, so the run is skipped per `unit_loop_core.md` → `## The test-run rule` (3) and deferred to the Run gates phase. The new case rests on reading only. Bullet 2 (the rendered block) was checked by execution: a scratch probe ran the compiled `init` in a throwaway repository and printed the block. The three lines sit under their own comment, carry no leading `/`, and no line is a bare `*.bak`.

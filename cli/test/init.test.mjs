@@ -8633,6 +8633,30 @@ test('init --upgrade-workflows re-pins an older workflow after a .bak, and nothi
     }
   });
 
+  await t.test('the managed block ignores the two workflow .bak files and the profile .bak, and no other .bak', async (subtest) => {
+    const dir = await agedWorkflowFixture(subtest);
+    const workflowBaks = [WORKFLOW_RUN_FILE, WORKFLOW_RESUME_FILE].map((path) => `${path}.bak`);
+    const visibleBaks = ['.github/workflows/ci.yml.bak', `${CLAUDE_MD}.bak`];
+    const profileBak = `${PROFILE_FILE}.bak`;
+
+    await initOk(dir, [UPGRADE_WORKFLOWS]);
+    for (const path of visibleBaks) writeFileSync(join(dir, path), 'planted\n', 'utf8');
+
+    assert.deepEqual(await ignoredAmong(dir, [...workflowBaks, ...visibleBaks]), workflowBaks);
+
+    await initOk(dir, ['--force']);
+    assert.ok(await exists(dir, profileBak), '--force wrote no profile .bak');
+    assert.deepEqual(await ignoredAmong(dir, [profileBak]), [profileBak]);
+
+    const ignoreFile = text(dir, GITIGNORE_FILE);
+    for (const line of [...workflowBaks, profileBak]) {
+      assert.ok(ignoreFile.split('\n').includes(line), `the block does not carry ${line} unanchored`);
+    }
+    assert.ok(!ignoreFile.split('\n').includes('*.bak'), 'the block carries a bare *.bak');
+    await initOk(dir);
+    assert.equal(text(dir, GITIGNORE_FILE), ignoreFile, 'a plain re-run changed .gitignore');
+  });
+
   await t.test('a second run leaves both workflows and both .bak files byte-identical', async (subtest) => {
     const dir = await agedWorkflowFixture(subtest);
     await initOk(dir, [UPGRADE_WORKFLOWS]);

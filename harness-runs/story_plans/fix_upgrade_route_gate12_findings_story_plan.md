@@ -53,7 +53,7 @@ The `.gitignore` entry matters. Task 2's new lines change `.gitignore` on the fi
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_upgrade_route_gate12_findings/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, with the catch-all layer last.
 
 1. [x] **Task 1** — Declare the in-flight sentence once, carry it in `doctor`'s version warning, and fix that warning's double full stop at its join _(layer: cli)_ _(points: 12)_
-2. [ ] **Task 2** — Ignore the two workflow `.bak` files and the permission profile's `.bak` in the managed `.gitignore` block _(layer: cli)_ _(points: 10)_
+2. [x] **Task 2** — Ignore the two workflow `.bak` files and the permission profile's `.bak` in the managed `.gitignore` block _(layer: cli)_ _(points: 10)_
 3. [ ] **Task 3** — Print upgrade-specific next steps from `init --upgrade-workflows` instead of the first-setup block _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Silence git's detached-HEAD advice in the `Install the pinned plugin` tag clone _(layer: cli)_ _(points: 8)_
 5. [ ] **Task 5** — Document in `### Upgrading` what an upgrade does to a run in flight, and the route to move one on purpose _(layer: general)_ _(points: 10)_
