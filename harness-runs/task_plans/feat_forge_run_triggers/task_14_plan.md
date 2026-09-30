@@ -35,3 +35,8 @@
 - `npm test -- test/doctor.test.mjs` from `cli/` passes.
 - `commands.typecheck` (`bash scripts/typecheck.sh`) exits 0.
 - `grep -n "id: 'forge'" cli/src/doctor/checks.ts` shows one check, and `grep -n "FORGE_CHECK" cli/src/doctor/checks.ts` shows its definition and its one `CHECKS` entry.
+
+**Deviations from plan:**
+
+- Added one state the plan's grade list does not name: a `forge` value outside `FORGE_KINDS` passes as *not graded (see the config check)*, since that check already fails it and grading it twice would make one finding two. Not covered by a test case (the config check refuses writing such a value through `config set`).
+- `grep -n "FORGE_CHECK"` shows a third line besides the definition and the `CHECKS` entry: the module header's choice 3 now names `FORGE_CHECK` beside `REMOTE_EXECUTION_CHECK` as a check that spawns no `gh`, and choice 1 names `forgeTriggerApplies` and `WORKFLOW_TRIGGER_PATH` among the imported owners.

@@ -54,7 +54,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_triggers/task
 11. [x] **Task 11** — Name the GitHub route in every job-side notification that names a local command _(layer: cli)_ _(points: 12)_
 12. [x] **Task 12** — Ship the `harness-trigger.yml` workflow template _(layer: cli)_ _(points: 15)_
 13. [x] **Task 13** — Write the trigger workflow from `init` when `forge` is `github` and runs execute on GitHub Actions _(layer: cli)_ _(points: 20)_
-14. [ ] **Task 14** — Add the `doctor` check `forge`, the key's reporter _(layer: cli)_ _(points: 15)_
+14. [x] **Task 14** — Add the `doctor` check `forge`, the key's reporter _(layer: cli)_ _(points: 15)_
 15. [ ] **Task 15** — Ask GitHub about the trigger workflow and its label under `doctor --check-github` _(layer: cli)_ _(points: 10)_
 16. [ ] **Task 16** — Adopt runs started on GitHub before the four syncing commands sync _(layer: plugin)_ _(points: 10)_
 17. [ ] **Task 17** — Show runs not yet adopted in `/autonomous-sdlc-harness:branch-status` without syncing _(layer: plugin)_ _(points: 5)_
