@@ -22,6 +22,7 @@
 #   remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]
 #   remote-run.sh run-created-at <run_id> [--repo <root>]
 #   remote-run.sh start <branch> --prompt-file <file> [--repo <root>]
+#   remote-run.sh trigger [--repo <root>]   (its own exit map: its paragraph)
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status: printed; for sync: the record is
@@ -69,6 +70,58 @@
 # `hr_push_landed`), the same calls the watcher's inbox pass makes, so nothing
 # downstream can tell where a task came from. It writes no registry record: a
 # trigger job has no registry, and a local record for such a run is `adopt`'s.
+#
+# `trigger` IS THE GITHUB EVENT ADAPTER, the one step of the trigger
+# workflow's job: event -> (branch, task text) -> `start`. It handles
+# `GITHUB_EVENT_NAME` `issues` only; any other name, or an event file it cannot
+# read, exits 1. Like `restore` it acts on `hr_repo_root` of the working
+# directory, and it takes no part in the sending-verb gate: it gates itself, so
+# a refusal can still be commented. It reads, only from the environment:
+#   GITHUB_EVENT_NAME, GITHUB_EVENT_PATH   the event; each field is read by `jq`
+#                        into a variable and is only ever an argument or file
+#                        bytes, never shell source
+#   GITHUB_REPOSITORY, GITHUB_SERVER_URL, GITHUB_RUN_ID   the `gh` target and
+#                        the URLs its comments name
+#   HARNESS_REMOTE_STOP  non-empty: every start is refused
+#   HARNESS_TRIGGER_LABEL   the trigger label; `DEFAULT_TRIGGER_LABEL` when empty
+#   HARNESS_TRIGGER_ALLOWED_BOTS   comma-separated bot logins allowed to start
+#   HARNESS_TRIGGER_LOOKUP_SECS    seconds between run lookups; `5` when empty.
+#                        A test seam
+#   RUNNER_TEMP          where the prompt snapshot is written; a `mktemp -d`
+#                        directory when empty
+# An `action` other than `labeled`, or another label, is one line and exit 0
+# with no `gh` call. Otherwise refused, in this order, each refusal one issue
+# comment naming the reason and the way on:
+#   1. `HARNESS_REMOTE_STOP` is set
+#   2. `hr_forge` is not `github` or `hr_execution_target` is not
+#      `github-actions` — before any authorisation, so a disabled trigger asks
+#      GitHub nothing about the labeller
+#   3. the issue is not `open`
+#   4. `sender.login` is `ghost` (GitHub's placeholder for a deleted account),
+#      empty, or not a login shape (`^[A-Za-z0-9][A-Za-z0-9-]*$`, plus `[bot]`
+#      for a `Bot`)
+#   5. `sender.type` is not `User` and the login is not an exact entry of
+#      `HARNESS_TRIGGER_ALLOWED_BOTS` — checked by the listing alone, with no
+#      permission call, because the permission API answers `none` or 404 for a bot
+#   6. a `User` whose `collaborators/<login>/permission` is not `admin` or
+#      `write` — `maintain` reads as `write` and `triage` as `read` there; a
+#      failed call is "could not confirm write access", never a pass
+# Then it fetches `origin <defaultBranch>` (a failure tolerated), derives the
+# branch with `hr_derive_branch <title> issue_<number>` (2 or 3 refused), writes
+# the snapshot — `# <title>`, the body's bytes, `---` and a provenance sentence
+# naming the issue, the labeller, the label and the time — and runs `start` as a
+# child. After a start it looks up the `harness run <branch>` run, at most
+# `TRIGGER_RUN_LOOKUP_TRIES` times, falling back to the branch's filtered run
+# list, and comments the branch and that URL. Every comment is followed by
+# removing the label, so re-applying it is deliberate; a removal that fails is
+# one `::warning::` line.
+#     0  started (commented), or ignored
+#     1  not an `issues` event, or the event could not be read
+#     2  refused (commented)
+#     3  a `gh` step after the decision failed: the comment could not be posted
+#        (an `::error::` line), or `start` pushed the branch but its dispatch
+#        failed (commented with the manual Run-workflow way on)
+#     4  `start` refused or failed its placement (commented)
 #
 # `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
 # its job, before and (under `always()`) after the harness step. Without
@@ -315,7 +368,8 @@
 # WHAT IT NEVER DOES. It never launches a local session, never writes the
 # inbox, and never watches a run it sent. Only `start` pushes, and only through
 # `create-worktree.sh` and `push-branch.sh`; its writes are the new working
-# copy and the prompt committed in it. Every other verb's only writes are the
+# copy and the prompt committed in it. `trigger` writes its snapshot and comment
+# files under `RUNNER_TEMP`, one comment on the issue and the label removal. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
 # `<branch>.remote.log` in the main checkout, plus the mirror restore
@@ -334,6 +388,9 @@
 #   STATE_ARTIFACT_NAME  mirrors  STATE_ARTIFACT_NAME
 #   POLL_STATE_ARTIFACT_NAME mirrors POLL_STATE_ARTIFACT_NAME
 #   HARNESS_GH_CLI       mirrors  GH_CLI_VARIABLE (the binary run as `gh`)
+#   HARNESS_TRIGGER_LABEL        mirrors  TRIGGER_LABEL_VARIABLE
+#   DEFAULT_TRIGGER_LABEL        mirrors  DEFAULT_TRIGGER_LABEL
+#   HARNESS_TRIGGER_ALLOWED_BOTS mirrors  TRIGGER_ALLOWED_BOTS_VARIABLE
 #
 # `set -u` WITHOUT `-e`: every refusal is reported with its own exit code rather
 # than aborting mid-decision.
@@ -463,6 +520,21 @@
 #   run-created-at   a stub answering `run view 42 --json createdAt` with
 #              {"createdAt":"2026-01-01T00:00:10Z"}: bash scripts/remote-run.sh
 #              run-created-at 42 -> prints 1767225610, 0; a failing stub -> 3
+#
+#   trigger needs start's setup plus `"forge": "github"`, an event file e.json
+#   {"action":"labeled","label":{"name":"harness"},"sender":{"login":"alice",
+#   "type":"User"},"issue":{"number":7,"title":"Add comments","body":"x",
+#   "html_url":"https://github.com/o/r/issues/7","state":"open"}}, and a stub
+#   answering `api repos/o/r/collaborators/alice/permission` with
+#   {"permission":"write"}; export GITHUB_EVENT_NAME=issues GITHUB_EVENT_PATH=e.json
+#   GITHUB_REPOSITORY=o/r HARNESS_TRIGGER_LOOKUP_SECS=0:
+#   trigger    bash scripts/remote-run.sh trigger -> 0; origin/add_comments gains
+#              the prompt commit, "$s.log" gains `workflow run harness-run.yml
+#              --ref add_comments ...`, `issue comment 7 ...` naming the branch,
+#              then `issue edit 7 ... --remove-label harness`
+#   read       the permission answer {"permission":"read"} -> 2, no `workflow
+#              run`, one comment naming write access, the label removed
+#   ignored    e.json's label name `bug` -> 0, one line, "$s.log" unchanged
 
 set -u
 
@@ -479,6 +551,7 @@ WORKFLOW_RUN_FILE='harness-run.yml'
 WORKFLOW_RESUME_FILE='harness-resume.yml'
 STATE_ARTIFACT_NAME='harness-state'
 POLL_STATE_ARTIFACT_NAME='harness-poll-state'
+DEFAULT_TRIGGER_LABEL='harness'
 GH="${HARNESS_GH_CLI:-gh}"
 
 # How many runs `status` prints, and how many `run list` returns for status
@@ -499,6 +572,10 @@ POLL_GIVE_UP_AFTER_MINUTES_DEFAULT=360
 # How many of the poller's own runs `poll` searches for the previous tick's
 # state artifact; each one without it costs an artifact lookup.
 POLL_STATE_RUNS_LIMIT=10
+# `trigger`'s bound on looking up the run its `start` dispatched; the wait
+# between tries is `HARNESS_TRIGGER_LOOKUP_SECS`, a test seam.
+TRIGGER_RUN_LOOKUP_TRIES=6
+TRIGGER_LOOKUP_SECS_DEFAULT=5
 
 # GitHub's documented limit on a `workflow_dispatch` inputs payload: "The
 # maximum payload for inputs is 65,535 characters."
@@ -528,6 +605,7 @@ usage() {
   echo "       remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]" >&2
   echo "       remote-run.sh run-created-at <run_id> [--repo <root>]" >&2
   echo "       remote-run.sh start <branch> --prompt-file <file> [--repo <root>]" >&2
+  echo "       remote-run.sh trigger [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -578,7 +656,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|restore|save|continue|poll|pause-requested|run-created-at|start) ;;
+  dispatch|pause|warm|stop|status|sync|restore|save|continue|poll|pause-requested|run-created-at|start|trigger) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -627,7 +705,7 @@ while [ "$#" -gt 0 ]; do
     -*)
       usage "unknown option '$1'" ;;
     *)
-      [ "$verb" != warm ] && [ "$verb" != poll ] || usage "$verb takes no branch"
+      [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != trigger ] || usage "$verb takes no branch"
       if [ "$verb" = run-created-at ]; then
         [ -z "$run_id_arg" ] || usage "unexpected argument '$1'"
         run_id_arg="$1"
@@ -646,7 +724,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != run-created-at ]; then
+if [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != run-created-at ] && [ "$verb" != trigger ]; then
   valid_branch "$branch" || usage "$verb needs a <branch>"
 fi
 
@@ -725,7 +803,7 @@ setup_fail() {
 if [ -n "$repo_arg" ]; then
   root=$(hr_repo_root "$repo_arg") || setup_fail "'$repo_arg' is not a git repository"
 elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ] \
-  || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ]; then
+  || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ] || [ "$verb" = trigger ]; then
   root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
@@ -739,6 +817,9 @@ case "$verb" in
     ;;
   pause-requested|run-created-at)
     # Read verbs: no gate, and nothing of the configuration is read.
+    ;;
+  trigger)
+    # Gates itself, after reading the event, so a refusal can still be commented.
     ;;
   status|sync)
     registry=$(hr_state_path "$root" autonomous_logs/registry.json) || {
@@ -1874,6 +1955,249 @@ verb_start() {
   echo "remote-run.sh: started $branch (worktree $worktree)"
 }
 
+# ---------------------------------------------------------------------------
+# `trigger` — the event adapter. Event text is data: every field is read by
+# `jq` into a variable and reaches a command only as one argument or as file
+# bytes, never as shell source.
+# ---------------------------------------------------------------------------
+
+trigger_tmp=""
+trigger_label=""
+issue_number=""
+
+# event_field <jq filter> — one field of the event into EVENT_VALUE, its bytes
+# kept (a command substitution alone would drop trailing newlines). 1 when jq
+# cannot read it.
+EVENT_VALUE=""
+event_field() {
+  local out
+  out=$(jq -j "$1" "$GITHUB_EVENT_PATH" 2>/dev/null && printf x) || return 1
+  EVENT_VALUE=${out%x}
+}
+
+# trigger_finish <exit> <comment> — post <comment> on the issue, remove the
+# trigger label, and exit <exit>. A comment that cannot be posted makes the exit
+# 3; a label that cannot be removed is a warning only.
+trigger_finish() {
+  local code="$1" body="$2" file
+  if [ -n "${GITHUB_RUN_ID-}" ]; then
+    body="$body
+
+_Posted by the trigger job ${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY-}/actions/runs/$GITHUB_RUN_ID._"
+  fi
+  if ! file=$(mktemp "$trigger_tmp/harness-trigger-comment.XXXXXX"); then
+    echo "::error::remote-run.sh: trigger: cannot create the comment file for issue #$issue_number under '$trigger_tmp'"
+    exit "$EXIT_GH"
+  fi
+  printf '%s\n' "$body" >"$file"
+  if ! gh_call issue comment "$issue_number" --repo "${GITHUB_REPOSITORY-}" --body-file "$file"; then
+    echo "::error::remote-run.sh: trigger: the comment on issue #$issue_number could not be posted: $GH_ERR"
+    code="$EXIT_GH"
+  fi
+  rm -f "$file"
+  if ! gh_call issue edit "$issue_number" --repo "${GITHUB_REPOSITORY-}" --remove-label "$trigger_label"; then
+    echo "::warning::remote-run.sh: trigger: removing the label '$trigger_label' from issue #$issue_number failed: $GH_ERR"
+  fi
+  exit "$code"
+}
+
+# trigger_refuse <reason> <way on> — print the reason, comment both, exit 2.
+trigger_refuse() {
+  echo "remote-run.sh: trigger: refused, nothing sent: $1" >&2
+  trigger_finish "$EXIT_REFUSED" "No run started: $1
+
+$2"
+}
+
+# trigger_bot_listed <login> — 0 when <login> is an exact entry of
+# HARNESS_TRIGGER_ALLOWED_BOTS, split on `,` with each entry trimmed.
+trigger_bot_listed() {
+  local rest="${HARNESS_TRIGGER_ALLOWED_BOTS-}," entry
+  while [ -n "$rest" ]; do
+    entry=${rest%%,*}
+    rest=${rest#*,}
+    entry=${entry#"${entry%%[![:space:]]*}"}
+    entry=${entry%"${entry##*[![:space:]]}"}
+    [ -n "$entry" ] && [ "$entry" = "$1" ] && return 0
+  done
+  return 1
+}
+
+# trigger_run_url — the URL of the `harness run <branch>` run `start` just
+# dispatched, looked up at most TRIGGER_RUN_LOOKUP_TRIES times; the branch's
+# filtered run list when none appears. Never fails.
+trigger_run_url() {
+  local try=1 secs url=""
+  secs="${HARNESS_TRIGGER_LOOKUP_SECS-}"
+  case "$secs" in
+    ''|*[!0-9]*) secs="$TRIGGER_LOOKUP_SECS_DEFAULT" ;;
+  esac
+  while :; do
+    if gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json url,displayTitle --limit 5; then
+      url=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" \
+        '[.[]? | select(.displayTitle == $t) | .url | strings] | first // empty' 2>/dev/null) || url=""
+      [ -z "$url" ] || break
+    else
+      echo "remote-run.sh: trigger: looking up the run of $branch failed: $GH_ERR" >&2
+    fi
+    [ "$try" -lt "$TRIGGER_RUN_LOOKUP_TRIES" ] || break
+    try=$((try + 1))
+    sleep "$secs"
+  done
+  # A derived name is `[a-z0-9_]` only, so it needs no encoding in the query.
+  [ -n "$url" ] || url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY-}/actions/workflows/${WORKFLOW_RUN_FILE}?query=branch%3A$branch"
+  printf '%s\n' "$url"
+}
+
+verb_trigger() {
+  local LC_ALL=C
+  local action label title body html_url state login sender_type
+  local forge="" target="" default name_file status permission prompt errfile last url
+  case "${GITHUB_EVENT_NAME-}" in
+    issues) ;;
+    *)
+      echo "remote-run.sh: trigger handles GITHUB_EVENT_NAME issues, not '${GITHUB_EVENT_NAME-}'" >&2
+      exit "$EXIT_USAGE" ;;
+  esac
+  if [ -z "${GITHUB_EVENT_PATH-}" ] || [ ! -f "$GITHUB_EVENT_PATH" ] || [ ! -r "$GITHUB_EVENT_PATH" ]; then
+    echo "remote-run.sh: trigger: cannot read the event file '${GITHUB_EVENT_PATH-}'" >&2
+    exit "$EXIT_USAGE"
+  fi
+  hr_have_jq || { echo "remote-run.sh: trigger needs jq" >&2; exit "$EXIT_USAGE"; }
+  { event_field '.action // ""' && action="$EVENT_VALUE" \
+    && event_field '.label.name // ""' && label="$EVENT_VALUE" \
+    && event_field '.issue.number // ""' && issue_number="$EVENT_VALUE" \
+    && event_field '.issue.title // ""' && title="$EVENT_VALUE" \
+    && event_field '.issue.body // ""' && body="$EVENT_VALUE" \
+    && event_field '.issue.html_url // ""' && html_url="$EVENT_VALUE" \
+    && event_field '.issue.state // ""' && state="$EVENT_VALUE" \
+    && event_field '.sender.login // ""' && login="$EVENT_VALUE" \
+    && event_field '.sender.type // ""' && sender_type="$EVENT_VALUE"; } || {
+    echo "remote-run.sh: trigger: '$GITHUB_EVENT_PATH' is not a readable event" >&2
+    exit "$EXIT_USAGE"
+  }
+
+  trigger_label="${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}"
+  if [ "$action" != labeled ] || [ "$label" != "$trigger_label" ]; then
+    echo "remote-run.sh: trigger: ignored, not the label '$trigger_label' being applied"
+    return 0
+  fi
+  case "$issue_number" in
+    ''|*[!0-9]*|0*)
+      echo "remote-run.sh: trigger: the event carries no issue number" >&2
+      exit "$EXIT_USAGE" ;;
+  esac
+
+  trigger_tmp="${RUNNER_TEMP-}"
+  if [ -z "$trigger_tmp" ] || [ ! -d "$trigger_tmp" ]; then
+    trigger_tmp=$(mktemp -d) || { echo "remote-run.sh: trigger: mktemp failed" >&2; exit "$EXIT_USAGE"; }
+  fi
+
+  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
+    trigger_refuse "the repository variable \`HARNESS_REMOTE_STOP\` is set, which stops every start." \
+      "Clear it under **Settings → Secrets and variables → Actions → Variables**, then re-apply the label \`$trigger_label\`."
+  fi
+
+  forge=$(hr_forge "$root") || forge=""
+  target=$(hr_execution_target "$root") || target=""
+  if [ "$forge" != github ] || [ "$target" != github-actions ]; then
+    trigger_refuse "the default branch's \`harness.config.json\` does not turn the issue trigger on: it needs \`forge\` set to \`github\` (it is ${forge:-not set or unreadable}) and \`execution.target\` set to \`github-actions\` (it is ${target:-unreadable})." \
+      "Set both keys on the default branch, then re-apply the label \`$trigger_label\`."
+  fi
+
+  if [ "$state" != open ]; then
+    trigger_refuse "this issue is not open." "Reopen it, then re-apply the label \`$trigger_label\`."
+  fi
+
+  if [ "$login" = ghost ] || [ -z "$login" ] \
+    || ! { [[ "$login" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] \
+      || { [ "$sender_type" = Bot ] && [[ "$login" =~ ^[A-Za-z0-9][A-Za-z0-9-]*\[bot\]$ ]]; }; }; then
+    trigger_refuse "the label was applied by an account GitHub does not name (a deleted account shows as \`ghost\`)." \
+      "A collaborator with write access can re-apply the label \`$trigger_label\`."
+  fi
+
+  if [ "$sender_type" != User ]; then
+    trigger_bot_listed "$login" || trigger_refuse \
+      "@$login is not a person, and is not listed in the repository variable \`HARNESS_TRIGGER_ALLOWED_BOTS\`." \
+      "Add \`$login\` to that comma-separated list to let it start runs, or have a collaborator with write access apply the label \`$trigger_label\`."
+  else
+    permission=""
+    if gh_call api "repos/${GITHUB_REPOSITORY-}/collaborators/$login/permission"; then
+      permission=$(printf '%s' "$GH_OUT" | jq -r '.permission // empty' 2>/dev/null) || permission=""
+      case "$permission" in
+        admin|write) ;;
+        *) trigger_refuse "could not confirm write access for @$login: GitHub reports their permission as \`${permission:-nothing}\`." \
+             "Only a collaborator with write, maintain or admin access starts a run by labelling an issue; one of them can re-apply the label \`$trigger_label\`." ;;
+      esac
+    else
+      trigger_refuse "could not confirm write access for @$login: the permission check failed ($GH_ERR)." \
+        "Re-apply the label \`$trigger_label\` to try again."
+    fi
+  fi
+
+  # The name check reads origin/<defaultBranch>; a failed fetch leaves it to say so.
+  default=$(hr_default_branch "$root") || default=""
+  if [ -n "$default" ]; then
+    git -C "$root" fetch --quiet origin "$default" >&2 || echo "remote-run.sh: trigger: fetching origin $default failed" >&2
+  fi
+  name_file=$(mktemp "$trigger_tmp/harness-trigger-branch.XXXXXX") || trigger_refuse \
+    "the branch name could not be derived (mktemp failed)." "Re-apply the label \`$trigger_label\` to try again."
+  status=0
+  hr_derive_branch "$root" "$title" "issue_$issue_number" >"$name_file" || status=$?
+  branch=""
+  IFS= read -r branch <"$name_file" || :
+  rm -f "$name_file"
+  case "$status" in
+    0) ;;
+    3) trigger_refuse "every branch name derived from this issue's title, through the suffix \`_99\`, is already taken." \
+         "Retitle the issue, then re-apply the label \`$trigger_label\`." ;;
+    *) trigger_refuse "the branch name for this issue could not be checked (${HR_TAKEN_WHY:-no usable name})." \
+         "Re-apply the label \`$trigger_label\` to try again." ;;
+  esac
+
+  prompt=$(mktemp "$trigger_tmp/harness-trigger-prompt.XXXXXX") || trigger_finish "$EXIT_PLACEMENT" \
+    "No run started: the task prompt for \`$branch\` could not be written. Re-apply the label \`$trigger_label\` to try again."
+  printf '# %s\n\n%s\n\n---\n\nStarted from %s by @%s, who applied the label `%s` at %s. This is the issue'"'"'s text at that moment; later edits to the issue do not reach this run.\n' \
+    "$title" "$body" "$html_url" "$login" "$trigger_label" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$prompt"
+
+  errfile=$(mktemp "$trigger_tmp/harness-trigger-start.XXXXXX") || errfile=/dev/null
+  status=0
+  bash "$script_dir/remote-run.sh" start "$branch" --prompt-file "$prompt" --repo "$root" 2>"$errfile" || status=$?
+  last=""
+  if [ "$errfile" != /dev/null ]; then
+    cat "$errfile" >&2
+    last=$(grep -v '^[[:space:]]*$' "$errfile" | tail -n 1)
+    rm -f "$errfile"
+  fi
+  case "$status" in
+    0) ;;
+    3)
+      echo "remote-run.sh: trigger: $branch is pushed, but its dispatch failed" >&2
+      trigger_finish "$EXIT_GH" "The branch \`$branch\` was pushed with this issue's task, but dispatching its run failed:
+
+\`\`\`
+$last
+\`\`\`
+
+Start it by hand: **Actions → \`$WORKFLOW_RUN_FILE\` → Run workflow**, with \`action\` \`run\` and \`branch\` \`$branch\`." ;;
+    *)
+      echo "remote-run.sh: trigger: the start of $branch failed (exit $status)" >&2
+      trigger_finish "$EXIT_PLACEMENT" "No run started: placing this issue's task on the branch \`$branch\` failed:
+
+\`\`\`
+$last
+\`\`\`
+
+Re-apply the label \`$trigger_label\` to try again." ;;
+  esac
+
+  url=$(trigger_run_url)
+  echo "remote-run.sh: trigger: started $branch from issue #$issue_number: $url"
+  trigger_finish "$EXIT_OK" "Started a harness run on the branch \`$branch\`: $url
+
+The task is this issue's title and body as they were when the label \`$trigger_label\` was applied; later edits to the issue do not reach this run. Re-applying the label starts another run, on the next indexed branch."
+}
+
 case "$verb" in
   dispatch) verb_dispatch ;;
   pause) verb_pause ;;
@@ -1888,5 +2212,6 @@ case "$verb" in
   pause-requested) verb_pause_requested ;;
   run-created-at) verb_run_created_at ;;
   start) verb_start ;;
+  trigger) verb_trigger ;;
 esac
 exit "$EXIT_OK"

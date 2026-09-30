@@ -87,3 +87,8 @@
 - `grep -n "workflow run" cli/templates/scripts/remote-run.sh` shows no new `workflow run` composed outside `verb_dispatch`, `verb_pause`, `verb_warm` and `verb_stop`: the trigger dispatches only through `start`.
 - `grep -n "harness-run.yml" cli/templates/scripts/remote-run.sh` shows only the one `WORKFLOW_RUN_FILE=` assignment, the header mirror-table row and comment / REPRO lines — no code line inside `trigger`; the invariant is *no hit on an uncommented line other than the assignment*.
 - `grep -n '"\$GH"\|^[^#]*\bgh ' cli/templates/scripts/remote-run.sh` has every hit inside the `gh_call` function body (and its `GH_ERR` messages), none inside `trigger`: `trigger` reaches `gh` only through `gh_call`.
+
+- **Deviations from plan:**
+  - The suite carries one case beyond the plan's list: a `workflow run` that fails after the push exits 3 and comments the manual **Run workflow** way on, naming the workflow file from `WORKFLOW_RUN_FILE`. The stub gained `STUB_FAIL_ON` for it, as in `remote-start.test.mjs`.
+  - The shell-syntax body case uses LF line endings only: the adopter's `.gitattributes` (`* text=auto`, from `cli/templates/repo/gitattributes`) normalises a CRLF body on commit, so "the committed prompt holds those bytes" is asserted for bytes git stores unchanged.
+  - Refusal 4 accepts the `[bot]`-suffixed login shape only when `.sender.type` is `Bot`, reading "that shape followed by `[bot]` for a bot" as a condition on the type.
