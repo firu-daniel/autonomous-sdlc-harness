@@ -1297,12 +1297,20 @@ notify() {
 #                       bound of the next control poll, this job's or the next
 #                       chained one's. Set at start (see JOB MODE) and advanced
 #                       by every successful poll
-#   execution           `github-actions` on a record launch_remote_run wrote, and
+#   execution           `github-actions` on a remote record — one
+#                       launch_remote_run wrote, or one `remote-run.sh adopt`
+#                       wrote for a run started on GitHub, both through
+#                       lib/harness-run-lib.sh's `hr_remote_record_init` — and
 #                       absent on a local one. Fixed for the run's life: a later
 #                       pass reads this field, never `execution.target`
 #   remote_dispatched_at
 #                       the epoch second launch_remote_run's `remote-run.sh
-#                       dispatch` returned 0; empty after a failed dispatch
+#                       dispatch` returned 0; empty after a failed dispatch;
+#                       always empty on a record remote-run.sh adopt wrote,
+#                       since no local dispatch happened
+#   remote_adopted_at   the epoch second `remote-run.sh adopt` wrote this record
+#                       for a run started on GitHub (a trigger's, or another
+#                       machine's); absent on every other record
 #   park_loop_clear_pending
 #                       `1` on a remote record clear_park_loops returned to
 #                       `parked`, so the next answer relay sends
