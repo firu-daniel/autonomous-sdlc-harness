@@ -198,9 +198,12 @@ import {
   GIT_TOKEN_SECRET,
   OAUTH_TOKEN_SECRET,
   CLI_VERSION_VARIABLE,
+  DEFAULT_TRIGGER_LABEL,
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
   RUNNER_VARIABLE,
+  TRIGGER_ALLOWED_BOTS_VARIABLE,
+  TRIGGER_LABEL_VARIABLE,
 } from '../remote/githubActions.js';
 import { setUpRetrieval } from '../retrieval/setup.js';
 import type { CommandContext, Subcommand } from './registry.js';
@@ -2490,7 +2493,7 @@ async function run(ctx: CommandContext): Promise<number> {
     });
   }
   if (freshWorkflows.length > 0 && workflows.upgrade?.replaced !== true) {
-    reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun, freshWorkflows);
+    reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun, freshWorkflows, workflows.trigger);
   }
 
   return EXIT.OK;
@@ -2565,7 +2568,8 @@ function reportWorkflowUpgrade(
  * The first-setup block: the GitHub-side steps only the adopter can take, printed when this run
  * created or replaced at least one of the two workflows, and **not** printed for an upgrade that
  * replaced a workflow — {@link reportWorkflowUpgrade} owns that run's steps. `workflowPaths` names
- * the workflows, repo-relative.
+ * the workflows, repo-relative; `trigger` is the generator's fact that the trigger workflow was
+ * enqueued, and adds the label step.
  *
  * Commands stand on their own lines so each can be pasted. The push comes first because GitHub
  * dispatches a `workflow_dispatch` workflow only once it exists on the default branch. It skips the
@@ -2578,13 +2582,19 @@ function reportGithubSteps(
   defaultBranch: string,
   dryRun: boolean,
   workflowPaths: readonly string[],
+  trigger: boolean,
 ): void {
   const wrote = dryRun ? 'would write' : 'wrote';
   const command = (line: string): void => ctx.report.info(`   ${line}`);
+  const listed =
+    workflowPaths.length === 1
+      ? workflowPaths[0]
+      : `${workflowPaths.slice(0, -1).join(', ')} and ${workflowPaths[workflowPaths.length - 1]}`;
+  let step = 4;
 
   ctx.report.step('remote execution');
   ctx.report.info(
-    `1. This run ${wrote} ${workflowPaths.join(' and ')}. Commit and push ${workflowPaths.length === 1 ? 'it' : 'both'} to GitHub's default branch (assumed \`${defaultBranch}\` below) — a workflow_dispatch workflow can be dispatched only once it exists there. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(defaultBranch)}`,
+    `1. This run ${wrote} ${listed}. Commit and push ${workflowPaths.length === 1 ? 'it' : 'them'} to GitHub's default branch (assumed \`${defaultBranch}\` below) — a workflow_dispatch workflow can be dispatched only once it exists there. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(defaultBranch)}`,
   );
   command(`git add ${workflowPaths.join(' ')}`);
   command('git commit -m "Add the harness workflows"');
@@ -2606,7 +2616,20 @@ function reportGithubSteps(
   ctx.report.info(`4. Optionally set the repository variable ${RUNNER_VARIABLE} to run on a self-hosted runner label instead of ubuntu-latest:`);
   command(`gh variable set ${RUNNER_VARIABLE} --body <runner-label>`);
   ctx.report.info('');
-  ctx.report.info('5. Then verify the GitHub side:');
+  if (trigger) {
+    step += 1;
+    ctx.report.info(
+      `${step}. Create the issue label the trigger workflow listens to; labelling an issue with it starts a run. Only a person with write or admin access, or a listed bot, starts one:`,
+    );
+    command(`gh label create ${DEFAULT_TRIGGER_LABEL} --description "Start a harness run from this issue"`);
+    ctx.report.info(
+      `   Optionally set the repository variable ${TRIGGER_LABEL_VARIABLE} to use another label, and ${TRIGGER_ALLOWED_BOTS_VARIABLE} to a comma-separated list of bot logins allowed to start runs:`,
+    );
+    command(`gh variable set ${TRIGGER_LABEL_VARIABLE} --body <label>`);
+    command(`gh variable set ${TRIGGER_ALLOWED_BOTS_VARIABLE} --body <bot-login,...>`);
+    ctx.report.info('');
+  }
+  ctx.report.info(`${step + 1}. Then verify the GitHub side:`);
   command(DOCTOR_CHECK_GITHUB_COMMAND);
   ctx.report.info('');
   ctx.report.info(
