@@ -548,7 +548,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 - https://code.claude.com/docs/en/legal-and-compliance — retrieved 2026-09-30: "Moreover, developers may not collect, store, or intermediate Claude.ai credentials or session tokens — sign-in to a Claude account must complete through Anthropic's own flow."
 - https://code.claude.com/docs/en/github-actions#manual-setup — retrieved 2026-09-30: "Generate one by running `claude setup-token` locally."
 
-**Consequence:** none now. `docs/remote-execution.md` → `### Every secret and variable` already asks for `claude setup-token`.
+**Consequence:** none now. `docs/remote-execution.md` → `## 7. Turning it on`, step **4. Set a credential secret.**, already asks for `claude setup-token`.
 
 ### A12. The `.claude/**` sensitive-path wall on the current Claude Code, including Bash writes.
 
