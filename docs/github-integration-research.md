@@ -55,7 +55,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 | [A3](#a3-does-disabling-a-workflow-file-disable-every-trigger-in-it) | Disabling one trigger of a multi-trigger workflow | `verified` | adoption |
 | [A4](#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length) | The prefilled new-file link | `partly true` | adoption |
 | [A5](#a5-workflow-templates-template-repositories-and-other-ways-to-add-a-workflow-without-a-checkout) | Workflow templates and other no-checkout routes | `partly true` | adoption |
-| [A6](#a6-github-apps-what-one-needs-hosted-the-workflows-permission-a-thin-relay-and-hosting-cost) | GitHub Apps, a thin relay, hosting cost | `partly true` | adoption |
+| [A6](#a6-github-apps-what-one-needs-hosted-the-workflows-permission-a-thin-relay-and-hosting-cost) | GitHub Apps, a thin relay, hosting cost | `verified` | adoption |
 | [A7](#a7-copilot-cloud-agent-third-party-coding-agents-on-github-copilot-extensions) | Copilot agents and Copilot Extensions | `partly true` | adoption |
 | [A8](#a8-the-claude-github-app-what-it-installs-its-permissions-its-credentials) | The Claude GitHub App | `partly true` | adoption |
 | [A9](#a9-github-codespaces-claude-with-the-plugin-sign-in-setup-token-pushing-workflow-files-cost-a-readme-button) | GitHub Codespaces | `partly true` | adoption |
@@ -235,7 +235,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 - Not established: a docs.github.com sentence that says in one line that `issues` workflows receive repository secrets, and a measurement with an opener who has no access.
 
 **Consequence:**
-- `feat_forge_run_triggers`: the lead's security conclusion holds — `opened` must never start a run without the same permission check as `labeled`, because the job holds the credential secrets whoever wrote the issue. Its job must declare `contents: write` (and `actions: write` to dispatch, `issues: write` to comment) explicitly; it cannot rely on the default.
+- `feat_forge_run_triggers`: the lead, *Leads* › *Authorisation*: *"An `issues` workflow runs with the repository's secrets whoever opened the issue."*, holds; it claims the secrets and not a write token, so it is not listed in section 6. Its security conclusion holds — `opened` must never start a run without the same permission check as `labeled`, because the job holds the credential secrets whoever wrote the issue. Its job must declare `contents: write` (and `actions: write` to dispatch, `issues: write` to comment) explicitly; it cannot rely on the default.
 
 ### T3. The API for a user's permission on a repository: what it returns for an organisation member, an outside collaborator and a bot, and the token permission it needs.
 
@@ -415,11 +415,14 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 **Verdict:** `partly true` — all documented except whether a called workflow's own `schedule` trigger runs.
 
-**Answer:** `secrets: inherit` works only within one organisation or enterprise, so a caller under another owner passes each secret by name. A called workflow can only lower the caller's permissions. Workflows nest ten levels deep. A composite action cannot read `secrets` at all. A caller can pin `@v1`, and Dependabot updates reusable-workflow references.
+**Answer:** `secrets: inherit` works only within one organisation or enterprise, so a caller under another owner passes each secret by name. A called workflow can only lower the caller's permissions. Workflows nest ten levels deep: the top-level caller plus up to nine reusable workflows. A composite action cannot read the `secrets` context; a secret reaches it only when the caller passes it as an input. A caller can pin `@v1`, and Dependabot updates reusable-workflow references.
 
 **Evidence:**
 - https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idsecretsinherit — retrieved 2026-09-30: "The `inherit` keyword can be used to pass secrets across repositories within the same organization, or across organizations within the same enterprise."
 - https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#limitations-of-reusable-workflows — retrieved 2026-09-30: "The `GITHUB_TOKEN` permissions passed from the caller workflow can be only downgraded (not elevated) by the called workflow."
+- https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#nesting-reusable-workflows — retrieved 2026-09-30 — "Nesting reusable workflows": "You can connect a maximum of ten levels of workflows - that is, the top-level caller workflow and up to nine levels of reusable workflows."
+- https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#secrets-context — retrieved 2026-09-30 — "`secrets` context": "The `secrets` context is not available for composite actions due to security reasons. If you want to pass a secret to a composite action, you need to do it explicitly as an input."
+- https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#calling-a-reusable-workflow — retrieved 2026-09-30 — "Calling a reusable workflow": "When you reference a reusable workflow with `{owner}/{repo}` and `@{ref}`, the `{ref}` can be a SHA, a release tag, or a branch name." The same section's example is `uses: octo-org/another-repo/.github/workflows/workflow.yml@v1`.
 - https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot — retrieved 2026-09-30: "When you enable Dependabot version updates for GitHub Actions, Dependabot will help ensure that references to actions in a repository's *workflow.yml* file and reusable workflows used inside workflows are kept up to date."
 
 **Consequence:** none now; it would shape thin callers if the idea returns.
@@ -428,10 +431,11 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 **Verdict:** `partly true` — only an action (or an app) can be listed, not a reusable workflow.
 
-**Answer:** A reusable workflow cannot be published to the Marketplace. An action, including a composite action, can be listed from a public repository with one root `action.yml`. A listing installs nothing into the adopter's repository.
+**Answer:** A reusable workflow cannot be published to the Marketplace. An action, including a composite action, can be listed from a public repository with one root `action.yml` or `action.yaml`, and a `name` no other listing uses. A listing installs nothing into the adopter's repository.
 
 **Evidence:**
 - https://docs.github.com/en/actions/concepts/workflows-and-actions/reusing-workflow-configurations#key-differences-between-reusable-workflows-and-composite-actions — retrieved 2026-09-30, table row (reusable | composite): "Cannot be published to the marketplace | Can be published to the marketplace".
+- https://docs.github.com/en/actions/how-tos/create-and-publish-actions/publish-in-github-marketplace#prerequisites — retrieved 2026-09-30 — "Prerequisites": "The action must be in a public repository." / "Each repository must contain a single action metadata file (`action.yml` or `action.yaml`) at the root." / "The `name` in the action's metadata file must be unique."
 
 **Consequence:** none now.
 
@@ -472,14 +476,16 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 ### A6. GitHub Apps: what one needs hosted, the *Workflows* permission, a thin relay, and hosting cost.
 
-**Verdict:** `partly true` — verified, except the permission's UI wording.
+**Verdict:** `verified`
 
-**Answer:** Receiving webhooks needs a server, and minting installation tokens needs the app's private key. A relay app hosted by the harness could dispatch runs without holding any adopter's credential, but it would hold a key that reaches every installation. Hosting starts at $0 on Cloudflare Workers Free, capped at 10 ms CPU per request, or $4 a month for a droplet. The adopter's own workflows already receive issue, comment and review events without an app. Not established: the permission's UI wording.
+**Answer:** Receiving webhooks needs a server, and minting installation tokens needs the app's private key. A relay app hosted by the harness could dispatch runs without holding any adopter's credential, but it would hold a key that reaches every installation. Hosting starts at $0 on Cloudflare Workers Free, capped at 10 ms CPU per request, or $4 a month for a droplet. The permission an app needs to write `.github/workflows` is named "Workflows", and GitHub documents only a write level for it. The adopter's own workflows already receive issue, comment and review events without an app.
 
 **Evidence:**
 - https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/best-practices-for-creating-a-github-app — retrieved 2026-09-30: "The private key for your GitHub App grants access to every account that the app is installed on. It **must** be stored securely and never shared broadly."
 - https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app — retrieved 2026-09-30: "If your app specifically needs to access or edit Actions files in the `.github/workflows` directory, request the "Workflows" repository permission."
+- https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps — retrieved 2026-09-30 — "Repository permissions for "Workflows"": every endpoint listed carries access `write`, e.g. "| `PUT /repos/{owner}/{repo}/contents/{path}` | write | UAT, IAT | ✓ |"; no endpoint is listed at `read`.
 - https://developers.cloudflare.com/workers/platform/pricing/ — retrieved 2026-09-30, Workers Free row: "100,000 per day | No charge for duration | 10 milliseconds of CPU time per invocation".
+- https://www.digitalocean.com/pricing/droplets — retrieved 2026-09-30 — "Basic Droplets", cheapest row (memory, vCPU, transfer, SSD, hourly, monthly): "512 MiB | 1 vCPU | 500 GiB | 10 GiB | $0.00595 | $4.00".
 
 **Consequence:** none now. Triggers and control need no app, because workflows receive the events directly (T1, C1).
 
@@ -492,6 +498,9 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 **Evidence:**
 - https://docs.github.com/en/copilot/concepts/agents/anthropic-claude — retrieved 2026-09-30: "The Anthropic Claude coding agent uses the Claude Agent SDK and can be powered by your existing Copilot subscription."
 - https://github.blog/changelog/2025-09-24-deprecate-github-copilot-extensions-github-apps/ — retrieved 2026-09-30: "November 10, 2025: Full sunset—all Copilot Extensions disabled".
+- https://github.blog/changelog/2026-04-01-research-plan-and-code-with-copilot-cloud-agent/ — retrieved 2026-09-30 — "Research, plan, and code with Copilot cloud agent": "Copilot cloud agent (formerly known as Copilot coding agent) is no longer limited to pull-request workflows".
+- https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent#copilot-cloud-agent-usage-costs — retrieved 2026-09-30 — "Copilot cloud agent usage costs": "Copilot cloud agent uses GitHub Actions minutes and AI credits. The AI credits consumed depend on the model used and the number of tokens processed during the session."
+- https://docs.github.com/en/copilot/concepts/agents/about-third-party-coding-agents#usage-costs — retrieved 2026-09-30 — "Usage costs": "Coding agents consume **GitHub Actions minutes** and **AI credits**. Each agent session consumes AI credits based on the model used and the number of tokens processed."
 
 **Consequence:** none.
 
@@ -517,12 +526,13 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 - **Plugin:** the plugin installed at user scope, and `/autonomous-sdlc-harness:branch-status` ran.
 - **Sign-in:** `claude` signed in by copying a URL into the browser and pasting back a code. `claude setup-token` used the same flow and succeeded.
 - **Workflow files:** the codespace's token pushed a workflow-file change (S2).
-- **Cost:** a 2-core machine is $0.18 an hour past the included 120 hours (Free).
+- **Cost:** a 2-core machine is $0.18 an hour past the included 120 core hours a month (Free), which is 60 hours of a 2-core machine.
 - **Link:** a `codespaces.new/OWNER/REPO` link opens the repository it names.
 
 **Evidence:**
 - Observation by the maintainer, Gate 12 codespace, 2026-09-30 10:31–10:45 UTC: plugin install exit 0. Sign-in ended with `Login successful. Press Enter to continue…`. `claude setup-token` printed `✓ Long-lived authentication token created successfully!`. Commit `91a9e70`, changing `.github/workflows/probe-listen.yml`, was pushed by the codespace's `GITHUB_TOKEN` (S2).
-- https://docs.github.com/en/billing/concepts/product-billing/github-codespaces — retrieved 2026-09-30, table row: "Codespaces compute | 2 core | 1 hour | 2 | $0.18".
+- https://docs.github.com/en/billing/concepts/product-billing/github-codespaces — retrieved 2026-09-30, table row: "Codespaces compute | 2 core | 1 hour | 2 | $0.18". Same page, "Free quota", the *Compute time per month* column's row for GitHub Free for personal accounts: "120 hrs".
+- https://docs.github.com/en/codespaces/troubleshooting/troubleshooting-included-usage#about-codespaces-compute — retrieved 2026-09-30 — "About Codespaces compute": "Codespaces compute is counted in core hours, which is the sum of the time a codespace is active, multiplied by the multiplier for the codespace's machine type: for example, a multiplier of 2 for a 2-core machine, or a multiplier of 8 for an 8-core machine."
 - https://docs.github.com/en/codespaces/setting-up-your-project-for-codespaces/setting-up-your-repository/facilitating-quick-creation-and-resumption-of-codespaces — retrieved 2026-09-30: "Create a codespace for the default branch of the repository: `https://codespaces.new/OWNER/REPO-NAME`".
 
 **Consequence:** none now; it was judged not worth it against the local install, which it would merely relocate.
@@ -591,7 +601,7 @@ A lead is listed here when its entry's evidence shows it wrong, wholly or in par
 4. **`feat_github_native_adoption`**, *Options to evaluate*: *"A reusable workflow or composite action published on the GitHub Actions Marketplace."* A reusable workflow cannot be published to the Marketplace; only an action (a composite action included) or an app can ([A2](#a2-github-marketplace-can-a-reusable-workflow-be-listed-or-only-an-action)).
 5. **`feat_github_native_adoption`**, *Options to evaluate* › *A browser-hosted development environment: GitHub Codespaces*: *"A button in the harness README, or a `devcontainer.json` the setup adds, opens a Codespace on the adopter's repository."* A `codespaces.new` link opens the repository it names, so a button in the harness README opens the harness repository, not the adopter's. A `devcontainer.json` in the adopter's own repository is unaffected ([A9](#a9-github-codespaces-claude-with-the-plugin-sign-in-setup-token-pushing-workflow-files-cost-a-readme-button)).
 6. **`feat_github_native_adoption`**, *Options to evaluate* › *A prefilled new-file link*: *"so adding the file is one click plus a commit"*. It holds only for a small file. From a URL of about 9.5 KB, GitHub returns `Whoa there! Your request URL is too long.`, which rules out today's 24 KB `harness-run.yml`. The commit is two clicks ([A4](#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length)).
-7. **`feat_github_native_adoption`**, *Options to evaluate* › *Copilot and GitHub's agent integrations*: *"Copilot Extensions, which as far as is known are being retired in favour of MCP"*. They are already retired: disabled on 2025-11-10 ([A7](#a7-copilot-cloud-agent-third-party-coding-agents-on-github-copilot-extensions)).
+7. **`feat_github_native_adoption`**, *Options to evaluate* › *Copilot and GitHub's agent integrations*: *"Copilot Extensions, which as far as is known are being retired in favour of MCP"*. They are already retired: disabled on 2025-11-10. Two other details of the same bullet are dated: "the Copilot coding agent" is now named Copilot cloud agent, and it and the third-party coding agents consume AI credits plus Actions minutes ([A7](#a7-copilot-cloud-agent-third-party-coding-agents-on-github-copilot-extensions)).
 8. **`feat_github_native_adoption`**, *Leads* › *Workflow files and `GITHUB_TOKEN`*, candidate (c): *"a GitHub App's installation token with the _Workflows_ permission, whether an app of the harness's own or Anthropic's Claude app"*. Anthropic's app is not a candidate. Its installation token can be minted only with Anthropic's private key, and its *Workflows* permission is stated both ways by Anthropic's own sources ([A6](#a6-github-apps-what-one-needs-hosted-the-workflows-permission-a-thin-relay-and-hosting-cost), [A8](#a8-the-claude-github-app-what-it-installs-its-permissions-its-credentials)).
 
 ### Removed by decision, not refuted
