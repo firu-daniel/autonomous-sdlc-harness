@@ -734,7 +734,7 @@ The findings:
 5. The upgrade reprints the whole first-setup block, commit message `Add the harness workflows` included.
 6. The tag clone prints git's detached-HEAD advice into every job log.
 
-All six are carried to a follow-up fix.
+A follow-up fix answers findings 1, 3, 4, 5 and 6. For finding 1 the answer is documentation plus one sentence in the upgrade's report and in the version warning, because a run keeping the version it started with is intended. Finding 2 is not carried: no repository carries a workflow rendered before the pinned install, because remote execution has no adopters.
 
 What still owes a first recording: (v)'s enable and its in-progress artifact listing; (vii), (ix) and (x); (xi)'s convergence and the `/autonomous-sdlc-harness:branch-answer` command itself; and (xii)'s last leg on a real release after the one under test.
 
@@ -938,7 +938,7 @@ Then re-render the two workflows with the CLI under test:
 npx --yes autonomous-sdlc-harness@<version> init --upgrade-workflows
 ```
 
-Passes when both `.github/workflows/harness-run.yml` and `.github/workflows/harness-resume.yml` are re-rendered with their pins at `<version>`, the resume workflow's cron is carried over, and a `.bak` of each sits beside it. Commit the two workflows and push them with `--no-verify`, as *Setup* does, then let the watcher dispatch the task again. Passes when the next job clones `autonomous-sdlc-harness--v<version>`, passes the version check and runs. Record the job's `claude plugin list --json` output for the installed version.
+Passes when both `.github/workflows/harness-run.yml` and `.github/workflows/harness-resume.yml` are re-rendered with their pins at `<version>`, the resume workflow's cron is carried over, and a `.bak` of each sits beside it. Commit the paths the upgrade's printed `git add` names, which include `.gitignore` when the upgrade merged the managed block's new lines into it, and push them with `--no-verify`, as *Setup* does, then let the watcher dispatch the task again. Passes when the next job clones `autonomous-sdlc-harness--v<version>`, passes the version check and runs. Record the job's `claude plugin list --json` output for the installed version.
 
 Record too whether that job's session `init` record names the plugin path under `$RUNNER_TEMP/harness-marketplace/plugin`. This settles `docs/remote-execution.md` → `## 6. What is not verified here`, the row on the user-scope directory marketplace and the project-scope entry of the same name.
 
