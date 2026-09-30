@@ -62,6 +62,7 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 | [A10](#a10-claude-code-on-the-web-claudeaicode) | Claude Code on the web | `unverified` | adoption |
 | [A11](#a11-a-subscription-token-without-running-the-claude-cli-anywhere) | A subscription token without the CLI | `verified` | adoption |
 | [A12](#a12-the-claude-sensitive-path-wall-on-the-current-claude-code-including-bash-writes) | The `.claude/**` wall on the current Claude Code | `verified` | adoption |
+| [A13](#a13-an-mcp-server-instead-of-the-local-plugin-install) | An MCP server instead of the local plugin install | `verified` | adoption |
 
 ---
 
@@ -572,6 +573,23 @@ The last column abbreviates the three prompts: *triggers* is `feat_forge_run_tri
 
 **Consequence:** none for the other two branches. `docs/analyze.md` → `## 3. What it may write` records the same wall on 2.1.237; this measurement extends it to 2.1.285 and to Bash. This branch does not edit that file.
 
+### A13. An MCP server instead of the local plugin install
+
+Asked by the maintainer on 2026-09-30, after the branch was dropped: can an MCP server, such as GitHub's, give full remote support without a local plugin install, including the supervised analysis and committing `.claude/` files? Declined by the maintainer the same day, on the answer below.
+
+**Verdict:** `verified` — no MCP route runs the harness's agents and hooks without an install.
+
+**Answer:** An MCP server gives a client tools, prompts and resources; the client is still what runs the session. GitHub hosts its own MCP server, whose `push_files` commits several files in one commit through the API, so it could write `.claude/` files, which the A12 wall does not guard because that wall covers local writes only, and, with the `workflow` scope, workflow files. But no client reachable without an install loads the plugin whole: claude.ai chat and the Desktop chat ignore its agents and hooks and apply its commands only as skills, and a cloud session at claude.ai/code cannot install a plugin from a marketplace (and is A10's entry point, dropped by decision). Cowork loads agents and hooks, but it is a desktop app, so still an install. So the supervised analysis would lose the separate writer and reviewer agents it relies on, `init` (a Node CLI) could not run, and a harness-owned MCP server serving the analysis as a prompt would be a hosted service. A subscription token still needs `claude setup-token` in the CLI (A11).
+
+**Evidence:**
+- https://github.com/github/github-mcp-server — retrieved 2026-09-30 — README, "Remote GitHub MCP Server": "The remote GitHub MCP Server is hosted by GitHub and provides the easiest method for getting up and running." Its configurations point at `https://api.githubcopilot.com/mcp/`. "Tools": "**push_files** - Push files to repository", with OAuth challenge scopes `repo`, `workflow`.
+- https://github.com/github/github-mcp-server/blob/main/pkg/github/repositories.go — retrieved 2026-09-30: `push_files` is described as "Push multiple files to a GitHub repository in a single commit".
+- https://modelcontextprotocol.io/specification/2025-06-18/server/prompts — retrieved 2026-09-30: "Prompts allow servers to provide structured messages and instructions for interacting with language models."
+- https://claude.com/docs/plugins/platform-support — retrieved 2026-09-30 — "Compare component support by app": "You can install the same plugin folder everywhere you use Claude, but chat, Cowork, and Claude Code each load a different subset". Table rows (chat | Cowork | Claude Code): "Commands (`commands/*.md`) | Loads as a skill; Claude applies it when it fits | Loads; you run it by typing `/plugin-name:command` | Loads"; "Agents (`agents/*.md`) | Ignored | Loads | Loads"; "Hooks (`hooks/hooks.json`) | Ignored | Loads | Loads".
+- https://code.claude.com/docs/en/plugins/install — retrieved 2026-09-30 — "Install a plugin", cloud session: "A cloud session, including the browser at claude.ai/code, has no plugin browser and doesn't load the plugins you installed on your own machine or the ones your repository's `.claude/settings.json` turns on."
+
+**Consequence:** none. It does not change the finding in section 5: an MCP route is not GitHub-only, since it moves the session into a Claude client.
+
 ## 5. Adoption routes compared
 
 The count uses the unit `feat_github_native_adoption` set, from a repository with no harness file to a first run started by labelling an issue. One action is each click-through the adopter must choose, each paste or typed command, each commit, each secret, each setting and each merge. Navigating a form already counted is not counted again, and optional steps are left out. Counts are for an adopter with an Anthropic Console API key. A subscription token adds a codespace detour on every GitHub-side route (A11): create the codespace, install, `claude setup-token`, paste the URL, paste the code, then delete it. The detour replaces the route's *API key* action, so it adds 5 actions net, or 2 on R2, where the codespace is already open and the detour is only `claude setup-token`, the URL and the code.
@@ -588,6 +606,7 @@ The count uses the unit `feat_github_native_adoption` set, from a repository wit
 | R8 Marketplace listing | not a route: a listing installs nothing; as R3 or R4 | — | — | A2 |
 | R9 Workflow templates / template repository | not applicable to an existing repository of another owner | — | — | A5 |
 | R10 Copilot agents; Claude Code on the web | not evaluated further: vendor agents (A7); dropped by decision (A10) | — | — | A7, A10 |
+| R11 A Claude client with GitHub's MCP server | not a route: no client reachable without an install runs the plugin's agents and hooks, and `init` cannot run | — | — | A13 |
 
 No GitHub-only route covers the supervised analysis (A12) or a subscription credential (A11) without a codespace, and a codespace setup (R2) costs more actions than the local install (R1). That is the finding `feat_github_native_adoption` was dropped on.
 
