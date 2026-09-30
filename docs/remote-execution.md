@@ -511,10 +511,10 @@ git status --short
 ```
 
 ```
-git add .github/workflows/harness-run.yml .github/workflows/harness-resume.yml
+git add <every path on the git add line the upgrade's report prints>
 ```
 
-Run the `git add` the upgrade's report prints rather than this one: it already names every tracked file the upgrade changed, `.gitignore` included when the run merged new ignore rules into it. Leaving one out fails the next job, because the job's own `init` refuses a changed tracked file. Then:
+Take the paths from the `git add` line the upgrade's report prints. That line names every tracked file the upgrade changed, `.gitignore` included when the run merged new ignore rules into it, and leaving one out fails the next job, because the job's own `init` refuses a changed tracked file. Then:
 
 ```
 git commit -m "Upgrade the harness workflows to <version>"

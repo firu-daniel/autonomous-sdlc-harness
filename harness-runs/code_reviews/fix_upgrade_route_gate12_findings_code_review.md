@@ -12,7 +12,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Replace the fenced two-workflow `git add` in `### Upgrading` → **The commands** with the report's paths and reword the sentence after it _(layer: general)_
+1. [x] **Finding 2** — Replace the fenced two-workflow `git add` in `### Upgrading` → **The commands** with the report's paths and reword the sentence after it _(layer: general)_
 2. [ ] **Finding 1** — Make the in-flight move route detach onto `origin/<branch>` and push `HEAD:<branch>`, then return the checkout _(layer: general)_
 
 ---
