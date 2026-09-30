@@ -55,4 +55,4 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/chore_githu
 3. [x] **Task 3** — Write the control entries C1–C4 _(layer: general)_ _(points: 8)_
 4. [x] **Task 4** — Record the adoption entries A1–A12 briefly _(layer: general)_ _(points: 8)_
 5. [x] **Task 5** — Record the adoption routes and their action counts briefly _(layer: general)_ _(points: 3)_
-6. [ ] **Task 6** — Add the summary table and the refuted-leads section, and check the document against the acceptance list _(layer: general)_ _(points: 8)_
+6. [x] **Task 6** — Add the summary table and the refuted-leads section, and check the document against the acceptance list _(layer: general)_ _(points: 8)_

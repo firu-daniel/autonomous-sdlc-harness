@@ -28,6 +28,43 @@ It cites rather than restates [`remote-execution.md`](remote-execution.md), whos
 
 ---
 
+## Summary
+
+The last column abbreviates the three prompts: *triggers* is `feat_forge_run_triggers`, *control* is `feat_forge_run_control`, and *adoption* is `feat_github_native_adoption`.
+
+| ID | Question | Verdict | Prompts affected |
+|---|---|---|---|
+| [S1](#s1-can-github_token-create-or-modify-files-under-githubworkflows-under-any-permissions-setting-what-does-a-refused-push-print-does-a-branch-whose-commits-touch-no-workflow-file-push-when-cut-from-a-default-branch-that-carries-workflow-files) | Can `GITHUB_TOKEN` write `.github/workflows/*`? | `verified` | triggers, adoption |
+| [S2](#s2-which-tokens-can-write-workflow-files--a-fine-grained-pat-a-classic-pat-a-github-app-installation-token-a-codespaces-token-how-does-each-expire-and-how-is-each-created) | Which tokens can write workflow files, and how they expire | `partly true` | control, adoption |
+| [S3](#s3-which-events-raised-with-github_token-start-other-workflows-and-which-do-not--pushes-pr-creation-comments-labels) | Which `GITHUB_TOKEN` events start other workflows | `partly true` | triggers, control, adoption |
+| [S4](#s4-the-setting-allow-github-actions-to-create-and-approve-pull-requests-its-default-for-a-new-personal-repository-and-a-new-organisation-where-it-is-set-and-whether-a-workflow-can-read-it) | The "create and approve pull requests" setting | `verified` | control, adoption |
+| [S5](#s5-workflow_dispatch-the-limit-on-the-number-of-inputs-and-on-the-payload-size-the-code-assumes-65535-characters-remote-runsh--remote_input_payload_max) | `workflow_dispatch` input count and payload limits | `verified` | control, adoption |
+| [S6](#s6-the-maximum-length-of-an-issue-or-pr-comment-body) | Maximum comment body length | `verified` | control |
+| [T1](#t1-the-issues-events-activity-types-which-role-is-needed-to-apply-a-label--is-triage-enough-who-appears-as-sender-on-labeled) | `issues` types, the role to label, `sender` on `labeled` | `verified` | triggers |
+| [T2](#t2-does-an-issues-workflow-get-the-repositorys-secrets-and-a-write-token-when-the-issue-was-opened-by-someone-without-access) | Secrets and a write token for an `issues` workflow | `partly true` | triggers |
+| [T3](#t3-the-api-for-a-users-permission-on-a-repository-what-it-returns-for-an-organisation-member-an-outside-collaborator-and-a-bot-and-the-token-permission-it-needs) | The collaborator-permission API | `partly true` | triggers, control |
+| [T4](#t4-what-anthropicsclaude-code-action-checks-before-acting-and-where-it-documents-it) | What `anthropics/claude-code-action` checks | `verified` | triggers, control |
+| [T5](#t5-gits-and-githubs-rules-on-branch-names-that-matter-for-a-derived-slug-git-check-ref-format-length-limits-case-sensitivity) | Branch-name rules for a derived slug | `partly true` | triggers |
+| [T6](#t6-jira-automation--github-repository_dispatch-whether-it-works-as-described-and-what-a-jira-rule-needs-gitlabs-equivalent-route) | Jira → `repository_dispatch`; GitLab | `partly true` | triggers |
+| [C1](#c1-pull_request_review-submitted-pull_request_review_comment-and-issue_comment-on-a-pr-which-review-states-exist-in-the-payload-and-how-to-fetch-every-inline-comment-of-one-review-with-its-file-and-line) | Review events, states, and a review's inline comments | `verified` | control |
+| [C2](#c2-what-pull_request_review-pull_request_review_comment-and-issue_comment-get-on-a-pr-whose-head-is-a-fork-what-pull_request_target-changes-and-githubs-guidance-on-it) | Fork PRs, and `pull_request_target` | `verified` | control |
+| [C3](#c3-can-a-github_token-open-a-draft-pr-and-what-does-it-need-beyond-s4) | A draft PR from `GITHUB_TOKEN` | `verified` | control, adoption |
+| [C4](#c4-prior-art-for-comment-commands-the-syntax-anthropicsclaude-code-action-uses-and-any-convention-that-avoids-a-collision-with-it) | Prior art for comment commands | `partly true` | control |
+| [A1](#a1-reusable-workflows-against-composite-actions-secrets-permissions-concurrency-nesting-schedule-in-a-called-workflow-pinning-and-dependabot) | Reusable workflows against composite actions | `partly true` | adoption |
+| [A2](#a2-github-marketplace-can-a-reusable-workflow-be-listed-or-only-an-action) | Marketplace listing | `partly true` | adoption |
+| [A3](#a3-does-disabling-a-workflow-file-disable-every-trigger-in-it) | Disabling one trigger of a multi-trigger workflow | `verified` | adoption |
+| [A4](#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length) | The prefilled new-file link | `partly true` | adoption |
+| [A5](#a5-workflow-templates-template-repositories-and-other-ways-to-add-a-workflow-without-a-checkout) | Workflow templates and other no-checkout routes | `partly true` | adoption |
+| [A6](#a6-github-apps-what-one-needs-hosted-the-workflows-permission-a-thin-relay-and-hosting-cost) | GitHub Apps, a thin relay, hosting cost | `verified` | adoption |
+| [A7](#a7-copilot-cloud-agent-third-party-coding-agents-on-github-copilot-extensions) | Copilot agents and Copilot Extensions | `partly true` | adoption |
+| [A8](#a8-the-claude-github-app-what-it-installs-its-permissions-its-credentials) | The Claude GitHub App | `partly true` | adoption |
+| [A9](#a9-github-codespaces-claude-with-the-plugin-sign-in-setup-token-pushing-workflow-files-cost-a-readme-button) | GitHub Codespaces | `partly true` | adoption |
+| [A10](#a10-claude-code-on-the-web-claudeaicode) | Claude Code on the web | `unverified` | adoption |
+| [A11](#a11-a-subscription-token-without-running-the-claude-cli-anywhere) | A subscription token without the CLI | `verified` | adoption |
+| [A12](#a12-the-claude-sensitive-path-wall-on-the-current-claude-code-including-bash-writes) | The `.claude/**` wall on the current Claude Code | `verified` | adoption |
+
+---
+
 ## 1. Shared: GitHub Actions and tokens
 
 ### S1. Can `GITHUB_TOKEN` create or modify files under `.github/workflows/`, under any `permissions:` setting? What does a refused push print? Does a branch whose commits touch no workflow file push, when cut from a default branch that carries workflow files?
@@ -543,3 +580,20 @@ The count uses the unit `feat_github_native_adoption` set, from a repository wit
 | R10 Copilot agents; Claude Code on the web | not evaluated further: vendor agents (A7); dropped by decision (A10) | — | — | A7, A10 |
 
 No GitHub-only route covers the supervised analysis (A12) or a subscription credential (A11) without a codespace, and a codespace setup (R2) costs more actions than the local install (R1). That is the finding `feat_github_native_adoption` was dropped on.
+
+## 6. Leads this research refutes
+
+A lead is listed here when its entry's evidence shows it wrong, wholly or in part; a lead that holds is not listed. The `feat_github_native_adoption` items are kept although that branch was dropped on 2026-09-30, so that its prompt is not revived with them.
+
+1. **`feat_forge_run_control`**, *Leads* › *Opening PRs from a job*: *"A PR opened, or a push made, with `GITHUB_TOKEN` starts no other workflow, so the adopter's CI does not run on the draft PR."* True of the push. Since 2026-06-11 a PR opened with `GITHUB_TOKEN` creates `pull_request` runs that wait for a person with write access to approve them, measured as `action_required` ([S3](#s3-which-events-raised-with-github_token-start-other-workflows-and-which-do-not--pushes-pr-creation-comments-labels)).
+2. **`feat_github_native_adoption`**, *Leads* › *Opening pull requests from a job*: *"Pushes and PRs made with `GITHUB_TOKEN` start no other workflow."* The same correction ([S3](#s3-which-events-raised-with-github_token-start-other-workflows-and-which-do-not--pushes-pr-creation-comments-labels)).
+3. **`feat_github_native_adoption`**, *Leads* › *Workflow files and `GITHUB_TOKEN`*, candidate (a): *"It costs the adopter one more secret, and it expires"*. A fine-grained PAT may be created with no expiry unless an organisation policy caps it (the organisation default is 366 days), and a classic PAT's expiry is optional ([S2](#s2-which-tokens-can-write-workflow-files--a-fine-grained-pat-a-classic-pat-a-github-app-installation-token-a-codespaces-token-how-does-each-expire-and-how-is-each-created)).
+4. **`feat_github_native_adoption`**, *Options to evaluate*: *"A reusable workflow or composite action published on the GitHub Actions Marketplace."* A reusable workflow cannot be published to the Marketplace; only an action (a composite action included) or an app can ([A2](#a2-github-marketplace-can-a-reusable-workflow-be-listed-or-only-an-action)).
+5. **`feat_github_native_adoption`**, *Options to evaluate* › *A browser-hosted development environment: GitHub Codespaces*: *"A button in the harness README, or a `devcontainer.json` the setup adds, opens a Codespace on the adopter's repository."* A `codespaces.new` link opens the repository it names, so a button in the harness README opens the harness repository, not the adopter's. A `devcontainer.json` in the adopter's own repository is unaffected ([A9](#a9-github-codespaces-claude-with-the-plugin-sign-in-setup-token-pushing-workflow-files-cost-a-readme-button)).
+6. **`feat_github_native_adoption`**, *Options to evaluate* › *A prefilled new-file link*: *"so adding the file is one click plus a commit"*. It holds only for a small file. From a URL of about 9.5 KB, GitHub returns `Whoa there! Your request URL is too long.`, which rules out today's 24 KB `harness-run.yml`. The commit is two clicks ([A4](#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length)).
+7. **`feat_github_native_adoption`**, *Options to evaluate* › *Copilot and GitHub's agent integrations*: *"Copilot Extensions, which as far as is known are being retired in favour of MCP"*. They are already retired: disabled on 2025-11-10. The *"Copilot coding agent"* is now named the Copilot cloud agent, and it is billed in AI credits plus Actions minutes ([A7](#a7-copilot-cloud-agent-third-party-coding-agents-on-github-copilot-extensions)).
+8. **`feat_github_native_adoption`**, *Leads* › *Workflow files and `GITHUB_TOKEN`*, candidate (c): *"a GitHub App's installation token with the _Workflows_ permission, whether an app of the harness's own or Anthropic's Claude app"*. Anthropic's app is not a candidate. Its installation token can be minted only with Anthropic's private key, and its *Workflows* permission is stated both ways by Anthropic's own sources ([A6](#a6-github-apps-what-one-needs-hosted-the-workflows-permission-a-thin-relay-and-hosting-cost), [A8](#a8-the-claude-github-app-what-it-installs-its-permissions-its-credentials)).
+
+### Removed by decision, not refuted
+
+- **A10**, the *Claude Code on the web (claude.ai/code)* option of `feat_github_native_adoption`. The maintainer dropped it on 2026-09-30 so that adoption uses GitHub's own surfaces ([A10](#a10-claude-code-on-the-web-claudeaicode)).

@@ -71,3 +71,9 @@
 - `## Summary` sits between `## How this was researched` and `## 1. Shared: GitHub Actions and tokens`. It has 28 rows, one per ID, and each verdict equals its entry's `**Verdict:**` word.
 - `## 6. Leads this research refutes` is the last section. It has the eight items and the A10 note.
 - The acceptance check's five confirmations pass. `bash scripts/run-gates.sh` shows no failure that `main` does not also show. The machine-path grep prints nothing.
+
+**Deviations from plan:**
+- The branch-diff check was run against `origin/dev`, not `origin/main`: this repository publishes `main` from `dev` (`scripts/publish-main.sh`), so the `origin/main` merge base predates 43 dev commits and lists every file they touched. `git diff --name-only origin/dev...HEAD -- . ':(exclude)harness-runs'` lists only `docs/github-integration-research.md`.
+- `bash scripts/run-gates.sh` was not run: a gate script is deferred to the Run gates phase (`unit_loop_core.md` → `## The test-run rule`). Acceptance criterion 6 therefore rests on the Run gates phase; this unit ran `bash scripts/typecheck.sh` (PASS).
+- Refuted lead 7 omits "not premium requests": no entry or per-task file carries that contrast. It states A7's own wording, "AI credits plus Actions minutes".
+- Refuted lead 8 writes the inner *Workflows* emphasis as `_Workflows_`, so it does not close the surrounding italic quote early.
