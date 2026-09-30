@@ -2,8 +2,9 @@
 # harness-run-lib.sh — the one place every generated outer-loop script resolves
 # the repository it is operating on, reads that repository's
 # `harness.config.json` at run time, answers "is this branch protected?",
-# routes an inbox filename to its engine and branch (`hr_inbox_route_var`), and
-# derives the anchors (main checkout, work root, worktree directory, repo slug,
+# routes an inbox filename to its engine and branch (`hr_inbox_route_var`),
+# derives a branch name from a title (`hr_derive_branch`), and derives the
+# anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
 # differently. It also implements the run registry's reads and writes for the
 # scripts that share that registry, and states the remote state bundle's format
@@ -183,7 +184,9 @@
 # watcher calls these on every tick: `HR_CFG_PID`, `HR_CFG_ROOT`,
 # `HR_CFG_STATE`, `HR_CFG_FILE`, `HR_CFG_SCALARS`, `HR_CFG_LISTS`,
 # `HR_CFG_VALUE`, `HR_CFG_COMMAND_KEYS`, `HR_PROTECTED_DEFAULT`,
-# `HR_INBOX_KIND`, `HR_INBOX_BRANCH`, and the lane's
+# `HR_INBOX_KIND`, `HR_INBOX_BRANCH`, the branch derivation's
+# `HR_BRANCH_SLUG_MAX`, `HR_BRANCH_SUFFIX_MAX`, `HR_TAKEN_REMOTE`,
+# `HR_TAKEN_ARTIFACTS` and `HR_TAKEN_WHY`, and the lane's
 # `HR_LANE_RANK`, `HR_LANE_STATE`, `HR_LANE_RESUME_AT`, `HR_LANE_OBSERVED_AT`,
 # `HR_LANE_OBSERVED_REPO`, `HR_LANE_OWNER_SLUG`, `HR_LANE_OWNER_PID`,
 # `HR_LANE_OWNER_AT` and `HR_LANE_BROKEN_OWNER`, and the remote state bundle's
@@ -1382,6 +1385,212 @@ hr_registry_branches() {
   local file="${1-}"
   hr_registry_init "$file" || :
   jq -r '.runs | keys[]' "$file" 2>/dev/null
+}
+
+# ---------------------------------------------------------------------------
+# DERIVING A BRANCH NAME FROM A TITLE.
+#
+# THE RULE. A title becomes a branch name by a fixed fold, with no model and no
+# confirmation step: lowercase A–Z, turn every run of characters outside
+# `[a-z0-9]` into one `_`, trim `_` from both ends, cut to `HR_BRANCH_SLUG_MAX`
+# and trim a trailing `_` the cut exposed. An empty result takes the caller's
+# <fallback> (`issue_<number>` for an issue, `task_<run id>` for a dispatch). A
+# taken name takes the lowest free `<name>_<n>`, `_2` through
+# `HR_BRANCH_SUFFIX_MAX`; the first branch carries no suffix (`Version bump` →
+# `version_bump`), and `_2` reads as "the second".
+#
+# - The fold is ASCII-only under `LC_ALL=C`, so `é` is a separator, never a
+#   letter — `hr_repo_slug`'s precedent. A locale-dependent fold would derive
+#   different names on different runners; a lowercase ASCII name passes every
+#   `git check-ref-format` rule and cannot collide by case on macOS or Windows.
+# - The cap is 60, cut before the suffix. The name becomes a working-copy
+#   directory component (`<projectName>-<branch>`) and prefixes artifact names
+#   (`<branch>_task_prompt.md`); 60 keeps each far under a 255-byte file-name
+#   limit and readable in the Actions run list. GitHub documents no ref limit.
+#
+# THIS SECTION ONLY READS. It fetches nothing and creates no branch or file; a
+# caller that wants `origin` fresh fetches first. A registry is read only when
+# it already exists, because `hr_registry_get` creates an absent one.
+# ---------------------------------------------------------------------------
+
+# The two limits the rule above names.
+hr_branch_limits_var() {
+  HR_BRANCH_SLUG_MAX=60
+  HR_BRANCH_SUFFIX_MAX=99
+}
+
+# hr_branch_slug <text> — print the slug and return 0; print nothing and return
+# 1 when the fold leaves nothing (`🚀🚀`).
+hr_branch_slug() {
+  # `[!a-z0-9]` is a collation range: under a UTF-8 locale it would keep `é`.
+  local LC_ALL=C
+  local text="${1-}" slug
+  hr_branch_limits_var
+  slug=$(printf '%s' "$text" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+  slug=${slug//[!a-z0-9]/_}
+  while :; do
+    case "$slug" in
+      *__*) slug=${slug//__/_} ;;
+      *) break ;;
+    esac
+  done
+  slug=${slug#_}
+  slug=${slug%_}
+  if [ "${#slug}" -gt "$HR_BRANCH_SLUG_MAX" ]; then
+    slug=${slug:0:$HR_BRANCH_SLUG_MAX}
+    slug=${slug%_}
+  fi
+  [ -n "$slug" ] || return 1
+  printf '%s\n' "$slug"
+}
+
+# Read, once, the two listings every `taken` judgement compares against:
+# `HR_TAKEN_REMOTE` — each branch on `origin`, lowercased — and
+# `HR_TAKEN_ARTIFACTS` — the basename of every file and directory under
+# `<state_dir>` on `origin/<defaultBranch>`; one per line in both. 0 when both
+# were read; 2, with `HR_TAKEN_WHY` naming which, when either could not be.
+hr_branch_taken_lists_var() {
+  local LC_ALL=C
+  local root="${1-}" heads state default tree line tab
+  tab=$(printf '\t')
+  HR_TAKEN_REMOTE=""
+  HR_TAKEN_ARTIFACTS=""
+  HR_TAKEN_WHY=""
+  if ! heads=$(git -C "$root" ls-remote --heads origin 2>/dev/null); then
+    HR_TAKEN_WHY="the branches on origin could not be listed"
+    return 2
+  fi
+  while IFS= read -r line; do
+    line=${line#*"$tab"refs/heads/}
+    [ -n "$line" ] || continue
+    HR_TAKEN_REMOTE="$HR_TAKEN_REMOTE$line
+"
+  done <<EOF
+$heads
+EOF
+  HR_TAKEN_REMOTE=$(printf '%s' "$HR_TAKEN_REMOTE" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+
+  if ! state=$(hr_state_dir "$root") || ! default=$(hr_default_branch "$root"); then
+    HR_TAKEN_WHY="the configuration could not be read"
+    return 2
+  fi
+  if ! git -C "$root" rev-parse --verify --quiet "refs/remotes/origin/$default^{commit}" >/dev/null 2>&1; then
+    HR_TAKEN_WHY="origin/$default is not present"
+    return 2
+  fi
+  if ! tree=$(git -C "$root" ls-tree -r -t --name-only "refs/remotes/origin/$default" -- "$state/" 2>/dev/null); then
+    HR_TAKEN_WHY="the tree of origin/$default could not be read"
+    return 2
+  fi
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    HR_TAKEN_ARTIFACTS="$HR_TAKEN_ARTIFACTS${line##*/}
+"
+  done <<EOF
+$tree
+EOF
+  return 0
+}
+
+# Judge <name> against the listings `hr_branch_taken_lists_var` last read. The
+# answers and `HR_TAKEN_WHY` are `hr_branch_name_taken`'s.
+hr_branch_taken_judge() {
+  local LC_ALL=C
+  local root="${1-}" name="${2-}" registry="${3-}" lower status nl
+  nl='
+'
+  HR_TAKEN_WHY=""
+  status=0
+  hr_branch_is_protected "$root" "$name" || status=$?
+  case "$status" in
+    0) HR_TAKEN_WHY="a protected branch"; return 0 ;;
+    2) HR_TAKEN_WHY="the protected branches could not be resolved"; return 2 ;;
+  esac
+  lower=$(printf '%s' "$name" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+  case "$nl$HR_TAKEN_REMOTE$nl" in
+    *"$nl$lower$nl"*) HR_TAKEN_WHY="a branch on origin"; return 0 ;;
+  esac
+  if git -C "$root" show-ref --verify --quiet "refs/heads/$name" 2>/dev/null; then
+    HR_TAKEN_WHY="a local branch"
+    return 0
+  fi
+  case "$nl$HR_TAKEN_ARTIFACTS" in
+    *"$nl$name$nl"* | *"$nl${name}_task_prompt.md$nl"* | *"$nl${name}_story_plan.md$nl"* | *"$nl${name}_docs.md$nl"*)
+      HR_TAKEN_WHY="a run's artifacts on the default branch"
+      return 0
+      ;;
+  esac
+  if [ -n "$registry" ] && [ -f "$registry" ] && [ -n "$(hr_registry_get "$registry" "$name" branch)" ]; then
+    HR_TAKEN_WHY="a run registry record"
+    return 0
+  fi
+  return 1
+}
+
+# hr_branch_name_taken <root> <name> [<registry>] — 0 taken, 1 free, 2 cannot
+# tell. Sets `HR_TAKEN_WHY` to a short phrase naming the collision or the
+# failure. Taken: a protected name; a branch on `origin`, compared
+# case-insensitively; a local branch; under `<state_dir>` on
+# `origin/<defaultBranch>`, a directory named <name> or a file
+# `<name>_task_prompt.md`, `<name>_story_plan.md` or `<name>_docs.md` — which a
+# merged and deleted branch still leaves; a record in an existing <registry>.
+hr_branch_name_taken() {
+  local root="${1-}" name="${2-}" registry="${3-}"
+  HR_TAKEN_WHY=""
+  if [ -z "$root" ] || [ -z "$name" ]; then
+    HR_TAKEN_WHY="no branch name to judge"
+    return 2
+  fi
+  hr_config_load "$root" || :
+  hr_branch_taken_lists_var "$root" || return 2
+  hr_branch_taken_judge "$root" "$name" "$registry"
+}
+
+# hr_derive_branch <root> <text> <fallback> [<registry>] — print the derived name
+# and return 0; return 2, printing nothing, when a `taken` judgement could not
+# tell or no base routes back to itself; return 3, printing nothing, when every
+# suffix through `HR_BRANCH_SUFFIX_MAX` is taken. Never a guessed name.
+#
+# THE BASE MUST ROUTE BACK TO ITSELF: `hr_inbox_route_var` on each drop filename
+# a run of that name produces has to give the base as its branch, so no derived
+# name makes the inbox patterns ambiguous. A base that does not is replaced by
+# <fallback> once.
+hr_derive_branch() {
+  local root="${1-}" text="${2-}" fallback="${3-}" registry="${4-}"
+  local base="" candidate suffix routes n status
+  hr_branch_limits_var
+  candidate=$(hr_branch_slug "$text") || candidate="$fallback"
+  for candidate in "$candidate" "$fallback"; do
+    [ -n "$candidate" ] || continue
+    routes=0
+    for suffix in _task_prompt.md _review.md _review_2.md _docs.md; do
+      if ! hr_inbox_route_var "$candidate$suffix" || [ "$HR_INBOX_BRANCH" != "$candidate" ]; then
+        routes=1
+        break
+      fi
+    done
+    if [ "$routes" -eq 0 ]; then
+      base="$candidate"
+      break
+    fi
+  done
+  [ -n "$base" ] || return 2
+
+  hr_config_load "$root" || :
+  hr_branch_taken_lists_var "$root" || return 2
+  candidate="$base"
+  n=1
+  while :; do
+    status=0
+    hr_branch_taken_judge "$root" "$candidate" "$registry" || status=$?
+    case "$status" in
+      1) printf '%s\n' "$candidate"; return 0 ;;
+      2) return 2 ;;
+    esac
+    n=$((n + 1))
+    [ "$n" -le "$HR_BRANCH_SUFFIX_MAX" ] || return 3
+    candidate="${base}_$n"
+  done
 }
 
 # ---------------------------------------------------------------------------

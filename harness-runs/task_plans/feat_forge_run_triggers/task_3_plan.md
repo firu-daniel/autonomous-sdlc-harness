@@ -37,6 +37,10 @@
   - a registry record making the name taken;
   - a failing `ls-remote` (an unreachable `origin` URL) returning 2 with nothing printed.
 
+**Deviations from plan:**
+  - The two constants are set by `hr_branch_limits_var` rather than as top-level assignments: the library header's FILE DISCIPLINE forbids top-level side effects, and `hr_protected_default_var` is the precedent.
+  - The listings a `taken` judgement compares against (`ls-remote`, the `origin/<defaultBranch>` tree) are read once by `hr_branch_taken_lists_var` and judged per candidate by `hr_branch_taken_judge`, so `hr_derive_branch` lists `origin` once rather than once per suffix. `hr_branch_name_taken` is those two in sequence. The header's NAMING list gains the new `HR_` variables; its write-exception list is unchanged.
+
 **Verification:**
 
 - `npm test -- test/branch-naming.test.mjs` from `cli/` passes.
