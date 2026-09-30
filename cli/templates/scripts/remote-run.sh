@@ -23,6 +23,7 @@
 #   remote-run.sh run-created-at <run_id> [--repo <root>]
 #   remote-run.sh start <branch> --prompt-file <file> [--repo <root>]
 #   remote-run.sh trigger [--repo <root>]   (its own exit map: its paragraph)
+#   remote-run.sh adopt [--list] [--repo <root>]
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status: printed; for sync: the record is
@@ -32,13 +33,14 @@
 #        for save: ALWAYS, whatever happened; for continue: whatever it
 #        decided — every outcome a person must act on is a notification; for
 #        poll: the tick finished; for pause-requested: such a run exists; for
-#        run-created-at: printed
+#        run-created-at: printed; for adopt: every candidate adopted, or none;
+#        for adopt --list: printed
 #     1  usage error, or the library or the configuration could not be
 #        resolved; for sync and restore, a local copy or write failed; for
 #        pause-requested, also NO such run — a caller that reads 1 as "no
 #        pause" passes arguments it has already validated
 #     2  refused, nothing sent or written: execution.target is not
-#        github-actions (sending verbs); the branch's local record does not
+#        github-actions (sending verbs and adopt); the branch's local record does not
 #        carry `execution: github-actions` (status, sync); the record's mirror
 #        working copy is missing, or a downloaded bundle is unrecognised
 #        (sync, restore); the inputs payload is over the limit; a named answer
@@ -52,9 +54,12 @@
 #        stderr is named. For poll: the listing or the disable failed. For
 #        pause-requested and run-created-at, also an answer that is not the
 #        expected JSON; a caller never pauses on a failed read. For start, the
-#        dispatch failed AFTER the branch and its task prompt were pushed
-#     4  start only: placement failed — the branch cut, the copy, the commit
-#        or the push — and nothing was dispatched
+#        dispatch failed AFTER the branch and its task prompt were pushed. For
+#        adopt (and --list), the listing or `git ls-remote` failed; nothing
+#        written
+#     4  start: placement failed — the branch cut, the copy, the commit or the
+#        push — and nothing was dispatched. adopt: at least one candidate was
+#        not adopted (each named by a `could not adopt` line); the others were
 #
 # `start` IS THE ADAPTERS' ONE ENTRY: every trigger (an issue event, a forge
 # dispatch, anything later) reduces to a branch and a task text and ends here.
@@ -70,6 +75,27 @@
 # `hr_push_landed`), the same calls the watcher's inbox pass makes, so nothing
 # downstream can tell where a task came from. It writes no registry record: a
 # trigger job has no registry, and a local record for such a run is `adopt`'s.
+#
+# `adopt` MAKES A RUN STARTED ON GITHUB LOCAL. The local commands work on a
+# registry record and a mirror working copy, and a run no local watcher
+# dispatched — a trigger's, or another machine's — has neither. `adopt` reads
+# one bounded listing of the run workflow (`ALL_RUNS_LIMIT`, the listing the
+# stop marker reads) and takes each branch's newest run titled exactly `harness
+# run <branch>`, newest first — never a `pause`, `stop` or `warm` title. It
+# drops a branch that already has a registry record (that run is already
+# local), one `hr_branch_is_protected` does not answer 1 for (a run never
+# works on one, and an unjudgeable one is not adopted), and one that is not a
+# live head in one `git ls-remote --heads origin` (a merged-and-deleted branch
+# is not worth a working copy). For each candidate, in order, one failure never
+# stopping the next: `create-worktree.sh --existing` (it never pushes), then
+# `hr_remote_record_init` with engine `task`, `status: running` and
+# `remote_adopted_at` in one write, then this script's own `sync`, then the
+# record's `engine` from the synced bundle's `status.json` when it names a valid
+# one. It runs only on request — never from the watcher's tick, because nothing
+# flows from GitHub to this machine unless the user asks, and a tick-time adopt
+# would spend a listing on every poll. The registry is tested with `-f` before
+# any read, because `hr_registry_get` creates an absent one; `--list` prints
+# `not adopted: <branch> <url>` per candidate and writes nothing.
 #
 # `trigger` IS THE GITHUB EVENT ADAPTER, the one step of the trigger
 # workflow's job: event -> (branch, task text) -> `start`. It handles
@@ -395,7 +421,9 @@
 # `park_loop_cycles` rewrite of `remote_status.json`, all in the job's
 # checkout; for `save`, <out_dir> and the step summary; for `poll`, its
 # download directories and `<state_dir>/autonomous_logs/poll_state/previous/`
-# and `current/`. `pause-requested` and `run-created-at` write nothing.
+# and `current/`; for `adopt`, per candidate the mirror `create-worktree.sh
+# --existing` makes, the registry record, and whatever its `sync` writes.
+# `pause-requested`, `run-created-at` and `adopt --list` write nothing.
 #
 # MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
 # rename there is an edit here, byte for byte:
@@ -557,6 +585,17 @@
 #              "client_payload":{"title":"Add tags","body":"x","source":"jira"}}
 #              -> 0; `workflow run ... --ref add_tags ...`, /tmp/s names
 #              add_tags, no `issue` call; without "title" -> 2, no `workflow run`
+#
+#   adopt needs start's setup, a feat_x pushed to origin, no registry record
+#   for it, and a `run list` answer carrying `headBranch` feat_x, `displayTitle`
+#   `harness run feat_x`, `status` `in_progress` and a `url`:
+#   list       bash scripts/remote-run.sh adopt --list -> 0; prints `not adopted:
+#              feat_x <url>`; no registry file is created
+#   adopt      bash scripts/remote-run.sh adopt -> 0; the mirror at
+#              hr_worktree_dir, "$r"'s feat_x record `github-actions` /
+#              `running`, prints `adopted feat_x (<url>)`
+#   again      bash scripts/remote-run.sh adopt -> 0, `nothing to adopt`, "$r"
+#              byte-identical
 
 set -u
 
@@ -629,6 +668,7 @@ usage() {
   echo "       remote-run.sh run-created-at <run_id> [--repo <root>]" >&2
   echo "       remote-run.sh start <branch> --prompt-file <file> [--repo <root>]" >&2
   echo "       remote-run.sh trigger [--repo <root>]" >&2
+  echo "       remote-run.sh adopt [--list] [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -679,7 +719,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|restore|save|continue|poll|pause-requested|run-created-at|start|trigger) ;;
+  dispatch|pause|warm|stop|status|sync|restore|save|continue|poll|pause-requested|run-created-at|start|trigger|adopt) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -698,6 +738,7 @@ repo_arg=""
 since_arg=""
 run_id_arg=""
 prompt_file=""
+adopt_list=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -725,10 +766,13 @@ while [ "$#" -gt 0 ]; do
       [ "$verb" = start ] || usage "$1 is a start option"
       [ "$#" -ge 2 ] && [ -n "$2" ] || usage "$1 needs a value"
       prompt_file="$2"; shift 2 ;;
+    --list)
+      [ "$verb" = adopt ] || usage "$1 is an adopt option"
+      adopt_list=1; shift ;;
     -*)
       usage "unknown option '$1'" ;;
     *)
-      [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != trigger ] || usage "$verb takes no branch"
+      [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != trigger ] && [ "$verb" != adopt ] || usage "$verb takes no branch"
       if [ "$verb" = run-created-at ]; then
         [ -z "$run_id_arg" ] || usage "unexpected argument '$1'"
         run_id_arg="$1"
@@ -747,7 +791,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != run-created-at ] && [ "$verb" != trigger ]; then
+if [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != run-created-at ] && [ "$verb" != trigger ] \
+  && [ "$verb" != adopt ]; then
   valid_branch "$branch" || usage "$verb needs a <branch>"
 fi
 
@@ -1468,7 +1513,7 @@ ALL_RUNS_LISTED=0
 list_all_runs() {
   [ "$ALL_RUNS_LISTED" -eq 0 ] || return 0
   gh_call run list --workflow "$WORKFLOW_RUN_FILE" \
-    --json databaseId,headBranch,displayTitle,status,createdAt --limit "$ALL_RUNS_LIMIT" || return 1
+    --json databaseId,headBranch,displayTitle,status,createdAt,url --limit "$ALL_RUNS_LIMIT" || return 1
   printf '%s' "$GH_OUT" | jq -e 'type == "array"' >/dev/null 2>&1 || {
     GH_ERR="its run list is not the expected JSON"
     return 1
@@ -1979,6 +2024,119 @@ verb_start() {
 }
 
 # ---------------------------------------------------------------------------
+# `adopt` — a local record and mirror for a run started on GitHub.
+# ---------------------------------------------------------------------------
+
+# adopt_fail <branch> <reason> — one candidate not adopted; the next is tried.
+adopt_failed=0
+adopt_fail() {
+  echo "remote-run.sh: could not adopt $1: $2" >&2
+  adopt_failed=1
+}
+
+# adopt_one <branch> <url> — the mirror, the record, a sync, then the engine
+# the synced bundle names. 1 when any step failed.
+adopt_one() {
+  local b="$1" url="$2" status=0 worktree log_path run_id download engine_value
+  bash "$script_dir/create-worktree.sh" --existing "$b" >&2 || status=$?
+  [ "$status" -eq 0 ] || { adopt_fail "$b" "create-worktree.sh exited $status"; return 1; }
+  worktree=$(hr_worktree_dir "$root" "$b") || { adopt_fail "$b" "resolving its working copy failed"; return 1; }
+  log_path=$(hr_state_path "$root" "autonomous_logs/$b.log") || { adopt_fail "$b" "resolving its log path failed"; return 1; }
+  hr_remote_record_init "$registry" "$b" "$worktree" "$log_path" task \
+    || { adopt_fail "$b" "writing its record to '$registry' failed"; return 1; }
+  hr_registry_set "$registry" "$b" status running remote_adopted_at "$(date +%s)" \
+    || { adopt_fail "$b" "writing its status to '$registry' failed"; return 1; }
+  status=0
+  bash "$script_dir/remote-run.sh" sync "$b" --repo "$root" || status=$?
+  [ "$status" -eq 0 ] \
+    || { adopt_fail "$b" "sync exited $status (its record and mirror are written; run sync again)"; return 1; }
+  # Every trigger-started run is `task`; a run another machine dropped may not be.
+  run_id=$(hr_registry_get "$registry" "$b" remote_run_id)
+  if [ -n "$run_id" ]; then
+    hr_remote_names_var
+    download=$(hr_state_path "$root" "autonomous_logs/remote_download/$b/$run_id") || download=""
+    if [ -n "$download" ] && [ -f "$download/$HR_REMOTE_STATUS_FILE" ]; then
+      engine_value=$(hr_remote_status_get "$download/$HR_REMOTE_STATUS_FILE" engine) || engine_value=""
+      if valid_engine "$engine_value" && ! hr_registry_set "$registry" "$b" engine "$engine_value"; then
+        adopt_fail "$b" "writing its engine to '$registry' failed"
+        return 1
+      fi
+    fi
+  fi
+  echo "remote-run.sh: adopted $b ($url)"
+}
+
+verb_adopt() {
+  local titled recorded="" heads="" live=$'\n' ref b url protected candidates=""
+  registry=$(hr_state_path "$root" autonomous_logs/registry.json) || {
+    echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
+    exit "$EXIT_USAGE"
+  }
+  list_all_runs || gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
+  # Newest first, one line per branch: its newest `harness run <branch>` run.
+  titled=$(printf '%s' "$ALL_RUNS" | jq -r '
+    [.[] | select((.displayTitle // "") | startswith("harness run "))
+         | . + {b: (.displayTitle | ltrimstr("harness run "))}]
+    | sort_by([.createdAt, .databaseId]) | reverse
+    | reduce .[] as $r ({seen: {}, out: []};
+        if .seen[$r.b] then . else (.seen[$r.b] = true | .out += [$r]) end)
+    | .out[] | "\(.b)\t\(.url // "")"' 2>/dev/null) || {
+    GH_ERR="its run list is not the expected JSON"
+    gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
+  }
+
+  # Tested with -f first: hr_registry_get creates an absent registry, and
+  # --list writes nothing.
+  if [ -f "$registry" ]; then
+    recorded=$(jq -r '.runs | keys[]' "$registry" 2>/dev/null) || {
+      echo "remote-run.sh: cannot read the registry '$registry'" >&2
+      exit "$EXIT_USAGE"
+    }
+  fi
+  recorded=$'\n'"$recorded"$'\n'
+
+  if [ -n "$titled" ]; then
+    heads=$(git -C "$root" ls-remote --heads origin 2>&1) || {
+      echo "remote-run.sh: reading origin's branches failed: ${heads%%$'\n'*}" >&2
+      exit "$EXIT_GH"
+    }
+    while IFS=$'\t' read -r _ ref; do
+      case "$ref" in refs/heads/*) live="$live${ref#refs/heads/}"$'\n' ;; esac
+    done <<EOF
+$heads
+EOF
+  fi
+
+  while IFS=$'\t' read -r b url; do
+    valid_branch "$b" || continue
+    case "$recorded" in *$'\n'"$b"$'\n'*) continue ;; esac
+    protected=0
+    hr_branch_is_protected "$root" "$b" || protected=$?
+    [ "$protected" -eq 1 ] || continue
+    case "$live" in *$'\n'"$b"$'\n'*) ;; *) continue ;; esac
+    candidates="$candidates$b"$'\t'"$url"$'\n'
+  done <<EOF
+$titled
+EOF
+
+  if [ -z "$candidates" ]; then
+    echo "remote-run.sh: nothing to adopt"
+    return 0
+  fi
+  while IFS=$'\t' read -r b url; do
+    [ -n "$b" ] || continue
+    if [ "$adopt_list" -eq 1 ]; then
+      echo "remote-run.sh: not adopted: $b $url"
+    else
+      adopt_one "$b" "$url" </dev/null || :
+    fi
+  done <<EOF
+$candidates
+EOF
+  [ "$adopt_failed" -eq 0 ] || exit "$EXIT_PLACEMENT"
+}
+
+# ---------------------------------------------------------------------------
 # `trigger` — the event adapter. Event text is data: every field is read by
 # `jq` into a variable and reaches a command only as one argument or as file
 # bytes, never as shell source.
@@ -2296,5 +2454,6 @@ case "$verb" in
   run-created-at) verb_run_created_at ;;
   start) verb_start ;;
   trigger) verb_trigger ;;
+  adopt) verb_adopt ;;
 esac
 exit "$EXIT_OK"

@@ -62,3 +62,9 @@ The run title contract is `docs/remote-execution.md` → `## 5.`: `run-name` is 
 - `npm test -- test/remote-adopt.test.mjs` from `cli/` passes.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `grep -n "adopt" cli/templates/scripts/autonomous-watcher.sh` prints nothing: the tick never adopts.
+
+**Deviations from plan:**
+
+- `grep -n "adopt" cli/templates/scripts/autonomous-watcher.sh` prints one pre-existing line, a comment containing the word `adopter` (`No schema default: a non-zero return means the adopter pinned none.`); no line calls `adopt`, so the tick still never adopts. `grep -nw "adopt"` prints nothing.
+- `list_all_runs` now also requests `url` in its `--json` fields, so `adopt` can print each candidate's newest run URL from the one shared listing; the listing's existing prefix is unchanged.
+- A `sync` that exits non-zero after the record and mirror were written is reported as `could not adopt <branch>: sync exited <n> (its record and mirror are written; run sync again)` and counts toward exit 4; the plan named no outcome for it.
