@@ -83,7 +83,7 @@ root` says what a contributor should do about it. This is not a request to chang
 - Run `36671794632`: a task dropped after the upgrade. It cloned v0.4.2 and ran.
 - Run `36672854611`: pinned to 0.4.1 while `main` carried 0.4.2. It cloned v0.4.1 and ran.
 - The rendered workflows before and after the upgrade:
-  `/Users/daniel/Work/harness-gate12-test-steps/round4-rendered-workflows/`.
+  `<home>/Work/harness-gate12-test-steps/round4-rendered-workflows/` (machine-local; not part of this repository).
 
 ## Acceptance criteria
 
