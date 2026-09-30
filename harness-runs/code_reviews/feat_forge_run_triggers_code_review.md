@@ -36,7 +36,7 @@ Four findings remain. Two are Must Fix: the GitHub route omits the engine, and a
 
 Each entry resolves to `harness-runs/code_reviews/feat_forge_run_triggers_code_review/finding_<K>.md` via its `**Finding K**` reference. The list is sorted smallest and safest first, and the leading `N.` is fix order while `K` is the finding's stable identity.
 
-1. [ ] **Finding 3** — Tell the five `adopt`-running commands what to do on exit 1 _(layer: plugin)_
+1. [x] **Finding 3** — Tell the five `adopt`-running commands what to do on exit 1 _(layer: plugin)_
 2. [ ] **Finding 4** — Correct the watcher header's registry field list for adopted records and `remote_adopted_at` _(layer: cli)_
 3. [ ] **Finding 2** — Disclose that `adopt` runs each adopted branch's bootstrap on the maintainer's machine _(layer: general)_
 4. [ ] **Finding 1** — Name the run's `engine` in the GitHub route every job-side notification prints _(layer: cli, general)_

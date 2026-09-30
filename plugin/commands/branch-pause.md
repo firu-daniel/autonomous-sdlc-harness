@@ -51,7 +51,7 @@ own audit — the orchestrator only checks the file's **presence**, never its co
    - **Runs started on GitHub are adopted first.** Before syncing, run `bash <scripts_dir>/remote-run.sh adopt` once. It writes a record and a mirror for every `harness run <branch>` run on GitHub whose branch is live, unprotected and unknown to the registry, then syncs each one. Handle its exit status as follows:
      - exit 0: report each `adopted <branch>` line it printed, and nothing when it printed `nothing to adopt`;
      - exit 2: remote execution is off, so say nothing;
-     - exit 3 or 4: report its message and carry on with the registry as it stands.
+     - exit 1, 3 or 4: report its message and carry on with the registry as it stands.
 
      Never guess about a branch it did not adopt. An adopted run is an ordinary remote record from here on, and the sync below includes it.
    - **Remote records sync first.** Before building the candidate set — and before reading a prefix-named

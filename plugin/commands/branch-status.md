@@ -30,7 +30,7 @@ A **read-only, on-demand** digest of autonomous runs. It reads the run registry 
    - **Runs started on GitHub, not yet adopted.** With no argument, or with a branch argument the registry does not hold, run `bash <scripts_dir>/remote-run.sh adopt --list` **once**. It reads GitHub and writes nothing. Handle its exit status as follows:
      - exit 0: print a short *Started on GitHub, not yet adopted locally* section, one line per `not adopted: <branch> <url>` line with that branch and its run URL, and nothing when it printed `nothing to adopt`;
      - exit 2: say nothing, because remote execution is off;
-     - exit 3: report its message.
+     - exit 1 or 3: report its message.
 
      For a named branch it lists, say that run was started on GitHub and has no local record yet, instead of *no such run*.
 3. Per run, print: `status`, `engine` (absent → `task`), `started_at` / `updated_at` (and `resumed_at` when present), and `worktree`.
