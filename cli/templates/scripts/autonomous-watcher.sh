@@ -3023,29 +3023,27 @@ reject_preserving_status() {
 # remote_commit_and_push <branch> <worktree> <log_path> <file> <fname> <dest> <rel> <subject> <what>
 #
 # The remote arm's commit-and-push, BLOCKING (REMOTE DISPATCH in the header):
-# 0 = <dest> is committed and origin/<branch> carries HEAD; 1 = it is not, and
+# 0 = <rel> is committed and origin/<branch> carries HEAD; 1 = it is not, and
 # fail_before_launch has already run, so the caller dispatches nothing. The
-# same staging, identical-re-drop skip and wrappers the local arm uses; the
-# push stays a separate statement from the commit.
+# library's staging, identical-re-drop skip and landed test (THE ARTIFACT
+# PLACEMENT in lib/harness-run-lib.sh) with the local arm's wrappers; the push
+# stays a separate statement from the commit. <dest> is the caller's.
 remote_commit_and_push() {
   local branch="$1" worktree="$2" log_path="$3" file="$4" fname="$5"
-  local dest="$6" rel="$7" subject="$8" what="$9" head upstream
+  local dest="$6" rel="$7" subject="$8" what="$9" rc=0
 
-  git -C "$worktree" add "$dest"
-  if git -C "$worktree" diff --cached --quiet "$dest"; then
-    log "the $what for '$branch' is already committed (identical re-drop) — skipping the commit, pushing anyway"
-  elif "$COMMIT_ON_BRANCH" --repo "$worktree" "$rel" -- "$subject" >>"$log_path" 2>&1; then
-    log "committed the $what for '$branch' ($subject)"
-  else
-    log "commit-on-branch.sh could not commit the $what for '$branch' — not dispatching (see $log_path)"
-    fail_before_launch "$branch" "$file" "$fname" "(commit-on-branch.sh could not commit the $what — nothing dispatched; see $log_path)"
-    return 1
-  fi
+  hr_commit_placed "$COMMIT_ON_BRANCH" "$worktree" "$rel" "$subject" >>"$log_path" 2>&1 || rc=$?
+  case "$rc" in
+    3) log "the $what for '$branch' is already committed (identical re-drop) — skipping the commit, pushing anyway" ;;
+    0) log "committed the $what for '$branch' ($subject)" ;;
+    *)
+      log "commit-on-branch.sh could not commit the $what for '$branch' — not dispatching (see $log_path)"
+      fail_before_launch "$branch" "$file" "$fname" "(commit-on-branch.sh could not commit the $what — nothing dispatched; see $log_path)"
+      return 1
+      ;;
+  esac
 
-  "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1
-  head="$(git -C "$worktree" rev-parse --verify --quiet HEAD)" || head=""
-  upstream="$(git -C "$worktree" rev-parse --verify --quiet "refs/remotes/origin/$branch")" || upstream=""
-  if [ -z "$head" ] || [ "$head" != "$upstream" ]; then
+  if ! hr_push_landed "$PUSH_BRANCH" "$worktree" "$branch" >>"$log_path" 2>&1; then
     log "push-branch.sh did not bring origin/$branch to HEAD after the $what for '$branch' — not dispatching (see $log_path)"
     fail_before_launch "$branch" "$file" "$fname" "(push-branch.sh did not push the $what to origin/$branch — nothing dispatched; the job checks out origin/$branch; see $log_path)"
     return 1
@@ -3257,10 +3255,11 @@ process_inbox_file() {
 
     # (3a) Copy the dropped prompt into the working copy, then archive the inbox
     # file so it is not processed again.
-    local prompt_rel="$state_rel/task_prompts/${branch}_task_prompt.md"
-    local prompt_dest="$worktree/$prompt_rel"
-    mkdir -p "$worktree/$state_rel/task_prompts"
-    cp "$file" "$prompt_dest"
+    local prompt_rel prompt_dest prompt_subject prompt_rc=0
+    prompt_rel="$(hr_task_prompt_rel "$state_rel" "$branch")"
+    prompt_dest="$worktree/$prompt_rel"
+    prompt_subject="$(hr_task_prompt_subject "$branch")"
+    hr_place_artifact "$worktree" "$file" "$prompt_rel"
     mv "$file" "$ARCHIVE_DIR/$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
     log "copied the prompt -> $prompt_dest; archived the inbox file"
 
@@ -3275,13 +3274,14 @@ process_inbox_file() {
     #
     # Only the prompt is staged, by explicit path — never `git add -A` or
     # `git add .`, matching the no-blanket-add rule every unattended commit point
-    # in this family follows. The `diff --cached --quiet` pre-check is what makes
+    # in this family follows. The nothing-staged pre-check is what makes
     # an identical re-drop of an already-committed prompt a no-op instead of an
     # empty commit; when there IS a diff, the WRAPPER does the real staging and
     # the commit, so this commit point inherits its protected-branch refusal
     # rather than re-implementing it. The wrapper stages paths RELATIVE TO THE
-    # REPOSITORY TOP, so it is handed the repo-relative path; the absolute one is
-    # `git -C "$worktree"`-scoped and only feeds the skip pre-check.
+    # REPOSITORY TOP, so it is handed the repo-relative path. The placement
+    # itself lives in lib/harness-run-lib.sh (THE ARTIFACT PLACEMENT), shared
+    # with a job that starts a run.
     #
     # A FAILURE AT EITHER STEP IS LOGGED AND THE RUN LAUNCHES ANYWAY: a prompt
     # commit that did not land has to be VISIBLE, and it must never be the reason
@@ -3292,20 +3292,18 @@ process_inbox_file() {
     # dispatch instead (REMOTE DISPATCH in the header).
     if [ "$remote" = 1 ]; then
       remote_commit_and_push "$branch" "$worktree" "$log_path" "$file" "$fname" \
-        "$prompt_dest" "$prompt_rel" "chore: add task prompt for $branch" "task prompt" || return 0
+        "$prompt_dest" "$prompt_rel" "$prompt_subject" "task prompt" || return 0
     else
-      git -C "$worktree" add "$prompt_dest"
-      if git -C "$worktree" diff --cached --quiet "$prompt_dest"; then
-        log "the task prompt for '$branch' is already committed (identical re-drop) — skipping the commit"
-      elif "$COMMIT_ON_BRANCH" --repo "$worktree" \
-        "$prompt_rel" \
-        -- "chore: add task prompt for $branch" >>"$log_path" 2>&1; then
-        log "committed the task prompt for '$branch' (chore: add task prompt for $branch)"
-        "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
-          log "WARNING: push-branch.sh failed after the task-prompt commit for '$branch' — continuing"
-      else
-        log "WARNING: could not commit the task prompt for '$branch' — launching anyway (its working-tree-clean precondition may be dishonest; see $log_path)"
-      fi
+      hr_commit_placed "$COMMIT_ON_BRANCH" "$worktree" "$prompt_rel" "$prompt_subject" >>"$log_path" 2>&1 || prompt_rc=$?
+      case "$prompt_rc" in
+        3) log "the task prompt for '$branch' is already committed (identical re-drop) — skipping the commit" ;;
+        0)
+          log "committed the task prompt for '$branch' ($prompt_subject)"
+          "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
+            log "WARNING: push-branch.sh failed after the task-prompt commit for '$branch' — continuing"
+          ;;
+        *) log "WARNING: could not commit the task prompt for '$branch' — launching anyway (its working-tree-clean precondition may be dishonest; see $log_path)" ;;
+      esac
     fi
   elif [ "$engine_kind" = "docs" ]; then
     # (2c) Docs path: the task path's strategy exactly — a FRESH working copy off
@@ -3333,26 +3331,24 @@ process_inbox_file() {
     # rationale is stated once, above.
     local docs_rel="$state_rel/docs_catalog/${branch}_docs.md"
     local docs_dest="$worktree/$docs_rel"
-    mkdir -p "$worktree/$state_rel/docs_catalog"
-    cp "$file" "$docs_dest"
+    local docs_subject="chore: add docs checklist for $branch" docs_rc=0
+    hr_place_artifact "$worktree" "$file" "$docs_rel"
     mv "$file" "$ARCHIVE_DIR/$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
     log "copied the docs checklist -> $docs_dest; archived the inbox file"
     if [ "$remote" = 1 ]; then
       remote_commit_and_push "$branch" "$worktree" "$log_path" "$file" "$fname" \
-        "$docs_dest" "$docs_rel" "chore: add docs checklist for $branch" "docs checklist" || return 0
+        "$docs_dest" "$docs_rel" "$docs_subject" "docs checklist" || return 0
     else
-      git -C "$worktree" add "$docs_dest"
-      if git -C "$worktree" diff --cached --quiet "$docs_dest"; then
-        log "the docs checklist for '$branch' is already committed (identical re-drop) — skipping the commit"
-      elif "$COMMIT_ON_BRANCH" --repo "$worktree" \
-        "$docs_rel" \
-        -- "chore: add docs checklist for $branch" >>"$log_path" 2>&1; then
-        log "committed the docs checklist for '$branch' (chore: add docs checklist for $branch)"
-        "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
-          log "WARNING: push-branch.sh failed after the docs-checklist commit for '$branch' — continuing"
-      else
-        log "WARNING: could not commit the docs checklist for '$branch' — launching anyway (see $log_path)"
-      fi
+      hr_commit_placed "$COMMIT_ON_BRANCH" "$worktree" "$docs_rel" "$docs_subject" >>"$log_path" 2>&1 || docs_rc=$?
+      case "$docs_rc" in
+        3) log "the docs checklist for '$branch' is already committed (identical re-drop) — skipping the commit" ;;
+        0)
+          log "committed the docs checklist for '$branch' ($docs_subject)"
+          "$PUSH_BRANCH" "$worktree" >>"$log_path" 2>&1 ||
+            log "WARNING: push-branch.sh failed after the docs-checklist commit for '$branch' — continuing"
+          ;;
+        *) log "WARNING: could not commit the docs checklist for '$branch' — launching anyway (see $log_path)" ;;
+      esac
     fi
   else
     # (2b) Review path: REUSE the branch's existing working copy when it is

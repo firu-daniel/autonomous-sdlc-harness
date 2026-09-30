@@ -40,3 +40,8 @@
 - `npm test -- test/outer-loop-scripts.test.mjs` and `npm test -- test/watcher-remote-dispatch.test.mjs` from `cli/` pass, with every case `watcher-remote-dispatch.test.mjs` carried before this task unchanged.
 - `grep -n "chore: add task prompt for" cli/templates/scripts/autonomous-watcher.sh` finds only comments. `grep -n "chore: add task prompt for" cli/templates/scripts/lib/harness-run-lib.sh` finds the one producer.
 - `grep -n "diff --cached --quiet" cli/templates/scripts/autonomous-watcher.sh` prints nothing: the identical-re-drop test lives only in the library.
+
+- **Deviations from plan:**
+  - The `watcher-remote-dispatch.test.mjs` case is driven on the **review** arm, not by a second identical task-prompt drop. Measured with a probe case in that file (removed afterwards): after the refused-push task drop, the identical re-drop logged `create-worktree.sh failed for 'feat_x'` and sent no `workflow run` — `create-worktree.sh` default mode refuses the branch the first drop cut (`worktree add -b`), so a task or docs re-drop never reaches the placement. The review arm reuses the working copy, so the new case drops a review whose push is refused, restores pushing, re-drops the same bytes, and asserts the identical-re-drop line, the landed push and exactly one further `workflow run`.
+  - `hr_commit_placed` returns 1 when its own `git add -- <rel>` fails, rather than going on to the nothing-staged test; the watcher logged no line for that step before.
+  - Every other `watcher*` suite that drives the task and docs arms locally was not run here: deferred to the Run gates phase (`unit_loop_core.md` → `## The test-run rule`).

@@ -3,7 +3,8 @@
 # the repository it is operating on, reads that repository's
 # `harness.config.json` at run time, answers "is this branch protected?",
 # routes an inbox filename to its engine and branch (`hr_inbox_route_var`),
-# derives a branch name from a title (`hr_derive_branch`), and derives the
+# derives a branch name from a title (`hr_derive_branch`), places a dropped
+# artifact in a working copy and commits and pushes it, and derives the
 # anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
 # differently. It also implements the run registry's reads and writes for the
@@ -77,10 +78,16 @@
 #      of `hr_remote_status_write`. Written only by `hr_remote_status_write`,
 #      `hr_remote_bundle_write` and `hr_remote_bundle_restore`, and nothing
 #      there but a writer's own failed temp file is ever removed.
+#   4. THE ARTIFACT PLACEMENT writes one artifact into a working copy. Fence:
+#      the caller-named `<worktree>/<rel>`, its parent directories and that
+#      path's index entry, plus whatever the two caller-named wrappers do.
+#      Written only by `hr_place_artifact`, `hr_commit_placed` and
+#      `hr_push_landed`.
 #
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
 # `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
-# `hr_remote_bundle_write` or `hr_remote_bundle_restore` function still gets a library that only reads. The
+# `hr_remote_bundle_write`, `hr_remote_bundle_restore`, `hr_place_artifact`,
+# `hr_commit_placed` or `hr_push_landed` function still gets a library that only reads. The
 # lane's ceilings are the only environment values here that carry policy, because
 # the lane is machine-scoped and has no configuration key to carry them; each is
 # named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
@@ -175,7 +182,10 @@
 # `mktemp`'s and `jq`'s own stderr on a failed write to the caller, as the
 # watcher's bodies they replaced did — that stream is the watcher's log — and
 # add one line of their own, naming the lock, when `hr_registry_set` cannot
-# take the registry lock. That silence is why the lane reports a lock it BROKE through a
+# take the registry lock. The artifact placement's three writers likewise leave
+# `mkdir`'s, `cp`'s, `git add`'s and both wrappers' own output on their stdout
+# and stderr for the caller to redirect into its log.
+# That silence is why the lane reports a lock it BROKE through a
 # variable instead of a log line — the caller owns the log.
 #
 # NAMING. Every function is prefixed `hr_`; every variable this file touches
@@ -1591,6 +1601,69 @@ hr_derive_branch() {
     [ "$n" -le "$HR_BRANCH_SUFFIX_MAX" ] || return 3
     candidate="${base}_$n"
   done
+}
+
+# ---------------------------------------------------------------------------
+# THE ARTIFACT PLACEMENT.
+#
+# THE CONTRACT. The one placement the watcher's inbox pass and a job starting a
+# run both perform: copy a dropped artifact into a working copy, stage exactly
+# that path, skip an identical re-drop, commit through the caller-named commit
+# wrapper, push through the caller-named push wrapper, and read "landed" as
+# `origin/<branch>` equal to `HEAD`. Every step reports by exit status only;
+# what a failure means — log and launch anyway, or block the dispatch — is the
+# caller's decision. The wrapper paths are arguments because this library
+# resolves no sibling script. Write exception 4 in the header is this section's.
+# ---------------------------------------------------------------------------
+
+# hr_task_prompt_rel <state_rel> <branch> — print the task prompt's
+# repo-relative path, with <state_rel>'s trailing `/` dropped.
+hr_task_prompt_rel() {
+  local state_rel="${1-}" branch="${2-}"
+  printf '%s/task_prompts/%s_task_prompt.md\n' "${state_rel%/}" "$branch"
+}
+
+# hr_task_prompt_subject <branch> — print the task prompt's commit subject. The
+# one producer of it; `.claude/context/conventions.md` → `## Commit-message
+# policy` lists it byte for byte.
+hr_task_prompt_subject() {
+  printf 'chore: add task prompt for %s\n' "${1-}"
+}
+
+# hr_place_artifact <worktree> <src_file> <rel> — copy <src_file> to
+# <worktree>/<rel>, creating its parent. 0, or 1 on a failure.
+hr_place_artifact() {
+  local worktree="${1-}" src="${2-}" rel="${3-}" dest
+  [ -n "$worktree" ] && [ -n "$src" ] && [ -n "$rel" ] || return 1
+  dest="$worktree/$rel"
+  mkdir -p "${dest%/*}" || return 1
+  cp "$src" "$dest" || return 1
+  return 0
+}
+
+# hr_commit_placed <commit_wrapper> <worktree> <rel> <subject> — stage <rel> and
+# commit it through <commit_wrapper>. 0 committed; 3 nothing staged for <rel> (an
+# identical re-drop — nothing committed); 1 staging or the wrapper failed.
+hr_commit_placed() {
+  local wrapper="${1-}" worktree="${2-}" rel="${3-}" subject="${4-}"
+  [ -n "$wrapper" ] && [ -n "$worktree" ] && [ -n "$rel" ] && [ -n "$subject" ] || return 1
+  git -C "$worktree" add -- "$rel" || return 1
+  git -C "$worktree" diff --cached --quiet -- "$rel" && return 3
+  "$wrapper" --repo "$worktree" "$rel" -- "$subject" || return 1
+  return 0
+}
+
+# hr_push_landed <push_wrapper> <worktree> <branch> — run <push_wrapper>, then 0
+# only when `HEAD` and `refs/remotes/origin/<branch>` both resolve and are
+# equal; 1 otherwise. `push-branch.sh` exits 0 on every path, so its status is
+# never the answer.
+hr_push_landed() {
+  local wrapper="${1-}" worktree="${2-}" branch="${3-}" head upstream
+  [ -n "$wrapper" ] && [ -n "$worktree" ] && [ -n "$branch" ] || return 1
+  "$wrapper" "$worktree"
+  head=$(git -C "$worktree" rev-parse --verify --quiet HEAD) || return 1
+  upstream=$(git -C "$worktree" rev-parse --verify --quiet "refs/remotes/origin/$branch") || return 1
+  [ -n "$head" ] && [ "$head" = "$upstream" ]
 }
 
 # ---------------------------------------------------------------------------

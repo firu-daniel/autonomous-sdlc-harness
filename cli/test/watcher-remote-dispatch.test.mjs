@@ -196,6 +196,34 @@ test('a push origin refuses blocks the dispatch', async (t) => {
   assert.deepEqual(f.prompts(), []);
 });
 
+// A task or docs re-drop never reaches the placement: `create-worktree.sh` refuses the branch the first
+// drop cut. A review re-drop reuses the working copy, so it is where an identical re-drop is pushed.
+test('an identical re-drop after a refused push skips the commit, lands the push and dispatches once', async (t) => {
+  const f = await createDispatchFixture(t);
+  if (f === null) return;
+
+  await f.drop('feat_x_task_prompt.md', 'do the thing\n');
+  await f.tick();
+  await f.patchRecord({ status: 'completed' });
+  await f.rejectUpdates();
+  await f.drop('feat_x_review.md', 'fix the button\n');
+  await f.tick();
+  assert.equal(await f.subject(), 'chore: add user review for feat_x');
+  assert.notEqual(await f.originTip(), await f.head());
+  assert.equal(f.workflowRuns().length, 1, 'a refused push was followed by a dispatch');
+
+  const committed = await f.head();
+  await rm(join(f.origin, 'hooks', 'pre-receive'));
+  await f.drop('feat_x_review.md', 'fix the button\n');
+  await f.tick();
+
+  assert.equal(await f.head(), committed, 'the identical re-drop made a commit');
+  assert.match(f.watcherLog(), /already committed \(identical re-drop\) — skipping the commit, pushing anyway/);
+  assert.equal(await f.originTip(), committed, 'the push did not land');
+  assert.deepEqual(f.workflowRuns(), [taskDispatch('feat_x', 'task'), taskDispatch('feat_x', 'user_review')]);
+  assert.equal(f.record().status, 'running');
+});
+
 test('a remote review drop fast-forwards, commits, pushes and dispatches; a refused re-push blocks', async (t) => {
   const f = await createDispatchFixture(t);
   if (f === null) return;

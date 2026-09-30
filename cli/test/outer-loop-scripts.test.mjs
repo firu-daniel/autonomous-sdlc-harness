@@ -56,6 +56,7 @@ import { execFile, execFileSync } from 'node:child_process';
 import {
   accessSync,
   appendFileSync,
+  chmodSync,
   constants as fsConstants,
   mkdirSync,
   readdirSync,
@@ -68,7 +69,7 @@ import { lstat } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import test from 'node:test';
 
-import { createFixture, plantRetrievalRuntime, runBash, runCli, snapshotTree, PACKAGE_ROOT } from './helpers/fixture.mjs';
+import { createFixture, plantRetrievalRuntime, runBash, runCli, runGit, snapshotTree, PACKAGE_ROOT } from './helpers/fixture.mjs';
 
 /** The default `scriptsDir`, and the library's path under it — the contract, spelled out once. */
 const SCRIPTS_DIR = 'scripts';
@@ -387,6 +388,44 @@ test('hr_registry_set then hr_registry_get round-trips a value through a fresh r
 function libCall(dir, script, args = [], env = {}) {
   return runBash(dir, ['-c', `. "$1"; shift; ${script}`, '_', join(dir, LIB_PATH), ...args], env);
 }
+
+test('the artifact placement commits one path once, skips an identical re-drop and reads landed off origin', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  await runGit(dir, ['checkout', '--quiet', '-b', 'feat_x']);
+  plant(dir, 'watcher-test/prompt.md', 'do the thing\n');
+  plant(dir, 'watcher-test/push-nothing.sh', '#!/bin/sh\nexit 0\n');
+  chmodSync(join(dir, 'watcher-test/push-nothing.sh'), 0o755);
+  const commits = async () => Number((await runGit(dir, ['rev-list', '--count', 'HEAD'])).stdout.trim());
+
+  const rel = (await libCall(dir, 'hr_task_prompt_rel "$@"', [`${STATE_DIR}/`, 'feat_x'])).stdout.trim();
+  assert.equal(rel, `${STATE_DIR}/task_prompts/feat_x_task_prompt.md`);
+  const place = [
+    'hr_place_artifact "$PWD" watcher-test/prompt.md "$1" || exit 10',
+    'hr_commit_placed "$PWD/scripts/commit-on-branch.sh" "$PWD" "$1" "$(hr_task_prompt_subject feat_x)"',
+  ].join('; ');
+
+  const before = await commits();
+  const first = await libCall(dir, place, [rel]);
+  assert.equal(first.status, 0, `the first placement exited ${first.status}: ${first.stderr}`);
+  assert.equal(await commits(), before + 1);
+  assert.equal((await runGit(dir, ['log', '-1', '--format=%s'])).stdout, 'chore: add task prompt for feat_x\n');
+  assert.equal((await runGit(dir, ['show', '--name-only', '--format=', 'HEAD'])).stdout.trim(), rel);
+
+  const again = await libCall(dir, place, [rel]);
+  assert.equal(again.status, 3, `an identical re-drop exited ${again.status}: ${again.stderr}`);
+  assert.equal(await commits(), before + 1, 'an identical re-drop made a commit');
+
+  const landed = 'hr_push_landed "$1" "$PWD" feat_x';
+  const stub = await libCall(dir, landed, [join(dir, 'watcher-test/push-nothing.sh')]);
+  assert.equal(stub.status, 1, 'a push wrapper that pushed nothing read as landed');
+  const pushed = await libCall(dir, landed, [join(dir, SCRIPTS_DIR, 'push-branch.sh')]);
+  assert.equal(pushed.status, 0, `the real push did not land: ${pushed.stdout}${pushed.stderr}`);
+  assert.equal(
+    (await runGit(dir, ['rev-parse', 'refs/remotes/origin/feat_x'])).stdout,
+    (await runGit(dir, ['rev-parse', 'HEAD'])).stdout,
+  );
+});
 
 /** A slashed branch, so a path built with `${branch%/*}` or a basename would show. */
 const REMOTE_BRANCH = 'feat/x';
