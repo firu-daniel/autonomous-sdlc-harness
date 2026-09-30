@@ -61,7 +61,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_triggers/task
 18. [x] **Task 18** — Restate the forge coupling's status in the plugin's flow documents _(layer: plugin)_ _(points: 8)_
 19. [x] **Task 19** — Restate `forge` in the schema and in `ARCHITECTURE.md` now that it has a reader and a reporter _(layer: general)_ _(points: 10)_
 20. [x] **Task 20** — Write `docs/github-issue-trigger.md`, the issue trigger's document of record _(layer: general)_ _(points: 20)_
-21. [ ] **Task 21** — Bring `docs/remote-execution.md` level with the trigger, adopt and the GitHub-only route _(layer: general)_ _(points: 20)_
+21. [x] **Task 21** — Bring `docs/remote-execution.md` level with the trigger, adopt and the GitHub-only route _(layer: general)_ _(points: 20)_
 22. [ ] **Task 22** — Document the new verbs, the trigger workflow and the `forge` check in `docs/cli.md` and `docs/watcher.md` _(layer: general)_ _(points: 10)_
 23. [ ] **Task 23** — Update the `forge` row, the roadmap debt, `ROADMAP.md` and `README.md` _(layer: general)_ _(points: 10)_
 24. [ ] **Task 24** — Add Gate 12 observation (xiii): an issue label starts a run with the machine off _(layer: general)_ _(points: 8)_

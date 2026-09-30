@@ -60,3 +60,9 @@
 - `git grep -n -i -E "gains no reader|What stays open\*\* is the trigger half" -- docs/remote-execution.md` prints nothing.
 - `grep -n "^### Working a run from GitHub alone$" docs/remote-execution.md` prints exactly one line, and it falls between `## 1.` and `## 2.`: `grep -n "^## " docs/remote-execution.md` shows the order.
 - `grep -n "^## " docs/remote-execution.md` lists the same numbered sections as before this task.
+
+**Deviations from plan:**
+
+- `## 11. Security`'s self-hosted paragraph said the harness's own workflows "trigger only on `workflow_dispatch` … and `schedule`", which `harness-trigger.yml` (`issues` `labeled`, `repository_dispatch`) made false. The sentence now names both events and says neither is a pull-request event. Not in the plan's list; fixed because the paragraph is in this task's target section.
+- `### Working a run from GitHub alone` also tells the reader to pick the run's branch under *Use workflow from*, matching `remote-run.sh`'s `--ref <branch>` (§7, *Upgrading*). Without it the form runs the default branch's workflow file, not the run's pinned one.
+- The `## 5.` *What stays open* line drops the plan's "after this branch" wording, because the document is of record and does not name the branch that wrote it.
