@@ -229,6 +229,7 @@ import {
   renderedCliVersions,
   runGh,
   RUNNER_VARIABLE,
+  TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_LABEL_VARIABLE,
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RESUME_PATH,
@@ -2551,10 +2552,14 @@ function retentionDaysOf(stdout: string): number | undefined {
  * - `fail` — `gh` does not spawn or `gh auth status` refuses (nothing further is asked); GitHub does
  *   not know `harness-run.yml`; neither credential secret is set.
  * - `warn` — `HARNESS_PUSH_URL` absent; `harness-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
- *   set; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; and any call that timed
+ *   set; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
+ *   {@link forgeTriggerApplies}, `harness-trigger.yml` unknown to GitHub, or no label named by
+ *   `HARNESS_TRIGGER_LABEL` (default {@link DEFAULT_TRIGGER_LABEL}); and any call that timed
  *   out, could not reach GitHub, or answered in a shape not understood — *cannot tell* is not
  *   *missing*, so it never fails.
  * - both credential secrets present is a note, not a finding: billing follows `ANTHROPIC_API_KEY`.
+ * - a non-empty `HARNESS_TRIGGER_ALLOWED_BOTS` is a note naming the bots, which start runs without a
+ *   permission check. When the trigger does not apply, neither trigger read is made.
  * - the retention read refused (typically HTTP 403: the endpoint needs admin access) is a note too —
  *   the read is best-effort, and a collaborator without admin can still run remotely.
  *
@@ -2658,11 +2663,47 @@ const REMOTE_GITHUB_CHECK: Check = {
       }
     }
 
+    let triggerKnown = '';
+    if (forgeTriggerApplies(ctx.config)) {
+      const trigger = ask(['workflow', 'view', WORKFLOW_TRIGGER_FILE]);
+      if (trigger.answer === undefined) return fail(noSpawn);
+      if (trigger.answer.kind === 'unknown') warnings.push(cannotTell(trigger.call, trigger.answer.why, `whether GitHub knows ${WORKFLOW_TRIGGER_FILE}`));
+      if (trigger.answer.kind === 'refused') {
+        warnings.push(`GitHub does not know ${WORKFLOW_TRIGGER_FILE} (${trigger.call}: ${trigger.answer.why}), so labelling an issue starts nothing: push ${WORKFLOW_TRIGGER_PATH} to the repository's default branch`);
+      }
+
+      // The label's name is a repository variable, so an unread variable listing leaves nothing to compare.
+      const configured = variableValues?.get(TRIGGER_LABEL_VARIABLE)?.trim() ?? '';
+      const labelName = configured === '' ? DEFAULT_TRIGGER_LABEL : configured;
+      let labelFound = false;
+      if (variableValues === undefined) {
+        warnings.push(`cannot tell whether the trigger label exists: its name is the ${TRIGGER_LABEL_VARIABLE} variable, and ${variables.call} gave no readable answer`);
+      } else {
+        const labels = ask(['label', 'list', '--json', 'name', '--limit', '1000']);
+        if (labels.answer === undefined) return fail(noSpawn);
+        const labelNames = labels.answer.kind === 'answered' ? ghJsonEntries(labels.answer.stdout) : undefined;
+        if (labels.answer.kind !== 'answered') {
+          warnings.push(cannotTell(labels.call, labels.answer.why, `whether the label \`${labelName}\` exists`));
+        } else if (labelNames === undefined) {
+          warnings.push(`cannot tell whether the label \`${labelName}\` exists: ${labels.call} answered in a shape this check does not read`);
+        } else if (!labelNames.has(labelName)) {
+          warnings.push(`no label \`${labelName}\` exists, so nobody can apply it: \`gh label create ${labelName}\``);
+        } else {
+          labelFound = true;
+        }
+        const bots = (variableValues.get(TRIGGER_ALLOWED_BOTS_VARIABLE) ?? '').split(',').map((bot) => bot.trim()).filter((bot) => bot !== '');
+        if (bots.length > 0) {
+          notes.push(`${TRIGGER_ALLOWED_BOTS_VARIABLE} admits ${nameList(bots)}, each of which can start a run without a permission check`);
+        }
+      }
+      if (trigger.answer.kind === 'answered' && labelFound) triggerKnown = `; GitHub knows ${WORKFLOW_TRIGGER_FILE} and the label \`${labelName}\` exists`;
+    }
+
     const noted = notes.length > 0 ? `; ${notes.join('; ')}` : '';
     if (failures.length > 0) return fail(`${[...failures, ...warnings].join('; ')}${noted}`);
     if (warnings.length > 0) return warn(`${warnings.join('; ')}${noted}`);
     const kept = retentionDays === undefined ? '' : `, and the repository keeps artifacts for ${retentionDays} days`;
-    return pass(`gh is authenticated, GitHub knows ${WORKFLOW_RUN_FILE} and ${WORKFLOW_RESUME_FILE}, a credential secret and ${PUSH_URL_SECRET} are set, and remote runs use ${runner as string}${kept}${noted}`);
+    return pass(`gh is authenticated, GitHub knows ${WORKFLOW_RUN_FILE} and ${WORKFLOW_RESUME_FILE}, a credential secret and ${PUSH_URL_SECRET} are set, and remote runs use ${runner as string}${kept}${triggerKnown}${noted}`);
   },
 };
 
