@@ -59,7 +59,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_triggers/task
 16. [x] **Task 16** — Adopt runs started on GitHub before the four syncing commands sync _(layer: plugin)_ _(points: 10)_
 17. [x] **Task 17** — Show runs not yet adopted in `/autonomous-sdlc-harness:branch-status` without syncing _(layer: plugin)_ _(points: 5)_
 18. [x] **Task 18** — Restate the forge coupling's status in the plugin's flow documents _(layer: plugin)_ _(points: 8)_
-19. [ ] **Task 19** — Restate `forge` in the schema and in `ARCHITECTURE.md` now that it has a reader and a reporter _(layer: general)_ _(points: 10)_
+19. [x] **Task 19** — Restate `forge` in the schema and in `ARCHITECTURE.md` now that it has a reader and a reporter _(layer: general)_ _(points: 10)_
 20. [ ] **Task 20** — Write `docs/github-issue-trigger.md`, the issue trigger's document of record _(layer: general)_ _(points: 20)_
 21. [ ] **Task 21** — Bring `docs/remote-execution.md` level with the trigger, adopt and the GitHub-only route _(layer: general)_ _(points: 20)_
 22. [ ] **Task 22** — Document the new verbs, the trigger workflow and the `forge` check in `docs/cli.md` and `docs/watcher.md` _(layer: general)_ _(points: 10)_
