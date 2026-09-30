@@ -48,7 +48,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_triggers/task
 5. [x] **Task 5** — Let `create-worktree.sh` cut and push a branch without bootstrapping it _(layer: cli)_ _(points: 8)_
 6. [x] **Task 6** — Add `remote-run.sh start`: place a task prompt on a new branch and dispatch it _(layer: cli)_ _(points: 15)_
 7. [x] **Task 7** — Add `remote-run.sh trigger` for a labelled GitHub issue _(layer: cli)_ _(points: 20)_
-8. [ ] **Task 8** — Extend `remote-run.sh trigger` to a `repository_dispatch` event _(layer: cli)_ _(points: 8)_
+8. [x] **Task 8** — Extend `remote-run.sh trigger` to a `repository_dispatch` event _(layer: cli)_ _(points: 8)_
 9. [ ] **Task 9** — Share a remote run's initial registry record between the watcher and the remote script _(layer: cli)_ _(points: 8)_
 10. [ ] **Task 10** — Add `remote-run.sh adopt` and `adopt --list` for runs started on GitHub _(layer: cli)_ _(points: 20)_
 11. [ ] **Task 11** — Name the GitHub route in every job-side notification that names a local command _(layer: cli)_ _(points: 12)_

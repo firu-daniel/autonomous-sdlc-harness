@@ -1,12 +1,13 @@
 /**
- * `remote-run.sh trigger`, the GitHub event adapter: an `issues` `labeled` event becomes a branch and a
- * task text, then `start`.
+ * `remote-run.sh trigger`, the GitHub event adapter: an `issues` `labeled` event, or a `repository_dispatch`
+ * of type `harness-task`, becomes a branch and a task text, then `start`.
  *
  * **The rule these tests exist to enforce: only a write-or-admin human or a listed bot starts a run;
  * every refusal sends no `workflow run` and posts one comment naming why; event text is data.** Each
  * refusal arm — `HARNESS_REMOTE_STOP`, a trigger the configuration does not turn on, a closed issue,
  * `ghost`, an unlisted bot, a `read` answer and a failed permission call — is driven here, and a body
- * carrying shell syntax is committed byte for byte with nothing executed.
+ * carrying shell syntax is committed byte for byte with nothing executed. A dispatch event has no issue,
+ * so its cases assert feedback in the step summary and no `issue` call at all.
  *
  * Each case drives `remote-start.test.mjs`'s fixture shape — `init`, `execution.target` set, the
  * adopted tree pushed to the fixture's bare `origin` — plus `forge: "github"` and an event file the
@@ -93,6 +94,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
   const stub = join(stubDir, 'gh');
   writeFileSync(stub, STUB, { mode: 0o755 });
   const log = join(stubDir, 'gh.log');
+  const summary = join(stubDir, 'step-summary.md');
   let events = 0;
 
   /** Every working copy a derived branch may cut, removed after the case. */
@@ -147,6 +149,38 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
         ...env,
       });
     },
+    /**
+     * Run `trigger` on one `repository_dispatch` event, with a step-summary file.
+     *
+     * @param {object} event the whole event: `action` and `client_payload`.
+     * @param {Record<string, string>} [env]
+     */
+    dispatch: async (event, env = {}) => {
+      events += 1;
+      const eventPath = join(stubDir, `event_${events}.json`);
+      writeFileSync(eventPath, JSON.stringify(event));
+      for (const branch of [BRANCH, 'task_4242']) {
+        t.after(() => rm(worktreeOf(branch), { recursive: true, force: true }));
+      }
+      return runBash(dir, [SCRIPT, 'trigger'], {
+        HARNESS_GH_CLI: stub,
+        STUB_LOG: log,
+        STUB_PERMISSIONS: '{}',
+        GITHUB_EVENT_NAME: 'repository_dispatch',
+        GITHUB_EVENT_PATH: eventPath,
+        GITHUB_REPOSITORY: REPOSITORY,
+        GITHUB_SERVER_URL: 'https://github.com',
+        GITHUB_RUN_ID: '4242',
+        GITHUB_STEP_SUMMARY: summary,
+        RUNNER_TEMP: runnerTemp,
+        HARNESS_REMOTE_STOP: '',
+        HARNESS_TRIGGER_LABEL: '',
+        HARNESS_TRIGGER_ALLOWED_BOTS: '',
+        HARNESS_TRIGGER_LOOKUP_SECS: '0',
+        ...env,
+      });
+    },
+    summary: () => (existsSync(summary) ? readFileSync(summary, 'utf8') : ''),
     /** @returns {{ args: string[], body: string | null, line: string }[]} */
     calls: () =>
       existsSync(log)
@@ -322,4 +356,58 @@ test('a dispatch that fails after the push exits 3 and comments the manual way o
   assert.match(posted[0].body, new RegExp(`\`${BRANCH}\` was pushed`));
   assert.match(posted[0].body, /harness-run\.yml.*Run workflow/s);
   assert.equal(removals(calls).length, 1);
+});
+
+const issueCalls = (calls) => calls.filter((call) => call.args[0] === 'issue');
+
+test('a harness-task dispatch starts one run, snapshots its provenance and reports in the step summary', async (t) => {
+  const f = await triggerFixture(t);
+  const body = 'Let a reader comment on a content item';
+  const result = await f.dispatch({
+    action: 'harness-task',
+    client_payload: { title: TITLE, body, source: 'jira PROJ-12' },
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(
+    dispatches(calls).map((call) => call.line),
+    [`workflow run harness-run.yml --ref ${BRANCH} -f action=run -f branch=${BRANCH} -f engine=task -f resume=none -f chain=0`],
+  );
+  assert.deepEqual(issueCalls(calls), []);
+  const prompt = await f.committedPrompt(BRANCH);
+  assert.match(
+    prompt,
+    new RegExp(
+      `^# ${TITLE}\\n\\n${body}\\n\\n---\\n\\nStarted by a repository_dispatch event of type \`harness-task\`, from jira PROJ-12 at \\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ\\.\\n$`,
+    ),
+  );
+  assert.match(f.summary(), new RegExp(`\`${BRANCH}\``));
+  assert.match(f.summary(), new RegExp(`https://example\\.test/runs/${BRANCH}`));
+  assert.match(result.stdout, new RegExp(`\`${BRANCH}\``));
+});
+
+test('a dispatch of another type is ignored with no gh call', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.dispatch({ action: 'something-else', client_payload: { title: TITLE } });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ignored/);
+  assert.deepEqual(f.calls(), []);
+});
+
+test('a dispatch without a title is refused, naming the payload shape', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.dispatch({ action: 'harness-task', client_payload: { body: 'x' } });
+  assert.equal(result.status, 2, `${result.stdout}\n${result.stderr}`);
+  assert.deepEqual(dispatches(f.calls()), []);
+  assert.deepEqual(issueCalls(f.calls()), []);
+  assert.match(f.summary(), /No run started/);
+  assert.match(f.summary(), /"client_payload": \{"title"/);
+});
+
+test('a dispatch whose title has no slug starts on task_<GITHUB_RUN_ID>', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.dispatch({ action: 'harness-task', client_payload: { title: '🚀🚀', body: 'x' } });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.deepEqual(dispatches(f.calls()).map((call) => call.args[4]), ['task_4242']);
+  assert.match(await f.committedPrompt('task_4242'), /^# 🚀🚀\n\nx\n\n---\n\nStarted by a repository_dispatch event of type `harness-task` at /);
 });

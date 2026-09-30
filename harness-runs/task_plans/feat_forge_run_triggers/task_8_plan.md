@@ -36,3 +36,9 @@
 
 - `npm test -- test/remote-trigger.test.mjs` from `cli/` passes, with every Task 7 case unchanged.
 - `grep -n "harness-task" cli/templates/scripts/remote-run.sh` shows the literal once in code and once in the header's mirror declaration.
+
+**Deviations from plan:**
+
+- The dispatch fields are read through Task 7's `event_field` (`jq -j` with a byte-keeping sentinel) rather than bare `jq -r`, so a body's trailing newlines survive exactly as the issue arm's do; the `// ""` defaults are as planned.
+- The empty-`title` refusal runs before refusals 1 and 2, as part of the arm; its way-on names the payload shape through `TRIGGER_DISPATCH_EVENT_TYPE`, so the literal stays at the two sites the grep verification names (the constant and the mirror line, which now carries the value). The header and REPRO spell the event type as `TRIGGER_DISPATCH_EVENT_TYPE` for the same reason.
+- A step summary that cannot be appended is one `::warning::` line and does not change the exit code (the issue arm's un-postable comment is 3): the dispatch arm prints every outcome to stdout either way, so its feedback is not lost.
