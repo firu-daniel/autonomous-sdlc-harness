@@ -8607,6 +8607,13 @@ async function agedWorkflowFixture(subtest) {
   return dir;
 }
 
+/** The one indented `git add` command an upgrade report prints, without its indentation. */
+function upgradeAddLine(stdout) {
+  const matches = [...stdout.matchAll(/^\s+(git add .*)$/gm)].map((match) => match[1]);
+  assert.equal(matches.length, 1, `expected one git add line:\n${stdout}`);
+  return matches[0];
+}
+
 /** Every pin value the run workflow carries. */
 function pins(dir) {
   return [...text(dir, WORKFLOW_RUN_FILE).matchAll(CLI_VERSION_LINE)].map((match) => match[1]);
@@ -8655,6 +8662,48 @@ test('init --upgrade-workflows re-pins an older workflow after a .bak, and nothi
     assert.ok(!ignoreFile.split('\n').includes('*.bak'), 'the block carries a bare *.bak');
     await initOk(dir);
     assert.equal(text(dir, GITIGNORE_FILE), ignoreFile, 'a plain re-run changed .gitignore');
+  });
+
+  await t.test('an upgrade prints its own commit-and-push steps and the in-flight sentence, not the first-setup block', async (subtest) => {
+    const dir = await agedWorkflowFixture(subtest);
+    const { defaultBranch } = readJson(join(dir, CONFIG_FILE));
+
+    const { stdout } = await initOk(dir, [UPGRADE_WORKFLOWS]);
+
+    const addLine = upgradeAddLine(stdout);
+    for (const path of [WORKFLOW_RUN_FILE, WORKFLOW_RESUME_FILE]) {
+      assert.ok(addLine.includes(path), `the git add line does not name ${path}: ${addLine}`);
+    }
+    const present = [
+      'git status --short',
+      `Upgrade the harness workflows to ${version}`,
+      'gh auth refresh -s workflow',
+      `git push --no-verify origin ${defaultBranch}`,
+      'finishes on the version it started with',
+    ];
+    for (const name of present) assert.ok(stdout.includes(name), `the upgrade report does not name ${name}:\n${stdout}`);
+    for (const name of ['Add the harness workflows', 'gh secret set', 'gh variable set', 'Do not commit the .bak files']) {
+      assert.ok(!stdout.includes(name), `the upgrade report prints ${name}:\n${stdout}`);
+    }
+  });
+
+  await t.test("the upgrade's git add names .gitignore only when the run merged lines into it", async (subtest) => {
+    const harnessBackups = [WORKFLOW_RUN_FILE, WORKFLOW_RESUME_FILE, PROFILE_FILE].map((path) => `${path}.bak`);
+    const olderBlock = await agedWorkflowFixture(subtest);
+    const lines = text(olderBlock, GITIGNORE_FILE).split('\n');
+    assert.ok(harnessBackups.every((line) => lines.includes(line)), 'the fixture block does not carry the three .bak lines');
+    writeFileSync(
+      join(olderBlock, GITIGNORE_FILE),
+      lines.filter((line) => !harnessBackups.includes(line)).join('\n'),
+      'utf8',
+    );
+
+    const merged = upgradeAddLine((await initOk(olderBlock, [UPGRADE_WORKFLOWS])).stdout);
+    assert.ok(merged.split(' ').includes(GITIGNORE_FILE), `the git add line does not name ${GITIGNORE_FILE}: ${merged}`);
+
+    const currentBlock = await agedWorkflowFixture(subtest);
+    const kept = upgradeAddLine((await initOk(currentBlock, [UPGRADE_WORKFLOWS])).stdout);
+    assert.ok(!kept.split(' ').includes(GITIGNORE_FILE), `the git add line names an unchanged ${GITIGNORE_FILE}: ${kept}`);
   });
 
   await t.test('a second run leaves both workflows and both .bak files byte-identical', async (subtest) => {

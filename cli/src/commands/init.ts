@@ -150,6 +150,7 @@ import {
 } from '../generators/claudeContext.js';
 import { pointHooksPath, writeGitHooks } from '../generators/githooks.js';
 import {
+  IN_FLIGHT_RUNS_NOTE,
   UPGRADE_WORKFLOWS_FLAG,
   writeGithubWorkflows,
   type WorkflowUpgrade,
@@ -2470,9 +2471,27 @@ async function run(ctx: CommandContext): Promise<number> {
     const replacedWorkflows = workflows.workflows
       .filter(({ absolute }) => applied.find((r) => r.path === absolute)?.effect === 'backed-up-and-replaced')
       .map(({ repoPath }) => repoPath);
-    reportWorkflowUpgrade(ctx, workflows.upgrade, replacedWorkflows, ctx.flags.dryRun);
+    // Every tracked file this run merged into, so the upgrade's commit leaves no tracked change behind.
+    const mergedPaths = applied
+      .filter(
+        (r) =>
+          (r.policy === 'merge-lines' || r.policy === 'merge-json') &&
+          (r.effect === 'merged' || r.effect === 'created') &&
+          insideRepo(repoRoot, r.path),
+      )
+      .map((r) => normalizeRepoDir(relative(repoRoot, r.path)));
+    reportWorkflowUpgrade(ctx, {
+      upgrade: workflows.upgrade,
+      replacedWorkflows,
+      dryRun: ctx.flags.dryRun,
+      defaultBranch: effective.defaultBranch,
+      workflowPaths: freshWorkflows,
+      mergedPaths,
+    });
   }
-  if (freshWorkflows.length > 0) reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun, freshWorkflows);
+  if (freshWorkflows.length > 0 && workflows.upgrade?.replaced !== true) {
+    reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun, freshWorkflows);
+  }
 
   return EXIT.OK;
 }
@@ -2481,14 +2500,27 @@ async function run(ctx: CommandContext): Promise<number> {
  * What {@link UPGRADE_WORKFLOWS_FLAG} did, printed when the generator returned an upgrade result;
  * `replacedWorkflows` names, repo-relative, the workflows the plan replaced after a `.bak`. What was
  * replaced, and when, is the generator's decision (`generators/githubWorkflows.ts`, choice 4); this
- * only reports it, and leaves the commit-and-push steps to {@link reportGithubSteps}.
+ * only reports it.
+ *
+ * An upgrade that replaced a workflow owns its commit-and-push steps here, and {@link reportGithubSteps}
+ * is not printed for it. The `git add` names `mergedPaths` — every tracked file this run merged lines
+ * or keys into — beside `workflowPaths`, because the remote job's own `init` fails its setup step on a
+ * changed tracked file, so a merge left uncommitted breaks the next run.
  */
 function reportWorkflowUpgrade(
   ctx: CommandContext,
-  upgrade: WorkflowUpgrade,
-  replacedWorkflows: readonly string[],
-  dryRun: boolean,
+  options: {
+    readonly upgrade: WorkflowUpgrade;
+    readonly replacedWorkflows: readonly string[];
+    readonly dryRun: boolean;
+    readonly defaultBranch: string;
+    /** Every workflow this run created or replaced, repo-relative. */
+    readonly workflowPaths: readonly string[];
+    /** Every in-repository file a merge policy created or merged into, repo-relative. */
+    readonly mergedPaths: readonly string[];
+  },
 ): void {
+  const { upgrade, replacedWorkflows, dryRun, defaultBranch, workflowPaths, mergedPaths } = options;
   if (!upgrade.replaced) {
     ctx.report.info(
       `${UPGRADE_WORKFLOWS_FLAG}: the workflows are already rendered for ${upgrade.to}, so nothing was upgraded.`,
@@ -2512,13 +2544,28 @@ function reportWorkflowUpgrade(
       : `The resume poller's schedule was carried: ${upgrade.cron.join(', ')}.`,
   );
   ctx.report.info(
-    `Do not commit the .bak files. The runner (${RUNNER_VARIABLE}), the timeouts and the stop switch (${REMOTE_STOP_VARIABLE}) are repository variables and were not touched.`,
+    `The .bak files ${dryRun ? 'would be' : 'are'} ignored by the managed .gitignore block, so git add -A leaves them out; delete them once compared. The runner (${RUNNER_VARIABLE}), the timeouts and the stop switch (${REMOTE_STOP_VARIABLE}) are repository variables and were not touched.`,
   );
+  ctx.report.info('');
+  ctx.report.info('1. Check what the upgrade changed:');
+  command('git status --short');
+  ctx.report.info('');
+  ctx.report.info(
+    `2. Commit it and push it to GitHub's default branch (assumed \`${defaultBranch}\` below). ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(defaultBranch)}`,
+  );
+  command(`git add ${[...workflowPaths, ...mergedPaths].join(' ')}`);
+  command(`git commit -m "Upgrade the harness workflows to ${upgrade.to}"`);
+  command(WORKFLOW_SCOPE_COMMAND);
+  command(defaultBranchPushCommand(defaultBranch));
+  ctx.report.info('');
+  ctx.report.info(IN_FLIGHT_RUNS_NOTE);
 }
 
 /**
- * The GitHub-side steps only the adopter can take, printed when this run created or replaced at least
- * one of the two workflows; `workflowPaths` names those, repo-relative.
+ * The first-setup block: the GitHub-side steps only the adopter can take, printed when this run
+ * created or replaced at least one of the two workflows, and **not** printed for an upgrade that
+ * replaced a workflow — {@link reportWorkflowUpgrade} owns that run's steps. `workflowPaths` names
+ * the workflows, repo-relative.
  *
  * Commands stand on their own lines so each can be pasted. The push comes first because GitHub
  * dispatches a `workflow_dispatch` workflow only once it exists on the default branch. It skips the

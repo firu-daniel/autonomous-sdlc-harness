@@ -56,3 +56,11 @@
   4. Run the printed `git add` and `git commit` lines verbatim.
   5. Then `git status --porcelain --untracked-files=no` prints nothing, and `git status --porcelain` lists neither `.bak`. This is the property the remote job's setup step relies on.
 - Grep `cli/src/commands/init.ts` for `finishes on the version it started with`. There is no hit: the sentence reaches the report only through the imported `IN_FLIGHT_RUNS_NOTE`.
+
+**Deviations from plan:**
+
+- The five commands print under two numbered steps in `reportGithubSteps`' layout (1. `git status --short`; 2. `git add`, `git commit`, scope, push, with `WORKFLOW_SCOPE_REASON` and `defaultBranchPushReason` in step 2's prose), one command per line, in the order the plan lists.
+- `reportWorkflowUpgrade` now takes one options object rather than seven positional parameters.
+- Verification, first bullet: the `cli/test/init.test.mjs` run was **not executed** — neither `.claude/context/cli.md` nor `.claude/context/conventions.md` states a single-file test command, so per `unit_loop_core.md` → `## The test-run rule` (3) it is deferred to the Run gates phase. The two new cases are verified by reading only.
+- Verification, second bullet: executed as a probe under `harness-runs/scratch/` against the built CLI in a system-temp fixture (remote execution on, run workflow aged to `0.0.1`, Task 2's three lines removed from `.gitignore`, committed). The printed `git add` named `.github/workflows/harness-run.yml .gitignore`; after running the printed `git add` and `git commit` verbatim, `git status --porcelain --untracked-files=no` and `git status --porcelain` both printed nothing.
+- Verification, third bullet: `grep -n "finishes on the version" cli/src/commands/init.ts` returns no hit.
