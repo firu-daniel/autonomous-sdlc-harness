@@ -1,0 +1,29 @@
+# Architecture review — iteration 1
+
+Iteration 0's Must Fix (Task 11, the library as an undeclared mirror of `WORKFLOW_RUN_FILE` / `STATE_ARTIFACT_NAME`) is resolved: Task 11 now declares the mirror on both sides, reads both names from `hr_remote_names_var`, and pins them in `remote-names.test.mjs`. No `## Rejected findings` section is present in the story index.
+
+## Must Fix
+
+1. **Task 7 spells `harness-run.yml` inline in `remote-run.sh` code, beside the declared `WORKFLOW_RUN_FILE` mirror**. The offending file is `task_7_plan.md`, in Work → **Derive, snapshot, start** (the exit-3 comment's *"**Run workflow** on `harness-run.yml`"*) and Work → **Feedback** (`gh run list --workflow harness-run.yml …` and the fallback URL `…/actions/workflows/harness-run.yml?query=branch%3A<branch>`). Rule sources:
+   - `.claude/context/cli.md` → `## How a module in this layer is written` → **One string, one producer**.
+   - `.claude/context/cli.md` → `## What "done" means here`: *"A reviewer holds a change to its module's own header."*
+   - The headers in question. `cli/src/remote/githubActions.ts` says *"every remote-execution name has one owner"*, and its **Shell and YAML mirrors** paragraph says *"a rename here is an edit to each of them"*. `cli/templates/scripts/remote-run.sh`'s header table reads *"MIRRORS OF `cli/src/remote/githubActions.ts` … a rename there is an edit here, byte for byte: `WORKFLOW_RUN_FILE mirrors WORKFLOW_RUN_FILE`"*.
+
+   In `remote-run.sh` today, the name is assigned once (`WORKFLOW_RUN_FILE='harness-run.yml'`). Every code use reads `"$WORKFLOW_RUN_FILE"`: `verb_dispatch`, `verb_pause`, `verb_warm`, `verb_stop` and every `run list --workflow`. Task 7's plan writes the literal into three new code sites of `trigger`: the run lookup's `gh run list` argument vector, the fallback run-list URL, and the dispatch-failed comment. That makes three undeclared copies inside a declared mirror file. A rename in the owner changes the mirror table row and the assignment, and misses these three silently. No test catches it either, because `remote-trigger.test.mjs`'s stub answers any `run list`. Task 11 of this same plan reads the name only from a variable for exactly this reason, so the plan contradicts itself here. Task 7's `**Verification:**` greps for `workflow run` but not for the file name, so nothing in the plan would catch the drift.
+
+   **Fix:** In `task_7_plan.md`, state that `trigger` reads the run workflow's name only from the script's existing `WORKFLOW_RUN_FILE` variable, in the lookup's `run list --workflow`, in the fallback URL and in the dispatch-failed comment. State also that it reaches `gh` only through the script's existing `gh_call` path, the `HARNESS_GH_CLI` mirror the test stub depends on. Then add a `**Verification:**` bullet: `grep -n "harness-run.yml" cli/templates/scripts/remote-run.sh` shows the one assignment, the header mirror table and comment/REPRO lines only, with no new code line in `trigger`.
+
+## Should Fix
+
+1. **Task 10 (and Task 9) leave the watcher's registry-field inventory stale.** This carries over from iteration 0 and is still unaddressed. The offending files are `task_10_plan.md` (Work → **Adopt each candidate**, step 3, and `### Targets`) and `task_9_plan.md` (`### Targets`). Rule source: `.claude/context/cli.md` → `## What "done" means here`, the rule that a header is held to the change.
+   - `cli/templates/scripts/autonomous-watcher.sh`'s header inventory lists every registry field and its writer. Its `execution` entry reads *"`github-actions` on a record launch_remote_run wrote"*.
+   - After Task 9, `hr_remote_record_init` writes that field. After Task 10, `remote-run.sh adopt` is a second writer of it, and it also writes the new field `remote_adopted_at`, which the inventory does not list.
+
+   **Fix:** Add the watcher's registry-field comment block to Task 10's `### Targets`. Add a `remote_adopted_at` entry naming its writer (`remote-run.sh adopt`). Extend the `execution` entry to name `hr_remote_record_init` and the record `adopt` writes. Alternatively, have Task 9 amend the `execution` entry, and Task 10 add the new field.
+
+2. **Task 17 cites `docs/remote-execution.md` from a plugin command without saying it means the harness repository's copy.** This carries over from iteration 0 and is still unaddressed. The offending file is `task_17_plan.md`, Work → **The next action**. Rule sources are `.claude/context/plugin.md` → `## Citation` and `.claude/context/conventions.md` → `## Configuration is the source of truth…`. The command runs in an adopter's checkout, where a bare `docs/remote-execution.md` does not exist. The existing precedent is `plugin/docs/AUTONOMOUS_FLOW.md` → `## The wiring table`, whose *Remote execution* row says *"the harness repository's `docs/remote-execution.md`"*. **Fix:** Word the new step-6 sentence as *the harness repository's* `docs/remote-execution.md` → `## 1. The lifecycle of a remote run`.
+
+## Nice to Have
+
+1. **Task 14 could name the `core/git.ts` helper it reuses.** In `task_14_plan.md`, the `origin/<defaultBranch>`-carries-the-trigger grade should read the ref the way `REMOTE_EXECUTION_CHECK` does, through `pathAtRef` imported from `cli/src/core/git.ts`. That module holds the `git` monopoly (`.claude/context/conventions.md` → `### Where a new responsibility goes`). Naming `pathAtRef` in the Work bullet keeps an implementer from adding a second `git` invocation in `checks.ts`.
+2. **Carried over from iteration 0.** Task 1 changes `forge`'s meaning in the model and the check before Task 19 changes the schema and Task 23 changes the `docs/config.md` row. `.claude/context/conventions.md` → `### The order files are created…` puts the schema first. Consider one sentence in Task 1's **Where this task stops** acknowledging that the four descriptions disagree between Tasks 1 and 19, and why.
