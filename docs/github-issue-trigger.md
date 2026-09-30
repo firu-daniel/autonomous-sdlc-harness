@@ -143,6 +143,13 @@ A `repository_dispatch` has no labeller: the holder of the token that sent it is
 **Applying the trigger label means "run this text as a task".** The issue's title and body may have been written by someone without write access. An `issues` workflow runs with the repository's secrets whoever opened the issue (T2), the trigger job holds `contents: write`, and the run it dispatches holds the credential secrets. So the labeller is vouching for the text, as if they had written the task prompt themselves.
 
 - **The committed prompt is the snapshot at label time.** An edit to the issue afterwards does not reach the run, and the comment says so.
+- **Adopting a run executes its branch on your machine.** `remote-run.sh adopt` creates each mirror with `create-worktree.sh --existing`, which bootstraps it: it runs the adopted branch's own `setup-worktree.sh`, and that branch's `commands.depInstall` and `commands.build`, locally. The branch was written by a run whose task the labeller vouched for, so adopting it trusts that branch as far as running its install and build. Every one of `/autonomous-sdlc-harness:branch-answer`, `-resume`, `-pause` and `-user-review` adopts **every** candidate once before it acts, not only the branch it names. To see the candidates without adopting them, run:
+
+  ```
+  /autonomous-sdlc-harness:branch-status
+  ```
+
+  It lists each candidate as `not adopted` and adopts nothing.
 - **The trigger job references no secret.** It needs only its own token (`contents`, `actions` and `issues` write), so the credential secrets never reach the job that reads the issue text. Event text reaches its shell only through `env:` and the event file, never through a GitHub expression inside `run:`.
 - **A task that edits `.github/workflows/*` cannot push that edit with the job's own token.** This is the existing remote-run limit, not the trigger's: no `permissions:` setting lets `GITHUB_TOKEN` write a workflow file, and the push is refused with ``refusing to allow a GitHub App to create or update workflow … without `workflows` permission`` (S1). Such a task needs a workflow-capable `HARNESS_GIT_TOKEN` ([`remote-execution.md`](remote-execution.md) → `### Every secret and variable`). The trigger itself commits only a task prompt, and a branch whose commits touch no workflow file pushes normally (S1).
 
@@ -170,7 +177,7 @@ The trigger job's push and comment start no other workflow; its `workflow_dispat
 /autonomous-sdlc-harness:branch-user-review <branch>: <review feedback>
 ```
 
-Adopting runs `remote-run.sh adopt`: for each `harness run <branch>` run whose branch is live on `origin`, not protected and unknown to the local registry, it creates the mirror working copy and writes a record with `execution: github-actions`, and from there the run is an ordinary remote record. Until then, `/autonomous-sdlc-harness:branch-status` lists it as `not adopted`, without adopting or syncing. The watcher's tick never adopts, and a relay still needs the local watcher running when you act.
+Adopting runs `remote-run.sh adopt`: for each `harness run <branch>` run whose branch is live on `origin`, not protected and unknown to the local registry, it creates the mirror working copy — bootstrapping it, which runs that branch's install and build locally (§4) — and writes a record with `execution: github-actions`, and from there the run is an ordinary remote record. Until then, `/autonomous-sdlc-harness:branch-status` lists it as `not adopted`, without adopting or syncing. The watcher's tick never adopts, and a relay still needs the local watcher running when you act.
 
 **Without one**, a run is worked from GitHub alone ([`remote-execution.md`](remote-execution.md) → `## 1. The lifecycle of a remote run`).
 

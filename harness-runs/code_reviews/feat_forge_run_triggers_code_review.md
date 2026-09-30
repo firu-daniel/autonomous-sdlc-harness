@@ -38,7 +38,7 @@ Each entry resolves to `harness-runs/code_reviews/feat_forge_run_triggers_code_r
 
 1. [x] **Finding 3** — Tell the five `adopt`-running commands what to do on exit 1 _(layer: plugin)_
 2. [x] **Finding 4** — Correct the watcher header's registry field list for adopted records and `remote_adopted_at` _(layer: cli)_
-3. [ ] **Finding 2** — Disclose that `adopt` runs each adopted branch's bootstrap on the maintainer's machine _(layer: general)_
+3. [x] **Finding 2** — Disclose that `adopt` runs each adopted branch's bootstrap on the maintainer's machine _(layer: general)_
 4. [ ] **Finding 1** — Name the run's `engine` in the GitHub route every job-side notification prints _(layer: cli, general)_
 
 ---
