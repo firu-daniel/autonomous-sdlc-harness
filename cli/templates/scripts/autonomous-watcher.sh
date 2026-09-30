@@ -2069,26 +2069,15 @@ launch_run() {
 # launch_remote_run <branch> <worktree> <log_path> <engine_kind>
 #
 # launch_run's bookkeeping for a remote drop (REMOTE DISPATCH in the header):
-# the same fields written and cleared, plus `execution` and an empty pid, then
+# the same fields written and cleared, plus `execution` and an empty pid — the
+# one list is lib/harness-run-lib.sh's `hr_remote_record_init` — then
 # `remote-run.sh dispatch` in place of the window and the spawn. `running` is
 # written only once the dispatch returned 0, so a record never claims a run
 # GitHub was not asked for.
 launch_remote_run() {
   local branch="$1" worktree="$2" log_path="$3" engine_kind="$4" out rc first
 
-  registry_set "$branch" worktree "$worktree"
-  registry_set "$branch" log_path "$log_path"
-  registry_set "$branch" engine "$engine_kind"
-  registry_set "$branch" execution github-actions
-  registry_set "$branch" started_at "$(date '+%Y-%m-%dT%H:%M:%S')"
-  registry_set "$branch" pid ""
-  registry_set "$branch" remote_dispatched_at ""
-  registry_set "$branch" stall_restarts 0
-  registry_set "$branch" stall_warned ""
-  registry_set "$branch" stall_killing ""
-  registry_set "$branch" paused_by "" usage_resume_at ""
-  registry_set "$branch" resume_kind ""
-  registry_set "$branch" park_loop_cycles 0
+  hr_remote_record_init "$REGISTRY" "$branch" "$worktree" "$log_path" "$engine_kind"
 
   log "dispatching '$branch' (engine=$engine_kind) to GitHub Actions via remote-run.sh (log: $log_path)"
   out="$(bash "$REMOTE_RUN" dispatch "$branch" --engine "$engine_kind" --resume none --chain 0 --repo "$MAIN_REPO" 2>&1)"

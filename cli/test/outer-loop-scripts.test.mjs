@@ -427,6 +427,43 @@ test('the artifact placement commits one path once, skips an identical re-drop a
   );
 });
 
+test('hr_remote_record_init writes a remote record\'s starting fields, leaves status to its caller and resets the counters', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  const registry = join(dir, 'registry.json');
+  const init = 'hr_remote_record_init "$1" feat_x /tmp/wt /tmp/wt.log task';
+  const record = () => JSON.parse(readFileSync(registry, 'utf8')).runs.feat_x;
+  const expected = {
+    worktree: '/tmp/wt',
+    log_path: '/tmp/wt.log',
+    engine: 'task',
+    execution: 'github-actions',
+    pid: '',
+    remote_dispatched_at: '',
+    stall_warned: '',
+    stall_killing: '',
+    paused_by: '',
+    usage_resume_at: '',
+    resume_kind: '',
+    stall_restarts: '0',
+    park_loop_cycles: '0',
+  };
+
+  const first = await libCall(dir, init, [registry]);
+  assert.equal(first.status, 0, `hr_remote_record_init exited ${first.status}: ${first.stderr}`);
+  for (const [key, value] of Object.entries(expected)) assert.equal(record()[key], value, `\`${key}\` was not written as ${JSON.stringify(value)}`);
+  assert.match(record().started_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/, 'started_at is not in the watcher\'s date form');
+  assert.ok(!('status' in record()), 'hr_remote_record_init wrote a status');
+
+  const parked = await libCall(dir, 'hr_registry_set "$1" feat_x status parked stall_restarts 2 park_loop_cycles 3', [registry]);
+  assert.equal(parked.status, 0, `hr_registry_set exited ${parked.status}: ${parked.stderr}`);
+  const again = await libCall(dir, init, [registry]);
+  assert.equal(again.status, 0, `the second hr_remote_record_init exited ${again.status}: ${again.stderr}`);
+  assert.equal(record().status, 'parked', 'a second call changed status');
+  assert.equal(record().stall_restarts, '0', 'a second call did not reset stall_restarts');
+  assert.equal(record().park_loop_cycles, '0', 'a second call did not reset park_loop_cycles');
+});
+
 /** A slashed branch, so a path built with `${branch%/*}` or a basename would show. */
 const REMOTE_BRANCH = 'feat/x';
 

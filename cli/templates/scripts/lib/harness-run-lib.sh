@@ -65,8 +65,9 @@
 #      `.stale.*` move-aside and `.break` mutex while a stale one is broken)
 #      and the temp files
 #      `.registry.*` in the registry's own directory. Written only by
-#      `hr_registry_init`, `hr_registry_set` and the `hr_registry_lock` /
-#      `hr_registry_unlock` pair `hr_registry_set` calls.
+#      `hr_registry_init`, `hr_registry_set`, `hr_remote_record_init` (through
+#      `hr_registry_set`) and the `hr_registry_lock` / `hr_registry_unlock`
+#      pair `hr_registry_set` calls.
 #   3. THE REMOTE STATE BUNDLE writes the files its format lists. Fence: inside
 #      `<root>/<state_dir>/` (resolved through `hr_state_dir`), only
 #      `autonomous_logs/remote_status.json`, `clarifications/<branch>/`,
@@ -85,7 +86,7 @@
 #      `hr_push_landed`.
 #
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
-# `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
+# `hr_remote_record_init`, `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
 # `hr_remote_bundle_write`, `hr_remote_bundle_restore`, `hr_place_artifact`,
 # `hr_commit_placed` or `hr_push_landed` function still gets a library that only reads. The
 # lane's ceilings are the only environment values here that carry policy, because
@@ -1395,6 +1396,23 @@ hr_registry_branches() {
   local file="${1-}"
   hr_registry_init "$file" || :
   jq -r '.runs | keys[]' "$file" 2>/dev/null
+}
+
+# hr_remote_record_init <file> <branch> <worktree> <log_path> <engine>
+# The fields a remote run's record starts with — the one list, shared by the
+# watcher's `launch_remote_run` and `remote-run.sh adopt` — in one write, so no
+# reader sees half of them. `status` is left to the caller, which writes it only
+# once its run exists. 1 when the write failed.
+hr_remote_record_init() {
+  local file="${1-}" branch="${2-}"
+  hr_registry_set "$file" "$branch" \
+    worktree "${3-}" log_path "${4-}" engine "${5-}" \
+    execution github-actions \
+    started_at "$(date '+%Y-%m-%dT%H:%M:%S')" \
+    pid "" remote_dispatched_at "" \
+    stall_restarts 0 stall_warned "" stall_killing "" \
+    paused_by "" usage_resume_at "" \
+    resume_kind "" park_loop_cycles 0
 }
 
 # ---------------------------------------------------------------------------
