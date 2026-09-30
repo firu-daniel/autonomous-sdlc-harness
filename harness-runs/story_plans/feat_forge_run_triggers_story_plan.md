@@ -57,7 +57,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_triggers/task
 14. [x] **Task 14** — Add the `doctor` check `forge`, the key's reporter _(layer: cli)_ _(points: 15)_
 15. [x] **Task 15** — Ask GitHub about the trigger workflow and its label under `doctor --check-github` _(layer: cli)_ _(points: 10)_
 16. [x] **Task 16** — Adopt runs started on GitHub before the four syncing commands sync _(layer: plugin)_ _(points: 10)_
-17. [ ] **Task 17** — Show runs not yet adopted in `/autonomous-sdlc-harness:branch-status` without syncing _(layer: plugin)_ _(points: 5)_
+17. [x] **Task 17** — Show runs not yet adopted in `/autonomous-sdlc-harness:branch-status` without syncing _(layer: plugin)_ _(points: 5)_
 18. [ ] **Task 18** — Restate the forge coupling's status in the plugin's flow documents _(layer: plugin)_ _(points: 8)_
 19. [ ] **Task 19** — Restate `forge` in the schema and in `ARCHITECTURE.md` now that it has a reader and a reporter _(layer: general)_ _(points: 10)_
 20. [ ] **Task 20** — Write `docs/github-issue-trigger.md`, the issue trigger's document of record _(layer: general)_ _(points: 20)_
