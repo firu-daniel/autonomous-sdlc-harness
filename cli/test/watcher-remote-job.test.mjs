@@ -266,6 +266,7 @@ test('none: the launch line, the start and stop records, and the parked detail',
     assert.match(parked[0].detail, new RegExp(`/autonomous-sdlc-harness:branch-answer ${j.branch}`));
     assert.match(parked[0].detail, /Run workflow on harness-run\.yml .*resume answer/);
     assert.match(parked[0].detail, /engine `task`/);
+    assert.match(parked[0].detail, /from the branch `[^`]+` \(Use workflow from\)/);
     j.assertLaneUntouched();
   });
 });

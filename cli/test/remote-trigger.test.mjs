@@ -355,6 +355,7 @@ test('a dispatch that fails after the push exits 3 and comments the manual way o
   assert.equal(posted.length, 1);
   assert.match(posted[0].body, new RegExp(`\`${BRANCH}\` was pushed`));
   assert.match(posted[0].body, /harness-run\.yml.*Run workflow/s);
+  assert.match(posted[0].body, /Use workflow from\* set to/);
   assert.equal(removals(calls).length, 1);
 });
 

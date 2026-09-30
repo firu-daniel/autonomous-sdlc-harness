@@ -1788,7 +1788,10 @@ hr_remote_names_var() {
 # one clause with no trailing period, for the caller to join after its local
 # command. The route names the engine because `harness-run.yml`'s `engine`
 # input defaults to `task`: an empty <engine> prints where to read the run's
-# own instead. A non-empty third argument to the answer route adds the
+# own instead. It names the branch twice, as the form's *Use workflow from*
+# ref and as the `branch` input: a run dispatched from the default branch is
+# listed under that branch, where every `gh run list --branch <branch>`
+# lookup (`sync`, `status`, `restore`) misses it. A non-empty third argument to the answer route adds the
 # park-loop clear. The section cited is `## 1. The lifecycle of a remote run`;
 # renumbering or retitling it is an edit here.
 hr_github_answer_route() {
@@ -1800,8 +1803,8 @@ hr_github_answer_route() {
     eng="engine the run's own (the \`engine\` field of \`$HR_REMOTE_STATUS_FILE\` in its \`$HR_REMOTE_STATE_ARTIFACT\` artifact)"
   fi
   [ -n "${3-}" ] && clear=', park_loop_clear true'
-  printf 'or from GitHub: take the question from the run'"'"'s `%s` artifact, then Run workflow on %s with action run, branch `%s`, %s, resume answer%s and answers `{"<n>": "<your answer>"}` (docs/remote-execution.md, section 1)' \
-    "$HR_REMOTE_STATE_ARTIFACT" "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch" "$eng" "$clear"
+  printf 'or from GitHub: take the question from the run'"'"'s `%s` artifact, then Run workflow on %s from the branch `%s` (Use workflow from), with action run, branch `%s`, %s, resume answer%s and answers `{"<n>": "<your answer>"}` (docs/remote-execution.md, section 1)' \
+    "$HR_REMOTE_STATE_ARTIFACT" "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch" "$branch" "$eng" "$clear"
 }
 
 hr_github_resume_route() {
@@ -1812,8 +1815,8 @@ hr_github_resume_route() {
   else
     eng="engine the run's own (the \`engine\` field of \`$HR_REMOTE_STATUS_FILE\` in its \`$HR_REMOTE_STATE_ARTIFACT\` artifact)"
   fi
-  printf 'or from GitHub: Run workflow on %s with action run, branch `%s`, %s and resume pause (docs/remote-execution.md, section 1)' \
-    "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch" "$eng"
+  printf 'or from GitHub: Run workflow on %s from the branch `%s` (Use workflow from), with action run, branch `%s`, %s and resume pause (docs/remote-execution.md, section 1)' \
+    "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch" "$branch" "$eng"
 }
 
 # hr_remote_planning_paths <branch>

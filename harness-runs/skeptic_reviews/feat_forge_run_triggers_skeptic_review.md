@@ -42,7 +42,7 @@
 
 1. [x] **Finding 2** — Tell an already-wired repository to bring its scripts current before the trigger can run _(layer: general)_
 2. [x] **Finding 3** — Have `sync` take the engine the downloaded bundle names _(layer: cli)_
-3. [ ] **Finding 1** — Name the *Use workflow from* ref in the GitHub route and the trigger's hand-start comment _(layer: cli, general)_
+3. [x] **Finding 1** — Name the *Use workflow from* ref in the GitHub route and the trigger's hand-start comment _(layer: cli, general)_
 
 ---
 

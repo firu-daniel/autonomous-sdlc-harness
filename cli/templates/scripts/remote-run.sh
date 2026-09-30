@@ -2424,7 +2424,7 @@ verb_trigger() {
 $last
 \`\`\`
 
-Start it by hand: **Actions → \`$WORKFLOW_RUN_FILE\` → Run workflow**, with \`action\` \`run\` and \`branch\` \`$branch\`." ;;
+Start it by hand: **Actions → \`$WORKFLOW_RUN_FILE\` → Run workflow**, with *Use workflow from* set to \`$branch\`, \`action\` \`run\` and \`branch\` \`$branch\`." ;;
     *)
       echo "remote-run.sh: trigger: the start of $branch failed (exit $status)" >&2
       trigger_finish "$EXIT_PLACEMENT" "No run started: placing $task_what on the branch \`$branch\` failed:
