@@ -48,3 +48,10 @@
 - `grep -n "^\*\*(xiii)" docs/development.md` prints one line, after the `(xii)` observation's.
 - `grep -n "Thirteen observations" docs/development.md` prints one line, and `grep -n "Twelve observations" docs/development.md` prints nothing.
 - Every command in the new observation sits alone inside a fenced block (read the section), and every verb it names exists: `grep -n "daemon stop\|config set\|--check-github" docs/cli.md` finds each.
+
+- **Deviations from plan:**
+  - Plan asked the Teardown to "unset `forge`"; `config` has no unset verb (`docs/cli.md` → `## 8. \`config\``: `list`, `get`, `set` only), so the Teardown says to remove the key from `harness.config.json` by hand.
+  - The daemon commands are pinned (`npx --yes autonomous-sdlc-harness@<version> daemon stop` / `daemon start`) to match every other command in Gate 12, rather than the unpinned form the plan quoted.
+  - Leg (c) needs the watcher restarted; it uses `daemon start`, a verb `docs/cli.md` → `## 9. \`daemon\`` names.
+  - The intro's first-sentence addition reads "the issue trigger's behaviours live beside it in `docs/github-issue-trigger.md` → `## 7. What is not verified here`", placed in the sentence that cites `docs/remote-execution.md` → `## 6.` (the gate's second sentence after its bold lead).
+  - Verification "every verb it names exists" was checked by grep over `docs/cli.md` (`daemon stop`, `config set`, `--check-github` each present) and by reading `## 8.` and `## 9.`; no command in the procedure was executed, since each needs a real GitHub repository.
