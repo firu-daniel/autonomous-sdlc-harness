@@ -496,6 +496,8 @@ Entries you added to this machine's `.claude/settings.autonomous.json` — typic
 
 **The model.** A job runs exactly the version its workflow names (§4). A release of the harness changes nothing for a repository that has not upgraded, and moving to a new version is a deliberate act.
 
+**Runs already in flight.** An upgrade applies to the runs dropped after it is pushed, and a run already in flight finishes on the version it started with. `remote-run.sh` dispatches every run with `--ref <branch>` (`cli/templates/scripts/remote-run.sh`, the `gh_call workflow run "$WORKFLOW_RUN_FILE" --ref "$branch"` line), and GitHub runs the workflow file as that ref carries it. A run's branch is cut from the default branch when its task is dropped, so it keeps the workflows, and with them the pin, that were current then. That holds through every later dispatch of the run: a self-pause continuation, a `/autonomous-sdlc-harness:branch-resume` and an answered park all clone that run's own tag, whatever the default branch now carries. This is deliberate. The pin exists so that a run never changes plugin version under itself, which is why dispatching from the default branch was not taken.
+
 **The commands**, from the repository root, with `<version>` the version you are moving to. Re-render the two workflows at that version:
 
 ```
@@ -512,7 +514,7 @@ git status --short
 git add .github/workflows/harness-run.yml .github/workflows/harness-resume.yml
 ```
 
-Add any other tracked file `init` changed, because the job's own `init` refuses a changed tracked file. Then:
+Run the `git add` the upgrade's report prints rather than this one: it already names every tracked file the upgrade changed, `.gitignore` included when the run merged new ignore rules into it. Leaving one out fails the next job, because the job's own `init` refuses a changed tracked file. Then:
 
 ```
 git commit -m "Upgrade the harness workflows to <version>"
@@ -538,10 +540,44 @@ The last two are needed for the reason step 3 above gives: the `workflow` scope,
   git diff --no-index .github/workflows/harness-run.yml.bak .github/workflows/harness-run.yml
   ```
 
-  Carry over what you need by hand, and do not commit the `.bak` files.
+  Carry over what you need by hand. The managed `.gitignore` block ignores both workflow `.bak` files, so `git add -A` leaves them out; delete them once compared.
 - **It does not re-render the outer-loop scripts** under `<scriptsDir>`. They stay create-if-absent ([`cli.md`](cli.md) → `## 3. The re-run contract`), so `init --force` remains their route. It also regenerates every other generated file after a `.bak`, including `.claude/CLAUDE.md` and the conventions documents the analyze command filled.
 
-**`doctor` says when you have not moved.** While the run workflow names a version other than the CLI running `doctor`, its `remote-execution` check warns, and names this route and the way to stay. It is a `warn`, so it fails nothing.
+**Moving a run in flight to the new version, on purpose.** Do it only after the upgrade is pushed to the default branch, and only while no job of that run is executing: the run is paused, parked or stopped. A job pushes the branch after every commit and at its end (`cli/templates/scripts/push-branch.sh`), and a push that fails because the remote moved is non-fatal by that script's own header (*"EVERY FAILURE PATH IS NON-FATAL"*). So a commit pushed beside a running job leaves the job's later commits off the remote without stopping it.
+
+**This switches the plugin version mid-run.** The work the run already did was written by the old version and is continued by the new one.
+
+With `<branch>` the run's branch:
+
+```
+git fetch origin
+```
+
+```
+git switch <branch>
+```
+
+The checkout below takes the same paths the upgrade's printed `git add` named and you committed. `.gitignore` is in it because the first upgrade after this release merges new ignore lines into it; append any other path that `git add` named to the same line. Once the branch carries the new workflows, its next job runs the new version's `init` (`cli/templates/github/workflows/harness-run.yml`, step `Generate the job's permission profile`, `init --plugin-root-entries`), which would merge the missing lines into the branch's tracked `.gitignore`. That step's `git status --porcelain --untracked-files=no` test then fails the job on a changed tracked file (`init … changed tracked files`). Checking out only the two workflows therefore fails the run's very next job.
+
+```
+git checkout origin/<default branch> -- .github/workflows/harness-run.yml .github/workflows/harness-resume.yml .gitignore
+```
+
+```
+git commit -m "Move <branch> to the harness workflows at <version>"
+```
+
+```
+gh auth refresh -s workflow
+```
+
+```
+git push origin <branch>
+```
+
+The push needs no `--no-verify`: the `pre-push` hook refuses only protected branches. The next dispatch of that run runs the new version.
+
+**`doctor` says when you have not moved.** While the run workflow names a version other than the CLI running `doctor`, its `remote-execution` check warns, and names this route and the way to stay. The warning also states that a run already in flight keeps its version, and points back to this section. It is a `warn`, so it fails nothing.
 
 **When a job cannot install its version**, the `Install the pinned plugin` step refuses with one of two errors. Each names this route and cites this section.
 
