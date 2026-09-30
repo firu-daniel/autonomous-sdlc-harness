@@ -1,0 +1,143 @@
+# harness-trigger.yml — starts an autonomous-sdlc-harness task run when an
+# issue is labelled, or when a `repository_dispatch` asks for one.
+#
+# WHO WRITES IT. `autonomous-sdlc-harness init`, only when harness.config.json's
+# `forge` is `github` and its `execution.target` is `github-actions`. Written
+# create-if-absent: from then on it is yours to tune, and a re-run of `init`
+# keeps your copy. `init --upgrade-workflows` does NOT re-render it: it carries
+# no version pin and calls the scripts on the default branch, so it shares
+# their re-run contract — `init --force` replaces it after a `.bak`.
+#
+# WHAT IT DOES. One job runs `remote-run.sh trigger`, which does everything
+# else: it authorises the start, derives the branch, places and commits the task
+# prompt, pushes, dispatches harness-run.yml, comments on the issue and removes
+# the label. Every decision lives in that script; this file carries only the
+# events, the permissions and the label filter. The `run-name` below is not
+# harness-run.yml's `harness <action> <branch>` title, so no run lookup
+# `remote-run.sh` makes by that title can match a trigger run.
+#
+# THE EVENTS.
+#   issues, type `labeled` only, never `opened`: labelling an issue at creation
+#     raises `labeled` too, so listening to both would start twice
+#     (docs/github-integration-research.md, T1). The job runs only for the
+#     label the HARNESS_TRIGGER_LABEL variable names (`harness` when unset);
+#     every other label yields a skipped job, which runs no runner and bills
+#     nothing (docs/remote-execution.md, `### Verified in Gate 12 round 2`).
+#   repository_dispatch, type `harness-task`: the entry for any other adapter
+#     (a Jira rule, a script). Its body is
+#       {"event_type": "harness-task",
+#        "client_payload": {"title": …, "body": …, "source": …}}
+#     within GitHub's client_payload limits (10 top-level properties, under
+#     64 KB). Sending one needs a token with Contents write, so its holder is
+#     the authority.
+#
+# WHO CAN START A RUN. `remote-run.sh`'s `trigger` paragraph owns the check —
+# the labeller, bots and HARNESS_TRIGGER_ALLOWED_BOTS, the permission call —
+# and the order its refusals are made in. Nothing here pre-filters on it.
+#
+# THE PERMISSIONS, declared because the default token may be read-only
+# (docs/github-integration-research.md, T2):
+#   contents: write   push the new branch carrying the task prompt
+#   actions: write    dispatch harness-run.yml and look up the run it created
+#   issues: write     comment on the issue and remove the trigger label
+# The job reads no repository secret: it needs only its own token, so the
+# credential secrets never reach the job that reads untrusted issue text.
+#
+# THE CHECKOUT. The default branch, with the job's own token and never
+# HARNESS_GIT_TOKEN: a branch pushed with GITHUB_TOKEN starts no workflow
+# (docs/remote-execution.md, `### Verified in Gate 12 round 3`), so the prompt
+# commit does not run your CI. A full fetch, because pushing a new branch from
+# a shallow clone has not been measured anywhere.
+#
+# NO CONCURRENCY GROUP. A group keeps at most one pending run and cancels an
+# earlier pending one, which would drop a trigger. Two starts that race for one
+# branch name are caught by the refused push of an existing branch, and the
+# refusal is commented on the issue.
+#
+# TWO RULES EVERY EDIT KEEPS.
+#   * Event text and variables reach a shell line only through `env:` and the
+#     event file, never through a GitHub expression inside `run:` — an issue
+#     title is written by whoever opened the issue (script injection).
+#   * Every GitHub expression has a space after its opening braces. `init`
+#     renders its workflows with the CLI's double-brace token renderer, which
+#     reads a letter straight after the braces as a token; this file carries
+#     no token.
+#
+# DECLARED MIRRORS — a rename on either side is an edit to both:
+#   cli/src/remote/githubActions.ts   WORKFLOW_TRIGGER_FILE, HARNESS_RUNNER,
+#                                     HARNESS_REMOTE_STOP, HARNESS_TRIGGER_LABEL,
+#                                     DEFAULT_TRIGGER_LABEL (`harness`),
+#                                     HARNESS_TRIGGER_ALLOWED_BOTS,
+#                                     TRIGGER_DISPATCH_EVENT_TYPE (`harness-task`)
+#   cli/src/config/model.ts           DEFAULTS.scriptsDir
+#
+# ACTION PINS.
+#   actions/checkout@v5
+# The lowest major whose own action.yml declares `runs.using: node24`, per a
+# maintainer's lookups of its action.yml and release notes on
+# 2026-09-29T08:21Z (UTC). That major's release notes require Actions Runner
+# 2.327.1 or newer; a GitHub-hosted runner already has it, and a self-hosted
+# one must run it (docs/remote-execution.md, section 8). A major tag, not a
+# commit sha: it is GitHub's own `actions/` organisation, the owner of the
+# runner and GITHUB_TOKEN this job already trusts, and a major tag takes the
+# action's own patch and security releases where a sha would freeze your copy.
+# Pin a sha in your copy if you want one.
+
+name: harness-trigger
+run-name: harness trigger ${{ github.event.issue.number || github.event.action }}
+
+on:
+  issues:
+    types: [labeled]
+  repository_dispatch:
+    types: [harness-task]
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  trigger:
+    if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.HARNESS_TRIGGER_LABEL || 'harness')
+    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+      HARNESS_REMOTE_SLUG: ${{ github.repository }}
+      HARNESS_TRIGGER_LABEL: ${{ vars.HARNESS_TRIGGER_LABEL }}
+      HARNESS_TRIGGER_ALLOWED_BOTS: ${{ vars.HARNESS_TRIGGER_ALLOWED_BOTS }}
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@v5
+        with:
+          token: ${{ github.token }}
+          fetch-depth: 0
+
+      - name: Check for jq and gh
+        run: |
+          missing=""
+          for tool in jq gh; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::this runner lacks:$missing. Install them on the self-hosted runner, or use a GitHub-hosted one."
+            exit 1
+          fi
+
+      - name: Read the configuration
+        run: |
+          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
+
+      - name: Set the git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Start the run
+        run: bash "$SCRIPTS_DIR/remote-run.sh" trigger
