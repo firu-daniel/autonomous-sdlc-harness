@@ -41,3 +41,7 @@
 - `grep -n "harness-trigger.yml" docs/cli.md` shows the `## 2.` sentence and the `## 3.` row.
 - `grep -n "| \`forge\` |" docs/cli.md` shows one table row.
 - `git grep -n "no-bootstrap\|adopt" -- docs/watcher.md` shows the two amended rows.
+
+**Deviations from plan:**
+
+- The `docs/watcher.md` rows' *who runs it* column was also brought level: `create-worktree.sh` gains `remote-run.sh` as a caller (`start` cuts with `--no-bootstrap`, `adopt` with `--existing`), and `remote-run.sh` gains the trigger job and the `branch-*` commands (for `adopt`, per `plugin/commands/branch-status.md` and its siblings); its registry-writer list gains `adopt`, which writes a record through `hr_remote_record_init`. The plan named only the description column; leaving the others unchanged would have made the rows contradict the scripts' own headers. The *agent-invocable* column is unchanged.
