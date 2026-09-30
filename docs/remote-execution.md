@@ -25,7 +25,7 @@ From a drop to a pushed branch:
 1. **The drop.** The user runs `/autonomous-sdlc-harness:branch-prompt` (or answers `Run it autonomously` to the task offer, which invokes it). The file lands in the main checkout's inbox exactly as it does for a local run.
 2. **Preparation.** The watcher's inbox pass reads `execution.target` from the configuration in effect for that drop, then does what it does locally: creates the working copy, copies the artifact in, commits it and pushes the branch. For a remote run a failed commit or push **blocks** the dispatch, because the job sees only what was pushed; locally it never blocks. The usage hold, the concurrency cap and the machine lane are skipped, since the job gates itself. The kill switch `AUTONOMOUS_STOP` still defers the drop.
 3. **Dispatch.** The watcher calls `remote-run.sh dispatch <branch> --engine <kind>`, which sends `workflow_dispatch` to `harness-run.yml` with `action: run` and `chain: 0`. The registry record is written with `execution: github-actions` and an empty `pid`; a run keeps the execution it started with for its whole life, and every later pass reads the record's field, never the current key. From here the local working copy is a **mirror** that only `remote-run.sh sync` fills.
-4. **The job's setup**, in the order `harness-run.yml` runs it: compute the time budget from `runner.environment`; stop if `HARNESS_REMOTE_STOP` is set; check out the branch; check for `jq` and `gh`; read `scriptsDir` and whether docs retrieval applies from `harness.config.json` at run time; set up Node; install the `claude` CLI when absent; refuse when neither credential secret is set; install the plugin and refuse on a version other than the one the workflow was rendered for; restore the retrieval cache when retrieval applies; generate the job's permission profile with `init --plugin-root-entries` and fail if that changed a tracked file; run `doctor --remote-job` as a preflight, which stops the job on a committed profile, on one whose paths name another checkout, or on a missing plugin-root grant (§4); bootstrap the checkout with `setup-worktree.sh`; and `remote-run.sh restore` the previous job's state bundle.
+4. **The job's setup**, in the order `harness-run.yml` runs it: compute the time budget from `runner.environment`; stop if `HARNESS_REMOTE_STOP` is set; check out the branch; check for `jq` and `gh`; read `scriptsDir` and whether docs retrieval applies from `harness.config.json` at run time; set up Node; install the `claude` CLI when absent; refuse when neither credential secret is set; install the plugin from the marketplace repository's release tag for the workflow's version, and refuse when that tag is absent or the installed version differs (§4); restore the retrieval cache when retrieval applies; generate the job's permission profile with `init --plugin-root-entries` and fail if that changed a tracked file; run `doctor --remote-job` as a preflight, which stops the job on a committed profile, on one whose paths name another checkout, or on a missing plugin-root grant (§4); bootstrap the checkout with `setup-worktree.sh`; and `remote-run.sh restore` the previous job's state bundle.
 5. **The run.** `autonomous-watcher.sh job <branch> <engine> <resume>` launches one session through the watcher's own `spawn_engine` and supervises it (§3). It writes `status.json` with decision `continue` before the launch, so a job killed mid-run still leaves a bundle that says *continue*.
 6. **The end of the job.** Under `always()`: `push-branch.sh`, then `remote-run.sh save` and the upload of the bundle as the Actions artifact `harness-state`. Under `!cancelled()`: `remote-run.sh continue`. Under `cancelled()`: a best-effort `failed` notification.
 7. **The decision.** `continue` reads the bundle's `decision`. `continue` re-dispatches the same workflow with `resume: pause` and `chain` one higher; `wait-poller` enables `harness-resume.yml`; `stop` does nothing, because job mode has already notified.
@@ -208,7 +208,7 @@ When the usage gate pauses a run, the job has two ways to resume it, and chooses
 
 **Retrieval.** The docs-retrieval runtime and model cache under `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/` is empty in every new job. When retrieval applies, the job restores it with `actions/cache/restore`, keyed on the runner's OS and the rendered CLI version, and `init` installs only what is missing. A cache saved on a feature branch cannot be read by its siblings, so a run job never saves one; `remote-run.sh warm` dispatches `action: warm` on GitHub's own default branch, whose job only provisions and saves the cache every branch can restore.
 
-**Plugin install, and its pin.** The job installs the plugin explicitly: `claude plugin marketplace add` with the source named in the committed `.claude/settings.json`, then `claude plugin install`. Neither command's `--help` offers a ref or a version (measured on Claude Code 2.1.282, recorded in `harness-run.yml`'s header), so the pin is a check rather than a request: the job refuses to run, naming both versions, when `claude plugin list --json` reports a version other than the CLI version the workflow was rendered with.
+**Plugin install, and its pin.** The job installs exactly the version its workflow names. Its `Install the pinned plugin` step clones the marketplace repository named in the committed `.claude/settings.json` at the release tag `autonomous-sdlc-harness--v<version>`, where `<version>` is the workflow's `HARNESS_CLI_VERSION`, into `$RUNNER_TEMP/harness-marketplace`. It adds the clone as a directory-sourced marketplace with `claude plugin marketplace add ./harness-marketplace`, then runs `claude plugin install` from it. So the pin is now a request, and the version check after it is its guard. The job refuses before installing when the tag is absent, and refuses to run when `claude plugin list --json` reports a version other than the pinned one. Both refusals name the upgrade route (§7, *Upgrading*). The clone is the plugin's runtime root and the runner's plugin cache is its install root ([`development.md`](development.md) → `## 1. Source types and the plugin root`). `init --plugin-root-entries` grants both roots and `doctor --remote-job` grades both (**The permission profile.** below). Two designs were not taken. A native ref, meaning a ref in the marketplace source or a version on install, has not been measured to exist in the agent-runner CLI (§6). A reusable workflow the adopter calls would pin nothing by itself, because the called workflow still has to install the plugin, and it would move the adopter's tuning into inputs.
 
 **Guards.** Unchanged in the job. The plugin's `PreToolUse` guards load with the installed plugin, and the job's `init` points `core.hooksPath` at the repository's hooks directory, so the pre-push hook refuses a protected branch there as it does locally. `push-branch.sh` still refuses protected branches, and the flow still never merges.
 
@@ -265,12 +265,65 @@ The design rests on these GitHub behaviours, each exposed as a tunable or a degr
 | A GitHub-hosted job is stopped at 6 hours, a self-hosted one at 5 days | The 360- and 7200-minute limits the time budget is computed from | https://docs.github.com/en/actions/reference/limits, retrieved 2026-09-24 (carried). Gate 12 round 2: not measured: the longest job was 30 m 35 s | `HARNESS_STEP_TIMEOUT_MINUTES` and `HARNESS_SELF_PAUSE_AFTER_MINUTES` re-size the budget |
 | `gh workflow enable` succeeds under `GITHUB_TOKEN` with `actions: write` | The poller enabling on a usage pause | None: the prompt's research left it unverified, with no source. Gate 12 round 2: not observed: no job ended on a usage pause | The `paused` notification says auto-resume is unavailable, and the run waits for `/autonomous-sdlc-harness:branch-resume` (§3) |
 | An `actions/upload-artifact` artifact, at the major the run workflow pins (its header's `# ACTION PINS.` block), is listed by `repos/{owner}/{repo}/actions/runs/<id>/artifacts` and downloadable with `gh run download` while its run is still in progress | The poller's post-disable re-check, which counts a still-running job carrying a usage-paused bundle as waiting (§3) | None retrieved: where to check is the `actions/upload-artifact` README, https://github.com/actions/upload-artifact (not retrieved). Gate 12 round 2: not observed: no job ended on a usage pause | The listing shows no in-progress artifact, the re-check finds nothing, and a job that enables the poller while a tick is disabling it can still be left with no poller, exactly as before the re-check existed; it then waits for `/autonomous-sdlc-harness:branch-resume`. Gate 12 observation (v) records which it is |
-| The plugin cannot be pinned by a ref at install | The version check after install rather than a pinned install | Measured, not retrieved: `claude plugin marketplace add --help` and `claude plugin install --help` on Claude Code 2.1.282, recorded in `harness-run.yml`'s header | If a later CLI accepts a ref, the check still holds; a pinned install could replace it |
+| The agent-runner CLI offers no ref and no version when it adds a marketplace or installs a plugin, so the pin is a clone of the release tag | The clone-and-check install (§4), which rests on none of the forms *The plugin-install probe* below lists as not established | Measured, not retrieved: `bash scripts/probe-plugin-cli.sh` on Claude Code 2.1.284, 2026-09-29; the help lines are quoted under *The plugin-install probe* below | A later CLI that accepts a ref or a version could replace the clone, and the version check still holds |
+| At session start the runtime uses the user-scope *directory* marketplace the job added, not the project-scope *github* entry of the same name in the committed `.claude/settings.json` | The session running the plugin version the install step checked (§4) | None: not measured. Gate 12 observation (xii) in [`development.md`](development.md) records which | The session loads the default branch's plugin after the check passed, because the check grades the install, not the session |
+| On a self-hosted runner whose home persists across jobs, an earlier job's marketplace entry, which names a `$RUNNER_TEMP` clone that no longer exists, does not disturb the next job's add and install | The install step on such a runner (§8) | None: not measured. Gate 12 observation (vii), the self-hosted runner, has not run | Not known which of the add and the install then fails; whatever installs, the version check refuses a version other than the pinned one |
 | A cache saved on one branch cannot be restored by a sibling | `remote-run.sh warm` saving the retrieval cache on the default branch | https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching, retrieved 2026-09-24 (carried) | A feature branch could save its own cache; `warm` stays harmless |
 | A `schedule` trigger is a recurring cron on the default branch, at most every 5 minutes, often late and sometimes dropped, and disabled in a public repository after 60 days without activity | The poller's shape, and its tolerance for a late or dropped tick | https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows, retrieved 2026-09-24 (carried) | A late tick delays a resume by one interval; the self-disabling poller is re-enabled by the next pausing job |
 | A `workflow_dispatch` inputs payload is limited to 65,535 characters | `dispatch --resume answer` refusing a larger payload | https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#onworkflow_dispatchinputs, quoted in `remote-run.sh` → `REMOTE_INPUT_PAYLOAD_MAX`; retrieval date not recorded there | A different limit moves the refusal point; the constant is the one place to change |
 | An environment wait timer is fixed per environment and may need a paid plan on a private repository | The decision not to build one (§3) | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment, retrieved 2026-09-24 (carried) | Nothing built depends on it |
 | A `permissions.allow` or `permissions.additionalDirectories` entry in the committed `.claude/settings.json` applies to the job's session | Nothing: the job's grants come from the profile it generates and the watcher's launch flags (§4) | Measured negative, not retrieved: in Gate 12 round 1 Run 3 (run `36428382006`, 2026-09-28) entries there naming a path outside the checkout did not apply in the job. Not measured for an entry that names no path | Nothing changes: the job's grants already come from its own profile and launch flags. Why the Run 3 entries did not apply was not established |
+
+### The plugin-install probe
+
+On 2026-09-29, `bash scripts/probe-plugin-cli.sh`, run from the repository root, printed `2.1.284 (Claude Code)` for `claude --version`. It then ran `claude plugin --help`, `claude plugin marketplace --help`, `claude plugin marketplace add --help` and `claude plugin install --help`, each exiting 0. The relevant lines follow, as printed. First, two entries of `claude plugin --help`'s command list:
+
+```
+  install|i [options] <plugin>         Install a plugin from available
+                                       marketplaces (use plugin@marketplace for
+                                       specific marketplace)
+  tag [options] [path]                 Create a {name}--v{version} git tag for a
+                                       plugin release, validating that
+                                       plugin.json and any enclosing marketplace
+                                       entry agree
+```
+
+Then `claude plugin marketplace add --help`, in full:
+
+```
+Usage: claude plugin marketplace add [options] <source>
+
+Add a marketplace from a URL, path, or GitHub repo
+
+Options:
+  --claudeai           Add the marketplace of this name that claude.ai hosts for
+                       you, by its listed name or its local name (see: claude
+                       plugin marketplace list)
+  -h, --help           Display help for command
+  --scope <scope>      Where to declare the marketplace: user (default),
+                       project, or local
+  --sparse <paths...>  Limit checkout to specific directories via git
+                       sparse-checkout (for monorepos). Example: --sparse
+                       .claude-plugin plugins
+```
+
+Then the usage line of `claude plugin install --help`:
+
+```
+Usage: claude plugin install|i [options] <plugin>
+```
+
+`claude plugin install`'s other options are `--accept-command <sha256>`, `--config <key=value>`, `-h, --help`, `--json`, `--registry <url>`, `-s, --scope <scope>` and `-y, --yes`. None of them names a ref or a version.
+
+**Established.** The release tag's shape. `autonomous-sdlc-harness--v0.1.0` was created by hand: annotated, SSH-signed by the maintainer on 2026-09-09, with the message `autonomous-sdlc-harness 0.1.0`, on the initial commit. This command shows it:
+
+```
+git cat-file -p autonomous-sdlc-harness--v0.1.0
+```
+
+It is the `{name}--v{version}` form the `tag` line above names. Later tags are made by `scripts/tag-release.sh` ([`development.md`](development.md) → `## 7. Releasing`).
+
+**Not established.** Four forms are not established: a `#<ref>` suffix on `marketplace add`'s source, a `ref` in a marketplace source, a version on `plugin install`, and whether the runtime resolves anything from `<plugin>--v<version>` tags. The help above documents none of them, and none was tried. The chosen install rests on none of them.
 
 ### Verified in Gate 12 round 2
 
@@ -307,13 +360,13 @@ The commands below run from the repository root, on the machine the local watche
 npx autonomous-sdlc-harness config set execution.target github-actions
 ```
 
-**2. Write the two workflows.** `init` writes `.github/workflows/harness-run.yml` and `.github/workflows/harness-resume.yml`, each only if absent, with the run workflow pinned to this CLI's version ([`cli.md`](cli.md) → `## 3.`).
+**2. Write the two workflows.** `init` writes `.github/workflows/harness-run.yml` and `.github/workflows/harness-resume.yml`, each only if absent ([`cli.md`](cli.md) → `## 3.`). The run workflow is pinned to this CLI's version, and the job installs exactly that version of the plugin (§4).
 
 ```
 npx autonomous-sdlc-harness init
 ```
 
-The job installs the plugin from the marketplace source named in the committed `.claude/settings.json`, and refuses to start when there is none. When `init` reports that it could not resolve the owner, name the source yourself:
+The job installs the plugin from the marketplace repository named in the committed `.claude/settings.json`, and refuses to start when there is none. That repository must carry the release tags `autonomous-sdlc-harness--v<version>`, which the job clones. A fork named with `--marketplace` must carry its own. When `init` reports that it could not resolve the owner, name the source yourself:
 
 ```
 npx autonomous-sdlc-harness init --marketplace <owner>/<repo>
@@ -353,19 +406,7 @@ git commit -m "Stop tracking the machine-local permission profile"
 git push --no-verify origin <default branch>
 ```
 
-It lands on the default branch because every run's branch is cut from `origin/<default branch>`, so an untrack pushed only to a run branch covers that one run; and it skips the hook for the same reason as the push above. Then re-render the two workflows so the job's preflight is `doctor --remote-job`. Delete them and run a plain `init`, which re-creates each one under create-if-absent at this CLI's version. It also merges this release's ignore rule for the profile, with its comment, into the managed `.gitignore` block, and nothing it already carries changes. Commit `.gitignore` with the workflows: left uncommitted, the job's own `init` makes the same change, and its setup step fails on any changed tracked file. Re-apply any timeout, runner or cron tuning from the deleted copies in git history, then stage all three and commit and push as above. `init --force` would re-render them too, but it also regenerates every other generated file after a `.bak`, including `.claude/CLAUDE.md` and the conventions documents the analyze command filled. The same holds for the action pins: because the workflows are create-if-absent, a copy written before this release keeps its Node 20 action majors until it is re-rendered this way or edited by hand, and each template header's `# ACTION PINS.` block names the current majors.
-
-```
-git rm .github/workflows/harness-run.yml .github/workflows/harness-resume.yml
-```
-
-```
-npx autonomous-sdlc-harness init
-```
-
-```
-git add .github/workflows/harness-run.yml .github/workflows/harness-resume.yml .gitignore
-```
+It lands on the default branch because every run's branch is cut from `origin/<default branch>`, so an untrack pushed only to a run branch covers that one run; and it skips the hook for the same reason as the push above. Then re-render the two workflows at this CLI's version with `init --upgrade-workflows`, so the job's preflight is `doctor --remote-job`. *Upgrading* below gives the commands. The same run also merges this release's ignore rule for the profile, with its comment, into the managed `.gitignore` block, and nothing that block already carries changes. Commit `.gitignore` with the workflows: left uncommitted, the job's own `init` makes the same change, and its setup step fails on any changed tracked file. The same route updates the action pins. Because the workflows are create-if-absent, a copy written before this release keeps its Node 20 action majors until `--upgrade-workflows` re-renders it or it is edited by hand. Each template header's `# ACTION PINS.` block names the current majors.
 
 **4. Set a credential secret.** One of the two is required (§9 says which one billing follows). For a Claude subscription, make a long-lived token, then store it; `gh secret set` asks for the value, so it stays out of your shell history:
 
@@ -443,6 +484,64 @@ The list of record is the `env:` block of the `run` job in `harness-run.yml`, an
 ### Your own allow entries
 
 Entries you added to this machine's `.claude/settings.autonomous.json` — typically to stop a stall on a command the generated profile did not allow — do not reach the job, which generates its own profile for its own checkout (§4). An entry moved into the committed `.claude/settings.json` applies on a person's machine, where the runtime merges that file beside the profile passed with `--settings`. In the job it is not established: Gate 12 round 1 observed entries there naming a path outside the checkout not applying, and an entry naming no path is unmeasured there (§6). The job's plugin-root grants come from its generated profile and its launch flags (§4), not from that file.
+
+### Upgrading
+
+**The model.** A job runs exactly the version its workflow names (§4). A release of the harness changes nothing for a repository that has not upgraded, and moving to a new version is a deliberate act.
+
+**The commands**, from the repository root, with `<version>` the version you are moving to. Re-render the two workflows at that version:
+
+```
+npx autonomous-sdlc-harness@<version> init --upgrade-workflows
+```
+
+It replaces `.github/workflows/harness-run.yml` and `.github/workflows/harness-resume.yml`, each after a `.bak`, and only when the run workflow's `HARNESS_CLI_VERSION` differs from `<version>`. Otherwise it reports that nothing was upgraded. Then see what changed:
+
+```
+git status --short
+```
+
+```
+git add .github/workflows/harness-run.yml .github/workflows/harness-resume.yml
+```
+
+Add any other tracked file `init` changed, because the job's own `init` refuses a changed tracked file. Then:
+
+```
+git commit -m "Upgrade the harness workflows to <version>"
+```
+
+```
+gh auth refresh -s workflow
+```
+
+```
+git push --no-verify origin <default branch>
+```
+
+The last two are needed for the reason step 3 above gives: the `workflow` scope, and the `pre-push` hook.
+
+**What it carries, and what it does not.**
+
+- **It carries** the resume poller's schedule: the `- cron:` lines of your `harness-resume.yml` go into the re-render.
+- **It does not touch** the runner, the timeouts, the stop switch or any other tunable in *Every secret and variable* above. All of them are repository variables.
+- **Any other edit survives only in the `.bak`.** `init` prints one diff command per replaced workflow, for example:
+
+  ```
+  git diff --no-index .github/workflows/harness-run.yml.bak .github/workflows/harness-run.yml
+  ```
+
+  Carry over what you need by hand, and do not commit the `.bak` files.
+- **It does not re-render the outer-loop scripts** under `<scriptsDir>`. They stay create-if-absent ([`cli.md`](cli.md) → `## 3. The re-run contract`), so `init --force` remains their route. It also regenerates every other generated file after a `.bak`, including `.claude/CLAUDE.md` and the conventions documents the analyze command filled.
+
+**`doctor` says when you have not moved.** While the run workflow names a version other than the CLI running `doctor`, its `remote-execution` check warns, and names this route and the way to stay. It is a `warn`, so it fails nothing.
+
+**When a job cannot install its version**, the `Install the pinned plugin` step refuses with one of two errors. Each names this route and cites this section.
+
+- **The source repository has no release tag `autonomous-sdlc-harness--v<version>`.** Either `<version>` was released without its tag, which its maintainer fixes ([`development.md`](development.md) → `## 7. Releasing`), or the source is a fork that does not carry the tag. Upgrading to a version whose tag exists also clears it.
+- **The installed plugin is another version than the one the workflow was rendered for.** The tag was cloned, but what was installed does not match it. Two causes fit: the plugin manifest at the tag names another version, or the install resolved something other than the clone (§6). The job does not run on a plugin it did not pin.
+
+**Why there is no auto-update.** Upgrading means committing the workflows to the default branch. The harness never commits on your behalf, and every protected-branch guard and the `pre-push` hook refuse a push to the default branch.
 
 ---
 

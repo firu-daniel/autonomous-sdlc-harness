@@ -4,7 +4,7 @@
  * **The rule this module exists to enforce: every remote-execution name has one owner, and a copy
  * anywhere else in `cli/src` imports it.** The workflow file names and paths, the template directory,
  * the repository secret and variable names, the two artifact names and the `gh` test-seam variable
- * are declared here once; the generator that writes the workflows and the `doctor` checks that grade
+ * and the rendered CLI-version pin are declared here once; the generator that writes the workflows and the `doctor` checks that grade
  * them read these constants rather than retyping a literal.
  *
  * Nothing here is consulted unless `config/model.ts` → `remoteExecutionApplies(config)` is true:
@@ -25,6 +25,8 @@
  */
 
 import { spawnSync } from 'node:child_process';
+
+import { unquoteYamlScalar } from '../core/yamlScalar.js';
 
 /** The adopter-side directory GitHub reads workflows from. */
 export const WORKFLOWS_DIR = '.github/workflows';
@@ -61,6 +63,30 @@ export const GIT_TOKEN_SECRET = 'HARNESS_GIT_TOKEN';
 
 /** The environment variable naming the binary run as `gh`: `${HARNESS_GH_CLI:-gh}`. */
 export const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';
+
+/**
+ * The job-level `env:` variable carrying the CLI version a rendered `harness-run.yml` is pinned to.
+ * Mirrored in `cli/templates/github/workflows/harness-run.yml`, once per job.
+ */
+export const CLI_VERSION_VARIABLE = 'HARNESS_CLI_VERSION';
+
+const CLI_VERSION_LINE = new RegExp(`^[ \\t]*${CLI_VERSION_VARIABLE}:[ \\t]*(.*?)(?:[ \\t]+#.*)?[ \\t]*$`);
+
+/**
+ * Every version a workflow's text is pinned to: the value of each `<indent>HARNESS_CLI_VERSION: <value>`
+ * line, a trailing ` # comment` and the quotes stripped, distinct and in file order; `[]` when no such
+ * line exists. Pure — the caller reads the file.
+ */
+export function renderedCliVersions(text: string): readonly string[] {
+  const versions: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const match = CLI_VERSION_LINE.exec(line);
+    if (match === null) continue;
+    const value = unquoteYamlScalar(match[1] ?? '');
+    if (value !== '' && !versions.includes(value)) versions.push(value);
+  }
+  return versions;
+}
 
 /** The binary run as `gh` when {@link GH_CLI_VARIABLE} is unset or empty. */
 export const DEFAULT_GH_CLI = 'gh';

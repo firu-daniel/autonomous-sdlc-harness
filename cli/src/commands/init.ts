@@ -97,6 +97,7 @@ import {
   answersNone,
   asQaDriver,
   browserWiringApplies,
+  remoteExecutionApplies,
   CONFIG_FILENAME,
   DEFAULTS,
   isPlaceholder,
@@ -148,7 +149,11 @@ import {
   type AnalyzeOffer,
 } from '../generators/claudeContext.js';
 import { pointHooksPath, writeGitHooks } from '../generators/githooks.js';
-import { writeGithubWorkflows } from '../generators/githubWorkflows.js';
+import {
+  UPGRADE_WORKFLOWS_FLAG,
+  writeGithubWorkflows,
+  type WorkflowUpgrade,
+} from '../generators/githubWorkflows.js';
 import { writeHarnessConfig, type AppDirSource, type HarnessConfigFlags } from '../generators/harnessConfig.js';
 import {
   writeNotifications,
@@ -191,7 +196,9 @@ import {
   API_KEY_SECRET,
   GIT_TOKEN_SECRET,
   OAUTH_TOKEN_SECRET,
+  CLI_VERSION_VARIABLE,
   PUSH_URL_SECRET,
+  REMOTE_STOP_VARIABLE,
   RUNNER_VARIABLE,
 } from '../remote/githubActions.js';
 import { setUpRetrieval } from '../retrieval/setup.js';
@@ -450,6 +457,12 @@ export interface InitFlags extends HarnessConfigFlags, ProjectSettingsFlags {
    * (`generators/permissionProfile.ts`). Writes no config key.
    */
   readonly pluginRootEntries?: boolean;
+  /**
+   * `--upgrade-workflows`. Re-render the two remote-execution workflows at this CLI's version, after a
+   * `.bak`, when `harness-run.yml` was rendered for another (`generators/githubWorkflows.ts`, choice 4).
+   * Writes no config key.
+   */
+  readonly upgradeWorkflows?: boolean;
 }
 
 /**
@@ -494,7 +507,8 @@ type ValueFlagKey = Exclude<keyof InitFlags, SwitchFlagKey>;
  * (`generators/projectSettings.ts`) and `--reference-toolchain-path` reaches the permission profile
  * (`generators/permissionProfile.ts`), so both still take effect on a kept run; and the run-shape
  * rows — `--git-init`, `--reset-config`, the {@link ANALYZE_FLAG} / {@link NO_ANALYZE_FLAG} pair,
- * {@link NOTIFICATIONS_FLAG}, {@link PUSH_URL_FLAG} and {@link PLUGIN_ROOT_ENTRIES_FLAG} — are about
+ * {@link NOTIFICATIONS_FLAG}, {@link PUSH_URL_FLAG}, {@link PLUGIN_ROOT_ENTRIES_FLAG} and
+ * {@link UPGRADE_WORKFLOWS_FLAG} — are about
  * the shape of the run or about artifacts outside the repository's config.
  *
  * **Marked *and* detection-steering** is the sub-case, and {@link InitOption.steersDetection} is how
@@ -561,8 +575,9 @@ function initOptions<T extends readonly InitOption[]>(
  * phase toggles with their own inputs beside them, then the onboarding slug, then the pair that
  * answers the offer to analyze this repository — which decides the wording the generated
  * always-loaded file carries — then the pair that decides whether this account gets told when an
- * unattended run finishes, which is the one pair that writes nothing into the repository at all, and
- * last the switch that adds this machine's plugin-root entries to a freshly generated profile.
+ * unattended run finishes, which is the one pair that writes nothing into the repository at all, then
+ * the switch that adds this machine's plugin-root entries to a freshly generated profile, and last the
+ * switch that re-renders the two remote-execution workflows at this CLI's version.
  *
  * The first two sit together, and ahead of everything else, because they are the rows whose subject
  * is the **shape of the run** rather than a value in the generated file: one settles what `init` is
@@ -726,6 +741,12 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
     flag: PLUGIN_ROOT_ENTRIES_FLAG,
     kind: 'switch',
     summary: "Include this machine's plugin-root permission entries when the profile is generated (for a remote job)",
+  },
+  {
+    key: 'upgradeWorkflows',
+    flag: UPGRADE_WORKFLOWS_FLAG,
+    kind: 'switch',
+    summary: "Re-render the two remote-execution workflows at this CLI's version, after a .bak, when harness-run.yml was rendered for another",
   },
 ] as const);
 
@@ -946,6 +967,7 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
     docsRetrieval: switches.has('docsRetrieval'),
     parity: switches.has('parity'),
     pluginRootEntries: switches.has('pluginRootEntries'),
+    upgradeWorkflows: switches.has('upgradeWorkflows'),
   } as InitFlags;
 }
 
@@ -2291,7 +2313,12 @@ async function run(ctx: CommandContext): Promise<number> {
 
   // After the scripts, which the workflows run, and before the permission profile. Enqueues nothing
   // unless `execution.target` is `github-actions` (`generators/githubWorkflows.ts`).
-  const workflows = writeGithubWorkflows({ repoRoot, config: effective, plan });
+  const workflows = writeGithubWorkflows({ repoRoot, config: effective, plan, upgrade: flags.upgradeWorkflows === true });
+  if (flags.upgradeWorkflows === true && !remoteExecutionApplies(effective)) {
+    warnings.push(
+      `${UPGRADE_WORKFLOWS_FLAG}: there is no workflow to upgrade, because execution.target is not github-actions — nothing under .github/workflows was written.`,
+    );
+  }
 
   const state = writeStateDir({ repoRoot, config: effective, plan });
   notes.push(...state.notes);
@@ -2439,9 +2466,54 @@ async function run(ctx: CommandContext): Promise<number> {
       return result !== undefined && result.effect !== 'kept';
     })
     .map(({ repoPath }) => repoPath);
+  if (workflows.upgrade !== undefined) {
+    const replacedWorkflows = workflows.workflows
+      .filter(({ absolute }) => applied.find((r) => r.path === absolute)?.effect === 'backed-up-and-replaced')
+      .map(({ repoPath }) => repoPath);
+    reportWorkflowUpgrade(ctx, workflows.upgrade, replacedWorkflows, ctx.flags.dryRun);
+  }
   if (freshWorkflows.length > 0) reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun, freshWorkflows);
 
   return EXIT.OK;
+}
+
+/**
+ * What {@link UPGRADE_WORKFLOWS_FLAG} did, printed when the generator returned an upgrade result;
+ * `replacedWorkflows` names, repo-relative, the workflows the plan replaced after a `.bak`. What was
+ * replaced, and when, is the generator's decision (`generators/githubWorkflows.ts`, choice 4); this
+ * only reports it, and leaves the commit-and-push steps to {@link reportGithubSteps}.
+ */
+function reportWorkflowUpgrade(
+  ctx: CommandContext,
+  upgrade: WorkflowUpgrade,
+  replacedWorkflows: readonly string[],
+  dryRun: boolean,
+): void {
+  if (!upgrade.replaced) {
+    ctx.report.info(
+      `${UPGRADE_WORKFLOWS_FLAG}: the workflows are already rendered for ${upgrade.to}, so nothing was upgraded.`,
+    );
+    return;
+  }
+  const command = (line: string): void => ctx.report.info(`   ${line}`);
+  const from =
+    upgrade.renderedFor.length === 0
+      ? `no readable ${CLI_VERSION_VARIABLE} pin`
+      : `${CLI_VERSION_VARIABLE} ${upgrade.renderedFor.join(', ')}`;
+
+  ctx.report.step('workflow upgrade');
+  ctx.report.info(
+    `This run ${dryRun ? 'would re-render' : 're-rendered'} the workflows from ${from} to ${upgrade.to}. Each previous copy ${dryRun ? 'would be' : 'is'} kept beside it as a .bak; compare it with:`,
+  );
+  for (const path of replacedWorkflows) command(`git diff --no-index ${path}.bak ${path}`);
+  ctx.report.info(
+    upgrade.cron === undefined
+      ? "The resume poller's schedule is the template's default; no cron was carried."
+      : `The resume poller's schedule was carried: ${upgrade.cron.join(', ')}.`,
+  );
+  ctx.report.info(
+    `Do not commit the .bak files. The runner (${RUNNER_VARIABLE}), the timeouts and the stop switch (${REMOTE_STOP_VARIABLE}) are repository variables and were not touched.`,
+  );
 }
 
 /**

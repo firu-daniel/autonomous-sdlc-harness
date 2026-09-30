@@ -125,7 +125,7 @@ import {
 import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
-import { readTemplate, workRoot } from '../core/paths.js';
+import { ownManifestString, readTemplate, workRoot } from '../core/paths.js';
 import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
 import { normalizeRepoPathStrict } from '../core/repoPaths.js';
 import { probeWritable } from '../core/writer.js';
@@ -157,6 +157,7 @@ import {
   pushEnvCandidates,
   type PushEnvCandidate,
 } from '../generators/notifications.js';
+import { pinnedCliCommand, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
 import { DOCS_SEARCH_SERVER_SCRIPT_NAME, outerLoopScriptsDir } from '../generators/outerLoopScripts.js';
 import {
   bashScriptRule,
@@ -213,6 +214,7 @@ import {
 import { inspect, readRegistry, registryPath, type EntryState, type InspectedEntry } from '../machine/registry.js';
 import {
   API_KEY_SECRET,
+  CLI_VERSION_VARIABLE,
   DEFAULT_GH_CLI,
   GH_CLI_VARIABLE,
   ghCli,
@@ -220,6 +222,7 @@ import {
   OAUTH_TOKEN_SECRET,
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
+  renderedCliVersions,
   runGh,
   RUNNER_VARIABLE,
   WORKFLOW_RESUME_FILE,
@@ -2351,8 +2354,14 @@ const DAEMON_PATH_CHECK: Check = {
  *
  * **Every finding is reported, and the grade is the worst of them.** Two `fail`s: no
  * `harness-run.yml`, because no remote run can be dispatched; and no `gh`, because the watcher
- * dispatches through it. Three `warn`s: no `harness-resume.yml`, because a usage-paused hosted run then
- * waits for `/autonomous-sdlc-harness:branch-resume`; a `harness-run.yml` that
+ * dispatches through it. Four `warn`s: a `harness-run.yml` pinned (`remote/githubActions.ts` →
+ * {@link renderedCliVersions}) to a version other than this CLI's — never a `fail`, because the job
+ * installs its pin and the adopter may stay on it deliberately; the remedy is
+ * `generators/githubWorkflows.ts` → {@link upgradeWorkflowsCommand}, the alternative `doctor` at the
+ * pin, both prefixed by that module's {@link pinnedCliCommand} so the two cannot name different
+ * packages, and under `--remote-job` the job runs `doctor` at its own pin, so this cannot arise
+ * there. A file with no pin, or unreadable, is a note. No `harness-resume.yml`, because a usage-paused
+ * hosted run then waits for `/autonomous-sdlc-harness:branch-resume`; a `harness-run.yml` that
  * `origin/<defaultBranch>` does not carry, because GitHub dispatches only a workflow its default
  * branch has — the run starts once it is pushed, so nothing is broken here, and its remedy's push
  * skips the hook because the `pre-push` hook `init` wired refuses every push to the default branch
@@ -2421,9 +2430,32 @@ const REMOTE_EXECUTION_CHECK: Check = {
       );
     }
 
+    const version = ownManifestString('version');
+    let pinnedHere = false;
     if (runPresent) {
       const branch = ctx.config.defaultBranch;
-      if (typeof branch !== 'string' || branch.trim() === '') {
+      const branchUsable = typeof branch === 'string' && branch.trim() !== '';
+      let text: string | undefined;
+      try {
+        text = readFileSync(join(root, ...WORKFLOW_RUN_PATH.split('/')), 'utf8');
+      } catch (error) {
+        notes.push(`which version ${WORKFLOW_RUN_PATH} was rendered for is not graded, because it could not be read (${messageOf(error)})`);
+      }
+      const pins = text === undefined ? undefined : renderedCliVersions(text);
+      if (pins !== undefined && pins.length === 0) {
+        notes.push(`which version ${WORKFLOW_RUN_PATH} was rendered for could not be read, because it carries no ${CLI_VERSION_VARIABLE} line`);
+      } else if (pins !== undefined && pins[0] !== undefined && pins.some((pin) => pin !== version)) {
+        const push = branchUsable
+          ? `run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`
+          : 'push them to the default branch';
+        warnings.push(
+          `${WORKFLOW_RUN_PATH} was rendered for ${nameList(pins)} (${CLI_VERSION_VARIABLE}), and this CLI is ${version}; the job installs and runs the version it names, so nothing is broken, and moving is your choice. To move to ${version}: run \`${upgradeWorkflowsCommand(version)}\`, commit ${WORKFLOW_RUN_PATH} and ${WORKFLOW_RESUME_PATH}, then ${push}. To stay on ${nameList(pins)}: run doctor at that version instead, \`${pinnedCliCommand(pins[0])} doctor\``,
+        );
+      } else if (pins !== undefined) {
+        pinnedHere = true;
+      }
+
+      if (!branchUsable) {
         notes.push(`whether GitHub's default branch carries ${WORKFLOW_RUN_PATH} is not graded, because defaultBranch is not a branch name (see the config check)`);
       } else if (!remoteTrackingBranchResolves(root, branch)) {
         notes.push(`whether origin/${branch} carries ${WORKFLOW_RUN_PATH} is not graded, because there is no origin/${branch} (see the remote check)`);
@@ -2439,7 +2471,7 @@ const REMOTE_EXECUTION_CHECK: Check = {
     if (failures.length > 0) return fail(`${on}: ${[...failures, ...warnings].join('; ')}${noted}`);
     if (warnings.length > 0) return warn(`${on}: ${warnings.join('; ')}${noted}`);
     return pass(
-      `${on}: ${WORKFLOW_RUN_PATH} and ${WORKFLOW_RESUME_PATH} are present and ${gh} resolves on PATH${noted}. What this cannot see lives on GitHub — a credential secret (${OAUTH_TOKEN_SECRET} or ${API_KEY_SECRET}), the ${PUSH_URL_SECRET} and ${GIT_TOKEN_SECRET} secrets, and the ${RUNNER_VARIABLE} and ${REMOTE_STOP_VARIABLE} variables; \`${CLI} doctor --check-github\` asks GitHub`,
+      `${on}: ${WORKFLOW_RUN_PATH} and ${WORKFLOW_RESUME_PATH} are present${pinnedHere ? `, ${WORKFLOW_RUN_PATH} is rendered for this CLI's own version, ${version},` : ''} and ${gh} resolves on PATH${noted}. What this cannot see lives on GitHub — a credential secret (${OAUTH_TOKEN_SECRET} or ${API_KEY_SECRET}), the ${PUSH_URL_SECRET} and ${GIT_TOKEN_SECRET} secrets, and the ${RUNNER_VARIABLE} and ${REMOTE_STOP_VARIABLE} variables; \`${CLI} doctor --check-github\` asks GitHub`,
     );
   },
 };
