@@ -1587,13 +1587,13 @@ RESUME_HINT="/autonomous-sdlc-harness:branch-resume"
 continue_redispatch() {
   local status_file="$1" engine_value
   if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
-    notify paused "$branch" "Not re-dispatched: remote stop is set. Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch")."
+    notify paused "$branch" "Not re-dispatched: remote stop is set. Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")."
     return 0
   fi
   remote_branch_stopped "$branch"
   case $? in
     0) echo "remote-run.sh: $branch is stopped ($STOPPED_LINE); not re-dispatched"; return 0 ;;
-    2) notify paused "$branch" "Not re-dispatched: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch")."; return 0 ;;
+    2) notify paused "$branch" "Not re-dispatched: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")."; return 0 ;;
   esac
   if ! max_chain_var; then
     notify failed "$branch" "Not re-dispatched: HARNESS_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer."
@@ -1610,19 +1610,19 @@ continue_redispatch() {
     return 0
   fi
   redispatch "$engine_value" "$NEXT_CHAIN" \
-    || notify paused "$branch" "Re-dispatch failed ($REDISPATCH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch")."
+    || notify paused "$branch" "Re-dispatch failed ($REDISPATCH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "$engine_value")."
 }
 
 continue_wait_poller() {
   remote_branch_stopped "$branch"
   case $? in
     0) echo "remote-run.sh: $branch is stopped ($STOPPED_LINE); the resume poller is not enabled"; return 0 ;;
-    2) notify paused "$branch" "Auto-resume not enabled: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch")."; return 0 ;;
+    2) notify paused "$branch" "Auto-resume not enabled: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")."; return 0 ;;
   esac
   if gh_call workflow enable "$WORKFLOW_RESUME_FILE"; then
     echo "remote-run.sh: enabled $WORKFLOW_RESUME_FILE for $branch"
   else
-    notify paused "$branch" "Auto-resume is unavailable: enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $branch after the usage reset; $(hr_github_resume_route "$branch")."
+    notify paused "$branch" "Auto-resume is unavailable: enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $branch after the usage reset; $(hr_github_resume_route "$branch" "")."
   fi
 }
 
@@ -1846,7 +1846,7 @@ poll_branch() {
   if [ "$failures" -ge "$((10#$POLL_MAX_FAILURES))" ] \
     || [ "$now" -gt "$((10#$at + 10#$POLL_GIVE_UP_MINUTES * 60))" ]; then
     poll_state_put "$branch" "$id" "$failures" 1
-    notify paused "$branch" "The resume poller could not re-dispatch $branch ($REDISPATCH_ERR) after $failures attempts; automatic resume has stopped. Run $RESUME_HINT $branch; $(hr_github_resume_route "$branch")."
+    notify paused "$branch" "The resume poller could not re-dispatch $branch ($REDISPATCH_ERR) after $failures attempts; automatic resume has stopped. Run $RESUME_HINT $branch; $(hr_github_resume_route "$branch" "$engine_value")."
     return 1
   fi
   poll_state_put "$branch" "$id" "$failures" ""
@@ -1903,7 +1903,7 @@ poll_recheck() {
     return 0
   fi
   for b in $POLL_WAITING; do
-    notify paused "$b" "Auto-resume is unavailable: re-enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $b after the usage reset; $(hr_github_resume_route "$b")."
+    notify paused "$b" "Auto-resume is unavailable: re-enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $b after the usage reset; $(hr_github_resume_route "$b" "")."
   done
 }
 

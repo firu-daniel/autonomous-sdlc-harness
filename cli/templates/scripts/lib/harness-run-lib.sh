@@ -1781,27 +1781,39 @@ hr_remote_names_var() {
   HR_REMOTE_STATE_ARTIFACT='harness-state'
 }
 
-# hr_github_answer_route <branch> [park_loop_clear]
-# hr_github_resume_route <branch>
+# hr_github_answer_route <branch> <engine> [park_loop_clear]
+# hr_github_resume_route <branch> <engine>
 #
 # Print the GitHub route for a remote-only reader of a job-side notification,
 # one clause with no trailing period, for the caller to join after its local
-# command. A non-empty second argument to the answer route adds the park-loop
-# clear. The section cited is `## 1. The lifecycle of a remote run`; renumbering
-# or retitling it is an edit here.
+# command. The route names the engine because `harness-run.yml`'s `engine`
+# input defaults to `task`: an empty <engine> prints where to read the run's
+# own instead. A non-empty third argument to the answer route adds the
+# park-loop clear. The section cited is `## 1. The lifecycle of a remote run`;
+# renumbering or retitling it is an edit here.
 hr_github_answer_route() {
-  local branch="${1-}" clear=''
+  local branch="${1-}" engine="${2-}" clear='' eng
   hr_remote_names_var
-  [ -n "${2-}" ] && clear=', park_loop_clear true'
-  printf 'or from GitHub: take the question from the run'"'"'s `%s` artifact, then Run workflow on %s with action run, branch `%s`, resume answer%s and answers `{"<n>": "<your answer>"}` (docs/remote-execution.md, section 1)' \
-    "$HR_REMOTE_STATE_ARTIFACT" "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch" "$clear"
+  if [ -n "$engine" ]; then
+    eng="engine \`$engine\`"
+  else
+    eng="engine the run's own (the \`engine\` field of \`$HR_REMOTE_STATUS_FILE\` in its \`$HR_REMOTE_STATE_ARTIFACT\` artifact)"
+  fi
+  [ -n "${3-}" ] && clear=', park_loop_clear true'
+  printf 'or from GitHub: take the question from the run'"'"'s `%s` artifact, then Run workflow on %s with action run, branch `%s`, %s, resume answer%s and answers `{"<n>": "<your answer>"}` (docs/remote-execution.md, section 1)' \
+    "$HR_REMOTE_STATE_ARTIFACT" "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch" "$eng" "$clear"
 }
 
 hr_github_resume_route() {
-  local branch="${1-}"
+  local branch="${1-}" engine="${2-}" eng
   hr_remote_names_var
-  printf 'or from GitHub: Run workflow on %s with action run, branch `%s` and resume pause (docs/remote-execution.md, section 1)' \
-    "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch"
+  if [ -n "$engine" ]; then
+    eng="engine \`$engine\`"
+  else
+    eng="engine the run's own (the \`engine\` field of \`$HR_REMOTE_STATUS_FILE\` in its \`$HR_REMOTE_STATE_ARTIFACT\` artifact)"
+  fi
+  printf 'or from GitHub: Run workflow on %s with action run, branch `%s`, %s and resume pause (docs/remote-execution.md, section 1)' \
+    "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch" "$eng"
 }
 
 # hr_remote_planning_paths <branch>
