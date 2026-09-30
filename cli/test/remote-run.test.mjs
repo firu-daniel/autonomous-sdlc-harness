@@ -1065,6 +1065,8 @@ test('continue with HARNESS_REMOTE_STOP set sends nothing and notifies paused on
   assert.equal(notes().length, 1);
   assert.equal(notes()[0].event, 'paused');
   assert.match(notes()[0].detail, /remote stop is set/);
+  assert.match(notes()[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(notes()[0].detail, /Run workflow on harness-run\.yml .*resume pause/);
 });
 
 test('continue on wait-poller enables the resume poller and notifies nothing', async (t) => {

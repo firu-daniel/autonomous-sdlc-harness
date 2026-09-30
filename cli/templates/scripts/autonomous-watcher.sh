@@ -2219,7 +2219,7 @@ classify_run_exit() {
       registry_set "$branch" pause_reason "$reason" status paused
       log "run '$branch' paused (PAUSE honored, reason $reason) — rc=$rc"
       if [ "$reason" = "user" ]; then
-        notify paused "$branch" "$log_path" "paused as you asked — run /autonomous-sdlc-harness:branch-resume $branch to continue"
+        notify paused "$branch" "$log_path" "paused as you asked — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch")"
       fi
       return 0
     fi
@@ -2310,7 +2310,7 @@ classify_run_exit() {
         registry_set "$branch" status park_loop
         log "run '$branch' park loop — $cycles consecutive resumes made no progress; not resuming it again (clear: $clar_dir/PARK_LOOP_CLEAR)"
         if [ "$JOB_MODE" = "1" ]; then
-          notify park_loop "$branch" "$log_path" "$cycles no-progress resumes — run /autonomous-sdlc-harness:branch-status $branch to see the question, then clear the park loop"
+          notify park_loop "$branch" "$log_path" "$cycles no-progress resumes — run /autonomous-sdlc-harness:branch-status $branch to see the question, then clear the park loop; $(hr_github_answer_route "$branch" clear)"
         else
           notify park_loop "$branch" "$log_path" "$cycles no-progress resumes — create $clar_dir/PARK_LOOP_CLEAR to clear"
         fi
@@ -2325,7 +2325,7 @@ classify_run_exit() {
     registry_set "$branch" status parked
     log "run '$branch' parked (clarification waiting) — rc=$rc"
     if [ "$JOB_MODE" = "1" ]; then
-      notify parked "$branch" "$log_path" "answer with /autonomous-sdlc-harness:branch-answer $branch"
+      notify parked "$branch" "$log_path" "answer with /autonomous-sdlc-harness:branch-answer $branch; $(hr_github_answer_route "$branch")"
     else
       notify parked "$branch" "$log_path" "See $clar_dir"
     fi
@@ -4306,14 +4306,14 @@ run_job() {
               # run over rather than waiting on nothing.
               decision=wait-poller
               detail="usage limit reached; the in-job usage wait passed its bound (REMOTE_WAIT_MAX_SECS=${REMOTE_WAIT_MAX_SECS}s past the reset) without a resume"
-              notify paused "$branch" "$log_path" "usage limit: the in-job wait passed ${REMOTE_WAIT_MAX_SECS}s after the reset without a resume — run /autonomous-sdlc-harness:branch-resume $branch to continue"
+              notify paused "$branch" "$log_path" "usage limit: the in-job wait passed ${REMOTE_WAIT_MAX_SECS}s after the reset without a resume — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch")"
               break
             fi
             ;;
           *)
             job_auto_resume "$branch" "$worktree" "$log_path" "$state_abs" "an overload self-pause" && continue
             detail="paused itself on API overload; automatic resumes exhausted"
-            notify paused "$branch" "$log_path" "paused itself on API overload — run /autonomous-sdlc-harness:branch-resume $branch to continue"
+            notify paused "$branch" "$log_path" "paused itself on API overload — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch")"
             break
             ;;
         esac

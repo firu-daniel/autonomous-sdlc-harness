@@ -51,7 +51,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_triggers/task
 8. [x] **Task 8** — Extend `remote-run.sh trigger` to a `repository_dispatch` event _(layer: cli)_ _(points: 8)_
 9. [x] **Task 9** — Share a remote run's initial registry record between the watcher and the remote script _(layer: cli)_ _(points: 8)_
 10. [x] **Task 10** — Add `remote-run.sh adopt` and `adopt --list` for runs started on GitHub _(layer: cli)_ _(points: 20)_
-11. [ ] **Task 11** — Name the GitHub route in every job-side notification that names a local command _(layer: cli)_ _(points: 12)_
+11. [x] **Task 11** — Name the GitHub route in every job-side notification that names a local command _(layer: cli)_ _(points: 12)_
 12. [ ] **Task 12** — Ship the `harness-trigger.yml` workflow template _(layer: cli)_ _(points: 15)_
 13. [ ] **Task 13** — Write the trigger workflow from `init` when `forge` is `github` and runs execute on GitHub Actions _(layer: cli)_ _(points: 20)_
 14. [ ] **Task 14** — Add the `doctor` check `forge`, the key's reporter _(layer: cli)_ _(points: 15)_

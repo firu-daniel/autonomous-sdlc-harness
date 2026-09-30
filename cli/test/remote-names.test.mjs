@@ -8,15 +8,17 @@
  */
 
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { PACKAGE_ROOT } from './helpers/fixture.mjs';
 import { forgeTriggerApplies } from '../dist/config/model.js';
 import {
   DEFAULT_TRIGGER_LABEL,
   GH_CLI_VARIABLE,
+  STATE_ARTIFACT_NAME,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_DISPATCH_EVENT_TYPE,
   TRIGGER_LABEL_VARIABLE,
@@ -53,6 +55,12 @@ test('the issue-trigger names keep their literal values', () => {
   assert.equal(DEFAULT_TRIGGER_LABEL, 'harness');
   assert.equal(TRIGGER_ALLOWED_BOTS_VARIABLE, 'HARNESS_TRIGGER_ALLOWED_BOTS');
   assert.equal(TRIGGER_DISPATCH_EVENT_TYPE, 'harness-task');
+});
+
+test('harness-run-lib.sh mirrors WORKFLOW_RUN_FILE and STATE_ARTIFACT_NAME byte for byte', () => {
+  const lib = readFileSync(join(PACKAGE_ROOT, 'templates', 'scripts', 'lib', 'harness-run-lib.sh'), 'utf8');
+  assert.match(lib, new RegExp(`^\\s*HR_REMOTE_WORKFLOW_RUN_FILE='${WORKFLOW_RUN_FILE}'$`, 'm'));
+  assert.match(lib, new RegExp(`^\\s*HR_REMOTE_STATE_ARTIFACT='${STATE_ARTIFACT_NAME}'$`, 'm'));
 });
 
 test('forgeTriggerApplies holds only for github with github-actions execution', () => {

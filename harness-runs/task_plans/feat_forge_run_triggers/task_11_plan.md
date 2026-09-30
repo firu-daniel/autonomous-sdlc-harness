@@ -60,3 +60,8 @@
 - `grep -n "harness-run.yml\|harness-state" cli/templates/scripts/lib/harness-run-lib.sh` prints only comment lines, the header's mirror table and the `THE REMOTE STATE BUNDLE` text, and the two assignments inside `hr_remote_names_var`. No other function spells either name.
 - The mirror is declared on both sides. `grep -n "MIRRORS OF" cli/templates/scripts/lib/harness-run-lib.sh` finds the header table, and `grep -n "mirrors  *WORKFLOW_RUN_FILE\|mirrors  *STATE_ARTIFACT_NAME" cli/templates/scripts/lib/harness-run-lib.sh` finds both rows. `grep -n "harness-run-lib.sh" cli/src/remote/githubActions.ts` finds the library in the header's **Shell and YAML mirrors** paragraph.
 - `grep -n "autonomous-watcher.sh" cli/src/remote/githubActions.ts` shows the amended watcher sentence naming `hr_github_answer_route` and `hr_github_resume_route`. `grep -n "harness-run.yml\|harness-state" cli/templates/scripts/autonomous-watcher.sh` prints no code line.
+
+**Deviations from plan:**
+
+- `watcher-remote-job.test.mjs` had no local-mode case whose run parks, so the local-mode assertion is a new case, *"a local run that parks names neither the job command nor the GitHub route"*, driven through `createWatcherFixture` → `tick` with `HARNESS_JOB_MODE` empty.
+- `hr_github_answer_route`'s `, park_loop_clear true` is placed after `resume answer` and before `and answers …`, so the clause still reads as one list; the plan named the addition without its position.

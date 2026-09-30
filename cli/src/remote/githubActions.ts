@@ -17,9 +17,13 @@
  * **Shell and YAML mirrors that must agree byte for byte.** The compiler cannot reach them, so each
  * declares the mirror in its own header, and a rename here is an edit to each of them:
  * `cli/templates/scripts/remote-run.sh`, `cli/templates/github/workflows/harness-run.yml`,
- * `cli/templates/github/workflows/harness-resume.yml` and
- * `cli/templates/github/workflows/harness-trigger.yml`. `cli/templates/scripts/autonomous-watcher.sh`
- * is not one: it reaches GitHub only through `remote-run.sh` and spells none of these names in code.
+ * `cli/templates/github/workflows/harness-resume.yml`,
+ * `cli/templates/github/workflows/harness-trigger.yml` and
+ * `cli/templates/scripts/lib/harness-run-lib.sh`, which mirrors {@link WORKFLOW_RUN_FILE} and
+ * {@link STATE_ARTIFACT_NAME} for the GitHub route its notification producers print.
+ * `cli/templates/scripts/autonomous-watcher.sh` is not one: it reaches GitHub only through
+ * `remote-run.sh`, spells none of these names in code, and reaches the GitHub-route text only through
+ * the library's `hr_github_answer_route` and `hr_github_resume_route`.
  *
  * **Why {@link GH_CLI_VARIABLE} exists.** Every real route into `gh` reaches the network, which no
  * test may do, so the binary run as `gh` is taken from `${HARNESS_GH_CLI:-gh}` in both this CLI and

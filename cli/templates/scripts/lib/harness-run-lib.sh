@@ -9,7 +9,8 @@
 # state-dir paths) the scripts would otherwise each re-derive slightly
 # differently. It also implements the run registry's reads and writes for the
 # scripts that share that registry, and states the remote state bundle's format
-# with the one writer and restorer every remote-execution consumer shares.
+# with the one writer and restorer every remote-execution consumer shares, and
+# the GitHub route a job-side notification names beside its local command.
 #
 # WHO SOURCES THIS, AND HOW. Every script in the configured `scriptsDir` that
 # needs this library sources it by a path computed from `${BASH_SOURCE[0]}` —
@@ -84,6 +85,11 @@
 #      path's index entry, plus whatever the two caller-named wrappers do.
 #      Written only by `hr_place_artifact`, `hr_commit_placed` and
 #      `hr_push_landed`.
+#
+# MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
+# rename there is an edit here, byte for byte:
+#   HR_REMOTE_WORKFLOW_RUN_FILE mirrors  WORKFLOW_RUN_FILE
+#   HR_REMOTE_STATE_ARTIFACT    mirrors  STATE_ARTIFACT_NAME
 #
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
 # `hr_remote_record_init`, `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
@@ -1688,8 +1694,12 @@ hr_push_landed() {
 # THE REMOTE STATE BUNDLE.
 #
 # THE FORMAT OF RECORD. What a remote job carries across a job boundary and
-# reports back, uploaded as the Actions artifact `harness-state`. Every name
-# below is a variable `hr_remote_names_var` assigns; no function spells one.
+# reports back, uploaded as the Actions artifact `HR_REMOTE_STATE_ARTIFACT`
+# names. Every name below is a variable `hr_remote_names_var` assigns, and it
+# also assigns `HR_REMOTE_WORKFLOW_RUN_FILE`, the run workflow's file name, for
+# the GitHub-route producers `hr_github_answer_route` and
+# `hr_github_resume_route`. Those two are mirrors of the header's table; no
+# function spells either one, or any other name here.
 #
 #   <bundle>/status.json                 the job's record, fixed schema below
 #   <bundle>/clarifications/<branch>/    the whole branch directory, answered/ included
@@ -1767,6 +1777,31 @@ hr_remote_names_var() {
   HR_REMOTE_STATUS_SOURCE="$HR_REMOTE_LOGS_DIR/remote_status.json"
   HR_REMOTE_SUPERSEDED_DIR="$HR_REMOTE_LOGS_DIR/remote_superseded"
   HR_REMOTE_PLANNING_DIR='planning'
+  HR_REMOTE_WORKFLOW_RUN_FILE='harness-run.yml'
+  HR_REMOTE_STATE_ARTIFACT='harness-state'
+}
+
+# hr_github_answer_route <branch> [park_loop_clear]
+# hr_github_resume_route <branch>
+#
+# Print the GitHub route for a remote-only reader of a job-side notification,
+# one clause with no trailing period, for the caller to join after its local
+# command. A non-empty second argument to the answer route adds the park-loop
+# clear. The section cited is `## 1. The lifecycle of a remote run`; renumbering
+# or retitling it is an edit here.
+hr_github_answer_route() {
+  local branch="${1-}" clear=''
+  hr_remote_names_var
+  [ -n "${2-}" ] && clear=', park_loop_clear true'
+  printf 'or from GitHub: take the question from the run'"'"'s `%s` artifact, then Run workflow on %s with action run, branch `%s`, resume answer%s and answers `{"<n>": "<your answer>"}` (docs/remote-execution.md, section 1)' \
+    "$HR_REMOTE_STATE_ARTIFACT" "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch" "$clear"
+}
+
+hr_github_resume_route() {
+  local branch="${1-}"
+  hr_remote_names_var
+  printf 'or from GitHub: Run workflow on %s with action run, branch `%s` and resume pause (docs/remote-execution.md, section 1)' \
+    "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch"
 }
 
 # hr_remote_planning_paths <branch>
