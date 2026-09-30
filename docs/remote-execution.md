@@ -554,8 +554,10 @@ git fetch origin
 ```
 
 ```
-git switch <branch>
+git switch --detach origin/<branch>
 ```
+
+The switch is detached on purpose: `origin/<branch>` is where the run's jobs pushed, the local branch of that name lags it, and the run's mirror working copy may hold that branch checked out, which git refuses to switch a second checkout onto.
 
 The checkout below takes the same paths the upgrade's printed `git add` named and you committed. `.gitignore` is in it because the first upgrade after this release merges new ignore lines into it; append any other path that `git add` named to the same line. Once the branch carries the new workflows, its next job runs the new version's `init` (`cli/templates/github/workflows/harness-run.yml`, step `Generate the job's permission profile`, `init --plugin-root-entries`), which would merge the missing lines into the branch's tracked `.gitignore`. That step's `git status --porcelain --untracked-files=no` test then fails the job on a changed tracked file (`init … changed tracked files`). Checking out only the two workflows therefore fails the run's very next job.
 
@@ -572,10 +574,16 @@ gh auth refresh -s workflow
 ```
 
 ```
-git push origin <branch>
+git push origin HEAD:<branch>
 ```
 
 The push needs no `--no-verify`: the `pre-push` hook refuses only protected branches. The next dispatch of that run runs the new version.
+
+Then return this checkout to where it was:
+
+```
+git switch -
+```
 
 **`doctor` says when you have not moved.** While the run workflow names a version other than the CLI running `doctor`, its `remote-execution` check warns, and names this route and the way to stay. The warning also states that a run already in flight keeps its version, and points back to this section. It is a `warn`, so it fails nothing.
 
