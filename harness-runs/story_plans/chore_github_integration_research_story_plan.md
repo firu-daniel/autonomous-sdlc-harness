@@ -50,7 +50,7 @@ A verdict grades the question's lead where the question carries one (the belief 
 
 Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/chore_github_integration_research/task_<K>_plan.md` file. All tasks are in the catch-all layer, because the only file this branch touches is under `docs/`.
 
-1. [ ] **Task 1** — Create `docs/github-integration-research.md` with its header, method section and the shared entries S1–S6 _(layer: general)_ _(points: 13)_
+1. [x] **Task 1** — Create `docs/github-integration-research.md` with its header, method section and the shared entries S1–S6 _(layer: general)_ _(points: 13)_
 2. [ ] **Task 2** — Write the trigger entries T1–T6 _(layer: general)_ _(points: 10)_
 3. [ ] **Task 3** — Write the control entries C1–C4 _(layer: general)_ _(points: 8)_
 4. [ ] **Task 4** — Record the adoption entries A1–A12 briefly _(layer: general)_ _(points: 8)_
