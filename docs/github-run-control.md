@@ -255,12 +255,12 @@ Triage is refused because commenting and labelling need only the triage role, so
 **Pull requests from forks.** The fork rule is three sentences:
 
 - `harness-control.yml` never uses `pull_request_target`.
-- A review on a fork's pull request never runs: the workflow's `if:` skips it, and its token would be read-only anyway (C2).
+- A review on a fork's pull request runs `harness-control.yml` as the fork's merge commit carries it (C2). The shipped `if:` skips it, but a fork can edit that copy. Such a job gets a read-only token and no secret, so it can reply to nothing and dispatch nothing, but it does run, on any runner label the fork names ([`remote-execution.md`](remote-execution.md) → `## 11. Security`).
 - A comment on a fork's pull request is refused with a reply, because an `issue_comment` job carries the repository's secrets (C2).
 
 A fork can still reach a self-hosted runner through a workflow of its own. [`remote-execution.md`](remote-execution.md) → `## 11. Security` gives that warning and what prevents it.
 
-**Nothing from a pull request's head runs.** The control job checks out the default branch and runs that branch's scripts, never the pull request's merge commit. A round's fixes run later, in `harness-run.yml`, on the run's own branch, as every round does.
+**The scripts are always the default branch's.** The control job checks out the default branch and runs that branch's `remote-run.sh`, never the pull request's. For a review event, though, the workflow file itself is the pull request's merge-commit copy (C2), so a head that edits `harness-control.yml` changes what its own review job runs. A round's fixes run later, in `harness-run.yml`, on the run's own branch, as every round does.
 
 **The harness never triggers itself.** Every comment the harness posts carries the hidden line `<!-- sdlc-harness`, which the workflow's `if:` and `control` both exclude ([§1](#1-commands-in-a-comment)). Each one is posted with the job's own token, and a comment made with that token starts no workflow (S3).
 

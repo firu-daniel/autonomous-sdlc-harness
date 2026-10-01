@@ -53,12 +53,19 @@
 # Every reply is posted as github-actions[bot] and starts no workflow (S3).
 #
 # FORK PULL REQUESTS. Never `pull_request_target`, which would run with this
-# repository's write token on a fork's event (C2). A fork's review is skipped
-# by the prefilter: its token is read-only, so the job could not even reply. A
-# comment on a fork's pull request runs with a write token, and `control`
-# refuses it. The checkout is always the default branch, never the pull
-# request's merge commit a `pull_request_review` job checks out by default, so
-# nothing from a pull request's head is ever run here.
+# repository's write token on a fork's event (C2).
+# A `pull_request_review` job runs this file as the pull request's merge
+# commit carries it (docs/github-integration-research.md, C2), so the `if:`
+# that skips a fork's review is the fork's own copy: a fork that edits it is
+# not skipped, and can name any `runs-on:` label, a self-hosted runner's
+# included. Such a job gets a read-only token and no secret (C2), and fork
+# approval policies apply to it.
+# A comment on a fork's pull request runs with a write token, and `control`
+# refuses it.
+# The checkout is always the default branch, never the pull request's merge
+# commit a `pull_request_review` job checks out by default, so the script that
+# decides is always the default branch's; what a pull request's head can change
+# is this file's own definition for its own review events.
 #
 # NO CONCURRENCY GROUP. A group keeps at most one pending run and cancels an
 # earlier pending one, which would drop a command.
