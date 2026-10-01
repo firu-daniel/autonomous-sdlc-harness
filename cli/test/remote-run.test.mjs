@@ -67,7 +67,9 @@
  * resume dispatch marks an existing remote record `running`, and
  * no other dispatch creates or touches a registry.** **For `review`, the rule is that a round lands
  * on the branch tip only when no run is in flight, named by exact branch equality, committed under
- * its fixed subject and dispatched once — leaving no copy, no local branch and no bootstrap behind**;
+ * its fixed subject and dispatched once — leaving no copy, no local branch and no bootstrap behind —
+ * a branch with no run listed taking one only under `--allow-no-run`, and under `forge` `github` the
+ * round reported on the run's issue after the dispatch**;
  * those cases push to the fixture's bare `origin`, as `remote-start.test.mjs` does. The bootstrap
  * sentinel is a `commands.depInstall` writing a marker outside the copy, because the copy itself is
  * removed before the case can look in it.
@@ -2070,9 +2072,10 @@ const REVIEW_DISPATCH =
 /**
  * A remote fixture adopted on `origin`'s default branch, with `origin/feat_x` one commit ahead
  * carrying `reviews` under the state directory's `user_reviews/`, no local `feat_x`, a review file
- * outside the checkout, and a `commands.depInstall` that would write `bootstrapMarker`.
+ * outside the checkout, and a `commands.depInstall` that would write `bootstrapMarker`. With `forge`,
+ * the configuration says `forge` `github` and `feat_x` carries a task prompt started from issue 7.
  */
-async function reviewFixture(t, reviews = []) {
+async function reviewFixture(t, reviews = [], { forge = false } = {}) {
   const fx = await remoteFixture(t);
   const { dir } = fx;
   const bootstrapMarker = join(dir, STATE_DIR, 'stub', 'bootstrap.marker');
@@ -2080,6 +2083,7 @@ async function reviewFixture(t, reviews = []) {
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.commands.depInstall = `printf x > '${bootstrapMarker}'`;
   delete config.commands.build;
+  if (forge) config.forge = 'github';
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
   const copy = join(dirname(dir), `${config.projectName}-feat_x`);
   t.after(() => rmSync(copy, { recursive: true, force: true }));
@@ -2093,6 +2097,13 @@ async function reviewFixture(t, reviews = []) {
   if (reviews.length > 0) {
     await runGit(dir, ['add', '--', ...reviews.map((name) => `${REVIEW_DIR}/${name}`)]);
     await runGit(dir, ['commit', '--quiet', '-m', 'fixture: earlier rounds']);
+  }
+  if (forge) {
+    mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
+    writeFileSync(join(dir, LINEAGE_PROMPT),
+      '# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/o/r/issues/7 by @alice, who applied the label `sdlc-harness`.\n');
+    await runGit(dir, ['add', '--force', LINEAGE_PROMPT]);
+    await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: feat_x prompt']);
   }
   await runGit(dir, ['push', '--quiet', '--no-verify', 'origin', 'HEAD:refs/heads/feat_x']);
   await runGit(dir, ['checkout', '--quiet', config.defaultBranch]);
@@ -2160,6 +2171,65 @@ test('review of a branch with no earlier round places round 1', async (t) => {
   const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile], finishedEnv(fx, 'failed'));
   assert.equal(result.status, 0, result.stderr);
   assert.equal((await runGit(fx.origin, ['show', `refs/heads/feat_x:${REVIEW_DIR}/feat_x_review.md`])).stdout, REVIEW_BYTES);
+});
+
+test('review --allow-no-run places round 1 on a branch with no harness run on GitHub, and dispatches once', async (t) => {
+  const fx = await reviewFixture(t);
+  const tipBefore = await fx.git(fx.origin, ['rev-parse', 'refs/heads/feat_x']);
+  const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile, '--allow-no-run'], syncEnv({ runs: [] }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await fx.git(fx.origin, ['log', '-1', '--format=%s', 'refs/heads/feat_x']), 'chore: add user review for feat_x');
+  assert.equal(await fx.git(fx.origin, ['diff', '--name-only', tipBefore, 'refs/heads/feat_x']), `${REVIEW_DIR}/feat_x_review.md`);
+  assert.equal((await runGit(fx.origin, ['show', `refs/heads/feat_x:${REVIEW_DIR}/feat_x_review.md`])).stdout, REVIEW_BYTES);
+  assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow run')), [REVIEW_DISPATCH]);
+  assert.equal(existsSync(fx.copy), false, 'the copy was left behind');
+});
+
+test('review with no harness run on GitHub and no --allow-no-run is refused; origin unchanged', async (t) => {
+  const fx = await reviewFixture(t);
+  const before = await fx.originRefs();
+  const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile], syncEnv({ runs: [] }));
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stderr, /no `harness run feat_x` run on GitHub/);
+  assert.equal(await fx.originRefs(), before);
+  assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow run')), []);
+});
+
+test('review under forge github reports the round on the issue, naming the round, source and actor, and labels running', async (t) => {
+  const fx = await reviewFixture(t, [], { forge: true });
+  const source = 'https://github.com/octo/fixture/pull/12#pullrequestreview-1';
+  const result = await remoteRun(fx,
+    ['review', 'feat_x', '--review-file', fx.reviewFile, '--allow-no-run', '--actor', 'alice', '--source', source],
+    {
+      ...syncEnv({ runs: [] }), STUB_REPO_VIEW: '{"nameWithOwner":"o/r"}',
+      GITHUB_REPOSITORY: '', GITHUB_SERVER_URL: '', GITHUB_RUN_ID: '', RUNNER_TEMP: '',
+    });
+  assert.equal(result.status, 0, result.stderr);
+  const sent = joined(fx);
+  const dispatched = sent.indexOf(REVIEW_DISPATCH);
+  assert.ok(dispatched >= 0, sent.join('\n'));
+  const comments = posted(fx).filter((call) => call.args.join(' ').startsWith(COMMENT_ON_7));
+  assert.equal(comments.length, 1, sent.join('\n'));
+  assert.ok(sent.findIndex((line) => line.startsWith(COMMENT_ON_7)) > dispatched, sent.join('\n'));
+  assert.match(comments[0].body, /A user-review round started on `feat_x`/);
+  assert.ok(comments[0].body.includes(`Round 1 from ${source} by @alice`), comments[0].body);
+  assert.match(comments[0].body, /event=round branch=feat_x/);
+  assert.deepEqual(sent.filter((line) => line.startsWith(LABEL_ON_7)), [`${LABEL_ON_7} -f labels[]=sdlc-harness: running`]);
+});
+
+test('review --actor or --source of the wrong shape is a usage error, and either option off review too; nothing pushed or called', async (t) => {
+  const fx = await reviewFixture(t);
+  const before = await fx.originRefs();
+  for (const extra of [['--actor', 'x y'], ['--source', 'http://example.com/r'], ['--source', 'x']]) {
+    const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile, '--allow-no-run', ...extra], syncEnv({ runs: [] }));
+    assert.equal(result.status, 1, `${extra.join(' ')}: ${result.stderr}`);
+  }
+  for (const misplaced of [['--allow-no-run'], ['--source', 'https://example.com/r']]) {
+    const result = await remoteRun(fx, ['pause', 'feat_x', ...misplaced]);
+    assert.equal(result.status, 1, `${misplaced.join(' ')}: ${result.stderr}`);
+  }
+  assert.equal(await fx.originRefs(), before);
+  assert.deepEqual(calls(fx), []);
 });
 
 // ---------------------------------------------------------------------------

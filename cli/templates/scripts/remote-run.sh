@@ -23,7 +23,8 @@
 #   remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]
 #   remote-run.sh run-created-at <run_id> [--repo <root>]
 #   remote-run.sh start <branch> --prompt-file <file> [--repo <root>]
-#   remote-run.sh review <branch> --review-file <file> [--repo <root>]
+#   remote-run.sh review <branch> --review-file <file> [--allow-no-run]
+#                 [--actor <login>] [--source <https-url>] [--repo <root>]
 #   remote-run.sh trigger [--repo <root>]   (its own exit map: its paragraph)
 #   remote-run.sh list [--repo <root>]
 #   remote-run.sh discard <dir> [--repo <root>]
@@ -135,8 +136,9 @@
 # and a review file that is not a readable regular file (2; a relative
 # --review-file resolves against the caller's directory); refuse a branch whose
 # newest `harness run <branch>` run, by `remote_state`, is anything but
-# `completed` or `failed` — none listed, `running`, `parked`, `park_loop` or
-# `paused`, an expired bundle naming its expiry (2); the bundle it reads is
+# `completed` or `failed` — none listed (unless --allow-no-run), `running`,
+# `parked`, `park_loop` or `paused`, an expired bundle naming its expiry (2);
+# the bundle it reads is
 # downloaded to `sync`'s directory, the one write a refusal makes. The copy: the main
 # checkout's remote record's mirror when its `worktree` exists and is on the
 # branch, never removed; otherwise `create-worktree.sh --existing
@@ -151,7 +153,17 @@
 # `hr_user_review_subject`'s `chore: add user review for <branch>` and pushed
 # (each failure 4); the cut copy is removed; then `dispatch --engine
 # user_review --resume none --chain 0`. A remote record, when one exists, is
-# set `running` / `user_review` in one write after the dispatch.
+# set `running` / `user_review` in one write after the dispatch. Then the round
+# is reported as `report round` with the note `Round <round>`, plus ` from
+# <source>` under --source, and ` by @<actor>` under --actor (a login, as for
+# `stop`), else ` from a local session`.
+# --allow-no-run EXISTS FOR A LOCALLY EXECUTED BRANCH REVIEWED ON GITHUB: such
+# a branch has no `harness run <branch>` run, and its round runs through
+# `WORKFLOW_RUN_FILE` because a GitHub-started round always does. Its local
+# record carries no `execution: github-actions`, so it is neither read as the
+# copy nor written; the round runs remotely, and the branch's local working
+# copy falls behind `origin/<branch>` until the maintainer fast-forwards it.
+# The flag widens only the none-listed refusal.
 #
 # `trigger` IS THE GITHUB EVENT ADAPTER, the one step of the trigger
 # workflow's job: event -> (branch, task text) -> `start`. It handles
@@ -248,7 +260,8 @@
 # other state label on that issue and that pull request, each when known; the
 # label is a view, and the run list stays the authority. The state map:
 # `parked` and `park_loop` -> parked, `paused` -> paused, `resumed` -> running,
-# `failed` -> failed, `stopped` -> stopped. `failed` posts nothing when
+# `failed` -> failed, `stopped` -> stopped, `round` (review's) -> running.
+# `failed` posts nothing when
 # `remote_branch_stopped` finds the branch stopped, so a cancelled job never
 # overwrites `stopped`. `completed` (deliver's) and `launched` (the trigger's
 # own comment) are one line each, as is any other event. The comment names the
@@ -584,8 +597,8 @@
 # the prompt committed on `origin/<branch>`, through a working copy and a local
 # branch it removes before it returns; `review`'s are the round committed on
 # `origin/<branch>`, through the record's mirror or a copy and a local branch
-# it removes, the record's `status` / `engine`, and the bundle download
-# directory `sync` uses. A user's chain-0 `dispatch --resume answer|pause`
+# it removes, the record's `status` / `engine`, the bundle download
+# directory `sync` uses, and `report`'s writes for the round. A user's chain-0 `dispatch --resume answer|pause`
 # writes the record's `status`, `resumed_at` and `resume_kind` in one write
 # when the main checkout's registry file exists and holds a record with
 # `execution: github-actions`; any other `dispatch` writes nothing. `trigger` writes its snapshot and comment
@@ -677,6 +690,12 @@
 #                 placing feat_x_review.md, then one `-f engine=user_review`
 #                 dispatch; no copy or local feat_x is left
 #   in flight  the newest run `in_progress` -> 2, nothing pushed or sent
+#   no run     no `harness run feat_x` run listed -> 2, nothing pushed; with
+#              --allow-no-run -> 0, placed and dispatched as `review` above
+#   reported   report's setup, then review ... --actor alice --source
+#              https://github.com/o/r/pull/12#pullrequestreview-1 -> 0; one
+#              comment on 7 naming `Round <n>`, the source and `@alice`, then
+#              `sdlc-harness: running` on 7
 #   fetch      t=$(mktemp -d); bash scripts/remote-run.sh fetch feat_x "$t"
 #              -> 0; prints `state: running` (or, with no run listed,
 #                 `state: none`), every other key present
@@ -914,7 +933,7 @@ usage() {
   echo "       remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]" >&2
   echo "       remote-run.sh run-created-at <run_id> [--repo <root>]" >&2
   echo "       remote-run.sh start <branch> --prompt-file <file> [--repo <root>]" >&2
-  echo "       remote-run.sh review <branch> --review-file <file> [--repo <root>]" >&2
+  echo "       remote-run.sh review <branch> --review-file <file> [--allow-no-run] [--actor <login>] [--source <https-url>] [--repo <root>]" >&2
   echo "       remote-run.sh trigger [--repo <root>]" >&2
   echo "       remote-run.sh list [--repo <root>]" >&2
   echo "       remote-run.sh discard <dir> [--repo <root>]" >&2
@@ -1013,7 +1032,9 @@ discard_dir=""
 discard_base=""
 report_event=""
 report_note=""
-stop_actor=""
+actor_arg=""
+source_arg=""
+allow_no_run=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -1050,9 +1071,16 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || usage "$1 needs a value"
       report_note="$2"; shift 2 ;;
     --actor)
-      [ "$verb" = stop ] || usage "$1 is a stop option"
+      [ "$verb" = stop ] || [ "$verb" = review ] || usage "$1 is a stop or review option"
       [ "$#" -ge 2 ] && [ -n "$2" ] || usage "$1 needs a value"
-      stop_actor="$2"; shift 2 ;;
+      actor_arg="$2"; shift 2 ;;
+    --source)
+      [ "$verb" = review ] || usage "$1 is a review option"
+      [ "$#" -ge 2 ] && [ -n "$2" ] || usage "$1 needs a value"
+      source_arg="$2"; shift 2 ;;
+    --allow-no-run)
+      [ "$verb" = review ] || usage "$1 is a review option"
+      allow_no_run=1; shift ;;
     -*)
       usage "unknown option '$1'" ;;
     *)
@@ -1095,9 +1123,17 @@ if [ "$verb" = report ] && ! [[ "$report_event" =~ ^[a-z][a-z_]*$ ]]; then
   usage "report needs an <event> of lowercase letters and underscores"
 fi
 
-# The actor lands in the stop comment, so it is a login: the trigger's shape.
-if [ -n "$stop_actor" ] && ! [[ "$stop_actor" =~ ^[A-Za-z0-9][A-Za-z0-9-]*(\[bot\])?$ ]]; then
+# The actor lands in the stop or round comment, so it is a login: the trigger's shape.
+if [ -n "$actor_arg" ] && ! [[ "$actor_arg" =~ ^[A-Za-z0-9][A-Za-z0-9-]*(\[bot\])?$ ]]; then
   usage "--actor needs a GitHub login"
+fi
+
+# The source lands in the round comment as a link.
+if [ -n "$source_arg" ]; then
+  case "$source_arg" in
+    https://*) ;;
+    *) usage "--source needs an https:// URL" ;;
+  esac
 fi
 
 if [ "$verb" = pause-requested ]; then
@@ -1376,8 +1412,8 @@ verb_stop() {
       || echo "remote-run.sh: stopped on GitHub, but the local record of $branch could not be updated" >&2
   fi
   echo "remote-run.sh: stopped $branch"
-  if [ -n "$stop_actor" ]; then
-    forge_report stopped "$branch" "Stopped by @$stop_actor."
+  if [ -n "$actor_arg" ]; then
+    forge_report stopped "$branch" "Stopped by @$actor_arg."
   else
     forge_report stopped "$branch" "Stopped from a local \`remote-run.sh stop\`."
   fi
@@ -2659,7 +2695,7 @@ remote_record_exists() {
 }
 
 verb_review() {
-  local protected=0 status=0 reg="" record_wt="" use_mirror=0 state_rel names name round max=0 next rel
+  local protected=0 status=0 reg="" record_wt="" use_mirror=0 state_rel names name round max=0 next rel note
   hr_branch_is_protected "$root" "$branch" || protected=$?
   case "$protected" in
     0)
@@ -2680,8 +2716,10 @@ verb_review() {
   case "$RS_STATE" in
     completed|failed) ;;
     none)
-      echo "remote-run.sh: refused, nothing written: no \`harness run $branch\` run on GitHub" >&2
-      exit "$EXIT_REFUSED" ;;
+      if [ "$allow_no_run" -eq 0 ]; then
+        echo "remote-run.sh: refused, nothing written: no \`harness run $branch\` run on GitHub" >&2
+        exit "$EXIT_REFUSED"
+      fi ;;
     paused)
       if [ "$RS_PAUSE_REASON" = expired ]; then
         echo "remote-run.sh: refused, nothing written: $RS_DETAIL" >&2
@@ -2769,6 +2807,15 @@ NAMES
     hr_registry_set "$reg" "$branch" status running engine user_review \
       || echo "remote-run.sh: dispatched, but the local record of $branch could not be updated" >&2
   fi
+
+  note="Round $round"
+  [ -z "$source_arg" ] || note="$note from $source_arg"
+  if [ -n "$actor_arg" ]; then
+    note="$note by @$actor_arg"
+  else
+    note="$note from a local session"
+  fi
+  forge_report round "$branch" "$note"
 }
 
 # unrecorded_runs — UNRECORDED: one `<branch>\t<url>` line per branch whose
@@ -3445,6 +3492,7 @@ forge_report() {
     resumed) state=running ;;
     failed) state=failed ;;
     stopped) state=stopped ;;
+    round) state=running ;;
     completed)
       echo "remote-run.sh: report: completed is posted by deliver; nothing posted"
       return 0 ;;
@@ -3518,6 +3566,8 @@ forge_report() {
       fi ;;
     stopped)
       text="The harness run on \`$br\` was stopped. Nothing runs on it until a new review or label starts another round or run." ;;
+    round)
+      text="A user-review round started on \`$br\`; a \`completed\` comment follows when the branch is ready for review again." ;;
   esac
 
   OPEN_QUESTIONS=""

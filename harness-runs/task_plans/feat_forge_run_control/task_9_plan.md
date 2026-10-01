@@ -39,3 +39,8 @@ Those exits are unchanged here. The run-in-flight refusal for a branch whose new
 - `npm test -- test/remote-run.test.mjs` from `cli/` passes.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n "_review(_" -- cli/templates/scripts/remote-run.sh` still has one round regex, in `verb_review`: no second round computation.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the permission layer and not run. That bullet rests on `npm test -- test/remote-run.test.mjs` instead: it passed 106 of 106, and every case runs the edited script under bash, which would not run if the file did not parse.
+- `--actor` was already a `stop` option. It now belongs to `stop` and `review`, and its variable is renamed from `stop_actor` to `actor_arg`, so the plan's "validated as in `stop`" uses that one check rather than a second copy of it.
