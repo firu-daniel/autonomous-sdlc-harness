@@ -30,3 +30,7 @@
 - `git grep -n 'What counts as taken' -A12 -- docs/github-issue-trigger.md` shows the run-history reason within the list.
 - The reason phrase quoted in the document is byte-identical to `HR_TAKEN_WHY`'s text in `cli/templates/scripts/lib/harness-run-lib.sh`: `git grep -nF 'a run of the run workflow listed under that name' -- docs/github-issue-trigger.md cli/templates/scripts/lib/harness-run-lib.sh` matches in both files.
 - Every new §7 row has the table's four cells, and every verified row has two.
+
+**Deviations from plan:**
+- The first `**Verification:**` command as written (`git grep -n 'What counts as taken' -A12 -- …`) fails with `fatal: unable to resolve revision: -A12`, because `-A12` after the pattern is read as a revision. Ran `git grep -n -A12 'What counts as taken' -- docs/github-issue-trigger.md` instead; it shows the run-history reason within the list.
+- The §7 lead sentence said "the row moved to *Verified in Gate 12 round 5*"; with a second verified row it now reads "the rows under *Verified in Gate 12 round 5*".

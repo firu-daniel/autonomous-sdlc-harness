@@ -72,7 +72,7 @@ gh variable set HARNESS_TRIGGER_LABEL --body <label>
 gh variable set HARNESS_TRIGGER_ALLOWED_BOTS --body <bot login>,<bot login>
 ```
 
-**6. Check the setup.** `doctor`'s `forge` check reads local evidence only: it warns when remote execution is off, when the trigger workflow is absent, or when `origin/<default branch>` does not carry it. `--check-github` adds whether GitHub knows `harness-trigger.yml` and whether the trigger label exists, and notes every bot `HARNESS_TRIGGER_ALLOWED_BOTS` admits.
+**6. Check the setup.** `doctor`'s `forge` check reads local evidence only: it warns when remote execution is off, when the trigger workflow is absent, or when `origin/<default branch>` does not carry it. `--check-github` adds whether GitHub knows `harness-trigger.yml` and whether the trigger label exists, and notes every bot `HARNESS_TRIGGER_ALLOWED_BOTS` admits. Both answers appear in the `remote-github` check's report whatever else it reports, `pass`, `warn` or `fail`.
 
 ```
 npx autonomous-sdlc-harness doctor --check-github
@@ -95,7 +95,7 @@ The trigger job runs on the runner `HARNESS_RUNNER` names, like the run job, and
    6. the labeller is a `User` whose repository permission is not `admin` or `write`, or whose permission could not be read (§3).
 4. **The branch and the snapshot.** The job fetches the default branch, derives the branch name from the issue's title (§2), and writes the task prompt: `# <title>`, the body as it is at this moment, and a provenance line naming the issue, the labeller, the label and the time. A name that cannot be derived, or whose every suffix is taken, is a refusal.
 5. **`start`.** `remote-run.sh start <branch> --prompt-file <file>` cuts the branch from `origin/<default branch>`, places the prompt at `<stateDir>/task_prompts/<branch>_task_prompt.md`, commits it as `chore: add task prompt for <branch>` and pushes it, through the same run-library calls the local watcher's inbox pass makes. The working copy and its local branch are removed once the push lands, and on any failure after the cut, so a self-hosted runner accumulates nothing; a copy or branch that existed before the cut is left alone. Then it sends `harness-run.yml`'s `workflow_dispatch` with `action: run`, `engine: task`, `resume: none` and `chain: 0`. Nothing downstream can tell where the task came from.
-6. **The comment and the label.** The job looks up the `harness run <branch>` run it dispatched, and comments the branch and that run's URL — or, if the lookup finds nothing, the URL of the branch's filtered run list. Every comment, a refusal's included, is followed by removing the trigger label, so re-applying it is a deliberate act; re-applied on the same issue, it starts another run on the next indexed branch. The comment and the removal are the only writes the trigger makes to the issue.
+6. **The comment and the label.** The job looks up the `harness run <branch>` run whose head commit (`headSha`) is the one `start` pushed, at most `TRIGGER_RUN_LOOKUP_TRIES` times, and comments the branch and that run's URL — or, if the lookup finds nothing, the URL of the branch's filtered run list. A run of an earlier branch of the same name is never named. Every comment, a refusal's included, is followed by removing the trigger label, so re-applying it is a deliberate act; re-applied on the same issue, it starts another run on the next indexed branch. The comment and the removal are the only writes the trigger makes to the issue.
 7. **From here it is the run a local drop starts** ([`remote-execution.md`](remote-execution.md) → `## 1. The lifecycle of a remote run`, from step 4): the same workflow, inputs, supervision and notifications, ending in a pushed branch ready for review. Nothing on your machine takes part.
 
 **The adapter shape is *event → (branch, task text) → placement → dispatch*.** `trigger` is the event adapter: it turns a GitHub event into a branch and a task text. `start` is the platform-neutral half, and is where any later adapter plugs in; a Jira rule already reaches it through `repository_dispatch` without touching it (§6). The workflow declares no `concurrency` group, because a group keeps at most one pending run and cancels an earlier pending one, which would drop a trigger (§7). Two starts racing for one name are caught by the refused push of an existing branch, and that refusal is commented.
@@ -125,9 +125,10 @@ The name is derived from the issue title by a fixed rule, with no model call and
   - *a run's artifacts on the default branch*: a directory named exactly the name, or a file `<name>_task_prompt.md`, `<name>_story_plan.md` or `<name>_docs.md`, under `<stateDir>` on `origin/<default branch>`. A merged and deleted branch leaves them there, and a reused name would collide with them;
   - *a protected branch*: `protectedBranches` with `defaultBranch`, which no run ever works on. A title of `Main` derives `main_2`;
   - *a branch on `origin`*, compared case-insensitively, since two refs differing only in case cannot coexist on a case-insensitive filesystem (T5);
-  - *a local branch*, and *a run-registry record* when the caller names a registry. The rule is written for any caller; the trigger job's fresh checkout holds no run branch and names no registry, so for it these two never fire.
+  - *a local branch*, and *a run-registry record* when the caller names a registry. The rule is written for any caller; the trigger job's fresh checkout holds no run branch and names no registry, so for it these two never fire;
+  - *a run of the run workflow listed under that name*, when the caller passes `gh`, as the trigger does: GitHub is asked once per candidate whether any `harness-run.yml` run is listed under it. An abandoned, unmerged branch leaves no artifact on the default branch, yet its runs and their state bundles stay listed under its name for the artifact retention, and a reused name would inherit them ([`development.md`](development.md) → Gate 12 → Round 5, finding 1).
 
-  A name that cannot be judged, because a listing failed, is a refusal, never a guess.
+  A name that cannot be judged, because a listing failed, a candidate's run history included, is a refusal, never a guess.
 - **The inbox round-trip.** The derived name must route back to itself through the inbox filename patterns (`<name>_task_prompt.md`, `<name>_review.md`, `<name>_review_2.md`, `<name>_docs.md`), so no derived name makes those patterns ambiguous. A name that does not is replaced by the fallback once.
 
 `/autonomous-sdlc-harness:branch-prompt` keeps its confirmed, model-deduced name; this rule does not change it.
@@ -215,7 +216,7 @@ That token is a GitHub write credential held outside GitHub, and whoever can edi
 
 ## 7. What is not verified here
 
-Every automated case drives a `gh` stub. Gate 12 round 5 (2026-10-01, CLI 0.5.0) observed the row moved to *Verified in Gate 12 round 5* below against a real repository; none of the others has been.
+Every automated case drives a `gh` stub. Gate 12 round 5 (2026-10-01, CLI 0.5.0) observed the rows under *Verified in Gate 12 round 5* below against a real repository; none of the others has been.
 
 | Behaviour | What rests on it | Source | If it is wrong |
 |---|---|---|---|
@@ -224,13 +225,15 @@ Every automated case drives a `gh` stub. Gate 12 round 5 (2026-10-01, CLI 0.5.0)
 | A label an issue form adds at creation raises `labeled`, and with which `sender` | The advice to keep the trigger label out of issue forms (§3) | Not established (T1) | The permission check still refuses a sender without write access |
 | A `concurrency` group keeps at most one pending run and cancels an earlier pending one | The decision to declare none (§1) | GitHub's documented behaviour, not retrieved in this branch | Nothing built depends on it: the workflow has no group |
 | A Jira rule's **Send web request** reaches `repository_dispatch` end to end | §6's Jira route | GitHub side documented, Jira side documented in parts, the chain untested (T6) | The route is documentation only; nothing ships for it |
+| A `workflow_dispatch` run's `headSha` in `gh run list` is the commit the dispatched ref pointed at when it was dispatched | The comment's run lookup (§1 step 6) | Not retrieved in this branch, because unattended runs have no web access; Gate 12 (xiii) leg (d) in [`development.md`](development.md) records it | No run matches, so the comment names the branch's filtered run list rather than the run; it never names another lineage's run |
 
 
 ### Verified in Gate 12 round 5
 
 | Behaviour | Observed |
 |---|---|
-| The dispatched run appears in `gh run list` within the trigger's lookup bound (`TRIGGER_RUN_LOOKUP_TRIES`) | For a branch with no earlier runs: issue #7's comment named run `36835744979`, the `harness run feat_invoices_2` the trigger dispatched. For a branch name with earlier runs the lookup named an older run instead, a defect recorded in [`development.md`](development.md) → Gate 12 → Round 5, finding 1 |
+| The dispatched run appears in `gh run list` within the trigger's lookup bound (`TRIGGER_RUN_LOOKUP_TRIES`) | For a branch with no earlier runs: issue #7's comment named run `36835744979`, the `harness run feat_invoices_2` the trigger dispatched. For a branch name with earlier runs the lookup named an older run instead, a defect recorded in [`development.md`](development.md) → Gate 12 → Round 5, finding 1; `fix_forge_trigger_run_lineage` fixed it by matching the run's `headSha`, and the fix is not yet re-observed on GitHub |
+| Runs of a deleted branch stay listed under its name by `gh run list --branch` | `restore` on a new `feat_invoices` found run `36569531374` of the deleted `feat_invoices` of rounds 3 and 4 ([`development.md`](development.md) → Gate 12 → Round 5, finding 1). The run-history reason in §2's **What counts as taken** rests on this observation |
 
 ---
 
