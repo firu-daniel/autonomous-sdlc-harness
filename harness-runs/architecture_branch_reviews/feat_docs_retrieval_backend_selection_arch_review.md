@@ -8,7 +8,7 @@ Headline: the layering holds. Every new file sits in the layer and area its kind
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Declare the shell mirrors of `retrievalApplies` and `DEFAULT_RETRIEVAL_BACKEND` in `config/model.ts` _(layer: cli)_
+1. [x] **Finding 1** — Declare the shell mirrors of `retrievalApplies` and `DEFAULT_RETRIEVAL_BACKEND` in `config/model.ts` _(layer: cli)_
 2. [ ] **Finding 2** — Declare `test_launcher_e2e.py`'s exit-3 copy among `pythonBackend.ts`'s mirrors _(layer: cli)_
 3. [ ] **Finding 3** — Throw the `self-check` invariant breach through `internal()`, not `new Error` _(layer: cli)_
 

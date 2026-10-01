@@ -513,6 +513,10 @@ export type HarnessRetrievalBackend = (typeof RETRIEVAL_BACKENDS)[number];
 /**
  * The schema's `docs.retrievalBackend` `default`. Deliberately not in {@link DEFAULTS}: no generator
  * writes the key, so `init`'s generated config stays byte-identical whatever this holds.
+ *
+ * Its shell mirrors are `hr_docs_retrieval_backend`'s absent-key answer in
+ * `cli/templates/scripts/lib/harness-run-lib.sh` and the `backend=typescript` seed in
+ * `cli/templates/scripts/docs-search-server.sh`; change all three together.
  */
 export const DEFAULT_RETRIEVAL_BACKEND: HarnessRetrievalBackend = 'typescript';
 
@@ -559,10 +563,13 @@ export function browserWiringApplies(config: HarnessConfig): boolean {
  * Does this config call for the docs-retrieval wiring — the search server, its permission-profile
  * entries, its ignore rules, `init`'s setup step, the `docs` verbs and `doctor`'s checks?
  *
- * **Declared once, here, because every one of those consumers has to agree.** A copy of this
- * predicate in one of them that drifted would register a server the permission profile never starts,
- * or start one nothing registers — and nothing checks two spellings of the config question against
- * each other, so there is only ever one. Import it; do not re-spell it.
+ * **Declared once, here, because every one of those consumers has to agree** — and, as the shell
+ * mirror `hr_docs_retrieval_applies` in `cli/templates/scripts/lib/harness-run-lib.sh`, the
+ * `docs-search-server.sh` launcher. A copy in one of them that drifted would register a server the
+ * permission profile never starts, or start one nothing registers; a drifted shell mirror would start
+ * a backend `init` and `doctor` never prepared or graded. Nothing checks the spellings against each
+ * other: change the predicate there and here together; import it everywhere else, and do not
+ * re-spell it.
  *
  * Both conditions are needed, and the phase test is not redundant with the structural check that
  * grades `docs.retrieval: true` without `phases.docs` an error: `config/io.ts` → `loadConfig` still
