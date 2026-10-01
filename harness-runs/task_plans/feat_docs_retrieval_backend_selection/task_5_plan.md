@@ -59,3 +59,9 @@ All three are graded from **one** run of the package's own `harness-docs-retriev
 - `git grep -n "harness-docs-retrieval\|fetch-models" -- cli/src/doctor/checks.ts` matches doc comments only: every message names the command and sub-command through Task 2's constants.
 - No password reaches a check's text: the `index` remedy is built from the URL's host, port and database alone.
 - Run the compiled `doctor` once by hand against a throwaway retrieval-on fixture under the system temp directory, never this checkout, with `docs.retrievalBackend: "python"` and no `harness-docs-retrieval` on `PATH`. Confirm the three `retrieval-python-*` lines fail as stated and the three TypeScript lines pass not applicable. Every state is asserted behaviourally by Task 6, which drives the same compiled `doctor` end to end.
+
+**Deviations from plan:**
+
+- The `answered` outcome also carries `databaseUrl` (the `pythonDatabaseUrl` answer the child ran with), so `retrieval-python-index`'s remedy names the URL that was actually used rather than re-reading `.mcp.json`; `pythonSelfCheck` takes the narrowed `repoRoot` as a second argument.
+- The `unresolved` failure also prints the searched `PATH` (the `launcherSearchPath` result), so the operator sees where the launcher looks.
+- The manual compiled-`doctor` run was executed through `bash scripts/scratch-run.sh harness-runs/scratch/task5_doctor_probe.mjs cli/dist/cli.js` (throwaway fixture under the system temp directory, `PATH=/usr/bin:/bin`): an inline shell one-liner was refused by the permission layer. Result: python backend — three `retrieval-python-*` FAIL as stated, three TypeScript checks PASS with `TYPESCRIPT_NOT_SELECTED`; default backend — three `retrieval-python-*` PASS with `PYTHON_NOT_SELECTED`.

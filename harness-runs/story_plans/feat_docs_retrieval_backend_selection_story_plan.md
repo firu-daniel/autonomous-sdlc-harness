@@ -36,7 +36,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_docs_retrieval_backend_
 2. [x] **Task 2** — Add `cli/src/retrieval/pythonBackend.ts`, the one owner of the Python backend's names, default URL and `self-check` parser _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Add the run library's `docs.retrievalBackend` reader and retrieval gate, `hr_docs_retrieval_backend` / `hr_docs_retrieval_applies` _(layer: cli)_ _(points: 12)_
 4. [x] **Task 4** — Route `docs-search-server.sh` on the key, with the new exit `3` _(layer: cli)_ _(points: 20)_
-5. [ ] **Task 5** — Add the three `retrieval-python-*` doctor checks and make the TypeScript three not applicable under the Python backend _(layer: cli)_ _(points: 20)_
+5. [x] **Task 5** — Add the three `retrieval-python-*` doctor checks and make the TypeScript three not applicable under the Python backend _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 6** — Test the six retrieval doctor checks in every state, and the key-absent report _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — Note the Python backend in `init`'s retrieval setup, and assert the key-absent install is unchanged _(layer: cli)_ _(points: 10)_
 8. [ ] **Task 8** — Add the `docs.retrievalBackend` schema property and its negative fixture _(layer: general)_ _(points: 10)_
