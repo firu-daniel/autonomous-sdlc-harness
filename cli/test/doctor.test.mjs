@@ -6090,7 +6090,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
     assert.ok(line?.includes('Allow GitHub Actions to create and approve pull requests is off and HARNESS_GIT_TOKEN is not a repository secret'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('Settings → Actions → General → Workflow permissions'), line);
+    assert.ok(line.includes('Settings -> Actions -> General -> Workflow permissions'), line);
     assert.ok(line.includes('`gh secret set HARNESS_GIT_TOKEN`'), line);
   });
 

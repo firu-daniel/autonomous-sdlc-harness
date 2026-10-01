@@ -14,7 +14,8 @@
  * execution on. The issue-trigger names (`WORKFLOW_TRIGGER_*`, `TRIGGER_*`, `DEFAULT_TRIGGER_LABEL`,
  * `LEGACY_TRIGGER_LABEL`)
  * and the run-control names (`WORKFLOW_CONTROL_*`, `COMMAND_*`, `COMMENT_MARKER`,
- * `REVIEW_ROUND_STATE`, `STATE_LABEL_PREFIX`, `RUN_STATES`, `STATE_LABELS`) are gated tighter
+ * `REVIEW_ROUND_STATE`, `STATE_LABEL_PREFIX`, `RUN_STATES`, `STATE_LABELS`, `PR_CREATE_SETTING`,
+ * `PR_CREATE_SETTING_PATH`) are gated tighter
  * still: they are consulted only where `forgeTriggerApplies(config)` is true.
  *
  * **Shell and YAML mirrors that must agree byte for byte.** The compiler cannot reach them, so each
@@ -153,6 +154,11 @@ export const API_KEY_SECRET = 'ANTHROPIC_API_KEY';
 
 export const PUSH_URL_SECRET = 'HARNESS_PUSH_URL';
 export const GIT_TOKEN_SECRET = 'HARNESS_GIT_TOKEN';
+
+/** GitHub's repository setting that lets a workflow's own token open a pull request; off by default. */
+export const PR_CREATE_SETTING = 'Allow GitHub Actions to create and approve pull requests';
+/** Where an adopter finds {@link PR_CREATE_SETTING} in the repository's settings. */
+export const PR_CREATE_SETTING_PATH = 'Settings -> Actions -> General -> Workflow permissions';
 
 /** The environment variable naming the binary run as `gh`: `${HARNESS_GH_CLI:-gh}`. */
 export const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';

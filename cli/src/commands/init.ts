@@ -198,6 +198,8 @@ import {
   GIT_TOKEN_SECRET,
   OAUTH_TOKEN_SECRET,
   CLI_VERSION_VARIABLE,
+  PR_CREATE_SETTING,
+  PR_CREATE_SETTING_PATH,
   COMMAND_HANDLE,
   COMMAND_VERBS,
   DEFAULT_TRIGGER_LABEL,
@@ -2637,7 +2639,7 @@ function reportGithubSteps(
     ctx.report.info('');
     step += 1;
     ctx.report.info(
-      `${step}. A completed run opens a draft pull request with the job's token only once "Allow GitHub Actions to create and approve pull requests" is switched on under Settings -> Actions -> General -> Workflow permissions: switch it on, or set ${GIT_TOKEN_SECRET}, which opens the pull request so the repository's CI runs on it without an approval click. With ${GIT_TOKEN_SECRET} set, the pull request's author is the token's owner, who cannot request changes on it, so a solo maintainer uses a token of a machine account or starts review rounds locally with ${USER_REVIEW_COMMAND}.`,
+      `${step}. A completed run opens a draft pull request with the job's token only once "${PR_CREATE_SETTING}" is switched on under ${PR_CREATE_SETTING_PATH}: switch it on, or set ${GIT_TOKEN_SECRET}, which opens the pull request so the repository's CI runs on it without an approval click. With ${GIT_TOKEN_SECRET} set, the pull request's author is the token's owner, who cannot request changes on it, so a solo maintainer uses a token of a machine account or starts review rounds locally with ${USER_REVIEW_COMMAND}.`,
     );
     ctx.report.info(
       `   On a run's issue or pull request, a comment starting ${COMMAND_HANDLE} followed by ${nameList([...COMMAND_VERBS])} steers the run, and a review requesting changes on the run's pull request starts a user-review round.`,

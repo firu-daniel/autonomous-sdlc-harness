@@ -226,6 +226,8 @@ import {
   GIT_TOKEN_SECRET,
   LEGACY_TRIGGER_LABEL,
   OAUTH_TOKEN_SECRET,
+  PR_CREATE_SETTING,
+  PR_CREATE_SETTING_PATH,
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
   renderedCliVersions,
@@ -2759,9 +2761,8 @@ const REMOTE_GITHUB_CHECK: Check = {
 
       const prSetting = ask(['api', PR_SETTING_ENDPOINT]);
       if (prSetting.answer === undefined) return fail(noSpawn);
-      const settingName = 'Allow GitHub Actions to create and approve pull requests';
       if (prSetting.answer.kind === 'unknown') {
-        warnings.push(cannotTell(prSetting.call, prSetting.answer.why, `whether a run's own token may open its pull request (${settingName})`));
+        warnings.push(cannotTell(prSetting.call, prSetting.answer.why, `whether a run's own token may open its pull request (${PR_CREATE_SETTING})`));
       } else if (prSetting.answer.kind === 'refused') {
         notes.push(`the pull-request setting was not checked: ${prSetting.call} may need more access than this login has (${prSetting.answer.why})`);
       } else {
@@ -2769,9 +2770,9 @@ const REMOTE_GITHUB_CHECK: Check = {
         if (allowed === undefined) {
           warnings.push(`cannot tell whether a run's own token may open its pull request: ${prSetting.call} answered in a shape this check does not read`);
         } else if (!allowed && secretNames?.has(GIT_TOKEN_SECRET) === true) {
-          notes.push(`${settingName} is off, so a completed run opens its draft pull request with ${GIT_TOKEN_SECRET}`);
+          notes.push(`${PR_CREATE_SETTING} is off, so a completed run opens its draft pull request with ${GIT_TOKEN_SECRET}`);
         } else if (!allowed) {
-          warnings.push(`${settingName} is off and ${GIT_TOKEN_SECRET} is not a repository secret, so a completed run cannot open its draft pull request with the job's token: turn it on under Settings → Actions → General → Workflow permissions, or set ${GIT_TOKEN_SECRET} with \`gh secret set ${GIT_TOKEN_SECRET}\``);
+          warnings.push(`${PR_CREATE_SETTING} is off and ${GIT_TOKEN_SECRET} is not a repository secret, so a completed run cannot open its draft pull request with the job's token: turn it on under ${PR_CREATE_SETTING_PATH}, or set ${GIT_TOKEN_SECRET} with \`gh secret set ${GIT_TOKEN_SECRET}\``);
         }
       }
     }
