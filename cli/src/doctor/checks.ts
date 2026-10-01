@@ -25,7 +25,7 @@
  *    remote-execution switch is `config/model.ts`'s {@link remoteExecutionApplies} and the
  *    issue-trigger switch its {@link forgeTriggerApplies}, the workflow paths and the binary run as
  *    `gh` are `remote/githubActions.ts`'s ({@link WORKFLOW_RUN_PATH}, {@link WORKFLOW_RESUME_PATH},
- *    {@link WORKFLOW_TRIGGER_PATH}, {@link GH_CLI_VARIABLE}, {@link ghCli}), whether a ref carries a
+ *    {@link WORKFLOW_TRIGGER_PATH}, {@link WORKFLOW_CONTROL_PATH}, {@link GH_CLI_VARIABLE}, {@link ghCli}), whether a ref carries a
  *    file is `core/git.ts`'s {@link pathAtRef}, and
  *    the writability probe is the write engine's {@link probeWritable}. A
  *    check that wanted a slightly different answer would be a second definition of the thing being
@@ -219,6 +219,7 @@ import {
   API_KEY_SECRET,
   CLI_VERSION_VARIABLE,
   DEFAULT_GH_CLI,
+  COMMAND_HANDLE,
   DEFAULT_TRIGGER_LABEL,
   GH_CLI_VARIABLE,
   ghCli,
@@ -231,6 +232,8 @@ import {
   RUNNER_VARIABLE,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_LABEL_VARIABLE,
+  WORKFLOW_CONTROL_FILE,
+  WORKFLOW_CONTROL_PATH,
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RESUME_PATH,
   WORKFLOW_RUN_FILE,
@@ -2719,21 +2722,21 @@ const REMOTE_GITHUB_CHECK: Check = {
  * check speaks only about a value outside {@link FORGE_KINDS}. An absent key is a decision not yet
  * made, and this line is where an operator learns the decision exists.
  *
- * **Graded from local evidence only** (the module header's choice 3): the trigger workflow, one git
- * ref and the configuration. Whether the label exists and whether GitHub knows the workflow are left
- * to `--check-github`: the `github` pass names that flag when it is absent, and under it names
- * {@link REMOTE_GITHUB_CHECK}, which {@link CHECKS} runs first and which carries GitHub's answer.
+ * **Graded from local evidence only** (the module header's choice 3): the two forge workflows —
+ * {@link WORKFLOW_TRIGGER_FILE} and {@link WORKFLOW_CONTROL_FILE}, graded the same way — one git ref
+ * and the configuration. What GitHub says — whether the label exists, which workflows it knows, and
+ * the pull-request setting — is left to {@link REMOTE_GITHUB_CHECK}: the `github` pass names
+ * `--check-github` when it is absent, and under it names that check, which {@link CHECKS} runs first.
  *
  * **Its worst grade is `warn`**: no `forge` state stops a run, because the inbox path works whatever
  * the key says. The three `warn`s are all `github`: remote execution off, because a run started from
- * GitHub always executes through {@link WORKFLOW_RUN_FILE}; the trigger workflow absent; and the
- * trigger workflow not carried by `origin/<defaultBranch>`, because GitHub runs an `issues` workflow
- * only from its default branch — that last with {@link REMOTE_EXECUTION_CHECK}'s push remedy and its
- * two *not graded* notes, on the same reasoning.
+ * GitHub always executes through {@link WORKFLOW_RUN_FILE}; a forge workflow absent; and a forge
+ * workflow not carried by `origin/<defaultBranch>`, because GitHub runs an `issues` or
+ * `issue_comment` workflow only from its default branch — that last with
+ * {@link REMOTE_EXECUTION_CHECK}'s push remedy and its two *not graded* notes, on the same reasoning.
+ * Each warn names every file it is about, so two absent files are one line naming both.
  *
- * Draft-pull-request output and comment park-and-ask are not graded, because nothing implements them
- * yet; the `github` pass names them as still to come, so the line never implies the whole coupling
- * exists. A value outside {@link FORGE_KINDS} is the config check's `fail`, and is not graded here.
+ * A value outside {@link FORGE_KINDS} is the config check's `fail`, and is not graded here.
  */
 const FORGE_CHECK: Check = {
   id: 'forge',
@@ -2744,7 +2747,9 @@ const FORGE_CHECK: Check = {
 
     const root = ctx.repoRoot;
     const forge = ctx.config.forge;
-    const triggerPresent = existsSync(join(root, ...WORKFLOW_TRIGGER_PATH.split('/')));
+    const forgeWorkflows = [WORKFLOW_TRIGGER_PATH, WORKFLOW_CONTROL_PATH];
+    const presentWorkflows = forgeWorkflows.filter((path) => existsSync(join(root, ...path.split('/'))));
+    const isAre = (paths: readonly string[]) => (paths.length === 1 ? 'is' : 'are');
 
     if (forge === undefined) {
       return pass(
@@ -2755,8 +2760,8 @@ const FORGE_CHECK: Check = {
       return pass('not graded, because forge holds a value this CLI does not know (see the config check)');
     }
     if (forge === 'none') {
-      const left = triggerPresent
-        ? `. ${WORKFLOW_TRIGGER_PATH} is present and unused: the job it starts refuses every event while forge is not github`
+      const left = presentWorkflows.length > 0
+        ? `. ${nameList(presentWorkflows)} ${isAre(presentWorkflows)} present and unused: the job each starts refuses every event while forge is not github`
         : '';
       return pass(`forge is none: this repository has no forge integration, and nothing starts a run from an issue${left}`);
     }
@@ -2773,29 +2778,39 @@ const FORGE_CHECK: Check = {
     }
 
     const on = 'forge is github and remote execution is on';
-    if (!triggerPresent) {
-      return warn(`${on}, but ${WORKFLOW_TRIGGER_PATH} is absent, so labelling an issue starts nothing: re-run \`${CLI} init\`, which writes it create-if-absent`);
+    const startsNothing: Readonly<Record<string, string>> = {
+      [WORKFLOW_TRIGGER_PATH]: 'labelling an issue starts nothing',
+      [WORKFLOW_CONTROL_PATH]: 'comments and reviews start nothing',
+    };
+    const consequence = (paths: readonly string[]) => paths.map((path) => startsNothing[path]).join(', and ');
+    const absent = forgeWorkflows.filter((path) => !presentWorkflows.includes(path));
+    if (absent.length > 0) {
+      return warn(
+        `${on}, but ${nameList(absent)} ${isAre(absent)} absent, so ${consequence(absent)}: re-run \`${CLI} init\`, which writes ${absent.length === 1 ? 'it' : 'them'} create-if-absent`,
+      );
     }
 
     const branch = ctx.config.defaultBranch;
     let carried: string;
     if (typeof branch !== 'string' || branch.trim() === '') {
-      carried = `; whether GitHub's default branch carries it is not graded, because defaultBranch is not a branch name (see the config check)`;
+      carried = `; whether GitHub's default branch carries them is not graded, because defaultBranch is not a branch name (see the config check)`;
     } else if (!remoteTrackingBranchResolves(root, branch)) {
-      carried = `; whether origin/${branch} carries it is not graded, because there is no origin/${branch} (see the remote check)`;
-    } else if (!pathAtRef(root, `origin/${branch}`, WORKFLOW_TRIGGER_PATH)) {
-      return warn(
-        `${on}, but origin/${branch} does not carry ${WORKFLOW_TRIGGER_PATH}, as this checkout last fetched it, and GitHub runs an issues workflow only from its default branch, so labelling an issue starts nothing yet: commit it, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`,
-      );
+      carried = `; whether origin/${branch} carries them is not graded, because there is no origin/${branch} (see the remote check)`;
     } else {
-      carried = ` and origin/${branch} carries it`;
+      const uncarried = forgeWorkflows.filter((path) => !pathAtRef(root, `origin/${branch}`, path));
+      if (uncarried.length > 0) {
+        return warn(
+          `${on}, but origin/${branch} does not carry ${nameList(uncarried)}, as this checkout last fetched it, and GitHub runs an issues or issue_comment workflow only from its default branch, so ${consequence(uncarried)} yet: commit ${uncarried.length === 1 ? 'it' : 'them'}, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`,
+        );
+      }
+      carried = ` and origin/${branch} carries them`;
     }
 
     const asked = ctx.probeGithub
       ? `the ${REMOTE_GITHUB_CHECK.id} check above reports what GitHub says`
       : `\`${CLI} doctor --check-github\` asks GitHub`;
     return pass(
-      `${on}: ${WORKFLOW_TRIGGER_PATH} is present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; draft-pull-request output and comment park-and-ask are still to come. What this cannot see lives on GitHub — whether that label exists and whether GitHub knows ${WORKFLOW_TRIGGER_FILE}; ${asked}`,
+      `${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; a \`${COMMAND_HANDLE} <verb>\` comment answers, pauses, resumes, stops or clears it; a review requesting changes on the run's pull request starts a user-review round; and a completed run opens a draft pull request. What this cannot see lives on GitHub — the label, the workflows GitHub knows (${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE}) and the pull-request setting; ${asked}`,
     );
   },
 };

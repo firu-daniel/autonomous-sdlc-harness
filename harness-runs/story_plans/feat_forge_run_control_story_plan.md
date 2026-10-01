@@ -50,7 +50,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control/task_
 14. [x] **Task 14** — Give the run and resume workflows the report permissions and the `deliver` step _(layer: cli)_ _(points: 10)_
 15. [x] **Task 15** — Ship the `harness-control.yml` workflow template _(layer: cli)_ _(points: 15)_
 16. [x] **Task 16** — Write the control workflow from `init` and print its GitHub steps _(layer: cli)_ _(points: 15)_
-17. [ ] **Task 17** — Grade the control workflow in `doctor`'s `forge` check _(layer: cli)_ _(points: 12)_
+17. [x] **Task 17** — Grade the control workflow in `doctor`'s `forge` check _(layer: cli)_ _(points: 12)_
 18. [ ] **Task 18** — Ask GitHub about the control workflow, the pull-request setting and the effective trigger label _(layer: cli)_ _(points: 15)_
 19. [ ] **Task 19** — State the pull-request-review round in the `user_reviews/` template README _(layer: cli)_ _(points: 5)_
 20. [ ] **Task 20** — Teach the user-review fix-plan writer to re-locate a pull-request review comment _(layer: plugin)_ _(points: 8)_

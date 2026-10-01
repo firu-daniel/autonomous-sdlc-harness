@@ -50,6 +50,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -6077,6 +6078,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
  * Every case runs `doctor` with the recording `gh` stub, so a case that spawned `gh` fails.
  */
 const REMOTE_TRIGGER_WORKFLOW = '.github/workflows/harness-trigger.yml';
+const REMOTE_CONTROL_WORKFLOW = '.github/workflows/harness-control.yml';
 
 /** Apply `config set` edits in order, then optionally re-run `init`, asserting each exits 0. */
 async function configure(dir, edits, { init = false } = {}) {
@@ -6121,17 +6123,18 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(!line.includes('present and unused'), line);
   });
 
-  await t.test('none with the trigger workflow left in place passes and says it is unused', async (subtest) => {
+  await t.test('none with both forge workflows left in place passes and names both as unused', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     assert.ok(existsSync(join(dir, REMOTE_TRIGGER_WORKFLOW)), 'init did not write harness-trigger.yml');
+    assert.ok(existsSync(join(dir, REMOTE_CONTROL_WORKFLOW)), 'init did not write harness-control.yml');
     await configure(dir, [['forge', 'none']]);
     const stub = await ghStub(subtest);
 
     const { stdout, stderr } = await doctorWithStub(dir, stub);
 
     const line = reportLine(stdout, 'pass', 'forge');
-    assert.ok(line?.includes(`${REMOTE_TRIGGER_WORKFLOW} is present and unused`), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes(`${REMOTE_TRIGGER_WORKFLOW}, ${REMOTE_CONTROL_WORKFLOW} are present and unused`), `${stdout}\n${stderr}`);
   });
 
   await t.test('gitlab passes and cites the research on the relay route', async (subtest) => {
@@ -6171,8 +6174,41 @@ test('the forge check names every forge state and never fails', async (t) => {
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'forge');
-    assert.ok(line?.includes(`${REMOTE_TRIGGER_WORKFLOW} is absent, so labelling an issue starts nothing`), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes(`${REMOTE_TRIGGER_WORKFLOW}, ${REMOTE_CONTROL_WORKFLOW} are absent, so labelling an issue starts nothing, and comments and reviews start nothing`), `${stdout}\n${stderr}`);
     assert.ok(line.includes('re-run `npx autonomous-sdlc-harness init`'), line);
+  });
+
+  await t.test('github with harness-control.yml absent warns naming it and init', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    rmSync(join(dir, REMOTE_CONTROL_WORKFLOW));
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'forge');
+    assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} is absent, so comments and reviews start nothing`), `${stdout}\n${stderr}`);
+    assert.ok(!line.includes(REMOTE_TRIGGER_WORKFLOW), line);
+    assert.ok(line.includes('re-run `npx autonomous-sdlc-harness init`'), line);
+  });
+
+  await t.test('github with harness-control.yml present but not on origin warns with the push remedy', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await configure(dir, [['forge', 'github']], { init: true });
+    rmSync(join(dir, REMOTE_CONTROL_WORKFLOW));
+    await pushWorkflows(dir);
+    await configure(dir, [], { init: true });
+    assert.ok(existsSync(join(dir, REMOTE_CONTROL_WORKFLOW)), 'init did not re-write harness-control.yml');
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'forge');
+    assert.ok(line?.includes(`does not carry ${REMOTE_CONTROL_WORKFLOW},`), `${stdout}\n${stderr}`);
+    assert.ok(!line.includes(REMOTE_TRIGGER_WORKFLOW), line);
+    assert.ok(line.includes('so comments and reviews start nothing yet'), line);
+    assert.ok(line.includes('git push --no-verify origin'), line);
   });
 
   await t.test('github with the trigger workflow present but not on origin warns with the push remedy', async (subtest) => {
@@ -6185,7 +6221,8 @@ test('the forge check names every forge state and never fails', async (t) => {
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'forge');
-    assert.ok(line?.includes('GitHub runs an issues workflow only from its default branch'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes(`does not carry ${REMOTE_TRIGGER_WORKFLOW}, ${REMOTE_CONTROL_WORKFLOW},`), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('GitHub runs an issues or issue_comment workflow only from its default branch'), line);
     assert.ok(line.includes('git push --no-verify origin'), line);
   });
 
@@ -6200,7 +6237,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line?.includes('is not graded, because there is no origin/'), `${stdout}\n${stderr}`);
   });
 
-  await t.test('github with the trigger workflow pushed passes and points at --check-github', async (subtest) => {
+  await t.test('github with both forge workflows pushed passes and points at --check-github', async (subtest) => {
     const dir = await remoteFixture(subtest);
     await configure(dir, [['forge', 'github']], { init: true });
     await pushWorkflows(dir);
@@ -6211,7 +6248,11 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'forge');
     assert.ok(line?.includes('HARNESS_TRIGGER_LABEL label (default `sdlc-harness`) starts a task run'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('still to come'), line);
+    assert.ok(line.includes(REMOTE_CONTROL_WORKFLOW), line);
+    assert.ok(line.includes('`@sdlc-harness <verb>` comment'), line);
+    assert.ok(line.includes('a completed run opens a draft pull request'), line);
+    assert.ok(line.includes('carries them'), line);
+    assert.ok(!line.includes('still to come'), line);
     assert.ok(line.includes('doctor --check-github'), line);
   });
 
