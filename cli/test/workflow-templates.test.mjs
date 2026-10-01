@@ -4,7 +4,11 @@
  * **The contract these tests enforce.** The seven `workflow_dispatch` inputs `remote-run.sh`
  * sends, with `action`'s options exactly `run`, `pause`, `warm` and `stop`; a job only for `run`
  * and for `warm`, so `pause` and `stop` start none; the `run-name` title the pause poll and
- * `continue` / `poll` match runs by; the `runs-on` line and the two permissions; every GitHub
+ * `continue` / `poll` match runs by; the `runs-on` line and the permissions exactly `contents`,
+ * `actions`, `issues` and `pull-requests`, each `write`; the `Open the pull request and report`
+ * step running `remote-run.sh deliver` after `Upload the state bundle` and before `Continue, wait
+ * or stop`, `continue-on-error: true`, with `HARNESS_PR_TOKEN` drawn from `secrets.HARNESS_GIT_TOKEN`
+ * through `env:`; the cancelled-job step calling `remote-run.sh report failed`; every GitHub
  * expression spaced after its braces and `{{cliVersion}}` the only template token, so the CLI's
  * renderer (`cli/src/core/templating.ts`) sees nothing else; no input or secret expression inside a
  * `run:` block (script injection); `continue` under `!cancelled()` and the upload and final push
@@ -15,7 +19,7 @@
  * `cli/src/commands/doctor.ts` → `REMOTE_JOB_FLAG` declares it, which that module does not export.
  *
  * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; the permissions exactly
- * `contents: read` and `actions: write`; `remote-run.sh poll` its only call into the script family;
+ * `contents: read`, `actions: write`, `issues: write` and `pull-requests: write`;`remote-run.sh poll` its only call into the script family;
  * `HARNESS_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block;
  * its state upload under `always()` named `POLL_STATE_ARTIFACT_NAME`, as `remote-run.sh` spells it.
  *
@@ -134,7 +138,36 @@ test('the run-name title, the runner line and the permissions', () => {
     assert.equal(line.trim(), "runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}");
   }
   const i = LINES.indexOf('permissions:');
-  assert.deepEqual(blockUnder(i).filter((l) => l.trim() !== '').map((l) => l.trim()), ['contents: write', 'actions: write']);
+  assert.deepEqual(blockUnder(i).filter((l) => l.trim() !== '').map((l) => l.trim()), [
+    'contents: write',
+    'actions: write',
+    'issues: write',
+    'pull-requests: write',
+  ]);
+});
+
+test('deliver opens the pull request and reports, after the upload and before continue, never failing the job', () => {
+  const names = steps().map((s) => /- name: (.*)$/m.exec(s)[1]);
+  const at = (name) => {
+    const i = names.indexOf(name);
+    assert.notEqual(i, -1, `a step is named ${name}`);
+    return i;
+  };
+  const deliver = at('Open the pull request and report');
+  assert.ok(at('Upload the state bundle') < deliver);
+  assert.ok(deliver < at('Continue, wait or stop'));
+  const step = steps()[deliver];
+  assert.match(ifOf(step), /!cancelled\(\)/);
+  assert.match(step, /^\s*continue-on-error: true$/m);
+  assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.HARNESS_GIT_TOKEN \}\}$/m);
+  const [body] = runBodies(step.split('\n'));
+  assert.equal(body, 'bash "$SCRIPTS_DIR/remote-run.sh" deliver "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"');
+});
+
+test('a cancelled job reports failed through remote-run.sh report', () => {
+  const step = stepCarrying('autonomous-notify.sh" failed');
+  assert.match(ifOf(step), /^cancelled\(\)/);
+  assert.match(runBodies(step.split('\n')).join('\n'), /remote-run\.sh" report failed "\$HARNESS_INPUT_BRANCH" --note /);
 });
 
 test('every expression is spaced, and {{cliVersion}} is the only token', () => {
@@ -199,7 +232,7 @@ test('no configured directory is frozen into the file', () => {
   assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_-])sdlc-harness\//m);
 });
 
-test('the poller: a schedule, a hand trigger, and exactly its two permissions', () => {
+test('the poller: a schedule, a hand trigger, and exactly its four permissions', () => {
   const on = RESUME_LINES.indexOf('on:');
   assert.notEqual(on, -1);
   const under = blockUnder(on, RESUME_LINES);
@@ -209,7 +242,7 @@ test('the poller: a schedule, a hand trigger, and exactly its two permissions', 
   const perms = RESUME_LINES.indexOf('permissions:');
   assert.deepEqual(
     blockUnder(perms, RESUME_LINES).filter((l) => l.trim() !== '').map((l) => l.trim()),
-    ['contents: read', 'actions: write'],
+    ['contents: read', 'actions: write', 'issues: write', 'pull-requests: write'],
   );
 });
 
