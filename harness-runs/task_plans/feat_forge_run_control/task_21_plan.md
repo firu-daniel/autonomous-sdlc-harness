@@ -44,3 +44,8 @@
 - `git grep -n -i "partial forge coupling\|forge coupling is partial" -- plugin` finds nothing.
 - `git grep -n "never opens or pushes a pull request\|open or push a pull request" -- plugin` still finds `AUTONOMOUS_FLOW.md`'s `## Output guarantee` sentence and the three autonomous forks' prohibition lines: the flow's boundary is unchanged.
 - `git grep -n "^## " -- plugin/docs/AUTONOMOUS_FLOW.md` lists the same headings as before this task: no citer is stranded.
+
+**Deviations from plan:**
+
+- `## Output guarantee`'s closing forge-ruleset paragraph said the `forge` key is read *"only to write and run the issue trigger"*, which this branch makes false; it now names the issue trigger, the control workflow and the draft pull request. Not in the Targets list, but the same section and the same claim this task restates.
+- `## Drop a user review (fix cycle)`: the GitHub-side sentence closes the fix-cycle paragraph rather than the section, because the section's last paragraph describes the documentation run, a different entry point.
