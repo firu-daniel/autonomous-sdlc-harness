@@ -46,7 +46,7 @@ Tasks 1, 2, 4 and 7 each edit a different section of `cli/templates/scripts/remo
 6. [x] **Task 6** — Move the scratch-containment path test into the run library as `hr_scratch_path_var`, and make `scratch-run.sh` call it _(layer: cli)_ _(points: 12)_
 7. [x] **Task 7** — Add `remote-run.sh discard`, scoped to `<state_dir>/scratch/` through `hr_scratch_path_var`, and describe the commands' scratch directories _(layer: cli)_ _(points: 15)_
 8. [x] **Task 8** — Move `branch-pause` and `branch-resume` to a fixed scratch directory removed by `discard` _(layer: plugin)_ _(points: 10)_
-9. [ ] **Task 9** — Move `branch-answer` and `branch-user-review` to a fixed scratch directory removed by `discard` _(layer: plugin)_ _(points: 12)_
+9. [x] **Task 9** — Move `branch-answer` and `branch-user-review` to a fixed scratch directory removed by `discard` _(layer: plugin)_ _(points: 12)_
 10. [ ] **Task 10** — State the lineage bound, the scratch directories and the `remote-github` outcome in `docs/remote-execution.md` and `docs/cli.md`, and add `discard` to `docs/watcher.md`'s `remote-run.sh` row _(layer: general)_ _(points: 12)_
 11. [ ] **Task 11** — State run history as taken, the `headSha` comment lookup and the new not-verified rows in `docs/github-issue-trigger.md` _(layer: general)_ _(points: 10)_
 12. [ ] **Task 12** — Add Gate 12 (xiii) leg (d) and record what this branch changed for round 5's findings in `docs/development.md` _(layer: general)_ _(points: 10)_
