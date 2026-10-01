@@ -22,6 +22,8 @@
  *   ({@link PYTHON_DATABASE_URL_VARIABLE}).
  * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_path_with_fallbacks` —
  *   {@link LAUNCHER_PATH_FALLBACKS} and the policy {@link launcherSearchPath} reproduces.
+ * - `docs-retrieval-service/tests/test_launcher_e2e.py` — `_BACKEND_UNAVAILABLE_EXIT`
+ *   ({@link PYTHON_BACKEND_UNAVAILABLE_EXIT}).
  *
  * A change to a mirrored literal is an edit to every file that mirrors it, in the same change; a
  * mirror this header does not declare is a defect (`.claude/context/conventions.md` →
