@@ -37,3 +37,9 @@ Nothing tracked on the branch names a machine path. The failure is caused entire
 - [ ] Do not edit `scripts/run-gates.sh` to exclude these paths. The gate is correct: it is a self-check over the working tree.
 
 These deletions change no tracked file, so this fix has no diff to commit. The committing role should record the finding as done without a code commit.
+
+## Already passing
+
+- **(a) Named test / fix site:** finding names no test file (`none — 6a no machine paths`), so the close rests on reading the fix site — `harness-runs/scratch/` and the two `__pycache__/` directories. The deletions were made by the user, per `harness-runs/clarifications/feat_docs_retrieval_python_backend/question_2.md` (Q1, option 1) answered `deleted` in `answer_2.md`.
+- **(b) Evidence:** `ls -A harness-runs/scratch/` lists `README.md` only. `ls -d` on `docs-retrieval-service/src/harness_docs_retrieval/__pycache__` and `docs-retrieval-service/tests/__pycache__` returns `No such file or directory` for both. `find <repo_root> -name __pycache__ -not -path '*/node_modules/*'` returns nothing. A `grep -rl` for the home directory with gate 6a's four `--exclude-dir` values matches only the worktree's `.git` pointer file, which `machine_path_hits` in `scripts/run-gates.sh` filters out with `grep -v '^\./\.git:[0-9][0-9]*:'`. Gate 6a itself was not run (a gate script is never run in this loop); the next gate round confirms it.
+- **(c) Code files edited:** none. `scripts/run-gates.sh` is unchanged.
