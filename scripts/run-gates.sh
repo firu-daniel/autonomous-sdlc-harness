@@ -10,7 +10,7 @@
 # BLOCKED where `uv` or its synced environment is missing, and its container leg 13d SKIPPED unless
 # HARNESS_GATES_CONTAINERS=1 is set on a machine with Docker. Neither outcome is a pass or a failure.
 # `commands.test` in `harness.config.json` points here for exactly that reason: `npm test` is gate 4
-# alone, and a branch review that reads it as "verified" is reading the other five automatable
+# alone, and a branch review that reads it as "verified" is reading the other six automatable
 # gates' worth of silence as a pass.
 #
 # NOT the generated `scripts/test.sh`. That file is `init`'s, it wraps whatever `commands.test`
