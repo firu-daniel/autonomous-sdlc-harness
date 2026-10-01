@@ -215,16 +215,22 @@ That token is a GitHub write credential held outside GitHub, and whoever can edi
 
 ## 7. What is not verified here
 
-Every automated case drives a `gh` stub; none of the rows below has been observed against a real repository.
+Every automated case drives a `gh` stub. Gate 12 round 5 (2026-10-01, CLI 0.5.0) observed the row moved to *Verified in Gate 12 round 5* below against a real repository; none of the others has been.
 
 | Behaviour | What rests on it | Source | If it is wrong |
 |---|---|---|---|
-| Labelling an issue starts a run that reaches "branch ready for review" with the maintainer's machine off | The whole chain | None yet: Gate 12 observation (xiii), not yet run ([`development.md`](development.md) → `## 5. Verifying a change`) | The failing step is visible in the trigger job's log and the issue comment |
+| Labelling an issue starts a run that reaches "branch ready for review" with the maintainer's machine off | The whole chain | Gate 12 observation (xiii), reached in round 5 up to a paused run with the machine on but no daemon installed; the run to "branch ready for review" with the machine off is not yet recorded ([`development.md`](development.md) → `## 5. Verifying a change`) | The failing step is visible in the trigger job's log and the issue comment |
 | The permission API answers `read` for a triage user | Refusing triage (§3) | Documented, not measured: no second account (T3) | A triage user would still need an answer of `admin` or `write` to pass, so a different answer refuses as well |
 | A label an issue form adds at creation raises `labeled`, and with which `sender` | The advice to keep the trigger label out of issue forms (§3) | Not established (T1) | The permission check still refuses a sender without write access |
 | A `concurrency` group keeps at most one pending run and cancels an earlier pending one | The decision to declare none (§1) | GitHub's documented behaviour, not retrieved in this branch | Nothing built depends on it: the workflow has no group |
-| The dispatched run appears in `gh run list` within the trigger's lookup bound (`TRIGGER_RUN_LOOKUP_TRIES`) | The comment naming the run's own URL | None: not measured | The comment names the branch's filtered run list instead |
 | A Jira rule's **Send web request** reaches `repository_dispatch` end to end | §6's Jira route | GitHub side documented, Jira side documented in parts, the chain untested (T6) | The route is documentation only; nothing ships for it |
+
+
+### Verified in Gate 12 round 5
+
+| Behaviour | Observed |
+|---|---|
+| The dispatched run appears in `gh run list` within the trigger's lookup bound (`TRIGGER_RUN_LOOKUP_TRIES`) | For a branch with no earlier runs: issue #7's comment named run `36835744979`, the `harness run feat_invoices_2` the trigger dispatched. For a branch name with earlier runs the lookup named an older run instead, a defect recorded in [`development.md`](development.md) → Gate 12 → Round 5, finding 1 |
 
 ---
 
