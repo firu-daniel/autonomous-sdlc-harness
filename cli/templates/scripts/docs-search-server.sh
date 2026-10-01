@@ -28,8 +28,10 @@
 #
 # WHY THE PYTHON BRANCH IS NOT `exec`ED. Its failure must surface as exit 3,
 # which an `exec` could not report. It runs as a child with stdin passed
-# explicitly, and `TERM` / `INT` are forwarded to it so the runner's shutdown
-# still reaches the server.
+# explicitly, and a `TERM` or an `INT` the launcher receives is passed on to it
+# as `TERM`, the signal the server stops on: bash starts a background child with
+# `SIGINT` ignored when job control is off, and Python installs no handler over
+# an ignored `SIGINT`, so an `INT` passed on as itself would never arrive.
 #
 # MIRRORS — a change to any owner below is an edit here too:
 #   `retrieval/runtime` and `node_modules/autonomous-sdlc-harness/dist/cli.js`
@@ -99,7 +101,7 @@ if [ "$backend" = python ]; then
   child=$!
   trapped=0
   trap 'trapped=1; kill -TERM "$child" 2>/dev/null || true' TERM
-  trap 'trapped=1; kill -INT "$child" 2>/dev/null || true' INT
+  trap 'trapped=1; kill -TERM "$child" 2>/dev/null || true' INT
 
   # A trapped signal interrupts `wait` before the child's status is collected, so wait again. 127
   # means the first `wait` had already collected it.

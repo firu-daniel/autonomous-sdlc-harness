@@ -52,7 +52,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { execFile, execFileSync } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import {
   accessSync,
   appendFileSync,
@@ -1481,6 +1481,47 @@ test('the launcher exits 3 and keeps the backend\'s own reason when the Python b
   assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
   assert.ok(stderr.includes(reason), `the backend's own line is missing:\n${stderr}`);
   assert.match(stderr, /^docs-search-server: .*status 1.*doctor/m, `the launcher's own line is missing:\n${stderr}`);
+});
+
+test('the launcher passes an INT on to the Python backend as TERM', async (t) => {
+  const { dir, env } = await launcherFixture(t, { docs: { retrieval: true, retrievalBackend: 'python' }, fake: false });
+  const fakePath = join(dir, 'fake-bin', PYTHON_RETRIEVAL_COMMAND);
+  writeFileSync(
+    fakePath,
+    '#!/usr/bin/env node\n' +
+      "process.on('SIGTERM', () => { process.stderr.write(JSON.stringify({ got: 'SIGTERM' }) + '\\n'); process.exit(0); });\n" +
+      "process.stderr.write('ready\\n');\n" +
+      'setInterval(() => {}, 1000);\n',
+    'utf8',
+  );
+  chmodSync(fakePath, 0o755);
+
+  const child = spawn('bash', [join(dir, LAUNCHER_PATH)], { cwd: dir, env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
+  let stdout = '';
+  let stderr = '';
+  let signalled = false;
+  child.stdout.on('data', (chunk) => { stdout += chunk; });
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+    if (!signalled && stderr.includes('ready')) {
+      signalled = true;
+      child.kill('SIGINT');
+    }
+  });
+  let timer;
+  const status = await Promise.race([
+    new Promise((resolve) => child.on('close', (code) => resolve(code))),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        child.kill('SIGKILL');
+        reject(new Error(`the launcher did not exit within 10 s of an INT:\n${stderr}`));
+      }, 10_000);
+    }),
+  ]).finally(() => clearTimeout(timer));
+
+  assert.equal(status, 0, `the launcher exited ${status}:\n${stderr}`);
+  assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
+  assert.deepEqual(jsonLines(stderr), [{ got: 'SIGTERM' }], `the backend did not receive TERM:\n${stderr}`);
 });
 
 test('the launcher refuses a docs.retrievalBackend outside the enum with exit 1', async (t) => {
