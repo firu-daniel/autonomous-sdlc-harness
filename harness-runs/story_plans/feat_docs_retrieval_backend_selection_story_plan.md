@@ -33,7 +33,7 @@ This branch makes the Python docs-retrieval backend that `feat_docs_retrieval_py
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_docs_retrieval_backend_selection/task_<K>_plan.md`. Each task is single-layer, ordered bottom-up: `cli` first, then the catch-all `general`. No task is `plugin`.
 
 1. [x] **Task 1** — Add `docs.retrievalBackend` to the config model and the structural check _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Add `cli/src/retrieval/pythonBackend.ts`, the one owner of the Python backend's names, default URL and `self-check` parser _(layer: cli)_ _(points: 15)_
+2. [x] **Task 2** — Add `cli/src/retrieval/pythonBackend.ts`, the one owner of the Python backend's names, default URL and `self-check` parser _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Add the run library's `docs.retrievalBackend` reader and retrieval gate, `hr_docs_retrieval_backend` / `hr_docs_retrieval_applies` _(layer: cli)_ _(points: 12)_
 4. [ ] **Task 4** — Route `docs-search-server.sh` on the key, with the new exit `3` _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Add the three `retrieval-python-*` doctor checks and make the TypeScript three not applicable under the Python backend _(layer: cli)_ _(points: 20)_
