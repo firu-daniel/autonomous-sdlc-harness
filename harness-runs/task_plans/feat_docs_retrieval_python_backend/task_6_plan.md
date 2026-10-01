@@ -31,3 +31,9 @@
 - `tests/test_stubs.py` passes (subject to the story index's test-run note). Exact float equality holds because the vectors cross the bridge as JSON, which round-trips every IEEE double.
 - `grep -n "sum(" docs-retrieval-service/src/harness_docs_retrieval/stubs.py` finds no `sum()` over the vector.
 - Every hit of `grep -rn "AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB" docs-retrieval-service/src` is the `RETRIEVAL_STUB_ENV` definition in `stubs.py`. Every reader and every message takes the name from that constant, the rule `.claude/context/conventions.md` states for an environment-variable name.
+
+**Deviations from plan:**
+
+- `tests/test_stubs.py`, Python lint (ruff) and Python type-check (mypy) were not run: no conventions document states a single-file Python command, so per the story index's test-run note they are deferred to the Run gates phase.
+- Evidence the stub-parity claim rests on instead: a scratch probe (`harness-runs/scratch/task6_stub_probe.py`, run through `bash scripts/scratch-run.sh` on the host's Python 3.9.6) loaded the real `stubs.py` with its three package imports replaced by stand-ins, fed it the test's own `STUB_INPUT`, and compared against `node tests/ts_bridge.mjs stub-models` for `hash-v1` and `hash-v2`: `embedderId`, `rerankerId`, `dimensions`, `documentVectors`, `queryVector` and `scores` all compared equal with `==`; the `constants` name matched; the `hash-v3` refusal printed the plan's message; an empty variable reached `load_models` with the given `allow_remote`. That host interpreter predates 3.12's compensated float summation, so the probe does not exercise the hazard the explicit loop guards against.
+- The no-stub case is tested with the variable both unset and set to the empty string, and for both `allow_remote` values — a superset of the plan's "unset" case, since the TypeScript side reads empty as unset.

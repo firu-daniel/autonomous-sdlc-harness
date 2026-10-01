@@ -37,7 +37,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_docs_retrieval_python_b
 3. [x] **Task 3** — Port the Markdown chunker (`chunk.py`) _(layer: general)_ _(points: 15)_
 4. [x] **Task 4** — Add the TypeScript bridge and the chunk-key and hash parity case over both eval corpora _(layer: general)_ _(points: 20)_
 5. [x] **Task 5** — Add the model interfaces, the fp32 sentence-transformers loader, the weight cache and its presence check (`models.py`) _(layer: general)_ _(points: 15)_
-6. [ ] **Task 6** — Port the hash stubs and the stub selector, with a stub-parity case against the TypeScript stubs (`stubs.py`) _(layer: general)_ _(points: 15)_
+6. [x] **Task 6** — Port the hash stubs and the stub selector, with a stub-parity case against the TypeScript stubs (`stubs.py`) _(layer: general)_ _(points: 15)_
 7. [ ] **Task 7** — Port `DocStore` onto a real Postgres with the same SQL (`store.py`) _(layer: general)_ _(points: 20)_
 8. [ ] **Task 8** — Port hybrid search, abstention and rendering, with the byte-for-byte render case (`search.py`) _(layer: general)_ _(points: 20)_
 9. [ ] **Task 9** — Port the incremental index refresh (`refresh.py`) _(layer: general)_ _(points: 10)_
