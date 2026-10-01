@@ -53,3 +53,8 @@
 - `bash -n cli/templates/scripts/docs-search-server.sh` exits 0, and the file still opens `#!/usr/bin/env bash` with `set -euo pipefail`.
 - `git diff --stat dev...HEAD -- cli/templates/repo/mcp.retrieval.json cli/templates/claude plugin` prints nothing (Acceptance 6).
 - The end-to-end path through this launcher, an MCP client calling `search_docs` on the Python backend, is exercised by Task 10's container case.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/docs-search-server.sh` was refused by the permission layer and not run. The syntax claim rests on execution instead: every launcher case in `npm test -- test/outer-loop-scripts.test.mjs` runs the written copy under `bash` (68 pass, 0 fail), which a parse error would fail. The shebang and `set -euo pipefail` lines were checked by reading the file.
+- The `git diff --stat dev...HEAD -- …` bullet was not run before commit; `git status --short` shows only `cli/templates/scripts/docs-search-server.sh` and `cli/test/outer-loop-scripts.test.mjs` changed by this task.

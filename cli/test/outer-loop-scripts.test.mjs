@@ -69,6 +69,13 @@ import { lstat } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import test from 'node:test';
 
+import {
+  PYTHON_BACKEND_UNAVAILABLE_EXIT,
+  PYTHON_DATABASE_URL_VARIABLE,
+  PYTHON_DEFAULT_DATABASE_URL,
+  PYTHON_RETRIEVAL_COMMAND,
+  PYTHON_SERVE_SUB_COMMAND,
+} from '../dist/retrieval/pythonBackend.js';
 import { createFixture, plantRetrievalRuntime, runBash, runCli, runGit, snapshotTree, PACKAGE_ROOT } from './helpers/fixture.mjs';
 
 /** The default `scriptsDir`, and the library's path under it — the contract, spelled out once. */
@@ -1348,6 +1355,156 @@ test("the docs-retrieval server launcher execs the runtime's docs serve for its 
   assert.equal(status, 0, `the launcher exited ${status}:\n${stderr}`);
   assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
   assert.deepEqual(JSON.parse(stderr), ['docs', 'serve', '--cwd', dir]);
+});
+
+/**
+ * A launcher fixture: `init`, then `harness.config.json` rewritten with the `docs` / `phases.docs`
+ * values the case states, a planted TypeScript runtime that reports its argv on stderr, and —
+ * unless `fake` is `false` — a fake `harness-docs-retrieval` first on `PATH` that reports its argv
+ * and database variable as JSON on stderr, after an optional prelude line, and exits `fake.status`.
+ * `HOME` is a fixture directory, so `~/.local/bin` cannot supply a real backend.
+ */
+async function launcherFixture(t, { docs, phasesDocs = true, fake = { status: 0 } }) {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  writeFileSync(
+    join(dir, 'harness.config.json'),
+    `${JSON.stringify(seededConfig({ phases: { docs: phasesDocs }, docs }))}\n`,
+  );
+  const cacheHome = join(dir, 'cache');
+  await plantRetrievalRuntime(cacheHome);
+  writeFileSync(
+    join(cacheHome, ...RUNTIME_ENTRY),
+    "process.stderr.write(JSON.stringify(process.argv.slice(2)) + '\\n');\nprocess.exit(0);\n",
+    'utf8',
+  );
+  const home = join(dir, 'home');
+  mkdirSync(home, { recursive: true });
+  const bin = join(dir, 'fake-bin');
+  mkdirSync(bin, { recursive: true });
+  if (fake !== false) {
+    const prelude = fake.prelude === undefined ? '' : `process.stderr.write(${JSON.stringify(`${fake.prelude}\n`)});\n`;
+    const fakePath = join(bin, PYTHON_RETRIEVAL_COMMAND);
+    writeFileSync(
+      fakePath,
+      '#!/usr/bin/env node\n' +
+        prelude +
+        `process.stderr.write(JSON.stringify({ argv: process.argv.slice(2), url: process.env.${PYTHON_DATABASE_URL_VARIABLE} }) + '\\n');\n` +
+        `process.exit(${fake.status});\n`,
+      'utf8',
+    );
+    chmodSync(fakePath, 0o755);
+  }
+  const env = {
+    XDG_CACHE_HOME: cacheHome,
+    HOME: home,
+    PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+    [PYTHON_DATABASE_URL_VARIABLE]: '',
+  };
+  return { dir, env };
+}
+
+/** The JSON lines a planted runtime or fake backend wrote to stderr, parsed; other lines dropped. */
+function jsonLines(stderr) {
+  return stderr
+    .split('\n')
+    .filter((line) => line.startsWith('{') || line.startsWith('['))
+    .map((line) => JSON.parse(line));
+}
+
+test('the launcher execs the TypeScript runtime when retrieval is off, whatever docs.retrievalBackend holds', async (t) => {
+  const { dir, env } = await launcherFixture(t, { docs: { retrieval: false, retrievalBackend: 'python' } });
+
+  const { status, stdout, stderr } = await runBash(dir, [join(dir, LAUNCHER_PATH)], env);
+
+  assert.equal(status, 0, `the launcher exited ${status}:\n${stderr}`);
+  assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
+  assert.deepEqual(jsonLines(stderr), [['docs', 'serve', '--cwd', dir]], `the Python backend was reached:\n${stderr}`);
+});
+
+test('the launcher execs the TypeScript runtime when docs.retrievalBackend is typescript', async (t) => {
+  const { dir, env } = await launcherFixture(t, { docs: { retrieval: true, retrievalBackend: 'typescript' } });
+
+  const { status, stdout, stderr } = await runBash(dir, [join(dir, LAUNCHER_PATH)], env);
+
+  assert.equal(status, 0, `the launcher exited ${status}:\n${stderr}`);
+  assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
+  assert.deepEqual(jsonLines(stderr), [['docs', 'serve', '--cwd', dir]]);
+});
+
+test('the launcher starts the Python backend with the default database URL when docs.retrievalBackend is python', async (t) => {
+  const { dir, env } = await launcherFixture(t, { docs: { retrieval: true, retrievalBackend: 'python' } });
+
+  const { status, stdout, stderr } = await runBash(dir, [join(dir, LAUNCHER_PATH)], env);
+
+  assert.equal(status, 0, `the launcher exited ${status}:\n${stderr}`);
+  assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
+  assert.deepEqual(jsonLines(stderr), [{ argv: [PYTHON_SERVE_SUB_COMMAND, '--repo', dir], url: PYTHON_DEFAULT_DATABASE_URL }]);
+});
+
+test('the launcher passes an inherited database URL to the Python backend unchanged', async (t) => {
+  const { dir, env } = await launcherFixture(t, { docs: { retrieval: true, retrievalBackend: 'python' } });
+  const url = 'postgresql://someone:else@db.example:6543/elsewhere';
+
+  const { status, stdout, stderr } = await runBash(dir, [join(dir, LAUNCHER_PATH)], { ...env, [PYTHON_DATABASE_URL_VARIABLE]: url });
+
+  assert.equal(status, 0, `the launcher exited ${status}:\n${stderr}`);
+  assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
+  assert.deepEqual(jsonLines(stderr), [{ argv: [PYTHON_SERVE_SUB_COMMAND, '--repo', dir], url }]);
+});
+
+test('the launcher exits 3 when the Python backend is selected and its command does not resolve', async (t) => {
+  if (onPath(PYTHON_RETRIEVAL_COMMAND) || inFallbackDirs(PYTHON_RETRIEVAL_COMMAND)) {
+    t.skip(`${PYTHON_RETRIEVAL_COMMAND} is installed on this machine, so its absence cannot be staged`);
+    return;
+  }
+  const { dir, env } = await launcherFixture(t, { docs: { retrieval: true, retrievalBackend: 'python' }, fake: false });
+
+  const { status, stdout, stderr } = await runBash(dir, [join(dir, LAUNCHER_PATH)], env);
+
+  assert.equal(status, PYTHON_BACKEND_UNAVAILABLE_EXIT, `the launcher exited ${status}:\n${stderr}`);
+  assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
+  assert.ok(stderr.includes(PYTHON_RETRIEVAL_COMMAND), `the refusal does not name the command:\n${stderr}`);
+  assert.match(stderr, /doctor/, `the refusal does not name doctor:\n${stderr}`);
+});
+
+test('the launcher exits 3 and keeps the backend\'s own reason when the Python backend fails', async (t) => {
+  const reason = `${PYTHON_RETRIEVAL_COMMAND}: could not connect to the database`;
+  const { dir, env } = await launcherFixture(t, {
+    docs: { retrieval: true, retrievalBackend: 'python' },
+    fake: { status: 1, prelude: reason },
+  });
+
+  const { status, stdout, stderr } = await runBash(dir, [join(dir, LAUNCHER_PATH)], env);
+
+  assert.equal(status, PYTHON_BACKEND_UNAVAILABLE_EXIT, `the launcher exited ${status}:\n${stderr}`);
+  assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
+  assert.ok(stderr.includes(reason), `the backend's own line is missing:\n${stderr}`);
+  assert.match(stderr, /^docs-search-server: .*status 1.*doctor/m, `the launcher's own line is missing:\n${stderr}`);
+});
+
+test('the launcher refuses a docs.retrievalBackend outside the enum with exit 1', async (t) => {
+  const { dir, env } = await launcherFixture(t, { docs: { retrieval: true, retrievalBackend: 'java' } });
+
+  const { status, stdout, stderr } = await runBash(dir, [join(dir, LAUNCHER_PATH)], env);
+
+  assert.equal(status, 1, `the launcher exited ${status}:\n${stderr}`);
+  assert.equal(stdout, '', `the launcher wrote to stdout:\n${stdout}`);
+  assert.match(stderr, /docs\.retrievalBackend/, `the refusal does not name the key:\n${stderr}`);
+  assert.deepEqual(jsonLines(stderr), [], `a backend was started:\n${stderr}`);
+});
+
+test('the launcher template carries every Python backend literal it mirrors', () => {
+  const template = readFileSync(LAUNCHER_TEMPLATE, 'utf8');
+  for (const literal of [
+    PYTHON_RETRIEVAL_COMMAND,
+    PYTHON_SERVE_SUB_COMMAND,
+    PYTHON_DATABASE_URL_VARIABLE,
+    PYTHON_DEFAULT_DATABASE_URL,
+    `exit ${PYTHON_BACKEND_UNAVAILABLE_EXIT}`,
+  ]) {
+    assert.ok(template.includes(literal), `${LAUNCHER_FILE} does not carry ${literal}`);
+  }
 });
 
 test('hr_cache_dir resolves the machine cache directory the way machineCacheDir() does', async (t) => {
