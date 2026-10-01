@@ -44,3 +44,8 @@ Each half checks the restore line and the comment URL. Also append to the round 
 - Every command the leg tells the reader to run sits alone in its own fenced block: read the leg and find no inline command and no block holding two.
 - The quoted log lines are byte-identical to the strings `cli/templates/scripts/remote-run.sh` prints. Check with `git grep -nF` for each across both files: each must match in both.
 - The round 5 finding sentences 1–3 are unchanged: `git diff` of `docs/development.md` touches none of the lines beginning `1. **A run whose branch name`, `2. \`doctor --check-github\`` and `3. \`/autonomous-sdlc-harness:branch-pause\``.
+
+**Deviations from plan:**
+- The Round 5 sentences for findings 2 and 3 end *not yet re-observed; (xiii)'s setup records it* and *…; leg (c) records it*, not *leg (d) records it*: leg (d) as specified exercises only finding 1's fixes, while the `remote-github` answers are read in (xiii)'s setup and the scratch-directory check was added to leg (c)'s pass condition. Pointing all three at leg (d) would name a leg that never observes them.
+- Leg (d) step 2 adds a `gh run list … --branch <slug>_2` block so the reader has the `<run id>` for `gh run view`; this is the second of the "both `gh run list` outputs" the record asks for. "Then three legs" became "Then four legs".
+- The "byte-identical" check uses the fixed parts of each line (`remote-run.sh: skipped `, `finished run(s) of `, ` from before its current lineage`, `remote-run.sh: no previous bundle for `, `; this is its first job`); `git grep -cF` matched them in both `docs/development.md` and `cli/templates/scripts/remote-run.sh`. The variable parts are `<n>` / `<slug>_2` where the script prints `$LINEAGE_SKIPPED` / `$branch`.
