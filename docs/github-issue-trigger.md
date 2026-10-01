@@ -171,7 +171,7 @@ The trigger job's push and comment start no other workflow; its `workflow_dispat
 
 ## 5. Working the run
 
-**With a local setup**, the local commands see a run started on GitHub once it is adopted. Each of these adopts first, then syncs:
+**With a local setup**, the local commands act on a run started on GitHub directly when given its branch as the `<branch>:` prefix — no adopt, no local copy, no sync and no running watcher. Each reads the job's newest state from GitHub before it acts:
 
 ```
 /autonomous-sdlc-harness:branch-answer <branch>: <answer text>
@@ -189,7 +189,7 @@ The trigger job's push and comment start no other workflow; its `workflow_dispat
 /autonomous-sdlc-harness:branch-user-review <branch>: <review feedback>
 ```
 
-Adopting runs `remote-run.sh adopt`: for each `harness run <branch>` run whose branch is live on `origin`, not protected and unknown to the local registry, it creates the mirror working copy — bootstrapping it, which runs that branch's install and build locally (§4) — and writes a record with `execution: github-actions`, and from there the run is an ordinary remote record. Until then, `/autonomous-sdlc-harness:branch-status` lists it as `not adopted`, without adopting or syncing. The watcher's tick never adopts, and a relay still needs the local watcher running when you act.
+Without the prefix a command chooses among the local registry's runs only, so a run with no local record is reached through the prefix alone. The answer, resume and pause go out as dispatches the command sends itself; the user review is committed on the branch tip from a temporary copy that is never bootstrapped, then dispatched ([`remote-execution.md`](remote-execution.md) → `## 1. The lifecycle of a remote run`).
 
 **Without one**, a run is worked from GitHub alone ([`remote-execution.md`](remote-execution.md) → `## 1. The lifecycle of a remote run`).
 

@@ -132,3 +132,25 @@ GitHub already accepts all four. `harness-run.yml`'s `workflow_dispatch` takes `
 - [ ] `docs/development.md` Gate 12:
   - In (iv), (viii) and (xi), drop the `autonomous-watcher.sh tick` relay steps and the "relays" pass criteria. The commands' own dispatch is what is observed: (iv) the `harness pause` run appears after `/autonomous-sdlc-harness:branch-pause <branch>` alone; (viii) the resume dispatch follows `/autonomous-sdlc-harness:branch-resume <branch>`; (xi) the answer dispatch follows `/autonomous-sdlc-harness:branch-answer <branch>: …`, and its sync step is no longer needed.
   - Leave the dated round records as they are: they are history.
+
+**Deviations from plan:** (cli layer)
+- `review`'s in-flight check downloads the newest bundle into the main checkout's `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/`, the cache `sync` already uses, not a temporary directory: removing a temporary bundle tree would need a shelled-out recursive removal, which `.claude/context/conventions.md` → `## Shell assets` forbids. A refusal therefore writes that cache and nothing else (no registry, no copy, no push).
+- `remote_state` takes `<download_dir> [<applied_run_id>]`: an empty `<download_dir>` means `sync`'s per-run directory (the run id is known only inside the derivation), and `<applied_run_id>` returns `applied` for `sync`'s case 1 and counts as a bundle existing for case 4, so `sync` keeps its case order and output.
+- `review` fast-forwards a cut copy to `origin/<branch>` as well as the mirror: `--existing` checks out a local branch that existed before, which may be behind origin.
+- The watcher's `record_is_remote "$branch" && return 1` sits at the top of `resume_parked_run` and `resume_paused_run`, ahead of the missing-working-copy log as well as the kill switch, so the pass logs nothing for a remote record.
+- `hr_user_review_subject`'s comment does not claim the subject is listed in `.claude/context/conventions.md` → `## Commit-message policy`, because it is not listed there; adding it is a `general`-layer edit.
+
+**Deviations from plan:** (plugin layer)
+- `plugin/docs/AUTONOMOUS_FLOW.md` → `## Out of scope in this release`, the **Forge coupling is partial.** bullet, also edited: its "a file drop into a local mirror — which reaches a trigger-started run once a syncing command has adopted it" contradicted the new direct route.
+- `plugin/commands/branch-status.md` step 6: the **not yet adopted** paragraph ("adopts it first and then acts on it") rewritten to the `<branch>:` prefix route, and the closing fence's "are the commands that sync" scoped to "sync a remote record" — both stated what the four commands no longer do.
+- `branch-answer` and `branch-resume` refuse an empty `<engine>` exactly as the plan states; `branch-user-review`'s GitHub route needs no engine, since `remote-run.sh review` dispatches `user_review` itself.
+- Each command's `## Resolved values` lead sentence now lists the new path placeholders (`<tmp>`, `<engine>`, `<tmpfile>`) beside the existing ones, so no placeholder in the body is undeclared.
+- Verification: `claude plugin validate --strict plugin` passed; this unit wrote no test file and ran no test file.
+
+**Deviations from plan:** (general layer)
+- `docs/watcher.md` → `## 4.`'s **A remote run gets these mechanisms in the job, not from this daemon.** paragraph ("reach it only as **relayed dispatches**") and `docs/outer-loop-verification.md`'s **A real GitHub Actions run.** paragraph ("the local watcher's dispatch and relays") also edited: both described the relays this finding removes and are not in the plan's file list.
+- `docs/remote-execution.md` → `## 1.`'s mermaid diagram also edited: the user's answer, resume, pause and review now reach `remote-run.sh` directly rather than through the mirror and the watcher, `review`'s push is a thick edge to the branch, and `sync` is the edge that fills the mirror.
+- `docs/remote-execution.md` → `## 11. Security`: "the `answers` a `/autonomous-sdlc-harness:branch-answer` relay carries" → "dispatch carries".
+- The `**What each local command does for a remote run.**` paragraph and the chain-0 paragraph also state the record update after a chain-0 `resume: answer|pause` and that `AUTONOMOUS_STOP` gates none of the commands' dispatches, so the doc matches `verb_dispatch` and the commands as landed.
+- `## Commit-message policy` in `.claude/context/conventions.md` not edited: the plan does not assign it, and `chore: add user review for <branch>` predates this finding in the watcher.
+- Verification: `bash scripts/typecheck.sh` passed; this unit wrote no test file and ran no test file.

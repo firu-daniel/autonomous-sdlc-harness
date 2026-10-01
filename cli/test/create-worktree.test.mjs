@@ -1,9 +1,10 @@
 /**
- * `create-worktree.sh --no-bootstrap`, the branch cut a trigger job makes.
+ * `create-worktree.sh --no-bootstrap`, the branch cut a trigger job makes, and its `--existing`
+ * form, the copy `remote-run.sh review` places a review round in.
  *
  * **The rule these tests exist to enforce: a no-bootstrap cut pushes the branch and installs
- * nothing; an `--existing` one refuses the option.** The default mode's case is the regression for
- * the unchanged, bootstrapped path.
+ * nothing; an `--existing --no-bootstrap` copy checks the branch out, installs nothing and pushes
+ * nothing.** The default mode's case is the regression for the unchanged, bootstrapped path.
  *
  * Each case builds the script header's REPRO fixture under the system temp directory: a bare
  * `origin`, a committed `harness.config.json` whose `commands.depInstall` writes `deps.marker`, and
@@ -86,20 +87,27 @@ test('a --no-bootstrap cut pushes the branch and installs nothing', async (t) =>
   assert.match(stdout, /branch feat\/q \(pushed to origin\)/);
 });
 
-test('--existing refuses --no-bootstrap in either order and creates nothing', async (t) => {
+test('--existing --no-bootstrap checks out a branch only on origin, installs nothing, pushes nothing', async (t) => {
   const f = await reproFixture(t);
+  await runGit(f.d, ['push', '--quiet', 'origin', 'trunk:refs/heads/feat/q']);
+  assert.equal(await f.localHas('feat/q'), false, 'the fixture left a local feat/q');
+  const originBefore = (await runGit(f.b, ['for-each-ref'])).stdout;
 
   for (const args of [
     ['--existing', '--no-bootstrap', 'feat/q'],
     ['--no-bootstrap', '--existing', 'feat/q'],
   ]) {
     const { status, stdout, stderr } = await f.create(args);
-    assert.equal(status, 1, `${args.join(' ')} exited ${status}\n${stdout}\n${stderr}`);
-    assert.match(stderr, /--no-bootstrap/);
+    assert.equal(status, 0, `${args.join(' ')} exited ${status}\n${stdout}\n${stderr}`);
+    const copy = join(f.w, 'demo-feat-q');
+    assert.equal((await runGit(copy, ['branch', '--show-current'])).stdout.trim(), 'feat/q');
+    assert.equal(existsSync(join(copy, 'deps.marker')), false, `${args.join(' ')} ran the dependency install`);
+    assert.match(stdout, /\(not bootstrapped\)/);
+    assert.match(stdout, /branch feat\/q \(existing branch; not pushed\)/);
+    assert.equal((await runGit(f.b, ['for-each-ref'])).stdout, originBefore, `${args.join(' ')} changed origin`);
+    await runGit(f.d, ['worktree', 'remove', '--force', copy]);
+    await runGit(f.d, ['branch', '-D', 'feat/q']);
   }
-  assert.equal(existsSync(join(f.w, 'demo-feat-q')), false, 'a refused call created a working copy');
-  assert.equal(await f.localHas('feat/q'), false, 'a refused call created a local branch');
-  assert.equal(await f.originHas('feat/q'), false, 'a refused call pushed a branch');
 });
 
 test('the default mode still bootstraps the copy before pushing', async (t) => {

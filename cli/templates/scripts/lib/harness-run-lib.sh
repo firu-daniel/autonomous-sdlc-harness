@@ -1654,6 +1654,13 @@ hr_task_prompt_subject() {
   printf 'chore: add task prompt for %s\n' "${1-}"
 }
 
+# hr_user_review_subject <branch> — print a user review round's commit subject.
+# The one producer of it, for the watcher's remote inbox pass and
+# `remote-run.sh review`.
+hr_user_review_subject() {
+  printf 'chore: add user review for %s\n' "${1-}"
+}
+
 # hr_place_artifact <worktree> <src_file> <rel> — copy <src_file> to
 # <worktree>/<rel>, creating its parent. 0, or 1 on a failure.
 hr_place_artifact() {

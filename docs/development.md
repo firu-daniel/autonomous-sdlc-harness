@@ -834,15 +834,15 @@ One probe run is expected before any job ran. The watcher pushed the task-prompt
 
 Passes when the job drops its own `PAUSE`, ends with decision `continue`, its `remote-run.sh continue` step dispatches, and a **new** `harness run <branch>` run starts whose job restores the previous bundle and resumes from the pushed ledger. That second run starting is the evidence that a `workflow_dispatch` sent with `GITHUB_TOKEN` starts a run. Record both run ids, the `continue` step's output, the second job's `restore` line, and whether any `push-probe.yml` run's `headSha` is a commit the first job pushed, with the `gh run list` and `git log` output verbatim. Record too the `harness-state` artifact's `expires_at` from `gh api repos/<owner>/<scratch-repo>/actions/runs/<first run id>/artifacts`, which shows whether `retention-days: 400` was capped at the repository's retention or refused (`docs/remote-execution.md` §6).
 
-**(iv) A `pause` dispatch.** While a job is running, run `/autonomous-sdlc-harness:branch-pause <branch>` in the session, then relay it and read the marker run:
+**(iv) A `pause` dispatch.** While a job is running, run `/autonomous-sdlc-harness:branch-pause <branch>` in the session, then read the marker run it sent:
 
 ```
-bash <scriptsDir>/autonomous-watcher.sh tick
+gh run list --workflow harness-run.yml
 gh run view <pause run id>
 gh api repos/<owner>/<scratch-repo>/actions/runs/<pause run id>/timing
 ```
 
-Passes when the `harness pause <branch>` run's job is **skipped**, its billable time is zero, and within `REMOTE_CONTROL_POLL_SECS` of it the running job finds it, yields at its next clean checkpoint and ends with decision `stop`, re-dispatching nothing. Record the `timing` answer verbatim and the job-log line where the pause was found. Where the billable figure is not zero, record it: `docs/remote-execution.md` §6 already states that cost.
+Passes when the `harness pause <branch>` run appears after the command alone — no watcher tick — its job is **skipped**, its billable time is zero, and within `REMOTE_CONTROL_POLL_SECS` of it the running job finds it, yields at its next clean checkpoint and ends with decision `stop`, re-dispatching nothing. Record the `timing` answer verbatim and the job-log line where the pause was found. Where the billable figure is not zero, record it: `docs/remote-execution.md` §6 already states that cost.
 
 **(v) `gh workflow enable` and `disable` under the job's token.** The disable is reached by one hand-started poller tick with nothing waiting:
 
@@ -872,7 +872,7 @@ gh run list --workflow harness-run.yml
 bash <scriptsDir>/remote-run.sh sync <branch>
 ```
 
-Passes when a `harness stop <branch>` run appears, the running job is cancelled, and no new `harness run <branch>` run follows it. Then run `/autonomous-sdlc-harness:branch-resume <branch>` in the session and one more `tick`; passes when that dispatch starts a job that resumes from the pushed ledger. Record the `stop` output, the run list after it, and the resumed job's `restore` line — or, where the resume is refused, the exact refusal.
+Passes when a `harness stop <branch>` run appears, the running job is cancelled, and no new `harness run <branch>` run follows it. Then run `/autonomous-sdlc-harness:branch-resume <branch>` in the session; passes when the resume dispatch the command itself sends, with no watcher tick, starts a job that resumes from the pushed ledger. Record the `stop` output, the run list after it, and the resumed job's `restore` line — or, where the resume is refused, the exact refusal.
 
 **(ix) Both credentials.**
 
@@ -906,29 +906,19 @@ git push --no-verify origin <default branch>
 
 Then drop a small task and let it run to the end. Passes when the run ends at "ready for review" with its ledger's `E` entry `[-]` and `P2` `[x]`, the ledger's `## Run mode` block carrying `remote-skipped: qa`, the Done summary carrying the `QA (Phase E): skipped` line, and the `completed` notification's detail naming the skip and `/autonomous-sdlc-harness:branch-qa-test <branch>` (`docs/remote-execution.md` → `## 3.` → *The interactive-test phase*). Record the ledger's `## Run mode` block and the notification text verbatim.
 
-**(xi) A remote park answered and resumed.** Drop a task that leaves a decision undecided — a limit it names without setting — so the task-plan writer parks, and wait for the job log's `job: parked stop`. Then sync the branch:
+**(xi) A remote park answered and resumed.** Drop a task that leaves a decision undecided — a limit it names without setting — so the task-plan writer parks, and wait for the job log's `job: parked stop`. Answer the question in the session:
 
 ```
-bash <scriptsDir>/remote-run.sh sync <branch>
+/autonomous-sdlc-harness:branch-answer <branch>: <answer text>
 ```
 
-Answer the question in the session:
-
-```
-/autonomous-sdlc-harness:branch-answer <branch>
-```
-
-Relay the answers and read the next run:
-
-```
-bash <scriptsDir>/autonomous-watcher.sh tick
-```
+Then read the next run:
 
 ```
 gh run list --workflow harness-run.yml
 ```
 
-Passes when the tick relays the answers; the next job logs its `restore` line, `wrote answer_<n>.md for <branch>` and `resuming parked run '<branch>' (answers <n>)`; the run does not re-park on the same question; and P1 converges, meaning the ledger's `P1` flips `[x]` and `chore: Add task plan for <branch>` lands on the branch. Record the relay line, those three job-log lines and the commit.
+Passes when the command itself sends the `resume: answer` dispatch, with no watcher tick; the next job logs its `restore` line, `wrote answer_<n>.md for <branch>` and `resuming parked run '<branch>' (answers <n>)`; the run does not re-park on the same question; and P1 converges, meaning the ledger's `P1` flips `[x]` and `chore: Add task plan for <branch>` lands on the branch. Record the command's `dispatched` line, those three job-log lines and the commit.
 
 **(xii) A job rendered for the previous version, and the upgrade.** Start from the scratch repository adopted with the **previous** release, its workflows unchanged, once `<version>` has been published and `main` carries it. Drop a small task and let the watcher dispatch it. Passes when that job refuses in its `Install the pinned plugin` step. Record the step's `::error::` line exactly.
 
