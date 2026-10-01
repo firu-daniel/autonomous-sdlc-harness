@@ -18,7 +18,7 @@ Each entry resolves to a self-contained `harness-runs/user_reviews/feat_docs_ret
 2. [x] **Finding 4** — Add the entry-point deferred-work marker at the refresh-failure remedy in `service.py` → `answer`, and mark the README's wire difference as temporary. _(layer: general)_
 3. [x] **Finding 5** — Make `fetch-models` refuse (exit 1) under the stub, as `docs fetch-models` does; update the README and `tests/test_self_check.py`. _(layer: general)_
 4. [x] **Finding 2** — Add `store.py` → `driver_message` and use it in both `answer` failure texts so a driver error reaches the client on one line. _(layer: general)_
-5. [ ] **Finding 6** — Make SIGTERM stop the MCP transport and drain the in-flight call before closing the store, instead of cancelling it. _(layer: general)_
+5. [x] **Finding 6** — Make SIGTERM stop the MCP transport and drain the in-flight call before closing the store, instead of cancelling it. _(layer: general)_
 6. [ ] **Finding 1** — Serialize lone surrogates as `\uXXXX` escapes on both Python transports (MCP stdio writer and HTTP responses), with unit and e2e cases. _(layer: general)_
 
 ---

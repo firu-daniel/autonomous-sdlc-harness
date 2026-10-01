@@ -15,13 +15,16 @@ Departure from `server.ts`: after each call that searched, one stderr line carri
 import asyncio
 import signal
 import sys
+from collections.abc import AsyncIterable
 from typing import Any
 
 import anyio
+from anyio.streams.memory import MemoryObjectSendStream
 from mcp import types
 from mcp.server import ServerRequestContext
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
+from mcp.shared.message import SessionMessage
 
 from harness_docs_retrieval import __version__
 from harness_docs_retrieval.jscompat import js_to_fixed, json_stringify_str
@@ -59,7 +62,11 @@ def build_server(session: RetrievalSession) -> Server[Any]:
                 f"this server exposes {SEARCH_TOOL_NAME}",
                 is_error=True,
             )
-        result = await answer(session, params.arguments)
+        # Shielded: the SDK cancels in-flight handlers when the incoming stream ends, and a started
+        # call must finish its refresh writes before the store closes, as `serveDocs` awaits its
+        # queue.
+        with anyio.CancelScope(shield=True):
+            result = await answer(session, params.arguments)
         if result.search_ms is not None:
             print(
                 f"{TIMING_LINE_PREFIX}{js_to_fixed(result.search_ms, 3)}",
@@ -76,24 +83,56 @@ def build_server(session: RetrievalSession) -> Server[Any]:
     )
 
 
+async def _relay(
+    source: AsyncIterable[SessionMessage | Exception],
+    sink: MemoryObjectSendStream[SessionMessage | Exception],
+) -> None:
+    with sink:
+        try:
+            async for item in source:
+                await sink.send(item)
+        except anyio.ClosedResourceError:
+            # `SIGTERM` closed the sink.
+            pass
+
+
 async def serve_mcp(config: ServiceConfig) -> None:
     """Serves until the client closes stdin or the process gets `SIGTERM`, then closes the
-    session."""
+    session once any call already started has finished."""
     session = await open_session(config)
     loop = asyncio.get_running_loop()
     sigterm_installed = False
+    stopped = False
+    incoming_send, incoming = anyio.create_memory_object_stream[SessionMessage | Exception]()
+
+    def stop() -> None:
+        nonlocal stopped
+        stopped = True
+        incoming_send.close()
+
     try:
         server = build_server(session)
-        with anyio.CancelScope() as scope:
-            try:
-                loop.add_signal_handler(signal.SIGTERM, scope.cancel)
-                sigterm_installed = True
-            except NotImplementedError:
-                # Windows event loops take no signal handlers; stdin closing still ends the server.
-                pass
-            async with stdio_server() as (read_stream, write_stream):
-                await server.run(read_stream, write_stream, server.create_initialization_options())
+        try:
+            loop.add_signal_handler(signal.SIGTERM, stop)
+            sigterm_installed = True
+        except NotImplementedError:
+            # Windows event loops take no signal handlers; stdin closing still ends the server.
+            pass
+        with anyio.CancelScope() as transport_scope:
+            async with (
+                stdio_server() as (stdin_stream, write_stream),
+                anyio.create_task_group() as relay_group,
+            ):
+                relay_group.start_soon(_relay, stdin_stream, incoming_send)
+                await server.run(incoming, write_stream, server.create_initialization_options())
+                if stopped:
+                    # The stdin reader is still waiting on a line that may never come.
+                    transport_scope.cancel()
     finally:
         if sigterm_installed:
             loop.remove_signal_handler(signal.SIGTERM)
-        await session.close()
+        try:
+            async with session.lock:
+                pass
+        finally:
+            await session.close()
