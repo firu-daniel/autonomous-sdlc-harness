@@ -46,7 +46,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_docs_retrieval_backend_
 12. [x] **Task 12** — Rewrite `docs/retrieval.md`'s design sections for two backends _(layer: general)_ _(points: 15)_
 13. [x] **Task 13** — Add `docs/retrieval.md`'s end-to-end section on turning the Python backend on _(layer: general)_ _(points: 15)_
 14. [x] **Task 14** — Document the key's effect on `init`, `doctor`, the launcher and the `docs` verb in `docs/cli.md` and `docs/watcher.md` _(layer: general)_ _(points: 15)_
-15. [ ] **Task 15** — Bring the service README, `docs/remote-execution.md` and `ARCHITECTURE.md` level with the selectable backend _(layer: general)_ _(points: 12)_
+15. [x] **Task 15** — Bring the service README, `docs/remote-execution.md` and `ARCHITECTURE.md` level with the selectable backend _(layer: general)_ _(points: 12)_
 
 ## Scope register
 
