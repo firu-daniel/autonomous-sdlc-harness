@@ -26,3 +26,9 @@
 - `npm test -- test/watcher-remote-job.test.mjs` from `cli/` passes, every pre-existing case unchanged.
 - `bash -n cli/templates/scripts/autonomous-watcher.sh` exits 0.
 - `git grep -n '"\$REMOTE_RUN" report' -- cli/templates/scripts/autonomous-watcher.sh` has its only hit inside `notify()`: no event site calls `report` directly.
+
+**Deviations from plan:**
+
+- The `bash -n cli/templates/scripts/autonomous-watcher.sh` verification bullet could not be executed: the call was refused by the permission layer. That claim rests instead on `npm test -- test/watcher-remote-job.test.mjs` from `cli/` (38 of 38 passing), which runs the `init`-written copy of the script end to end in every case.
+- `notify()` no longer returns early when the notifier is not executable: the report call now runs either way, so a missing notifier does not also silence the GitHub comment. Each missing script is still one `log` line.
+- The test's `jobEnv` additionally pins `GITHUB_REPOSITORY`, `GITHUB_SERVER_URL` and `RUNNER_TEMP` empty, matching its rule that a suite run inside a real Actions job reads none of that job's values; the forge case sets `GITHUB_REPOSITORY` itself.

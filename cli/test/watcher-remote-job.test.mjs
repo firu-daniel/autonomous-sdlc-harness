@@ -13,6 +13,10 @@
  * lost, or with the in-job wait's bound fired. The `usage:` cases assert both on the written
  * `remote_status.json` and the notification recorder, and none of them waits on the fallback hour.
  *
+ * **Every job-mode event also reaches `remote-run.sh report`, which reaches GitHub only with `forge`
+ * `github`:** a parked case posts its comment on the issue the branch's provenance line names, and the
+ * same case with `forge` unset makes no `issues/` call.
+ *
  * **Every watcher this file starts is bounded and reaped, so a hang fails by name.** Each `runBash`
  * call carries `timeoutMs: WATCHER_RUN_TIMEOUT_MS` and `t.signal`. The value sits below the per-test
  * timeout (`--test-timeout=1800000`), because that expiry kills this file's process and leaves the
@@ -39,12 +43,12 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
-import { runBash } from './helpers/fixture.mjs';
+import { runBash, runGit } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
@@ -166,6 +170,9 @@ async function createJobFixture(t) {
     RUNNER_ENVIRONMENT: '',
     REMOTE_SELF_PAUSE_AFTER_SECS: '',
     GITHUB_RUN_ID: '',
+    GITHUB_REPOSITORY: '',
+    GITHUB_SERVER_URL: '',
+    RUNNER_TEMP: '',
     REMOTE_CONTROL_POLL_SECS: '1',
     REMOTE_AUTO_RESUME_DELAY_SECS: '0',
     HARNESS_GH_CLI: ghStub,
@@ -731,6 +738,70 @@ test('phases.qa: a job tells the task and user_review engines the QA phase is sk
         assert.equal(SKIP_DETAIL.test(completed[0].detail ?? ''), expectSkip, `${engine}: completed detail`);
       }
       j.assertLaneUntouched();
+    });
+  }
+});
+
+/** The repository and issue the forge cases' provenance line names. */
+const FORGE_REPOSITORY = 'octo/fixture';
+const FORGE_ISSUE = 7;
+
+/**
+ * Set `execution.target` `github-actions` and `forge` (deleted when null), and push the job's branch to
+ * origin carrying a task prompt whose provenance line names {@link FORGE_ISSUE}. The checkout itself is
+ * left as it was: the push goes through a throwaway clone.
+ */
+async function wireForge(j, forge) {
+  const configPath = join(j.dir, 'harness.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.execution = { target: 'github-actions' };
+  if (forge === null) delete config.forge;
+  else config.forge = forge;
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+
+  const origin = (await runGit(j.dir, ['remote', 'get-url', 'origin'])).stdout.trim();
+  const clone = join(j.dir, 'job-test', 'origin-clone');
+  await runGit(j.dir, ['clone', '--quiet', origin, clone]);
+  try {
+    await runGit(clone, ['checkout', '--quiet', '-b', j.branch]);
+    const prompt = `${STATE_DIR}/task_prompts/${j.branch}_task_prompt.md`;
+    await mkdir(join(clone, STATE_DIR, 'task_prompts'), { recursive: true });
+    await writeFile(
+      join(clone, prompt),
+      `# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/${FORGE_REPOSITORY}/issues/${FORGE_ISSUE} by @alice, who applied the label \`sdlc-harness\`.\n`,
+      'utf8',
+    );
+    await runGit(clone, ['add', '--force', prompt]);
+    await runGit(clone, [
+      '-c', 'user.email=fixture@example.invalid', '-c', 'user.name=Harness Fixture',
+      'commit', '--quiet', '--no-verify', '-m', `fixture: ${j.branch}`,
+    ]);
+    await runGit(clone, ['push', '--quiet', '--no-verify', 'origin', `HEAD:refs/heads/${j.branch}`]);
+  } finally {
+    await rm(clone, { recursive: true, force: true });
+  }
+}
+
+test('report: a parked job comments on its issue with forge github, and calls no issues/ endpoint without it', async (t) => {
+  for (const forge of ['github', null]) {
+    await t.test(`forge ${forge ?? 'unset'}`, async (t) => {
+      const j = await createJobFixture(t);
+      if (j === null) return;
+      await wireForge(j, forge);
+      await mkdir(j.clarDir, { recursive: true });
+      await j.setStub('printf "## Q1\\n" > "$CLAR/question_1.md"');
+      const result = await j.job([j.branch, 'task', 'none'], { GITHUB_REPOSITORY: FORGE_REPOSITORY });
+      assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      assert.equal(j.status().status, 'parked');
+      assert.equal(j.notifications().filter((n) => n.event === 'parked').length, 1);
+
+      const calls = j.ghCalls();
+      if (forge === 'github') {
+        const comment = `api --method POST repos/${FORGE_REPOSITORY}/issues/${FORGE_ISSUE}/comments`;
+        assert.ok(calls.some((c) => c.startsWith(`${comment} `)), calls.join('\n'));
+      } else {
+        assert.equal(calls.some((c) => c.includes('issues/')), false, calls.join('\n'));
+      }
     });
   }
 });

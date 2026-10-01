@@ -376,7 +376,11 @@
 #     and the next job no `resumed` for it: a chained continuation is not an
 #     event the user acts on. classify_run_exit's `paused` arm notifies only a
 #     `user` pause; job mode sends the others once it has decided. Their titles
-#     carry HARNESS_REMOTE_SLUG when set.
+#     carry HARNESS_REMOTE_SLUG when set. Each job-mode event is also passed to
+#     `remote-run.sh report`, which comments on the run's pull request or issue
+#     and moves its state label when `forge` is `github`; `autonomous-notify.sh`
+#     is unchanged, and `completed` is reported by the workflow's `deliver` step
+#     after the push.
 #   * THE INTERACTIVE-TEST PHASE IS SKIPPED, not run: a runner has no browser
 #     wiring, application dependencies or QA credentials for it. With
 #     `phases.qa` true, the task and user_review launch prompts gain one clause
@@ -1150,12 +1154,25 @@ unset USAGE_LANE_ENABLED_RETIRED
 # Every lifecycle event goes out through here, so a notifier that is missing or
 # not executable costs one log line instead of ending a pass. Best-effort by
 # contract: the notifier itself never fails its caller.
+# JOB MODE ONLY: the event is also passed to `remote-run.sh report`, the only
+# route to GitHub. The detail ($4) is withheld: it names local slash commands,
+# and `report` words its comment from the registry record itself.
 notify() {
   if [ ! -x "$NOTIFY" ]; then
     log "notify: '$NOTIFY' is not executable — '${1:-?}' event for '${2:-?}' not delivered"
+  else
+    "$NOTIFY" "$@" || true
+  fi
+  [ "$JOB_MODE" = 1 ] || return 0
+  if [ ! -r "$REMOTE_RUN" ]; then
+    log "notify: '$REMOTE_RUN' is not readable — '${1:-?}' event for '${2:-?}' not reported on GitHub"
     return 0
   fi
-  "$NOTIFY" "$@" || true
+  if [ -n "${3:-}" ]; then
+    bash "$REMOTE_RUN" report "$1" "$2" --repo "$MAIN_REPO" >>"$3" 2>&1 || true
+  else
+    bash "$REMOTE_RUN" report "$1" "$2" --repo "$MAIN_REPO" >/dev/null 2>&1 || true
+  fi
 }
 
 # -----------------------------------------------------------------------------
