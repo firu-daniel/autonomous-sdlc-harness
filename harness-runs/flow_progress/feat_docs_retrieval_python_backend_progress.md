@@ -10,7 +10,7 @@ Source: harness-runs/task_prompts/feat_docs_retrieval_python_backend_task_prompt
 - [x] R1. Fix plan written & converged (parity + architecture gates PASS)
 - [x] R2. Fix plan + source review committed
 ## Fixing
-- [ ] R3. All fix-plan findings implemented (fix-plan index all [x])
+- [x] R3. All fix-plan findings implemented (fix-plan index all [x])
 - [-] R4. QA passed (UI-test index all [x] / no_ui / no-op augment)
 - [ ] RG. Run gates passed (the test-suite wrapper printed pass)
 - [ ] R5. Post-user-review statistics committed
