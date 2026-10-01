@@ -170,7 +170,8 @@
 #      `write` — `maintain` reads as `write` and `triage` as `read` there; a
 #      failed call is "could not confirm write access", never a pass
 # Then it fetches `origin <defaultBranch>` (a failure tolerated), derives the
-# branch with `hr_derive_branch <title> issue_<number>` (2 or 3 refused), writes
+# branch with `hr_derive_branch <title> issue_<number>`, passing `gh` so a name
+# with run-workflow history counts as taken (2 or 3 refused), writes
 # the snapshot — `# <title>`, the body's bytes, `---` and a provenance sentence
 # naming the issue, the labeller, the label and the time — and runs `start` as a
 # child. After a start it looks up the `harness run <branch>` run whose
@@ -2854,7 +2855,7 @@ verb_trigger() {
   name_file=$(mktemp "$trigger_tmp/harness-trigger-branch.XXXXXX") || trigger_refuse \
     "the branch name could not be derived (mktemp failed)." "$retry_again"
   status=0
-  hr_derive_branch "$root" "$title" "$fallback" >"$name_file" || status=$?
+  hr_derive_branch "$root" "$title" "$fallback" "" "$GH" >"$name_file" || status=$?
   branch=""
   IFS= read -r branch <"$name_file" || :
   rm -f "$name_file"
