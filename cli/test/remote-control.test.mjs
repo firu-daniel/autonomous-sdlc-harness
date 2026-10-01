@@ -25,6 +25,9 @@
  *
  * `resume` and `clear` are asserted to send exactly the local relay's dispatch — `clear` alone adding
  * `park_loop_clear` — and to refuse every other state, and an unrecorded engine, with no `workflow run`.
+ * `answer` is asserted to send one `resume=answer` dispatch carrying one entry, its text byte for byte
+ * and never evaluated, to label the run `running` only when no other question stays open, and to refuse
+ * a hold, an expired bundle, a job in progress, an unnamed or unknown index and an oversized payload.
  */
 
 import assert from 'node:assert/strict';
@@ -323,13 +326,6 @@ test('an unknown verb gets a reply listing the five commands', async (t) => {
   assert.match(reply.body, /docs\/github-run-control\.md/);
 });
 
-test('a known verb no arm handles yet gets the same reply', async (t) => {
-  const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness answer 1');
-  const reply = assertRefused(f, result, /docs\/github-run-control\.md/);
-  assert.match(reply.body, /`@sdlc-harness clear`/);
-});
-
 test('a cross-repository pull request is refused', async (t) => {
   const f = await controlFixture(t);
   const result = await f.control('@sdlc-harness pause', {}, {
@@ -586,6 +582,94 @@ test('a resume whose dispatch fails replies naming the failure and exits 3', asy
   assert.equal(posted.length, 1);
   assert.match(posted[0].body, /stub gh failure/);
   assert.ok(!f.calls().some((call) => /\/labels -f labels\[\]=/.test(call.line)));
+});
+
+const ANSWER_DISPATCH = (answers) =>
+  `workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=answer -f answers=${JSON.stringify(answers)} -f chain=0`;
+const parkedRun = (questions) => finishedRun('parked', { engine: 'task' }, questions);
+
+test('answer with lines below and one open question sends them, replies that it resumes and labels it running', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness answer\r\nUse A.\r\nBecause it is smaller.\n', {}, parkedRun('1'));
+  assertResumed(f, result, ANSWER_DISPATCH({ 1: 'Use A.\nBecause it is smaller.\n' }),
+    /^Answer to question 1 received from @alice; every open question is answered, so `feat_x` resumes\.\n/);
+  assert.deepEqual(readdirNames(f.runnerTemp), []);
+});
+
+test('answer 1 with a short answer on the first line sends that answer', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness answer 1 Use B.', {}, parkedRun('1'));
+  assertResumed(f, result, ANSWER_DISPATCH({ 1: 'Use B.' }), /^Answer to question 1 received from @alice/);
+});
+
+test('answer with no index and two open questions is refused listing both', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness answer\nUse B.', {}, parkedRun('1 2'));
+  const reply = assertRefused(f, result, /questions 1, 2 are open, so the command must name one/);
+  assert.match(reply.body, /`@sdlc-harness answer 1`, `@sdlc-harness answer 2`/);
+});
+
+test('answer 2 with two open is sent, names question 1 as still open and leaves the label', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness answer 2\nUse B.', {}, parkedRun('1 2'));
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(dispatches(calls).map((call) => call.line), [ANSWER_DISPATCH({ 2: 'Use B.' })]);
+  const posted = replies(calls);
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].body,
+    /^Answer to question 2 received from @alice and sent; question\(s\) 1 still need an answer: `@sdlc-harness answer 1`\.\n/);
+  assert.ok(!calls.some((call) => /\/labels -f labels\[\]=/.test(call.line)), JSON.stringify(calls.map((call) => call.line)));
+});
+
+test('answer 3 is refused naming the open set', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness answer 3\nUse B.', {}, parkedRun('1 2'));
+  assertRefused(f, result, /question 3 is not open; the open questions are 1, 2/);
+});
+
+test('an empty answer is refused', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness answer 1\n  \n', {}, parkedRun('1'));
+  assertRefused(f, result, /the answer is empty/);
+});
+
+test('answer on a park-loop hold is refused naming clear', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness answer 1\nUse B.', {}, finishedRun('park_loop', { engine: 'task' }, '1'));
+  assertRefused(f, result, /`@sdlc-harness clear`/);
+});
+
+test('answer on an expired bundle is refused naming the expiry, never as no park', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness answer 1\nUse B.', {}, {
+    ...parkedRun('1'),
+    STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: true, expires_at: '2026-01-02T00:00:00Z' }] }),
+  });
+  const reply = assertRefused(f, result, /expired on 2026-01-02T00:00:00Z/);
+  assert.match(reply.body, /can no longer be answered here/);
+  assert.match(reply.body, /`@sdlc-harness resume`/);
+});
+
+test('answer while a job is in progress is refused naming the run', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness answer 1\nUse B.');
+  assertRefused(f, result, /in progress \(https:\/\/example\.test\/runs\/501\)/);
+});
+
+test('an answer over the payload limit is refused naming the limit', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control(`@sdlc-harness answer\n${'a'.repeat(70000)}`, {}, parkedRun('1'));
+  const reply = assertRefused(f, result, /workflow_dispatch limit of 65535/);
+  assert.match(reply.body, /Shorten the answer, or commit it to a file on `feat_x`/);
+});
+
+test('an answer carrying a command substitution and a backtick is sent byte for byte and never run', async (t) => {
+  const f = await controlFixture(t);
+  const answer = 'Run `$(touch pwned)` and "$HOME"\\n `x';
+  const result = await f.control(`@sdlc-harness answer\n${answer}`, {}, parkedRun('1'));
+  assertResumed(f, result, ANSWER_DISPATCH({ 1: answer }), /^Answer to question 1 received from @alice/);
+  assert.ok(!existsSync(join(f.dir, 'pwned')));
 });
 
 /** The entries of <dir>, for asserting that control removed what it created there. */

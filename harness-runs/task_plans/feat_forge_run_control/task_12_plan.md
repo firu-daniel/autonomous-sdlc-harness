@@ -62,3 +62,11 @@
 - `npm test -- test/remote-control.test.mjs` from `cli/` passes.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n "REMOTE_INPUT_PAYLOAD_MAX" -- cli/templates/scripts/remote-run.sh` has its comparison only in `verb_dispatch`: `control` adds no second measure of the payload.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the permission layer (twice, from the root and with an absolute path). The parse claim rests instead on `npm test -- test/remote-control.test.mjs`, whose 51 cases each execute the script (51 pass); an earlier run of that file surfaced and fixed a parse error, an apostrophe inside a double-quoted `${…:-…}`.
+- The existing case *"a known verb no arm handles yet gets the same reply"* drove `@sdlc-harness answer 1` and is removed: with `answer` handled, every `COMMAND_VERBS` word has an arm, so no verb is left for it to drive.
+- With no positive-integer index on the first line, the whole of `CONTROL_ARGS` is the short form (so `@sdlc-harness answer Use B.` answers the one open question). The plan named the short form only after an index.
+- A `parked` run with no open question gets a reply saying it is `parked` with none open, rather than the literal "any state but `parked`" wording, which would read as a contradiction.
+- The empty-answer refusal runs before the state fetch: it needs no state, and refusing first spends no `gh` call.

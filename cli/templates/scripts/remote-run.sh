@@ -367,7 +367,32 @@
 # `clear` with `park_loop_clear` set, and no other command sets it. An empty
 # engine is refused, never guessed (the `engine` input defaults to `task`),
 # naming the Run workflow form. On 0 a reply, then `running` on the run's issue
-# and pull request; on 2 a refusal and exit 2. A child's failure is a reply
+# and pull request; on 2 a refusal and exit 2. `answer`: the first line is
+# `answer <n>` and the answer every line below it, a trailing CR stripped from
+# each line and its bytes otherwise unchanged; text after <n> on the first line
+# is the answer when nothing follows below, and with no positive-integer <n>
+# all of that line's text is. <n> may be left out only when exactly one
+# question is open — issue comments have no threads. Refused, each a reply and
+# exit 2: an empty answer; `park_loop` (pointing at `clear`); `paused` /
+# `expired`, quoting its detail and pointing at `resume`, never treated as no
+# park; `running`, naming the run, so a second answer never queues behind a job
+# that a newer pending run in the per-branch `concurrency` group could cancel;
+# any state but `parked`; no open question; several open and no <n>; an <n> not
+# open, listing the open set; an empty engine, naming the Run workflow form.
+# Otherwise the answer is written by `printf` (data, never shell source) to
+# `answer_<n>.md` in a fresh directory under `RUNNER_TEMP`, and sent as
+# `dispatch <branch> --engine <engine> --resume answer --answers-from <dir>
+# --indexes <n> --chain 0`: one answer, one dispatch with one entry. That is
+# safe because an `answer` job whose park is not fully answered stops parked
+# before any session (`autonomous-watcher.sh` -> `run_job`), its bundle then
+# carrying the `answer_<n>.md` restore wrote, so the next answer's job finds the
+# set complete. The payload limit is `dispatch`'s alone: its refusal is quoted,
+# with shortening the answer or committing it to a file on the branch as the
+# way on. On 0 with no other question open, a reply that the run resumes and
+# `running` on its issue and pull request; with others open, a reply naming
+# them, and the label stays `parked`. An answer becomes a comment on the item,
+# public on a public repository, as the question already is.
+# A child's failure is a reply
 # naming its last stderr line, and exit 3. Every reply goes to the item the comment was
 # typed on, opens `@<login>`, and carries the `reply` marker; a refusal reads
 # `@<login>: `<verb>` was not run: <reason>. <way on>`.
@@ -4074,7 +4099,7 @@ control_branch_from_issue() {
 # control_verb_handled <verb> — 0 when an arm below carries out <verb>.
 control_verb_handled() {
   case "$1" in
-    pause|stop|resume|clear) return 0 ;;
+    answer|pause|stop|resume|clear) return 0 ;;
   esac
   return 1
 }
@@ -4189,6 +4214,133 @@ control_stop() {
   esac
 }
 
+# control_answer — one answer, one `resume: answer` dispatch with one entry. A
+# park left partly answered is safe: run_job stops an `answer` job whose park
+# is not fully answered before any session, and its bundle then carries the
+# `answer_<n>.md` restore wrote, so the next answer's job finds the set complete.
+control_answer() {
+  local first short="" below="" text n="" v open_list="" rest="" cmds="" route form dir out status="$EXIT_OK"
+  first=${CONTROL_ARGS%%[$' \t']*}
+  if [[ "$first" =~ ^[1-9][0-9]*$ ]]; then
+    n="$first"
+    short=${CONTROL_ARGS#"$first"}
+    short=${short#"${short%%[!$' \t']*}"}
+  else
+    short="$CONTROL_ARGS"
+  fi
+  case "$CONTROL_BODY" in
+    *$'\n'*) below=${CONTROL_BODY#*$'\n'} ;;
+  esac
+  below=${below//$'\r'$'\n'/$'\n'}
+  below=${below%$'\r'}
+  if [[ "$below" =~ ^[[:space:]]*$ ]]; then
+    text="$short"
+  else
+    text="$below"
+  fi
+  if [[ "$text" =~ ^[[:space:]]*$ ]]; then
+    control_refuse "$EXIT_REFUSED" "the answer is empty" \
+      "Comment \`$COMMAND_HANDLE answer <n>\` with the answer on the lines below it."
+  fi
+
+  control_state_var "$CONTROL_BRANCH" \
+    || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($CS_ERR)" "Comment again to retry."
+  case "$CS_STATE:$CS_REASON" in
+    park_loop:*)
+      control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` is held by the park-loop guard, not waiting for an answer" \
+        "Comment \`$COMMAND_HANDLE clear\` to release the hold and resume it." ;;
+    paused:expired)
+      # An expired bundle is reported as expired, never as no park.
+      control_refuse "$EXIT_REFUSED" "${CS_DETAIL:-the state bundle of the run has expired}; the park's questions can no longer be answered here" \
+        "Comment \`$COMMAND_HANDLE resume\` to resume from the committed ledger." ;;
+    running:*)
+      # Refused rather than queued: a newer pending run in the per-branch
+      # concurrency group could cancel a queued one.
+      control_refuse "$EXIT_REFUSED" "a job of the run on \`$CONTROL_BRANCH\` is in progress${CS_URL:+ ($CS_URL)}" \
+        "Send the answer again once it finishes."
+      ;;
+    parked:*) ;;
+    *)
+      control_refuse "$EXIT_REFUSED" "only a parked run can be answered, and the run on \`$CONTROL_BRANCH\` is \`${CS_STATE:-unknown}\`" \
+        "Nothing is waiting for an answer." ;;
+  esac
+  if [ -z "$CS_OPEN" ]; then
+    control_refuse "$EXIT_REFUSED" "only a parked run with an open question can be answered, and the run on \`$CONTROL_BRANCH\` is \`parked\` with none open" \
+      "Nothing is waiting for an answer."
+  fi
+  for v in $CS_OPEN; do
+    open_list="$open_list${open_list:+, }$v"
+    cmds="$cmds${cmds:+, }\`$COMMAND_HANDLE answer $v\`"
+  done
+  if [ -z "$n" ]; then
+    case "$CS_OPEN" in
+      *' '*)
+        control_refuse "$EXIT_REFUSED" "questions $open_list are open, so the command must name one" \
+          "Answer each with its own comment: $cmds." ;;
+    esac
+    n="$CS_OPEN"
+  fi
+  case " $CS_OPEN " in
+    *" $n "*) ;;
+    *)
+      control_refuse "$EXIT_REFUSED" "question $n is not open; the open questions are $open_list" \
+        "Answer one of them: $cmds." ;;
+  esac
+  if [ -z "$CS_ENGINE" ]; then
+    route=$(hr_github_resume_route "$CONTROL_BRANCH" "<task, user_review or docs: the one the run was started with>")
+    route=${route#or from GitHub: }
+    form="resume answer and answers \`{\"$n\": \"<the answer>\"}\`"
+    route=${route/and resume pause/$form}
+    control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` (\`parked\`) records no engine, and the harness does not guess one" \
+      "Answer it with the **Run workflow** form instead: $route."
+  fi
+
+  if ! dir=$(mktemp -d "$control_tmp/harness-control-answer.XXXXXX"); then
+    control_refuse "$EXIT_GH" "an answer directory could not be created under '$control_tmp'" "Comment again to retry."
+  fi
+  control_dirs="$control_dirs $dir"
+  # The answer is untrusted data: written by printf, never sourced.
+  if ! mkdir "$dir/answers" || ! printf '%s' "$text" >"$dir/answers/answer_$n.md"; then
+    control_refuse "$EXIT_GH" "the answer could not be written under '$dir'" "Comment again to retry."
+  fi
+  out="$dir/dispatch.out"
+  control_child "$out" dispatch "$CONTROL_BRANCH" --engine "$CS_ENGINE" --resume answer \
+    --answers-from "$dir/answers" --indexes "$n" --chain 0 --repo "$root"
+  cat "$out" 2>/dev/null || :
+  case "$CHILD_STATUS" in
+    0) ;;
+    2)
+      case "$CHILD_LAST" in
+        *"workflow_dispatch limit"*)
+          control_refuse "$EXIT_REFUSED" "the dispatch was refused ($CHILD_LAST)" \
+            "Shorten the answer, or commit it to a file on \`$CONTROL_BRANCH\` and name that file in a shorter answer." ;;
+      esac
+      control_refuse "$EXIT_REFUSED" "the dispatch was refused ($CHILD_LAST)" \
+        "Comment \`$COMMAND_HANDLE answer $n\` again once that is fixed." ;;
+    *)
+      control_refuse "$EXIT_GH" "the dispatch could not be sent ($CHILD_LAST)" \
+        "Comment \`$COMMAND_HANDLE answer $n\` again to retry." ;;
+  esac
+
+  cmds=""
+  for v in $CS_OPEN; do
+    [ "$v" != "$n" ] || continue
+    rest="$rest${rest:+, }$v"
+    cmds="$cmds${cmds:+, }\`$COMMAND_HANDLE answer $v\`"
+  done
+  if [ -n "$rest" ]; then
+    # The label stays `parked` until the last answer: only that job resumes.
+    control_reply "$EXIT_OK" "Answer to question $n received from @$CONTROL_ACTOR and sent; question(s) $rest still need an answer: $cmds."
+  fi
+  control_post "Answer to question $n received from @$CONTROL_ACTOR; every open question is answered, so \`$CONTROL_BRANCH\` resumes." \
+    || status="$EXIT_GH"
+  forge_issue_var "$CONTROL_BRANCH" || FORGE_ISSUE=""
+  forge_pr_var "$CONTROL_BRANCH" || FORGE_PR=""
+  [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" running || :
+  [ -z "$FORGE_PR" ] || forge_set_state "$FORGE_PR" running || :
+  exit "$status"
+}
+
 verb_control() {
   local LC_ALL=C
   local action is_pr sender_type first word rest handle forge="" target="" status verbs="" v
@@ -4289,6 +4441,7 @@ verb_control() {
 
   echo "remote-run.sh: control: $CONTROL_VERB on $CONTROL_BRANCH from @$CONTROL_ACTOR on #$CONTROL_NUMBER"
   case "$CONTROL_VERB" in
+    answer) control_answer ;;
     pause) control_pause ;;
     stop) control_stop ;;
     resume) control_resume ;;

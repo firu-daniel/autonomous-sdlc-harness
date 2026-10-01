@@ -45,7 +45,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control/task_
 9. [x] **Task 9** — Let `remote-run.sh review` take a GitHub-started round and report it _(layer: cli)_ _(points: 12)_
 10. [x] **Task 10** — Add `remote-run.sh control` for comment commands, with `pause` and `stop` _(layer: cli)_ _(points: 20)_
 11. [x] **Task 11** — Add the `resume` and `clear` comment commands _(layer: cli)_ _(points: 10)_
-12. [ ] **Task 12** — Add the `answer` comment command _(layer: cli)_ _(points: 15)_
+12. [x] **Task 12** — Add the `answer` comment command _(layer: cli)_ _(points: 15)_
 13. [ ] **Task 13** — Turn a review requesting changes into the next user-review round _(layer: cli)_ _(points: 20)_
 14. [ ] **Task 14** — Give the run and resume workflows the report permissions and the `deliver` step _(layer: cli)_ _(points: 10)_
 15. [ ] **Task 15** — Ship the `harness-control.yml` workflow template _(layer: cli)_ _(points: 15)_
