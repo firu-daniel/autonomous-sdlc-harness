@@ -9,11 +9,15 @@ Exit statuses: `0` success, `1` a `ServiceError`, `2` a missing or unknown sub-c
 """
 
 import argparse
+import asyncio
+import os
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from harness_docs_retrieval.errors import ServiceError
+from harness_docs_retrieval.mcp_server import serve_mcp
+from harness_docs_retrieval.service import add_service_options, load_service_config
 
 PROG = "harness-docs-retrieval"
 
@@ -26,7 +30,20 @@ class SubCommand:
     run: Callable[[argparse.Namespace], int]
 
 
-SUB_COMMANDS: list[SubCommand] = []
+def _run_serve_mcp(args: argparse.Namespace) -> int:
+    config = load_service_config(repo=args.repo, docs_root=args.docs_root, environ=os.environ)
+    asyncio.run(serve_mcp(config))
+    return 0
+
+
+SUB_COMMANDS: list[SubCommand] = [
+    SubCommand(
+        name="serve-mcp",
+        summary="Serve search_docs over stdio MCP (the server an agent runner starts)",
+        configure=add_service_options,
+        run=_run_serve_mcp,
+    ),
+]
 
 
 def _build_parser() -> argparse.ArgumentParser:

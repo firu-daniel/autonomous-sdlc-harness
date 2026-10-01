@@ -41,6 +41,5 @@ def test_service_error_exits_1_with_one_line_and_no_traceback(
     assert "Traceback" not in err
 
 
-def test_sub_command_table_is_empty() -> None:
-    # Tasks 11-13 replace this with the names of the rows they add.
-    assert cli.SUB_COMMANDS == []
+def test_sub_command_table_rows() -> None:
+    assert [row.name for row in cli.SUB_COMMANDS] == ["serve-mcp"]
