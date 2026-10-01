@@ -44,3 +44,4 @@ with
 The joined line is indented by 8 spaces, and the opening `base = "".join(` and closing `).replace(" ", "-")` lines stay unchanged.
 
 - [ ] Join the generator expression as shown, leaving no trailing comma.
+- **Deviations from plan:** The finding names no test file (`none — 13a Python lint`), so the row-G.4 check took the fix-site fallback: the fix site still carried the three-line form, and the fix was applied as specified. The `ruff format --check` gate was not run (a unit never runs a gate script; deferred to the Run gates phase). The claim that the joined form is what `ruff format` produces rests on comparing the edited site with the diff in the finding's log, not on running the formatter.

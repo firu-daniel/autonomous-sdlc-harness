@@ -55,9 +55,7 @@ def heading_slug(text: str, seen: dict[str, int]) -> str:
     suffixed form a literal heading already took.
     """
     base = "".join(
-        ch
-        for ch in text.lower()
-        if ch in " _-" or unicodedata.category(ch)[0] in ("L", "N")
+        ch for ch in text.lower() if ch in " _-" or unicodedata.category(ch)[0] in ("L", "N")
     ).replace(" ", "-")
     slug = base
     if base in seen:
