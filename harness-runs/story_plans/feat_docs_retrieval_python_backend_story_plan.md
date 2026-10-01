@@ -39,7 +39,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_docs_retrieval_python_b
 5. [x] **Task 5** — Add the model interfaces, the fp32 sentence-transformers loader, the weight cache and its presence check (`models.py`) _(layer: general)_ _(points: 15)_
 6. [x] **Task 6** — Port the hash stubs and the stub selector, with a stub-parity case against the TypeScript stubs (`stubs.py`) _(layer: general)_ _(points: 15)_
 7. [x] **Task 7** — Port `DocStore` onto a real Postgres with the same SQL (`store.py`) _(layer: general)_ _(points: 20)_
-8. [ ] **Task 8** — Port hybrid search, abstention and rendering, with the byte-for-byte render case (`search.py`) _(layer: general)_ _(points: 20)_
+8. [x] **Task 8** — Port hybrid search, abstention and rendering, with the byte-for-byte render case (`search.py`) _(layer: general)_ _(points: 20)_
 9. [ ] **Task 9** — Port the incremental index refresh (`refresh.py`) _(layer: general)_ _(points: 10)_
 10. [ ] **Task 10** — Add the wire constants, the service config, the session and the one shared answer path (`wire.py`, `service.py`) _(layer: general)_ _(points: 20)_
 11. [ ] **Task 11** — Serve `search_docs` over stdio MCP, with the tool-listing and refusal parity case (`mcp_server.py`) _(layer: general)_ _(points: 20)_

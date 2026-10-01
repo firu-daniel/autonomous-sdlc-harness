@@ -44,3 +44,9 @@
 - `tests/test_search.py` and `tests/test_render_parity.py` pass (subject to the story index's test-run note).
 - `grep -n ":.3f\|round(" docs-retrieval-service/src/harness_docs_retrieval/search.py` finds nothing. Scores render through `js_to_fixed` only.
 - `grep -n "SELECT\|INSERT\|ORDER BY" docs-retrieval-service/src/harness_docs_retrieval/search.py` finds nothing. Like `search.ts`, this module holds no SQL.
+
+**Deviations from plan:**
+
+- Deferred to the Run gates phase: `tests/test_search.py`, `tests/test_render_parity.py`, Python lint and Python type-check were not run. No conventions document states a single-file Python command (story index `## Context`, the test-run note). Evidence downgrade: the `snippet_of` literals and the `toFixed(3)` values of the parity scores (`0.063`, `0.188`, `0.001`, `0.016`, `1.000`, `0.000`) rest on an executed scratch probe (`harness-runs/scratch/task8_snippet_probe.mjs`, run through `scripts/scratch-run.sh`), which ran `snippetOf`'s body copied from `search.ts` on the test inputs. That the Python port produces the same strings rests on reading only. The two plan greps were run and found nothing.
+- `tests/fakes.py` also declares `doc_chunk(path, anchor, heading, body)`, a `DocChunk` builder with placeholder `text` and `hash`, and `InMemoryDocStore.calls`, the search-path method names in call order, which the lexical-mode and empty-query cases assert on. `lexical_ranking` takes the query and `vector_ranking` the query embedding; each returns ids, truncated to `limit` and ranked from 1.
+- `test_search.py` adds cases beyond the list: vector mode never calls `lexical_search`, a missing rerank score reads as `0`, `k = -3` and `-inf`, and a 238-unit-plus-astral body that fits at exactly 240 UTF-16 units.
