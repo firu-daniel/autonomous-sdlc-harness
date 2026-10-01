@@ -68,3 +68,7 @@
 - The type check passes.
 - `git grep -nE "pwd -P|\*\.\.\*|A-Za-z0-9\._/-" -- cli/templates/scripts/scratch-run.sh` returns only header prose and the call site. No hit is an inline `case` pattern or a `cd … && pwd -P` resolution of the candidate.
 - `git grep -n 'hr_scratch_path_var' -- cli/templates/scripts` returns the definition, its mention in the library's opening paragraph, and `scratch-run.sh`'s call and header pointer. After Task 7 it also returns `remote-run.sh`'s call. No other script carries its own copy of the test.
+
+**Deviations from plan:**
+- The `git grep -nE "pwd -P|\*\.\.\*|A-Za-z0-9\._/-"` probe over `scratch-run.sh` also hits the `charset` refusal's message line, because that message must keep the `outside A-Za-z0-9` substring the suite matches; it is a message, not an inline `case` pattern or resolution.
+- The `no-scratch` message names the unresolved scratch path by calling `hr_state_path "$repo_root" "$HR_SCRATCH_SUBDIR"` at the message site, because the function's `HR_SCRATCH_DIR` is the physical path and is empty on that outcome; the message text is otherwise unchanged.

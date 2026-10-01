@@ -3,7 +3,9 @@
 # the repository it is operating on, reads that repository's
 # `harness.config.json` at run time, answers "is this branch protected?",
 # routes an inbox filename to its engine and branch (`hr_inbox_route_var`),
-# derives a branch name from a title (`hr_derive_branch`), places a dropped
+# derives a branch name from a title (`hr_derive_branch`), judges whether a
+# path lies strictly inside the state directory's scratch directory
+# (`hr_scratch_path_var`), places a dropped
 # artifact in a working copy and commits and pushes it, and derives the
 # anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
@@ -1138,6 +1140,92 @@ hr_state_path() {
   else
     printf '%s/%s\n' "$root" "$state"
   fi
+}
+
+# Judge whether <path> resolves STRICTLY INSIDE `<root>/<state_dir>/scratch/`.
+# Usage: hr_scratch_path_var <root> <path> [<base>]
+#
+# Two callers, differing only in what they do with an accepted path:
+# `scratch-run.sh` executes a file there and `remote-run.sh discard` removes a
+# directory there. So this reports a keyword in `HR_SCRATCH_WHY` and leaves every
+# message and exit code to its caller.
+#
+# The rule, stated once:
+#   - `..` is refused ANYWHERE in the argument, not only as a whole segment —
+#     strictly stronger, and free, because nothing in that directory depends on
+#     a file's name. Then any character outside `A-Za-z0-9._/-` is refused. Both
+#     tests run on <path> as the caller received it, before anything resolves.
+#   - A relative <path> resolves against <base> when given, else <root>; an
+#     absolute one is taken as given.
+#   - Both sides of the comparison are resolved PHYSICALLY (`cd … && pwd -P`), so
+#     a symlinked directory planted inside the scratch tree cannot widen the
+#     fence. The target's parent must be the scratch directory or beneath it, and
+#     a basename of `.` (the scratch directory itself) is refused.
+#   - A target that is itself a symlink is refused rather than followed: its
+#     destination is outside this judgement. The target need not exist.
+#
+# Clears the other four, then sets: `HR_SCRATCH_SUBDIR` (`scratch`, mirroring the `scratch` row
+# of `STATE_DIR_ENTRIES` in `cli/src/generators/stateDir.ts`), `HR_SCRATCH_DIR`
+# (physical), `HR_SCRATCH_PARENT` (physical), `HR_SCRATCH_TARGET`
+# (`<parent>/<basename>`, the path a caller acts on) and `HR_SCRATCH_WHY`.
+# Status / `HR_SCRATCH_WHY`:
+#   0  accepted (WHY empty)
+#   1  refused — `dotdot`, `charset`, `outside`, `itself`, `symlink`
+#   2  the target's parent does not resolve — `no-parent`
+#   3  the scratch directory cannot be located — `no-config`, `no-scratch`
+#   4  <root> or <path> is empty — `usage`
+hr_scratch_path_var() {
+  local root="${1-}" path="${2-}" base="${3-}" scratch candidate name
+  HR_SCRATCH_DIR=""
+  HR_SCRATCH_PARENT=""
+  HR_SCRATCH_TARGET=""
+  HR_SCRATCH_WHY=""
+  HR_SCRATCH_SUBDIR='scratch'
+  if [ -z "$root" ] || [ -z "$path" ]; then
+    HR_SCRATCH_WHY="usage"
+    return 4
+  fi
+  case "$path" in
+    *..*) HR_SCRATCH_WHY="dotdot"; return 1 ;;
+  esac
+  case "$path" in
+    *[!A-Za-z0-9._/-]*) HR_SCRATCH_WHY="charset"; return 1 ;;
+  esac
+  scratch=$(hr_state_path "$root" "$HR_SCRATCH_SUBDIR")
+  if [ "$?" -ne 0 ] || [ -z "$scratch" ]; then
+    HR_SCRATCH_WHY="no-config"
+    return 3
+  fi
+  HR_SCRATCH_DIR=$(cd "$scratch" 2>/dev/null && pwd -P)
+  if [ -z "$HR_SCRATCH_DIR" ]; then
+    HR_SCRATCH_WHY="no-scratch"
+    return 3
+  fi
+  [ -n "$base" ] || base="$root"
+  case "$path" in
+    /*) candidate="$path" ;;
+    *) candidate="${base%/}/$path" ;;
+  esac
+  HR_SCRATCH_PARENT=$(cd "$(dirname "$candidate")" 2>/dev/null && pwd -P)
+  if [ -z "$HR_SCRATCH_PARENT" ]; then
+    HR_SCRATCH_WHY="no-parent"
+    return 2
+  fi
+  case "$HR_SCRATCH_PARENT" in
+    "$HR_SCRATCH_DIR" | "$HR_SCRATCH_DIR"/*) ;;
+    *) HR_SCRATCH_WHY="outside"; return 1 ;;
+  esac
+  name=$(basename "$candidate")
+  if [ "$name" = "." ]; then
+    HR_SCRATCH_WHY="itself"
+    return 1
+  fi
+  HR_SCRATCH_TARGET="$HR_SCRATCH_PARENT/$name"
+  if [ -L "$HR_SCRATCH_TARGET" ]; then
+    HR_SCRATCH_WHY="symlink"
+    return 1
+  fi
+  return 0
 }
 
 # The machine-local settings directory — one place an operator keeps values that

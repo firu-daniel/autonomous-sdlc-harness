@@ -43,7 +43,7 @@ Tasks 1, 2, 4 and 7 each edit a different section of `cli/templates/scripts/remo
 3. [x] **Task 3** — Count run-workflow history as "taken" in the run library's branch-name rule _(layer: cli)_ _(points: 15)_
 4. [x] **Task 4** — Ask GitHub for run history in the trigger's name derivation, and cover it _(layer: cli)_ _(points: 8)_
 5. [x] **Task 5** — Carry the trigger confirmation on every `remote-github` outcome, and point `forge` at it under `--check-github` _(layer: cli)_ _(points: 10)_
-6. [ ] **Task 6** — Move the scratch-containment path test into the run library as `hr_scratch_path_var`, and make `scratch-run.sh` call it _(layer: cli)_ _(points: 12)_
+6. [x] **Task 6** — Move the scratch-containment path test into the run library as `hr_scratch_path_var`, and make `scratch-run.sh` call it _(layer: cli)_ _(points: 12)_
 7. [ ] **Task 7** — Add `remote-run.sh discard`, scoped to `<state_dir>/scratch/` through `hr_scratch_path_var`, and describe the commands' scratch directories _(layer: cli)_ _(points: 15)_
 8. [ ] **Task 8** — Move `branch-pause` and `branch-resume` to a fixed scratch directory removed by `discard` _(layer: plugin)_ _(points: 10)_
 9. [ ] **Task 9** — Move `branch-answer` and `branch-user-review` to a fixed scratch directory removed by `discard` _(layer: plugin)_ _(points: 12)_
