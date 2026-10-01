@@ -53,3 +53,8 @@
 - `npm test -- test/remote-run.test.mjs` from `cli/` passes: the four new cases, and every existing `restore`, `save`, `sync` and `continue` case unchanged. The existing fixtures have no commit beyond `origin/<default>`, so they take the fallback.
 - The type check (`commands.typecheck`) passes.
 - `git grep -n 'lineage' -- cli/templates/scripts/remote-run.sh` lists only the helper, its two call sites in `previous_bundle_run` / `verb_restore`, the header paragraph and the `REPRO` lines. No other verb reads `LINEAGE_COMMITS` (the story index's first `Top risks:` entry).
+
+**Deviations from plan:**
+- The plan states that the existing fixtures have no commit beyond `origin/<default>`. They do: `init` makes a first commit, and that commit does not descend from the fixture's seeded `origin` commit. So the bound applied to them, and seven existing `restore` cases failed. `remoteFixture` now force-pushes `HEAD` to `origin/<defaultBranch>` when `HEAD` resolves. Every existing case then takes the unbounded fallback, as the plan intended, and no existing assertion changes.
+- `restore keeps a planning file the fresh checkout already carries, and reports it kept` commits a story index after the fixture is built, so its `HEAD` is one commit beyond `origin/<default>`. `restoreFrom` gained an optional `headSha`, and that case passes the commit as run 401's `headSha`. That run is of the branch's own lineage, which is what the case models.
+- `lineage_commits_var` also returns 1 with "the configuration could not be read" when `defaultBranch` resolves empty. `defaultBranch` is required by the schema, so an empty value means the configuration is not usable.

@@ -38,7 +38,7 @@ Tasks 1, 2, 4 and 7 each edit a different section of `cli/templates/scripts/remo
 
 **This section is the single source of truth for the implementation loop.** The orchestrator walks the `[ ]` entries below from top to bottom. Only the committing role flips a marker to `[x]`: the `committer` agent in every flow that dispatches one, or the orchestrator itself in the supervised flow, which dispatches none. An implementer never changes a marker here, and never edits any other line of this section while a run is iterating this index. `[ ]` markers anywhere else, such as sub-step bullets inside the per-task files, are informational only; the committer never touches them. Each entry maps 1:1 to `harness-runs/task_plans/fix_forge_trigger_run_lineage/task_<K>_plan.md`. Entries are ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Bound `restore`'s previous-bundle selection to the branch's lineage by `headSha` _(layer: cli)_ _(points: 18)_
+1. [x] **Task 1** — Bound `restore`'s previous-bundle selection to the branch's lineage by `headSha` _(layer: cli)_ _(points: 18)_
 2. [ ] **Task 2** — Make the trigger comment name the run whose `headSha` is the commit `start` pushed _(layer: cli)_ _(points: 10)_
 3. [ ] **Task 3** — Count run-workflow history as "taken" in the run library's branch-name rule _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Ask GitHub for run history in the trigger's name derivation, and cover it _(layer: cli)_ _(points: 8)_

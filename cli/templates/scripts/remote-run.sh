@@ -31,8 +31,9 @@
 #        asked to cancel, or there was none); for status and fetch: printed
 #        (for fetch, `state: none` included); for sync: the record is
 #        current (including "no run listed yet", which writes nothing); for
-#        restore: restored, or no previous bundle (or an expired one, with a
-#        `::warning::` line) under --resume none|pause;
+#        restore: restored, or no previous bundle of the branch's current
+#        lineage (or an expired one, with a `::warning::` line) under
+#        --resume none|pause;
 #        for save: ALWAYS, whatever happened; for continue: whatever it
 #        decided — every outcome a person must act on is a notification; for
 #        poll: the tick finished; for pause-requested: such a run exists; for
@@ -54,7 +55,8 @@
 #        downloaded bundle is unrecognised (sync, restore, and status with no
 #        local record); the inputs payload is over the limit; a named answer
 #        file is missing. For restore under --resume answer, "nothing more":
-#        no previous bundle, the previous bundle expired (the message names
+#        no previous bundle of the branch's current lineage, the previous
+#        bundle expired (the message names
 #        its expiry and the resume command), `HARNESS_INPUT_ANSWERS` not an object of
 #        positive-integer keys to strings, or an answer whose `question_<n>.md`
 #        is not at the top level of the previous bundle — nothing is restored
@@ -232,7 +234,21 @@
 # with the exact bytes, after checking every entry first; and with
 # `HARNESS_INPUT_PARK_LOOP_CLEAR` exactly `true` it sets `park_loop_cycles` to
 # "0" in the restored `autonomous_logs/remote_status.json`. No bundle in any
-# run is an ordinary first job (exit 0, one line) except under --resume answer.
+# candidate run is an ordinary first job (exit 0, one line) except under
+# --resume answer, whose refusal names the current lineage.
+#
+# THE CANDIDATES ARE BOUNDED TO THE BRANCH'S CURRENT LINEAGE, so a branch
+# recreated under a reused name never restores an earlier, unrelated run's
+# bundle. The listing reads each run's `headSha`, and `lineage_commits_var`
+# lists `git rev-list refs/remotes/origin/<defaultBranch>..HEAD` in the job's
+# checkout; a run whose `headSha` is not among those commits, or that carries
+# none, is dropped before the walk, so the expired-bundle stop applies to
+# lineage runs only. When any was dropped it prints `skipped <n> finished
+# run(s) of <branch> from before its current lineage`. When the lineage cannot
+# be listed — the configuration unreadable, `origin/<defaultBranch>` not
+# present, or HEAD carrying no commit beyond it — every finished run is a
+# candidate, as before the bound, and it prints `the lineage of <branch> is
+# not bounded (<reason>); every finished run of it is a candidate`.
 #
 # `save` WRAPS `hr_remote_bundle_write` into <out_dir>, and with
 # `GITHUB_STEP_SUMMARY` set appends a Markdown table of the bundle's `status`,
@@ -594,6 +610,13 @@
 #   first job  a `run list` answer with no finished run: --resume none -> 0;
 #              --resume answer -> 2
 #   own run    GITHUB_RUN_ID=<the bundle run's id> -> that run is skipped
+#   lineage    the checkout on feat_x one commit beyond origin/main, and a `run
+#              list` answer holding only an older completed run whose `headSha`
+#              is another commit: --resume none -> 0, prints `skipped 1 finished
+#              run(s) of feat_x from before its current lineage` and `this is
+#              its first job`, no `run download`
+#   own lineage  that same branch plus a newer completed run whose `headSha`
+#              is that commit -> that run's bundle is restored
 #   expired    the artifact list answering {"artifacts":[{"name":"harness-state",
 #              "expired":true,"expires_at":"2026-01-02T00:00:00Z"}]}: --resume
 #              pause -> 0, a `::warning::` line, no `run download`, no older
@@ -1542,26 +1565,71 @@ restore_refuse() {
   exit "$EXIT_REFUSED"
 }
 
+# lineage_commits_var <checkout> — the branch's current lineage, read from refs
+# alone: never a fetch, never gh, nothing on stdout. A run is of the current
+# lineage when its `headSha` is a commit reachable from HEAD and not from
+# `origin/<defaultBranch>`. The list is complete because `harness-run.yml`
+# checks out with `fetch-depth: 0`. It survives the branch's own history
+# edits because `refresh-branch.sh` merges and never rebases and
+# `push-branch.sh` never forces, so every own run's `headSha` stays an ancestor
+# of HEAD; a deleted, unmerged branch's commits are not ancestors of a branch
+# recreated under its name. An empty list leaves the lineage unbounded.
+# 0: LINEAGE_COMMITS holds the newline-separated full SHAs. 1: it is empty and
+# LINEAGE_WHY names the reason.
+LINEAGE_COMMITS=""
+LINEAGE_WHY=""
+lineage_commits_var() {
+  local checkout="${1-}" default
+  LINEAGE_COMMITS=""
+  LINEAGE_WHY=""
+  default=$(hr_default_branch "$checkout") && [ -n "$default" ] || {
+    LINEAGE_WHY="the configuration could not be read"
+    return 1
+  }
+  git -C "$checkout" rev-parse --verify --quiet "refs/remotes/origin/$default^{commit}" >/dev/null 2>&1 || {
+    LINEAGE_WHY="origin/$default is not present"
+    return 1
+  }
+  LINEAGE_COMMITS=$(git -C "$checkout" rev-list "refs/remotes/origin/$default..HEAD" 2>/dev/null) || LINEAGE_COMMITS=""
+  [ -n "$LINEAGE_COMMITS" ] || {
+    LINEAGE_WHY="HEAD carries no commit beyond origin/$default"
+    return 1
+  }
+  return 0
+}
+
 # previous_bundle_run — PREV_RUN_ID is the newest finished `harness run
 # <branch>` run, other than this job's own, carrying a state artifact, and
-# PREV_RUN_STATE is `present`, `expired` or empty when no run carries one. A
-# run with no artifact is walked past; an expired one stops the walk, because
+# PREV_RUN_STATE is `present`, `expired` or empty when no run carries one. When
+# `lineage_commits_var` bounds the lineage, a run whose `headSha` is not in it
+# (or that has none) is dropped before the walk and counted in LINEAGE_SKIPPED.
+# A run with no artifact is walked past; an expired one stops the walk, because
 # an older copy is staler state. Exits 3 when gh fails.
 PREV_RUN_ID=""
 PREV_RUN_STATE=""
+LINEAGE_SKIPPED=0
 previous_bundle_run() {
-  local ids id
+  local ids id out bounded=0
   PREV_RUN_ID=""
   PREV_RUN_STATE=""
+  LINEAGE_SKIPPED=0
+  lineage_commits_var "$root" && bounded=1
   gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" \
-    --json databaseId,displayTitle,status,createdAt --limit "$RUN_LIST_LIMIT" \
+    --json databaseId,displayTitle,status,createdAt,headSha --limit "$RUN_LIST_LIMIT" \
     || gh_fail "listing the runs of '$branch' failed"
-  ids=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" --arg self "${GITHUB_RUN_ID-}" '
-    [.[] | select(.displayTitle == $t and .status == "completed" and (.databaseId | tostring) != $self)]
-    | sort_by([.createdAt, .databaseId]) | reverse | .[].databaseId | tostring' 2>/dev/null) || {
+  # jq 1.5: membership by `any(gen; cond)`, not `index` / `IN`.
+  out=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" --arg self "${GITHUB_RUN_ID-}" \
+    --arg bounded "$bounded" --arg lineage "$LINEAGE_COMMITS" '
+    ($lineage | split("\n")) as $l
+    | [.[] | select(.displayTitle == $t and .status == "completed" and (.databaseId | tostring) != $self)] as $done
+    | [$done[] | select($bounded != "1" or ((.headSha // "") as $h | any($l[]; . == $h)))] as $kept
+    | ((($done | length) - ($kept | length)) | tostring),
+      ($kept | sort_by([.createdAt, .databaseId]) | reverse | .[].databaseId | tostring)' 2>/dev/null) || {
     GH_ERR="its run list is not the expected JSON"
     gh_fail "listing the runs of '$branch' failed"
   }
+  LINEAGE_SKIPPED=$(printf '%s\n' "$out" | head -n 1)
+  ids=$(printf '%s\n' "$out" | tail -n +2)
   for id in $ids; do
     bundle_state "$id"
     if [ "$BUNDLE_STATE" != none ]; then
@@ -1592,13 +1660,18 @@ verb_restore() {
   previous_bundle_run
   id="$PREV_RUN_ID"
   hr_remote_names_var
+  if [ -n "$LINEAGE_WHY" ]; then
+    echo "remote-run.sh: the lineage of $branch is not bounded ($LINEAGE_WHY); every finished run of it is a candidate"
+  elif [ "${LINEAGE_SKIPPED:-0}" -gt 0 ]; then
+    echo "remote-run.sh: skipped $LINEAGE_SKIPPED finished run(s) of $branch from before its current lineage"
+  fi
   if [ "$PREV_RUN_STATE" = expired ]; then
     [ "$resume" != answer ] \
       || restore_refuse "the state bundle of run $id expired on $BUNDLE_EXPIRES_AT, so its questions can no longer be answered here: resume from the committed ledger with $RESUME_HINT $branch, or re-drop the task; nothing written"
     echo "::warning::remote-run.sh: the state bundle of run $id expired on $BUNDLE_EXPIRES_AT: the park-loop, auto-resume and stall counts, the clarification history and any planning drafts not yet committed that it carried are lost; this job continues from the committed ledger"
   elif [ -z "$id" ]; then
     [ "$resume" != answer ] \
-      || restore_refuse "--resume answer, but no finished run of $branch carries a state bundle; nothing written"
+      || restore_refuse "--resume answer, but no finished run of $branch's current lineage carries a state bundle; nothing written"
     echo "remote-run.sh: no previous bundle for $branch; this is its first job"
   else
     download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$id") \
