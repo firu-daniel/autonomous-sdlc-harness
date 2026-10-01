@@ -5597,6 +5597,7 @@ test('retrieval-python-* under python: each self-check answer grades its check, 
     assert.equal(index?.status, 'FAIL', stderr);
     assert.ok(index.detail.includes('could not connect to the database'), index.detail);
     assert.ok(index.detail.includes('docker compose up -d --wait postgres'), index.detail);
+    assert.ok(index.detail.includes('docs-retrieval-service/'), index.detail);
     assert.ok(index.detail.includes('127.0.0.1:5432/docs_retrieval'), index.detail);
     assert.ok(!index.detail.includes(':harness@'), `the line printed the password: ${index.detail}`);
   });

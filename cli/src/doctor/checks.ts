@@ -5082,7 +5082,7 @@ const RETRIEVAL_PYTHON_INDEX_CHECK: Check = {
       return fail(`cannot build without the Python backend's ${stoppedBy} (see ${PYTHON_CHECK_ID[stoppedBy]})`);
     }
     return fail(
-      `${line.detail} — the backend's database is ${databaseLocation(answer.databaseUrl)} (${MCP_PATH}'s ${DOCS_SERVER_NAME} \`env\` ${PYTHON_DATABASE_URL_VARIABLE}, else the compose default): start the bundled one with \`docker compose up -d --wait postgres\`, or point ${PYTHON_DATABASE_URL_VARIABLE} in that \`env\` object at yours`,
+      `${line.detail} — the backend's database is ${databaseLocation(answer.databaseUrl)} (${MCP_PATH}'s ${DOCS_SERVER_NAME} \`env\` ${PYTHON_DATABASE_URL_VARIABLE}, else the compose default): start the bundled one by running \`docker compose up -d --wait postgres\` in docs-retrieval-service/ of a clone of this CLI's repository at its release tag (docs/retrieval.md → \`## Turning on the Python backend\`, step 2), or point ${PYTHON_DATABASE_URL_VARIABLE} in that \`env\` object at yours`,
     );
   },
 };
