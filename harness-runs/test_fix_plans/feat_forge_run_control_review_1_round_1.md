@@ -10,7 +10,7 @@
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Remove the leftover scratch probes that carry the checkout's absolute path. _(layer: general)_
+1. [x] **Finding 1** — Remove the leftover scratch probes that carry the checkout's absolute path. _(layer: general)_
 
 ## Must Fix
 
