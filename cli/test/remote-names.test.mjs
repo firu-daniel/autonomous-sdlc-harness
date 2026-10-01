@@ -22,6 +22,8 @@ import {
   DEFAULT_TRIGGER_LABEL,
   GH_CLI_VARIABLE,
   LEGACY_TRIGGER_LABEL,
+  PR_CREATE_SETTING,
+  PR_CREATE_SETTING_PATH,
   REVIEW_ROUND_STATE,
   RUN_STATES,
   STATE_ARTIFACT_NAME,
@@ -86,6 +88,8 @@ test('remote-run.sh mirrors the run-control names byte for byte', () => {
     `REVIEW_ROUND_STATE='${REVIEW_ROUND_STATE}'`,
     `STATE_LABEL_PREFIX='${STATE_LABEL_PREFIX}'`,
     `RUN_STATES='${RUN_STATES.join(' ')}'`,
+    `PR_CREATE_SETTING='${PR_CREATE_SETTING}'`,
+    `PR_CREATE_SETTING_PATH='${PR_CREATE_SETTING_PATH}'`,
   ];
   for (const line of mirrors) assert.ok(lines.includes(line), `remote-run.sh lacks the line ${line}`);
 });

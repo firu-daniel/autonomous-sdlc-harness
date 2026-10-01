@@ -772,6 +772,8 @@
 #   REVIEW_ROUND_STATE           mirrors  REVIEW_ROUND_STATE
 #   STATE_LABEL_PREFIX           mirrors  STATE_LABEL_PREFIX
 #   RUN_STATES                   mirrors  RUN_STATES, space-separated, same order
+#   PR_CREATE_SETTING            mirrors  PR_CREATE_SETTING
+#   PR_CREATE_SETTING_PATH       mirrors  PR_CREATE_SETTING_PATH
 #
 # `set -u` WITHOUT `-e`: every refusal is reported with its own exit code rather
 # than aborting mid-decision.
@@ -1017,6 +1019,8 @@ COMMENT_MARKER='<!-- sdlc-harness'
 REVIEW_ROUND_STATE='changes_requested'
 STATE_LABEL_PREFIX='sdlc-harness: '
 RUN_STATES='running parked paused done failed stopped'
+PR_CREATE_SETTING='Allow GitHub Actions to create and approve pull requests'
+PR_CREATE_SETTING_PATH='Settings -> Actions -> General -> Workflow permissions'
 # The most bytes of a question file one park comment carries. An issue comment
 # holds 262,144 bytes of UTF-8, and the refusal text's character count is not
 # to be trusted (docs/github-integration-research.md -> S6); the margin is the
@@ -3887,7 +3891,7 @@ verb_deliver() {
   if [ -z "$pr_url" ]; then
     target="$FORGE_ISSUE"
     if [ "$forbidden" -eq 1 ]; then
-      text="The harness run on \`$branch\` completed, but its pull request could not be opened: GitHub Actions is not permitted to create pull requests in this repository. Turn on Settings → Actions → General → Workflow permissions → *Allow GitHub Actions to create and approve pull requests*, or set the \`HARNESS_GIT_TOKEN\` secret, for the next run. For this one, open the pull request from the branch: $compare"
+      text="The harness run on \`$branch\` completed, but its pull request could not be opened: GitHub Actions is not permitted to create pull requests in this repository. Turn on *$PR_CREATE_SETTING* under $PR_CREATE_SETTING_PATH, or set the \`HARNESS_GIT_TOKEN\` secret, for the next run. For this one, open the pull request from the branch: $compare"
     else
       text="The harness run on \`$branch\` completed, but its pull request could not be opened: $create_err. Open it by hand from the branch: $compare"
     fi
