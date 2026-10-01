@@ -45,6 +45,29 @@
 #                                     `name:`, so GitHub names it by its key,
 #                                     and the settledness test reads that
 #                                     job's status by that name
+#   harness-control.yml               the concurrency group
+#                                     `harness-review-<branch>`, shared by its
+#                                     review jobs and the `collect` job here
+#
+# THE COLLECT JOB. When a run ends, `remote-run.sh collect` starts the next
+# user-review round from every review requesting changes that `control`
+# answered "collected" while the run was in flight, so a reviewer waits at most
+# for that run and never resubmits. It is a job of its own, not a step of
+# `run`, for two reasons: a step cannot hold a concurrency group, and this one
+# must share `harness-review-<branch>` with harness-control.yml's review jobs so
+# the two never place a round at once; and the settledness test reads "the
+# `run` job is completed", which no step inside that job could see. Under
+# `!cancelled()` a failed `run` job still reaches it, and the run's state bundle
+# decides whether the run ended or only paused or parked; a cancelled or
+# stopped run skips it. The group name mirrors harness-control.yml's, and
+# RUN_JOB_NAME in remote-run.sh mirrors the `run` job's key (DECLARED MIRRORS
+# above). It reads no secret: its own token pushes the round, dispatches it and
+# comments. It checks out the default branch, as harness-control.yml's review
+# jobs do, never the run's branch: `collect` fetches that branch itself and
+# `review` cuts its own working copy of it, which create-worktree.sh refuses
+# for a branch already checked out. Its step is `continue-on-error` for the
+# report step's reason below: scripts older than this file carry no `collect`
+# verb.
 #
 # ACTION PINS.
 #   actions/checkout@v5
@@ -460,6 +483,52 @@ jobs:
           bash "$SCRIPTS_DIR/autonomous-notify.sh" failed "$HARNESS_INPUT_BRANCH" "" \
             "job cancelled: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true
           bash "$SCRIPTS_DIR/remote-run.sh" report failed "$HARNESS_INPUT_BRANCH" --note "the job was cancelled: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true
+
+  collect:
+    needs: run
+    if: ${{ inputs.action == 'run' && !cancelled() }}
+    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    concurrency:
+      group: harness-review-${{ inputs.branch }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HARNESS_REMOTE_SLUG: ${{ github.repository }}
+      HARNESS_INPUT_BRANCH: ${{ inputs.branch }}
+      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+      HARNESS_TRIGGER_ALLOWED_BOTS: ${{ vars.HARNESS_TRIGGER_ALLOWED_BOTS }}
+    steps:
+      - name: Check out the default branch for collecting
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          token: ${{ github.token }}
+          fetch-depth: 0
+
+      - name: Check for jq and gh before collecting
+        run: |
+          missing=""
+          for tool in jq gh; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::this runner lacks:$missing. Install them on the self-hosted runner, or use a GitHub-hosted one."
+            exit 1
+          fi
+
+      - name: Read the configuration for collecting
+        run: |
+          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
+
+      - name: Set the git identity for collecting
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Start the next round from collected reviews
+        continue-on-error: true
+        run: bash "$SCRIPTS_DIR/remote-run.sh" collect "$HARNESS_INPUT_BRANCH"
 
   warm:
     if: inputs.action == 'warm'

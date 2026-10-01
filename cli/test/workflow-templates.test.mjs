@@ -3,7 +3,10 @@
  *
  * **The contract these tests enforce.** The seven `workflow_dispatch` inputs `remote-run.sh`
  * sends, with `action`'s options exactly `run`, `pause`, `warm` and `stop`; a job only for `run`
- * and for `warm`, so `pause` and `stop` start none; the `run-name` title the pause poll and
+ * and for `warm`, so `pause` and `stop` start none; the `collect` job after `run`, under `!cancelled()`,
+ * in the `harness-review-<branch>` group with `cancel-in-progress: false`, checking out the default
+ * branch rather than `inputs.branch`, reading no secret and running
+ * `remote-run.sh collect` alone; the `run-name` title the pause poll and
  * `continue` / `poll` match runs by; the `runs-on` line and the permissions exactly `contents`,
  * `actions`, `issues` and `pull-requests`, each `write`; the `Open the pull request and report`
  * step running `remote-run.sh deliver` after `Upload the state bundle` and before `Continue, wait
@@ -146,7 +149,34 @@ test('the seven inputs, with their types and options', () => {
 
 test('only run and warm start a job, so pause and stop start none', () => {
   const jobIfs = LINES.filter((l) => /^ {4}if: /.test(l)).map((l) => l.trim());
-  assert.deepEqual(jobIfs, ["if: inputs.action == 'run'", "if: inputs.action == 'warm'"]);
+  assert.deepEqual(jobIfs, [
+    "if: inputs.action == 'run'",
+    "if: ${{ inputs.action == 'run' && !cancelled() }}",
+    "if: inputs.action == 'warm'",
+  ]);
+});
+
+test('the collect job follows run unless cancelled, shares the review group, reads no secret and runs collect', () => {
+  const start = LINES.indexOf('  collect:');
+  assert.notEqual(start, -1, 'harness-run.yml carries a collect job');
+  const block = blockUnder(start);
+  const text = block.join('\n');
+  assert.ok(block.includes('    needs: run'), text);
+  assert.match(text, /^ {4}if: .*!cancelled\(\)/m);
+  const at = block.findIndex((l) => /^ {4}concurrency:$/.test(l));
+  assert.notEqual(at, -1, 'the collect job declares a concurrency group');
+  assert.deepEqual(blockUnder(at, block).map((l) => l.trim()), [
+    'group: harness-review-${{ inputs.branch }}',
+    'cancel-in-progress: false',
+  ]);
+  assert.doesNotMatch(text, /secrets\./);
+  const refs = block.filter((l) => /^\s+ref: /.test(l)).map((l) => l.trim());
+  assert.deepEqual(refs, ['ref: ${{ github.event.repository.default_branch }}'], 'review cannot cut a branch the job checked out');
+  const calls = runBodies(block).flatMap((body) =>
+    [...body.matchAll(/([A-Za-z0-9_-]+\.sh)"?\s+(\S*)/g)].map((m) => `${m[1]} ${m[2]}`),
+  );
+  assert.deepEqual(calls, ['remote-run.sh collect']);
+  assert.match(text, /remote-run\.sh" collect "\$HARNESS_INPUT_BRANCH"/);
 });
 
 test('the run-name title, the runner line and the permissions', () => {

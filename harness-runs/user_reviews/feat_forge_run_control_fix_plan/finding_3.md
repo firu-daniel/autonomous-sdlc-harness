@@ -69,3 +69,12 @@ Also touched by this finding: `cli/templates/scripts/remote-run.sh`, which gets 
   - no open pull request: nothing;
   - `review` failing placement: exactly one pull-request comment and exit 0.
 - **`cli/test/workflow-templates.test.mjs`.** Add a case asserting that `harness-run.yml` carries the `collect` job with `needs: run`, `!cancelled()` in its `if:`, the group `harness-review-${{ inputs.branch }}` with `cancel-in-progress: false`, no `secrets.` reference, and a step that runs `remote-run.sh" collect`.
+
+**Deviations from plan:**
+
+- `cli` layer: the `collect` step is `continue-on-error: true`, for the reason `harness-run.yml`'s header already gives the report step: a repository that re-rendered the workflow without `init --force` runs scripts with no `collect` verb, and that usage error must not mark a finished run failed. The `THE COLLECT JOB` paragraph says so.
+- `cli` layer: a settledness read that fails, a pull-request lookup that fails, and a `round_collect` that fails (its 3 or 4) are each one line and exit 0 with no comment; the collector failure is a `::warning::` line. Item 1.7's one comment is posted only for a failed `review` child, as the plan states.
+- `cli` layer: `collect` reuses `control`'s `control_settled_var`, `control_child` and `control_cleanup` with `CONTROL_BRANCH` set to the branch, rather than a second copy of each; the section header says so.
+- `cli` layer: `harness-control.yml`'s group paragraph and its DECLARED MIRRORS now name `harness-run.yml`'s `collect` job, the half of the mirror Finding 1 left to this finding. `cli/src/config/model.ts` → `forgeTriggerApplies`'s consumer list gains `collect`. The script header's REPRO block gains a `collect` entry.
+- `cli` layer: beyond the plan's case list, `remote-collect.test.mjs` adds a case where this run ended `parked` and one for `--pr` (a usage error for `0`; a round placed from `--pr 12` with no pull request listed). The "nothing pending" case lists an inline comment and no review, which also covers "inline comments alone start no round".
+- Not run in this dispatch: `remote-control-review.test.mjs`, `remote-run.test.mjs` and the other suites this unit did not edit, though `remote-run.sh` changed under them; deferred to the Run gates phase.

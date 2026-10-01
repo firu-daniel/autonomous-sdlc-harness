@@ -82,6 +82,8 @@
 #   * The name `harness-review-<branch>` is reserved for every job that places a
 #     review round on that branch; any other workflow's job that does so joins
 #     the group under exactly that name, and both files' headers declare it.
+#     harness-run.yml's `collect` job is the one such job today (DECLARED
+#     MIRRORS below).
 #
 
 # TWO RULES EVERY EDIT KEEPS.
@@ -101,6 +103,9 @@
 #                                     HARNESS_REMOTE_STOP,
 #                                     HARNESS_TRIGGER_ALLOWED_BOTS
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir
+#   harness-run.yml                   the concurrency group
+#                                     `harness-review-<branch>`, held by its
+#                                     `collect` job
 #
 # ACTION PINS.
 #   actions/checkout@v5

@@ -576,7 +576,7 @@ export function remoteExecutionApplies(config: HarnessConfig): boolean {
  *
  * **Declared once, here, because every consumer has to agree**: the workflow generator, `doctor`'s
  * `forge` and `remote-github` checks, and — as the shell mirror `hr_forge` plus
- * `hr_execution_target` — `remote-run.sh`'s `trigger`, `control`, `report` and `deliver`. A drift
+ * `hr_execution_target` — `remote-run.sh`'s `trigger`, `control`, `report`, `deliver` and `collect`. A drift
  * between them would write a workflow nothing grades, or act on a coupling nothing wrote. Import it;
  * do not re-spell it.
  *

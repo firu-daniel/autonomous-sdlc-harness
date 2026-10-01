@@ -33,6 +33,8 @@
 #                 (always 0, 1 only on a usage error: its paragraph)
 #   remote-run.sh deliver <branch> <bundle_dir> [--repo <root>]
 #                 (always 0, 1 only on a usage error: its paragraph)
+#   remote-run.sh collect <branch> [--pr <n>] [--repo <root>]
+#                 (always 0, 1 only on a usage error: its paragraph)
 #   remote-run.sh control [--repo <root>]   (its own exit map: its paragraph)
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
@@ -138,7 +140,7 @@
 # GitHub. In order, stopping at the first failure: refuse a protected branch
 # and a review file that is not a readable regular file (2; a relative
 # --review-file resolves against the caller's directory); refuse a branch that
-# `branch_settled_var`, the settledness test `control` shares, reads as not
+# `branch_settled_var`, the settledness test `control` and `collect` share, reads as not
 # settled (2). Its newest `harness run <branch>` run decides: none listed is
 # settled only under --allow-no-run; a `completed` one is read by
 # `remote_state`; any other is in flight as `running` until its `RUN_JOB_NAME`
@@ -325,6 +327,27 @@
 # owed. Then `sdlc-harness: done` on the issue and the pull request, each when
 # known. It writes at most one pull request, one comment and those labels, and
 # never pushes. It never fails its caller: every problem is one line and exit 0.
+#
+# `collect` STARTS THE NEXT ROUND FROM THE REVIEWS COLLECTED DURING A RUN: the
+# one step of the run workflow's `collect` job, which follows its `run` job, so
+# a review `control` answered "collected" waits at most for the run in flight.
+# Job-side for its root and self-gated, as `report` and `deliver` are
+# (`forge_on`, one line when off). In order, each stop one line and exit 0:
+# `HARNESS_REMOTE_STOP` set; `remote_branch_stopped` finding the branch stopped,
+# or failing; no pull request, from --pr or else `forge_pr_var` (a failed lookup
+# included); `branch_settled_var`, read as `control` reads it, finding the
+# branch in flight — a newer run listed, or this run ending `parked`,
+# `park_loop` or `paused` (a budget chain's included), whose own end collects
+# next — or failing; `round_collect` finding no review requesting changes
+# pending (inline comments alone start no round, as *Comment* starts none; they
+# ride along in the next), or failing, a `::warning::` line. Otherwise `review
+# <branch> --review-file <file> --allow-no-run --reviewers <logins> --source
+# <pull request url>` runs as a child, as `control` runs it, placing,
+# dispatching and reporting the round. A child that exits non-zero gets exactly
+# one comment on the pull request, with the `reply` marker, naming its last
+# stderr line and saying the reviews stay there and that submitting a review
+# requesting changes retries; there is no automatic retry. It never fails its
+# caller: every outcome but a usage error is exit 0.
 #
 # `control` IS THE COMMENT AND REVIEW ADAPTER, the twin of `trigger` and the one
 # step of the `WORKFLOW_CONTROL_FILE` job: one GitHub event -> one action on
@@ -781,7 +804,9 @@
 # comment files under `RUNNER_TEMP` (removed), at most one pull request, one
 # comment and the state labels. `control` writes its reply file and its
 # `fetch` directory under `RUNNER_TEMP` (removed) and one reply comment, plus
-# what the child verb it runs writes. `stop`, `continue` and `poll` also make
+# what the child verb it runs writes. `collect` writes its round file and its
+# settledness directory under `RUNNER_TEMP` (removed), at most one comment on
+# the pull request, plus what its `review` child writes. `stop`, `continue` and `poll` also make
 # `report`'s writes for each event they report. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
@@ -1028,6 +1053,16 @@
 #              7 and 12
 #   not done   status parked, or an empty <b> -> 0, one line, "$s.log" unchanged
 #
+#   collect needs deliver's setup, a story index on feat_x, a stub answering
+#   `pr list` with [{"number":12,"isCrossRepository":false}], `run list` with a
+#   `completed` `harness run feat_x` run whose bundle says `completed`, `api
+#   --paginate repos/o/r/pulls/12/reviews` with one `CHANGES_REQUESTED` review
+#   by alice, and the permission call with {"permission":"write"}:
+#   collect    bash scripts/remote-run.sh collect feat_x -> 0; origin/feat_x
+#              gains `chore: add user review for feat_x`, then one `-f
+#              engine=user_review` dispatch; with no review listed -> 0, one
+#              line, nothing pushed or dispatched
+#
 #   control needs report's setup, a stub answering `pr view 12 ...` with
 #   {"headRefName":"feat_x","isCrossRepository":false,"state":"OPEN"}, the
 #   permission call with {"permission":"write"}, and `run list` with an
@@ -1140,6 +1175,7 @@ usage() {
   echo "       remote-run.sh discard <dir> [--repo <root>]" >&2
   echo "       remote-run.sh report <event> <branch> [--note <text>] [--repo <root>]" >&2
   echo "       remote-run.sh deliver <branch> <bundle_dir> [--repo <root>]" >&2
+  echo "       remote-run.sh collect <branch> [--pr <n>] [--repo <root>]" >&2
   echo "       remote-run.sh control [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
@@ -1210,7 +1246,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard|report|deliver|control) ;;
+  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard|report|deliver|collect|control) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -1238,6 +1274,7 @@ actor_arg=""
 source_arg=""
 reviewers_arg=""
 allow_no_run=0
+pr_arg=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -1288,6 +1325,13 @@ while [ "$#" -gt 0 ]; do
     --allow-no-run)
       [ "$verb" = review ] || usage "$1 is a review option"
       allow_no_run=1; shift ;;
+    --pr)
+      [ "$verb" = collect ] || usage "$1 is a collect option"
+      [ "$#" -ge 2 ] || usage "$1 needs a value"
+      case "$2" in
+        ''|*[!0-9]*|0*) usage "--pr needs a positive pull request number" ;;
+      esac
+      pr_arg="$2"; shift 2 ;;
     -*)
       usage "unknown option '$1'" ;;
     *)
@@ -1423,10 +1467,10 @@ fi
 # ---------------------------------------------------------------------------
 
 # setup_fail <message> — a configuration problem: exit 1, except for save,
-# report and deliver, which never fail the step that calls them.
+# report, deliver and collect, which never fail the step that calls them.
 setup_fail() {
   echo "remote-run.sh: $1" >&2
-  [ "$verb" != save ] && [ "$verb" != report ] && [ "$verb" != deliver ] || exit "$EXIT_OK"
+  [ "$verb" != save ] && [ "$verb" != report ] && [ "$verb" != deliver ] && [ "$verb" != collect ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
 
@@ -1434,7 +1478,8 @@ if [ -n "$repo_arg" ]; then
   root=$(hr_repo_root "$repo_arg") || setup_fail "'$repo_arg' is not a git repository"
 elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ] \
   || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ] || [ "$verb" = trigger ] \
-  || [ "$verb" = discard ] || [ "$verb" = report ] || [ "$verb" = deliver ] || [ "$verb" = control ]; then
+  || [ "$verb" = discard ] || [ "$verb" = report ] || [ "$verb" = deliver ] || [ "$verb" = collect ] \
+  || [ "$verb" = control ]; then
   root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
@@ -1453,7 +1498,7 @@ case "$verb" in
   trigger|control)
     # Gates itself, after reading the event, so a refusal can still be commented.
     ;;
-  report|deliver)
+  report|deliver|collect)
     # Gates itself (`forge_on`) and exits 0 on every outcome.
     ;;
   status|sync)
@@ -1933,7 +1978,7 @@ remote_state() {
 }
 
 # branch_settled_var <download_dir> <allow_no_run 0|1> — the one settledness
-# test `review` and `control` share: whether a user-review round may be placed
+# test `review`, `control` and `collect` share: whether a user-review round may be placed
 # on the branch now. Lists the runs itself, then derives RS_* through
 # `remote_state`. The newest `harness run <branch>` run decides:
 #   none listed      settled only under <allow_no_run> 1 (RS_STATE `none`)
@@ -5073,6 +5118,118 @@ verb_control() {
 }
 
 # ---------------------------------------------------------------------------
+# `collect` — the run workflow's last job: the next round from the reviews
+# collected while the run was in flight. It reuses `control`'s settledness read,
+# child runner and cleanup, with CONTROL_BRANCH set to the branch.
+# ---------------------------------------------------------------------------
+
+# collect_notify <text> — the one comment `collect` posts, on FORGE_PR with the
+# `reply` marker; a failure is one line.
+collect_notify() {
+  local file
+  if ! file=$(mktemp "$control_tmp/harness-collect-comment.XXXXXX"); then
+    echo "remote-run.sh: collect: cannot create the comment file for #$FORGE_PR; no comment posted" >&2
+    return 0
+  fi
+  {
+    printf '%s\n' "$1"
+    [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
+  } >"$file"
+  forge_comment "$FORGE_PR" reply "$branch" "$file" || :
+  rm -f "$file"
+}
+
+verb_collect() {
+  local status=0 dir file out
+  if ! forge_on; then
+    echo "remote-run.sh: collect: the forge coupling is off (forge github and execution.target github-actions); nothing collected"
+    exit "$EXIT_OK"
+  fi
+  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
+    echo "remote-run.sh: collect: HARNESS_REMOTE_STOP is set; no round started"
+    exit "$EXIT_OK"
+  fi
+  if ! hr_have_jq; then
+    echo "remote-run.sh: collect: jq is missing; nothing collected"
+    exit "$EXIT_OK"
+  fi
+  forge_repo_var || exit "$EXIT_OK"
+
+  remote_branch_stopped "$branch" || status=$?
+  case "$status" in
+    0)
+      echo "remote-run.sh: collect: $branch is stopped; no round started"
+      exit "$EXIT_OK" ;;
+    2)
+      echo "remote-run.sh: collect: whether $branch is stopped could not be read ($GH_ERR); no round started"
+      exit "$EXIT_OK" ;;
+  esac
+
+  if [ -n "$pr_arg" ]; then
+    FORGE_PR="$pr_arg"
+  elif ! forge_pr_var "$branch"; then
+    echo "remote-run.sh: collect: the pull request of $branch could not be read; nothing collected"
+    exit "$EXIT_OK"
+  fi
+  if [ -z "$FORGE_PR" ]; then
+    echo "remote-run.sh: collect: no open pull request; nothing to collect"
+    exit "$EXIT_OK"
+  fi
+
+  control_tmp="${RUNNER_TEMP-}"
+  if [ -z "$control_tmp" ] || [ ! -d "$control_tmp" ]; then
+    control_tmp=$(mktemp -d) || { echo "remote-run.sh: collect: mktemp failed; nothing collected"; exit "$EXIT_OK"; }
+    control_dirs="$control_tmp"
+  fi
+  trap control_cleanup EXIT
+
+  CONTROL_BRANCH="$branch"
+  if ! control_settled_var; then
+    echo "remote-run.sh: collect: the state of the run on $branch could not be read ($BS_ERR); no round started"
+    exit "$EXIT_OK"
+  fi
+  if [ "$BS_SETTLED" != 1 ]; then
+    echo "remote-run.sh: collect: $branch is ${BS_STATE:-in flight}${BS_REASON:+ ($BS_REASON)}; that run's own end collects"
+    exit "$EXIT_OK"
+  fi
+
+  forge_fetch_branch "$branch"
+  if ! dir=$(mktemp -d "$control_tmp/harness-collect.XXXXXX"); then
+    echo "::warning::remote-run.sh: collect: a round directory could not be created under '$control_tmp'; no round started"
+    exit "$EXIT_OK"
+  fi
+  control_dirs="$control_dirs $dir"
+  file="$dir/review.md"
+  RC_EVENT=""
+  status=0
+  round_collect "$FORGE_PR" "$file" || status=$?
+  case "$status" in
+    0) ;;
+    1)
+      echo "remote-run.sh: collect: no review requesting changes is pending on #$FORGE_PR since the previous round of $branch; no round started"
+      exit "$EXIT_OK" ;;
+    *)
+      echo "::warning::remote-run.sh: collect: the round of $branch could not be collected: $RC_ERR; no round started"
+      exit "$EXIT_OK" ;;
+  esac
+
+  out="$dir/review.out"
+  set -- review "$branch" --review-file "$file" --allow-no-run --reviewers "$RC_REVIEWERS"
+  case "$FORGE_SERVER" in
+    https://*) set -- "$@" --source "$FORGE_SERVER/$FORGE_REPO/pull/$FORGE_PR" ;;
+  esac
+  control_child "$out" "$@" --repo "$root"
+  cat "$out" 2>/dev/null || :
+  if [ "$CHILD_STATUS" -eq 0 ]; then
+    echo "remote-run.sh: collect: started the next round of $branch from @${RC_REVIEWERS//,/, @}"
+    exit "$EXIT_OK"
+  fi
+  collect_notify "The reviews requesting changes collected during the run on \`$branch\` could not start the next round: ${CHILD_LAST%.}. They stay on the pull request; submit a review requesting changes to retry."
+  echo "remote-run.sh: collect: review exited $CHILD_STATUS; the pull request was told, and nothing is retried"
+  exit "$EXIT_OK"
+}
+
+# ---------------------------------------------------------------------------
 # `discard` — remove a directory a command fetched into, inside scratch only.
 # ---------------------------------------------------------------------------
 
@@ -5152,6 +5309,7 @@ case "$verb" in
   discard) verb_discard ;;
   report) verb_report ;;
   deliver) verb_deliver ;;
+  collect) verb_collect ;;
   control) verb_control ;;
 esac
 exit "$EXIT_OK"
