@@ -137,15 +137,6 @@ async function adoptFixture(t, target = 'github-actions') {
   };
 }
 
-test('adopt --list prints feat_x only and creates no registry', async (t) => {
-  const f = await adoptFixture(t);
-  const result = await f.adopt(['--list']);
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout, `remote-run.sh: not adopted: feat_x ${FEAT_X_URL}\n`);
-  assert.equal(existsSync(f.registry), false, 'adopt --list created the registry');
-  assert.equal(existsSync(f.worktree), false, 'adopt --list created a working copy');
-});
-
 test('adopt makes the mirror and a running github-actions record, and a second adopt finds nothing', async (t) => {
   const f = await adoptFixture(t);
   const result = await f.adopt();

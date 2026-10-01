@@ -26,6 +26,7 @@
 #   remote-run.sh review <branch> --review-file <file> [--repo <root>]
 #   remote-run.sh trigger [--repo <root>]   (its own exit map: its paragraph)
 #   remote-run.sh adopt [--list] [--repo <root>]
+#   remote-run.sh list [--repo <root>]
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status and fetch: printed
@@ -37,19 +38,23 @@
 #        decided — every outcome a person must act on is a notification; for
 #        poll: the tick finished; for pause-requested: such a run exists; for
 #        run-created-at: printed; for review: placed, pushed and dispatched;
-#        for adopt: every candidate adopted, or none; for adopt --list: printed
+#        for adopt: every candidate adopted, or none; for adopt --list and
+#        list: printed
 #     1  usage error, or the library or the configuration could not be
 #        resolved; for fetch, <out_dir> is not an existing, empty directory;
 #        for sync and restore, a local copy or write failed; for
 #        pause-requested, also NO such run — a caller that reads 1 as "no
 #        pause" passes arguments it has already validated
 #     2  refused, nothing sent or written: execution.target is not
-#        github-actions (sending verbs, fetch, review and adopt); for review,
-#        a protected branch, a review file that is not a readable regular
-#        file, or a run in flight (its paragraph); the branch's local record does not
-#        carry `execution: github-actions` (status, sync); the record's mirror
-#        working copy is missing, or a downloaded bundle is unrecognised
-#        (sync, restore); the inputs payload is over the limit; a named answer
+#        github-actions (sending verbs, fetch, review, adopt and list); for
+#        review, a protected branch, a review file that is not a readable
+#        regular file, or a run in flight (its paragraph); for sync, the
+#        branch's local record does not carry `execution: github-actions`; for
+#        status, a local record that does not carry `execution:
+#        github-actions`, or no record and `execution.target` not
+#        `github-actions`; the record's mirror working copy is missing, or a
+#        downloaded bundle is unrecognised (sync, restore, and status with no
+#        local record); the inputs payload is over the limit; a named answer
 #        file is missing. For restore under --resume answer, "nothing more":
 #        no previous bundle, the previous bundle expired (the message names
 #        its expiry and the resume command), `HARNESS_INPUT_ANSWERS` not an object of
@@ -63,8 +68,8 @@
 #        dispatch failed AFTER the branch and its task prompt were pushed; for
 #        review, the listing failed, or the dispatch failed AFTER the review
 #        was pushed. For
-#        adopt (and --list), the listing or `git ls-remote` failed; nothing
-#        written
+#        adopt (and --list) and list, the listing or `git ls-remote` failed;
+#        nothing written
 #     4  start: placement failed — the branch cut, the copy, the commit or the
 #        push — and nothing was dispatched; the working copy and the local
 #        branch the cut created were removed. review: placement failed — the
@@ -371,11 +376,26 @@
 # `gh run view <run_id> --json createdAt` as an epoch second.
 #
 # `status` AND `sync` READ THE RECORD, NOT THE KEY. A run keeps the execution
-# it started with, so they test the record's `execution` field and never
-# `execution.target`; the configuration is still read for `stateDir`.
+# it started with, so where a record exists they test its `execution` field and
+# never `execution.target`; the configuration is still read for `stateDir`.
+# Only `status` with no record reads the key.
 #
-# `status` WRITES NOTHING AT ALL — no registry (it does not even create an
-# absent one), no download, no file. It prints the branch's newest runs titled
+# `status` WITH NO LOCAL RECORD (no registry file, or no record of the branch)
+# is gated like a sending verb and answers from GitHub alone: the same runs
+# listing, then `remote_state` with the bundle downloaded into a `mktemp -d`
+# directory removed on exit, printing the state, pause reason, detail, engine
+# and run URL, each open question (the rule `fetch` states) with its `## Q<k>`
+# heading lines; an expired bundle's expired line is its `detail`. No `harness run
+# <branch>` run listed prints one line and exits 0. There is no sync to compare
+# against, so no finished-since line.
+#
+# `list` IS `branch-status`'s DIGEST: one listing (`list_all_runs`) and one
+# `git ls-remote --heads origin`, never a bundle. It prints `on GitHub, no
+# local record: <branch> <url>` for each branch `unrecorded_runs` keeps — the
+# filters `adopt` applies — or `no run on GitHub without a local record`.
+#
+# `status` WITH A RECORD WRITES NOTHING AT ALL — no registry (it does not even
+# create an absent one), no download, no file. It prints the branch's newest runs titled
 # `harness run <branch>` or `harness pause <branch>` (bounded), the record's
 # `status`, `pause_reason`, `remote_run_url` and `remote_synced_at`, whether
 # a `harness run` finished after the last sync, and — reading the newest
@@ -487,8 +507,9 @@
 # download directories and `<state_dir>/autonomous_logs/poll_state/previous/`
 # and `current/`; for `adopt`, per candidate the mirror `create-worktree.sh
 # --existing` makes, the registry record, and whatever its `sync` writes.
-# For `fetch`, <out_dir> only. `pause-requested`, `run-created-at` and `adopt
-# --list` write nothing.
+# For `fetch`, <out_dir> only. `pause-requested`, `run-created-at`, `adopt
+# --list`, `list` and `status` write nothing; a no-record `status` downloads
+# into a temporary directory it removes on exit.
 #
 # MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
 # rename there is an edit here, byte for byte:
@@ -552,6 +573,12 @@
 #   fetch      t=$(mktemp -d); bash scripts/remote-run.sh fetch feat_x "$t"
 #              -> 0; prints `state: running` (or, with no run listed,
 #                 `state: none`), every other key present
+#
+#   no record  with no registry, the "a bundle" stub below with question_1.md:
+#              bash scripts/remote-run.sh status feat_x -> 0; prints `state:
+#              parked` and `open question question_1.md`; nothing written
+#   list       with adopt's setup below: bash scripts/remote-run.sh list -> 0;
+#              prints `on GitHub, no local record: feat_x <url>`; no registry
 #
 #   status and sync need a remote record, and a `run list` answer whose runs
 #   carry `displayTitle` `harness run feat_x` and a `url`:
@@ -746,6 +773,7 @@ usage() {
   echo "       remote-run.sh review <branch> --review-file <file> [--repo <root>]" >&2
   echo "       remote-run.sh trigger [--repo <root>]" >&2
   echo "       remote-run.sh adopt [--list] [--repo <root>]" >&2
+  echo "       remote-run.sh list [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -796,7 +824,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|adopt) ;;
+  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|adopt|list) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -854,7 +882,8 @@ while [ "$#" -gt 0 ]; do
     -*)
       usage "unknown option '$1'" ;;
     *)
-      [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != trigger ] && [ "$verb" != adopt ] || usage "$verb takes no branch"
+      [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != trigger ] && [ "$verb" != adopt ] \
+        && [ "$verb" != list ] || usage "$verb takes no branch"
       if [ "$verb" = run-created-at ]; then
         [ -z "$run_id_arg" ] || usage "unexpected argument '$1'"
         run_id_arg="$1"
@@ -874,7 +903,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != run-created-at ] && [ "$verb" != trigger ] \
-  && [ "$verb" != adopt ]; then
+  && [ "$verb" != adopt ] && [ "$verb" != list ]; then
   valid_branch "$branch" || usage "$verb needs a <branch>"
 fi
 
@@ -969,6 +998,7 @@ fi
 
 hr_config_load "$root" || :
 registry=""
+status_no_record=0
 case "$verb" in
   restore|save|continue|poll)
     hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/harness.config.json'"
@@ -986,7 +1016,18 @@ case "$verb" in
     }
     # Tested with -f first: hr_registry_get creates an absent registry, and
     # status writes nothing.
-    if [ ! -f "$registry" ] || [ "$(hr_registry_get "$registry" "$branch" execution)" != github-actions ]; then
+    if [ "$verb" = status ] && { [ ! -f "$registry" ] || [ -z "$(hr_registry_get "$registry" "$branch" branch)" ]; }; then
+      # No record: GitHub alone answers, behind the sending verbs' gate.
+      status_no_record=1
+      target=$(hr_execution_target "$root") || {
+        echo "remote-run.sh: cannot resolve '$root/harness.config.json' (or execution.target is outside its enum)" >&2
+        exit "$EXIT_USAGE"
+      }
+      if [ "$target" != github-actions ]; then
+        echo "remote-run.sh: refused, nothing sent: execution.target is '$target', not github-actions" >&2
+        exit "$EXIT_REFUSED"
+      fi
+    elif [ ! -f "$registry" ] || [ "$(hr_registry_get "$registry" "$branch" execution)" != github-actions ]; then
       echo "remote-run.sh: refused, nothing written: the local record of '$branch' does not carry execution: github-actions" >&2
       exit "$EXIT_REFUSED"
     fi
@@ -1230,6 +1271,55 @@ set_many_or_fail() {
   }
 }
 
+# open_questions_in <bundle_dir> — OPEN_QUESTIONS: the space-separated <n>,
+# ascending, of every top-level `clarifications/<branch>/question_<n>.md` in the
+# bundle with no `answer_<n>.md` beside it.
+OPEN_QUESTIONS=""
+open_questions_in() {
+  local clar f n
+  OPEN_QUESTIONS=""
+  hr_remote_names_var
+  clar="$1/$HR_REMOTE_CLARIFY_DIR/$branch"
+  for f in "$clar"/question_*.md; do
+    [ -f "$f" ] || continue
+    n="${f##*/question_}"
+    n="${n%.md}"
+    [[ "$n" =~ ^[0-9]+$ ]] || continue
+    [ -e "$clar/answer_$n.md" ] || OPEN_QUESTIONS="$OPEN_QUESTIONS $n"
+  done
+  if [ -n "$OPEN_QUESTIONS" ]; then
+    OPEN_QUESTIONS=$(printf '%s\n' $OPEN_QUESTIONS | sort -n | tr '\n' ' ')
+    OPEN_QUESTIONS="${OPEN_QUESTIONS% }"
+  fi
+}
+
+# status_from_github — `status` with no local record: the newest run's state
+# read through `remote_state` into a temporary directory removed on exit.
+status_tmp=""
+status_from_github() {
+  local n
+  if [ -z "$(titled_runs "harness run $branch" | jq -c '.[0] // empty')" ]; then
+    echo "remote-run.sh: no local record, and no run titled 'harness run $branch' on GitHub"
+    return 0
+  fi
+  echo "remote-run.sh: no local record; state from GitHub (newest run):"
+  status_tmp=$(mktemp -d) || { echo "remote-run.sh: cannot create a temporary directory" >&2; exit "$EXIT_USAGE"; }
+  trap 'rm -rf "$status_tmp"' EXIT
+  remote_state "$status_tmp"
+  printf '  state: %s\n' "$RS_STATE"
+  printf '  pause_reason: %s\n' "$RS_PAUSE_REASON"
+  printf '  detail: %s\n' "$RS_DETAIL"
+  printf '  engine: %s\n' "$RS_ENGINE"
+  printf '  run_url: %s\n' "$RS_RUN_URL"
+  if [ "$RS_BUNDLE" -eq 1 ]; then
+    open_questions_in "$status_tmp"
+    for n in $OPEN_QUESTIONS; do
+      echo "remote-run.sh: open question question_$n.md"
+      grep -E '^## Q[0-9]+' "$status_tmp/$HR_REMOTE_CLARIFY_DIR/$branch/question_$n.md" | sed 's/^/  /'
+    done
+  fi
+}
+
 verb_status() {
   local runs finished_id synced_id field
   list_runs
@@ -1238,6 +1328,10 @@ verb_status() {
   printf '%s' "$runs" | jq -r --argjson n "$STATUS_RUNS_SHOWN" '
     if length == 0 then "  (none)" else
     .[:$n][] | "  \(.databaseId)  \(.displayTitle)  \(.status)/\(.conclusion // "")  \(.createdAt)  \(.url)" end'
+  if [ "$status_no_record" -eq 1 ]; then
+    status_from_github
+    return 0
+  fi
   echo "remote-run.sh: local record (last synced):"
   for field in status pause_reason remote_run_url remote_synced_at; do
     printf '  %s: %s\n' "$field" "$(hr_registry_get "$registry" "$branch" "$field")"
@@ -1268,7 +1362,7 @@ sync_expired() {
 
 # remote_state <download_dir> [<applied_run_id>] — the one derivation of a
 # branch's newest remote state, from list_runs' answer in GH_OUT; `sync`,
-# `fetch` and `review` all call it. RS_STATE is `none` (no `harness run
+# `fetch`, `review` and `status` with no local record all call it. RS_STATE is `none` (no `harness run
 # <branch>` run listed), `running` (the newest is not `completed`), `applied`
 # (its id is <applied_run_id>: `sync`'s case 1, decided there), or the state
 # of `sync`'s cases 2-5, which it derives in that order. A bundle is downloaded
@@ -2250,7 +2344,7 @@ verb_start() {
 # ---------------------------------------------------------------------------
 
 verb_fetch() {
-  local clar f n open_questions="" bundle_dir=""
+  local open_questions="" bundle_dir=""
   if [ ! -d "$out_dir" ]; then
     echo "remote-run.sh: fetch needs an existing directory, not '$out_dir'" >&2
     exit "$EXIT_USAGE"
@@ -2263,18 +2357,8 @@ verb_fetch() {
   remote_state "$out_dir"
   if [ "$RS_BUNDLE" -eq 1 ]; then
     bundle_dir="$out_dir"
-    clar="$out_dir/$HR_REMOTE_CLARIFY_DIR/$branch"
-    for f in "$clar"/question_*.md; do
-      [ -f "$f" ] || continue
-      n="${f##*/question_}"
-      n="${n%.md}"
-      [[ "$n" =~ ^[0-9]+$ ]] || continue
-      [ -e "$clar/answer_$n.md" ] || open_questions="$open_questions $n"
-    done
-    if [ -n "$open_questions" ]; then
-      open_questions=$(printf '%s\n' $open_questions | sort -n | tr '\n' ' ')
-      open_questions="${open_questions% }"
-    fi
+    open_questions_in "$out_dir"
+    open_questions="$OPEN_QUESTIONS"
   fi
   printf 'run_id: %s\n' "$RS_RUN_ID"
   printf 'run_url: %s\n' "$RS_RUN_URL"
@@ -2460,9 +2544,17 @@ adopt_one() {
   echo "remote-run.sh: adopted $b ($url)"
 }
 
-verb_adopt() {
-  local titled recorded="" heads="" live=$'\n' ref b url protected candidates=""
-  registry=$(hr_state_path "$root" autonomous_logs/registry.json) || {
+# unrecorded_runs — UNRECORDED: one `<branch>\t<url>` line per branch whose
+# newest `harness run <branch>` run is on GitHub, newest first, dropping a
+# branch with a registry record, one `hr_branch_is_protected` does not answer 1
+# for, and one that is not a live head on origin. One listing and one
+# `ls-remote`; writes nothing. Exits 3 when either fails. Shared by `adopt` and
+# `list` until `adopt` goes.
+UNRECORDED=""
+unrecorded_runs() {
+  local titled reg recorded="" heads="" live=$'\n' ref b url protected
+  UNRECORDED=""
+  reg=$(hr_state_path "$root" autonomous_logs/registry.json) || {
     echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
     exit "$EXIT_USAGE"
   }
@@ -2479,11 +2571,10 @@ verb_adopt() {
     gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
   }
 
-  # Tested with -f first: hr_registry_get creates an absent registry, and
-  # --list writes nothing.
-  if [ -f "$registry" ]; then
-    recorded=$(jq -r '.runs | keys[]' "$registry" 2>/dev/null) || {
-      echo "remote-run.sh: cannot read the registry '$registry'" >&2
+  # Tested with -f first: hr_registry_get creates an absent registry.
+  if [ -f "$reg" ]; then
+    recorded=$(jq -r '.runs | keys[]' "$reg" 2>/dev/null) || {
+      echo "remote-run.sh: cannot read the registry '$reg'" >&2
       exit "$EXIT_USAGE"
     }
   fi
@@ -2508,10 +2599,20 @@ EOF
     hr_branch_is_protected "$root" "$b" || protected=$?
     [ "$protected" -eq 1 ] || continue
     case "$live" in *$'\n'"$b"$'\n'*) ;; *) continue ;; esac
-    candidates="$candidates$b"$'\t'"$url"$'\n'
+    UNRECORDED="$UNRECORDED$b"$'\t'"$url"$'\n'
   done <<EOF
 $titled
 EOF
+}
+
+verb_adopt() {
+  local b url candidates
+  registry=$(hr_state_path "$root" autonomous_logs/registry.json) || {
+    echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
+    exit "$EXIT_USAGE"
+  }
+  unrecorded_runs
+  candidates="$UNRECORDED"
 
   if [ -z "$candidates" ]; then
     echo "remote-run.sh: nothing to adopt"
@@ -2528,6 +2629,25 @@ EOF
 $candidates
 EOF
   [ "$adopt_failed" -eq 0 ] || exit "$EXIT_PLACEMENT"
+}
+
+# ---------------------------------------------------------------------------
+# `list` — the runs on GitHub with no local record, for `branch-status`.
+# ---------------------------------------------------------------------------
+
+verb_list() {
+  local b url
+  unrecorded_runs
+  if [ -z "$UNRECORDED" ]; then
+    echo "remote-run.sh: no run on GitHub without a local record"
+    return 0
+  fi
+  while IFS=$'\t' read -r b url; do
+    [ -n "$b" ] || continue
+    echo "remote-run.sh: on GitHub, no local record: $b $url"
+  done <<EOF
+$UNRECORDED
+EOF
 }
 
 # ---------------------------------------------------------------------------
@@ -2851,5 +2971,6 @@ case "$verb" in
   review) verb_review ;;
   trigger) verb_trigger ;;
   adopt) verb_adopt ;;
+  list) verb_list ;;
 esac
 exit "$EXIT_OK"

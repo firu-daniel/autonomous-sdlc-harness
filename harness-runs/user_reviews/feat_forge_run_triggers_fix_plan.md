@@ -39,7 +39,7 @@ All four edit `cli/templates/scripts/remote-run.sh`, so they run in this order.
    - `create-worktree.sh` accepts `--existing --no-bootstrap`;
    - the watcher's relay passes are removed and remote records are skipped;
    - the four commands, `branch-status` step 6 and the documents are updated. _(layer: cli, plugin, general)_
-3. [ ] **Finding 2** — `remote-run.sh status <branch>` answers from GitHub alone when there is no local record, reading the newest bundle into a temporary directory and writing nothing. A `list` verb replaces `adopt --list` for `branch-status`'s digest. `branch-status` stays read-only and never syncs. _(layer: cli, plugin, general)_
+3. [x] **Finding 2** — `remote-run.sh status <branch>` answers from GitHub alone when there is no local record, reading the newest bundle into a temporary directory and writing nothing. A `list` verb replaces `adopt --list` for `branch-status`'s digest. `branch-status` stays read-only and never syncs. _(layer: cli, plugin, general)_
 4. [ ] **Finding 1** — Remove the `adopt` verb, its test, its header text and its field comments, now that no command needs a local record for a run started on GitHub. Restate the bootstrap disclosure in `docs/github-issue-trigger.md` `## 4.` as what remains: no local command runs a branch's code. Update `docs/watcher.md` and Gate 12 (xiii)(c). _(layer: cli, general)_
 
 ---
