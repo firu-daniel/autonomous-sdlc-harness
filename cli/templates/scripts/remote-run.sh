@@ -161,12 +161,20 @@
 #   GITHUB_REPOSITORY, GITHUB_SERVER_URL, GITHUB_RUN_ID   the `gh` target and
 #                        the URLs its comments name
 #   HARNESS_REMOTE_STOP  non-empty: every start is refused
-#   HARNESS_TRIGGER_LABEL   the trigger label; `DEFAULT_TRIGGER_LABEL` when empty
+#   HARNESS_TRIGGER_LABEL   the trigger label; when empty, `DEFAULT_TRIGGER_LABEL`
+#                        or `LEGACY_TRIGGER_LABEL`, per the paragraph below
 #   HARNESS_TRIGGER_ALLOWED_BOTS   comma-separated bot logins allowed to start
 #   HARNESS_TRIGGER_LOOKUP_SECS    seconds between run lookups; `5` when empty.
 #                        A test seam
 #   RUNNER_TEMP          where the prompt snapshot is written; a `mktemp -d`
 #                        directory when empty
+# THE LEGACY LABEL. The workflow `init` now writes always passes a non-empty
+# `HARNESS_TRIGGER_LABEL`; only the previous release's workflow, which
+# `init --upgrade-workflows` never re-renders, passes it empty, and its `if:`
+# already ran the job for `LEGACY_TRIGGER_LABEL`. So when it is empty either
+# `DEFAULT_TRIGGER_LABEL` or `LEGACY_TRIGGER_LABEL` is accepted, and the comment
+# and the label removal name the one applied; a new workflow starts on
+# `LEGACY_TRIGGER_LABEL` only when the variable names it.
 # An `action` other than `labeled`, or another label, is one line and exit 0
 # with no `gh` call. Otherwise refused, in this order, each refusal one issue
 # comment naming the reason and the way on:
@@ -529,6 +537,7 @@
 #   HARNESS_GH_CLI       mirrors  GH_CLI_VARIABLE (the binary run as `gh`)
 #   HARNESS_TRIGGER_LABEL        mirrors  TRIGGER_LABEL_VARIABLE
 #   DEFAULT_TRIGGER_LABEL        mirrors  DEFAULT_TRIGGER_LABEL
+#   LEGACY_TRIGGER_LABEL         mirrors  LEGACY_TRIGGER_LABEL
 #   HARNESS_TRIGGER_ALLOWED_BOTS mirrors  TRIGGER_ALLOWED_BOTS_VARIABLE
 #   TRIGGER_DISPATCH_EVENT_TYPE  mirrors  TRIGGER_DISPATCH_EVENT_TYPE ('harness-task')
 #   WORKFLOW_CONTROL_FILE        mirrors  WORKFLOW_CONTROL_FILE
@@ -701,7 +710,7 @@
 #              run-created-at 42 -> prints 1767225610, 0; a failing stub -> 3
 #
 #   trigger needs start's setup plus `"forge": "github"`, an event file e.json
-#   {"action":"labeled","label":{"name":"harness"},"sender":{"login":"alice",
+#   {"action":"labeled","label":{"name":"sdlc-harness"},"sender":{"login":"alice",
 #   "type":"User"},"issue":{"number":7,"title":"Add comments","body":"x",
 #   "html_url":"https://github.com/o/r/issues/7","state":"open"}}, and a stub
 #   answering `api repos/o/r/collaborators/alice/permission` with
@@ -710,7 +719,7 @@
 #   trigger    bash scripts/remote-run.sh trigger -> 0; origin/add_comments gains
 #              the prompt commit, "$s.log" gains `workflow run harness-run.yml
 #              --ref add_comments ...`, `issue comment 7 ...` naming the branch,
-#              then `issue edit 7 ... --remove-label harness`
+#              then `issue edit 7 ... --remove-label sdlc-harness`
 #   read       the permission answer {"permission":"read"} -> 2, no `workflow
 #              run`, one comment naming write access, the label removed
 #   ignored    e.json's label name `bug` -> 0, one line, "$s.log" unchanged
@@ -735,7 +744,8 @@ WORKFLOW_RUN_FILE='harness-run.yml'
 WORKFLOW_RESUME_FILE='harness-resume.yml'
 STATE_ARTIFACT_NAME='harness-state'
 POLL_STATE_ARTIFACT_NAME='harness-poll-state'
-DEFAULT_TRIGGER_LABEL='harness'
+DEFAULT_TRIGGER_LABEL='sdlc-harness'
+LEGACY_TRIGGER_LABEL='harness'
 TRIGGER_DISPATCH_EVENT_TYPE='harness-task'
 WORKFLOW_CONTROL_FILE='harness-control.yml'
 COMMAND_HANDLE='@sdlc-harness'
@@ -2812,6 +2822,9 @@ verb_trigger() {
       exit "$EXIT_USAGE"
     }
     trigger_label="${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}"
+    if [ -z "${HARNESS_TRIGGER_LABEL-}" ] && [ "$label" = "$LEGACY_TRIGGER_LABEL" ]; then
+      trigger_label="$LEGACY_TRIGGER_LABEL"
+    fi
     if [ "$action" != labeled ] || [ "$label" != "$trigger_label" ]; then
       echo "remote-run.sh: trigger: ignored, not the label '$trigger_label' being applied"
       return 0

@@ -22,7 +22,8 @@
  * For `harness-trigger.yml`: the `issues` and `repository_dispatch` triggers, `labeled` the only
  * `issues` type so `opened` never starts a second run, and `TRIGGER_DISPATCH_EVENT_TYPE` the only
  * dispatch type; the permissions exactly `contents: write`, `actions: write` and `issues: write`; the
- * job's `if:` naming `TRIGGER_LABEL_VARIABLE` with `DEFAULT_TRIGGER_LABEL` as its fallback;
+ * job's `if:` and its `TRIGGER_LABEL_VARIABLE` env line each naming `TRIGGER_LABEL_VARIABLE` with
+ * `DEFAULT_TRIGGER_LABEL` as its fallback;
  * `remote-run.sh trigger` its only call into the script family; no `secrets.` reference, so the
  * credential secrets never reach the job reading issue text; no `concurrency:` key, which would drop a
  * pending trigger; no template token; every expression spaced, and none inside a `run:` block.
@@ -288,6 +289,13 @@ test('the trigger job runs for a dispatch or the configured label, defaulting to
   const jobIfs = TRIGGER_LINES.filter((l) => /^ {4}if: /.test(l)).map((l) => l.trim());
   assert.deepEqual(jobIfs, [
     `if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.${TRIGGER_LABEL_VARIABLE} || '${DEFAULT_TRIGGER_LABEL}')`,
+  ]);
+});
+
+test('the trigger job passes the label its if: matched, never an empty one', () => {
+  const envLines = TRIGGER_LINES.filter((l) => l.trim().startsWith(`${TRIGGER_LABEL_VARIABLE}:`)).map((l) => l.trim());
+  assert.deepEqual(envLines, [
+    `${TRIGGER_LABEL_VARIABLE}: \${{ vars.${TRIGGER_LABEL_VARIABLE} || '${DEFAULT_TRIGGER_LABEL}' }}`,
   ]);
 });
 

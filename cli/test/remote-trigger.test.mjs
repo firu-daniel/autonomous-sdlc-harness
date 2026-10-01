@@ -8,7 +8,9 @@
  * `ghost`, an unlisted bot, a `read` answer, a failed permission call and a failed run-history listing —
  * is driven here, and a body
  * carrying shell syntax is committed byte for byte with nothing executed. A dispatch event has no issue,
- * so its cases assert feedback in the step summary and no `issue` call at all.
+ * so its cases assert feedback in the step summary and no `issue` call at all. With `HARNESS_TRIGGER_LABEL`
+ * empty — only the previous release's workflow passes it so — the legacy label `harness` starts a run
+ * too, and its removal names it; with the variable set, only the label it names does.
  *
  * Each case drives `remote-start.test.mjs`'s fixture shape — `init`, `execution.target` set, the
  * adopted tree pushed to the fixture's bare `origin` — plus `forge: "github"` and an event file the
@@ -132,7 +134,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
     trigger: async (overrides = {}, env = {}, permissions = { alice: 'write' }) => {
       const event = {
         action: 'labeled',
-        label: { name: 'harness' },
+        label: { name: 'sdlc-harness' },
         sender: { login: 'alice', type: 'User' },
         ...overrides,
         issue: {
@@ -219,8 +221,8 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
 
 const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workflow run'));
 const comments = (calls) => calls.filter((call) => call.line.startsWith('issue comment 7'));
-const removals = (calls) =>
-  calls.filter((call) => call.line === `issue edit 7 --repo ${REPOSITORY} --remove-label harness`);
+const removals = (calls, label = 'sdlc-harness') =>
+  calls.filter((call) => call.line === `issue edit 7 --repo ${REPOSITORY} --remove-label ${label}`);
 const permissionCalls = (calls) => calls.filter((call) => call.args[0] === 'api');
 /** The name derivation's run-history probe, told apart from the run lookup by its `--json` fields. */
 const isProbe = (call) => call.line.startsWith('run list') && call.line.endsWith('--json databaseId');
@@ -262,7 +264,7 @@ test('a write user starts one run on the derived branch, comments it and removes
   assert.match(
     prompt,
     new RegExp(
-      `^# ${TITLE}\\n\\nLet a reader comment on a content item\\.\\n\\n\\n---\\n\\nStarted from https://github\\.com/${REPOSITORY}/issues/7 by @alice, who applied the label \`harness\` at \\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ\\.`,
+      `^# ${TITLE}\\n\\nLet a reader comment on a content item\\.\\n\\n\\n---\\n\\nStarted from https://github\\.com/${REPOSITORY}/issues/7 by @alice, who applied the label \`sdlc-harness\` at \\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ\\.`,
     ),
   );
 });
@@ -337,6 +339,33 @@ test('another action or another label is ignored with no gh call', async (t) => 
   assert.equal(other.status, 0, other.stderr);
   assert.match(other.stdout, /ignored/);
   assert.deepEqual(f.calls(), []);
+});
+
+test('with HARNESS_TRIGGER_LABEL empty, the legacy label starts a run and its removal names it', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.trigger({ label: { name: 'harness' } });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.equal(dispatches(calls).length, 1);
+  assert.equal(removals(calls, 'harness').length, 1);
+  assert.equal(removals(calls).length, 0);
+});
+
+test('with HARNESS_TRIGGER_LABEL set to the default, the legacy label is ignored with no gh call', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.trigger({ label: { name: 'harness' } }, { HARNESS_TRIGGER_LABEL: 'sdlc-harness' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ignored/);
+  assert.deepEqual(f.calls(), []);
+});
+
+test('with HARNESS_TRIGGER_LABEL naming the legacy label, that label starts a run', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.trigger({ label: { name: 'harness' } }, { HARNESS_TRIGGER_LABEL: 'harness' });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.equal(dispatches(calls).length, 1);
+  assert.equal(removals(calls, 'harness').length, 1);
 });
 
 test('a second issue with the same title starts on <slug>_2', async (t) => {

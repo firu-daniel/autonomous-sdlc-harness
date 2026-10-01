@@ -21,6 +21,7 @@ import {
   COMMENT_MARKER,
   DEFAULT_TRIGGER_LABEL,
   GH_CLI_VARIABLE,
+  LEGACY_TRIGGER_LABEL,
   REVIEW_ROUND_STATE,
   RUN_STATES,
   STATE_ARTIFACT_NAME,
@@ -92,9 +93,17 @@ test('remote-run.sh mirrors the run-control names byte for byte', () => {
 test('the issue-trigger names keep their literal values', () => {
   assert.equal(WORKFLOW_TRIGGER_FILE, 'harness-trigger.yml');
   assert.equal(TRIGGER_LABEL_VARIABLE, 'HARNESS_TRIGGER_LABEL');
-  assert.equal(DEFAULT_TRIGGER_LABEL, 'harness');
+  assert.equal(DEFAULT_TRIGGER_LABEL, 'sdlc-harness');
+  assert.equal(LEGACY_TRIGGER_LABEL, 'harness');
   assert.equal(TRIGGER_ALLOWED_BOTS_VARIABLE, 'HARNESS_TRIGGER_ALLOWED_BOTS');
   assert.equal(TRIGGER_DISPATCH_EVENT_TYPE, 'harness-task');
+});
+
+test('remote-run.sh mirrors the two trigger labels byte for byte', () => {
+  const lines = readFileSync(join(PACKAGE_ROOT, 'templates', 'scripts', 'remote-run.sh'), 'utf8').split('\n');
+  for (const line of [`DEFAULT_TRIGGER_LABEL='${DEFAULT_TRIGGER_LABEL}'`, `LEGACY_TRIGGER_LABEL='${LEGACY_TRIGGER_LABEL}'`]) {
+    assert.ok(lines.includes(line), `remote-run.sh lacks the line ${line}`);
+  }
 });
 
 test('harness-run-lib.sh mirrors WORKFLOW_RUN_FILE and STATE_ARTIFACT_NAME byte for byte', () => {

@@ -40,3 +40,8 @@
 - `npm test -- test/remote-names.test.mjs test/remote-trigger.test.mjs test/trigger-workflow-init.test.mjs test/workflow-templates.test.mjs test/doctor.test.mjs` from `cli/` passes.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n "'harness'" -- cli/src cli/templates/scripts/remote-run.sh cli/templates/github/workflows/harness-trigger.yml` has no hit outside the two `LEGACY_TRIGGER_LABEL` assignments: no other code line still spells the old default.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/remote-run.sh` could not be executed: the permission layer refused it ("This command requires approval"), from both the repo root and an absolute path. The claim rests instead on `remote-trigger.test.mjs` passing, which runs `remote-run.sh trigger` end to end, so the shell parsed the whole file.
+- `doctor.test.mjs`: as well as the cases listed, the missing-label case's case-variant label `Harness` became `Sdlc-Harness`, and the unreadable-label-list answer `{"name":"harness"}` became `{"name":"sdlc-harness"}`. Each case keeps what it tested, and none of them still spells the old default.

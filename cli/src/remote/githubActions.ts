@@ -11,7 +11,8 @@
  * Except in `generators/repoRoot.ts`, nothing here is consulted unless `config/model.ts` →
  * `remoteExecutionApplies(config)` is true: every other consumer tests that switch first. That one
  * is ungated because a gated rule would change `.gitignore` in the same run that turns remote
- * execution on. The issue-trigger names (`WORKFLOW_TRIGGER_*`, `TRIGGER_*`, `DEFAULT_TRIGGER_LABEL`)
+ * execution on. The issue-trigger names (`WORKFLOW_TRIGGER_*`, `TRIGGER_*`, `DEFAULT_TRIGGER_LABEL`,
+ * `LEGACY_TRIGGER_LABEL`)
  * and the run-control names (`WORKFLOW_CONTROL_*`, `COMMAND_*`, `COMMENT_MARKER`,
  * `REVIEW_ROUND_STATE`, `STATE_LABEL_PREFIX`, `RUN_STATES`, `STATE_LABELS`) are gated tighter
  * still: they are consulted only where `forgeTriggerApplies(config)` is true.
@@ -112,7 +113,14 @@ export const REMOTE_STOP_VARIABLE = 'HARNESS_REMOTE_STOP';
 export const TRIGGER_LABEL_VARIABLE = 'HARNESS_TRIGGER_LABEL';
 
 /** The issue label that starts a run when {@link TRIGGER_LABEL_VARIABLE} is unset or empty. */
-export const DEFAULT_TRIGGER_LABEL = 'harness';
+export const DEFAULT_TRIGGER_LABEL = 'sdlc-harness';
+
+/**
+ * The previous release's {@link DEFAULT_TRIGGER_LABEL}. The trigger still accepts it when its
+ * workflow passes no label, which only that release's `harness-trigger.yml` does: it is never
+ * re-rendered by `init --upgrade-workflows`, and its own `if:` already ran the job for this label.
+ */
+export const LEGACY_TRIGGER_LABEL = 'harness';
 
 /** Repository variable: comma-separated bot logins that may start a run; unset or empty admits none. */
 export const TRIGGER_ALLOWED_BOTS_VARIABLE = 'HARNESS_TRIGGER_ALLOWED_BOTS';

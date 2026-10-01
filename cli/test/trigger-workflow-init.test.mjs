@@ -18,7 +18,7 @@ const TRIGGER_FILE = '.github/workflows/harness-trigger.yml';
 const RUN_FILE = '.github/workflows/harness-run.yml';
 const RESUME_FILE = '.github/workflows/harness-resume.yml';
 const TRIGGER_TEMPLATE = readFileSync(join(PACKAGE_ROOT, 'templates', 'github', 'workflows', 'harness-trigger.yml'), 'utf8');
-const LABEL_COMMAND = 'gh label create harness --description "Start a harness run from this issue"';
+const LABEL_COMMAND = 'gh label create sdlc-harness --description "Start a harness run from this issue"';
 
 function nodeProjectFiles() {
   return {
