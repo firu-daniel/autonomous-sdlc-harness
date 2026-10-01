@@ -53,7 +53,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control/task_
 17. [x] **Task 17** — Grade the control workflow in `doctor`'s `forge` check _(layer: cli)_ _(points: 12)_
 18. [x] **Task 18** — Ask GitHub about the control workflow, the pull-request setting and the effective trigger label _(layer: cli)_ _(points: 15)_
 19. [x] **Task 19** — State the pull-request-review round in the `user_reviews/` template README _(layer: cli)_ _(points: 5)_
-20. [ ] **Task 20** — Teach the user-review fix-plan writer to re-locate a pull-request review comment _(layer: plugin)_ _(points: 8)_
+20. [x] **Task 20** — Teach the user-review fix-plan writer to re-locate a pull-request review comment _(layer: plugin)_ _(points: 8)_
 21. [ ] **Task 21** — Restate the forge coupling and the pull-request boundary in the plugin's flow documents _(layer: plugin)_ _(points: 12)_
 22. [ ] **Task 22** — Restate `forge` in the schema, `ARCHITECTURE.md` and the `docs/config.md` row _(layer: general)_ _(points: 10)_
 23. [ ] **Task 23** — Write `docs/github-run-control.md`: comment commands and review rounds _(layer: general)_ _(points: 20)_
