@@ -1,7 +1,8 @@
 """The rule this file exists to enforce: `cli.main` is the only place an anticipated failure
 becomes an exit status — a missing or unknown sub-command exits `2` with usage, and a
 `ServiceError` exits `1` with exactly one stderr line and no traceback. It also pins the
-sub-command table's rows.
+sub-command table's rows, and `serve-http`'s `--host` / `--port`, which Task 14's compose file
+passes.
 """
 
 import argparse
@@ -42,4 +43,13 @@ def test_service_error_exits_1_with_one_line_and_no_traceback(
 
 
 def test_sub_command_table_rows() -> None:
-    assert [row.name for row in cli.SUB_COMMANDS] == ["serve-mcp"]
+    assert [row.name for row in cli.SUB_COMMANDS] == ["serve-mcp", "serve-http"]
+
+
+def test_serve_http_binds_local_only_by_default() -> None:
+    row = next(row for row in cli.SUB_COMMANDS if row.name == "serve-http")
+    parser = argparse.ArgumentParser()
+    row.configure(parser)
+    assert (parser.parse_args([]).host, parser.parse_args([]).port) == ("127.0.0.1", 8080)
+    flags = parser.parse_args(["--host", "0.0.0.0", "--port", "9000"])
+    assert (flags.host, flags.port) == ("0.0.0.0", 9000)

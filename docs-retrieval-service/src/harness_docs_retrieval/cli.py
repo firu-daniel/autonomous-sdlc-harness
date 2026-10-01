@@ -16,6 +16,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from harness_docs_retrieval.errors import ServiceError
+from harness_docs_retrieval.http_app import serve_http
 from harness_docs_retrieval.mcp_server import serve_mcp
 from harness_docs_retrieval.service import add_service_options, load_service_config
 
@@ -36,12 +37,31 @@ def _run_serve_mcp(args: argparse.Namespace) -> int:
     return 0
 
 
+def _configure_serve_http(parser: argparse.ArgumentParser) -> None:
+    # Task 14's compose file passes both flags; the defaults keep a bare run local-only.
+    add_service_options(parser)
+    parser.add_argument("--host", default="127.0.0.1", help="the address to bind")
+    parser.add_argument("--port", type=int, default=8080, help="the port to bind")
+
+
+def _run_serve_http(args: argparse.Namespace) -> int:
+    config = load_service_config(repo=args.repo, docs_root=args.docs_root, environ=os.environ)
+    asyncio.run(serve_http(config, host=args.host, port=args.port))
+    return 0
+
+
 SUB_COMMANDS: list[SubCommand] = [
     SubCommand(
         name="serve-mcp",
         summary="Serve search_docs over stdio MCP (the server an agent runner starts)",
         configure=add_service_options,
         run=_run_serve_mcp,
+    ),
+    SubCommand(
+        name="serve-http",
+        summary="Serve POST /search and GET /health over HTTP",
+        configure=_configure_serve_http,
+        run=_run_serve_http,
     ),
 ]
 

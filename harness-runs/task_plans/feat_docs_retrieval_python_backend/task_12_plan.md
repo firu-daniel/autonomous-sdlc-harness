@@ -37,3 +37,10 @@
 - `tests/test_http_app.py` and `tests/test_cli.py` pass (subject to the story index's test-run note).
 - `grep -n "search_docs(\|render_results(" docs-retrieval-service/src/harness_docs_retrieval/http_app.py` finds nothing. The app reaches search only through `answer()`.
 - `grep -n "read_meta\|session\.store\|META_KEY\|\"dimensions\"" docs-retrieval-service/src/harness_docs_retrieval/http_app.py` finds nothing. The health check reaches the store only through `session.probe()`.
+
+**Deviations from plan:**
+
+- `run`'s open-then-serve body lives in `http_app.serve_http(config, *, host, port)`, mirroring `mcp_server.serve_mcp`; `cli.py`'s `run` loads the config and calls it inside one `asyncio.run`, so the behaviour is the plan's.
+- The invalid-JSON 400 text, unspecified by the plan, is `search: the request body is not valid JSON` (`http_app.BODY_REFUSAL`). A `mode` that is not a string is refused with the same composed text as an unknown one.
+- `tests/test_cli.py` gains one case beyond the row-set assertion: `serve-http`'s `--host` / `--port` defaults (`127.0.0.1` / `8080`) and overrides, the flags Task 14's compose file passes.
+- Evidence downgrade, per the story index's test-run note: `tests/test_http_app.py` and `tests/test_cli.py` were not run, and Python lint and type-check were not run — no conventions document states a single-file Python test command. Both verification greps were executed and found nothing. Deferred to the Run gates phase.
