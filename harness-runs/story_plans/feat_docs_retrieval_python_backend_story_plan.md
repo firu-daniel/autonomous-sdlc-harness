@@ -44,7 +44,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_docs_retrieval_python_b
 10. [x] **Task 10** — Add the wire constants, the service config, the session and the one shared answer path (`wire.py`, `service.py`) _(layer: general)_ _(points: 20)_
 11. [x] **Task 11** — Serve `search_docs` over stdio MCP, with the tool-listing and refusal parity case (`mcp_server.py`) _(layer: general)_ _(points: 20)_
 12. [x] **Task 12** — Serve the async FastAPI app: `POST /search` and `GET /health` (`http_app.py`) _(layer: general)_ _(points: 15)_
-13. [ ] **Task 13** — Add the `index`, `self-check` and `fetch-models` sub-commands (`self_check.py`) _(layer: general)_ _(points: 15)_
+13. [x] **Task 13** — Add the `index`, `self-check` and `fetch-models` sub-commands (`self_check.py`) _(layer: general)_ _(points: 15)_
 14. [ ] **Task 14** — Add the service image, the Postgres image with both extensions, and the compose file _(layer: general)_ _(points: 15)_
 15. [ ] **Task 15** — Add the container-gated end-to-end parity case and the wrapper's `container-test` sub-command _(layer: general)_ _(points: 20)_
 16. [ ] **Task 16** — Wire the Python gates into `scripts/run-gates.sh` and `docs/development.md` §5 _(layer: general)_ _(points: 15)_

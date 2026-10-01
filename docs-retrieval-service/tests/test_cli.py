@@ -43,7 +43,13 @@ def test_service_error_exits_1_with_one_line_and_no_traceback(
 
 
 def test_sub_command_table_rows() -> None:
-    assert [row.name for row in cli.SUB_COMMANDS] == ["serve-mcp", "serve-http"]
+    assert [row.name for row in cli.SUB_COMMANDS] == [
+        "serve-mcp",
+        "serve-http",
+        "index",
+        "self-check",
+        "fetch-models",
+    ]
 
 
 def test_serve_http_binds_local_only_by_default() -> None:

@@ -41,3 +41,10 @@
 - `tests/test_self_check.py` and `tests/test_cli.py` pass (subject to the story index's test-run note).
 - Every hit of `grep -n "fetch_models()" docs-retrieval-service/src/harness_docs_retrieval/cli.py docs-retrieval-service/src/harness_docs_retrieval/self_check.py docs-retrieval-service/src/harness_docs_retrieval/service.py` lies inside the `fetch-models` row's `run` callable.
 - No test or verification step downloads a model or touches `~/.cache/harness-docs-retrieval`. Every test points `HARNESS_DOCS_RETRIEVAL_MODEL_CACHE` at a temp dir.
+
+**Deviations from plan:**
+
+- The empty-cache subprocess case also sets `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB=hash-v1`. Without it, `packages` requires `sentence_transformers` and `torch`, which the gate environment never installs, so `packages` would fail too and the index line would depend on which failure it names. `run_self_check` names the first failed question in `SELF_CHECK_QUESTIONS` order; with the stub set that is `weights`, as the plan's assertion expects.
+- A check's `FAIL` detail is the exception message with its lines joined by `; ` (or the exception's class name when the message is empty), because a psycopg connection error spans several lines and the contract is exactly three stdout lines.
+- `fetch-models` under the stub prints the plan's note and exits `0`, where `docs fetch-models` in `cli/src/commands/docs.ts` refuses under the stub. The plan's behaviour is implemented; the divergence is stated in a comment on `_run_fetch_models`.
+- Verification deferred to the Run gates phase, per the story index's test-run note: `tests/test_self_check.py`, `tests/test_cli.py`, and Python lint and type-check were not run, because no conventions document states a single-file Python test command. The `fetch_models()` grep was run: its one hit is inside `_run_fetch_models` in `cli.py`.
