@@ -26,6 +26,7 @@
 #   remote-run.sh review <branch> --review-file <file> [--repo <root>]
 #   remote-run.sh trigger [--repo <root>]   (its own exit map: its paragraph)
 #   remote-run.sh list [--repo <root>]
+#   remote-run.sh discard <dir> [--repo <root>]
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status and fetch: printed
@@ -38,9 +39,10 @@
 #        decided — every outcome a person must act on is a notification; for
 #        poll: the tick finished; for pause-requested: such a run exists; for
 #        run-created-at: printed; for review: placed, pushed and dispatched;
-#        for list: printed
+#        for list: printed; for discard: <dir> removed, or it did not exist
 #     1  usage error, or the library or the configuration could not be
 #        resolved; for fetch, <out_dir> is not an existing, empty directory;
+#        for discard, <dir>'s parent does not resolve or the removal failed;
 #        for sync and restore, a local copy or write failed; for
 #        pause-requested, also NO such run — a caller that reads 1 as "no
 #        pause" passes arguments it has already validated
@@ -60,7 +62,8 @@
 #        its expiry and the resume command), `HARNESS_INPUT_ANSWERS` not an object of
 #        positive-integer keys to strings, or an answer whose `question_<n>.md`
 #        is not at the top level of the previous bundle — nothing is restored
-#        and no answer is written
+#        and no answer is written. For discard, <dir> does not resolve
+#        strictly inside `<state_dir>/scratch/`, or is a symlink; nothing removed
 #     3  gh failed: not found, or a non-zero exit — the first line of gh's
 #        stderr is named. For poll: the listing or the disable failed. For
 #        pause-requested and run-created-at, also an answer that is not the
@@ -109,6 +112,15 @@
 #                    `<out_dir>/clarifications/<branch>/question_<n>.md` with
 #                    no `answer_<n>.md` beside it, ascending
 #   bundle_dir:      <out_dir> when a bundle was downloaded
+#
+# `discard` REMOVES THE DIRECTORY A COMMAND FETCHED INTO, so the command needs
+# no recursive `rm` of its own. It removes <dir> only when the library's
+# `hr_scratch_path_var` accepts it: strictly inside the checkout's
+# `<state_dir>/scratch/` and not a symlink (2 otherwise). A relative <dir>
+# resolves against the caller's directory; the root is `--repo`, or else
+# `hr_repo_root` of the working directory, as for `restore`. No `gh` call and
+# no `execution.target` gate. A <dir> that does not exist is exit 0. It
+# creates nothing and writes nothing else.
 #
 # `review` PLACES A USER REVIEW ROUND ON THE BRANCH TIP AND DISPATCHES IT, for
 # `/autonomous-sdlc-harness:branch-user-review` on a run that executes on
@@ -500,7 +512,8 @@
 # `park_loop_cycles` rewrite of `remote_status.json`, all in the job's
 # checkout; for `save`, <out_dir> and the step summary; for `poll`, its
 # download directories and `<state_dir>/autonomous_logs/poll_state/previous/`
-# and `current/`. For `fetch`, <out_dir> only. `pause-requested`,
+# and `current/`. For `fetch`, <out_dir> only. For `discard`, the removal of
+# <dir> only. `pause-requested`,
 # `run-created-at`, `list` and `status` write nothing; a no-record `status`
 # downloads into a temporary directory it removes on exit.
 #
@@ -566,6 +579,10 @@
 #   fetch      t=$(mktemp -d); bash scripts/remote-run.sh fetch feat_x "$t"
 #              -> 0; prints `state: running` (or, with no run listed,
 #                 `state: none`), every other key present
+#   discard    mkdir -p sdlc-harness/scratch/branch-pause-feat_x, then
+#              bash scripts/remote-run.sh discard sdlc-harness/scratch/branch-pause-feat_x
+#              -> 0, the directory gone; discard sdlc-harness/autonomous_logs
+#              -> 2, nothing removed; no gh call either way
 #
 #   no record  with no registry, the "a bundle" stub below with question_1.md:
 #              bash scripts/remote-run.sh status feat_x -> 0; prints `state:
@@ -767,6 +784,7 @@ usage() {
   echo "       remote-run.sh review <branch> --review-file <file> [--repo <root>]" >&2
   echo "       remote-run.sh trigger [--repo <root>]" >&2
   echo "       remote-run.sh list [--repo <root>]" >&2
+  echo "       remote-run.sh discard <dir> [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -817,7 +835,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list) ;;
+  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -837,6 +855,8 @@ since_arg=""
 run_id_arg=""
 prompt_file=""
 review_file=""
+discard_dir=""
+discard_base=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -876,6 +896,9 @@ while [ "$#" -gt 0 ]; do
       if [ "$verb" = run-created-at ]; then
         [ -z "$run_id_arg" ] || usage "unexpected argument '$1'"
         run_id_arg="$1"
+      elif [ "$verb" = discard ]; then
+        [ -z "$discard_dir" ] || usage "unexpected argument '$1'"
+        discard_dir="$1"
       elif [ -z "$branch" ]; then
         branch="$1"
       elif [ "$verb" = pause-requested ] && [ -z "$since_arg" ]; then
@@ -892,8 +915,12 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != run-created-at ] && [ "$verb" != trigger ] \
-  && [ "$verb" != list ]; then
+  && [ "$verb" != list ] && [ "$verb" != discard ]; then
   valid_branch "$branch" || usage "$verb needs a <branch>"
+fi
+
+if [ "$verb" = discard ] && [ -z "$discard_dir" ]; then
+  usage "discard needs a <dir>"
 fi
 
 if [ "$verb" = pause-requested ]; then
@@ -979,7 +1006,8 @@ setup_fail() {
 if [ -n "$repo_arg" ]; then
   root=$(hr_repo_root "$repo_arg") || setup_fail "'$repo_arg' is not a git repository"
 elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ] \
-  || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ] || [ "$verb" = trigger ]; then
+  || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ] || [ "$verb" = trigger ] \
+  || [ "$verb" = discard ]; then
   root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
@@ -989,7 +1017,7 @@ hr_config_load "$root" || :
 registry=""
 status_no_record=0
 case "$verb" in
-  restore|save|continue|poll)
+  restore|save|continue|poll|discard)
     hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/harness.config.json'"
     ;;
   pause-requested|run-created-at)
@@ -1052,6 +1080,8 @@ if [ "$verb" = fetch ]; then
     *) out_dir="${PWD-.}/$out_dir" ;;
   esac
 fi
+# Kept apart from <dir>, so the library's character tests see it as typed.
+[ "$verb" != discard ] || discard_base="${PWD-.}"
 
 cd "$root" || setup_fail "cannot enter '$root'"
 
@@ -2929,6 +2959,61 @@ The task is this issue's title and body as they were when the label \`$trigger_l
 The task is the dispatch's \`client_payload\` title and body. Sending the same dispatch again starts another run, on the next indexed branch."
 }
 
+# ---------------------------------------------------------------------------
+# `discard` — remove a directory a command fetched into, inside scratch only.
+# ---------------------------------------------------------------------------
+
+# The removal lives here rather than in the command because a supervised or
+# auto-mode session may refuse a recursive `rm` the agent types, and a
+# user-level `rm -rf` deny cannot be overridden (`.claude/context/
+# conventions.md` -> `## Shell assets`). The scope is the scratch directory
+# only, per the lessons ledger's rule that a script "never removes one it did
+# not create": scratch holds only throwaway files a session itself wrote. Containment is `hr_scratch_path_var`'s alone; this verb
+# maps its status and acts on `HR_SCRATCH_TARGET`. It never creates anything.
+verb_discard() {
+  local status
+  hr_scratch_path_var "$root" "$discard_dir" "$discard_base"
+  status=$?
+  case "$status:$HR_SCRATCH_WHY" in
+    0:*) ;;
+    1:dotdot)
+      echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' carries '..'" >&2
+      exit "$EXIT_REFUSED" ;;
+    1:charset)
+      echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' carries a character a scratch path may not" >&2
+      exit "$EXIT_REFUSED" ;;
+    1:itself)
+      echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' is the scratch directory itself" >&2
+      exit "$EXIT_REFUSED" ;;
+    1:symlink)
+      echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' is a symlink" >&2
+      exit "$EXIT_REFUSED" ;;
+    1:*)
+      echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' is not inside '$HR_SCRATCH_DIR/'" >&2
+      exit "$EXIT_REFUSED" ;;
+    2:*)
+      echo "remote-run.sh: discard: the parent directory of '$discard_dir' cannot be resolved; nothing removed" >&2
+      exit "$EXIT_USAGE" ;;
+    3:no-scratch)
+      echo "remote-run.sh: discard: the state directory's scratch/ under '$root' does not exist; nothing removed" >&2
+      exit "$EXIT_USAGE" ;;
+    3:*)
+      echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
+      exit "$EXIT_USAGE" ;;
+    *)
+      usage "discard needs a <dir>" ;;
+  esac
+  if [ ! -e "$HR_SCRATCH_TARGET" ]; then
+    echo "remote-run.sh: $discard_dir does not exist; nothing removed"
+    return 0
+  fi
+  if ! rm -rf -- "$HR_SCRATCH_TARGET" || [ -e "$HR_SCRATCH_TARGET" ]; then
+    echo "remote-run.sh: discard: removing '$discard_dir' failed" >&2
+    exit "$EXIT_USAGE"
+  fi
+  echo "remote-run.sh: removed $discard_dir"
+}
+
 case "$verb" in
   dispatch) verb_dispatch ;;
   pause) verb_pause ;;
@@ -2947,5 +3032,6 @@ case "$verb" in
   review) verb_review ;;
   trigger) verb_trigger ;;
   list) verb_list ;;
+  discard) verb_discard ;;
 esac
 exit "$EXIT_OK"
