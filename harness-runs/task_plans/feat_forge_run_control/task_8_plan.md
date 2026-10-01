@@ -39,3 +39,10 @@
 - `npm test -- test/remote-run.test.mjs` from `cli/` passes.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n "^\s*notify \(paused\|failed\)" -- cli/templates/scripts/remote-run.sh` has every hit carrying a fourth quoted argument: no notification reaches GitHub with a slash command for its text.
+
+**Deviations from plan:**
+
+- The three notes saying the automatic resume after a usage limit failed (`continue_wait_poller`'s two arms, `poll_recheck`) also carry the next action, `USAGE_RESUME_NOTE` (*"Comment `@sdlc-harness resume` after the limit resets to continue."*), rather than stating only what happened: in a job the registry's `pause_reason` is `usage`, so `forge_report`'s own `paused` sentence says the run resumes by itself, which these arms contradict.
+- `notify` runs `forge_report` with stdin from `/dev/null`, and `poll_recheck` captures `GH_ERR` once before its loop: `poll_branch` notifies inside a loop reading its run list, and each report overwrites `GH_ERR`.
+- The stub's body log is a sibling file, `<log>.bodies`, rather than a field of the existing log line, so every pre-existing case's `calls()` reader and call list stay byte-identical.
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the tool layer (approval required) and was not run; the script's syntax rests on the 102 cases of `test/remote-run.test.mjs` executing it under bash, all passing.

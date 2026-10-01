@@ -12,7 +12,7 @@
 #                 [--park-loop-clear] [--chain <n>] [--repo <root>]
 #   remote-run.sh pause <branch> [--repo <root>]
 #   remote-run.sh warm [--repo <root>]
-#   remote-run.sh stop <branch> [--repo <root>]
+#   remote-run.sh stop <branch> [--actor <login>] [--repo <root>]
 #   remote-run.sh status <branch> [--repo <root>]
 #   remote-run.sh sync <branch> [--repo <root>]
 #   remote-run.sh fetch <branch> <out_dir> [--repo <root>]
@@ -377,7 +377,8 @@
 #                        so it names the repository rather than a runner path
 #   GITHUB_RUN_ID, GITHUB_SERVER_URL, GITHUB_REPOSITORY   the run URL
 # Notifications go through the sibling `autonomous-notify.sh`, as `paused` or
-# `failed`. A re-dispatch is `dispatch <branch> --engine <status.json engine>
+# `failed`, and each is then reported as `report` reports that event, with a
+# note of its own that names no slash command and no shell command. A re-dispatch is `dispatch <branch> --engine <status.json engine>
 # --resume pause --chain <chain + 1>`, composed by `dispatch` itself.
 #
 # `chain` HAS ONE SOURCE: the bundle's `status.json`, whose `chain` is the
@@ -549,7 +550,7 @@
 # is a wire: `pause` and `stop` send the branch as their `branch` input for
 # exactly that reason.
 #
-# `stop` DOES THREE THINGS, IN THIS ORDER. (1) It ALWAYS dispatches action=stop
+# `stop` DOES FOUR THINGS, IN THIS ORDER. (1) It ALWAYS dispatches action=stop
 # on the branch — a jobless run titled `harness stop <branch>` that GitHub keeps
 # as the stop marker `continue` and `poll` read. It is first because it is the
 # only part that reaches a usage-paused run waiting on the resume poller, which
@@ -561,7 +562,12 @@
 # after a failure. (3) Only when (1) and (2) all succeeded, and only when a
 # local registry record exists, it writes `remote_stopped_at` and sets `status`
 # to `failed` in one `hr_registry_set` call; a partial stop leaves the record alone
-# and exits 3, so running `stop` again is the remedy.
+# and exits 3, so running `stop` again is the remedy. (4) A complete stop is then
+# reported as `report stopped` with the note `Stopped by @<actor>.` under
+# `--actor` (a login, the trigger's shape plus an optional `[bot]`; anything else
+# is a usage error), else one naming a local stop; a partial stop reports
+# nothing. The cancelled job's own `failed` is then posted nowhere, because
+# `report` finds the branch stopped.
 #
 # `warm` dispatches action=warm on GitHub's OWN default branch (`gh repo view
 # --json defaultBranchRef`), which may differ from the configured
@@ -588,7 +594,8 @@
 # file under `RUNNER_TEMP` (removed), one comment and the state labels on the
 # issue and the pull request, and nothing local. `deliver` writes its body and
 # comment files under `RUNNER_TEMP` (removed), at most one pull request, one
-# comment and the state labels. Every other verb's only writes are the
+# comment and the state labels. `stop`, `continue` and `poll` also make
+# `report`'s writes for each event they report. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
 # `<branch>.remote.log` in the main checkout, plus the mirror restore
@@ -896,7 +903,7 @@ usage() {
   echo "usage: remote-run.sh dispatch <branch> --engine <task|user_review|docs> [--resume none|answer|pause] [--answers-from <clar_dir> --indexes \"<n> ...\"] [--park-loop-clear] [--chain <n>] [--repo <root>]" >&2
   echo "       remote-run.sh pause <branch> [--repo <root>]" >&2
   echo "       remote-run.sh warm [--repo <root>]" >&2
-  echo "       remote-run.sh stop <branch> [--repo <root>]" >&2
+  echo "       remote-run.sh stop <branch> [--actor <login>] [--repo <root>]" >&2
   echo "       remote-run.sh status <branch> [--repo <root>]" >&2
   echo "       remote-run.sh sync <branch> [--repo <root>]" >&2
   echo "       remote-run.sh fetch <branch> <out_dir> [--repo <root>]" >&2
@@ -1006,6 +1013,7 @@ discard_dir=""
 discard_base=""
 report_event=""
 report_note=""
+stop_actor=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -1041,6 +1049,10 @@ while [ "$#" -gt 0 ]; do
       [ "$verb" = report ] || usage "$1 is a report option"
       [ "$#" -ge 2 ] || usage "$1 needs a value"
       report_note="$2"; shift 2 ;;
+    --actor)
+      [ "$verb" = stop ] || usage "$1 is a stop option"
+      [ "$#" -ge 2 ] && [ -n "$2" ] || usage "$1 needs a value"
+      stop_actor="$2"; shift 2 ;;
     -*)
       usage "unknown option '$1'" ;;
     *)
@@ -1081,6 +1093,11 @@ fi
 # The event lands in the comment marker, so it is a word.
 if [ "$verb" = report ] && ! [[ "$report_event" =~ ^[a-z][a-z_]*$ ]]; then
   usage "report needs an <event> of lowercase letters and underscores"
+fi
+
+# The actor lands in the stop comment, so it is a login: the trigger's shape.
+if [ -n "$stop_actor" ] && ! [[ "$stop_actor" =~ ^[A-Za-z0-9][A-Za-z0-9-]*(\[bot\])?$ ]]; then
+  usage "--actor needs a GitHub login"
 fi
 
 if [ "$verb" = pause-requested ]; then
@@ -1359,6 +1376,11 @@ verb_stop() {
       || echo "remote-run.sh: stopped on GitHub, but the local record of $branch could not be updated" >&2
   fi
   echo "remote-run.sh: stopped $branch"
+  if [ -n "$stop_actor" ]; then
+    forge_report stopped "$branch" "Stopped by @$stop_actor."
+  else
+    forge_report stopped "$branch" "Stopped from a local \`remote-run.sh stop\`."
+  fi
 }
 
 # list_runs — the branch's runs of the workflow into GH_OUT; exits 3 on failure.
@@ -2000,7 +2022,11 @@ verb_save() {
   return 0
 }
 
-# notify <event> <branch> <detail> — one lifecycle notification; never fails.
+# notify <event> <branch> <detail> <forge_note> — one lifecycle notification,
+# then `forge_report` of the same event; never fails. Every call site supplies
+# both texts: <detail> is the push notification's, slash commands included;
+# <forge_note> is the comment's, naming no slash command and no shell command,
+# and states only what happened, since `forge_report` adds the next action.
 notify() {
   if [ -n "${HARNESS_REMOTE_SLUG-}" ]; then
     HARNESS_REPO_SLUG="$HARNESS_REMOTE_SLUG"
@@ -2009,6 +2035,8 @@ notify() {
   bash "$script_dir/autonomous-notify.sh" "$1" "$2" "" "$3" \
     || echo "remote-run.sh: the $1 notification for $2 could not be sent" >&2
   echo "remote-run.sh: notified $1 for $2: $3"
+  # stdin closed: `poll` calls this inside a loop reading its run list.
+  forge_report "$1" "$2" "$4" </dev/null
 }
 
 this_run_url() {
@@ -2107,46 +2135,49 @@ valid_engine() {
 
 STOPPED_LINE="a 'harness stop' run is newer than its newest 'harness run' run"
 RESUME_HINT="/autonomous-sdlc-harness:branch-resume"
+# A `paused` report on a usage pause says the run resumes by itself; a note
+# saying the automatic resume failed carries the action instead.
+USAGE_RESUME_NOTE="Comment \`$COMMAND_HANDLE resume\` after the limit resets to continue."
 
 continue_redispatch() {
   local status_file="$1" engine_value
   if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
-    notify paused "$branch" "Not re-dispatched: remote stop is set. Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")."
+    notify paused "$branch" "Not re-dispatched: remote stop is set. Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")." "Not continued: the repository variable \`HARNESS_REMOTE_STOP\` is set; clear it, then resume."
     return 0
   fi
   remote_branch_stopped "$branch"
   case $? in
     0) echo "remote-run.sh: $branch is stopped ($STOPPED_LINE); not re-dispatched"; return 0 ;;
-    2) notify paused "$branch" "Not re-dispatched: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")."; return 0 ;;
+    2) notify paused "$branch" "Not re-dispatched: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")." "Not continued: whether the run was stopped could not be checked ($GH_ERR)."; return 0 ;;
   esac
   if ! max_chain_var; then
-    notify failed "$branch" "Not re-dispatched: HARNESS_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer."
+    notify failed "$branch" "Not re-dispatched: HARNESS_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer." "Not continued: the repository variable \`HARNESS_MAX_CHAIN\` ('$MAX_CHAIN') is not a non-negative integer."
     return 0
   fi
   next_chain_var "$status_file"
   case $? in
-    1) notify failed "$branch" "Not re-dispatched: chain unreadable in status.json."; return 0 ;;
-    2) notify failed "$branch" "Not re-dispatched: chain limit reached ($NEXT_CHAIN over HARNESS_MAX_CHAIN $MAX_CHAIN)."; return 0 ;;
+    1) notify failed "$branch" "Not re-dispatched: chain unreadable in status.json." "Not continued: the chain count in the run's status could not be read."; return 0 ;;
+    2) notify failed "$branch" "Not re-dispatched: chain limit reached ($NEXT_CHAIN over HARNESS_MAX_CHAIN $MAX_CHAIN)." "Not continued: the chain limit was reached ($NEXT_CHAIN over \`HARNESS_MAX_CHAIN\` $MAX_CHAIN)."; return 0 ;;
   esac
   engine_value=$(hr_remote_status_get "$status_file" engine) || engine_value=""
   if ! valid_engine "$engine_value"; then
-    notify failed "$branch" "Not re-dispatched: engine '$engine_value' in status.json is not task, user_review or docs."
+    notify failed "$branch" "Not re-dispatched: engine '$engine_value' in status.json is not task, user_review or docs." "Not continued: the engine '$engine_value' in the run's status is not task, user_review or docs."
     return 0
   fi
   redispatch "$engine_value" "$NEXT_CHAIN" \
-    || notify paused "$branch" "Re-dispatch failed ($REDISPATCH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "$engine_value")."
+    || notify paused "$branch" "Re-dispatch failed ($REDISPATCH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "$engine_value")." "Not continued: dispatching the next job failed ($REDISPATCH_ERR)."
 }
 
 continue_wait_poller() {
   remote_branch_stopped "$branch"
   case $? in
     0) echo "remote-run.sh: $branch is stopped ($STOPPED_LINE); the resume poller is not enabled"; return 0 ;;
-    2) notify paused "$branch" "Auto-resume not enabled: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")."; return 0 ;;
+    2) notify paused "$branch" "Auto-resume not enabled: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")." "The automatic resume after the usage limit was not scheduled: whether the run was stopped could not be checked ($GH_ERR). $USAGE_RESUME_NOTE"; return 0 ;;
   esac
   if gh_call workflow enable "$WORKFLOW_RESUME_FILE"; then
     echo "remote-run.sh: enabled $WORKFLOW_RESUME_FILE for $branch"
   else
-    notify paused "$branch" "Auto-resume is unavailable: enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $branch after the usage reset; $(hr_github_resume_route "$branch" "")."
+    notify paused "$branch" "Auto-resume is unavailable: enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $branch after the usage reset; $(hr_github_resume_route "$branch" "")." "The automatic resume after the usage limit could not be scheduled ($GH_ERR). $USAGE_RESUME_NOTE"
   fi
 }
 
@@ -2155,7 +2186,7 @@ verb_continue() {
   hr_remote_names_var
   status_file="$bundle_dir/$HR_REMOTE_STATUS_FILE"
   if [ ! -f "$status_file" ]; then
-    notify failed "$branch" "The job stopped before the harness run started: $(this_run_url)"
+    notify failed "$branch" "The job stopped before the harness run started: $(this_run_url)" "The job stopped before the run started: $(this_run_url)."
     return 0
   fi
   decision=$(hr_remote_status_get "$status_file" decision) || decision=""
@@ -2163,7 +2194,7 @@ verb_continue() {
     continue) continue_redispatch "$status_file" ;;
     wait-poller) continue_wait_poller ;;
     stop) echo "remote-run.sh: decision stop for $branch; nothing to do" ;;
-    *) notify failed "$branch" "Not re-dispatched: status.json carries no recognised decision: $(this_run_url)" ;;
+    *) notify failed "$branch" "Not re-dispatched: status.json carries no recognised decision: $(this_run_url)" "Not continued: the run's status carries no recognised decision." ;;
   esac
   return 0
 }
@@ -2344,12 +2375,12 @@ poll_branch() {
   fi
   next_chain_var "$POLL_STATUS_FILE"
   case $? in
-    1) [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: chain unreadable in status.json."; return 1 ;;
-    2) [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: chain limit reached ($NEXT_CHAIN over HARNESS_MAX_CHAIN $MAX_CHAIN)."; return 1 ;;
+    1) [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: chain unreadable in status.json." "Not resumed after the usage limit: the chain count in the run's status could not be read."; return 1 ;;
+    2) [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: chain limit reached ($NEXT_CHAIN over HARNESS_MAX_CHAIN $MAX_CHAIN)." "Not resumed after the usage limit: the chain limit was reached ($NEXT_CHAIN over \`HARNESS_MAX_CHAIN\` $MAX_CHAIN)."; return 1 ;;
   esac
   engine_value=$(hr_remote_status_get "$POLL_STATUS_FILE" engine) || engine_value=""
   if ! valid_engine "$engine_value"; then
-    [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: engine '$engine_value' in status.json is not task, user_review or docs."
+    [ "$may_dispatch" -eq 0 ] || notify failed "$branch" "Not resumed by the poller: engine '$engine_value' in status.json is not task, user_review or docs." "Not resumed after the usage limit: the engine '$engine_value' in the run's status is not task, user_review or docs."
     return 1
   fi
   if [ "$may_dispatch" -eq 0 ]; then
@@ -2370,7 +2401,7 @@ poll_branch() {
   if [ "$failures" -ge "$((10#$POLL_MAX_FAILURES))" ] \
     || [ "$now" -gt "$((10#$at + 10#$POLL_GIVE_UP_MINUTES * 60))" ]; then
     poll_state_put "$branch" "$id" "$failures" 1
-    notify paused "$branch" "The resume poller could not re-dispatch $branch ($REDISPATCH_ERR) after $failures attempts; automatic resume has stopped. Run $RESUME_HINT $branch; $(hr_github_resume_route "$branch" "$engine_value")."
+    notify paused "$branch" "The resume poller could not re-dispatch $branch ($REDISPATCH_ERR) after $failures attempts; automatic resume has stopped. Run $RESUME_HINT $branch; $(hr_github_resume_route "$branch" "$engine_value")." "Not resumed after the usage limit: dispatching the next job failed $failures times ($REDISPATCH_ERR), and the automatic resume has stopped."
     return 1
   fi
   poll_state_put "$branch" "$id" "$failures" ""
@@ -2413,7 +2444,7 @@ EOF
 # poll_recheck — after the disable: one fresh listing, evaluated without
 # dispatching; re-enables the poller when a branch became waiting meanwhile.
 poll_recheck() {
-  local b
+  local b enable_err
   ALL_RUNS_LISTED=0
   if ! list_all_runs || ! poll_pass 0; then
     echo "remote-run.sh: poll: the re-check after disabling $WORKFLOW_RESUME_FILE could not list the runs ($GH_ERR); it stays disabled"
@@ -2426,8 +2457,10 @@ poll_recheck() {
     done
     return 0
   fi
+  # Captured once: each notify's report overwrites GH_ERR.
+  enable_err="$GH_ERR"
   for b in $POLL_WAITING; do
-    notify paused "$b" "Auto-resume is unavailable: re-enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $b after the usage reset; $(hr_github_resume_route "$b" "")."
+    notify paused "$b" "Auto-resume is unavailable: re-enabling $WORKFLOW_RESUME_FILE failed ($enable_err). Run $RESUME_HINT $b after the usage reset; $(hr_github_resume_route "$b" "")." "The automatic resume after the usage limit could not be scheduled ($enable_err). $USAGE_RESUME_NOTE"
   done
 }
 
