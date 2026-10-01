@@ -198,10 +198,14 @@ import {
   GIT_TOKEN_SECRET,
   OAUTH_TOKEN_SECRET,
   CLI_VERSION_VARIABLE,
+  COMMAND_HANDLE,
+  COMMAND_VERBS,
   DEFAULT_TRIGGER_LABEL,
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
   RUNNER_VARIABLE,
+  RUN_STATES,
+  STATE_LABEL_PREFIX,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_LABEL_VARIABLE,
 } from '../remote/githubActions.js';
@@ -2568,8 +2572,11 @@ function reportWorkflowUpgrade(
  * The first-setup block: the GitHub-side steps only the adopter can take, printed when this run
  * created or replaced at least one of the two workflows, and **not** printed for an upgrade that
  * replaced a workflow — {@link reportWorkflowUpgrade} owns that run's steps. `workflowPaths` names
- * the workflows, repo-relative; `trigger` is the generator's fact that the trigger workflow was
- * enqueued, and adds the label step.
+ * the workflows, repo-relative; `trigger` is the generator's fact that the trigger and control
+ * workflows were enqueued, and adds the label step and the pull-request step.
+ *
+ * The pull-request step is prose with a settings path and no command: the `gh api` call that writes
+ * that setting also overwrites the repository's default token permissions.
  *
  * Commands stand on their own lines so each can be pasted. The push comes first because GitHub
  * dispatches a `workflow_dispatch` workflow only once it exists on the default branch. It skips the
@@ -2619,7 +2626,7 @@ function reportGithubSteps(
   if (trigger) {
     step += 1;
     ctx.report.info(
-      `${step}. Create the issue label the trigger workflow listens to; labelling an issue with it starts a run. Only a person with write or admin access, or a listed bot, starts one:`,
+      `${step}. Create the issue label the trigger workflow listens to; labelling an issue with it starts a run. Only a person with write or admin access, or a listed bot, starts one. The label \`${DEFAULT_TRIGGER_LABEL}\` is distinct from the ${RUN_STATES.length} \`${STATE_LABEL_PREFIX}<state>\` labels a run's pull request carries: those are created on first use and must not be applied by hand:`,
     );
     command(`gh label create ${DEFAULT_TRIGGER_LABEL} --description "Start a harness run from this issue"`);
     ctx.report.info(
@@ -2628,12 +2635,22 @@ function reportGithubSteps(
     command(`gh variable set ${TRIGGER_LABEL_VARIABLE} --body <label>`);
     command(`gh variable set ${TRIGGER_ALLOWED_BOTS_VARIABLE} --body <bot-login,...>`);
     ctx.report.info('');
+    step += 1;
+    ctx.report.info(
+      `${step}. A completed run opens a draft pull request with the job's token only once "Allow GitHub Actions to create and approve pull requests" is switched on under Settings -> Actions -> General -> Workflow permissions: switch it on, or set ${GIT_TOKEN_SECRET}, which opens the pull request so the repository's CI runs on it without an approval click. With ${GIT_TOKEN_SECRET} set, the pull request's author is the token's owner, who cannot request changes on it, so a solo maintainer uses a token of a machine account or starts review rounds locally with /autonomous-sdlc-harness:branch-user-review.`,
+    );
+    ctx.report.info(
+      `   On a run's issue or pull request, a comment starting ${COMMAND_HANDLE} followed by ${nameList([...COMMAND_VERBS])} steers the run, and a review requesting changes on the run's pull request starts a user-review round.`,
+    );
+    ctx.report.info('');
   }
   ctx.report.info(`${step + 1}. Then verify the GitHub side:`);
   command(DOCTOR_CHECK_GITHUB_COMMAND);
   ctx.report.info('');
   ctx.report.info(
-    'Runner choices, costs, billing and security: the harness documentation, docs/remote-execution.md — Remote execution on GitHub Actions.',
+    trigger
+      ? 'Runner choices, costs, billing and security: the harness documentation, docs/remote-execution.md — Remote execution on GitHub Actions; the comment commands, the run-state labels and review rounds: docs/github-run-control.md.'
+      : 'Runner choices, costs, billing and security: the harness documentation, docs/remote-execution.md — Remote execution on GitHub Actions.',
   );
 }
 
