@@ -24,7 +24,8 @@
 #   remote-run.sh run-created-at <run_id> [--repo <root>]
 #   remote-run.sh start <branch> --prompt-file <file> [--repo <root>]
 #   remote-run.sh review <branch> --review-file <file> [--allow-no-run]
-#                 [--actor <login>] [--source <https-url>] [--repo <root>]
+#                 [--actor <login>] [--reviewers <login,login,...>]
+#                 [--source <https-url>] [--repo <root>]
 #   remote-run.sh trigger [--repo <root>]   (its own exit map: its paragraph)
 #   remote-run.sh list [--repo <root>]
 #   remote-run.sh discard <dir> [--repo <root>]
@@ -155,9 +156,12 @@
 # (each failure 4); the cut copy is removed; then `dispatch --engine
 # user_review --resume none --chain 0`. A remote record, when one exists, is
 # set `running` / `user_review` in one write after the dispatch. Then the round
-# is reported as `report round` with the note `Round <round>`, plus ` from
-# <source>` under --source, and ` by @<actor>` under --actor (a login, as for
-# `stop`), else ` from a local session`.
+# is reported as `report round`. Under --reviewers (comma-separated logins) the
+# note is `Round <round> from pull request #<pr> by @<a>, @<b>`, <pr> read from
+# --source's `/pull/<n>` or else the branch's open pull request, with ` (<source>)`
+# after it under --source. Otherwise it is `Round <round>`, plus ` from <source>`
+# under --source, and ` by @<actor>` under --actor (a login, as for `stop`),
+# else ` from a local session`.
 # --allow-no-run EXISTS FOR A LOCALLY EXECUTED BRANCH REVIEWED ON GITHUB: such
 # a branch has no `harness run <branch>` run, and its round runs through
 # `WORKFLOW_RUN_FILE` because a GitHub-started round always does. Its local
@@ -405,23 +409,39 @@
 # nothing, and draft status plays no part. Then gates 1-3 above, in order, each
 # a reply on the pull request, and `control_check_branch` on the head; then a
 # head whose origin tip carries no `<state>/story_plans/<head>_story_plan.md`
-# is refused, because the round reads its story index. One submitted review is
-# one round, built in a fresh file under `RUNNER_TEMP`: the body verbatim (or
-# `(The review carries no summary.)`), a `---` line, the provenance sentence
-# naming @<login>, the pull request, the review URL and `submitted_at`; then,
-# when any is kept, `## Inline comments`. Those come from ONE paginated
-# `pulls/<n>/comments` listing — never the per-review endpoint, which carries
-# no `line` — keeping the reviewer's own comments that belong to this review or
-# were created after the committer time of the branch's newest
-# `user_reviews/<head>_review[_<n>].md` on origin (all of them when there is
-# none), sorted by `created_at`; nobody else's. Each is a `### `<path>`, line
+# is refused, because the round reads its story index. A round is CUMULATIVE,
+# built by `round_collect` in a fresh file under `RUNNER_TEMP` from ONE
+# paginated `pulls/<n>/reviews` and ONE paginated `pulls/<n>/comments` listing
+# — never the per-review endpoint, which carries no `line` — the event's own
+# review merged when the listing lacks it. What earlier rounds consumed is the
+# union of the review and comment ids their marker lines record, read from
+# origin's tip; the time boundary is the highest-numbered marked round's
+# `collected_at` less `ROUND_OVERLAP_SECS`, or, when no round is marked, the
+# committer time of the branch's newest `user_reviews/<head>_review[_<n>].md`
+# (none when there is no round). Pending: a review whose state is
+# `REVIEW_ROUND_STATE`, whose body carries no `COMMENT_MARKER`, whose id is
+# unrecorded and whose `submitted_at` is at or after the boundary; and an
+# inline comment, by any author and whatever its review's state, whose id is
+# unrecorded, whose body carries no `COMMENT_MARKER`, and whose `created_at` is
+# at or after the boundary or whose review is pending. Every distinct author
+# of a pending item passes `authorise_actor`; a refused author's items are
+# dropped with one line naming the login, `AUTH_WHY` and the count, and a
+# failed permission call fails the collection. The file: one `## Review by
+# @<login>` section per pending review, oldest `submitted_at` first, holding
+# the body verbatim (or `(The review carries no summary.)`) and `Requested
+# changes on pull request #<n> (<url>) at <submitted_at>.`; then, when any is
+# kept, `## Inline comments`, oldest `created_at` first; then the marker line
+# `<!-- sdlc-harness round collected_at=<utc> reviews=<id,…> comments=<id,…> -->`
+# listing exactly the ids written. Each comment is a `### `<path>`, line
 # <n>` heading (`original line <n> (outdated)` when `line` is null), `Made on
-# commit `<original_commit_id or commit_id>`.`, its body verbatim, and its
-# `diff_hunk` in a `diff` fence one backtick longer than the hunk's longest
-# backtick run, at least three — the commit and hunk let the fix plan re-locate
-# a line the fixes moved. Then `review <head> --review-file <file>
-# --allow-no-run --actor <login> --source <review url>` runs as a child, which
-# fast-forwards, commits `chore: add user review for <head>`, pushes,
+# commit `<original_commit_id or commit_id>`.`, `By @<login>: <url>`, its body
+# verbatim, and its `diff_hunk` in a `diff` fence one backtick longer than the
+# hunk's longest backtick run, at least three — the commit and hunk let the fix plan re-locate
+# a line the fixes moved. With no review pending, nothing is placed: a reply
+# names the round whose marker records the event's review, else says nothing
+# is pending, and exit 0. Then `review <head> --review-file <file>
+# --allow-no-run --reviewers <logins> --source <pull request url>` runs as a
+# child, which fast-forwards, commits `chore: add user review for <head>`, pushes,
 # dispatches `engine: user_review` and reports the round itself. Its 0 is exit
 # 0 with nothing more posted; 2 is a reply quoting its last line — adding that
 # a round is in progress when that line names a running run — and exit 2; 3 a
@@ -1050,6 +1070,9 @@ POLL_STATE_RUNS_LIMIT=10
 # between tries is `HARNESS_TRIGGER_LOOKUP_SECS`, a test seam.
 TRIGGER_RUN_LOOKUP_TRIES=6
 TRIGGER_LOOKUP_SECS_DEFAULT=5
+# How far before the previous round's `collected_at` `round_collect` lists
+# from, absorbing runner-clock skew; the id check drops what it re-lists.
+ROUND_OVERLAP_SECS=300
 
 # GitHub's documented limit on a `workflow_dispatch` inputs payload: "The
 # maximum payload for inputs is 65,535 characters."
@@ -1080,7 +1103,7 @@ usage() {
   echo "       remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]" >&2
   echo "       remote-run.sh run-created-at <run_id> [--repo <root>]" >&2
   echo "       remote-run.sh start <branch> --prompt-file <file> [--repo <root>]" >&2
-  echo "       remote-run.sh review <branch> --review-file <file> [--allow-no-run] [--actor <login>] [--source <https-url>] [--repo <root>]" >&2
+  echo "       remote-run.sh review <branch> --review-file <file> [--allow-no-run] [--actor <login>] [--reviewers <login,login,...>] [--source <https-url>] [--repo <root>]" >&2
   echo "       remote-run.sh trigger [--repo <root>]" >&2
   echo "       remote-run.sh list [--repo <root>]" >&2
   echo "       remote-run.sh discard <dir> [--repo <root>]" >&2
@@ -1182,6 +1205,7 @@ report_event=""
 report_note=""
 actor_arg=""
 source_arg=""
+reviewers_arg=""
 allow_no_run=0
 
 while [ "$#" -gt 0 ]; do
@@ -1226,6 +1250,10 @@ while [ "$#" -gt 0 ]; do
       [ "$verb" = review ] || usage "$1 is a review option"
       [ "$#" -ge 2 ] && [ -n "$2" ] || usage "$1 needs a value"
       source_arg="$2"; shift 2 ;;
+    --reviewers)
+      [ "$verb" = review ] || usage "$1 is a review option"
+      [ "$#" -ge 2 ] && [ -n "$2" ] || usage "$1 needs a value"
+      reviewers_arg="$2"; shift 2 ;;
     --allow-no-run)
       [ "$verb" = review ] || usage "$1 is a review option"
       allow_no_run=1; shift ;;
@@ -1274,6 +1302,12 @@ fi
 # The actor lands in the stop or round comment, so it is a login: the trigger's shape.
 if [ -n "$actor_arg" ] && ! [[ "$actor_arg" =~ ^[A-Za-z0-9][A-Za-z0-9-]*(\[bot\])?$ ]]; then
   usage "--actor needs a GitHub login"
+fi
+
+# The reviewers land in the round comment, so each is a login.
+if [ -n "$reviewers_arg" ]; then
+  [[ ",$reviewers_arg," =~ ^(,[A-Za-z0-9][A-Za-z0-9-]*(\[bot\])?)+,$ ]] \
+    || usage "--reviewers needs comma-separated GitHub logins"
 fi
 
 # The source lands in the round comment as a link.
@@ -2843,7 +2877,7 @@ remote_record_exists() {
 }
 
 verb_review() {
-  local protected=0 status=0 reg="" record_wt="" use_mirror=0 state_rel names name round max=0 next rel note
+  local protected=0 status=0 reg="" record_wt="" use_mirror=0 state_rel names name round max=0 next rel note pr
   hr_branch_is_protected "$root" "$branch" || protected=$?
   case "$protected" in
     0)
@@ -2956,12 +2990,24 @@ NAMES
       || echo "remote-run.sh: dispatched, but the local record of $branch could not be updated" >&2
   fi
 
-  note="Round $round"
-  [ -z "$source_arg" ] || note="$note from $source_arg"
-  if [ -n "$actor_arg" ]; then
-    note="$note by @$actor_arg"
+  if [ -n "$reviewers_arg" ]; then
+    pr=""
+    if [[ "$source_arg" =~ /pull/([0-9]+)([/?#]|$) ]]; then
+      pr="${BASH_REMATCH[1]}"
+    elif forge_on && forge_repo_var && forge_pr_var "$branch"; then
+      pr="$FORGE_PR"
+    fi
+    note="Round $round from pull request${pr:+ #$pr}"
+    [ -z "$source_arg" ] || note="$note ($source_arg)"
+    note="$note by @${reviewers_arg//,/, @}"
   else
-    note="$note from a local session"
+    note="Round $round"
+    [ -z "$source_arg" ] || note="$note from $source_arg"
+    if [ -n "$actor_arg" ]; then
+      note="$note by @$actor_arg"
+    else
+      note="$note from a local session"
+    fi
   fi
   forge_report round "$branch" "$note"
 }
@@ -4417,37 +4463,174 @@ control_review_story() {
   fi
 }
 
-# control_review_round <file> — write the round to <file>: the review body
-# verbatim, the provenance, then the reviewer's inline comments from the pull
-# request's comments endpoint (the per-review one carries no line numbers). A
-# comment is kept when it belongs to this review, or was created after the
-# commit of the branch's newest round; with no round yet, every one is kept.
-control_review_round() {
-  local file="$1" state_rel boundary inline
-  if ! gh_call api --paginate "repos/$FORGE_REPO/pulls/$CONTROL_NUMBER/comments"; then
-    control_refuse "$EXIT_GH" "the inline comments of pull request #$CONTROL_NUMBER could not be read ($GH_ERR)" \
-      "Submit the review again to retry."
-  fi
+# round_collect <pr_number> <out_file> — the cumulative round of the global
+# `branch`'s pull request <pr_number>, shared by `control` and `collect`: every
+# review requesting changes and every inline comment no earlier round consumed,
+# by every author `authorise_actor` accepts. What earlier rounds consumed is
+# read from the marker lines of their files on origin's tip; with none marked,
+# the boundary is the committer time of the newest round file. A comment
+# belonging to a pending review is pending whatever its `created_at`: a draft
+# comment is created before its review is submitted. RC_EVENT, set by the
+# caller, is the event's own review as a JSON object, merged when the listing
+# lacks it. Sets RC_REVIEWS, RC_REVIEWERS (distinct logins, comma-joined, in
+# order) and RC_EVENT_ROUND (the round whose marker records RC_EVENT's id).
+# Returns 0 with <out_file> written; 1 when no review requesting changes is
+# pending, writing nothing; 3 a listing or a permission call failed; 4 the
+# previous rounds or <out_file> could not be read or written. RC_ERR holds why.
+RC_EVENT=""
+RC_REVIEWS=0
+RC_REVIEWERS=""
+RC_EVENT_ROUND=""
+RC_ERR=""
+round_collect() {
+  local pr="$1" file="$2" collected_at state_rel names name path n line event_id=""
+  local seen_r="," seen_c="," marked_max=0 marked_at="" since="" tmp status
+  local kept authors login type allowed="," count text
+  RC_REVIEWS=0
+  RC_REVIEWERS=""
+  RC_EVENT_ROUND=""
+  RC_ERR=""
+  collected_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  [ -z "$RC_EVENT" ] || event_id=$(printf '%s' "$RC_EVENT" | jq -r '.id // empty' 2>/dev/null) || event_id=""
+
   state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
   state_rel="${state_rel%/}"
-  # Epoch seconds, so the comparison with `created_at` reads no time zone.
-  if ! boundary=$(git -C "$root" log -1 --format=%ct "refs/remotes/origin/$CONTROL_BRANCH" -- \
-    "$state_rel/user_reviews/${CONTROL_BRANCH}_review.md" \
-    "$state_rel/user_reviews/${CONTROL_BRANCH}_review_[0-9]*.md" 2>/dev/null); then
-    control_refuse "$EXIT_PLACEMENT" "the previous round of \`$CONTROL_BRANCH\` could not be read, so nothing was dispatched" \
-      "Submit the review again to retry."
+  if [ -z "$state_rel" ]; then
+    RC_ERR="the state directory under '$root' could not be resolved"
+    return 4
   fi
-  # A paginated listing is one JSON array per page; jq builds the text, so a
-  # comment is data and never shell source. A hunk's fence is one backtick
-  # longer than its longest backtick run, at least three.
-  if ! inline=$(printf '%s' "$GH_OUT" | jq -s -j --arg who "$CONTROL_ACTOR" --argjson rid "$REVIEW_ID" --arg since "$boundary" '
-    [ .[] | if type == "array" then .[] else error("not a page") end
-      | select(.user.login == $who)
-      | select(.pull_request_review_id == $rid or $since == ""
-          or (((.created_at // "") | try fromdateiso8601 catch 0) > ($since | tonumber))) ]
-    | sort_by([.created_at, .id])
-    | if length == 0 then "" else
-        "\n## Inline comments\n" + (map(
+  if ! names=$(git -C "$root" ls-tree --name-only "refs/remotes/origin/$branch" -- "$state_rel/user_reviews/" 2>/dev/null); then
+    RC_ERR="the previous rounds of \`$branch\` could not be listed"
+    return 4
+  fi
+  while IFS= read -r path; do
+    name="${path##*/}"
+    [[ "$name" =~ ^(.+)_review(_([0-9]+))?\.md$ ]] || continue
+    [ "${BASH_REMATCH[1]}" = "$branch" ] || continue
+    n="${BASH_REMATCH[3]:-1}"
+    n=$((10#$n))
+    if ! line=$(git -C "$root" show "refs/remotes/origin/$branch:$path" 2>/dev/null); then
+      RC_ERR="the previous round \`$path\` could not be read"
+      return 4
+    fi
+    # The last marker line wins; a round placed before markers carries none.
+    line=$(printf '%s\n' "$line" | grep -F "$COMMENT_MARKER round collected_at=" | tail -n 1)
+    [[ "$line" =~ ^"$COMMENT_MARKER round collected_at="([0-9T:Z-]+)" reviews="([0-9,]*)" comments="([0-9,]*)" -->"$ ]] || continue
+    seen_r="$seen_r${BASH_REMATCH[2]}${BASH_REMATCH[2]:+,}"
+    seen_c="$seen_c${BASH_REMATCH[3]}${BASH_REMATCH[3]:+,}"
+    if [ "$n" -gt "$marked_max" ]; then
+      marked_max="$n"
+      marked_at="${BASH_REMATCH[1]}"
+    fi
+    case ",${BASH_REMATCH[2]}," in
+      *",$event_id,"*) [ -z "$event_id" ] || RC_EVENT_ROUND="$n" ;;
+    esac
+  done <<NAMES
+$names
+NAMES
+  # Epoch seconds, so the comparison with `submitted_at` / `created_at` reads no time zone.
+  if [ -n "$marked_at" ]; then
+    if ! since=$(jq -n -r --arg t "$marked_at" --argjson o "$ROUND_OVERLAP_SECS" '($t | fromdateiso8601) - $o' 2>/dev/null); then
+      RC_ERR="the previous round's collected_at '$marked_at' is not a UTC time"
+      return 4
+    fi
+  elif ! since=$(git -C "$root" log -1 --format=%ct "refs/remotes/origin/$branch" -- \
+    "$state_rel/user_reviews/${branch}_review.md" \
+    "$state_rel/user_reviews/${branch}_review_[0-9]*.md" 2>/dev/null); then
+    RC_ERR="the previous round of \`$branch\` could not be read"
+    return 4
+  fi
+
+  if ! tmp=$(mktemp -d); then
+    RC_ERR="a collection directory could not be created"
+    return 4
+  fi
+  if ! gh_call api --paginate "repos/$FORGE_REPO/pulls/$pr/reviews"; then
+    RC_ERR="the reviews of pull request #$pr could not be read ($GH_ERR)"
+    rm -rf -- "$tmp"
+    return 3
+  fi
+  printf '%s' "$GH_OUT" >"$tmp/reviews.json"
+  if ! gh_call api --paginate "repos/$FORGE_REPO/pulls/$pr/comments"; then
+    RC_ERR="the inline comments of pull request #$pr could not be read ($GH_ERR)"
+    rm -rf -- "$tmp"
+    return 3
+  fi
+  printf '%s' "$GH_OUT" >"$tmp/comments.json"
+
+  # A paginated listing is one JSON array per page; jq selects, so every
+  # listed field is data and never shell source.
+  if ! kept=$(jq -n -c --slurpfile R "$tmp/reviews.json" --slurpfile C "$tmp/comments.json" \
+    --argjson event "${RC_EVENT:-null}" --arg since "$since" --arg state "$REVIEW_ROUND_STATE" \
+    --arg marker "$COMMENT_MARKER" --arg seen_r "$seen_r" --arg seen_c "$seen_c" '
+    def flat: [ .[] | if type == "array" then .[] else error("not a page") end ];
+    def unseen($ids): ("," + tostring + ",") as $k | ($ids | contains($k)) | not;
+    def since_ok($t): $since == ""
+      or ((($t // "") | try fromdateiso8601 catch 0) >= ($since | tonumber));
+    ($R | flat) as $listed
+    | (if $event == null or any($listed[]; .id == $event.id) then $listed else $listed + [$event] end)
+    | [ .[] | select(((.state // "") | ascii_downcase) == $state)
+        | select(((.body // "") | contains($marker)) | not)
+        | select(.id | unseen($seen_r))
+        | select(since_ok(.submitted_at)) ]
+    | sort_by([.submitted_at, .id]) as $reviews
+    | ($reviews | map(.id)) as $ids
+    | ($C | flat)
+    | [ .[] | select(.id | unseen($seen_c))
+        | select(((.body // "") | contains($marker)) | not)
+        | select(since_ok(.created_at) or (.pull_request_review_id as $r | any($ids[]; . == $r))) ]
+    | sort_by([.created_at, .id]) as $comments
+    | {reviews: $reviews, comments: $comments}' 2>/dev/null); then
+    RC_ERR="the reviews or inline comments of pull request #$pr are not the expected JSON"
+    rm -rf -- "$tmp"
+    return 3
+  fi
+  rm -rf -- "$tmp"
+
+  # One permission answer per distinct author; a refused author's items are
+  # dropped with one line, and a failed call fails the collection.
+  authors=$(printf '%s' "$kept" | jq -r '
+    [ (.reviews[], .comments[]) | {l: (.user.login // ""), t: (.user.type // "")} ]
+    | reduce .[] as $a ([]; if any(.[]; .l == $a.l) then . else . + [$a] end)
+    | .[] | "\(.l)\t\(.t)"')
+  while IFS=$'\t' read -r login type; do
+    [ -n "$login$type" ] || continue
+    status=0
+    authorise_actor "$login" "$type" || status=$?
+    case "$status" in
+      0) allowed="$allowed$login," ;;
+      4)
+        RC_ERR="${AUTH_WHY%.}"
+        return 3 ;;
+      *)
+        count=$(printf '%s' "$kept" | jq -r --arg l "$login" '[ (.reviews[], .comments[]) | select((.user.login // "") == $l) ] | length')
+        echo "remote-run.sh: round: dropped $count item(s) by @${login:-(no login)}: $AUTH_WHY" ;;
+    esac
+  done <<AUTHORS
+$authors
+AUTHORS
+  kept=$(printf '%s' "$kept" | jq -c --arg allowed "$allowed" '
+    def ok: ("," + (.user.login // "") + ",") as $k | ($allowed | contains($k)) and (.user.login // "") != "";
+    {reviews: [ .reviews[] | select(ok) ], comments: [ .comments[] | select(ok) ]}')
+
+  RC_REVIEWS=$(printf '%s' "$kept" | jq -r '.reviews | length')
+  [ "$RC_REVIEWS" -gt 0 ] || return 1
+  RC_REVIEWERS=$(printf '%s' "$kept" | jq -r '
+    reduce (.reviews[] | .user.login) as $l ([]; if any(.[]; . == $l) then . else . + [$l] end) | join(",")')
+
+  # A hunk's fence is one backtick longer than its longest backtick run, at
+  # least three. The trailing `x` keeps the text's final newline through the
+  # substitution.
+  if ! text=$(printf '%s' "$kept" | jq -j --arg pr "$pr" --arg at "$collected_at" --arg marker "$COMMENT_MARKER" '
+    def nl: if endswith("\n") then . else . + "\n" end;
+    .reviews as $rv | .comments as $cm
+    | ($rv | map(
+        "## Review by @" + .user.login + "\n\n"
+        + (if (.body // "") == "" then "(The review carries no summary.)\n" else (.body | nl) end)
+        + "\nRequested changes on pull request #" + $pr + " (" + (.html_url // "") + ") at " + (.submitted_at // "") + ".\n"
+      ) | join("\n"))
+    + (if ($cm | length) == 0 then "" else
+        "\n## Inline comments\n" + ($cm | map(
           (.diff_hunk // "") as $h
           | (([$h | match("`+"; "g") | .length] | max) // 0) as $m
           | ("`" * ([$m + 1, 3] | max)) as $f
@@ -4455,35 +4638,30 @@ control_review_round() {
             + (if .line != null then ", line \(.line)"
                elif .original_line != null then ", original line \(.original_line) (outdated)"
                else "" end)
-            + "\n\nMade on commit `" + (.original_commit_id // .commit_id // "") + "`.\n\n"
-            + (.body // "") + (if ((.body // "") | endswith("\n")) then "" else "\n" end)
-            + "\n" + $f + "diff\n" + $h + (if ($h | endswith("\n")) then "" else "\n" end) + $f + "\n"
+            + "\n\nMade on commit `" + (.original_commit_id // .commit_id // "") + "`.\n"
+            + "By @" + .user.login + ": " + (.html_url // "") + "\n\n"
+            + ((.body // "") | nl)
+            + "\n" + $f + "diff\n" + ($h | nl) + $f + "\n"
         ) | join(""))
-      end + "x"' 2>/dev/null); then
-    GH_ERR="its comment list is not the expected JSON"
-    control_refuse "$EXIT_GH" "the inline comments of pull request #$CONTROL_NUMBER could not be read ($GH_ERR)" \
-      "Submit the review again to retry."
+      end)
+    + "\n" + $marker + " round collected_at=" + $at
+    + " reviews=" + ($rv | map(.id | tostring) | join(","))
+    + " comments=" + ($cm | map(.id | tostring) | join(",")) + " -->\n"
+    + "x"' 2>/dev/null); then
+    RC_ERR="the round could not be rendered"
+    return 4
   fi
-  # The trailing `x` keeps the text's final newline through the substitution.
-  inline=${inline%x}
-  {
-    if [ -n "$CONTROL_BODY" ]; then
-      printf '%s' "$CONTROL_BODY"
-      case "$CONTROL_BODY" in *$'\n') ;; *) printf '\n' ;; esac
-    else
-      printf '%s\n' '(The review carries no summary.)'
-    fi
-    printf '\n---\n\nSubmitted as a review requesting changes by @%s on pull request #%s (%s) at %s.\n' \
-      "$CONTROL_ACTOR" "$CONTROL_NUMBER" "$REVIEW_URL" "$REVIEW_AT"
-    printf '%s' "$inline"
-  } >"$file" || control_refuse "$EXIT_PLACEMENT" "the round could not be written to '$file', so nothing was dispatched" \
-    "Submit the review again to retry."
+  if ! printf '%s' "${text%x}" >"$file"; then
+    RC_ERR="the round could not be written to '$file'"
+    return 4
+  fi
+  return 0
 }
 
 # control_review — the round of one review requesting changes, placed and
 # dispatched by a `review` child, the local relay's own verb.
 control_review() {
-  local dir file out way
+  local dir file out way status
   control_review_story
   if ! dir=$(mktemp -d "$control_tmp/harness-control-review.XXXXXX"); then
     control_refuse "$EXIT_PLACEMENT" "a round directory could not be created under '$control_tmp', so nothing was dispatched" \
@@ -4491,11 +4669,32 @@ control_review() {
   fi
   control_dirs="$control_dirs $dir"
   file="$dir/review.md"
-  control_review_round "$file"
+  if ! RC_EVENT=$(jq -n -c --argjson id "$REVIEW_ID" --arg body "$CONTROL_BODY" --arg url "$REVIEW_URL" \
+    --arg at "$REVIEW_AT" --arg login "$CONTROL_ACTOR" --arg type "$CONTROL_SENDER_TYPE" \
+    '{id: $id, state: "CHANGES_REQUESTED", body: $body, html_url: $url, submitted_at: $at, user: {login: $login, type: $type}}'); then
+    control_refuse "$EXIT_PLACEMENT" "the review could not be read into the round, so nothing was dispatched" \
+      "Submit the review again to retry."
+  fi
+  branch="$CONTROL_BRANCH"
+  status=0
+  round_collect "$CONTROL_NUMBER" "$file" || status=$?
+  case "$status" in
+    0) ;;
+    1)
+      if [ -n "$RC_EVENT_ROUND" ]; then
+        control_reply "$EXIT_OK" "@$CONTROL_ACTOR: your review is part of round $RC_EVENT_ROUND of \`$CONTROL_BRANCH\`; nothing new was collected."
+      fi
+      control_reply "$EXIT_OK" "@$CONTROL_ACTOR: no review requesting changes is pending on pull request #$CONTROL_NUMBER since the previous round of \`$CONTROL_BRANCH\`, so no round was started." ;;
+    3)
+      control_refuse "$EXIT_GH" "the round could not be collected: $RC_ERR" "Submit the review again to retry." ;;
+    *)
+      control_refuse "$EXIT_PLACEMENT" "the round could not be collected: $RC_ERR, so nothing was dispatched" \
+        "Submit the review again to retry." ;;
+  esac
   out="$dir/review.out"
-  set -- review "$CONTROL_BRANCH" --review-file "$file" --allow-no-run --actor "$CONTROL_ACTOR"
-  case "$REVIEW_URL" in
-    https://*) set -- "$@" --source "$REVIEW_URL" ;;
+  set -- review "$CONTROL_BRANCH" --review-file "$file" --allow-no-run --reviewers "$RC_REVIEWERS"
+  case "$FORGE_SERVER" in
+    https://*) set -- "$@" --source "$FORGE_SERVER/$FORGE_REPO/pull/$CONTROL_NUMBER" ;;
   esac
   control_child "$out" "$@" --repo "$root"
   cat "$out" 2>/dev/null || :

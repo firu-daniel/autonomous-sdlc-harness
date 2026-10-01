@@ -53,3 +53,11 @@ That file is this agent's own definition in the `plugin` layer. Grep `plugin/` f
 - re-express `a reviewer comment from before the previous round is absent, and one after it is present` against the marked boundary and keep a legacy-boundary case;
 - update the provenance assertions at the `Submitted as a review requesting changes by @alice` line to the new `Requested changes on pull request #12 (…)` line;
 - update the file's header rule sentence to the new collection rule.
+
+**Deviations from plan:**
+
+- `cli` layer: an inline comment whose `pull_request_review_id` is a pending review's id is pending whatever its `created_at`, beside item 4's rule. It keeps today's "belongs to this review" clause: a draft comment is created before its review is submitted, so a reviewer who starts a draft before a round lands and submits after it would otherwise lose the comment. The id check still stops it from being collected twice.
+- `cli` layer: `round_collect` reports through return codes and globals rather than replying itself, so that Finding 3's `collect` can call it outside `control`. It returns 0 when the file is written, 1 when nothing is pending, 3 when a listing or permission call failed and 4 when a previous round or the file could not be read or written. `RC_ERR`, `RC_REVIEWS`, `RC_REVIEWERS` and `RC_EVENT_ROUND` carry the rest, and the caller passes the event's review as `RC_EVENT`.
+- `cli` layer: when nothing is pending, `control` replies and exits 0. If a marker records the event's review, the reply says `your review is part of round <n> of `<branch>``, which is the wording Finding 1 item 2 gives. Otherwise it says no review requesting changes is pending. Finding 1 will restructure this path.
+- `cli` layer: `control` now runs the `review` child with `--reviewers <logins> --source <server>/<repo>/pull/<n>` and no longer passes `--actor` and the review URL. `review` reads `<pr>` for its note from `--source`'s `/pull/<n>`, or from the branch's open pull request when `--source` does not name one.
+- Not run in this dispatch: `plugin/agents/user-review-fix-plan-writer.md`, which belongs to the `plugin` layer of this unit's tag.

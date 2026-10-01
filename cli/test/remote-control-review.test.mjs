@@ -3,19 +3,22 @@
  * branch's next user-review round through the `review` verb the local relay uses.
  *
  * **The rule these tests exist to enforce: only a review requesting changes, by a write-or-admin
- * reviewer, on a recognised same-repository harness branch carrying a story index, starts a round; it
- * carries the body verbatim and the reviewer's inline comments with file, line, commit and hunk; anything
- * arriving while a run is in flight is refused with a reply.** A started round is asserted on origin's
- * bytes — the `chore: add user review for feat_x` commit and the round file — and on exactly one
- * `engine=user_review` dispatch; every ignored shape is asserted to call no `gh` at all; every refusal is
- * asserted to post one reply and push nothing.
+ * reviewer, on a recognised same-repository harness branch carrying a story index, starts a round; the
+ * round collects every review requesting changes and every inline comment since the previous round, by
+ * every authorised author, each review's body under its own `## Review by @<login>` section and each
+ * comment with file, line, commit, author and hunk, closed by a marker recording the ids it consumed, and
+ * nothing a marker records is collected again; anything arriving while a run is in flight is refused with
+ * a reply.** A started round is asserted on origin's bytes — the `chore: add user review for feat_x`
+ * commit and the round file — and on exactly one `engine=user_review` dispatch; every ignored shape is
+ * asserted to call no `gh` at all; every refusal is asserted to post one reply and push nothing.
  *
  * The fixture is `remote-control.test.mjs`'s — `init`, `execution.target` `github-actions`, `forge`
  * `github`, the adopted tree pushed to the fixture's bare `origin`, and `feat_x` pushed carrying its task
  * prompt and its flow-progress ledger — plus `feat_x`'s story index. `gh` is a stub reached through
  * `HARNESS_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`, answers the
- * paginated `pulls/<n>/comments` listing from `STUB_PR_COMMENTS` (raw API objects, one page each), the
- * permission call from `STUB_PERMISSIONS`, `run list` from `STUB_RUN_LIST` (by default one completed
+ * paginated `pulls/<n>/comments` and `pulls/<n>/reviews` listings from `STUB_PR_COMMENTS` and
+ * `STUB_PR_REVIEWS` (raw API objects, one page each), the permission call per login from
+ * `STUB_PERMISSIONS`, `run list` from `STUB_RUN_LIST` (by default one completed
  * `harness run <branch>` run with no state bundle, which reads as `failed`), artifact lists with none,
  * and the labels GET with `[]`. No case reaches the network.
  */
@@ -47,9 +50,9 @@ const fail = (why) => { process.stderr.write(why + '\\n'); process.exit(4); };
 const permission = /^repos\\/[^/]+\\/[^/]+\\/collaborators\\/([^/]+)\\/permission$/.exec(args[1] ?? '');
 if (args[0] === 'pr' && args[1] === 'list') {
   process.stdout.write(process.env.STUB_PRS || '[]');
-} else if (args[0] === 'api' && args[1] === '--paginate' && /^repos\\/[^/]+\\/[^/]+\\/pulls\\/[0-9]+\\/comments$/.test(args[2] ?? '')) {
-  const comments = JSON.parse(process.env.STUB_PR_COMMENTS || '[]');
-  process.stdout.write(comments.length === 0 ? '[]' : comments.map((c) => JSON.stringify([c])).join(''));
+} else if (args[0] === 'api' && args[1] === '--paginate' && /^repos\\/[^/]+\\/[^/]+\\/pulls\\/[0-9]+\\/(comments|reviews)$/.test(args[2] ?? '')) {
+  const items = JSON.parse((args[2].endsWith('/reviews') ? process.env.STUB_PR_REVIEWS : process.env.STUB_PR_COMMENTS) || '[]');
+  process.stdout.write(items.length === 0 ? '[]' : items.map((c) => JSON.stringify([c])).join(''));
 } else if (args[0] === 'api' && permission) {
   const answer = JSON.parse(process.env.STUB_PERMISSIONS || '{}')[permission[1]];
   if (answer === undefined || answer === 'FAIL') fail('stub permission failure');
@@ -142,18 +145,18 @@ async function reviewFixture(t) {
      * Run `control` on one `pull_request_review` event: by default `alice` (a `User`) submitting a
      * `changes_requested` review on pull request 12, whose head is `feat_x` in this repository.
      *
-     * @param {{ state?: string, body?: string, action?: string, login?: string, type?: string, head?: string, headRepo?: string }} [event]
+     * @param {{ state?: string, body?: string, action?: string, login?: string, type?: string, head?: string, headRepo?: string, submittedAt?: string }} [event]
      * @param {Record<string, string>} [env]
      */
     control: async (
-      { state = 'changes_requested', body = 'Please fix these.', action = 'submitted', login = 'alice', type = 'User', head = 'feat_x', headRepo = REPOSITORY } = {},
+      { state = 'changes_requested', body = 'Please fix these.', action = 'submitted', login = 'alice', type = 'User', head = 'feat_x', headRepo = REPOSITORY, submittedAt = '2026-01-02T03:04:05Z' } = {},
       env = {},
     ) => {
       events += 1;
       const eventPath = join(stubDir, `event-${events}.json`);
       writeFileSync(eventPath, JSON.stringify({
         action,
-        review: { id: REVIEW_ID, state, body, html_url: REVIEW_URL, submitted_at: '2026-01-02T03:04:05Z', user: { login } },
+        review: { id: REVIEW_ID, state, body, html_url: REVIEW_URL, submitted_at: submittedAt, user: { login } },
         pull_request: { number: 12, head: { ref: head, repo: { full_name: headRepo } } },
         sender: { login, type },
       }));
@@ -172,6 +175,7 @@ async function reviewFixture(t) {
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write' }),
         STUB_PRS: '',
         STUB_PR_COMMENTS: '',
+        STUB_PR_REVIEWS: '',
         STUB_RUN_LIST: '',
         ...env,
       });
@@ -198,7 +202,8 @@ const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workf
 const inline = (id, fields = {}) => ({
   id,
   pull_request_review_id: REVIEW_ID,
-  user: { login: 'alice' },
+  user: { login: 'alice', type: 'User' },
+  html_url: `https://github.com/${REPOSITORY}/pull/12#discussion_r${id}`,
   path: `src/file_${id}.ts`,
   line: 10 + id,
   original_line: 10 + id,
@@ -209,6 +214,21 @@ const inline = (id, fields = {}) => ({
   created_at: `2026-01-02T00:00:0${id}Z`,
   ...fields,
 });
+
+/** One review, as the pull request's reviews endpoint returns it. */
+const review = (id, login, fields = {}) => ({
+  id,
+  user: { login, type: 'User' },
+  state: 'CHANGES_REQUESTED',
+  body: `Review ${id} by ${login}.`,
+  html_url: `https://github.com/${REPOSITORY}/pull/12#pullrequestreview-${id}`,
+  submitted_at: `2026-01-02T00:00:0${id % 10}Z`,
+  ...fields,
+});
+
+/** The marker line closing a round that consumed <reviews> and <comments>. */
+const markerOf = (reviews, comments) =>
+  new RegExp(`\\n<!-- sdlc-harness round collected_at=\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ reviews=${reviews.join(',')} comments=${comments.join(',')} -->\\n$`);
 
 /** Assert a started round: exit 0, `feat_x_review<suffix>.md` committed on origin, one dispatch, no reply. */
 const assertRound = async (f, result, name = 'feat_x_review.md') => {
@@ -241,17 +261,23 @@ for (const state of ['changes_requested', 'CHANGES_REQUESTED']) {
       STUB_PR_COMMENTS: JSON.stringify([inline(2), inline(1)]),
     });
     const round = await assertRound(f, result);
-    assert.ok(round.startsWith('The button is not centred.\n\n  "quoted" $HOME `tick`\n\n---\n\n'), round);
-    assert.ok(round.includes(`Submitted as a review requesting changes by @alice on pull request #12 (${REVIEW_URL}) at 2026-01-02T03:04:05Z.\n`), round);
+    assert.ok(round.startsWith('## Review by @alice\n\nThe button is not centred.\n\n  "quoted" $HOME `tick`\n\n'
+      + `Requested changes on pull request #12 (${REVIEW_URL}) at 2026-01-02T03:04:05Z.\n`), round);
+    assert.ok(!round.includes('\n---\n'), round);
     assert.ok(round.includes('\n## Inline comments\n'), round);
+    assert.match(round, markerOf([REVIEW_ID], [1, 2]));
     for (const id of [1, 2]) {
-      assert.ok(round.includes(`### \`src/file_${id}.ts\`, line ${10 + id}\n\nMade on commit \`orig${id}\`.\n\nComment ${id} body.\n`), round);
+      assert.ok(round.includes(`### \`src/file_${id}.ts\`, line ${10 + id}\n\nMade on commit \`orig${id}\`.\n`
+        + `By @alice: https://github.com/${REPOSITORY}/pull/12#discussion_r${id}\n\nComment ${id} body.\n`), round);
       assert.ok(round.includes(`\`\`\`diff\n@@ -1,3 +1,3 @@\n context\n-old ${id}\n+new ${id}\n\`\`\`\n`), round);
     }
     assert.ok(round.indexOf('src/file_1.ts') < round.indexOf('src/file_2.ts'), 'sorted by created_at');
     const lines = f.calls().map((call) => call.line);
     assert.ok(lines.includes(`api --paginate repos/${REPOSITORY}/pulls/12/comments`), JSON.stringify(lines));
+    assert.ok(lines.includes(`api --paginate repos/${REPOSITORY}/pulls/12/reviews`), JSON.stringify(lines));
     assert.ok(!lines.some((line) => /\/reviews\//.test(line)), JSON.stringify(lines));
+    const note = allComments(f.calls()).find((call) => /event=round /.test(call.body));
+    assert.ok(note?.body.includes(`Round 1 from pull request #12 (https://github.com/${REPOSITORY}/pull/12) by @alice`), note?.body);
   });
 }
 
@@ -270,8 +296,9 @@ for (const state of ['approved', 'commented']) {
 test('an empty review body reads as no summary', async (t) => {
   const f = await reviewFixture(t);
   const round = await assertRound(f, await f.control({ body: '' }));
-  assert.ok(round.startsWith('(The review carries no summary.)\n\n---\n\n'), round);
+  assert.ok(round.startsWith('## Review by @alice\n\n(The review carries no summary.)\n\nRequested changes on pull request #12 '), round);
   assert.ok(!round.includes('## Inline comments'), round);
+  assert.match(round, markerOf([REVIEW_ID], []));
 });
 
 test('an outdated comment reads original line <n> (outdated)', async (t) => {
@@ -281,21 +308,117 @@ test('an outdated comment reads original line <n> (outdated)', async (t) => {
   assert.ok(round.includes('### `src/file_1.ts`, original line 7 (outdated)\n'), round);
 });
 
-test('a comment by another user is absent', async (t) => {
+test("an authorised second reviewer's review body and inline comment are present", async (t) => {
   const f = await reviewFixture(t);
   const result = await f.control({}, {
-    STUB_PR_COMMENTS: JSON.stringify([inline(1), inline(2, { user: { login: 'mallory' }, body: 'Mallory says so.' })]),
+    STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'admin' }),
+    STUB_PR_REVIEWS: JSON.stringify([review(5, 'bob', { body: 'Bob requests.' })]),
+    STUB_PR_COMMENTS: JSON.stringify([inline(1), inline(2, { pull_request_review_id: 5, user: { login: 'bob', type: 'User' }, body: 'Bob says so.' })]),
+  });
+  const round = await assertRound(f, result);
+  assert.ok(round.includes('## Review by @bob\n\nBob requests.\n'), round);
+  assert.ok(round.includes('Comment 1 body.'), round);
+  assert.ok(round.includes(`By @bob: https://github.com/${REPOSITORY}/pull/12#discussion_r2\n\nBob says so.\n`), round);
+  assert.match(round, markerOf([5, REVIEW_ID], [1, 2]));
+});
+
+test("an unauthorised commenter's review and inline comment are absent, with one line naming the login", async (t) => {
+  const f = await reviewFixture(t);
+  const result = await f.control({}, {
+    STUB_PERMISSIONS: JSON.stringify({ alice: 'write', mallory: 'read' }),
+    STUB_PR_REVIEWS: JSON.stringify([review(5, 'mallory', { body: 'Mallory requests.' })]),
+    STUB_PR_COMMENTS: JSON.stringify([inline(1), inline(2, { user: { login: 'mallory', type: 'User' }, body: 'Mallory says so.' })]),
   });
   const round = await assertRound(f, result);
   assert.ok(round.includes('Comment 1 body.'), round);
-  assert.ok(!round.includes('Mallory says so.'), round);
+  assert.ok(!round.includes('Mallory'), round);
   assert.ok(!round.includes('src/file_2.ts'), round);
+  assert.match(round, markerOf([REVIEW_ID], [1]));
+  assert.match(result.stdout, /dropped 2 item\(s\) by @mallory: GitHub reports the permission of @mallory as read/);
 });
 
-test('a reviewer comment from before the previous round is absent, and one after it is present', async (t) => {
+test('a comment on a review that only comments is collected, and that review is no section', async (t) => {
+  const f = await reviewFixture(t);
+  const result = await f.control({}, {
+    STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
+    STUB_PR_REVIEWS: JSON.stringify([review(5, 'bob', { state: 'COMMENTED', body: 'Only a comment.' })]),
+    STUB_PR_COMMENTS: JSON.stringify([inline(2, { pull_request_review_id: 5, user: { login: 'bob', type: 'User' }, body: 'Bob notes.' })]),
+  });
+  const round = await assertRound(f, result);
+  assert.ok(!round.includes('Only a comment.'), round);
+  assert.ok(round.includes('Bob notes.'), round);
+  assert.match(round, markerOf([REVIEW_ID], [2]));
+});
+
+test('two reviews requesting changes become one round with two sections and one marker listing both', async (t) => {
+  const f = await reviewFixture(t);
+  const result = await f.control({}, {
+    STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
+    STUB_PR_REVIEWS: JSON.stringify([review(5, 'bob', { body: 'Bob requests.' })]),
+  });
+  const round = await assertRound(f, result);
+  assert.equal(round.match(/^## Review by @/gm)?.length, 2, round);
+  assert.ok(round.indexOf('## Review by @bob\n\nBob requests.\n') < round.indexOf('## Review by @alice\n'), 'oldest submitted_at first');
+  assert.match(round, markerOf([5, REVIEW_ID], []));
+  const note = allComments(f.calls()).find((call) => /event=round /.test(call.body));
+  assert.ok(note?.body.includes('by @bob, @alice'), note?.body);
+});
+
+test("an id already recorded in a previous round's marker is absent", async (t) => {
+  const f = await reviewFixture(t);
+  await f.commitOn('feat_x', {
+    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=5 comments=1 -->\n',
+  }, 'chore: add user review for feat_x');
+  const result = await f.control({}, {
+    STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
+    STUB_PR_REVIEWS: JSON.stringify([review(5, 'bob', { body: 'Bob requests.', submitted_at: '2100-01-01T00:00:00Z' })]),
+    STUB_PR_COMMENTS: JSON.stringify([
+      inline(1, { created_at: '2100-01-01T00:00:00Z', body: 'Recorded.' }),
+      inline(2, { created_at: '2100-01-01T00:00:00Z' }),
+    ]),
+  });
+  const round = await assertRound(f, result, 'feat_x_review_2.md');
+  assert.ok(!round.includes('Bob requests.'), round);
+  assert.ok(!round.includes('Recorded.'), round);
+  assert.ok(round.includes('Comment 2 body.'), round);
+  assert.match(round, markerOf([REVIEW_ID], [2]));
+});
+
+test('a review a marker already records, with nothing else pending, is answered with its round and places nothing', async (t) => {
+  const f = await reviewFixture(t);
+  await f.commitOn('feat_x', {
+    [`${REVIEW_DIR}/feat_x_review.md`]: `Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=${REVIEW_ID} comments= -->\n`,
+  }, 'chore: add user review for feat_x');
+  const before = await f.originRefs();
+  const result = await f.control();
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(dispatches(calls), []);
+  assert.equal(replies(calls).length, 1);
+  assert.match(replies(calls)[0].body, /^@alice: your review is part of round 1 of `feat_x`/);
+  assert.equal(await f.originRefs(), before);
+});
+
+test('a comment from before the marked boundary is absent, and one inside the overlap is present', async (t) => {
+  const f = await reviewFixture(t);
+  await f.commitOn('feat_x', {
+    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- sdlc-harness round collected_at=2026-01-02T00:00:00Z reviews=800 comments= -->\n',
+  }, 'chore: add user review for feat_x');
+  const result = await f.control({}, {
+    STUB_PR_COMMENTS: JSON.stringify([
+      inline(1, { pull_request_review_id: 800, created_at: '2026-01-01T23:50:00Z', body: 'Before the boundary.' }),
+      inline(2, { pull_request_review_id: 801, created_at: '2026-01-01T23:56:00Z', body: 'Inside the overlap.' }),
+    ]),
+  });
+  const round = await assertRound(f, result, 'feat_x_review_2.md');
+  assert.ok(!round.includes('Before the boundary.'), round);
+  assert.ok(round.includes('Inside the overlap.'), round);
+});
+
+test('with no marked round, a comment from before the previous round is absent, and one after it is present', async (t) => {
   const f = await reviewFixture(t);
   await f.commitOn('feat_x', { [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n' }, 'chore: add user review for feat_x');
-  const result = await f.control({}, {
+  const result = await f.control({ submittedAt: '2100-01-01T00:00:00Z' }, {
     STUB_PR_COMMENTS: JSON.stringify([
       inline(1, { pull_request_review_id: 800, created_at: '2000-01-01T00:00:00Z', body: 'Before the round.' }),
       inline(2, { pull_request_review_id: 801, created_at: '2100-01-01T00:00:00Z', body: 'After the round.' }),

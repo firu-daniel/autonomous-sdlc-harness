@@ -2217,14 +2217,14 @@ test('review under forge github reports the round on the issue, naming the round
   assert.deepEqual(sent.filter((line) => line.startsWith(LABEL_ON_7)), [`${LABEL_ON_7} -f labels[]=sdlc-harness: running`]);
 });
 
-test('review --actor or --source of the wrong shape is a usage error, and either option off review too; nothing pushed or called', async (t) => {
+test('review --actor, --reviewers or --source of the wrong shape is a usage error, and each option off review too; nothing pushed or called', async (t) => {
   const fx = await reviewFixture(t);
   const before = await fx.originRefs();
-  for (const extra of [['--actor', 'x y'], ['--source', 'http://example.com/r'], ['--source', 'x']]) {
+  for (const extra of [['--actor', 'x y'], ['--reviewers', 'alice,x y'], ['--reviewers', 'alice,'], ['--source', 'http://example.com/r'], ['--source', 'x']]) {
     const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile, '--allow-no-run', ...extra], syncEnv({ runs: [] }));
     assert.equal(result.status, 1, `${extra.join(' ')}: ${result.stderr}`);
   }
-  for (const misplaced of [['--allow-no-run'], ['--source', 'https://example.com/r']]) {
+  for (const misplaced of [['--allow-no-run'], ['--reviewers', 'alice'], ['--source', 'https://example.com/r']]) {
     const result = await remoteRun(fx, ['pause', 'feat_x', ...misplaced]);
     assert.equal(result.status, 1, `${misplaced.join(' ')}: ${result.stderr}`);
   }
