@@ -33,7 +33,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Make `cli/templates/scripts/README.md`'s launcher sentence name both backends _(layer: cli)_
+1. [x] **Finding 1** — Make `cli/templates/scripts/README.md`'s launcher sentence name both backends _(layer: cli)_
 
 ---
 
