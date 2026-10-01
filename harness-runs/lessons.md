@@ -54,4 +54,10 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **A script that creates a temporary working copy or branch removes it on every exit path, success and failure alike, and never removes one it did not create.** _(taught by: feat_forge_run_triggers)_
 
+## Ports and parallel implementations
+
+- **A client-visible divergence from the implementation being ported is justified only by a task-prompt exclusion or an entry-point deferred-work marker naming what reverts it; a test-file comment or a code comment is never an exclusion basis.** _(taught by: feat_docs_retrieval_python_backend)_
+
+- **When code deliberately produces an edge value (a lone surrogate, NaN, an oversize integer), add a case that carries it through every transport's serializer to the client, not only through the producing function.** _(taught by: feat_docs_retrieval_python_backend)_
+
 _Written by `autonomous-sdlc-harness init`, and yours from there on: a re-run never touches a ledger that already exists._
