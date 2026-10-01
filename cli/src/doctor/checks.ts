@@ -254,6 +254,7 @@ import {
   PYTHON_RETRIEVAL_COMMAND,
   PYTHON_SELF_CHECK_SUB_COMMAND,
   pythonDatabaseUrl,
+  SELF_CHECK_INDEX_NOT_ATTEMPTED,
   type SelfCheckLine,
   type SelfCheckQuestion,
 } from '../retrieval/pythonBackend.js';
@@ -4928,9 +4929,6 @@ const PYTHON_CHECK_ID: Readonly<Record<SelfCheckQuestion, string>> = Object.free
   index: 'retrieval-python-index',
 });
 
-/** What a not-attempted `index` line names: the question whose failure stopped it. */
-const INDEX_NOT_ATTEMPTED = /^not attempted, because (packages|weights) failed$/;
-
 /**
  * Run the Python backend's own `self-check` once per {@link CheckContext}; the three
  * `retrieval-python-*` checks grade its lines and never re-derive them (choice 1).
@@ -5079,7 +5077,7 @@ const RETRIEVAL_PYTHON_INDEX_CHECK: Check = {
     const line = selfCheckLine(answer, 'index');
     if (line.ok) return pass(line.detail);
 
-    const stoppedBy = INDEX_NOT_ATTEMPTED.exec(line.detail)?.[1] as SelfCheckQuestion | undefined;
+    const stoppedBy = SELF_CHECK_INDEX_NOT_ATTEMPTED.exec(line.detail)?.[1] as SelfCheckQuestion | undefined;
     if (stoppedBy !== undefined) {
       return fail(`cannot build without the Python backend's ${stoppedBy} (see ${PYTHON_CHECK_ID[stoppedBy]})`);
     }

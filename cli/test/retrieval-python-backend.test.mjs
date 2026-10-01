@@ -22,6 +22,7 @@ import {
   PYTHON_DEFAULT_DATABASE_URL,
   parseSelfCheck,
   pythonDatabaseUrl,
+  SELF_CHECK_INDEX_NOT_ATTEMPTED,
 } from '../dist/retrieval/pythonBackend.js';
 import { PACKAGE_ROOT } from './helpers/fixture.mjs';
 
@@ -75,6 +76,15 @@ test('parseSelfCheck reads the index line that was not attempted', () => {
     detail: 'not attempted, because packages failed',
   });
 });
+
+for (const stoppedBy of ['packages', 'weights']) {
+  test(`SELF_CHECK_INDEX_NOT_ATTEMPTED names ${stoppedBy} as the question that stopped the index`, () => {
+    assert.equal(
+      SELF_CHECK_INDEX_NOT_ATTEMPTED.exec(`not attempted, because ${stoppedBy} failed`)?.[1],
+      stoppedBy,
+    );
+  });
+}
 
 const UNREADABLE = {
   'two lines': ['ok   packages: a', 'ok   weights: b'],

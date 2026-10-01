@@ -17,7 +17,8 @@
  * - `docs-retrieval-service/compose.yaml` → `postgres` — the user, password, database and port inside
  *   {@link PYTHON_DEFAULT_DATABASE_URL}.
  * - `docs-retrieval-service/src/harness_docs_retrieval/self_check.py` — `SELF_CHECK_QUESTIONS`
- *   ({@link SELF_CHECK_QUESTIONS}) and `CheckLine.render` (the line shape {@link parseSelfCheck} reads).
+ *   ({@link SELF_CHECK_QUESTIONS}), `CheckLine.render` (the line shape {@link parseSelfCheck} reads)
+ *   and `_check_index`'s not-attempted detail ({@link SELF_CHECK_INDEX_NOT_ATTEMPTED}).
  * - `docs-retrieval-service/src/harness_docs_retrieval/store.py` — `DATABASE_URL_ENV`
  *   ({@link PYTHON_DATABASE_URL_VARIABLE}).
  * - `cli/templates/scripts/lib/harness-run-lib.sh` → `hr_path_with_fallbacks` —
@@ -67,6 +68,12 @@ export interface SelfCheckLine {
 
 /** `CheckLine.render`'s two prefixes; the `ok` one is padded to the width of `FAIL `. */
 const SELF_CHECK_LINE = /^(ok {3}|FAIL )([a-z]+): (.*)$/;
+
+/**
+ * The `index` line's detail when an earlier question failed, naming that question — `_check_index`'s
+ * `not attempted, because … failed`.
+ */
+export const SELF_CHECK_INDEX_NOT_ATTEMPTED = /^not attempted, because (packages|weights) failed$/;
 
 /**
  * Parse `self-check`'s stdout. Answers `undefined` unless the non-empty lines are exactly one per
