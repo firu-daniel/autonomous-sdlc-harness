@@ -33,7 +33,7 @@ from typing import Any, Protocol
 import psycopg
 
 from harness_docs_retrieval.chunk import DocChunk
-from harness_docs_retrieval.errors import ServiceError
+from harness_docs_retrieval.errors import ServiceError, one_line
 from harness_docs_retrieval.jscompat import js_trim
 
 CHUNKS_TABLE = "chunks"
@@ -317,6 +317,13 @@ async def open_postgres_store(database_url: str, dimensions: int) -> DocStore:
         await conn.execute(sql["create_hnsw"])
         await conn.execute(sql["create_bm25"])
         await store.write_meta(DIMENSIONS_META_KEY, width)
+    except psycopg.Error as error:
+        await conn.close()
+        raise ServiceError(
+            f"the Postgres {DATABASE_URL_ENV} names could not hold the docs index: "
+            f"{one_line(error)}; it needs the vector and pg_textsearch extensions installed "
+            "and pg_textsearch in shared_preload_libraries"
+        ) from None
     except BaseException:
         await conn.close()
         raise

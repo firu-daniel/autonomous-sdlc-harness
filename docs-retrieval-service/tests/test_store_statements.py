@@ -5,13 +5,14 @@ are the same text against a different engine.
 The constants are compared against the running TypeScript through the bridge. The vector arm's
 `ORDER BY embedding <=> $1::vector LIMIT $2` is not exported by `store.ts`, so no bridge can reach
 it; it is guarded by reading `cli/src/retrieval/store.ts`'s source instead, a last resort taken for
-that one string. Nothing here needs a database: the refusals below fail before connecting, or
-against a port nothing listens on.
+that one string. Nothing here needs a database: the refusals below fail before connecting,
+against a port nothing listens on, or against a fake connection.
 """
 
 import asyncio
 from typing import Any
 
+import psycopg
 import pytest
 
 from harness_docs_retrieval.errors import ServiceError
@@ -81,3 +82,38 @@ def test_a_connection_failure_names_the_variable_and_hides_the_string(database_u
         asyncio.run(open_postgres_store(database_url, 384))
     assert DATABASE_URL_ENV in str(raised.value)
     assert "s3cret-pw" not in str(raised.value)
+
+
+class _RefusingConnection:
+    """Connects, then refuses the first statement as a server lacking `pg_textsearch` does."""
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def execute(self, *_args: Any, **_kwargs: Any) -> None:
+        raise psycopg.errors.FeatureNotSupported(
+            'extension "pg_textsearch" is not available\n'
+            "DETAIL:  Could not open extension control file."
+        )
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def test_a_failure_preparing_the_database_is_one_service_error_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conn = _RefusingConnection()
+
+    async def connect(*_args: Any, **_kwargs: Any) -> _RefusingConnection:
+        return conn
+
+    monkeypatch.setattr(psycopg.AsyncConnection, "connect", connect)
+    with pytest.raises(ServiceError) as raised:
+        asyncio.run(open_postgres_store("postgresql://u@h/d", 384))
+    assert "\n" not in str(raised.value)
+    assert (
+        'extension "pg_textsearch" is not available; '
+        "DETAIL:  Could not open extension control file."
+    ) in str(raised.value)
+    assert conn.closed

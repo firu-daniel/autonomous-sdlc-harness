@@ -19,6 +19,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from harness_docs_retrieval.errors import one_line
 from harness_docs_retrieval.models import model_cache_dir, model_files_present
 from harness_docs_retrieval.service import load_service_config, open_session
 from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, stub_models_selected
@@ -40,12 +41,6 @@ class CheckLine:
         if self.ok:
             return f"ok   {self.question}: {self.detail}"
         return f"FAIL {self.question}: {self.detail}"
-
-
-def _one_line(error: BaseException) -> str:
-    # A driver error's message can span lines; the contract is one stdout line per question.
-    parts = [line.strip() for line in str(error).splitlines() if line.strip()]
-    return "; ".join(parts) if parts else type(error).__name__
 
 
 def _resolves(name: str) -> bool:
@@ -104,7 +99,7 @@ def _guarded(question: str, check: Callable[[], CheckLine]) -> CheckLine:
     try:
         return check()
     except Exception as error:
-        return CheckLine(question, False, _one_line(error))
+        return CheckLine(question, False, one_line(error))
 
 
 def run_self_check(config_args: argparse.Namespace) -> int:

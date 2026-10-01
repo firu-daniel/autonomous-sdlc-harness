@@ -9,3 +9,9 @@ traceback.
 
 class ServiceError(Exception):
     """An anticipated failure; its message is the one line the operator sees."""
+
+
+def one_line(error: BaseException) -> str:
+    """`error`'s message on one line: a driver message can span lines (DETAIL, HINT)."""
+    parts = [line.strip() for line in str(error).splitlines() if line.strip()]
+    return "; ".join(parts) if parts else type(error).__name__

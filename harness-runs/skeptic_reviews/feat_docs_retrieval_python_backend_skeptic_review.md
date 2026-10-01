@@ -23,7 +23,7 @@
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 2** — Replace plan-unit pointers in durable comments with file names, and correct the claim that the compose file passes `--host` / `--port` _(layer: general)_
-2. [ ] **Finding 1** — Raise a post-connect setup failure in `open_postgres_store` as a one-line `ServiceError` _(layer: general)_
+2. [x] **Finding 1** — Raise a post-connect setup failure in `open_postgres_store` as a one-line `ServiceError` _(layer: general)_
 
 ---
 
