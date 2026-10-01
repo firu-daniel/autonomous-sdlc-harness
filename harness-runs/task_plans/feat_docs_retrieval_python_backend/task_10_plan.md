@@ -60,3 +60,8 @@
 - `tests/test_service.py` passes (subject to the story index's test-run note).
 - `grep -rn "harness-docs\"\|\"search_docs\"" docs-retrieval-service/src` finds the definitions in `wire.py` only. Every other module imports them.
 - `git diff --name-only` shows nothing under `plugin/`, `cli/templates/` or `cli/src/`. The strings `wire.py` defines are quoted by those trees and are not edited there.
+
+**Deviations from plan:**
+
+- `tests/test_service.py` was not run, nor Python lint or mypy: no conventions document states a single-file Python test command, so per the story index's test-run note they are *deferred to the Run gates phase*. The `**Verification:**` bullet "`tests/test_service.py` passes" therefore rests on reading, not execution; the only execution was a scratch probe that `ast.parse`d the four files and checked the 100-column limit.
+- On a refresh or search failure `Answer.notes` is `()` and `search_ms` is `None`: the plan sets `search_ms` "only when the search ran", read here as "only when `search_docs` returned".

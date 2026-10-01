@@ -6,16 +6,25 @@ upserts and never reused, `get_chunks` answers in the order asked and skips an u
 whitespace-only lexical query ranks nothing. Each arm can be scripted exactly with
 `lexical_ranking` / `vector_ranking`; otherwise a token-overlap order and a cosine order stand in
 for BM25 and pgvector, and neither claims to reproduce their scores.
+
+`FakeSession` is a `RetrievalSession` over an `InMemoryDocStore` and the `hash-v1` stubs whose
+`refresh` returns or raises what it was given, so an entry point's case needs no corpus and no
+database.
 """
 
 import math
+import os
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from unittest import mock
 
 from harness_docs_retrieval.chunk import DocChunk
 from harness_docs_retrieval.jscompat import js_trim
+from harness_docs_retrieval.refresh import RefreshResult
+from harness_docs_retrieval.service import RetrievalSession
 from harness_docs_retrieval.store import DocStore, RankedId, StoredChunk
+from harness_docs_retrieval.stubs import RETRIEVAL_STUB_ENV, resolve_models
 
 _TOKEN = re.compile(r"[^\W_]+")
 
@@ -149,3 +158,39 @@ class InMemoryDocStore:
 def _check_protocol(store: InMemoryDocStore) -> DocStore:
     # mypy proves the fake satisfies the whole protocol here; nothing calls it.
     return store
+
+
+EMPTY_REFRESH = RefreshResult(
+    files=0, chunks=0, embedded=0, unchanged=0, deleted=0, rebuilt=False, warnings=()
+)
+
+
+class FakeSession(RetrievalSession):
+    """`refresh_calls` counts every `refresh()`; `refresh` is returned, or raised when it is an
+    exception. `fake_store` is the same store as `store`, typed as the fake."""
+
+    def __init__(
+        self,
+        store: InMemoryDocStore | None = None,
+        *,
+        refresh: RefreshResult | BaseException = EMPTY_REFRESH,
+    ) -> None:
+        # Scoped to this call, so the stub selector's variable outlives no test.
+        with mock.patch.dict(os.environ, {RETRIEVAL_STUB_ENV: "hash-v1"}):
+            embedder, reranker = resolve_models(allow_remote=False)
+        self.fake_store = InMemoryDocStore() if store is None else store
+        super().__init__(
+            store=self.fake_store,
+            embedder=embedder,
+            reranker=reranker,
+            repo_root="",
+            corpus_config={},
+        )
+        self.refresh_calls = 0
+        self._refresh_outcome = refresh
+
+    async def refresh(self) -> RefreshResult:
+        self.refresh_calls += 1
+        if isinstance(self._refresh_outcome, BaseException):
+            raise self._refresh_outcome
+        return self._refresh_outcome
