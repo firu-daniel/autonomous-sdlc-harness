@@ -6,6 +6,49 @@ It cites rather than restates. Every GitHub fact below is cited from [`github-in
 
 ---
 
+## The GitHub entry point
+
+GitHub is a second entry point **beside** the local one, never instead of it. One maintainer does the setup below once, on a machine of their own. After that, anyone with write access can start and work runs from GitHub with nothing installed. Anyone with a local setup keeps every local command too, and can mix the two on the same run ([§7](#7-working-a-run-from-both-sides)).
+
+**1. The one-time setup, by one maintainer, locally**, in order. Each step links to where its command is written:
+
+1. Install the plugin ([`README.md`](../README.md) → `### Adopting it in your own repository`, step A).
+2. Run `init` (the same section, step B).
+3. Run `/autonomous-sdlc-harness:harness-analyze`. This is recommended, not required (the same section, step C).
+4. Set `forge` to `github` and `execution.target` to `github-actions`, then run `init` again. That run writes the four workflows: `harness-run.yml`, `harness-resume.yml`, `harness-trigger.yml` and `harness-control.yml` ([`github-issue-trigger.md`](github-issue-trigger.md) → `## Turning it on, in short`, steps 1–2; [`remote-execution.md`](remote-execution.md) → `## 7. Turning it on`, steps 1–2).
+5. Commit them ([`remote-execution.md`](remote-execution.md) → `## 7.`, step 3).
+6. Give `gh` the `workflow` scope (the same step).
+7. Push to the default branch (the same step).
+8. Set a credential secret ([`remote-execution.md`](remote-execution.md) → `## 7.`, step 4).
+9. Set `HARNESS_GIT_TOKEN` if tasks will edit `.github/workflows/*` ([`remote-execution.md`](remote-execution.md) → `### Every secret and variable`). This token also opens the draft pull request, so CI runs on it. Its owner becomes the pull request's author, and an author cannot request changes on their own pull request. So use a token from a machine account, especially if you maintain the repository alone, or plan to start review rounds locally with `/autonomous-sdlc-harness:branch-user-review` ([§4](#4-the-draft-pull-request)).
+10. Create the trigger label `sdlc-harness` ([`github-issue-trigger.md`](github-issue-trigger.md) → `## Turning it on, in short`, step 4).
+11. Switch on *Allow GitHub Actions to create and approve pull requests* unless `HARNESS_GIT_TOKEN` is set ([§4](#4-the-draft-pull-request)).
+
+**2. What a team member with write access then does from GitHub alone:**
+
+- labels an issue `sdlc-harness` to start a run ([`github-issue-trigger.md`](github-issue-trigger.md));
+- answers, pauses, resumes or stops the run with `@sdlc-harness` comments ([§1](#1-commands-in-a-comment));
+- requests changes on a pull request from the run's branch, draft or not, to start the next round ([§2](#2-a-review-that-requests-changes-starts-a-round));
+- follows the run through its lifecycle comments and state labels ([§5](#5-lifecycle-comments-and-state-labels)).
+
+The triage role is refused ([§6](#6-who-can-act-and-pull-requests-from-forks)).
+
+**3. What still needs a local machine:**
+
+- Running or re-running `/autonomous-sdlc-harness:harness-analyze`. It is supervised and has no remote route ([`github-integration-research.md`](github-integration-research.md) → A12).
+- Upgrading, with `init --upgrade-workflows` or `init --force`, because the workflows pin the harness version ([`remote-execution.md`](remote-execution.md) → `### Upgrading`).
+- Running `doctor`.
+- A configuration change that needs files re-rendered. A plain switch in `harness.config.json` can be edited in a pull request on GitHub, because the job reads that file from the branch.
+- The interactive-test phase. A remote run skips it, so while `phases.qa` is on the branch still owes a local `/autonomous-sdlc-harness:branch-qa-test`, until `ROADMAP.md`'s *Cloud QA* row lands ([`remote-execution.md`](remote-execution.md) → `### The interactive-test phase`).
+
+**4. The caveats:**
+
+- Every run uses the repository's one credential secret and is billed to its owner ([`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`).
+- On a public repository, the comments are public ([§6](#6-who-can-act-and-pull-requests-from-forks)).
+- If `HARNESS_GIT_TOKEN` is a person's own token, that person cannot start a round with *Request changes* on the pull request it opened ([§4](#4-the-draft-pull-request), [§8](#8-what-is-not-verified-here)).
+
+---
+
 ## 1. Commands in a comment
 
 **A command is a new comment whose first line opens with `@sdlc-harness`, followed by a verb.** The handle must be the first word of the first line; leading spaces and tabs are skipped, and the handle and the verb are matched case-insensitively. Text after `pause`, `resume`, `stop` or `clear` on the same line is ignored. A comment is read once, when it is created: an edited comment is never re-read, so a correction is a new comment.
@@ -196,3 +239,67 @@ Every comment names its next action as something done on GitHub, never a slash c
 **The state labels** are `sdlc-harness: running`, `sdlc-harness: parked`, `sdlc-harness: paused`, `sdlc-harness: done`, `sdlc-harness: failed` and `sdlc-harness: stopped`. Exactly one is kept on the issue and one on the pull request, each when known; every transition removes the others. The trigger sets `sdlc-harness: running` when it removes the trigger label. A label is created the first time the harness sets it. Do not apply them by hand: the next transition overwrites a hand-applied one, so it says nothing about the run.
 
 The labels let a team filter runs by state from the issue and pull-request lists without opening a comment. They are a view: the run list on GitHub is the authority on what a run is doing.
+
+---
+
+## 6. Who can act, and pull requests from forks
+
+**One check, shared with the trigger.** A command and a review are both acted on only when the actor passes the trigger's own check ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run`):
+
+- a person must have `admin` or `write` permission, read from the collaborator-permission API;
+- a bot must be listed in `HARNESS_TRIGGER_ALLOWED_BOTS`;
+- `ghost` is never accepted.
+
+Triage is refused because commenting and labelling need only the triage role, so neither proves that the actor may run code with the repository's secrets. The API reports triage as `read` (T3).
+
+**Pull requests from forks.** The fork rule is three sentences:
+
+- `harness-control.yml` never uses `pull_request_target`.
+- A review on a fork's pull request never runs: the workflow's `if:` skips it, and its token would be read-only anyway (C2).
+- A comment on a fork's pull request is refused with a reply, because an `issue_comment` job carries the repository's secrets (C2).
+
+A fork can still reach a self-hosted runner through a workflow of its own. [`remote-execution.md`](remote-execution.md) → `## 11. Security` gives that warning and what prevents it.
+
+**Nothing from a pull request's head runs.** The control job checks out the default branch and runs that branch's scripts, never the pull request's merge commit. A round's fixes run later, in `harness-run.yml`, on the run's own branch, as every round does.
+
+**The harness never triggers itself.** Every comment the harness posts carries the hidden line `<!-- sdlc-harness`, which the workflow's `if:` and `control` both exclude ([§1](#1-commands-in-a-comment)). Each one is posted with the job's own token, and a comment made with that token starts no workflow (S3).
+
+**What a commenter vouches for.** An authorised reviewer or answerer vouches for the text that becomes a round or an answer, in the same way that the labeller vouches for an issue's text ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 4. What the labeller vouches for`). A review round carries the review's body and the reviewer's own inline comments, and nobody else's ([§2](#2-a-review-that-requests-changes-starts-a-round)). An answer is written as untrusted task data and never run as a command ([§3](#3-answering-a-park-in-a-comment)).
+
+**What comments make visible.** Park questions, answers and review text become comments on the issue or the pull request. On a public repository those comments are public. That adds to what the `harness-state` artifact and the workflow inputs already expose ([`remote-execution.md`](remote-execution.md) → `## 11. Security`, *What a reader of the repository's Actions runs can see*).
+
+---
+
+## 7. Working a run from both sides
+
+**Every local command still works for the same runs.** A run worked from GitHub is the same run the local commands reach. The local commands reach a run started from GitHub through the `<branch>:` prefix, even with no local record ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 5. Working the run`).
+
+**Each side sees the other:**
+
+- **GitHub's changes** show up locally because local commands read the run's state from GitHub before they act. `/autonomous-sdlc-harness:branch-status` reads it too.
+- **Local changes** show up on GitHub. A dispatch from `/autonomous-sdlc-harness:branch-answer`, `-resume` or `-pause` starts a job, and that job posts the lifecycle comments and sets the labels ([§5](#5-lifecycle-comments-and-state-labels)). A local `remote-run.sh stop` posts `stopped`, and a local `/autonomous-sdlc-harness:branch-user-review` posts the started round, as their GitHub forms do.
+
+**The Run workflow form stays the fallback.** A maintainer with no local setup can still work any remote run from `harness-run.yml`'s **Run workflow** form, for example when the control workflow is disabled ([`remote-execution.md`](remote-execution.md) → `### Working a run from GitHub alone`).
+
+**A locally executed branch reviewed on GitHub.** A person may open a pull request for a branch that ran on their own machine, and a review requesting changes on it starts a round ([§2](#2-a-review-that-requests-changes-starts-a-round)). That round runs through `harness-run.yml`, because a round started from GitHub always does. The local record keeps `execution: local` and is not touched. As a result, the local working copy falls behind `origin/<branch>` by the round's commits. Before another local round, bring it current by running this in that working copy:
+
+```
+git pull --ff-only
+```
+
+---
+
+## 8. What is not verified here
+
+Every automated case drives a `gh` stub. Gate 12 observation (xiv) in [`development.md`](development.md) → `## 5. Verifying a change` records the cases observed against a real repository.
+
+| Behaviour | What rests on it | Source | If it is wrong |
+|---|---|---|---|
+| The prefilter's `contains()` compares case-insensitively | Running the control job for a handle typed in mixed case ([§1](#1-commands-in-a-comment)) | GitHub's documented behaviour, not retrieved here | A mixed-case handle goes unanswered, and it is never obeyed |
+| The job token's `issues: write` can add a missing label to an issue or pull request, and create one | The state labels ([§5](#5-lifecycle-comments-and-state-labels)) | Not retrieved here | One warning line in the job log, and no label; the comment is still posted |
+| A pull request's conversation comment and its labels go through the issues endpoints | Every comment and label on a pull request ([§5](#5-lifecycle-comments-and-state-labels)) | Not retrieved here | Comments and labels on a pull request fail; the issue's are unaffected |
+| A pull request's conversation comment has the same size limit as an issue comment | Cutting a question file at 250,000 bytes ([§3](#3-answering-a-park-in-a-comment)) | S6 measured issue comments only | A long question comment on a pull request is refused |
+| A draft is refused for an account whose plan has no drafts, and a ready pull request is then accepted | The one ready retry ([§4](#4-the-draft-pull-request)) | C3; the fallback case is unmeasured | The retry fails too, and the `completed` comment names the compare link |
+| A pull request's author cannot request changes on their own pull request | The advice that a solo maintainer uses a machine account's token for `HARNESS_GIT_TOKEN` or starts the round locally ([§4](#4-the-draft-pull-request)) | GitHub's documented rule, not retrieved here; C1 measured only a pull request opened by `app/github-actions` | The token's owner can start a round from GitHub after all, and the advice is merely unneeded |
+| A newer pending run in `harness-run.yml`'s `concurrency` group cancels an older pending one | Refusing an answer, resume, clear or review while a job is in flight, rather than queueing it ([§1](#1-commands-in-a-comment), [§2](#2-a-review-that-requests-changes-starts-a-round)) | GitHub's documented behaviour, not measured here | Nothing is lost either way, because nothing is queued behind a job in flight |
+| The whole chain on GitHub: commands, a round from a review, a park answered in comments, the draft pull request, lifecycle comments and labels | All of this document | Gate 12 observation (xiv) ([`development.md`](development.md)) | The failing step is visible in the control or run job's log and in the comment it posted, or did not post |
