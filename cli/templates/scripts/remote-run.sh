@@ -249,6 +249,17 @@
 # this run's URL when `GITHUB_RUN_ID` is set, then the marker line
 # `<!-- sdlc-harness event=<event> branch=<branch> -->`. The pause reason and
 # reset come from the registry record, read only when the registry file exists.
+# `parked` instead posts one comment per open question — `open_questions_in`
+# over `$root`'s state directory, ascending — carrying `question_<n>.md` whole,
+# cut at its last whole line within `QUESTION_COMMENT_MAX_BYTES` and then naming
+# the file in the `STATE_ARTIFACT_NAME` artifact; then the answer form, a
+# comment whose first line is `COMMAND_HANDLE answer <n>` (`<n>` optional when
+# one question is open) and whose following lines are the answer; the marker
+# adds `question=<n>`. With no question open it posts the one notice. The label
+# is set once per target, not per question. On a public repository a question
+# comment and its answer are public, as the artifact already is
+# (`docs/remote-execution.md` -> `## 11. Security`, *What a reader of the
+# repository's Actions runs can see*).
 # It never fails its caller: every problem is one line and exit 0.
 #
 # `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
@@ -790,6 +801,11 @@ COMMENT_MARKER='<!-- sdlc-harness'
 REVIEW_ROUND_STATE='changes_requested'
 STATE_LABEL_PREFIX='sdlc-harness: '
 RUN_STATES='running parked paused done failed stopped'
+# The most bytes of a question file one park comment carries. An issue comment
+# holds 262,144 bytes of UTF-8, and the refusal text's character count is not
+# to be trusted (docs/github-integration-research.md -> S6); the margin is the
+# framing lines and the marker.
+QUESTION_COMMENT_MAX_BYTES=250000
 GH="${HARNESS_GH_CLI:-gh}"
 
 # How many runs `status` prints, and how many `run list` returns for status
@@ -3252,11 +3268,45 @@ forge_utc() {
   printf '%s' "$out"
 }
 
-# forge_report <event> <branch> [<note>] — one lifecycle comment and the state
-# label, by the target rule above. Always 0.
+# forge_question_body <out_file> <branch> <n> <open_count> <clar_dir> [<note>] —
+# write question <n>'s park comment, without its marker, into <out_file>: the
+# file's bytes, cut at the last whole line within QUESTION_COMMENT_MAX_BYTES
+# when it is over it (measured in bytes; `${#…}` counts characters).
+forge_question_body() {
+  local out="$1" br="$2" n="$3" count="$4" qfile="$5/question_$3.md" note="${6-}" size cut=0 last
+  size=$(wc -c <"$qfile") || return 1
+  size=$((size))
+  {
+    printf 'The run on `%s` is waiting for an answer to question %s.\n\n' "$br" "$n"
+    if [ "$size" -le "$QUESTION_COMMENT_MAX_BYTES" ]; then
+      cat "$qfile"
+    else
+      cut=1
+      head -c "$QUESTION_COMMENT_MAX_BYTES" "$qfile" >"$out.cut"
+      last=$(tail -c 1 "$out.cut")
+      # A non-empty last byte is a partial line; LC_ALL=C keeps sed from
+      # refusing a multi-byte character the byte cut split.
+      if [ -n "$last" ]; then LC_ALL=C sed '$d' "$out.cut"; else cat "$out.cut"; fi
+    fi
+  } >"$out" || return 1
+  {
+    [ -z "$(tail -c 1 "$out")" ] || printf '\n'
+    [ "$cut" -eq 0 ] || printf '\nThis question was cut to fit a comment. The whole file is `%s/%s/question_%s.md` in the run'"'"'s `%s` artifact.\n' \
+      "$HR_REMOTE_CLARIFY_DIR" "$br" "$n" "$STATE_ARTIFACT_NAME"
+    printf '\nAnswer with a comment whose first line is `%s answer %s` and whose following lines are your answer.' "$COMMAND_HANDLE" "$n"
+    [ "$count" -ne 1 ] || printf ' This is the only open question, so `%s` may be left out: `%s answer`.' "$n" "$COMMAND_HANDLE"
+    printf '\n'
+    [ -z "$note" ] || printf '\n%s\n' "$note"
+    [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
+  } >>"$out"
+}
+
+# forge_report <event> <branch> [<note>] — one lifecycle comment (on `parked`,
+# one per open question) and the state label, by the target rule above.
+# Always 0.
 forge_report() {
   local event="$1" br="$2" note="${3-}" state reason="" resume_at="" when registry_file
-  local target kind text tmp made_tmp="" file trigger_label stopped
+  local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n
   case "$event" in
     parked|park_loop) state=parked ;;
     paused) state=paused ;;
@@ -3338,12 +3388,33 @@ forge_report() {
       text="The harness run on \`$br\` was stopped. Nothing runs on it until a new review or label starts another round or run." ;;
   esac
 
+  OPEN_QUESTIONS=""
+  if [ "$event" = parked ]; then
+    state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
+    [ -z "$state_rel" ] || open_questions_in "$root/${state_rel%/}"
+  fi
+
   tmp="${RUNNER_TEMP-}"
   if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
     tmp=$(mktemp -d) || tmp=""
     made_tmp="$tmp"
   fi
-  if [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-report-comment.XXXXXX"); then
+  if [ -n "$OPEN_QUESTIONS" ]; then
+    count=$(printf '%s\n' $OPEN_QUESTIONS | wc -l)
+    count=$((count))
+    for n in $OPEN_QUESTIONS; do
+      if [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-report-comment.XXXXXX"); then
+        if forge_question_body "$file" "$br" "$n" "$count" "$root/${state_rel%/}/$HR_REMOTE_CLARIFY_DIR/$br" "$note"; then
+          forge_comment "$target" "$event" "$br" "$file" "$n" || :
+        else
+          echo "remote-run.sh: report: cannot write question $n's comment for #$target; not posted" >&2
+        fi
+        rm -f "$file" "$file.cut"
+      else
+        echo "remote-run.sh: report: cannot create question $n's comment file for #$target; not posted" >&2
+      fi
+    done
+  elif [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-report-comment.XXXXXX"); then
     {
       printf '%s\n' "$text"
       [ -z "$note" ] || printf '\n%s\n' "$note"

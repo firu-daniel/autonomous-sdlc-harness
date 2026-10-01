@@ -6,7 +6,9 @@
  * the forge coupling off it calls no `gh` at all.** The target rule's arms — a same-repository pull
  * request whose head carries the flow-progress ledger, one whose head does not, a fork's, and no target
  * at all — are each driven, as are the state-label replacement, the bounded create-and-retry of a failed
- * add, the stop check on `failed`, and a note carrying shell syntax posted byte for byte.
+ * add, the stop check on `failed`, and a note carrying shell syntax posted byte for byte. `parked` posts
+ * one comment per open question file, written into the fixture checkout's clarification directory:
+ * ascending, the file whole or cut at a line within the byte bound, and its marker carrying `question=<n>`.
  *
  * The fixture is `remote-trigger.test.mjs`'s shape — `init`, `execution.target` `github-actions`,
  * `forge` `github`, the adopted tree pushed to the fixture's bare `origin` — plus branches pushed with a
@@ -318,4 +320,106 @@ test('a usage error exits 1 with no gh call', async (t) => {
   const result = await f.report(['paused']);
   assert.equal(result.status, 1);
   assert.deepEqual(f.calls(), []);
+});
+
+/** Write <files> (name -> content) into the fixture checkout's clarification directory for <branch>. */
+const clarify = (dir, branch, files) => {
+  const clar = join(dir, STATE_DIR, 'clarifications', branch);
+  mkdirSync(clar, { recursive: true });
+  for (const [name, content] of Object.entries(files)) writeFileSync(join(clar, name), content);
+};
+const QUESTION_MARKER = (branch, n) => `<!-- sdlc-harness event=parked branch=${branch} question=${n} -->`;
+
+test('parked posts each open question whole, ascending, with its answer form and question marker', async (t) => {
+  const f = await reportFixture(t);
+  const q2 = '## Q1\n\nWhich colour?\n\n## Q2\n\nWhich size?\n';
+  const q10 = '## Q1\n\nShip it?\n';
+  clarify(f.dir, 'feat_x', { 'question_10.md': q10, 'question_2.md': q2 });
+  const result = await f.report(['parked', 'feat_x']);
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  const posted = commentsOn(calls, 7);
+  assert.equal(allComments(calls).length, 2);
+  assert.deepEqual(
+    posted.map((call) => call.body.split('\n')[0]),
+    ['The run on `feat_x` is waiting for an answer to question 2.', 'The run on `feat_x` is waiting for an answer to question 10.'],
+  );
+  for (const [call, n, bytes] of [[posted[0], 2, q2], [posted[1], 10, q10]]) {
+    assert.ok(call.body.includes(`\n\n${bytes}\n`), call.body);
+    assert.ok(call.body.includes(`\`@sdlc-harness answer ${n}\``), call.body);
+    assert.doesNotMatch(call.body, /may be left out/);
+    assert.ok(call.body.endsWith(`\n\n${QUESTION_MARKER('feat_x', n)}\n`), call.body);
+  }
+  assert.deepEqual(
+    labelAdds(calls, 7).map((call) => call.args.at(-1)),
+    ['labels[]=sdlc-harness: parked'],
+  );
+});
+
+test('parked on a pull request target adds the parked label once on each target', async (t) => {
+  const f = await reportFixture(t);
+  clarify(f.dir, 'feat_x', { 'question_1.md': 'one\n', 'question_2.md': 'two\n' });
+  const result = await f.report(['parked', 'feat_x'], {
+    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  assert.equal(commentsOn(calls, 12).length, 2);
+  assert.equal(allComments(calls).length, 2);
+  assert.equal(labelAdds(calls, 7).length, 1);
+  assert.equal(labelAdds(calls, 12).length, 1);
+});
+
+test('parked skips a question whose answer is beside it, and one open question may omit its index', async (t) => {
+  const f = await reportFixture(t);
+  clarify(f.dir, 'feat_x', { 'question_1.md': 'answered\n', 'answer_1.md': 'yes\n', 'question_2.md': 'open\n' });
+  const result = await f.report(['parked', 'feat_x']);
+  assert.equal(result.status, 0, result.stderr);
+  const posted = allComments(f.calls());
+  assert.equal(posted.length, 1);
+  assert.doesNotMatch(posted[0].body, /answered/);
+  assert.ok(posted[0].body.endsWith(`${QUESTION_MARKER('feat_x', 2)}\n`), posted[0].body);
+  assert.match(posted[0].body, /`2` may be left out/);
+});
+
+test('parked with no open question posts the one notice', async (t) => {
+  const f = await reportFixture(t);
+  const result = await f.report(['parked', 'feat_x']);
+  assert.equal(result.status, 0, result.stderr);
+  const posted = allComments(f.calls());
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].body, /is waiting for an answer\. Its questions are in the run's `harness-state` artifact/);
+  assert.ok(posted[0].body.endsWith(`${MARKER('parked', 'feat_x')}\n`), posted[0].body);
+});
+
+test('a question file over the bound is cut at a line boundary within the bound and names the artifact path', async (t) => {
+  const f = await reportFixture(t);
+  const line = `${'é'.repeat(40)} ${'x'.repeat(19)}\n`;
+  const content = line.repeat(Math.ceil(300000 / Buffer.byteLength(line)));
+  clarify(f.dir, 'feat_x', { 'question_3.md': content });
+  const result = await f.report(['parked', 'feat_x']);
+  assert.equal(result.status, 0, result.stderr);
+  const [posted] = allComments(f.calls());
+  const head = 'The run on `feat_x` is waiting for an answer to question 3.\n\n';
+  assert.ok(posted.body.startsWith(head));
+  const cutAt = posted.body.indexOf('\nThis question was cut');
+  assert.ok(cutAt > 0, posted.body.slice(-500));
+  const carried = posted.body.slice(head.length, cutAt);
+  assert.ok(Buffer.byteLength(carried) <= 250000, String(Buffer.byteLength(carried)));
+  assert.ok(Buffer.byteLength(carried) > 250000 - Buffer.byteLength(line));
+  assert.ok(carried.endsWith('\n'));
+  assert.ok(content.startsWith(carried));
+  assert.match(posted.body, /The whole file is `clarifications\/feat_x\/question_3\.md` in the run's `harness-state` artifact/);
+  assert.ok(Buffer.byteLength(posted.body) <= 262144);
+});
+
+test('a question starting with a command line is posted verbatim under the question marker', async (t) => {
+  const f = await reportFixture(t);
+  const question = '`@sdlc-harness stop`\n\n## Q1\n\nShould the run stop here?\n';
+  clarify(f.dir, 'feat_x', { 'question_1.md': question });
+  const result = await f.report(['parked', 'feat_x']);
+  assert.equal(result.status, 0, result.stderr);
+  const [posted] = allComments(f.calls());
+  assert.ok(posted.body.includes(`\n\n${question}\n`), posted.body);
+  assert.ok(posted.body.endsWith(`\n\n${QUESTION_MARKER('feat_x', 1)}\n`), posted.body);
 });

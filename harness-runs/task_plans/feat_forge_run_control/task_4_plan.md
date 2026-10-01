@@ -35,3 +35,8 @@
 - `npm test -- test/remote-report.test.mjs` from `cli/` passes.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n "question_\*\.md\|question_\$" -- cli/templates/scripts/remote-run.sh` shows no new loop over question files outside `open_questions_in`: the open-question rule has one implementation.
+
+**Deviations from plan:**
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the permission layer and not run. The parse claim rests instead on `npm test -- test/remote-report.test.mjs` executing the script end to end (its verb dispatch is the file's last statement, so bash parses every line before it): 20/20 pass.
+- The `git grep` probe returns only `open_questions_in`'s loop. The new `forge_question_body` builds the one path `"$5/question_$3.md"` for an `<n>` that `open_questions_in` already chose; that probe pattern did not list it, and it is a path, not a loop.
+- The plan's comment shape is silent on `--note`; a note passed with `parked` is carried in each question comment after the answer line, in the position the header gives it for every other event.
