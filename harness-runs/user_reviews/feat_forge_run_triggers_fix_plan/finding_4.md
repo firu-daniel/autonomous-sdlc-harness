@@ -1,0 +1,34 @@
+### 4. `remote-run.sh start` leaves its working copy, and its local branch, behind on every run
+
+**Files:**
+- `cli/templates/scripts/remote-run.sh` (`verb_start`) — "bash \"$script_dir/create-worktree.sh\" --no-bootstrap \"$branch\""; and the header paragraph "`start` IS THE ADAPTERS' ONE ENTRY"
+- `cli/test/remote-start.test.mjs` — the test "a start commits the prompt on origin/feat_x, then sends exactly one task dispatch"
+- `docs/github-issue-trigger.md` → `## 1. What happens when an issue is labelled`, item 5 ("**`start`.**")
+
+**Problem.** Verified in the current tree. `verb_start` cuts the branch with `create-worktree.sh --no-bootstrap "$branch"`, which creates a sibling working copy at `hr_worktree_dir "$root" "$branch"` **and** a local branch (`git worktree add -b`). It places, commits and pushes the prompt there, dispatches, and prints `started $branch (worktree $worktree)`. Nothing removes the copy or the branch, on success or on failure. `placement_fail` and `gh_fail` both `exit` straight out.
+
+On a GitHub-hosted runner the machine is thrown away, so nothing accumulates. On a self-hosted runner (`HARNESS_RUNNER`) the trigger job runs there too (`docs/github-issue-trigger.md` → "Running it on your own hardware"). Its work directory persists, and `actions/checkout` cleans only its own path. So one sibling copy and one local branch pile up per triggered issue.
+
+A failed start is worse. The `create-worktree.sh` header says a failed run leaves its half-created worktree "in place for inspection", and that a re-run "refuses with git's own `a branch named '<branch>' already exists`" until both the copy and the local branch are gone. So on a persistent runner, a failed start can block the next start for the same name.
+
+**Fix.** Nothing reads the copy after the push, so remove it as soon as the push has landed, and on every failure exit after it was created. This does not wait for a merge the way `cleanup-merged-worktrees.sh` does.
+
+- [ ] **Record what existed before the cut.** In `verb_start`, before calling `create-worktree.sh`:
+  - resolve `worktree=$(hr_worktree_dir "$root" "$branch")` (move the existing call up; it is deterministic);
+  - note whether that directory already exists (`had_copy`);
+  - note whether `refs/heads/$branch` already exists locally (`had_branch`, from `git -C "$root" show-ref --verify --quiet "refs/heads/$branch"`).
+
+  The cleanup must never remove a copy or a branch that `start` did not create. Today, a directory that already exists makes `create-worktree.sh` refuse without creating anything, and that directory belongs to someone else.
+- [ ] **Add one cleanup function**, e.g. `start_remove_copy`, idempotent. When `had_copy` was 0 and the directory exists, run `git -C "$root" worktree remove --force "$worktree"`. `--force` is right because on a failure exit the copy may hold the placed, uncommitted prompt, and that file is only a copy of `--prompt-file`. Then run `git -C "$root" worktree prune`. When `had_branch` was 0 and `refs/heads/$branch` exists, run `git -C "$root" branch -D "$branch"`. Each step that fails is one `remote-run.sh: …` line on stderr and never changes the exit status already decided.
+- [ ] **Run it on every exit path once the copy may exist.** Install `trap start_remove_copy EXIT` immediately before the `create-worktree.sh` call. That call can itself leave a half-created copy, and `placement_fail` and `gh_fail` both `exit`. `start` is its own process even when `trigger` runs it (`bash "$script_dir/remote-run.sh" start …`), and this file installs no other trap, so an EXIT trap in `verb_start` reaches only `start`.
+- [ ] **On success, remove before dispatching.** Call `start_remove_copy` explicitly right after `hr_push_landed` succeeds, then clear the trap (`trap - EXIT`), then `verb_dispatch`. The dispatch needs only the pushed branch. So a dispatch failure (exit 3, "already pushed … re-send with: remote-run.sh dispatch …") also leaves nothing local.
+- [ ] **Change the success line** from `started $branch (worktree $worktree)` to `started $branch`, and say in the header that the copy is removed. `trigger` does not parse that line (it captures only stderr into `errfile`). The test that matches it changes in the step below.
+- [ ] **Header, `start` paragraph — state the decision about a maintainer's machine.** `start` is the platform-neutral entry and may be run from a maintainer's machine as well as from a trigger job. The removal applies there too, for the same reason: nothing on any machine reads that copy after the push. The run executes on GitHub, and after Finding 3 every local command acts on such a run through GitHub rather than through a local copy. The paragraph should read, in substance: *"…confirm `origin/<branch>` equals `HEAD` (each failure 4); then remove the working copy and the local branch it created — on every exit after the cut, success included and wherever `start` runs, because nothing reads the copy once the push has landed and a leftover branch makes the next cut of that name refuse — and `dispatch --engine task --resume none --chain 0`…"*. Update the `WHAT IT NEVER DOES` paragraph to match: it currently lists for `start` "its writes are the new working copy and the prompt committed in it". Also update the exit-map line for 4, "placement failed — the branch cut, the copy, the commit or the push — and nothing was dispatched", to add that the copy and the local branch were removed.
+- [ ] **Tests, in `cli/test/remote-start.test.mjs`** (the suite this fix edits):
+  - The success test reads the prompt with `readFileSync(join(f.worktree, PROMPT_REL))`. Read it from origin instead (`git show refs/heads/feat_x:<PROMPT_REL>` against `f.origin`, which the test already does). Assert that `existsSync(f.worktree)` is `false`, that `git -C <fixture> show-ref refs/heads/feat_x` finds nothing, and that `git worktree list` no longer lists it.
+  - Add a case where the push fails, for example a `pre-receive` hook on the bare origin that rejects. Assert exit 4, no gh call, no copy and no local branch.
+  - Add a case where the dispatch fails after the push (gh stub exits non-zero for `workflow run`). Assert exit 3, `origin/feat_x` carries the prompt, and no copy or local branch is left.
+  - Keep the existing "a feat_x already on origin exits 4" case. Add an assertion that a pre-existing directory at `f.worktree`, created by the test before `start`, is left untouched by a refused start.
+
+  Update the stdout match `/remote-run\.sh: started feat_x \(worktree .*-feat_x\)/` to the new line.
+- [ ] **Docs.** In `docs/github-issue-trigger.md` → `## 1.`, item 5, add one sentence after the push: the working copy and its local branch are removed once the push lands, and on any failure after the cut, so a self-hosted runner accumulates nothing.
