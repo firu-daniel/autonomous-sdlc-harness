@@ -33,7 +33,7 @@ This branch builds a **second implementation** of docs retrieval: a Python servi
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_docs_retrieval_python_backend/task_<K>_plan.md`. Every task is single-layer `general`, because every target sits outside `cli/` and `plugin/`. They are ordered by ship sequence: scaffold, then chunking parity first (deliverable 6), then models, store, search, refresh, the shared answer path, the two entry points, the operator sub-commands, the container, the end-to-end parity case, the gates, and the README last, because it records what the others found.
 
 1. [x] **Task 1** — Scaffold the `harness-docs-retrieval` package, its lockfile and the `scripts/python-service.sh` toolchain wrapper _(layer: general)_ _(points: 15)_
-2. [ ] **Task 2** — Add the JS-semantics helper module and port corpus enumeration (`corpus.py`) _(layer: general)_ _(points: 15)_
+2. [x] **Task 2** — Add the JS-semantics helper module and port corpus enumeration (`corpus.py`) _(layer: general)_ _(points: 15)_
 3. [ ] **Task 3** — Port the Markdown chunker (`chunk.py`) _(layer: general)_ _(points: 15)_
 4. [ ] **Task 4** — Add the TypeScript bridge and the chunk-key and hash parity case over both eval corpora _(layer: general)_ _(points: 20)_
 5. [ ] **Task 5** — Add the model interfaces, the fp32 sentence-transformers loader, the weight cache and its presence check (`models.py`) _(layer: general)_ _(points: 15)_
