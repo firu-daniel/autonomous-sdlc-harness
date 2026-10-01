@@ -1,8 +1,8 @@
 """The rule this file exists to enforce: `cli.main` is the only place an anticipated failure
 becomes an exit status — a missing or unknown sub-command exits `2` with usage, and a
 `ServiceError` exits `1` with exactly one stderr line and no traceback. It also pins the
-sub-command table's rows, and `serve-http`'s `--host` / `--port`, which Task 14's compose file
-passes.
+sub-command table's rows, and `serve-http`'s `--host` / `--port`, which the service image's
+`CMD` in `Dockerfile` passes.
 """
 
 import argparse

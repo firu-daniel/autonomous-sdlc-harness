@@ -2,8 +2,8 @@
 exactly every Markdown file under `docs.root` plus every conventions document `layers[]` names, and
 nothing here throws on a missing path; each skip becomes a warning worded as `corpus.ts` words it.
 
-Expectations are hand-written from reading `corpus.ts`; Task 4 compares against the running
-TypeScript. Every repository is built under `tmp_path`, never inside this checkout.
+Expectations are hand-written from reading `corpus.ts`; `test_chunk_parity.py` compares against
+the running TypeScript. Every repository is built under `tmp_path`, never inside this checkout.
 """
 
 import os

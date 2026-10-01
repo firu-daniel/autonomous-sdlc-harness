@@ -2,7 +2,8 @@
 identity is its path and heading anchor, and its change signal is the hash of its text.
 
 Expectations are hand-written from reading `chunk.ts` and the `guide` document
-`cli/test/docs-retrieval.test.mjs` builds; Task 4 compares against the running TypeScript.
+`cli/test/docs-retrieval.test.mjs` builds; `test_chunk_parity.py` compares against the running
+TypeScript.
 """
 
 import hashlib

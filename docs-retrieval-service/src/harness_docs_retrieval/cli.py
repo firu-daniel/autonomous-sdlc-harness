@@ -47,7 +47,8 @@ def _run_serve_mcp(args: argparse.Namespace) -> int:
 
 
 def _configure_serve_http(parser: argparse.ArgumentParser) -> None:
-    # Task 14's compose file passes both flags; the defaults keep a bare run local-only.
+    # The service image's CMD (Dockerfile) passes both flags; the defaults keep a bare run
+    # local-only.
     add_service_options(parser)
     parser.add_argument("--host", default="127.0.0.1", help="the address to bind")
     parser.add_argument("--port", type=int, default=8080, help="the port to bind")

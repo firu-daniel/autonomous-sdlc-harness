@@ -5,7 +5,7 @@ rank-derived and never abstain.
 Each arm is scripted through `InMemoryDocStore`'s rankings, so fusion is asserted on exact ids and
 exact floats. The `snippet_of` expectations are literals worked from `snippetOf`'s algorithm, not
 from the port; the byte comparison against the running TypeScript is `test_render_parity.py`'s, and
-Task 15's end-to-end case covers `snippet_of` against it.
+`test_backend_parity_e2e.py` covers `snippet_of` against it end to end.
 """
 
 import asyncio
