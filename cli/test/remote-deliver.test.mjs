@@ -172,6 +172,10 @@ test('a completed run with no pull request opens one draft naming its issue, com
   assert.match(made[0].body, /\nStarted from #7\.\n/);
   assert.doesNotMatch(made[0].body, /\b(closes|fixes|resolves) #/i);
   assert.match(made[0].body, /@sdlc-harness pause/);
+  for (const cmd of ['@sdlc-harness answer <n>', '@sdlc-harness pause', '@sdlc-harness resume', '@sdlc-harness stop', '@sdlc-harness clear']) {
+    assert.ok(made[0].body.includes(`\`${cmd}\``), made[0].body);
+  }
+  assert.doesNotMatch(made[0].body, /While a round is running/);
   assert.ok(made[0].body.endsWith('<!-- sdlc-harness event=pull-request branch=feat_x -->\n'), made[0].body);
   assert.equal(allComments(calls).length, 1);
   const [posted] = commentsOn(calls, 7);

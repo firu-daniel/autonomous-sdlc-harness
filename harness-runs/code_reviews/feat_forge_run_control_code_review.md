@@ -64,7 +64,7 @@ The ledger's wall-clock rule was checked and is not exercised: the diff adds no 
 1. [x] **Finding 7** — Name both events in `control`'s exit-map line for exit 1 _(layer: cli)_
 2. [x] **Finding 3** — Repoint `ARCHITECTURE.md` at README's renamed forge bullet _(layer: general)_
 3. [x] **Finding 8** — Name the line-less file-comment heading in the fix-plan writer's pull-request review comment form _(layer: plugin)_
-4. [ ] **Finding 6** — Build the draft pull request's command list from `COMMAND_VERBS` _(layer: cli)_
+4. [x] **Finding 6** — Build the draft pull request's command list from `COMMAND_VERBS` _(layer: cli)_
 5. [ ] **Finding 4** — Report an unreadable secret list as *cannot tell* in `doctor`'s pull-request-setting arm _(layer: cli)_
 6. [ ] **Finding 5** — Mirror `PR_CREATE_SETTING` and its path in `remote-run.sh` and use them in `deliver`'s comment _(layer: cli)_
 7. [ ] **Finding 2** — Name the label that started the run in a failed run's issue comment _(layer: cli)_

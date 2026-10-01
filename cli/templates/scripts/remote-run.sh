@@ -3789,12 +3789,16 @@ deliver_title_var() {
 # issue as a plain mention (never a closing keyword: the flow does not own the
 # issue's lifecycle), what a reviewer can do here, and the marker.
 deliver_pr_body() {
+  local v verbs=""
+  for v in $COMMAND_VERBS; do
+    [ "$v" != answer ] || v="answer <n>"
+    verbs="$verbs${verbs:+, }\`$COMMAND_HANDLE $v\`"
+  done
   {
     printf 'This pull request carries the harness run on `%s`, ready for your review. The harness never merges it.\n' "$2"
     [ -z "$FORGE_ISSUE" ] || printf '\nStarted from #%s.\n' "$FORGE_ISSUE"
     printf '\nA review that requests changes starts a user-review round on this branch.\n'
-    printf 'While a round is running, comment `%s pause`, `%s resume`, `%s stop` or `%s answer <n>` to act on it.\n' \
-      "$COMMAND_HANDLE" "$COMMAND_HANDLE" "$COMMAND_HANDLE" "$COMMAND_HANDLE"
+    printf 'Comment %s to act on the run; each says when it applies (docs/github-run-control.md in the harness documentation).\n' "$verbs"
     printf '\n'
     forge_marker pull-request "$2"
   } >"$1"
