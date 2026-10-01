@@ -59,7 +59,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control/task_
 23. [x] **Task 23** — Write `docs/github-run-control.md`: comment commands and review rounds _(layer: general)_ _(points: 20)_
 24. [x] **Task 24** — Document parks over comments, the draft pull request, lifecycle comments and state labels _(layer: general)_ _(points: 20)_
 25. [x] **Task 25** — Document security, both sides, what is not verified, and the GitHub entry point _(layer: general)_ _(points: 20)_
-26. [ ] **Task 26** — Bring `docs/github-issue-trigger.md` level with the new label and run control _(layer: general)_ _(points: 15)_
+26. [x] **Task 26** — Bring `docs/github-issue-trigger.md` level with the new label and run control _(layer: general)_ _(points: 15)_
 27. [ ] **Task 27** — Bring `docs/remote-execution.md` §1, §3 and §5 level with run control _(layer: general)_ _(points: 15)_
 28. [ ] **Task 28** — Bring `docs/remote-execution.md` §7 and §11 level with run control _(layer: general)_ _(points: 12)_
 29. [ ] **Task 29** — Document the new verbs, the control workflow and the doctor checks in `docs/cli.md` and `docs/watcher.md` _(layer: general)_ _(points: 12)_
