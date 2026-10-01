@@ -5008,7 +5008,7 @@ function databaseLocation(url: string): string {
   }
 }
 
-/** The install remedy the two `packages`-side failures share. */
+/** The install remedy every `retrieval-python-dependencies` failure names. */
 const PYTHON_INSTALL_REMEDY =
   "install the package with its `models` extra (docs/retrieval.md → `## Turning on the Python backend`)";
 
@@ -5030,7 +5030,7 @@ const RETRIEVAL_PYTHON_DEPENDENCIES_CHECK: Check = {
     }
     if (answer.kind === 'unreadable') {
       return fail(
-        `${PYTHON_RETRIEVAL_COMMAND} ${PYTHON_SELF_CHECK_SUB_COMMAND} answered in a shape this CLI cannot grade (${answer.text})`,
+        `${PYTHON_RETRIEVAL_COMMAND} ${PYTHON_SELF_CHECK_SUB_COMMAND} answered in a shape this CLI cannot grade (${answer.text}) — ${PYTHON_INSTALL_REMEDY}, from a clone at the release tag matching this CLI's version, then run doctor again`,
       );
     }
     const line = selfCheckLine(answer, 'packages');

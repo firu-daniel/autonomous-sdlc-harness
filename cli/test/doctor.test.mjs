@@ -5628,6 +5628,7 @@ test('retrieval-python-* under python: each self-check answer grades its check, 
     const dependencies = checks.get('retrieval-python-dependencies');
     assert.equal(dependencies?.status, 'FAIL', stderr);
     assert.ok(dependencies.detail.includes('answered in a shape this CLI cannot grade'), dependencies.detail);
+    assert.ok(dependencies.detail.includes(PYTHON_INSTALL_REMEDY_TEXT), dependencies.detail);
     assert.ok(dependencies.detail.includes('exit status 0: ok   packages: '), dependencies.detail);
     for (const id of ['retrieval-python-model-cache', 'retrieval-python-index']) {
       assert.equal(checks.get(id)?.status, 'FAIL', `${id}:\n${stderr}`);

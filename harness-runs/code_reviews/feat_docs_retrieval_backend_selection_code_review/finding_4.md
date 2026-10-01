@@ -29,3 +29,5 @@ The operator is told what came back and nothing about what to do next, and both 
   ```
 
 Then run that test file alone, `npm test -- test/doctor.test.mjs` from `cli/`. The full suite runs later, in the Run gates phase.
+
+**Deviations from plan:** `cli` dispatch also reworded `PYTHON_INSTALL_REMEDY`'s doc comment in `cli/src/doctor/checks.ts` from "the two `packages`-side failures share" to "every `retrieval-python-dependencies` failure names", because the unreadable branch now names it too and the old comment would be false. The `docs/cli.md` sub-step is under `docs/`, so the `general` dispatch of this unit owns it.

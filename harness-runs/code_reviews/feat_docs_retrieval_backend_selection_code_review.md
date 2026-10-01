@@ -41,7 +41,7 @@ Each entry resolves to `harness-runs/code_reviews/feat_docs_retrieval_backend_se
 1. [x] **Finding 6** — Correct `PYTHON_SERVE_SUB_COMMAND`'s doc comment: the launcher runs it as a child, never `exec`s it _(layer: cli)_
 2. [x] **Finding 5** — Move `self-check`'s not-attempted pattern into `pythonBackend.ts` and declare it as a mirror _(layer: cli)_
 3. [x] **Finding 2** — Name the clone's `docs-retrieval-service/` directory in `retrieval-python-index`'s compose remedy _(layer: cli)_
-4. [ ] **Finding 4** — Give the unreadable-`self-check` failure of `retrieval-python-dependencies` the install remedy _(layer: cli, general)_
+4. [x] **Finding 4** — Give the unreadable-`self-check` failure of `retrieval-python-dependencies` the install remedy _(layer: cli, general)_
 5. [ ] **Finding 3** — Pass the launcher's `INT` on to the Python child as `TERM`, and test signal forwarding _(layer: cli, general)_
 6. [ ] **Finding 7** — Reduce `docs-retrieval-backend-unknown.json` to the single enum change _(layer: general)_
 7. [ ] **Finding 1** — Say in `docs/remote-execution.md` and `docs/retrieval.md` that the job's `doctor --remote-job` preflight stops a job with the Python backend selected _(layer: general)_
