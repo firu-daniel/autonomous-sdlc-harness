@@ -1832,8 +1832,9 @@ hr_push_landed() {
 # names. Every name below is a variable `hr_remote_names_var` assigns, and it
 # also assigns `HR_REMOTE_WORKFLOW_RUN_FILE`, the run workflow's file name, for
 # the GitHub-route producers `hr_github_answer_route` and
-# `hr_github_resume_route`. Those two are mirrors of the header's table; no
-# function spells either one, or any other name here.
+# `hr_github_resume_route` and for the run-history probe `hr_branch_run_history`.
+# Those two are mirrors of the header's table; no function spells either one,
+# or any other name here.
 #
 #   <bundle>/status.json                 the job's record, fixed schema below
 #   <bundle>/clarifications/<branch>/    the whole branch directory, answered/ included
