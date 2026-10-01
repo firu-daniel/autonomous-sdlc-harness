@@ -18,3 +18,21 @@
 - **category:** agent-contract
 - **evidence:** `plugin/instructions/unit_loop_core.md` (main checkout) → `## Substitution table`, row `A`'s `commit_prefix rule` is "from the branch name: `feat_` → `feat` …", so this run passed `commit_prefix: feat` on all 24 `mode: task` dispatches, and every Task commit subject begins `feat:` (e.g. `b3c49b5`, `a63e709`). `.claude/context/conventions.md` → `## Commit-message policy` designates **`none`** for the class "Adding new work — a story task's commit" and states "No other prefix token is in use in this repository" besides `chore`. `plugin/agents/committer.md` (main checkout) names "the branch name, for a story task" as a legal source, so the committer accepted it. The Phase C / C2 fix rows read the designation and passed `none` (e.g. `b127721`, `1cd7940`).
 - **cost this run:** 24 commit subjects on the branch carry a prefix the repository policy says is not in use; the branch's history mixes two conventions.
+
+# User-review fix round 1 — act on GitHub directly for remote runs, remove `adopt`, clean up `start`
+
+## Row `UR-A`'s Must Fix → `fix` prefix was refused by the committer on every fix commit this round
+- **category:** agent-contract
+- **evidence:** `plugin/instructions/unit_loop_core.md` (main checkout) → `#### Row UR-A — user-review fix items` sets `## Must Fix` → `fix`, so this run passed `commit_prefix: fix` on all 4 `mode: review_item` dispatches. Each time the committer's return said it did not use it, because `.claude/context/conventions.md` → `## Commit-message policy` designates `none` for "Fixing existing work". The resulting subjects carry no prefix: `6fb6537`, `a182dc8`, `bd8762e`, `31672e7`.
+- **cost this run:** none to the commits, which follow the policy; 4 of 4 dispatches carried an argument the receiving agent had to override.
+
+## The fix-plan writer's `harness-runs/lessons.md` append was not in the fix-plan convergence commit and landed inside an unrelated fix commit
+- **category:** silent-failure
+- **evidence:** the `user-review-fix-plan-writer` dispatch (fix-plan write, iter 0) appended three rules to the tracked `harness-runs/lessons.md`. The fix-plan fork's Override 3 stages an explicit list (fix-plan index, review, per-finding folder, two gate folders) that does not name `lessons.md`, so `git status --short` still showed ` M harness-runs/lessons.md` after convergence commit `913014d`. The Finding 4 committer then staged it from `git status` into `6fb6537` ("Clean up remote-run.sh start working copy and branch (Finding 4)").
+- **cost this run:** the round's lessons-ledger change is recorded under a Finding 4 code-fix commit; the tracked tree was dirty from fix-plan convergence until the first Phase A commit.
+
+## Per-unit layer reviewers of one multi-layer item share one `item_<K>/review_<i>.md` series, because `iteration` restarts at 0 per layer
+- **category:** agent-contract
+- **evidence:** Finding 3 (layers cli, plugin, general): the plugin `layer-reviewer` (iter 0, dispatch #9) returned PASS with a note that `review_0.md` "already held the `cli` layer's iteration-0 findings" and that it appended below them. The general reviewer (iter 0, #11) then FAILed into the same `harness-runs/user_review_fix_plan_point_reviews/feat_forge_run_triggers_fix_plan/item_3/review_0.md`, and the general fix prompt (#12) pointed at that combined file. Finding 1's `item_1/review_0.md` likewise holds both the cli and the general sections, per the general implementer's returns (#26, #28). For Finding 2, the cli review's Must Fix required a `plugin/commands/branch-status.md` change that the first-iteration plugin implementer prompt does not name; this run passed it as a `context_notes:` line (recorded in `harness-runs/dispatch_additions/feat_forge_run_triggers.md`, key `[A · Item 2 · plugin · iter 0]`).
+- **cost this run:** one `context_notes:` addition needed to carry a cross-layer requirement; fix implementers reading `review_0.md` had to separate other layers' sections themselves.
+- **hypothesis:** the first-dispatched layer's file name is the one later layers reuse, so a later layer's FAIL lands in an earlier layer's file.
