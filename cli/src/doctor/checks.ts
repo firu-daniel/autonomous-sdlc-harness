@@ -2586,6 +2586,8 @@ function prApprovalSettingOf(stdout: string): boolean | undefined {
  *   label by the effective trigger name, or the pull-request setting off with no `HARNESS_GIT_TOKEN`
  *   secret; and any call that timed out, could not reach GitHub, or answered in a shape not
  *   understood — *cannot tell* is not *missing*, so it never fails.
+ * - the pull-request setting off while the secret list was unreadable is a *cannot tell* warning,
+ *   never the missing-`HARNESS_GIT_TOKEN` one.
  * - the effective trigger label is `HARNESS_TRIGGER_LABEL`, else the fallback the committed
  *   `harness-trigger.yml` carries ({@link triggerFallbackLabel}), else {@link DEFAULT_TRIGGER_LABEL};
  *   a fallback of {@link LEGACY_TRIGGER_LABEL} is a note, since it still starts runs.
@@ -2770,6 +2772,8 @@ const REMOTE_GITHUB_CHECK: Check = {
         const allowed = prApprovalSettingOf(prSetting.answer.stdout);
         if (allowed === undefined) {
           warnings.push(`cannot tell whether a run's own token may open its pull request: ${prSetting.call} answered in a shape this check does not read`);
+        } else if (!allowed && secretNames === undefined) {
+          warnings.push(`${PR_CREATE_SETTING} is off, and whether ${GIT_TOKEN_SECRET} is set could not be read, so a completed run may not be able to open its draft pull request: turn the setting on under ${PR_CREATE_SETTING_PATH}, or confirm ${GIT_TOKEN_SECRET} is a repository secret`);
         } else if (!allowed && secretNames?.has(GIT_TOKEN_SECRET) === true) {
           notes.push(`${PR_CREATE_SETTING} is off, so a completed run opens its draft pull request with ${GIT_TOKEN_SECRET}`);
         } else if (!allowed) {

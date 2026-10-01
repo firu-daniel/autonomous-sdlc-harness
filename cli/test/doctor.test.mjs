@@ -6094,6 +6094,20 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(line.includes('`gh secret set HARNESS_GIT_TOKEN`'), line);
   });
 
+  await t.test('with the trigger on, the pull-request setting off and an unreadable secret list is cannot tell', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { secrets: { err: 'HTTP 403: Resource not accessible by integration\n', status: 1 } });
+    answerTriggerGh(stub, { prSetting: { out: JSON.stringify({ can_approve_pull_request_reviews: false }) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-github');
+    assert.ok(line?.includes('whether HARNESS_GIT_TOKEN is set could not be read'), `${stdout}\n${stderr}`);
+    assert.ok(!line.includes('HARNESS_GIT_TOKEN is not a repository secret'), line);
+  });
+
   await t.test('with the trigger on, the pull-request setting off and HARNESS_GIT_TOKEN set is a note', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
