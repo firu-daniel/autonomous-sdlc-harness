@@ -27,6 +27,8 @@
 #   remote-run.sh trigger [--repo <root>]   (its own exit map: its paragraph)
 #   remote-run.sh list [--repo <root>]
 #   remote-run.sh discard <dir> [--repo <root>]
+#   remote-run.sh report <event> <branch> [--note <text>] [--repo <root>]
+#                 (always 0, 1 only on a usage error: its paragraph)
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status and fetch: printed
@@ -226,6 +228,28 @@
 #        (an `::error::` line; issues only), or `start` pushed the branch but
 #        its dispatch failed (commented with the manual Run-workflow way on)
 #     4  `start` refused or failed its placement (commented)
+#
+# `report` TURNS A LIFECYCLE EVENT INTO ONE COMMENT AND ONE STATE LABEL, through
+# the forge surface (its section states the functions). Job-side for its root,
+# as `trigger` is, and outside the sending-verb gate: it does nothing, with one
+# line, unless `hr_forge` is `github` and `hr_execution_target` is
+# `github-actions`. The comment goes to the open same-repository pull request
+# whose head is <branch> when origin's <branch> carries
+# `<state_dir>/flow_progress/<branch>_progress.md`, else to the issue named by
+# the last `Started from <server>/<repo>/issues/<n> by @` line of its committed
+# task prompt, else nowhere. The label `STATE_LABEL_PREFIX<state>` replaces any
+# other state label on that issue and that pull request, each when known; the
+# label is a view, and the run list stays the authority. The state map:
+# `parked` and `park_loop` -> parked, `paused` -> paused, `resumed` -> running,
+# `failed` -> failed, `stopped` -> stopped. `failed` posts nothing when
+# `remote_branch_stopped` finds the branch stopped, so a cancelled job never
+# overwrites `stopped`. `completed` (deliver's) and `launched` (the trigger's
+# own comment) are one line each, as is any other event. The comment names the
+# next GitHub action — never a slash command — then <note> byte for byte, then
+# this run's URL when `GITHUB_RUN_ID` is set, then the marker line
+# `<!-- sdlc-harness event=<event> branch=<branch> -->`. The pause reason and
+# reset come from the registry record, read only when the registry file exists.
+# It never fails its caller: every problem is one line and exit 0.
 #
 # `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
 # its job, before and (under `always()`) after the harness step. Without
@@ -513,7 +537,9 @@
 # when the main checkout's registry file exists and holds a record with
 # `execution: github-actions`; any other `dispatch` writes nothing. `trigger` writes its snapshot and comment
 # files under `RUNNER_TEMP`, one comment on the issue and the label removal, or
-# for a dispatch event a block in the step summary. Every other verb's only writes are the
+# for a dispatch event a block in the step summary. `report` writes its comment
+# file under `RUNNER_TEMP` (removed), one comment and the state labels on the
+# issue and the pull request, and nothing local. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
 # `<branch>.remote.log` in the main checkout, plus the mirror restore
@@ -728,6 +754,16 @@
 #              "client_payload":{"title":"Add tags","body":"x","source":"jira"}}
 #              -> 0; `workflow run ... --ref add_tags ...`, /tmp/s names
 #              add_tags, no `issue` call; without "title" -> 2, no `workflow run`
+#
+#   report needs trigger's setup, a branch feat_x pushed carrying its task
+#   prompt (ending in a `Started from https://github.com/o/r/issues/7 by @alice`
+#   line) and `flow_progress/feat_x_progress.md`, and a stub answering `pr
+#   list` and `api repos/o/r/issues/7/labels` with []; GITHUB_REPOSITORY=o/r:
+#   paused     bash scripts/remote-run.sh report paused feat_x -> 0; "$s.log"
+#              gains `api --method POST repos/o/r/issues/7/comments -F body=@…`
+#              naming `@sdlc-harness resume`, then `api --method POST
+#              repos/o/r/issues/7/labels -f labels[]=sdlc-harness: paused`
+#   forge off  `"forge": "none"`, then the same -> 0, one line, "$s.log" unchanged
 
 set -u
 
@@ -812,6 +848,7 @@ usage() {
   echo "       remote-run.sh trigger [--repo <root>]" >&2
   echo "       remote-run.sh list [--repo <root>]" >&2
   echo "       remote-run.sh discard <dir> [--repo <root>]" >&2
+  echo "       remote-run.sh report <event> <branch> [--note <text>] [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -862,7 +899,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard) ;;
+  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard|report) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -884,6 +921,8 @@ prompt_file=""
 review_file=""
 discard_dir=""
 discard_base=""
+report_event=""
+report_note=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -915,6 +954,10 @@ while [ "$#" -gt 0 ]; do
       [ "$verb" = review ] || usage "$1 is a review option"
       [ "$#" -ge 2 ] && [ -n "$2" ] || usage "$1 needs a value"
       review_file="$2"; shift 2 ;;
+    --note)
+      [ "$verb" = report ] || usage "$1 is a report option"
+      [ "$#" -ge 2 ] || usage "$1 needs a value"
+      report_note="$2"; shift 2 ;;
     -*)
       usage "unknown option '$1'" ;;
     *)
@@ -926,6 +969,8 @@ while [ "$#" -gt 0 ]; do
       elif [ "$verb" = discard ]; then
         [ -z "$discard_dir" ] || usage "unexpected argument '$1'"
         discard_dir="$1"
+      elif [ "$verb" = report ] && [ -z "$report_event" ]; then
+        report_event="$1"
       elif [ -z "$branch" ]; then
         branch="$1"
       elif [ "$verb" = pause-requested ] && [ -z "$since_arg" ]; then
@@ -948,6 +993,11 @@ fi
 
 if [ "$verb" = discard ] && [ -z "$discard_dir" ]; then
   usage "discard needs a <dir>"
+fi
+
+# The event lands in the comment marker, so it is a word.
+if [ "$verb" = report ] && ! [[ "$report_event" =~ ^[a-z][a-z_]*$ ]]; then
+  usage "report needs an <event> of lowercase letters and underscores"
 fi
 
 if [ "$verb" = pause-requested ]; then
@@ -1023,10 +1073,11 @@ fi
 # The repository and its configuration.
 # ---------------------------------------------------------------------------
 
-# setup_fail <message> — a configuration problem: exit 1, except for save.
+# setup_fail <message> — a configuration problem: exit 1, except for save and
+# report, which never fail the step that calls them.
 setup_fail() {
   echo "remote-run.sh: $1" >&2
-  [ "$verb" != save ] || exit "$EXIT_OK"
+  [ "$verb" != save ] && [ "$verb" != report ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
 
@@ -1034,7 +1085,7 @@ if [ -n "$repo_arg" ]; then
   root=$(hr_repo_root "$repo_arg") || setup_fail "'$repo_arg' is not a git repository"
 elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ] \
   || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ] || [ "$verb" = trigger ] \
-  || [ "$verb" = discard ]; then
+  || [ "$verb" = discard ] || [ "$verb" = report ]; then
   root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
@@ -1052,6 +1103,9 @@ case "$verb" in
     ;;
   trigger)
     # Gates itself, after reading the event, so a refusal can still be commented.
+    ;;
+  report)
+    # Gates itself (`forge_on`) and exits 0 on every outcome.
     ;;
   status|sync)
     registry=$(hr_state_path "$root" autonomous_logs/registry.json) || {
@@ -2994,6 +3048,326 @@ The task is the dispatch's \`client_payload\` title and body. Sending the same d
 }
 
 # ---------------------------------------------------------------------------
+# THE FORGE SURFACE — the one place this script reads or writes an issue or a
+# pull request for a run. Every function sets globals rather than printing,
+# never exits, and reports a failure as one `remote-run.sh: …` line on stderr.
+#
+# THE TARGET RULE. A comment goes to the open same-repository pull request
+# whose head is the branch when `forge_recognised` holds for that branch, else
+# to the issue the run was started from (`FORGE_ISSUE`), else nowhere. The
+# state label goes on that issue and on that pull request, each when known.
+#
+# THE LABEL IS A VIEW, NEVER AN AUTHORITY. The run list is the authority
+# (`remote_state`); the harness overwrites any state label set by hand, and
+# nothing reads one back to decide anything.
+# ---------------------------------------------------------------------------
+
+# forge_on — 0 when `forge` is `github` and `execution.target` is
+# `github-actions`; the shell mirror of `forgeTriggerApplies`.
+forge_on() {
+  [ "$(hr_forge "$root" 2>/dev/null)" = github ] \
+    && [ "$(hr_execution_target "$root" 2>/dev/null)" = github-actions ]
+}
+
+# forge_repo_var — FORGE_REPO (owner/name) and FORGE_SERVER, from the runner's
+# environment when it names the repository, else one `gh repo view`; a success
+# is kept for the invocation.
+FORGE_REPO=""
+FORGE_SERVER=""
+FORGE_REPO_KNOWN=0
+forge_repo_var() {
+  local repo
+  [ "$FORGE_REPO_KNOWN" -eq 0 ] || return 0
+  if [ -n "${GITHUB_REPOSITORY-}" ]; then
+    repo="$GITHUB_REPOSITORY"
+  else
+    if ! gh_call repo view --json nameWithOwner; then
+      echo "remote-run.sh: reading the repository's name failed: $GH_ERR" >&2
+      return 1
+    fi
+    repo=$(printf '%s' "$GH_OUT" | jq -r '.nameWithOwner // empty' 2>/dev/null) || repo=""
+  fi
+  # Interpolated into every API path below, so its shape is checked once here.
+  if ! [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+    GH_ERR="the repository name '$repo' is not owner/name"
+    echo "remote-run.sh: reading the repository's name failed: $GH_ERR" >&2
+    return 1
+  fi
+  FORGE_REPO="$repo"
+  FORGE_SERVER="${GITHUB_SERVER_URL:-https://github.com}"
+  FORGE_SERVER="${FORGE_SERVER%/}"
+  FORGE_REPO_KNOWN=1
+}
+
+# forge_fetch_branch <branch> — update refs/remotes/origin/<branch>, at most
+# once per branch per invocation. The refspec is explicit because a single-branch
+# checkout's bare `fetch origin <branch>` updates only FETCH_HEAD. A failure is
+# one line and tolerated.
+FORGE_FETCHED=" "
+forge_fetch_branch() {
+  local err
+  case "$FORGE_FETCHED" in *" $1 "*) return 0 ;; esac
+  FORGE_FETCHED="$FORGE_FETCHED$1 "
+  if ! err=$(git -C "$root" fetch --quiet origin "+refs/heads/$1:refs/remotes/origin/$1" 2>&1 >/dev/null); then
+    echo "remote-run.sh: fetching origin $1 failed: ${err%%$'\n'*}" >&2
+  fi
+  return 0
+}
+
+# forge_marker <event> <branch> [<question>] — the one producer of a comment's
+# marker line, built from COMMENT_MARKER.
+forge_marker() {
+  if [ -n "${3-}" ]; then
+    printf '%s event=%s branch=%s question=%s -->\n' "$COMMENT_MARKER" "$1" "$2" "$3"
+  else
+    printf '%s event=%s branch=%s -->\n' "$COMMENT_MARKER" "$1" "$2"
+  fi
+}
+
+# forge_issue_var <branch> — FORGE_ISSUE from the last provenance line
+# `verb_trigger` writes into the branch's committed task prompt, matched against
+# this repository's own issue URL only; empty when there is none.
+FORGE_ISSUE=""
+forge_issue_var() {
+  local state_rel rel prompt line rest num prefix
+  FORGE_ISSUE=""
+  state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
+  if [ -z "$state_rel" ]; then
+    echo "remote-run.sh: cannot resolve the state directory under '$root'" >&2
+    return 1
+  fi
+  rel=$(hr_task_prompt_rel "$state_rel" "$1")
+  prompt=$(git -C "$root" show "refs/remotes/origin/$1:$rel" 2>/dev/null) || return 0
+  prefix="Started from $FORGE_SERVER/$FORGE_REPO/issues/"
+  while IFS= read -r line; do
+    case "$line" in
+      "$prefix"*) ;;
+      *) continue ;;
+    esac
+    rest=${line#"$prefix"}
+    num=${rest%%[!0-9]*}
+    [ -n "$num" ] || continue
+    case "${rest#"$num"}" in
+      ' by @'*) FORGE_ISSUE="$num" ;;
+    esac
+  done <<<"$prompt"
+  return 0
+}
+
+# forge_recognised <branch> — the harness-branch test, read from committed
+# state: 0 when origin's copy of the branch carries its flow-progress ledger.
+forge_recognised() {
+  local state_rel
+  state_rel=$(hr_state_dir "$root" 2>/dev/null) || return 1
+  [ -n "$state_rel" ] || return 1
+  git -C "$root" cat-file -e "refs/remotes/origin/$1:${state_rel%/}/flow_progress/$1_progress.md" 2>/dev/null
+}
+
+# forge_pr_var <branch> — FORGE_PR, the open pull request whose head is
+# <branch> in this repository (a fork's same-named head is skipped), or empty.
+FORGE_PR=""
+forge_pr_var() {
+  FORGE_PR=""
+  if ! gh_call pr list --repo "$FORGE_REPO" --head "$1" --state open --json number,isCrossRepository --limit 10; then
+    echo "remote-run.sh: listing the open pull requests of $1 failed: $GH_ERR" >&2
+    return 1
+  fi
+  if ! FORGE_PR=$(printf '%s' "$GH_OUT" | jq -r \
+    'if type == "array" then [.[] | select(.isCrossRepository == false) | .number | numbers] | first // empty else error end' 2>/dev/null); then
+    FORGE_PR=""
+    GH_ERR="its pr list is not the expected JSON"
+    echo "remote-run.sh: listing the open pull requests of $1 failed: $GH_ERR" >&2
+    return 1
+  fi
+  return 0
+}
+
+# forge_comment <number> <event> <branch> <body_file> [<question>] — append the
+# marker to <body_file> and post it on issue or pull request <number>.
+forge_comment() {
+  local number="$1" event="$2" branch="$3" file="$4" question="${5-}" status
+  if ! { printf '\n'; forge_marker "$event" "$branch" "$question"; } >>"$file"; then
+    echo "remote-run.sh: cannot append the marker to '$file'" >&2
+    return 1
+  fi
+  gh_call api --method POST "repos/$FORGE_REPO/issues/$number/comments" -F "body=@$file"
+  status=$?
+  [ "$status" -eq 0 ] || echo "remote-run.sh: the $event comment on #$number could not be posted: $GH_ERR" >&2
+  return "$status"
+}
+
+# forge_set_state <number> <state> — leave `STATE_LABEL_PREFIX<state>` as the
+# one state label on <number>. A failed add creates the label and retries once,
+# never more.
+forge_set_state() {
+  local number="$1" state="$2" label names name encoded color try
+  case " $RUN_STATES " in
+    *" $state "*) ;;
+    *) echo "remote-run.sh: '$state' is not one of: $RUN_STATES" >&2; return 1 ;;
+  esac
+  label="$STATE_LABEL_PREFIX$state"
+  if ! gh_call api "repos/$FORGE_REPO/issues/$number/labels"; then
+    echo "remote-run.sh: reading the labels of #$number failed: $GH_ERR" >&2
+    return 1
+  fi
+  if ! names=$(printf '%s' "$GH_OUT" | jq -r --arg p "$STATE_LABEL_PREFIX" --arg t "$label" \
+    'if type == "array" then .[] | .name | strings | select(startswith($p) and . != $t) else error end' 2>/dev/null); then
+    GH_ERR="its label list is not the expected JSON"
+    echo "remote-run.sh: reading the labels of #$number failed: $GH_ERR" >&2
+    return 1
+  fi
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    encoded=$(jq -rn --arg s "$name" '$s|@uri')
+    gh_call api --method DELETE "repos/$FORGE_REPO/issues/$number/labels/$encoded" \
+      || echo "remote-run.sh: removing the label '$name' from #$number failed: $GH_ERR" >&2
+  done <<<"$names"
+  for try in 1 2; do
+    gh_call api --method POST "repos/$FORGE_REPO/issues/$number/labels" -f "labels[]=$label" && return 0
+    if [ "$try" -eq 2 ]; then
+      echo "remote-run.sh: adding the label '$label' to #$number failed: $GH_ERR" >&2
+      return 1
+    fi
+    case "$state" in
+      running) color=1d76db ;;
+      parked) color=fbca04 ;;
+      paused) color=c5def5 ;;
+      done) color=0e8a16 ;;
+      failed) color=b60205 ;;
+      *) color=6a737d ;;
+    esac
+    gh_call api --method POST "repos/$FORGE_REPO/labels" -f "name=$label" -f "color=$color" \
+      -f "description=Set by the harness from its run list; a hand-applied state label is overwritten." \
+      || echo "remote-run.sh: creating the label '$label' failed: $GH_ERR" >&2
+  done
+}
+
+# forge_utc <epoch> — print <epoch> as a UTC time, or nothing. `date -r` takes an
+# epoch on BSD and a reference file on GNU, hence the `-d @` fallback.
+forge_utc() {
+  local out
+  case "${1-}" in ''|*[!0-9]*) return 0 ;; esac
+  out=$(date -u -r "$1" '+%Y-%m-%d %H:%M UTC' 2>/dev/null) || out=""
+  [ -n "$out" ] || out=$(date -u -d "@$1" '+%Y-%m-%d %H:%M UTC' 2>/dev/null) || out=""
+  printf '%s' "$out"
+}
+
+# forge_report <event> <branch> [<note>] — one lifecycle comment and the state
+# label, by the target rule above. Always 0.
+forge_report() {
+  local event="$1" br="$2" note="${3-}" state reason="" resume_at="" when registry_file
+  local target kind text tmp made_tmp="" file trigger_label stopped
+  case "$event" in
+    parked|park_loop) state=parked ;;
+    paused) state=paused ;;
+    resumed) state=running ;;
+    failed) state=failed ;;
+    stopped) state=stopped ;;
+    completed)
+      echo "remote-run.sh: report: completed is posted by deliver; nothing posted"
+      return 0 ;;
+    launched)
+      echo "remote-run.sh: report: launched is the trigger's own comment; nothing posted"
+      return 0 ;;
+    *)
+      echo "remote-run.sh: report: '$event' is not a reported event; nothing posted"
+      return 0 ;;
+  esac
+  if ! forge_on; then
+    echo "remote-run.sh: report: the forge coupling is off (forge github and execution.target github-actions); nothing posted"
+    return 0
+  fi
+  forge_repo_var || return 0
+
+  if [ "$event" = failed ]; then
+    remote_branch_stopped "$br"
+    stopped=$?
+    if [ "$stopped" -eq 0 ]; then
+      echo "remote-run.sh: report: $br was stopped, and the stop already reported the run; nothing posted"
+      return 0
+    fi
+    [ "$stopped" -eq 1 ] \
+      || echo "remote-run.sh: report: whether $br was stopped is unknown ($GH_ERR); reporting the failure" >&2
+  fi
+
+  forge_fetch_branch "$br"
+  forge_issue_var "$br" || FORGE_ISSUE=""
+  forge_pr_var "$br" || FORGE_PR=""
+  if [ -n "$FORGE_PR" ] && ! forge_recognised "$br"; then
+    echo "remote-run.sh: report: pull request #$FORGE_PR's head carries no flow-progress ledger; it is not a target"
+    FORGE_PR=""
+  fi
+  if [ -n "$FORGE_PR" ]; then
+    target="$FORGE_PR"; kind=pr
+  elif [ -n "$FORGE_ISSUE" ]; then
+    target="$FORGE_ISSUE"; kind=issue
+  else
+    echo "remote-run.sh: report: $br has no open pull request and no issue it was started from; nothing posted"
+    return 0
+  fi
+
+  # Tested with -f first: hr_registry_get creates an absent registry.
+  registry_file=$(hr_state_path "$root" autonomous_logs/registry.json 2>/dev/null) || registry_file=""
+  if [ -n "$registry_file" ] && [ -f "$registry_file" ]; then
+    reason=$(hr_registry_get "$registry_file" "$br" pause_reason)
+    resume_at=$(hr_registry_get "$registry_file" "$br" usage_resume_at)
+  fi
+
+  case "$event" in
+    paused)
+      if [ "$reason" = usage ]; then
+        when=$(forge_utc "$resume_at")
+        text="The harness run on \`$br\` paused: it reached its usage limit. It resumes by itself after the limit resets${when:+, at $when}."
+      else
+        text="The harness run on \`$br\` paused${reason:+ (reason: \`$reason\`)}. Comment \`${COMMAND_HANDLE} resume\` to continue."
+      fi ;;
+    park_loop)
+      text="The harness run on \`$br\` is on hold: it parked on its questions again and again without progress. Comment \`${COMMAND_HANDLE} clear\` to clear the hold and let it continue." ;;
+    parked)
+      text="The harness run on \`$br\` is waiting for an answer. Its questions are in the run's \`$STATE_ARTIFACT_NAME\` artifact." ;;
+    resumed)
+      text="The harness run on \`$br\` resumed." ;;
+    failed)
+      if [ "$kind" = pr ]; then
+        text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, submit a review on this pull request requesting changes."
+      else
+        trigger_label="${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}"
+        text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, re-apply the label \`$trigger_label\` to this issue; that starts a new run, on the next indexed branch."
+      fi ;;
+    stopped)
+      text="The harness run on \`$br\` was stopped. Nothing runs on it until a new review or label starts another round or run." ;;
+  esac
+
+  tmp="${RUNNER_TEMP-}"
+  if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
+    tmp=$(mktemp -d) || tmp=""
+    made_tmp="$tmp"
+  fi
+  if [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-report-comment.XXXXXX"); then
+    {
+      printf '%s\n' "$text"
+      [ -z "$note" ] || printf '\n%s\n' "$note"
+      [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
+    } >"$file"
+    forge_comment "$target" "$event" "$br" "$file" || :
+    rm -f "$file"
+  else
+    echo "remote-run.sh: report: cannot create the comment file for #$target; no comment posted" >&2
+  fi
+  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+
+  [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" "$state" || :
+  [ -z "$FORGE_PR" ] || forge_set_state "$FORGE_PR" "$state" || :
+  echo "remote-run.sh: report: $event on $br reported on #$target"
+  return 0
+}
+
+verb_report() {
+  forge_report "$report_event" "$branch" "$report_note"
+  exit "$EXIT_OK"
+}
+
+# ---------------------------------------------------------------------------
 # `discard` — remove a directory a command fetched into, inside scratch only.
 # ---------------------------------------------------------------------------
 
@@ -3071,5 +3445,6 @@ case "$verb" in
   trigger) verb_trigger ;;
   list) verb_list ;;
   discard) verb_discard ;;
+  report) verb_report ;;
 esac
 exit "$EXIT_OK"

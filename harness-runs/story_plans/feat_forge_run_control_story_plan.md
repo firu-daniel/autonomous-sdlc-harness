@@ -36,7 +36,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control/task_
 
 1. [x] **Task 1** — Declare the run-control names and their shell mirrors _(layer: cli)_ _(points: 10)_
 2. [x] **Task 2** — Make `sdlc-harness` the default trigger label, keeping `harness` working until a re-render _(layer: cli)_ _(points: 15)_
-3. [ ] **Task 3** — Add the forge-surface helpers and `remote-run.sh report` for lifecycle comments and state labels _(layer: cli)_ _(points: 20)_
+3. [x] **Task 3** — Add the forge-surface helpers and `remote-run.sh report` for lifecycle comments and state labels _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Post a park's question files as comments from `report parked` _(layer: cli)_ _(points: 10)_
 5. [ ] **Task 5** — Mark the trigger's comments, set the first state label, and share the actor check _(layer: cli)_ _(points: 10)_
 6. [ ] **Task 6** — Add `remote-run.sh deliver`: the draft pull request and the `completed` report _(layer: cli)_ _(points: 20)_

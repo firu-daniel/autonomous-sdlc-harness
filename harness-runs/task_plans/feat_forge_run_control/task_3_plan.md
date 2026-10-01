@@ -76,3 +76,9 @@ Every function sets globals rather than printing, so a caller can keep its own e
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n -e '--method POST' -e '--method DELETE' -- cli/templates/scripts/remote-run.sh` has every code hit inside `forge_comment` and `forge_set_state`: no other function writes a comment or a label.
 - `git grep -n -F '<!-- sdlc-harness' -- cli/templates/scripts/remote-run.sh` has its only code hit in the `COMMENT_MARKER=` assignment: the marker has one producer.
+
+**Deviations from plan:**
+
+- A pull request whose head fails `forge_recognised` is dropped as a target for the label as well as the comment (`forge_report` clears `FORGE_PR`), reading "that pull request" in the target rule as the recognised one; the suite asserts no label on 12 in that case.
+- `report`'s `<event>` is checked against `^[a-z][a-z_]*$` (usage error, exit 1), because it is interpolated into the marker line; and `setup_fail` exits 0 for `report` as it does for `save`, so an unresolvable root or configuration never fails the calling step.
+- Evidence downgrade: `bash -n cli/templates/scripts/remote-run.sh` was refused by the session's permission layer (twice). The syntax claim rests instead on `test/remote-report.test.mjs` executing the script through to its final `case "$verb"` dispatch in all 14 cases (pass), which bash cannot do with a parse error in the file.
