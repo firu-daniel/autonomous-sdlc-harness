@@ -37,3 +37,5 @@
 - `git grep -n "machine account" -- docs/remote-execution.md` hits the `HARNESS_GIT_TOKEN` row of `### Every secret and variable`.
 - `git grep -n "pull_request_target" -- docs/remote-execution.md` has its hits only in the new fork paragraph.
 - `git grep -n "harness-control.yml" -- docs/remote-execution.md` has hits in `## 7.` step 2, `### Every secret and variable`, `### Upgrading` and `## 11.`
+
+**Deviations from plan:** The optional step added after step 5 is numbered `5a` rather than `6`, so steps 6 and 7 and any citation of them keep their numbers.

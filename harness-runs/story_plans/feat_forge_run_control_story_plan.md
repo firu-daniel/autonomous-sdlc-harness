@@ -61,7 +61,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control/task_
 25. [x] **Task 25** — Document security, both sides, what is not verified, and the GitHub entry point _(layer: general)_ _(points: 20)_
 26. [x] **Task 26** — Bring `docs/github-issue-trigger.md` level with the new label and run control _(layer: general)_ _(points: 15)_
 27. [x] **Task 27** — Bring `docs/remote-execution.md` §1, §3 and §5 level with run control _(layer: general)_ _(points: 15)_
-28. [ ] **Task 28** — Bring `docs/remote-execution.md` §7 and §11 level with run control _(layer: general)_ _(points: 12)_
+28. [x] **Task 28** — Bring `docs/remote-execution.md` §7 and §11 level with run control _(layer: general)_ _(points: 12)_
 29. [ ] **Task 29** — Document the new verbs, the control workflow and the doctor checks in `docs/cli.md` and `docs/watcher.md` _(layer: general)_ _(points: 12)_
 30. [ ] **Task 30** — Open `README.md` and `llms.txt` with both entry points _(layer: general)_ _(points: 15)_
 31. [ ] **Task 31** — Close the forge debt in `ROADMAP.md` and `docs/development.md`, and add Gate 12 observation (xiv) _(layer: general)_ _(points: 15)_
