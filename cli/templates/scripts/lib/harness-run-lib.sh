@@ -1442,8 +1442,10 @@ hr_remote_record_init() {
 #   limit and readable in the Actions run list. GitHub documents no ref limit.
 #
 # THIS SECTION ONLY READS. It fetches nothing and creates no branch or file; a
-# caller that wants `origin` fresh fetches first. A registry is read only when
-# it already exists, because `hr_registry_get` creates an absent one.
+# caller that wants `origin` fresh fetches first. Given a <gh_cli>, it also asks
+# GitHub one read per candidate — the run workflow's runs under that name — and
+# still writes nothing. A registry is read only when it already exists, because
+# `hr_registry_get` creates an absent one.
 # ---------------------------------------------------------------------------
 
 # The two limits the rule above names.
@@ -1525,11 +1527,37 @@ EOF
   return 0
 }
 
-# Judge <name> against the listings `hr_branch_taken_lists_var` last read. The
-# answers and `HR_TAKEN_WHY` are `hr_branch_name_taken`'s.
+# hr_branch_run_history <root> <gh_cli> <name> — 0 when the run workflow
+# (`HR_REMOTE_WORKFLOW_RUN_FILE`) lists a run under <name>, 1 when it lists
+# none, 2 when <gh_cli> cannot run, exits non-zero, or answers anything but a
+# JSON array. Sets no `HR_` variable: the names are assigned inside the
+# subshell that `cd`s to <root>.
+#
+# GitHub keeps a deleted branch's runs listed under its name, and a later run
+# of that name inherits them: Gate 12 round 5 found run `36569531374` of the
+# deleted `feat_invoices` (`docs/development.md` → Gate 12 → Round 5, finding
+# 1). One bounded read per candidate, not one listing of every branch, because
+# a bounded all-branch listing could miss an old name. Bash 3.2 and jq 1.5.
+hr_branch_run_history() {
+  local root="${1-}" gh_cli="${2-}" name="${3-}" answer verdict
+  [ -n "$root" ] && [ -n "$gh_cli" ] && [ -n "$name" ] || return 2
+  answer=$(cd "$root" 2>/dev/null && hr_remote_names_var &&
+    "$gh_cli" run list --workflow "$HR_REMOTE_WORKFLOW_RUN_FILE" --branch "$name" --limit 1 --json databaseId 2>/dev/null) || return 2
+  verdict=$(printf '%s' "$answer" | jq -r 'if type == "array" then (if length > 0 then "history" else "none" end) else "other" end' 2>/dev/null) || return 2
+  case "$verdict" in
+    history) return 0 ;;
+    none) return 1 ;;
+  esac
+  return 2
+}
+
+# Judge <name> against the listings `hr_branch_taken_lists_var` last read, then,
+# given a <gh_cli>, against the run workflow's history — last, so the free local
+# checks answer first. The answers and `HR_TAKEN_WHY` are
+# `hr_branch_name_taken`'s.
 hr_branch_taken_judge() {
   local LC_ALL=C
-  local root="${1-}" name="${2-}" registry="${3-}" lower status nl
+  local root="${1-}" name="${2-}" registry="${3-}" gh_cli="${4-}" lower status nl
   nl='
 '
   HR_TAKEN_WHY=""
@@ -1557,18 +1585,29 @@ hr_branch_taken_judge() {
     HR_TAKEN_WHY="a run registry record"
     return 0
   fi
+  if [ -n "$gh_cli" ]; then
+    status=0
+    hr_branch_run_history "$root" "$gh_cli" "$name" || status=$?
+    case "$status" in
+      0) HR_TAKEN_WHY="a run of the run workflow listed under that name"; return 0 ;;
+      1) ;;
+      *) HR_TAKEN_WHY="the run history of $name could not be listed"; return 2 ;;
+    esac
+  fi
   return 1
 }
 
-# hr_branch_name_taken <root> <name> [<registry>] — 0 taken, 1 free, 2 cannot
-# tell. Sets `HR_TAKEN_WHY` to a short phrase naming the collision or the
-# failure. Taken: a protected name; a branch on `origin`, compared
-# case-insensitively; a local branch; under `<state_dir>` on
-# `origin/<defaultBranch>`, a directory named <name> or a file
-# `<name>_task_prompt.md`, `<name>_story_plan.md` or `<name>_docs.md` — which a
-# merged and deleted branch still leaves; a record in an existing <registry>.
+# hr_branch_name_taken <root> <name> [<registry>] [<gh_cli>] — 0 taken, 1 free,
+# 2 cannot tell. Sets `HR_TAKEN_WHY` to a short phrase naming the collision or
+# the failure. A caller with no registry passes `""` before <gh_cli>. Taken: a
+# protected name; a branch on `origin`, compared case-insensitively; a local
+# branch; under `<state_dir>` on `origin/<defaultBranch>`, a directory named
+# <name> or a file `<name>_task_prompt.md`, `<name>_story_plan.md` or
+# `<name>_docs.md` — which a merged and deleted branch still leaves; a record in
+# an existing <registry>; given a <gh_cli>, any run of the run workflow listed
+# under <name> (`hr_branch_run_history`), whose listing failing is a 2.
 hr_branch_name_taken() {
-  local root="${1-}" name="${2-}" registry="${3-}"
+  local root="${1-}" name="${2-}" registry="${3-}" gh_cli="${4-}"
   HR_TAKEN_WHY=""
   if [ -z "$root" ] || [ -z "$name" ]; then
     HR_TAKEN_WHY="no branch name to judge"
@@ -1576,20 +1615,21 @@ hr_branch_name_taken() {
   fi
   hr_config_load "$root" || :
   hr_branch_taken_lists_var "$root" || return 2
-  hr_branch_taken_judge "$root" "$name" "$registry"
+  hr_branch_taken_judge "$root" "$name" "$registry" "$gh_cli"
 }
 
-# hr_derive_branch <root> <text> <fallback> [<registry>] — print the derived name
-# and return 0; return 2, printing nothing, when a `taken` judgement could not
-# tell or no base routes back to itself; return 3, printing nothing, when every
-# suffix through `HR_BRANCH_SUFFIX_MAX` is taken. Never a guessed name.
+# hr_derive_branch <root> <text> <fallback> [<registry>] [<gh_cli>] — print the
+# derived name and return 0; return 2, printing nothing, when a `taken`
+# judgement could not tell or no base routes back to itself; return 3, printing
+# nothing, when every suffix through `HR_BRANCH_SUFFIX_MAX` is taken. Never a
+# guessed name. <gh_cli> reaches every judgement as `hr_branch_name_taken`'s.
 #
 # THE BASE MUST ROUTE BACK TO ITSELF: `hr_inbox_route_var` on each drop filename
 # a run of that name produces has to give the base as its branch, so no derived
 # name makes the inbox patterns ambiguous. A base that does not is replaced by
 # <fallback> once.
 hr_derive_branch() {
-  local root="${1-}" text="${2-}" fallback="${3-}" registry="${4-}"
+  local root="${1-}" text="${2-}" fallback="${3-}" registry="${4-}" gh_cli="${5-}"
   local base="" candidate suffix routes n status
   hr_branch_limits_var
   candidate=$(hr_branch_slug "$text") || candidate="$fallback"
@@ -1615,7 +1655,7 @@ hr_derive_branch() {
   n=1
   while :; do
     status=0
-    hr_branch_taken_judge "$root" "$candidate" "$registry" || status=$?
+    hr_branch_taken_judge "$root" "$candidate" "$registry" "$gh_cli" || status=$?
     case "$status" in
       1) printf '%s\n' "$candidate"; return 0 ;;
       2) return 2 ;;
