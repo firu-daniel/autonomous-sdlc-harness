@@ -596,9 +596,10 @@ hr_config_load() {
   # which is what lets an explicitly EMPTY list read as a configured set rather
   # than as an absent one.
   #
-  # A `phases.*` value that is not a boolean is emitted as `invalid`, so the
-  # string `"true"` — which `tostring` would otherwise make indistinguishable
-  # from `true` — reaches `hr_phase_enabled` as a value it refuses (2).
+  # A `phases.*` or `docs.retrieval` value that is not a boolean is emitted as
+  # `invalid`, so the string `"true"` — which `tostring` would otherwise make
+  # indistinguishable from `true` — reaches `hr_phase_enabled` or
+  # `hr_docs_retrieval_applies` as a value it refuses (2).
   out=$(jq -n -r '
     def s($k; $v):
       if $v == null then empty
@@ -633,6 +634,8 @@ hr_config_load() {
       s("phases.qa";             try (.phases.qa     | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("phases.docs";           try (.phases.docs   | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("execution.target";      try .execution.target     catch null),
+      s("docs.retrievalBackend"; try .docs.retrievalBackend catch null),
+      s("docs.retrieval";        try (.docs.retrieval | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("forge";                 try .forge                catch null),
       s("protectedBranches.present";
         try (if (.protectedBranches | type) == "array" then "1" else null end) catch null),
@@ -913,6 +916,53 @@ hr_forge() {
   hr_cfg_scalar_var "forge" || return 1
   case "$HR_CFG_VALUE" in
     github|gitlab|none)
+      printf '%s\n' "$HR_CFG_VALUE"
+      return 0
+      ;;
+  esac
+  return 2
+}
+
+# Whether the docs phase's retrieval step runs: `phases.docs` and
+# `docs.retrieval` both `true`. The shell mirror of `cli/src/config/model.ts` →
+# `retrievalApplies`: change the predicate there and here together. PRINTS
+# NOTHING: the answer is the status, as `hr_phase_enabled`'s is. 0 = both
+# `true`; 1 = either `false` or unset; 2 = the configuration is unresolvable or
+# either value is not a boolean — refused rather than guessed about.
+hr_docs_retrieval_applies() {
+  local root="${1-}" status
+  hr_phase_enabled "$root" docs
+  status=$?
+  [ "$status" -eq 0 ] || return "$status"
+  hr_cfg_scalar_var "docs.retrieval" || return 1
+  case "$HR_CFG_VALUE" in
+    true) return 0 ;;
+    false) return 1 ;;
+  esac
+  return 2
+}
+
+# `docs.retrievalBackend` — which runtime the docs-retrieval index uses:
+# `typescript` or `python`. THE ONE READER OF THE KEY IN THIS FAMILY, and the
+# shell mirror of `cli/src/config/model.ts` → `RETRIEVAL_BACKENDS` /
+# `DEFAULT_RETRIEVAL_BACKEND`: change the enum there and here together. Schema
+# default `typescript`, so an absent key prints `typescript` and 1 is never
+# returned; a `docs` parent of the wrong type (`"docs": "x"`) reads as absent
+# too, because `hr_config_load`'s `try … catch` nulls that key alone — refusing
+# that shape is the schema's job. 2 — printing nothing — when the configuration
+# is unresolvable or the value is outside the enum, a refusal rather than a
+# guess. It does NOT consult `phases.docs` / `docs.retrieval`: the key is read
+# only inside the gate, so a caller asks `hr_docs_retrieval_applies` first and
+# calls this only on its status 0.
+hr_docs_retrieval_backend() {
+  local root="${1-}"
+  hr_config_load "$root" || return 2
+  if ! hr_cfg_scalar_var "docs.retrievalBackend"; then
+    printf 'typescript\n'
+    return 0
+  fi
+  case "$HR_CFG_VALUE" in
+    typescript|python)
       printf '%s\n' "$HR_CFG_VALUE"
       return 0
       ;;

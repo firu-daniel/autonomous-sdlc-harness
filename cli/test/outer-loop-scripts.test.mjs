@@ -342,6 +342,74 @@ test('hr_forge reads the enum, reports an absent key as undecided and refuses a 
   assert.equal(unknown.stdout, '', 'hr_forge printed a value for a forge outside the enum');
 });
 
+test('hr_docs_retrieval_backend applies the schema default, reads the enum and refuses a value outside it', async (t) => {
+  const dir = await fixtureFor(t, {
+    files: { ...nodeProjectFiles(), 'harness.config.json': seededConfig() },
+  });
+  await initOk(dir);
+
+  // Each call is its own `bash`, so the per-process cache is cold and reads the file as rewritten.
+  const withDocs = (docs) =>
+    writeFileSync(
+      join(dir, 'harness.config.json'),
+      `${JSON.stringify(docs === undefined ? seededConfig() : seededConfig({ docs }))}\n`,
+    );
+
+  withDocs(undefined);
+  const absent = await sourceAndCall(dir, 'hr_docs_retrieval_backend');
+  assert.notEqual(absent.status, 2, 'hr_docs_retrieval_backend could not resolve the configuration — `jq` 1.5+ must be on PATH');
+  assert.equal(absent.status, 0, `hr_docs_retrieval_backend exited ${absent.status} with the key absent: ${absent.stderr}`);
+  assert.equal(absent.stdout, 'typescript\n', 'hr_docs_retrieval_backend did not apply the schema default');
+
+  withDocs({ retrievalBackend: 'python' });
+  const python = await sourceAndCall(dir, 'hr_docs_retrieval_backend');
+  assert.equal(python.status, 0, `hr_docs_retrieval_backend exited ${python.status}: ${python.stderr}`);
+  assert.equal(python.stdout, 'python\n', 'hr_docs_retrieval_backend did not print the configured backend');
+
+  withDocs({ retrievalBackend: 'java' });
+  const unknown = await sourceAndCall(dir, 'hr_docs_retrieval_backend');
+  assert.equal(unknown.status, 2, `hr_docs_retrieval_backend exited ${unknown.status} for a value outside the enum`);
+  assert.equal(unknown.stdout, '', 'hr_docs_retrieval_backend printed a value for a backend outside the enum');
+
+  // A wrong-typed `docs` parent nulls the key alone in `hr_config_load`, so it reads as absent.
+  withDocs('x');
+  const wrongParent = await sourceAndCall(dir, 'hr_docs_retrieval_backend');
+  assert.equal(wrongParent.status, 0, `hr_docs_retrieval_backend exited ${wrongParent.status} for a string \`docs\`: ${wrongParent.stderr}`);
+  assert.equal(wrongParent.stdout, 'typescript\n', 'hr_docs_retrieval_backend did not read a string `docs` as an absent key');
+
+  writeFileSync(join(dir, 'harness.config.json'), '{ not json\n');
+  const unparsable = await sourceAndCall(dir, 'hr_docs_retrieval_backend');
+  assert.equal(unparsable.status, 2, `hr_docs_retrieval_backend exited ${unparsable.status} for a config jq cannot parse`);
+  assert.equal(unparsable.stdout, '', 'hr_docs_retrieval_backend printed a value for a config jq cannot parse');
+});
+
+test('hr_docs_retrieval_applies answers through its status alone, mirroring retrievalApplies', async (t) => {
+  const dir = await fixtureFor(t, {
+    files: { ...nodeProjectFiles(), 'harness.config.json': seededConfig() },
+  });
+  await initOk(dir);
+
+  // Each call is its own `bash`, so the per-process cache is cold and reads the file as rewritten.
+  const rows = [
+    { name: 'docs on, retrieval on', overrides: { phases: { docs: true }, docs: { retrieval: true } }, status: 0 },
+    { name: 'docs on, retrieval off', overrides: { phases: { docs: true }, docs: { retrieval: false } }, status: 1 },
+    { name: 'docs on, retrieval absent', overrides: { phases: { docs: true } }, status: 1 },
+    { name: 'docs off, retrieval on', overrides: { phases: { docs: false }, docs: { retrieval: true } }, status: 1 },
+    { name: 'docs on, retrieval a string', overrides: { phases: { docs: true }, docs: { retrieval: 'true' } }, status: 2 },
+  ];
+  for (const row of rows) {
+    writeFileSync(join(dir, 'harness.config.json'), `${JSON.stringify(seededConfig(row.overrides))}\n`);
+    const result = await sourceAndCall(dir, 'hr_docs_retrieval_applies');
+    assert.equal(result.status, row.status, `hr_docs_retrieval_applies exited ${result.status} for ${row.name}: ${result.stderr}`);
+    assert.equal(result.stdout, '', `hr_docs_retrieval_applies printed to stdout for ${row.name}`);
+  }
+
+  writeFileSync(join(dir, 'harness.config.json'), '{ not json\n');
+  const unparsable = await sourceAndCall(dir, 'hr_docs_retrieval_applies');
+  assert.equal(unparsable.status, 2, `hr_docs_retrieval_applies exited ${unparsable.status} for a config jq cannot parse`);
+  assert.equal(unparsable.stdout, '', 'hr_docs_retrieval_applies printed to stdout for a config jq cannot parse');
+});
+
 test('hr_inbox_route_var routes each suffix to its engine and branch and refuses anything else', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(dir);

@@ -35,3 +35,8 @@
 - `npm test -- test/outer-loop-scripts.test.mjs` from `cli/` passes, including the unchanged verbatim-copy case for the library.
 - The function body uses no `set -e` / `set -u` and sets no shell option: the library leaves the sourcing shell as it found it (`.claude/context/conventions.md` → `## Shell assets`).
 - `bash -n cli/templates/scripts/lib/harness-run-lib.sh` exits 0.
+
+**Deviations from plan:**
+
+- The new cases call `sourceAndCall`, not `sourceAndCallWithEnv`: the plan named the latter, but it passes no `<root>` argument and replaces the whole environment (including `PATH`, where `jq` lives), while `sourceAndCall` is what the sibling `hr_execution_target` / `hr_forge` cases use for exactly this shape.
+- `bash -n cli/templates/scripts/lib/harness-run-lib.sh` was refused by the permission layer and not run. The syntax claim rests instead on execution: `npm test -- test/outer-loop-scripts.test.mjs` sources the written copy of the library in every reader case, and all passed.
