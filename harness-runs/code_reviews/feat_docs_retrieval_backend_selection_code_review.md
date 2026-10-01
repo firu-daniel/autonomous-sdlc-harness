@@ -44,7 +44,7 @@ Each entry resolves to `harness-runs/code_reviews/feat_docs_retrieval_backend_se
 4. [x] **Finding 4** — Give the unreadable-`self-check` failure of `retrieval-python-dependencies` the install remedy _(layer: cli, general)_
 5. [x] **Finding 3** — Pass the launcher's `INT` on to the Python child as `TERM`, and test signal forwarding _(layer: cli, general)_
 6. [x] **Finding 7** — Reduce `docs-retrieval-backend-unknown.json` to the single enum change _(layer: general)_
-7. [ ] **Finding 1** — Say in `docs/remote-execution.md` and `docs/retrieval.md` that the job's `doctor --remote-job` preflight stops a job with the Python backend selected _(layer: general)_
+7. [x] **Finding 1** — Say in `docs/remote-execution.md` and `docs/retrieval.md` that the job's `doctor --remote-job` preflight stops a job with the Python backend selected _(layer: general)_
 
 ---
 

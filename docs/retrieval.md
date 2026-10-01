@@ -236,7 +236,7 @@ npx autonomous-sdlc-harness config set docs.retrievalBackend typescript
 
 - **Nothing is reinstalled.** `init` kept the TypeScript runtime and models while `python` was selected, so the launcher starts them at once.
 - **The `docs` verb never changes backend.** `docs index` and `docs search` always answer from the TypeScript backend, whatever the key holds.
-- **A remote job does not run it.** A GitHub Actions job provisions the TypeScript runtime and models only ([`remote-execution.md`](remote-execution.md) → **Retrieval.**), and nothing of the Python backend, so with `python` selected the `harness-docs` server does not start there.
+- **A remote job does not run it.** A GitHub Actions job provisions the TypeScript runtime and models only ([`remote-execution.md`](remote-execution.md) → **Retrieval.**), and nothing of the Python backend, so with `python` selected the job's `doctor --remote-job` preflight fails the three `retrieval-python-*` checks and the job stops before its run starts ([`remote-execution.md`](remote-execution.md) → **Retrieval.**).
 
 ---
 
