@@ -1,8 +1,8 @@
 # Starting a run from a GitHub issue
 
-**Who reads this:** a maintainer who wants a labelled GitHub issue to start an autonomous run, and anyone changing the issue trigger — `harness-trigger.yml`, `remote-run.sh trigger`, `start` and `adopt`, or the branch-name rule. It owns the trigger's design of record: how to turn it on, what happens between a label and a dispatched run, how the branch is named, who may start a run and what the labeller vouches for, and what is not verified. The run itself, from the dispatch on, is [`remote-execution.md`](remote-execution.md)'s.
+**Who reads this:** a maintainer who wants a labelled GitHub issue to start an autonomous run, and anyone changing the issue trigger — `harness-trigger.yml`, `remote-run.sh trigger` and `start`, or the branch-name rule. It owns the trigger's design of record: how to turn it on, what happens between a label and a dispatched run, how the branch is named, who may start a run and what the labeller vouches for, and what is not verified. The run itself, from the dispatch on, is [`remote-execution.md`](remote-execution.md)'s.
 
-It cites rather than restates. Every GitHub fact below is cited from [`github-integration-research.md`](github-integration-research.md) by its ID (S1, S3, T1–T6), retrieved there on 2026-09-30 and not re-verified here. The code of record is `cli/templates/scripts/remote-run.sh` → the header's `start`, `adopt` and `trigger` paragraphs, the header of `cli/templates/github/workflows/harness-trigger.yml`, and `cli/templates/scripts/lib/harness-run-lib.sh` → `DERIVING A BRANCH NAME FROM A TITLE`.
+It cites rather than restates. Every GitHub fact below is cited from [`github-integration-research.md`](github-integration-research.md) by its ID (S1, S3, T1–T6), retrieved there on 2026-09-30 and not re-verified here. The code of record is `cli/templates/scripts/remote-run.sh` → the header's `start` and `trigger` paragraphs, the header of `cli/templates/github/workflows/harness-trigger.yml`, and `cli/templates/scripts/lib/harness-run-lib.sh` → `DERIVING A BRANCH NAME FROM A TITLE`.
 
 ---
 
@@ -26,7 +26,7 @@ npx autonomous-sdlc-harness config set execution.target github-actions
 npx autonomous-sdlc-harness init
 ```
 
-**A repository wired by an earlier release also needs its scripts brought current.** The trigger job runs `remote-run.sh trigger` from the scripts on the default branch, and `init` keeps existing outer-loop scripts as they are ([`cli.md`](cli.md) → `## 3. The re-run contract`). Scripts written before this release have no `trigger`, `start` or `adopt` verb. On such scripts the job fails with `remote-run.sh: unknown verb 'trigger'` and posts no comment on the issue, and `doctor`'s `forge` check does not see it. `--force` replaces the scripts, each after a `.bak`. What else it regenerates is listed in [`remote-execution.md`](remote-execution.md) → `### Upgrading`.
+**A repository wired by an earlier release also needs its scripts brought current.** The trigger job runs `remote-run.sh trigger` from the scripts on the default branch, and `init` keeps existing outer-loop scripts as they are ([`cli.md`](cli.md) → `## 3. The re-run contract`). Scripts written before this release have no `trigger` or `start` verb. On such scripts the job fails with `remote-run.sh: unknown verb 'trigger'` and posts no comment on the issue, and `doctor`'s `forge` check does not see it. `--force` replaces the scripts, each after a `.bak`. What else it regenerates is listed in [`remote-execution.md`](remote-execution.md) → `### Upgrading`.
 
 ```
 npx autonomous-sdlc-harness init --force
@@ -155,13 +155,7 @@ A `repository_dispatch` has no labeller: the holder of the token that sent it is
 **Applying the trigger label means "run this text as a task".** The issue's title and body may have been written by someone without write access. An `issues` workflow runs with the repository's secrets whoever opened the issue (T2), the trigger job holds `contents: write`, and the run it dispatches holds the credential secrets. So the labeller is vouching for the text, as if they had written the task prompt themselves.
 
 - **The committed prompt is the snapshot at label time.** An edit to the issue afterwards does not reach the run, and the comment says so.
-- **Adopting a run executes its branch on your machine.** `remote-run.sh adopt` creates each mirror with `create-worktree.sh --existing`, which bootstraps it: it runs the adopted branch's own `setup-worktree.sh`, and that branch's `commands.depInstall` and `commands.build`, locally. The branch was written by a run whose task the labeller vouched for, so adopting it trusts that branch as far as running its install and build. Every one of `/autonomous-sdlc-harness:branch-answer`, `-resume`, `-pause` and `-user-review` adopts **every** candidate once before it acts, not only the branch it names. To see the candidates without adopting them, run:
-
-  ```
-  /autonomous-sdlc-harness:branch-status
-  ```
-
-  It lists each candidate as `not adopted` and adopts nothing.
+- **Working a run from your machine runs none of its code.** The local commands act on a run started on GitHub through GitHub: `/autonomous-sdlc-harness:branch-status` reads it, and `/autonomous-sdlc-harness:branch-answer`, `-resume`, `-pause` and `-user-review` dispatch to it. None of them creates a working copy for any branch but the one it names. The one copy made, by `/autonomous-sdlc-harness:branch-user-review` to commit the review, is created with `create-worktree.sh --existing --no-bootstrap`: it runs no `setup-worktree.sh`, `commands.depInstall` or `commands.build`, and it is removed once the review is pushed. Running the branch's code locally is a deliberate step of your own, such as checking the branch out, and the labeller's vouching (above) is what you rely on then.
 - **The trigger job references no secret.** It needs only its own token (`contents`, `actions` and `issues` write), so the credential secrets never reach the job that reads the issue text. Event text reaches its shell only through `env:` and the event file, never through a GitHub expression inside `run:`.
 - **A task that edits `.github/workflows/*` cannot push that edit with the job's own token.** This is the existing remote-run limit, not the trigger's: no `permissions:` setting lets `GITHUB_TOKEN` write a workflow file, and the push is refused with ``refusing to allow a GitHub App to create or update workflow … without `workflows` permission`` (S1). Such a task needs a workflow-capable `HARNESS_GIT_TOKEN` ([`remote-execution.md`](remote-execution.md) → `### Every secret and variable`). The trigger itself commits only a task prompt, and a branch whose commits touch no workflow file pushes normally (S1).
 
@@ -171,7 +165,7 @@ The trigger job's push and comment start no other workflow; its `workflow_dispat
 
 ## 5. Working the run
 
-**With a local setup**, the local commands act on a run started on GitHub directly when given its branch as the `<branch>:` prefix — no adopt, no local copy, no sync and no running watcher. Each reads the job's newest state from GitHub before it acts:
+**With a local setup**, the local commands act on a run started on GitHub directly when given its branch as the `<branch>:` prefix — no local record, no sync and no running watcher — `branch-user-review` alone makes a short-lived, un-bootstrapped copy of the branch it names (§4). Each reads the job's newest state from GitHub before it acts:
 
 ```
 /autonomous-sdlc-harness:branch-answer <branch>: <answer text>

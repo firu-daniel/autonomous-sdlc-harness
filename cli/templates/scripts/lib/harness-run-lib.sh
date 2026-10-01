@@ -1405,9 +1405,8 @@ hr_registry_branches() {
 }
 
 # hr_remote_record_init <file> <branch> <worktree> <log_path> <engine>
-# The fields a remote run's record starts with — the one list, shared by the
-# watcher's `launch_remote_run` and `remote-run.sh adopt` — in one write, so no
-# reader sees half of them. `status` is left to the caller, which writes it only
+# The fields a remote run's record starts with — the one list, written by the
+# watcher's `launch_remote_run` — in one write, so no reader sees half of them. `status` is left to the caller, which writes it only
 # once its run exists. 1 when the write failed.
 hr_remote_record_init() {
   local file="${1-}" branch="${2-}"

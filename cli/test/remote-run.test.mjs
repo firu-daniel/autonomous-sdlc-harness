@@ -51,7 +51,9 @@
  *
  * **For the commands' `fetch`, the rule is that it reads a branch's newest state from GitHub alone and
  * writes nothing but its `<out_dir>`**; its `key: value` lines are a wire, so each case asserts the
- * keys it reads. **A user's chain-0 resume dispatch marks an existing remote record `running`, and
+ * keys it reads. **No verb makes a run started on GitHub local: `adopt` is an unknown verb, so no
+ * command can create a working copy or a record for another branch through it.** **A user's chain-0
+ * resume dispatch marks an existing remote record `running`, and
  * no other dispatch creates or touches a registry.** **For `review`, the rule is that a round lands
  * on the branch tip only when no run is in flight, named by exact branch equality, committed under
  * its fixed subject and dispatched once — leaving no copy, no local branch and no bootstrap behind**;
@@ -1748,6 +1750,18 @@ test('list with nothing unrecorded says so; under execution.target local it is r
   const refused = await remoteRun(local, ['list']);
   assert.equal(refused.status, 2, refused.stderr);
   assert.deepEqual(calls(local), []);
+});
+
+test('adopt is an unknown verb: exit 1, no gh call, no registry', async (t) => {
+  const fx = await remoteFixture(t);
+  const env = syncEnv({ runs: [branchRun(4, 'feat_x', 4)] });
+  for (const args of [['adopt'], ['adopt', '--list'], ['adopt', 'feat_x']]) {
+    const result = await remoteRun(fx, args, env);
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}`);
+    assert.match(result.stderr, /unknown verb 'adopt'/);
+  }
+  assert.deepEqual(calls(fx), []);
+  assert.equal(existsSync(join(fx.dir, REGISTRY)), false);
 });
 
 // ---------------------------------------------------------------------------

@@ -1027,27 +1027,17 @@ gh api repos/<owner>/<scratch-repo>/collaborators/<login>/permission
 
 Record whether it answered `read`, which settles research T3's unmeasured row.
 
-**(c) A local maintainer's command adopts the run.** With the machine back on, start the watcher:
+**(c) A local maintainer's command acts on the run.** While a run started from an issue is still going, in a `claude` session in the scratch repository:
 
 ```
-npx --yes autonomous-sdlc-harness@<version> daemon start
-```
-
-While a run started from an issue is still going, in a `claude` session in the scratch repository:
-
-```
-/autonomous-sdlc-harness:branch-status
+/autonomous-sdlc-harness:branch-status <slug>
 ```
 
 ```
 /autonomous-sdlc-harness:branch-pause <slug>
 ```
 
-```
-/autonomous-sdlc-harness:branch-status
-```
-
-Passes when the first `/autonomous-sdlc-harness:branch-status` lists the run as not yet adopted, with a `not adopted: <slug> <url>` line; `/autonomous-sdlc-harness:branch-pause` adopts it, creating the mirror and a record with `execution: github-actions`; the relay pauses the job, as in observation (iv); and the second `/autonomous-sdlc-harness:branch-status` shows the record. Record the `not adopted` line, the adopt output and the job-log line where the pause was found.
+Passes when `/autonomous-sdlc-harness:branch-status` prints the run's state from GitHub with no local record; `/autonomous-sdlc-harness:branch-pause` produces a `harness pause <slug>` run the job finds; and no registry record, no sibling working copy and no `deps.marker` appear on the machine. Record the status output, the pause output and the job-log line where the pause was found.
 
 **Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set. Where (xiii) ran, delete the trigger label with `gh label delete harness` and the issues the round created with `gh issue delete <number>`, and unset `forge` before the seed reset by removing its key from `harness.config.json` by hand, since `config` has no verb that unsets a key (`docs/cli.md` → ``## 8. `config` ``). Then return the scratch repository to its seed rather than deleting it, so the next round starts from the same tree: delete each run's branch on the remote, reset the default branch to the seed commit and force-push it with `--no-verify`, and remove each run's local worktree. The next round's setup skips `gh repo create` and starts at the first `init`.
 

@@ -1286,19 +1286,13 @@ notify() {
 #                       chained one's. Set at start (see JOB MODE) and advanced
 #                       by every successful poll
 #   execution           `github-actions` on a remote record — one
-#                       launch_remote_run wrote, or one `remote-run.sh adopt`
-#                       wrote for a run started on GitHub, both through
+#                       launch_remote_run wrote through
 #                       lib/harness-run-lib.sh's `hr_remote_record_init` — and
 #                       absent on a local one. Fixed for the run's life: a later
 #                       pass reads this field, never `execution.target`
 #   remote_dispatched_at
 #                       the epoch second launch_remote_run's `remote-run.sh
-#                       dispatch` returned 0; empty after a failed dispatch;
-#                       always empty on a record remote-run.sh adopt wrote,
-#                       since no local dispatch happened
-#   remote_adopted_at   the epoch second `remote-run.sh adopt` wrote this record
-#                       for a run started on GitHub (a trigger's, or another
-#                       machine's); absent on every other record
+#                       dispatch` returned 0; empty after a failed dispatch
 # -----------------------------------------------------------------------------
 # The bodies are lib/harness-run-lib.sh's THE RUN REGISTRY, shared with every
 # script that reads or writes this file; these wrappers bind them to $REGISTRY.
