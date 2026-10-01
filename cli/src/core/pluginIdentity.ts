@@ -32,3 +32,6 @@ export const PLUGIN_NAME = 'autonomous-sdlc-harness';
  * `docs/development.md` → `## 5. Verifying a change` → gate 6 records the spelling rule.
  */
 export const ANALYZE_COMMAND = `/${PLUGIN_NAME}:harness-analyze`;
+
+/** The user-review command as every line addressing the adopter names it, plugin-qualified. */
+export const USER_REVIEW_COMMAND = `/${PLUGIN_NAME}:branch-user-review`;

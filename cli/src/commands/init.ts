@@ -121,7 +121,7 @@ import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
 import { insideRepo, packageRoot } from '../core/paths.js';
-import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
+import { ANALYZE_COMMAND, USER_REVIEW_COMMAND } from '../core/pluginIdentity.js';
 import { askLine, askYesNo, canPrompt, REPROMPT_LIMIT, type PromptContext } from '../core/prompt.js';
 import { normalizeRepoDir, normalizeRepoPathStrict } from '../core/repoPaths.js';
 import { WritePlan } from '../core/writer.js';
@@ -2637,7 +2637,7 @@ function reportGithubSteps(
     ctx.report.info('');
     step += 1;
     ctx.report.info(
-      `${step}. A completed run opens a draft pull request with the job's token only once "Allow GitHub Actions to create and approve pull requests" is switched on under Settings -> Actions -> General -> Workflow permissions: switch it on, or set ${GIT_TOKEN_SECRET}, which opens the pull request so the repository's CI runs on it without an approval click. With ${GIT_TOKEN_SECRET} set, the pull request's author is the token's owner, who cannot request changes on it, so a solo maintainer uses a token of a machine account or starts review rounds locally with /autonomous-sdlc-harness:branch-user-review.`,
+      `${step}. A completed run opens a draft pull request with the job's token only once "Allow GitHub Actions to create and approve pull requests" is switched on under Settings -> Actions -> General -> Workflow permissions: switch it on, or set ${GIT_TOKEN_SECRET}, which opens the pull request so the repository's CI runs on it without an approval click. With ${GIT_TOKEN_SECRET} set, the pull request's author is the token's owner, who cannot request changes on it, so a solo maintainer uses a token of a machine account or starts review rounds locally with ${USER_REVIEW_COMMAND}.`,
     );
     ctx.report.info(
       `   On a run's issue or pull request, a comment starting ${COMMAND_HANDLE} followed by ${nameList([...COMMAND_VERBS])} steers the run, and a review requesting changes on the run's pull request starts a user-review round.`,
