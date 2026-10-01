@@ -1,0 +1,10 @@
+# Review plan meta-review — iteration 0
+
+## Must Fix
+1. **Finding 4's fix code is identical to the code it is meant to replace, so applying it changes nothing** — refers to review finding #4. File: `harness-runs/code_reviews/feat_docs_retrieval_python_backend_code_review/finding_4.md`.
+   The finding says the two constants should be written with `\u` escapes, not raw invisible characters. Its fix snippets were written with the same raw characters, though. Comparing bytes shows this:
+   - The `JS_WHITESPACE = ( … )` body in the fix's first sub-step has the same bytes as lines 19–21 of `docs-retrieval-service/src/harness_docs_retrieval/jscompat.py` (same MD5 after leading whitespace is stripped). It holds raw U+00A0, U+1680, U+2000–U+200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF, and no `\u` escape.
+   - The `_ATX_HEADING = re.compile(...)` line in the second sub-step has the same bytes as `chunk.py`'s `_ATX_HEADING` assignment. Its class `[^\n\r  ]` still holds raw U+2028 and U+2029.
+   - The note under that sub-step ("Python's `re` reads ` ` and ` ` inside a raw `str` pattern …") also has raw characters where the escape spellings should be. That makes it both unreadable and wrong about what the pattern contains.
+   The only way an implementer can apply this finding is to ignore its fix and work out the escapes alone. Or they apply it as written and land a no-op commit that flips the readiness entry to `[x]` while the problem stays. The fix in this file is not something anyone can carry out as written.
+   **Fix:** in `finding_4.md`, rewrite both snippets and the note using ASCII escape sequences. The whitespace constant should read, for example, `"\t\n\v\f\r   "` / `"           "` / `"    　﻿"`. The class should read `[^\n\r  ]`, kept inside the raw `r"..."` pattern, where `re` itself reads `\uXXXX`. The note should name ` ` and ` ` as escapes. Then check that the finding file contains no character outside ASCII inside either code block, for example with `grep -nP '[^\x00-\x7F]'` limited to those lines. Leave the index pointer and readiness entry 2 unchanged.
