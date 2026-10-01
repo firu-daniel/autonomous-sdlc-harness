@@ -321,7 +321,7 @@ def test_a_refresh_failure_is_an_error_but_not_a_refusal() -> None:
     assert got == Answer(
         text=(
             "search_docs: refreshing the docs index failed: the database went away; "
-            "run harness-docs-retrieval self-check in this repository"
+            "run `npx autonomous-sdlc-harness doctor` in this repository"
         ),
         is_error=True,
         refused=False,
@@ -355,7 +355,7 @@ def test_a_multi_line_failure_message_reaches_the_text_as_its_first_line() -> No
     assert "\n" not in got.text
     assert got.text == (
         "search_docs: refreshing the docs index failed: boom; "
-        "run harness-docs-retrieval self-check in this repository"
+        "run `npx autonomous-sdlc-harness doctor` in this repository"
     )
 
 
