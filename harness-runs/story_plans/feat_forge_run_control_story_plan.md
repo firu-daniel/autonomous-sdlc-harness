@@ -43,7 +43,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control/task_
 7. [x] **Task 7** — Report every job-mode lifecycle event from the watcher _(layer: cli)_ _(points: 8)_
 8. [x] **Task 8** — Report `remote-run.sh`'s own notifications and a stop on GitHub _(layer: cli)_ _(points: 12)_
 9. [x] **Task 9** — Let `remote-run.sh review` take a GitHub-started round and report it _(layer: cli)_ _(points: 12)_
-10. [ ] **Task 10** — Add `remote-run.sh control` for comment commands, with `pause` and `stop` _(layer: cli)_ _(points: 20)_
+10. [x] **Task 10** — Add `remote-run.sh control` for comment commands, with `pause` and `stop` _(layer: cli)_ _(points: 20)_
 11. [ ] **Task 11** — Add the `resume` and `clear` comment commands _(layer: cli)_ _(points: 10)_
 12. [ ] **Task 12** — Add the `answer` comment command _(layer: cli)_ _(points: 15)_
 13. [ ] **Task 13** — Turn a review requesting changes into the next user-review round _(layer: cli)_ _(points: 20)_

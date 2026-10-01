@@ -69,3 +69,9 @@
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n "workflow run" -- cli/templates/scripts/remote-run.sh` shows no new `workflow run` composed outside `verb_dispatch`, `verb_pause`, `verb_warm` and `verb_stop`: `control` dispatches only through child verbs.
 - `git grep -n "pull_request_target" -- cli/templates` finds nothing.
+
+**Deviations from plan:**
+
+- The protected-branch issue case names the fixture's configured `defaultBranch` rather than the literal `main`: `init` records the host git's default (`master` on this machine), and the fixture's resolved protected set held `main` only through that key, so a literal `main` was not protected there. The default branch is always in the protected set, so the case tests the same refusal.
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the permission layer and not run. The claim rests on `npm test -- test/remote-control.test.mjs`, which runs the script through `bash` (3.2.57 on this host) in all 32 cases, and on a scratch probe of the first-line parsing under `/bin/bash` 3.2.
+- Each `control_state_var` fetch directory, and the temporary directory `control` creates when `RUNNER_TEMP` is unset, is removed on exit by an EXIT trap; the parked case asserts `RUNNER_TEMP` is left empty.
