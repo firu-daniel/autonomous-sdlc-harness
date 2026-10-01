@@ -1,0 +1,36 @@
+### 1. A snippet ending in a lone surrogate cannot be serialized on either Python transport, where the TypeScript server answers
+
+**Severity:** Must Fix. **Layer:** general (`docs-retrieval-service/` sits under the catch-all `path: "."`).
+
+**Files (site anchors, grep-verified in the current tree):**
+- `docs-retrieval-service/src/harness_docs_retrieval/search.py` (`snippet_of`) — "return f\"{js_trim_end(cut[:space] if space > 0 else cut)}...\"" — produces the lone surrogate on purpose; **not changed**.
+- `docs-retrieval-service/src/harness_docs_retrieval/jscompat.py` (`json_stringify_str`) — "def json_stringify_str(s: str) -> str:" — the new encoder helper goes beside it.
+- `docs-retrieval-service/src/harness_docs_retrieval/mcp_server.py` (`serve_mcp`) — "async with stdio_server() as (read_stream, write_stream):"
+- `docs-retrieval-service/src/harness_docs_retrieval/http_app.py` (`create_app` → `search`) — "return JSONResponse(" ; and (`_error`) — "return JSONResponse({\"error\": text}, status_code=status)"
+- `docs-retrieval-service/tests/test_backend_parity_e2e.py`, module docstring — "Not covered here: a snippet cut that leaves a lone surrogate."
+- `docs-retrieval-service/tests/test_mcp_parity.py` and `docs-retrieval-service/tests/test_http_app.py` — the unit cases are added here.
+
+## Problem
+
+`cli/src/retrieval/search.ts` (`snippetOf`) cuts at 240 UTF-16 units with `text.slice(0, SNIPPET_CHARS)`. When the cut holds no space after index 0, it keeps the whole cut, so an astral character straddling units 239–240 leaves a lone high surrogate before the `...`. The TypeScript MCP SDK serializes the tool result with `JSON.stringify`, which writes that surrogate as the well-formed escape `\ud83d`, and the client gets a normal result.
+
+`search.py` → `snippet_of` reproduces the lone surrogate faithfully (`tests/test_search.py` → `test_snippet_with_no_space_keeps_the_lone_surrogate_of_a_straddling_pair` asserts `"a" * 239 + "\ud83d..."`). Neither Python transport can then emit it:
+
+- **MCP.** The SDK's stdio writer dumps each outgoing message with `model_dump_json(by_alias=True, exclude_none=True)`, which raises `PydanticSerializationError: … UnicodeEncodeError: 'utf-8' codec can't encode character '\ud83d' … surrogates not allowed` (reproduced by the user in a synced environment).
+- **HTTP.** Starlette's `JSONResponse` renders with `json.dumps(..., ensure_ascii=False).encode("utf-8")`, which raises `UnicodeEncodeError` the same way.
+
+So for that query the TypeScript backend answers and the Python backend fails to deliver any response. That breaks the task prompt's deliverable 2 (`harness-runs/task_prompts/feat_docs_retrieval_python_backend_task_prompt.md`: *"A client must not be able to tell which backend answered it."*), and it is a crash on a reachable input on its own terms. The trigger is rare but realistic: a section body whose first 240 units hold no space, with an astral character at units 239–240 (unspaced CJK prose with an emoji or an Extension-B ideograph, or a long URL or token run).
+
+The e2e test's docstring leaves this case out because *"a mismatch there would grade the MCP SDKs' encoders rather than the port"*. That is a test-file comment, not an exclusion basis: the task prompt's `## Out of scope` does not mention it, no entry-point deferred-work marker exists, and the README's **Deliberate wire differences** list does not record it. The SDK encoder is part of the port's wire.
+
+## Fix
+
+Make both Python transports emit a lone surrogate the way `JSON.stringify` does — as a lowercase `\uXXXX` escape inside otherwise ordinary JSON — so the text the client parses equals the TypeScript server's.
+
+- [ ] **Encoder helper in `jscompat.py`.** Add one function beside `json_stringify_str`, e.g. `json_dumps_js(value: object) -> str`, that serializes a JSON-compatible value (dicts, lists, `str`, `int`, `float`, `bool`, `None`) with every lone surrogate written as a lowercase `\udXXX` escape, and returns a `str` that encodes to UTF-8 without error. Preferred form: route every string through `json_stringify_str` (which already writes non-ASCII raw and lone surrogates and controls as lowercase `\uXXXX`, matching `JSON.stringify` byte for byte), keeping the module's rule that a JS operation is reproduced exactly. Acceptable fallback, as the user allowed: `json.dumps(value, ensure_ascii=True, separators=(",", ":"))`, which escapes every non-ASCII code point (lone surrogates included) and parses back to the identical string. Either way the acceptance criterion is: `json.loads(helper(value)) == value` for a value holding `"\ud83d..."`, and `helper(value).encode("utf-8")` does not raise. Add a case to `tests/test_jscompat.py` for it (the unit's own edited test file).
+- [ ] **MCP (`mcp_server.py` → `serve_mcp`).** Stop relying on the SDK's `model_dump_json` for outgoing messages. Either wrap the `write_stream` that `stdio_server()` yields or supply your own stdio writer: hand `server.run` the send side of your own `anyio` memory object stream, and run a writer task that takes each outgoing `SessionMessage`, dumps `message.message.model_dump(mode="json", by_alias=True, exclude_none=True)` through the helper above, and writes it to stdout followed by `"\n"`, one message per line, flushing after each. Keep stdout carrying nothing but the transport. Put the per-message dump in a small module-level function (e.g. `_encode_outgoing(message: SessionMessage) -> str`) so a unit case can reach it — the in-memory `Client(build_server(...))` used by `tests/test_mcp_parity.py` bypasses the stdio writer entirely and would pass without this fix.
+- [ ] **HTTP (`http_app.py` → `search` and `_error`).** Replace `JSONResponse(...)` with `Response(content=<helper output>, media_type="application/json", status_code=...)` built from the same dict, for the success body and for `_error`. Adjust the return annotations to `Response`. `/health` may stay on `JSONResponse`; it carries no snippet.
+- [ ] **Unit cases (non-container).**
+  - `tests/test_mcp_parity.py`: a `types.CallToolResult` whose text ends in `"\ud83d..."`, wrapped in a `SessionMessage` the way the server sends it, passes through `_encode_outgoing` without raising, and `json.loads` of the line yields that same text.
+  - `tests/test_http_app.py`: a `POST /search` whose answer's `text` (and a hit's `snippet`) ends in `"\ud83d..."` returns 200, and the parsed body's `text` equals that string. Reaching that answer through a monkeypatched `http_app.answer` or a seeded `FakeSession` store is the implementer's choice.
+- [ ] **E2E case.** In `tests/test_backend_parity_e2e.py`, add a corpus section whose body has no space in its first 240 UTF-16 units and an astral character at units 239–240, add a query that retrieves it, assert both backends answer it with equal parsed text, and delete the docstring's `Not covered here:` paragraph. Running that file is the container gate's (Phase G) matter, not this unit's.
