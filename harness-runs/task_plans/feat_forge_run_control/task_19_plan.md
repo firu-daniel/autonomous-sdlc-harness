@@ -26,3 +26,5 @@ Task 9's `review` commits it as `chore: add user review for <branch>`.
 
 - `git grep -n -i "pull request\|chore: add user review" -- cli/templates/state-dir/user_reviews/README.md` shows the two additions.
 - The README's description of the round file names the same headings as the shape under **Depends on**, `## Inline comments` included: the template states what `control` writes, not a remembered shape.
+
+**Deviations from plan:** The third paragraph's committed-round sentence names three origins for a run on GitHub — dropped, sent by the local command, or a pull-request review — not the plan's two; `docs/watcher.md` (step 5 and the `<branch>_review[_<n>].md` row) states a remote run's dropped review is also committed as `chore: add user review for <branch>` and pushed, so the two-origin wording would have been false.
