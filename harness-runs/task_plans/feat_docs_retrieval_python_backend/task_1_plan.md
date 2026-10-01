@@ -33,3 +33,9 @@
 - `bash -n scripts/python-service.sh` is clean. Reading the script shows that an unknown or missing sub-command exits `2` and that `lint` / `typecheck` / `test` exit `3` before calling `uv` when there is no synced environment. Do not exercise those sub-commands: once Task 16 wires them in they are gate commands (story index → the test-run note). `lock` and `sync` are provisioning and are the only sub-commands this task runs.
 - `tests/test_cli.py` passes (subject to the story index's test-run note).
 - `git diff --name-only` touches nothing under `plugin/` or `cli/`, and does not touch `harness.config.json`.
+
+**Deviations from plan:**
+
+- `tests/test_cli.py` was not run: no conventions document states a Python single-file command (story index → the test-run note). Deferred to the Run gates phase. The same holds for Python `lint` and `typecheck`.
+- `bash -n scripts/python-service.sh` was refused by the permission layer, so the syntax claim rests on reading the script plus `lock` and `sync` both executing through it with exit `0`, not on `bash -n`. The exit-`2` / exit-`3` paths are established by reading only, as the plan asks.
+- `uv lock` / `sync` selected CPython 3.14.7 (no `.python-version` pin); the lock's `requires-python` is `>=3.11` and mypy pins `python_version = "3.11"`, so no pin was added.

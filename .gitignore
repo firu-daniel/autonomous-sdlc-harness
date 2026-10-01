@@ -2,6 +2,12 @@ node_modules/
 dist/
 .DS_Store
 *.env
+# Backstop for running uv directly: scripts/python-service.sh keeps these outside the checkout.
+docs-retrieval-service/.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 
 # >>> autonomous-sdlc-harness (managed block: this line to the next blank line; re-run init to extend it) >>>
 # Machine-local files this repository names by path but never commits. Each path is a

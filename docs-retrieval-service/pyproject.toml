@@ -1,0 +1,72 @@
+[project]
+name = "harness-docs-retrieval"
+version = "0.1.0"
+description = "Docs-catalog retrieval service answering search_docs over MCP and HTTP, indexed in Postgres."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "mcp",
+    # 3.2 is where AsyncRawCursor arrives.
+    "psycopg[binary]>=3.2",
+    "huggingface_hub",
+]
+
+[project.optional-dependencies]
+models = [
+    "sentence-transformers",
+    "torch",
+]
+
+[project.scripts]
+harness-docs-retrieval = "harness_docs_retrieval.cli:main"
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "mypy",
+    "pytest",
+    "httpx",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/harness_docs_retrieval"]
+
+# Linux takes torch from the CPU-only index so the container image never pulls CUDA wheels.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+files = ["src", "tests"]
+mypy_path = "src"
+
+# The gate environment never installs the `models` extra.
+[[tool.mypy.overrides]]
+module = ["sentence_transformers.*", "torch.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider -rs"
+markers = [
+    "container: needs a real Postgres reached through HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL",
+]
