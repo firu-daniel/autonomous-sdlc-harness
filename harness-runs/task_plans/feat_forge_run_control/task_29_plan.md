@@ -47,3 +47,8 @@
 - `git grep -n "\`harness\` unless" -- docs/cli.md` finds nothing.
 - `git grep -n "machine account" -- docs/cli.md` hits `## 2.`'s closing-report paragraph.
 - `git grep -n -E "\bcontrol\b.*\breport\b.*\bdeliver\b|\breport\b.*\bdeliver\b" -- docs/watcher.md` hits the `remote-run.sh` row.
+
+**Deviations from plan:**
+
+- The last verification grep, as written (`git grep -n -E` with `\b`), returns nothing on this macOS git build, whose ERE engine does not honour `\b`; the same pattern through `grep -n -E` and through `git grep -n -P` both hit `docs/watcher.md`'s `remote-run.sh` row. The criterion rests on those two runs.
+- `## 7.`'s legacy-label note does not spell `init --force` inline, so the bullet gains no unfenced command a reader types; it says the note names the forced re-run.
