@@ -15,7 +15,8 @@
 # WHAT IT DOES. One job runs `remote-run.sh control`, which does everything
 # else: it authorises the actor, finds the run's branch, carries out the
 # command or places the review round, and replies. Every decision lives in that
-# script; this file carries only the events, the permissions and a prefilter.
+# script; this file carries only the events, the permissions, a prefilter and
+# the concurrency group.
 # The `run-name` below is not harness-run.yml's `harness <action> <branch>`
 # title, so no run lookup `remote-run.sh` makes by that title can match it.
 #
@@ -67,9 +68,22 @@
 # decides is always the default branch's; what a pull request's head can change
 # is this file's own definition for its own review events.
 #
-# NO CONCURRENCY GROUP. A group keeps at most one pending run and cancels an
-# earlier pending one, which would drop a command.
+# THE CONCURRENCY GROUP SERIALIZES REVIEW JOBS PER BRANCH, NEVER COMMENT JOBS.
+#   * A comment job's group is its own run id, so it never waits and is never
+#     replaced: a group keeps at most one pending job and cancels an earlier
+#     pending one, which would drop a command.
+#   * Review jobs on one head branch share `harness-review-<branch>` and run one
+#     at a time, so two reviews submitted together give one round, not two
+#     pushes racing for the same round number.
+#   * A pending review job replaced by a newer one loses nothing: every job in
+#     the group collects cumulatively, every review requesting changes and every
+#     inline comment no earlier round recorded, and the round's comment names
+#     every reviewer it took.
+#   * The name `harness-review-<branch>` is reserved for every job that places a
+#     review round on that branch; any other workflow's job that does so joins
+#     the group under exactly that name, and both files' headers declare it.
 #
+
 # TWO RULES EVERY EDIT KEEPS.
 #   * Event text and variables reach a shell line only through `env:` and the
 #     event file, never through a GitHub expression inside `run:` — a comment
@@ -123,6 +137,9 @@ jobs:
   control:
     if: (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@sdlc-harness') && !contains(github.event.comment.body, '<!-- sdlc-harness')) || (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    concurrency:
+      group: ${{ github.event_name == 'pull_request_review' && format('harness-review-{0}', github.event.pull_request.head.ref) || format('harness-control-{0}', github.run_id) }}
+      cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
       HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}

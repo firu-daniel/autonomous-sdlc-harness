@@ -21,7 +21,7 @@ All three are valid. They become four fixes: one per observation, and one for th
 Each entry resolves to a self-contained `harness-runs/user_reviews/feat_forge_run_control_fix_plan/finding_<K>.md` through its `**Finding K**` reference, one-to-one with the `### K. <title>` pointers below. The list is sorted from lowest blast radius to the widest change. Finding 2's collector comes first, because Findings 1 and 3 both call it. Finding 1's settledness test and serialization come next, because Finding 3 reuses both.
 
 1. [x] **Finding 2** — Collect every review requesting changes and every inline comment from all authorised reviewers since the previous round, deduplicated by ids recorded in a round marker. Update the fix-plan writer's reading of the round shape. _(layer: cli, plugin)_
-2. [ ] **Finding 1** — Accept and acknowledge a review while a run is in flight, never refusing it. Add a shared settledness test at `run`-job granularity, serialize review jobs per branch, and have `review` wait for its dispatch to be listed. _(layer: cli)_
+2. [x] **Finding 1** — Accept and acknowledge a review while a run is in flight, never refusing it. Add a shared settledness test at `run`-job granularity, serialize review jobs per branch, and have `review` wait for its dispatch to be listed. _(layer: cli)_
 3. [ ] **Finding 3** — Add a `collect` verb and a `collect` job in `harness-run.yml` that start the next round automatically when a run ends with collected reviews. _(layer: cli)_
 4. [ ] **Finding 4** — Bring `docs/github-run-control.md` and Gate 12 (xiv) in line with Findings 1–3, and record the no-retry decision on lost pushes. _(layer: general)_
 

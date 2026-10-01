@@ -41,6 +41,10 @@
 #   cli/src/machine/paths.ts          machineCacheDir, under which the retrieval
 #                                     runtime sits in `retrieval/`
 #   cli/src/retrieval/runtime.ts      RETRIEVAL_CACHE_DIRNAME, that `retrieval/`
+#   remote-run.sh (the scriptsDir copy) RUN_JOB_NAME (`run`): the `run` job has no
+#                                     `name:`, so GitHub names it by its key,
+#                                     and the settledness test reads that
+#                                     job's status by that name
 #
 # ACTION PINS.
 #   actions/checkout@v5

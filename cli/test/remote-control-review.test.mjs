@@ -7,8 +7,10 @@
  * round collects every review requesting changes and every inline comment since the previous round, by
  * every authorised author, each review's body under its own `## Review by @<login>` section and each
  * comment with file, line, commit, author and hunk, closed by a marker recording the ids it consumed, and
- * nothing a marker records is collected again; anything arriving while a run is in flight is refused with
- * a reply.** A started round is asserted on origin's bytes — the `chore: add user review for feat_x`
+ * nothing a marker records is collected again; a review arriving while a run is in flight is never
+ * refused: it is acknowledged with one reply, nothing is pushed or dispatched, and it stays on the pull
+ * request for the next round; once settled, `review` holds until its dispatched run is listed by the
+ * pushed commit's `headSha`.** A started round is asserted on origin's bytes — the `chore: add user review for feat_x`
  * commit and the round file — and on exactly one `engine=user_review` dispatch; every ignored shape is
  * asserted to call no `gh` at all; every refusal is asserted to post one reply and push nothing.
  *
@@ -19,8 +21,11 @@
  * paginated `pulls/<n>/comments` and `pulls/<n>/reviews` listings from `STUB_PR_COMMENTS` and
  * `STUB_PR_REVIEWS` (raw API objects, one page each), the permission call per login from
  * `STUB_PERMISSIONS`, `run list` from `STUB_RUN_LIST` (by default one completed
- * `harness run <branch>` run with no state bundle, which reads as `failed`), artifact lists with none,
- * and the labels GET with `[]`. No case reaches the network.
+ * `harness run <branch>` run with no state bundle, which reads as `failed`), a run's jobs from
+ * `STUB_JOBS` (none by default), its artifact list and `run download` from `STUB_BUNDLES` (run id ->
+ * `status.json` fields; none by default), the post-dispatch `headSha` lookup with origin's tip under
+ * `STUB_LIST_DISPATCHED`, and the labels GET with `[]`. `HARNESS_TRIGGER_LOOKUP_SECS` is `0`, so a
+ * lookup that finds nothing costs no wait. No case reaches the network.
  */
 
 import assert from 'node:assert/strict';
@@ -58,7 +63,22 @@ if (args[0] === 'pr' && args[1] === 'list') {
   if (answer === undefined || answer === 'FAIL') fail('stub permission failure');
   process.stdout.write(JSON.stringify({ permission: answer }));
 } else if (args[0] === 'api' && /\\/actions\\/runs\\/[0-9]+\\/artifacts$/.test(args[1] ?? '')) {
-  process.stdout.write('{"artifacts":[]}');
+  const id = args[1].split('/').slice(-2)[0];
+  const listed = Object.hasOwn(JSON.parse(process.env.STUB_BUNDLES || '{}'), id);
+  process.stdout.write(JSON.stringify({ artifacts: listed ? [{ name: 'harness-state', expired: false }] : [] }));
+} else if (args[0] === 'api' && /\\/actions\\/runs\\/[0-9]+\\/jobs$/.test(args[1] ?? '')) {
+  const id = args[1].split('/').slice(-2)[0];
+  process.stdout.write(JSON.stringify({ jobs: JSON.parse(process.env.STUB_JOBS || '{}')[id] || [] }));
+} else if (args[0] === 'run' && args[1] === 'download') {
+  const status = JSON.parse(process.env.STUB_BUNDLES || '{}')[args[2]];
+  if (!status) fail('no artifact matches');
+  const dir = args[args.indexOf('-D') + 1];
+  require('node:fs').mkdirSync(dir, { recursive: true });
+  require('node:fs').writeFileSync(dir + '/status.json', JSON.stringify({ schema: '1', branch: 'feat_x', engine: 'task', ...status }));
+} else if (args[0] === 'run' && args[1] === 'list' && process.env.STUB_LIST_DISPATCHED && args.includes('url,displayTitle,headSha')) {
+  const branch = args[args.indexOf('--branch') + 1];
+  const tip = require('node:child_process').execFileSync('git', ['ls-remote', 'origin', 'refs/heads/' + branch], { encoding: 'utf8' }).split('\\t')[0];
+  process.stdout.write(JSON.stringify([{ displayTitle: 'harness run ' + branch, headSha: tip, url: 'https://example.test/runs/777' }]));
 } else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1] ?? '')) {
   process.stdout.write('[]');
 } else if (args[0] === 'api') {
@@ -177,6 +197,10 @@ async function reviewFixture(t) {
         STUB_PR_COMMENTS: '',
         STUB_PR_REVIEWS: '',
         STUB_RUN_LIST: '',
+        STUB_JOBS: '',
+        STUB_BUNDLES: '',
+        STUB_LIST_DISPATCHED: '',
+        HARNESS_TRIGGER_LOOKUP_SECS: '0',
         ...env,
       });
     },
@@ -464,14 +488,73 @@ test('a head without the story index is refused: the round cannot start on it', 
     /`feat_z` carries no story index \(`sdlc-harness\/story_plans\/feat_z_story_plan\.md`\).*cannot start on this branch/);
 });
 
-test('a review while the newest run is in progress is refused naming the round in flight; origin unchanged', async (t) => {
+/** A `run list` answer whose newest `harness run feat_x` run, 501, is `in_progress`. */
+const IN_PROGRESS = JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]);
+
+/** Assert the in-flight answer: exit 0, one reply matching <pattern>, no dispatch, origin unchanged. */
+const assertAcknowledged = async (f, result, before, pattern) => {
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(dispatches(calls), []);
+  const posted = replies(calls);
+  assert.equal(posted.length, 1, JSON.stringify(calls.map((call) => call.line)));
+  assert.equal(allComments(calls).length, 1);
+  assert.match(posted[0].body, pattern);
+  assert.doesNotMatch(posted[0].body, /was not run|submit your review again/i);
+  assert.equal(await f.originRefs(), before);
+  return posted[0];
+};
+
+test('a review while the newest run is in progress is collected, not refused; nothing pushed or dispatched', async (t) => {
+  const f = await reviewFixture(t);
+  const before = await f.originRefs();
+  const result = await f.control({}, { STUB_RUN_LIST: IN_PROGRESS });
+  const reply = await assertAcknowledged(f, result, before, /^@alice: your review was collected\. `feat_x` is `running`; /);
+  assert.match(reply.body, /the next user-review round starts by itself .* Nothing needs to be submitted again\./);
+  assert.ok(f.calls().some((call) => call.line === 'api repos/{owner}/{repo}/actions/runs/501/jobs'), 'the run job was read');
+});
+
+test('a review already recorded in a round while the branch is in flight is answered with that round', async (t) => {
+  const f = await reviewFixture(t);
+  await f.commitOn('feat_x', {
+    [`${REVIEW_DIR}/feat_x_review.md`]: `Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=${REVIEW_ID} comments= -->\n`,
+  }, 'chore: add user review for feat_x');
+  const before = await f.originRefs();
+  const result = await f.control({}, { STUB_RUN_LIST: IN_PROGRESS });
+  await assertAcknowledged(f, result, before, /^@alice: your review is part of round 1, which is `running` on `feat_x`\./);
+});
+
+test('a run whose run job has completed is read from its bundle: completed places the round', async (t) => {
+  const f = await reviewFixture(t);
+  const result = await f.control({}, {
+    STUB_RUN_LIST: IN_PROGRESS,
+    STUB_JOBS: JSON.stringify({ 501: [{ name: 'run', status: 'completed' }, { name: 'collect', status: 'in_progress' }] }),
+    STUB_BUNDLES: JSON.stringify({ 501: { status: 'completed' } }),
+  });
+  await assertRound(f, result);
+});
+
+test('a run whose run job has completed parked is in flight, and the reply names the answer command', async (t) => {
   const f = await reviewFixture(t);
   const before = await f.originRefs();
   const result = await f.control({}, {
-    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+    STUB_RUN_LIST: IN_PROGRESS,
+    STUB_JOBS: JSON.stringify({ 501: [{ name: 'run', status: 'completed' }] }),
+    STUB_BUNDLES: JSON.stringify({ 501: { status: 'parked' } }),
   });
-  const reply = await assertRefused(f, result, before, /feat_x is running on GitHub/);
-  assert.match(reply.body, /A round is in progress; submit your review again once it completes\./);
+  const reply = await assertAcknowledged(f, result, before, /^@alice: your review was collected\. `feat_x` is `parked`; /);
+  assert.match(reply.body, /comment `@sdlc-harness answer <n>`/);
+});
+
+test("review waits for its dispatch to be listed, finding the run by the pushed commit's headSha", async (t) => {
+  const f = await reviewFixture(t);
+  const result = await f.control({}, { STUB_LIST_DISPATCHED: '1' });
+  await assertRound(f, result);
+  assert.match(result.stdout, /^remote-run\.sh: the dispatched run of feat_x is listed: https:\/\/example\.test\/runs\/777$/m);
+  assert.doesNotMatch(result.stdout, /::warning::/);
+  const lines = f.calls().map((call) => call.line);
+  const dispatched = lines.indexOf(REVIEW_DISPATCH);
+  assert.ok(lines.slice(dispatched + 1).some((line) => line.startsWith('run list ') && line.includes('url,displayTitle,headSha')), JSON.stringify(lines));
 });
 
 test('a review of a cross-repository head is ignored with no gh call', async (t) => {

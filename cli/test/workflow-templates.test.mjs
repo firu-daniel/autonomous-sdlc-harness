@@ -38,8 +38,10 @@
  * each `write`; the job's `if:` carrying `COMMAND_HANDLE`, `COMMENT_MARKER` and `REVIEW_ROUND_STATE`
  * and comparing the head repository with `github.repository`, so a fork's review is skipped; the
  * checkout's `ref` the default branch, never the pull request's merge commit; `remote-run.sh control`
- * its only call into the script family; no `secrets.` reference and no `concurrency:` key; no
- * template token; every expression spaced, and none inside a `run:` block.
+ * its only call into the script family; no `secrets.` reference; one `concurrency:` group on the job,
+ * `harness-review-` plus the head ref for a review and the run's own id for a comment, with
+ * `cancel-in-progress: false`, so review jobs on one branch run one at a time and no comment job is
+ * ever replaced; no template token; every expression spaced, and none inside a `run:` block.
  *
  * For all four: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
  * pin the file dropped or a bumped `uses:` the header forgot fails; and every `uses:` value is a major
@@ -419,9 +421,16 @@ test('control runs remote-run.sh control and nothing else of the family', () => 
   assert.deepEqual(calls, ['remote-run.sh control']);
 });
 
-test('control references no secret and declares no concurrency group', () => {
+test('control references no secret, and serializes review jobs per head branch but never comment jobs', () => {
   assert.doesNotMatch(CONTROL_TEXT, /secrets\./);
-  assert.doesNotMatch(CONTROL_TEXT, /^\s*concurrency:/m);
+  const at = CONTROL_LINES.findIndex((l) => /^ {4}concurrency:$/.test(l));
+  assert.notEqual(at, -1, 'the control job declares a concurrency group');
+  assert.equal(CONTROL_LINES.filter((l) => /^\s*concurrency:/.test(l)).length, 1);
+  const block = blockUnder(at, CONTROL_LINES).map((l) => l.trim());
+  assert.deepEqual(block, [
+    "group: ${{ github.event_name == 'pull_request_review' && format('harness-review-{0}', github.event.pull_request.head.ref) || format('harness-control-{0}', github.run_id) }}",
+    'cancel-in-progress: false',
+  ]);
 });
 
 test('control carries no template token, and every expression is spaced and outside run blocks', () => {

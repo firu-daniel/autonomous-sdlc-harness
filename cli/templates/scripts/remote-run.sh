@@ -56,7 +56,8 @@
 #     2  refused, nothing sent or written: execution.target is not
 #        github-actions (sending verbs, fetch, review and list); for
 #        review, a protected branch, a review file that is not a readable
-#        regular file, or a run in flight (its paragraph); for sync, the
+#        regular file, or a branch its settledness test reads as not settled
+#        (its paragraph); for sync, the
 #        branch's local record does not carry `execution: github-actions`; for
 #        status, a local record that does not carry `execution:
 #        github-actions`, or no record and `execution.target` not
@@ -136,11 +137,16 @@
 # `/autonomous-sdlc-harness:branch-user-review` on a run that executes on
 # GitHub. In order, stopping at the first failure: refuse a protected branch
 # and a review file that is not a readable regular file (2; a relative
-# --review-file resolves against the caller's directory); refuse a branch whose
-# newest `harness run <branch>` run, by `remote_state`, is anything but
-# `completed` or `failed` — none listed (unless --allow-no-run), `running`,
-# `parked`, `park_loop` or `paused`, an expired bundle naming its expiry (2);
-# the bundle it reads is
+# --review-file resolves against the caller's directory); refuse a branch that
+# `branch_settled_var`, the settledness test `control` shares, reads as not
+# settled (2). Its newest `harness run <branch>` run decides: none listed is
+# settled only under --allow-no-run; a `completed` one is read by
+# `remote_state`; any other is in flight as `running` until its `RUN_JOB_NAME`
+# job has completed, and then read by `remote_state` as a finished run. Settled
+# is `completed` or `failed`; `running`, `parked`, `park_loop` and `paused` are
+# refused, an expired bundle naming its expiry. The refusal stays for this
+# verb because a local round's file exists only on the caller's machine, so no
+# later collection could pick it up. The bundle it reads is
 # downloaded to `sync`'s directory, the one write a refusal makes. The copy: the main
 # checkout's remote record's mirror when its `worktree` exists and is on the
 # branch, never removed; otherwise `create-worktree.sh --existing
@@ -154,7 +160,11 @@
 # matched, else `<branch>_review_<max+1>.md`. It is placed, committed as
 # `hr_user_review_subject`'s `chore: add user review for <branch>` and pushed
 # (each failure 4); the cut copy is removed; then `dispatch --engine
-# user_review --resume none --chain 0`. A remote record, when one exists, is
+# user_review --resume none --chain 0`, after which it holds until a `harness run
+# <branch>` run whose `headSha` is the pushed commit is listed — `run_by_sha_var`,
+# `trigger`'s bounded lookup — so a review job serialized behind it never reads
+# the branch as settled before GitHub lists the new run; a lookup that runs out
+# is one `::warning::` line and still exit 0. A remote record, when one exists, is
 # set `running` / `user_review` in one write after the dispatch. Then the round
 # is reported as `report round`. Under --reviewers (comma-separated logins) the
 # note is `Round <round> from pull request #<pr> by @<a>, @<b>`, <pr> read from
@@ -409,7 +419,17 @@
 # nothing, and draft status plays no part. Then gates 1-3 above, in order, each
 # a reply on the pull request, and `control_check_branch` on the head; then a
 # head whose origin tip carries no `<state>/story_plans/<head>_story_plan.md`
-# is refused, because the round reads its story index. A round is CUMULATIVE,
+# is refused, because the round reads its story index. A REVIEW IS NEVER
+# REFUSED FOR A RUN IN FLIGHT. The head is read by `branch_settled_var`, no run
+# counting as settled, in a command substitution so a failed read is a reply
+# (exit 3) rather than an exit with none. Not settled: a reply and exit 0,
+# nothing pushed or dispatched — `your review is part of round <n>, which is
+# <state>` when a marker on origin's tip records the event's review id, else
+# `your review was collected`, naming the state and saying the next round
+# starts by itself when that run finishes, plus the state's way on: `answer
+# <n>` for `parked`, `clear` for `park_loop`, `resume` for any `paused` but
+# `usage`, and for `usage` that it resumes after the reset. The review stays on
+# the pull request, and a later round collects it. Settled: a round is CUMULATIVE,
 # built by `round_collect` in a fresh file under `RUNNER_TEMP` from ONE
 # paginated `pulls/<n>/reviews` and ONE paginated `pulls/<n>/comments` listing
 # — never the per-review endpoint, which carries no `line` — the event's own
@@ -442,12 +462,15 @@
 # is pending, and exit 0. Then `review <head> --review-file <file>
 # --allow-no-run --reviewers <logins> --source <pull request url>` runs as a
 # child, which fast-forwards, commits `chore: add user review for <head>`, pushes,
-# dispatches `engine: user_review` and reports the round itself. Its 0 is exit
-# 0 with nothing more posted; 2 is a reply quoting its last line — adding that
-# a round is in progress when that line names a running run — and exit 2; 3 a
-# reply quoting the re-send line, exit 3; 4 a reply that placement failed and
-# nothing was dispatched, exit 4. A refusal reads `@<login>: `review` was not
-# run: …`.
+# dispatches `engine: user_review`, waits for its run to be listed and reports
+# the round itself. Its 0 is exit 0 with nothing more posted; 2 means the branch
+# became unsettled between the two reads, answered with the in-flight reply
+# above (the state read again) and exit 0; 3 a reply quoting the re-send line,
+# exit 3; 4 a reply that placement failed and nothing was dispatched, exit 4.
+# A refusal reads `@<login>: `review` was not run: …`, and no reply to a review
+# asks for it to be submitted again to be kept: a reply that started nothing
+# says the reviews stay on the pull request for the next round, and that
+# submitting a review requesting changes retries now.
 # A child's failure is a reply
 # naming its last stderr line, and exit 3. Every reply goes to the item the comment was
 # typed on, opens `@<login>`, and carries the `reply` marker; a refusal reads
@@ -740,7 +763,8 @@
 # root's `harness.config.json`.
 #
 # WHAT IT NEVER DOES. It never launches a local session, never writes the
-# inbox, and never watches a run it sent. Only `start` and `review` push, and
+# inbox, and never watches a run it sent beyond the bounded lookup of its
+# listing that `trigger` and `review` make. Only `start` and `review` push, and
 # only through `create-worktree.sh` and `push-branch.sh`; `start`'s writes are
 # the prompt committed on `origin/<branch>`, through a working copy and a local
 # branch it removes before it returns; `review`'s are the round committed on
@@ -840,8 +864,11 @@
 #              bash scripts/remote-run.sh review feat_x --review-file /tmp/r.md
 #              -> 0; origin/feat_x gains `chore: add user review for feat_x`
 #                 placing feat_x_review.md, then one `-f engine=user_review`
-#                 dispatch; no copy or local feat_x is left
-#   in flight  the newest run `in_progress` -> 2, nothing pushed or sent
+#                 dispatch; no copy or local feat_x is left; the stub lists no
+#                 run of the pushed `headSha`, so one `::warning::` line follows
+#                 (export HARNESS_TRIGGER_LOOKUP_SECS=0 to skip the waits)
+#   in flight  the newest run `in_progress`, its jobs listing no completed
+#              `run` job -> 2, nothing pushed or sent
 #   no run     no `harness run feat_x` run listed -> 2, nothing pushed; with
 #              --allow-no-run -> 0, placed and dispatched as `review` above
 #   reported   report's setup, then review ... --actor alice --source
@@ -1070,6 +1097,10 @@ POLL_STATE_RUNS_LIMIT=10
 # between tries is `HARNESS_TRIGGER_LOOKUP_SECS`, a test seam.
 TRIGGER_RUN_LOOKUP_TRIES=6
 TRIGGER_LOOKUP_SECS_DEFAULT=5
+# The `run` job's name in WORKFLOW_RUN_FILE: its key, since it has no `name:`.
+# `branch_settled_var` reads that job's status; harness-run.yml's header
+# declares the mirror.
+RUN_JOB_NAME='run'
 # How far before the previous round's `collected_at` `round_collect` lists
 # from, absorbing runner-clock skew; the id check drops what it re-lists.
 ROUND_OVERLAP_SECS=300
@@ -1796,7 +1827,9 @@ sync_expired() {
 # into <download_dir> — `sync`'s per-run directory under the main checkout when
 # empty — skipped when that directory already holds its status.json, and
 # RS_BUNDLE is then 1. <applied_run_id>, when set, also counts as a bundle
-# existing for case 4. Exits 3 when gh fails, 2 for an unrecognised bundle.
+# existing for case 4. <finished> 1 reads the newest run as finished whatever
+# its `status`: `branch_settled_var` passes it once that run's `run` job has
+# completed. Exits 3 when gh fails, 2 for an unrecognised bundle.
 RS_RUNS=""
 RS_RUN_ID=""
 RS_RUN_URL=""
@@ -1810,7 +1843,7 @@ RS_PARK_LOOP_CYCLES=""
 RS_BUNDLE=0
 RS_DOWNLOAD=""
 remote_state() {
-  local download="${1-}" applied="${2-}" newest status_file older bundle_exists=0
+  local download="${1-}" applied="${2-}" finished="${3-0}" newest status_file older bundle_exists=0
   RS_RUNS=""; RS_RUN_ID=""; RS_RUN_URL=""; RS_GH_STATUS=""; RS_STATE=""
   RS_PAUSE_REASON=""; RS_DETAIL=""; RS_ENGINE=""; RS_USAGE_RESUME_AT=""
   RS_PARK_LOOP_CYCLES=""; RS_BUNDLE=0; RS_DOWNLOAD=""
@@ -1823,7 +1856,7 @@ remote_state() {
   RS_RUN_ID=$(printf '%s' "$newest" | jq -r '.databaseId | tostring')
   RS_GH_STATUS=$(printf '%s' "$newest" | jq -r '.status // ""')
   RS_RUN_URL=$(printf '%s' "$newest" | jq -r '.url // ""')
-  if [ "$RS_GH_STATUS" != completed ]; then
+  if [ "$RS_GH_STATUS" != completed ] && [ "$finished" != 1 ]; then
     RS_STATE=running
     return 0
   fi
@@ -1896,6 +1929,48 @@ remote_state() {
   # Case 5 — no bundle in any run.
   RS_STATE=failed
   RS_DETAIL="no run of $branch ever uploaded a state bundle; newest: $RS_RUN_URL"
+  return 0
+}
+
+# branch_settled_var <download_dir> <allow_no_run 0|1> — the one settledness
+# test `review` and `control` share: whether a user-review round may be placed
+# on the branch now. Lists the runs itself, then derives RS_* through
+# `remote_state`. The newest `harness run <branch>` run decides:
+#   none listed      settled only under <allow_no_run> 1 (RS_STATE `none`)
+#   `completed`      `remote_state` as ever
+#   anything else    its jobs are read: while no job named RUN_JOB_NAME exists
+#                    (queued) or that job is not `completed`, in flight as
+#                    `running`; once it is, the run's bundle decides as for a
+#                    finished run, since only a later job of that run is left
+# SETTLED is 1 for RS_STATE `completed` or `failed` (and `none` as above), else
+# 0. Exits 3 when gh fails, 2 for an unrecognised bundle, as `remote_state` does.
+SETTLED=0
+branch_settled_var() {
+  local download="${1-}" allow="${2-0}" listed newest id status job finished=0
+  SETTLED=0
+  list_runs
+  # `remote_state` reads the listing from GH_OUT, which the jobs call replaces.
+  listed="$GH_OUT"
+  newest=$(titled_runs "harness run $branch" | jq -c '.[0] // empty') || newest=""
+  if [ -n "$newest" ]; then
+    status=$(printf '%s' "$newest" | jq -r '.status // ""')
+    if [ "$status" != completed ]; then
+      id=$(printf '%s' "$newest" | jq -r '.databaseId | tostring')
+      gh_call api "repos/{owner}/{repo}/actions/runs/$id/jobs" || gh_fail "reading the jobs of run $id failed"
+      job=$(printf '%s' "$GH_OUT" | jq -r --arg n "$RUN_JOB_NAME" \
+        '[.jobs[]? | select(.name == $n) | .status // ""] | first // ""' 2>/dev/null) || {
+        GH_ERR="its job list is not the expected JSON"
+        gh_fail "reading the jobs of run $id failed"
+      }
+      [ "$job" != completed ] || finished=1
+    fi
+  fi
+  GH_OUT="$listed"
+  remote_state "$download" "" "$finished"
+  case "$RS_STATE" in
+    completed|failed) SETTLED=1 ;;
+    none) [ "$allow" != 1 ] || SETTLED=1 ;;
+  esac
   return 0
 }
 
@@ -2877,7 +2952,7 @@ remote_record_exists() {
 }
 
 verb_review() {
-  local protected=0 status=0 reg="" record_wt="" use_mirror=0 state_rel names name round max=0 next rel note pr
+  local protected=0 status=0 reg="" record_wt="" use_mirror=0 state_rel names name round max=0 next rel note pr pushed
   hr_branch_is_protected "$root" "$branch" || protected=$?
   case "$protected" in
     0)
@@ -2892,27 +2967,24 @@ verb_review() {
     exit "$EXIT_REFUSED"
   fi
 
-  # A run in flight takes no review: the local rule, `completed` or `failed` only.
-  list_runs
-  remote_state ""
-  case "$RS_STATE" in
-    completed|failed) ;;
-    none)
-      if [ "$allow_no_run" -eq 0 ]; then
-        echo "remote-run.sh: refused, nothing written: no \`harness run $branch\` run on GitHub" >&2
-        exit "$EXIT_REFUSED"
-      fi ;;
-    paused)
-      if [ "$RS_PAUSE_REASON" = expired ]; then
-        echo "remote-run.sh: refused, nothing written: $RS_DETAIL" >&2
-      else
-        echo "remote-run.sh: refused, nothing written: $branch is paused${RS_PAUSE_REASON:+ ($RS_PAUSE_REASON)} on GitHub; a review waits until its run is completed or failed" >&2
-      fi
-      exit "$EXIT_REFUSED" ;;
-    *)
-      echo "remote-run.sh: refused, nothing written: $branch is $RS_STATE on GitHub; a review waits until its run is completed or failed" >&2
-      exit "$EXIT_REFUSED" ;;
-  esac
+  # An unsettled branch takes no review here: a local round's file exists only
+  # on the caller's machine, so no later collection could pick it up.
+  branch_settled_var "" "$allow_no_run"
+  if [ "$SETTLED" -ne 1 ]; then
+    case "$RS_STATE" in
+      none)
+        echo "remote-run.sh: refused, nothing written: no \`harness run $branch\` run on GitHub" >&2 ;;
+      paused)
+        if [ "$RS_PAUSE_REASON" = expired ]; then
+          echo "remote-run.sh: refused, nothing written: $RS_DETAIL" >&2
+        else
+          echo "remote-run.sh: refused, nothing written: $branch is paused${RS_PAUSE_REASON:+ ($RS_PAUSE_REASON)} on GitHub; a review waits until its run is completed or failed" >&2
+        fi ;;
+      *)
+        echo "remote-run.sh: refused, nothing written: $branch is $RS_STATE on GitHub; a review waits until its run is completed or failed" >&2 ;;
+    esac
+    exit "$EXIT_REFUSED"
+  fi
 
   # The copy: the remote record's mirror when it is on the branch, never
   # removed; else a copy this verb cuts and removes on every exit.
@@ -2973,6 +3045,7 @@ NAMES
   [ "$status" -eq 0 ] || review_fail "committing '$rel'"
   hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 \
     || review_fail "pushing $branch (origin/$branch is not HEAD)"
+  pushed=$(git -C "$worktree" rev-parse HEAD 2>/dev/null) || pushed=""
   if [ "$use_mirror" -eq 0 ]; then
     start_remove_copy
     trap - EXIT
@@ -2984,6 +3057,16 @@ NAMES
   chain=0
   dispatch_fail_note="; the review is already pushed to origin/$branch, so re-send with: remote-run.sh dispatch $branch --engine user_review"
   verb_dispatch
+
+  # Held until GitHub lists the dispatched run: the next job serialized behind
+  # this one would otherwise read the branch as settled and place a second
+  # round, whose dispatch cancels this one's pending run in the run workflow's
+  # concurrency group.
+  if run_by_sha_var "$pushed"; then
+    echo "remote-run.sh: the dispatched run of $branch is listed: $RUN_BY_SHA_URL"
+  else
+    echo "::warning::remote-run.sh: no \`harness run $branch\` run of ${pushed:-the pushed commit} was listed after $TRIGGER_RUN_LOOKUP_TRIES lookups; the round is dispatched, but a review job reading $branch now may read it as settled"
+  fi
 
   if remote_record_exists "$reg"; then
     hr_registry_set "$reg" "$branch" status running engine user_review \
@@ -3215,15 +3298,17 @@ authorise_actor() {
   return 3
 }
 
-# trigger_run_url <sha> — the URL of the `harness run <branch>` run whose
-# `headSha` is <sha>, the commit `start` just pushed, looked up at most
-# TRIGGER_RUN_LOOKUP_TRIES times; the branch's filtered run list when none
-# appears, and at once when <sha> is empty. Never fails. Matched on `headSha`
-# rather than a `createdAt` bound: the SHA identifies this dispatch exactly and
-# reads no runner clock, where a time bound still admits an unrelated run
-# created in the same second.
-trigger_run_url() {
+# run_by_sha_var <sha> — RUN_BY_SHA_URL: the URL of the `harness run
+# <branch>` run whose `headSha` is <sha>, a commit just pushed and dispatched,
+# looked up at most TRIGGER_RUN_LOOKUP_TRIES times, `HARNESS_TRIGGER_LOOKUP_SECS`
+# apart; 1 when none was listed within that bound, and at once when <sha> is
+# empty. Never exits. Matched on `headSha` rather than a `createdAt` bound: the
+# SHA identifies this dispatch exactly and reads no runner clock, where a time
+# bound still admits an unrelated run created in the same second.
+RUN_BY_SHA_URL=""
+run_by_sha_var() {
   local sha="${1-}" try=1 secs url=""
+  RUN_BY_SHA_URL=""
   secs="${HARNESS_TRIGGER_LOOKUP_SECS-}"
   case "$secs" in
     ''|*[!0-9]*) secs="$TRIGGER_LOOKUP_SECS_DEFAULT" ;;
@@ -3234,12 +3319,21 @@ trigger_run_url() {
         '[.[]? | select(.displayTitle == $t and .headSha == $s) | .url | strings] | first // empty' 2>/dev/null) || url=""
       [ -z "$url" ] || break
     else
-      echo "remote-run.sh: trigger: looking up the run of $branch failed: $GH_ERR" >&2
+      echo "remote-run.sh: $verb: looking up the run of $branch failed: $GH_ERR" >&2
     fi
     [ "$try" -lt "$TRIGGER_RUN_LOOKUP_TRIES" ] || break
     try=$((try + 1))
     sleep "$secs"
   done
+  RUN_BY_SHA_URL="$url"
+  [ -n "$url" ]
+}
+
+# trigger_run_url <sha> — `run_by_sha_var`'s URL for the commit `start` just
+# pushed; the branch's filtered run list when none appears. Never fails.
+trigger_run_url() {
+  local url=""
+  ! run_by_sha_var "${1-}" || url="$RUN_BY_SHA_URL"
   # A derived name is `[a-z0-9_]` only, so it needs no encoding in the query.
   [ -n "$url" ] || url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY-}/actions/workflows/${WORKFLOW_RUN_FILE}?query=branch%3A$branch"
   printf '%s\n' "$url"
@@ -3771,7 +3865,7 @@ forge_report() {
         text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, re-apply the label \`$trigger_label\` to this issue; that starts a new run, on the next indexed branch."
       fi ;;
     stopped)
-      text="The harness run on \`$br\` was stopped. Comment \`${COMMAND_HANDLE} resume\` to continue it from its committed ledger. A review that requests changes starts a round only once a run of the branch has completed or failed." ;;
+      text="The harness run on \`$br\` was stopped. Comment \`${COMMAND_HANDLE} resume\` to continue it from its committed ledger. A review that requests changes is collected now, and its round starts once the resumed run finishes." ;;
     round)
       text="A user-review round started on \`$br\`; a \`completed\` comment follows when the branch is ready for review again." ;;
   esac
@@ -4482,24 +4576,30 @@ RC_REVIEWS=0
 RC_REVIEWERS=""
 RC_EVENT_ROUND=""
 RC_ERR=""
-round_collect() {
-  local pr="$1" file="$2" collected_at state_rel names name path n line event_id=""
-  local seen_r="," seen_c="," marked_max=0 marked_at="" since="" tmp status
-  local kept authors login type allowed="," count text
-  RC_REVIEWS=0
-  RC_REVIEWERS=""
+# round_markers_read <event_review_id> — what the global `branch`'s rounds on
+# origin's tip consumed, from their marker lines: RC_SEEN_R and RC_SEEN_C (the
+# recorded review and comment ids, comma-wrapped), RC_MARKED_AT (the
+# highest-numbered marked round's `collected_at`, empty when none is marked),
+# RC_EVENT_ROUND (the round recording <event_review_id>), and RC_STATE_REL.
+# 4 with RC_ERR when a round cannot be listed or read. `control` also calls it
+# on its own, to name the round a review in flight is already part of.
+RC_SEEN_R=","
+RC_SEEN_C=","
+RC_MARKED_AT=""
+RC_STATE_REL=""
+round_markers_read() {
+  local event_id="${1-}" names name path n line marked_max=0
+  RC_SEEN_R=","
+  RC_SEEN_C=","
+  RC_MARKED_AT=""
   RC_EVENT_ROUND=""
-  RC_ERR=""
-  collected_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  [ -z "$RC_EVENT" ] || event_id=$(printf '%s' "$RC_EVENT" | jq -r '.id // empty' 2>/dev/null) || event_id=""
-
-  state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
-  state_rel="${state_rel%/}"
-  if [ -z "$state_rel" ]; then
+  RC_STATE_REL=$(hr_state_dir "$root" 2>/dev/null) || RC_STATE_REL=""
+  RC_STATE_REL="${RC_STATE_REL%/}"
+  if [ -z "$RC_STATE_REL" ]; then
     RC_ERR="the state directory under '$root' could not be resolved"
     return 4
   fi
-  if ! names=$(git -C "$root" ls-tree --name-only "refs/remotes/origin/$branch" -- "$state_rel/user_reviews/" 2>/dev/null); then
+  if ! names=$(git -C "$root" ls-tree --name-only "refs/remotes/origin/$branch" -- "$RC_STATE_REL/user_reviews/" 2>/dev/null); then
     RC_ERR="the previous rounds of \`$branch\` could not be listed"
     return 4
   fi
@@ -4516,11 +4616,11 @@ round_collect() {
     # The last marker line wins; a round placed before markers carries none.
     line=$(printf '%s\n' "$line" | grep -F "$COMMENT_MARKER round collected_at=" | tail -n 1)
     [[ "$line" =~ ^"$COMMENT_MARKER round collected_at="([0-9T:Z-]+)" reviews="([0-9,]*)" comments="([0-9,]*)" -->"$ ]] || continue
-    seen_r="$seen_r${BASH_REMATCH[2]}${BASH_REMATCH[2]:+,}"
-    seen_c="$seen_c${BASH_REMATCH[3]}${BASH_REMATCH[3]:+,}"
+    RC_SEEN_R="$RC_SEEN_R${BASH_REMATCH[2]}${BASH_REMATCH[2]:+,}"
+    RC_SEEN_C="$RC_SEEN_C${BASH_REMATCH[3]}${BASH_REMATCH[3]:+,}"
     if [ "$n" -gt "$marked_max" ]; then
       marked_max="$n"
-      marked_at="${BASH_REMATCH[1]}"
+      RC_MARKED_AT="${BASH_REMATCH[1]}"
     fi
     case ",${BASH_REMATCH[2]}," in
       *",$event_id,"*) [ -z "$event_id" ] || RC_EVENT_ROUND="$n" ;;
@@ -4528,6 +4628,25 @@ round_collect() {
   done <<NAMES
 $names
 NAMES
+  return 0
+}
+
+round_collect() {
+  local pr="$1" file="$2" collected_at state_rel event_id=""
+  local seen_r seen_c marked_at since="" tmp status
+  local kept authors login type allowed="," count text
+  RC_REVIEWS=0
+  RC_REVIEWERS=""
+  RC_EVENT_ROUND=""
+  RC_ERR=""
+  collected_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  [ -z "$RC_EVENT" ] || event_id=$(printf '%s' "$RC_EVENT" | jq -r '.id // empty' 2>/dev/null) || event_id=""
+
+  round_markers_read "$event_id" || return 4
+  state_rel="$RC_STATE_REL"
+  seen_r="$RC_SEEN_R"
+  seen_c="$RC_SEEN_C"
+  marked_at="$RC_MARKED_AT"
   # Epoch seconds, so the comparison with `submitted_at` / `created_at` reads no time zone.
   if [ -n "$marked_at" ]; then
     if ! since=$(jq -n -r --arg t "$marked_at" --argjson o "$ROUND_OVERLAP_SECS" '($t | fromdateiso8601) - $o' 2>/dev/null); then
@@ -4658,14 +4777,79 @@ AUTHORS
   return 0
 }
 
-# control_review — the round of one review requesting changes, placed and
-# dispatched by a `review` child, the local relay's own verb.
+# The way on of every review reply that started nothing: a review is never
+# resubmitted to be kept, only to retry now.
+REVIEW_RETRY_WAY="The reviews stay on the pull request and are collected by the next round; submit any review requesting changes to retry now."
+
+# control_settled_var — `branch_settled_var` for CONTROL_BRANCH, with no run
+# counted as settled, run in a command substitution so that its exit on a
+# failed read reaches this process as a status, not as an exit with no reply:
+# BS_SETTLED, BS_STATE and BS_REASON; 1 with BS_ERR, its last stderr line, on a
+# failed read.
+BS_SETTLED=0; BS_STATE=""; BS_REASON=""; BS_ERR=""
+control_settled_var() {
+  local dir errfile line status=0
+  BS_SETTLED=0; BS_STATE=""; BS_REASON=""; BS_ERR=""
+  if ! dir=$(mktemp -d "$control_tmp/harness-control-settled.XXXXXX"); then
+    BS_ERR="a state directory could not be created under '$control_tmp'"
+    return 1
+  fi
+  errfile="$dir.err"
+  control_dirs="$control_dirs $dir $errfile"
+  branch="$CONTROL_BRANCH"
+  line=$(branch_settled_var "$dir" 1 >/dev/null 2>"$errfile" \
+    && printf '%s|%s|%s\n' "$SETTLED" "$RS_STATE" "$RS_PAUSE_REASON") || status=$?
+  cat "$errfile" >&2 2>/dev/null || :
+  if [ "$status" -ne 0 ] || [ -z "$line" ]; then
+    BS_ERR=$(grep -v '^[[:space:]]*$' "$errfile" 2>/dev/null | tail -n 1)
+    [ -n "$BS_ERR" ] || BS_ERR="exit $status, no message"
+    return 1
+  fi
+  IFS='|' read -r BS_SETTLED BS_STATE BS_REASON <<<"$line"
+  return 0
+}
+
+# control_review_in_flight — the reply to a review while CONTROL_BRANCH is in
+# flight (BS_STATE; empty when unknown), then exit 0: never a refusal, nothing
+# pushed or dispatched. Names the round whose marker on origin's tip already
+# records the review, else says it was collected, with the state's way on.
+control_review_in_flight() {
+  local state="in flight" way=""
+  if [ -n "$BS_STATE" ]; then
+    state="\`$BS_STATE\`"
+    [ -z "$BS_REASON" ] || state="$state (\`$BS_REASON\`)"
+  fi
+  case "$BS_STATE" in
+    parked)
+      way=" The run waits for an answer: comment \`$COMMAND_HANDLE answer <n>\` with the answer to its open question <n> on the lines below it." ;;
+    park_loop)
+      way=" The run is held by the park-loop guard: comment \`$COMMAND_HANDLE clear\` to release the hold." ;;
+    paused)
+      if [ "$BS_REASON" = usage ]; then
+        way=" The run resumes by itself once the usage limit resets."
+      else
+        way=" Comment \`$COMMAND_HANDLE resume\` to resume the run from its committed ledger."
+      fi ;;
+  esac
+  branch="$CONTROL_BRANCH"
+  if round_markers_read "$REVIEW_ID" && [ -n "$RC_EVENT_ROUND" ]; then
+    control_reply "$EXIT_OK" "@$CONTROL_ACTOR: your review is part of round $RC_EVENT_ROUND, which is $state on \`$CONTROL_BRANCH\`."
+  fi
+  control_reply "$EXIT_OK" "@$CONTROL_ACTOR: your review was collected. \`$CONTROL_BRANCH\` is $state; when that run finishes, the next user-review round starts by itself from every review requesting changes and every inline comment left since the previous round, yours included. Nothing needs to be submitted again.$way"
+}
+
+# control_review — a review requesting changes. In flight: acknowledged and
+# left on the pull request for the next round. Settled: the cumulative round,
+# placed and dispatched by a `review` child, the local relay's own verb.
 control_review() {
-  local dir file out way status
+  local dir file out status
   control_review_story
+  control_settled_var \
+    || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($BS_ERR)" "$REVIEW_RETRY_WAY"
+  [ "$BS_SETTLED" = 1 ] || control_review_in_flight
   if ! dir=$(mktemp -d "$control_tmp/harness-control-review.XXXXXX"); then
     control_refuse "$EXIT_PLACEMENT" "a round directory could not be created under '$control_tmp', so nothing was dispatched" \
-      "Submit the review again to retry."
+      "$REVIEW_RETRY_WAY"
   fi
   control_dirs="$control_dirs $dir"
   file="$dir/review.md"
@@ -4673,7 +4857,7 @@ control_review() {
     --arg at "$REVIEW_AT" --arg login "$CONTROL_ACTOR" --arg type "$CONTROL_SENDER_TYPE" \
     '{id: $id, state: "CHANGES_REQUESTED", body: $body, html_url: $url, submitted_at: $at, user: {login: $login, type: $type}}'); then
     control_refuse "$EXIT_PLACEMENT" "the review could not be read into the round, so nothing was dispatched" \
-      "Submit the review again to retry."
+      "$REVIEW_RETRY_WAY"
   fi
   branch="$CONTROL_BRANCH"
   status=0
@@ -4686,10 +4870,10 @@ control_review() {
       fi
       control_reply "$EXIT_OK" "@$CONTROL_ACTOR: no review requesting changes is pending on pull request #$CONTROL_NUMBER since the previous round of \`$CONTROL_BRANCH\`, so no round was started." ;;
     3)
-      control_refuse "$EXIT_GH" "the round could not be collected: $RC_ERR" "Submit the review again to retry." ;;
+      control_refuse "$EXIT_GH" "the round could not be collected: $RC_ERR" "$REVIEW_RETRY_WAY" ;;
     *)
       control_refuse "$EXIT_PLACEMENT" "the round could not be collected: $RC_ERR, so nothing was dispatched" \
-        "Submit the review again to retry." ;;
+        "$REVIEW_RETRY_WAY" ;;
   esac
   out="$dir/review.out"
   set -- review "$CONTROL_BRANCH" --review-file "$file" --allow-no-run --reviewers "$RC_REVIEWERS"
@@ -4701,19 +4885,18 @@ control_review() {
   case "$CHILD_STATUS" in
     0) exit "$EXIT_OK" ;;
     2)
-      way="Submit the review again once that is fixed."
-      case "$CHILD_LAST" in
-        *" is running on GitHub"*) way="A round is in progress; submit your review again once it completes." ;;
-      esac
-      control_refuse "$EXIT_REFUSED" "the round was refused ($CHILD_LAST)" "$way" ;;
+      # The branch became unsettled between the two reads: a run started in
+      # between, so the review waits for it like any review in flight.
+      control_settled_var && [ "$BS_SETTLED" != 1 ] || { BS_STATE=""; BS_REASON=""; }
+      control_review_in_flight ;;
     3)
       control_refuse "$EXIT_GH" "the round is pushed but its dispatch failed ($CHILD_LAST)" \
         "Re-send the dispatch as that line says." ;;
     4)
       control_refuse "$EXIT_PLACEMENT" "placing the round failed and nothing was dispatched ($CHILD_LAST)" \
-        "Submit the review again to retry." ;;
+        "$REVIEW_RETRY_WAY" ;;
     *)
-      control_refuse "$EXIT_GH" "the round could not be started ($CHILD_LAST)" "Submit the review again to retry." ;;
+      control_refuse "$EXIT_GH" "the round could not be started ($CHILD_LAST)" "$REVIEW_RETRY_WAY" ;;
   esac
 }
 

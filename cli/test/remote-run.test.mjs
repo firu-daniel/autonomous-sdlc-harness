@@ -181,7 +181,7 @@ async function remoteFixture(t, target = 'github-actions') {
 
 /** Run the script from the fixture root with the stub as `gh`. */
 function remoteRun(fx, args, env = {}) {
-  return runBash(fx.dir, [SCRIPT, ...args], { HARNESS_GH_CLI: fx.stub, STUB_LOG: fx.log, ...env });
+  return runBash(fx.dir, [SCRIPT, ...args], { HARNESS_GH_CLI: fx.stub, STUB_LOG: fx.log, HARNESS_TRIGGER_LOOKUP_SECS: '0', ...env });
 }
 
 /** Every argument vector the stub recorded, in call order. */

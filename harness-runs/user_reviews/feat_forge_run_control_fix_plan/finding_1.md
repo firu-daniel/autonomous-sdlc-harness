@@ -55,3 +55,15 @@ There is a second defect in the same path. `harness-control.yml` deliberately ha
 - Add a case where the newest run is `in_progress`, its `run` job is `completed`, and its bundle says `completed`, so the round is placed. The stub needs the `actions/runs/<id>/jobs` answer.
 - Add a case where the post-dispatch lookup finds the run by `headSha`.
 - In `cli/test/workflow-templates.test.mjs`, rewrite `control references no secret and declares no concurrency group`. It asserts that there is still no secret, and that the `concurrency` group is `harness-review-` plus the head ref for a review and per-run for a comment, with `cancel-in-progress: false`. Update that file's header sentence ("no `concurrency:` key") to match.
+
+**Deviations from plan:**
+
+- `cli` layer: `harness-control.yml`'s group paragraph states that the name `harness-review-<branch>` is reserved for every job that places a review round on that branch, and that any other workflow's job doing so joins under that name with both headers declaring it. It does not yet name `harness-run.yml`'s `collect` job, which does not exist until Finding 3 lands; Finding 3 adds that job and its half of the mirror.
+- `cli` layer: `harness-run.yml`'s mirror entry for `RUN_JOB_NAME` names `remote-run.sh (the scriptsDir copy)` rather than a path, because `workflow-templates.test.mjs` → `no configured directory is frozen into the file` refuses any `scripts/` path in that file.
+- `cli` layer: `control` runs the settledness test through `control_settled_var`, inside a command substitution, because `branch_settled_var` exits on a failed read (as `remote_state` does) and an exit inside `control` would post no reply. A failed read is a reply and exit 3, with the new way on.
+- `cli` layer: `remote_state` gained a third argument, `<finished>`, rather than `branch_settled_var` re-implementing case 3. With it set, the newest run is read as finished whatever its `status`, so cases 2–5 all apply once its `run` job has completed (a run whose `run` job completed with no bundle reads as `killed` or `failed`, as for a finished run).
+- `cli` layer: the marker reading in `round_collect` was factored into `round_markers_read`, which `control_review_in_flight` calls on its own to name the round recording the event's review.
+- `cli` layer: when `review` exits 2 after a settled read, the state is read again for the reply; when that read fails or reads settled, the reply says the branch is "in flight" without naming a state.
+- `cli` layer: the `part of round <n>` in-flight reply carries no way on; item 2 appends one to the `collected` reply only.
+- `cli` layer: `remote-run.test.mjs` → `remoteRun` now sets `HARNESS_TRIGGER_LOOKUP_SECS` to `0`, because `review`'s post-dispatch lookup would otherwise wait between its tries in every `review` case. Beyond the plan's list, `remote-control-review.test.mjs` adds a case where the `run` job has completed and the bundle says `parked`, so the reply names `@sdlc-harness answer <n>`.
+- Not run in this dispatch: `docs/github-run-control.md` §1 and §8 still describe the refusal. They belong to Finding 4 (`general` layer).
