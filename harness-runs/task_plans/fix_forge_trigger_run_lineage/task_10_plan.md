@@ -50,3 +50,8 @@
 - The two quoted log lines in **Central state.** are byte-identical to the strings `cli/templates/scripts/remote-run.sh` prints. Check with `git grep -nF` for each quoted string across `docs/remote-execution.md` and that script: both files must match.
 - The new §6 row has four cells, like its neighbours.
 - `git grep -nE '^\| .remote-run\.sh. \|' -- docs/watcher.md` prints a row naming `discard` in both its description and its callers cell, and with the same number of cells as before.
+
+**Deviations from plan:**
+- The unbounded log line is quoted with `<reason>`, the placeholder `remote-run.sh`'s header uses for `$LINEAGE_WHY`, not the Depends-on bullet's `<why>`.
+- Neither log line is byte-identical end to end in the script: its code interpolates `$LINEAGE_SKIPPED` / `$branch` / `$LINEAGE_WHY`, and its header wraps the skipped line. The `git grep -cF` check was run on the fixed fragments (`finished run(s) of`, `from before its current lineage`, `not bounded (<reason>); every finished run of it is a candidate`), each matching both files.
+- The new §6 row cites Gate 12 (xiii) leg (d), which `docs/development.md` does not carry yet; Task 12 adds it.
