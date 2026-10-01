@@ -806,6 +806,25 @@ test('report: a parked job comments on its issue with forge github, and calls no
   }
 });
 
+test('report: a job whose sessions keep failing reports failed on its issue once, after its automatic resumes', async (t) => {
+  const j = await createJobFixture(t);
+  if (j === null) return;
+  await wireForge(j, 'github');
+  await j.setStub('exit 2');
+  const result = await j.job([j.branch, 'task', 'none'], {
+    REMOTE_AUTO_RESUME_MAX: '2',
+    REMOTE_AUTO_RESUME_DELAY_SECS: '0',
+    GITHUB_REPOSITORY: FORGE_REPOSITORY,
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(lastLine(result.stdout), 'job: failed stop');
+  assert.equal(j.prompts().length, 3);
+
+  const calls = j.ghCalls();
+  // The fixture has no pull request, so each `failed` report labels the issue once.
+  assert.equal(calls.filter((c) => c.includes('labels[]=sdlc-harness: failed')).length, 1, calls.join('\n'));
+});
+
 test('status prints the four job-mode tunables with their defaults', async (t) => {
   const j = await createJobFixture(t);
   if (j === null) return;

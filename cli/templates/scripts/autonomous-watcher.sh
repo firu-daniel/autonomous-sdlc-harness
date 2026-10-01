@@ -376,9 +376,10 @@
 #     and the next job no `resumed` for it: a chained continuation is not an
 #     event the user acts on. classify_run_exit's `paused` arm notifies only a
 #     `user` pause; job mode sends the others once it has decided. Their titles
-#     carry HARNESS_REMOTE_SLUG when set. Each job-mode event is also passed to
-#     `remote-run.sh report`, which comments on the run's pull request or issue
-#     and moves its state label when `forge` is `github`; `autonomous-notify.sh`
+#     carry HARNESS_REMOTE_SLUG when set. Each job-mode event except `failed` is
+#     also passed to `remote-run.sh report` as it happens, and `failed` once,
+#     when the job ends `failed`; `report` comments on the run's pull request or
+#     issue and moves its state label when `forge` is `github`; `autonomous-notify.sh`
 #     is unchanged, and `completed` is reported by the workflow's `deliver` step
 #     after the push.
 #   * THE INTERACTIVE-TEST PHASE IS SKIPPED, not run: a runner has no browser
@@ -1154,9 +1155,9 @@ unset USAGE_LANE_ENABLED_RETIRED
 # Every lifecycle event goes out through here, so a notifier that is missing or
 # not executable costs one log line instead of ending a pass. Best-effort by
 # contract: the notifier itself never fails its caller.
-# JOB MODE ONLY: the event is also passed to `remote-run.sh report`, the only
-# route to GitHub. The detail ($4) is withheld: it names local slash commands,
-# and `report` words its comment from the registry record itself.
+# JOB MODE ONLY: the event is also passed to `remote-run.sh report` via
+# job_report. `failed` is not reported here: run_job reports it once its
+# automatic resumes are ruled out.
 notify() {
   if [ ! -x "$NOTIFY" ]; then
     log "notify: '$NOTIFY' is not executable — '${1:-?}' event for '${2:-?}' not delivered"
@@ -1164,6 +1165,14 @@ notify() {
     "$NOTIFY" "$@" || true
   fi
   [ "$JOB_MODE" = 1 ] || return 0
+  [ "${1:-}" != "failed" ] || return 0
+  job_report "$1" "$2" "${3:-}"
+}
+
+# job_report <event> <branch> [<log>] — the only route to GitHub. The detail is
+# withheld: it names local slash commands, and `report` words its comment from
+# the registry record itself.
+job_report() {
   if [ ! -r "$REMOTE_RUN" ]; then
     log "notify: '$REMOTE_RUN' is not readable — '${1:-?}' event for '${2:-?}' not reported on GitHub"
     return 0
@@ -4239,6 +4248,7 @@ run_job() {
   # A reason recorded for a pause the run finished before honouring.
   [ "$final" = "paused" ] || registry_set "$branch" pause_reason ""
   [ -n "$detail" ] || detail="the run ended $final in this job"
+  [ "$final" != "failed" ] || job_report failed "$branch" "$log_path"
   job_write_status "$branch" "$remote_status" "$decision" "$detail"
   echo "job: $final $decision"
   exit 0
