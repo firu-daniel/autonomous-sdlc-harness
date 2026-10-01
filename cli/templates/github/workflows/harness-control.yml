@@ -1,0 +1,154 @@
+# harness-control.yml — acts on an autonomous-sdlc-harness command comment
+# (`@sdlc-harness answer|pause|resume|stop|clear`) on an issue or pull request,
+# and turns a pull-request review requesting changes into the next user-review
+# round.
+#
+# WHO WRITES IT. `autonomous-sdlc-harness init`, only when harness.config.json's
+# `forge` is `github` and its `execution.target` is `github-actions`. Written
+# create-if-absent: from then on it is yours to tune, and a re-run of `init`
+# keeps your copy. `init --upgrade-workflows` does NOT re-render it: it carries
+# no version pin and calls the scripts on the default branch, so it shares
+# their re-run contract — `init --force` replaces it after a `.bak`. It is a
+# file of its own, apart from harness-trigger.yml, so you can disable comment
+# control alone: disabling a workflow disables every event in it.
+#
+# WHAT IT DOES. One job runs `remote-run.sh control`, which does everything
+# else: it authorises the actor, finds the run's branch, carries out the
+# command or places the review round, and replies. Every decision lives in that
+# script; this file carries only the events, the permissions and a prefilter.
+# The `run-name` below is not harness-run.yml's `harness <action> <branch>`
+# title, so no run lookup `remote-run.sh` makes by that title can match it.
+#
+# THE EVENTS.
+#   issue_comment, type `created` only: a command is a new comment. GitHub
+#     raises it for a comment on an issue and on a pull request alike.
+#   pull_request_review, type `submitted` only: the round is built from the
+#     review event, which carries the review body and identifies its inline
+#     comments (docs/github-integration-research.md, C1).
+#   Never pull_request_review_comment: one review raises one such event per
+#   inline comment, so listening to it would start one job per comment for a
+#   round the review event already covers (C1).
+#
+# THE PREFILTER. The job's `if:` runs it only for a comment that contains
+# `@sdlc-harness` and not `<!-- sdlc-harness` (the hidden line every harness
+# reply carries, so a reply quoting a command is never one), or for a review
+# whose state is `changes_requested` on a pull request from this repository.
+# Every other comment or review yields a skipped job, which runs no runner and
+# bills nothing (docs/remote-execution.md, `### Verified in Gate 12 round 2`).
+# It is a saving, not the authority: `control` re-checks every rule, so an
+# edited copy of this filter cannot bypass one. That `contains()` compares
+# case-insensitively is GitHub's documented behaviour, not verified here; a
+# mixed-case handle the filter missed would only go unanswered, never obeyed.
+#
+# THE PERMISSIONS, declared because the default token may be read-only
+# (docs/github-integration-research.md, T2):
+#   contents: write        push a review round
+#   actions: write         dispatch, pause, stop and cancel runs, and read
+#                          runs and their artifacts
+#   issues: write          reply on the issue or pull request, and label it
+#   pull-requests: write   read the pull request, its reviews and comments,
+#                          and label it
+# The job reads no repository secret: it needs only its own token, so the
+# credential secrets never reach the job that reads untrusted comment text.
+# Every reply is posted as github-actions[bot] and starts no workflow (S3).
+#
+# FORK PULL REQUESTS. Never `pull_request_target`, which would run with this
+# repository's write token on a fork's event (C2). A fork's review is skipped
+# by the prefilter: its token is read-only, so the job could not even reply. A
+# comment on a fork's pull request runs with a write token, and `control`
+# refuses it. The checkout is always the default branch, never the pull
+# request's merge commit a `pull_request_review` job checks out by default, so
+# nothing from a pull request's head is ever run here.
+#
+# NO CONCURRENCY GROUP. A group keeps at most one pending run and cancels an
+# earlier pending one, which would drop a command.
+#
+# TWO RULES EVERY EDIT KEEPS.
+#   * Event text and variables reach a shell line only through `env:` and the
+#     event file, never through a GitHub expression inside `run:` — a comment
+#     body is written by whoever posted it (script injection).
+#   * Every GitHub expression has a space after its opening braces. `init`
+#     renders its workflows with the CLI's double-brace token renderer, which
+#     reads a letter straight after the braces as a token; this file carries
+#     no token.
+#
+# DECLARED MIRRORS — a rename on either side is an edit to both:
+#   cli/src/remote/githubActions.ts   WORKFLOW_CONTROL_FILE, COMMAND_HANDLE
+#                                     (`@sdlc-harness`), COMMENT_MARKER
+#                                     (`<!-- sdlc-harness`), REVIEW_ROUND_STATE
+#                                     (`changes_requested`), HARNESS_RUNNER,
+#                                     HARNESS_REMOTE_STOP,
+#                                     HARNESS_TRIGGER_ALLOWED_BOTS
+#   cli/src/config/model.ts           DEFAULTS.scriptsDir
+#
+# ACTION PINS.
+#   actions/checkout@v5
+# The lowest major whose own action.yml declares `runs.using: node24`, per a
+# maintainer's lookups of its action.yml and release notes on
+# 2026-09-29T08:21Z (UTC). That major's release notes require Actions Runner
+# 2.327.1 or newer; a GitHub-hosted runner already has it, and a self-hosted
+# one must run it (docs/remote-execution.md, section 8). A major tag, not a
+# commit sha: it is GitHub's own `actions/` organisation, the owner of the
+# runner and GITHUB_TOKEN this job already trusts, and a major tag takes the
+# action's own patch and security releases where a sha would freeze your copy.
+# Pin a sha in your copy if you want one.
+
+name: harness-control
+run-name: harness control ${{ github.event.issue.number || github.event.pull_request.number }}
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  control:
+    if: (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@sdlc-harness') && !contains(github.event.comment.body, '<!-- sdlc-harness')) || (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+      HARNESS_REMOTE_SLUG: ${{ github.repository }}
+      HARNESS_TRIGGER_ALLOWED_BOTS: ${{ vars.HARNESS_TRIGGER_ALLOWED_BOTS }}
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          token: ${{ github.token }}
+          fetch-depth: 0
+
+      - name: Check for jq and gh
+        run: |
+          missing=""
+          for tool in jq gh; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::this runner lacks:$missing. Install them on the self-hosted runner, or use a GitHub-hosted one."
+            exit 1
+          fi
+
+      - name: Read the configuration
+        run: |
+          scripts_dir=$(jq -r '.scriptsDir // "scripts"' harness.config.json)
+          echo "SCRIPTS_DIR=${scripts_dir%/}" >> "$GITHUB_ENV"
+
+      - name: Set the git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Act on the comment or review
+        run: bash "$SCRIPTS_DIR/remote-run.sh" control

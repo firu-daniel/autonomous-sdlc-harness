@@ -32,7 +32,16 @@
  * credential secrets never reach the job reading issue text; no `concurrency:` key, which would drop a
  * pending trigger; no template token; every expression spaced, and none inside a `run:` block.
  *
- * For all three: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
+ * For `harness-control.yml`: the `issue_comment` and `pull_request_review` triggers, `created` and
+ * `submitted` their only types, and neither `pull_request_target` nor `pull_request_review_comment`
+ * outside a comment line; the permissions exactly `contents`, `actions`, `issues` and `pull-requests`,
+ * each `write`; the job's `if:` carrying `COMMAND_HANDLE`, `COMMENT_MARKER` and `REVIEW_ROUND_STATE`
+ * and comparing the head repository with `github.repository`, so a fork's review is skipped; the
+ * checkout's `ref` the default branch, never the pull request's merge commit; `remote-run.sh control`
+ * its only call into the script family; no `secrets.` reference and no `concurrency:` key; no
+ * template token; every expression spaced, and none inside a `run:` block.
+ *
+ * For all four: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
  * pin the file dropped or a bumped `uses:` the header forgot fails; and every `uses:` value is a major
  * tag of a GitHub `actions/` action, never a sha or a branch — the pinning decision that header states.
  */
@@ -44,11 +53,15 @@ import test from 'node:test';
 
 import { PACKAGE_ROOT } from './helpers/fixture.mjs';
 import {
+  COMMAND_HANDLE,
+  COMMENT_MARKER,
   DEFAULT_TRIGGER_LABEL,
   POLL_STATE_ARTIFACT_NAME,
+  REVIEW_ROUND_STATE,
   STATE_ARTIFACT_NAME,
   TRIGGER_DISPATCH_EVENT_TYPE,
   TRIGGER_LABEL_VARIABLE,
+  WORKFLOW_CONTROL_FILE,
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RUN_FILE,
   WORKFLOW_TEMPLATE_DIR,
@@ -61,6 +74,8 @@ const RESUME_TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLA
 const RESUME_LINES = RESUME_TEXT.split('\n');
 const TRIGGER_TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_TRIGGER_FILE), 'utf8');
 const TRIGGER_LINES = TRIGGER_TEXT.split('\n');
+const CONTROL_TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_CONTROL_FILE), 'utf8');
+const CONTROL_LINES = CONTROL_TEXT.split('\n');
 
 const indentOf = (line) => line.length - line.trimStart().length;
 
@@ -277,6 +292,7 @@ for (const [file, lines] of [
   [WORKFLOW_RUN_FILE, LINES],
   [WORKFLOW_RESUME_FILE, RESUME_LINES],
   [WORKFLOW_TRIGGER_FILE, TRIGGER_LINES],
+  [WORKFLOW_CONTROL_FILE, CONTROL_LINES],
 ]) {
   test(`${file}: the ACTION PINS header names exactly the uses: values, each a major tag of an actions/ action`, () => {
     const uses = usesValues(lines);
@@ -348,6 +364,70 @@ test('the trigger carries no template token, and every expression is spaced and 
   assert.doesNotMatch(TRIGGER_TEXT, /\{\{[A-Za-z]/);
   assert.doesNotMatch(TRIGGER_TEXT, /\$\{\{[^ ]/);
   const bodies = runBodies(TRIGGER_LINES);
+  assert.ok(bodies.length > 0);
+  for (const body of bodies) assert.ok(!body.includes('${{'), `expression in run: ${body}`);
+});
+
+test('control: a created comment or a submitted review, never pull_request_target or review comments', () => {
+  const on = CONTROL_LINES.indexOf('on:');
+  assert.notEqual(on, -1);
+  const under = blockUnder(on, CONTROL_LINES);
+  const triggers = under.filter((l) => /^ {2}[a-z_]+:/.test(l)).map((l) => l.trim().replace(/:.*$/, ''));
+  assert.deepEqual(triggers, ['issue_comment', 'pull_request_review']);
+  const typesOf = (event) => {
+    const i = CONTROL_LINES.indexOf(`  ${event}:`);
+    const line = blockUnder(i, CONTROL_LINES).find((l) => /^\s*types:/.test(l));
+    return /types: \[(.*)\]$/.exec(line)[1].split(',').map((t) => t.trim());
+  };
+  assert.deepEqual(typesOf('issue_comment'), ['created']);
+  assert.deepEqual(typesOf('pull_request_review'), ['submitted']);
+  const code = CONTROL_LINES.filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert.ok(!code.includes('pull_request_target'));
+  assert.ok(!code.includes('pull_request_review_comment'));
+});
+
+test('control: exactly its four permissions', () => {
+  const i = CONTROL_LINES.indexOf('permissions:');
+  assert.deepEqual(
+    blockUnder(i, CONTROL_LINES).filter((l) => l.trim() !== '').map((l) => l.trim()),
+    ['contents: write', 'actions: write', 'issues: write', 'pull-requests: write'],
+  );
+});
+
+test("control: the job's if: prefilters on the handle, the marker and the review state, and skips a fork's review", () => {
+  const jobIfs = CONTROL_LINES.filter((l) => /^ {4}if: /.test(l)).map((l) => l.trim());
+  assert.equal(jobIfs.length, 1);
+  const [cond] = jobIfs;
+  assert.ok(cond.includes(`contains(github.event.comment.body, '${COMMAND_HANDLE}')`));
+  assert.ok(cond.includes(`!contains(github.event.comment.body, '${COMMENT_MARKER}')`));
+  assert.ok(cond.includes(`github.event.review.state == '${REVIEW_ROUND_STATE}'`));
+  assert.ok(cond.includes('github.event.pull_request.head.repo.full_name == github.repository'));
+});
+
+test('control: the checkout is the default branch', () => {
+  const at = CONTROL_LINES.findIndex((l) => /^\s*(?:- )?uses:\s*actions\/checkout@/.test(l));
+  assert.notEqual(at, -1);
+  const withAt = CONTROL_LINES.findIndex((l, i) => i > at && /^\s*with:$/.test(l));
+  const refs = blockUnder(withAt, CONTROL_LINES).filter((l) => /^\s*ref:/.test(l)).map((l) => l.trim());
+  assert.deepEqual(refs, ['ref: ${{ github.event.repository.default_branch }}']);
+});
+
+test('control runs remote-run.sh control and nothing else of the family', () => {
+  const calls = runBodies(CONTROL_LINES).flatMap((body) =>
+    [...body.matchAll(/([A-Za-z0-9_-]+\.sh)"?\s+(\S*)/g)].map((m) => `${m[1]} ${m[2]}`),
+  );
+  assert.deepEqual(calls, ['remote-run.sh control']);
+});
+
+test('control references no secret and declares no concurrency group', () => {
+  assert.doesNotMatch(CONTROL_TEXT, /secrets\./);
+  assert.doesNotMatch(CONTROL_TEXT, /^\s*concurrency:/m);
+});
+
+test('control carries no template token, and every expression is spaced and outside run blocks', () => {
+  assert.doesNotMatch(CONTROL_TEXT, /\{\{[A-Za-z]/);
+  assert.doesNotMatch(CONTROL_TEXT, /\$\{\{[^ ]/);
+  const bodies = runBodies(CONTROL_LINES);
   assert.ok(bodies.length > 0);
   for (const body of bodies) assert.ok(!body.includes('${{'), `expression in run: ${body}`);
 });
