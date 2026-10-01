@@ -14,6 +14,10 @@
  *   runtime is a warning rather than an `npm` call, so a test that forgets to plant one stays offline.
  * - **A failed step is a warning.** The wiring the plan wrote stays valid; `doctor` fails until a
  *   re-run completes the step.
+ * - **The Python backend gets no install and no download here, and the TypeScript setup still runs.**
+ *   Its package, weights and Postgres are provisioned by hand; the TypeScript runtime and models are
+ *   kept so switching `docs.retrievalBackend` back costs nothing. With `python` selected, one note
+ *   says both.
  *
  * Both steps put machine state outside the repository, not through the write engine
  * (`cli/src/core/writer.ts` header). `setUpRuntime` writes the runtime itself, through `npm`;
@@ -25,8 +29,10 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import type { HarnessRetrievalBackend } from '../config/model.js';
 import { ownManifestString } from '../core/paths.js';
 import { modelFilesPresent, RETRIEVAL_STUB_ENV, stubModelsSelected } from './models.js';
+import { PYTHON_RETRIEVAL_COMMAND } from './pythonBackend.js';
 import {
   retrievalCliEntry,
   retrievalModelCacheDir,
@@ -134,10 +140,18 @@ function setUpModels(dryRun: boolean, notes: string[], warnings: string[]): void
 }
 
 /** Install the runtime, then download the models; each step skips when already satisfied. */
-export function setUpRetrieval(options: { dryRun: boolean }): { notes: string[]; warnings: string[] } {
+export function setUpRetrieval(options: { dryRun: boolean; backend: HarnessRetrievalBackend }): {
+  notes: string[];
+  warnings: string[];
+} {
   const notes: string[] = [];
   const warnings: string[] = [];
   setUpRuntime(options.dryRun, notes, warnings);
   setUpModels(options.dryRun, notes, warnings);
+  if (options.backend === 'python') {
+    notes.push(
+      `docs.retrievalBackend is python: init installed and downloaded nothing for it — the \`${PYTHON_RETRIEVAL_COMMAND}\` package, its weights and its Postgres are set up by hand (docs/retrieval.md → Turning on the Python backend); the TypeScript runtime and models above are kept so switching back costs nothing`,
+    );
+  }
   return { notes, warnings };
 }

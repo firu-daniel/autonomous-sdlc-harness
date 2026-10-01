@@ -103,6 +103,7 @@ import {
   isPlaceholder,
   qaDriverChoices,
   retrievalApplies,
+  retrievalBackend,
   STATE_DIR_DOT_PATTERN,
   type HarnessCommands,
   type HarnessConfig,
@@ -2428,7 +2429,7 @@ async function run(ctx: CommandContext): Promise<number> {
   // it must not delay the plan's own report. Before the commit, which a failure here must not stop.
   if (retrievalApplies(effective)) {
     ctx.report.step('docs retrieval setup');
-    const retrieval = setUpRetrieval({ dryRun: ctx.flags.dryRun });
+    const retrieval = setUpRetrieval({ dryRun: ctx.flags.dryRun, backend: retrievalBackend(effective) });
     warnings.push(...retrieval.warnings);
     notes.push(...retrieval.notes);
   }

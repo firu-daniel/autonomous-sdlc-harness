@@ -1883,6 +1883,42 @@ test('--docs-retrieval turns retrieval on, is refused without --docs, and defaul
   });
 });
 
+/** The opening of the note `setUpRetrieval` pushes when `docs.retrievalBackend` is `python`. */
+const PYTHON_BACKEND_NOTE = 'docs.retrievalBackend is python: init installed and downloaded nothing for it';
+const RUNTIME_INSTALLED_NOTE = 'docs retrieval runtime already installed';
+
+test('with docs.retrievalBackend absent, init writes and says exactly what it did before the key existed', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  const env = await retrievalCacheEnv(t);
+
+  const { stdout, stderr } = await initOk(dir, ['--docs', '--docs-retrieval'], env);
+
+  const { docs } = readJson(join(dir, CONFIG_FILE));
+  assert.deepEqual(Object.keys(docs).sort(), ['retrieval', 'root'], `docs carries a key beyond root and retrieval: ${JSON.stringify(docs)}`);
+  assert.deepEqual(readJson(join(dir, MCP_FILE)).mcpServers[DOCS_SERVER], DOCS_SERVER_ENTRY);
+  const output = `${stdout}\n${stderr}`;
+  assert.ok(!output.includes('retrievalBackend'), `a key-absent run mentions retrievalBackend:\n${output}`);
+  assert.ok(!output.includes('Python backend'), `a key-absent run mentions the Python backend:\n${output}`);
+});
+
+test('with docs.retrievalBackend python, init notes it once, still sets up the TypeScript runtime, and re-runs idempotently', async (t) => {
+  const { dir, env } = await retrievalFixture(t, { retrieval: true });
+  const configPath = join(dir, CONFIG_FILE);
+  const config = readJson(configPath);
+  config.docs.retrievalBackend = 'python';
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+  const { stdout, stderr } = await initOk(dir, [], env);
+
+  const output = `${stdout}\n${stderr}`;
+  assert.equal(occurrences(output, PYTHON_BACKEND_NOTE), 1, `the Python-backend note was not printed once:\n${output}`);
+  assert.ok(output.includes(RUNTIME_INSTALLED_NOTE), `the TypeScript runtime setup did not run:\n${output}`);
+
+  const before = await snapshotTree(dir);
+  await initOk(dir, [], env);
+  assert.deepEqual(await snapshotTree(dir), before, 'a second init changed what the first wrote');
+});
+
 /**
  * `--rag`, the second accepted spelling of `--docs-retrieval`. It is carried on that flag's
  * `INIT_OPTIONS` row rather than at the parse site, so the three consumers of that table — the
