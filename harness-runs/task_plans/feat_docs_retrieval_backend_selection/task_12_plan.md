@@ -45,3 +45,9 @@
 - `git grep -n "This branch does not build it" -- docs/retrieval.md` prints nothing.
 - Every Python cost line carries the pending marker and no number: read `## What it costs` against the lessons ledger's stub-figure and wall-clock rules.
 - Every `##` heading this file had still exists with its text unchanged (`git diff dev...HEAD -- docs/retrieval.md` shows no removed `## ` line), because other documents cite them.
+
+**Deviations from plan:**
+
+- `**Query log.**` now reads "the TypeScript server appends", and the **Server.** paragraph's Python sentence states that the Python backend writes no query log (`docs-retrieval-service/README.md` → **No query log.**). The plan named only Store, Server and Models, but without this the Query log paragraph would have stayed a claim about both backends that is true of one.
+- The three `## What this buys you` bold labels gained backend qualifiers (`**Embedded and in-process, on the TypeScript backend.**`, `**One Postgres engine rather than two stores, on either backend.**`) and the new bullet is `**A real Postgres, on the Python backend.**`. `git grep` over the tree outside `harness-runs/` found no citation of either old label.
+- The `git diff dev...HEAD` heading check was run as `git diff -- docs/retrieval.md` over the uncommitted edit, since this unit has not committed; it showed no removed or added `## ` line.
