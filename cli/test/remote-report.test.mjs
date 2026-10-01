@@ -81,13 +81,13 @@ async function reportFixture(t, { forge = 'github' } = {}) {
   await runGit(dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${config.defaultBranch}`]);
 
   /**
-   * Push <branch> to origin with a task prompt whose provenance names <issueUrl> (none when null) and,
-   * when <ledger>, its flow-progress ledger; the checkout returns to the default branch.
+   * Push <branch> to origin with a task prompt whose provenance names <issueUrl> (none when null) and the
+   * trigger <label>, and, when <ledger>, its flow-progress ledger; the checkout returns to the default branch.
    */
-  const pushBranch = async (branch, { issueUrl = ISSUE_URL, ledger = true } = {}) => {
+  const pushBranch = async (branch, { issueUrl = ISSUE_URL, ledger = true, label = 'sdlc-harness' } = {}) => {
     await runGit(dir, ['checkout', '--quiet', '-b', branch]);
     const files = [`${STATE_DIR}/task_prompts/${branch}_task_prompt.md`];
-    const provenance = issueUrl === null ? 'Started by hand.' : `Started from ${issueUrl} by @alice, who applied the label \`sdlc-harness\`.`;
+    const provenance = issueUrl === null ? 'Started by hand.' : `Started from ${issueUrl} by @alice, who applied the label \`${label}\`.`;
     mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
     writeFileSync(join(dir, files[0]), `# A task\n\nDo it.\n\n---\n\n${provenance}\n`);
     if (ledger) {
@@ -269,6 +269,16 @@ test('failed on an issue names the run log and re-applying the trigger label', a
   assert.match(posted.body, /run\.log/);
   assert.match(posted.body, /re-apply the label `sdlc-harness`/);
   assert.match(posted.body, /Run: https:\/\/github\.com\/octo\/fixture\/actions\/runs\/4242/);
+});
+
+test('failed on an issue names the label its provenance line records, not the default', async (t) => {
+  const f = await reportFixture(t);
+  await f.pushBranch('feat_l', { label: 'ai-run' });
+  const result = await f.report(['failed', 'feat_l']);
+  assert.equal(result.status, 0, result.stderr);
+  const [posted] = commentsOn(f.calls(), 7);
+  assert.match(posted.body, /re-apply the label `ai-run`/);
+  assert.ok(!posted.body.includes('`sdlc-harness`'), posted.body);
 });
 
 test('completed is deliver\'s: nothing posted', async (t) => {

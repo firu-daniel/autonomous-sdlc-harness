@@ -3469,11 +3469,15 @@ forge_marker() {
 
 # forge_issue_var <branch> — FORGE_ISSUE from the last provenance line
 # `verb_trigger` writes into the branch's committed task prompt, matched against
-# this repository's own issue URL only; empty when there is none.
+# this repository's own issue URL only; empty when there is none. Also sets
+# FORGE_TRIGGER_LABEL, the label that same provenance line names; empty when
+# it names none.
 FORGE_ISSUE=""
+FORGE_TRIGGER_LABEL=""
 forge_issue_var() {
-  local state_rel rel prompt line rest num prefix
+  local state_rel rel prompt line rest num prefix label
   FORGE_ISSUE=""
+  FORGE_TRIGGER_LABEL=""
   state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
   if [ -z "$state_rel" ]; then
     echo "remote-run.sh: cannot resolve the state directory under '$root'" >&2
@@ -3491,7 +3495,15 @@ forge_issue_var() {
     num=${rest%%[!0-9]*}
     [ -n "$num" ] || continue
     case "${rest#"$num"}" in
-      ' by @'*) FORGE_ISSUE="$num" ;;
+      ' by @'*)
+        FORGE_ISSUE="$num"
+        FORGE_TRIGGER_LABEL=""
+        case "$line" in
+          *'who applied the label `'*'`'*)
+            label=${line#*'who applied the label `'}
+            label=${label%%'`'*}
+            [ -z "$label" ] || FORGE_TRIGGER_LABEL="$label" ;;
+        esac ;;
     esac
   done <<<"$prompt"
   return 0
@@ -3709,7 +3721,7 @@ forge_report() {
       if [ "$kind" = pr ]; then
         text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, submit a review on this pull request requesting changes."
       else
-        trigger_label="${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}"
+        trigger_label="${FORGE_TRIGGER_LABEL:-${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}}"
         text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, re-apply the label \`$trigger_label\` to this issue; that starts a new run, on the next indexed branch."
       fi ;;
     stopped)
