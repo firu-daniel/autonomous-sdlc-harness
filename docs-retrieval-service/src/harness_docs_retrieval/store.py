@@ -17,7 +17,9 @@ Departures from store.ts:
   preload setting they need is the server's configuration. The `CREATE EXTENSION IF NOT EXISTS`
   statement itself carries over unchanged.
 - `openPgliteStore` takes a `dataDir` and creates it; here the database is the server's, reached
-  by connection string, and this module creates no directory.
+  by connection string, and this module creates no directory. The index is therefore one per
+  database rather than one per checkout: two checkouts sharing a connection string share one
+  `chunks` table, and each refresh deletes the other's rows.
 - `vectorLiteral` formats each value with JS `String(value)`; `_vector_literal` uses Python's
   shortest round-trip `repr`. The two parse to the same number (`1` against `1.0`, `1e-7` against
   `1e-07`), but the bound text is not always byte-identical.
