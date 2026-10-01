@@ -9,6 +9,21 @@
 #                bootstrap it, then PUSH the branch so the remote has it from
 #                the first moment. This is what the watcher calls when a prompt
 #                arrives for a branch that does not exist yet.
+#   --no-bootstrap  Skip the bootstrap. Alone, a variant of default mode: cut
+#                and push the new branch the same way. With `--existing`, check
+#                out the existing branch and never push. Its callers are
+#                `remote-run.sh start` (a new branch) and `remote-run.sh review`
+#                (an existing one), each of which only places and commits one
+#                file: such a copy runs nothing, so a dependency install would
+#                cost minutes and could fail the placement for a reason
+#                unrelated to the task. It installs no worktree-scoped pre-push
+#                backstop — the push a caller makes is of a branch it has
+#                already judged not protected, and every later commit goes
+#                through `commit-on-branch.sh` and `push-branch.sh`, which refuse
+#                a protected branch themselves. An existing branch's copy that a
+#                person or a local run works in still wants the bootstrap, so
+#                `--existing` alone keeps it; `--no-bootstrap` is for a copy that
+#                only places and commits one file.
 #   --existing   Check out an EXISTING branch — local, or DWIM-created from
 #                `origin/<branch>` when only the remote ref exists — bootstrap
 #                it, and NEVER push. This is what the watcher calls to recreate
@@ -33,7 +48,8 @@
 # probe stops doing its job. This one is a short, strictly ordered sequence in
 # which every step is a precondition of the next: bootstrapping a half-created
 # worktree, or pushing a branch whose dependency install failed, is worse than
-# stopping. So a failing step aborts the script with that step's own status —
+# stopping (a `--no-bootstrap` cut simply has no bootstrap step in its
+# sequence). So a failing step aborts the script with that step's own status —
 # and the worktree it had already created is LEFT IN PLACE for inspection,
 # because removing a working copy is a decision this script does not get to
 # make silently.
@@ -62,20 +78,25 @@
 # is neither a descriptor duplication (`2>&1`, `>&2`, `2>&-`) nor a redirection
 # to the literal `/dev/null`.
 #
-# Usage: create-worktree.sh [--existing] <branch-name> [worktree-dir]
+# Usage: create-worktree.sh [--existing] [--no-bootstrap] <branch-name> [worktree-dir]
 #   --existing     check out an existing branch instead of creating a new one
+#   --no-bootstrap skip the bootstrap: alone, create and push a new branch; with
+#                  --existing, check out the existing branch and never push
 #   <branch-name>  the branch to run on
 #   [worktree-dir] optional override; relative paths resolve against $PWD
 #
 # Exit map a caller can switch on:
 #
-#   0  the worktree is ready (and, in default mode, the branch was pushed)
+#   0  the worktree is ready (and, in default mode or under `--no-bootstrap`
+#      without `--existing`, the branch was pushed)
 #   1  usage error / the library or the configuration could not be read
 #   2  refusal — nothing was created: `--existing` and the branch is nowhere;
 #      the branch is already checked out in another working copy (which is
 #      named); or default mode with no `origin` remote, or no
 #      `origin/<default branch>` to branch from
-#   4  the working copy was created but could not be bootstrapped — it has no
+#   4  the working copy was created but could not be bootstrapped (never under
+#      `--no-bootstrap`, with or without `--existing`, which resolves no
+#      bootstrap) — it has no
 #      dependency install and no pre-push backstop, is LEFT IN PLACE for
 #      inspection, and in default mode the branch was NOT pushed, because this
 #      exit precedes the push step. In default mode the local
@@ -104,6 +125,13 @@
 #   new branch     bash "$d/scripts/create-worktree.sh" feat/x
 #                  -> "$w/demo-feat-x" on feat/x, bootstrapped, and `git -C "$b"
 #                     branch` now lists feat/x
+#   no-bootstrap   bash "$d/scripts/create-worktree.sh" --no-bootstrap feat/q
+#                  -> "$w/demo-feat-q" on feat/q, no deps.marker, and
+#                     `git -C "$b" branch` lists feat/q
+#   existing, no bootstrap   git -C "$d" worktree remove "$w/demo-feat-q"
+#                  git -C "$d" branch -D feat/q
+#                  bash "$d/scripts/create-worktree.sh" --existing --no-bootstrap feat/q
+#                  -> "$w/demo-feat-q" on feat/q, no deps.marker, "$b" UNCHANGED
 #   already there  bash "$d/scripts/create-worktree.sh" --existing feat/x
 #                  -> exit 2 naming "$w/demo-feat-x"; nothing created
 #   recreate       git -C "$d" worktree remove "$w/demo-feat-x"
@@ -150,15 +178,18 @@ fi
 . "$hr_lib"
 
 usage() {
-  echo "  usage: create-worktree.sh [--existing] <branch-name> [worktree-dir]" >&2
+  echo "  usage: create-worktree.sh [--existing] [--no-bootstrap] <branch-name> [worktree-dir]" >&2
 }
 
 existing=0
-if [ "${1:-}" = "--existing" ]; then
-  existing=1
-  shift
-fi
-
+no_bootstrap=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --existing) existing=1; shift ;;
+    --no-bootstrap) no_bootstrap=1; shift ;;
+    *) break ;;
+  esac
+done
 if [ "$#" -lt 1 ] || [ -z "${1:-}" ]; then
   echo "create-worktree.sh: no branch name given" >&2
   usage
@@ -325,6 +356,17 @@ fi
 # checkout's own copy is not run instead — setup-worktree.sh anchors on its own
 # location and takes no arguments, so running it would bootstrap THIS checkout
 # rather than the new one.
+if [ "$no_bootstrap" -eq 1 ]; then
+  if [ "$existing" -eq 1 ]; then
+    echo "create-worktree.sh: worktree ready at $worktree_dir (not bootstrapped)"
+    echo "create-worktree.sh: branch $branch (existing branch; not pushed)"
+  else
+    git -C "$worktree_dir" push -u origin "$branch"
+    echo "create-worktree.sh: worktree ready at $worktree_dir (not bootstrapped)"
+    echo "create-worktree.sh: branch $branch (pushed to origin)"
+  fi
+  exit 0
+fi
 scripts_rel="$(hr_scripts_dir "$worktree_dir")" || scripts_rel=""
 if [ -z "$scripts_rel" ]; then
   scripts_rel="$script_dir_rel"

@@ -264,8 +264,27 @@ test('none: the launch line, the start and stop records, and the parked detail',
     const parked = j.notifications().filter((n) => n.event === 'parked');
     assert.equal(parked.length, 1);
     assert.match(parked[0].detail, new RegExp(`/autonomous-sdlc-harness:branch-answer ${j.branch}`));
+    assert.match(parked[0].detail, /Run workflow on harness-run\.yml .*resume answer/);
+    assert.match(parked[0].detail, /engine `task`/);
+    assert.match(parked[0].detail, /from the branch `[^`]+` \(Use workflow from\)/);
     j.assertLaneUntouched();
   });
+});
+
+test('a local run that parks names neither the job command nor the GitHub route', async (t) => {
+  const w = await createWatcherFixture(t);
+  if (w === null) return;
+
+  await w.writeQuestion(1, '## Q1\n');
+  await w.seedRecord();
+  await w.writeAnswer(1, 'a1\n');
+  await w.setStub('printf "## Q2\\n" > "$CLAR/question_2.md"');
+  await w.tick({ HARNESS_JOB_MODE: '' });
+
+  const parked = w.notifications().filter((n) => n.event === 'parked');
+  assert.equal(parked.length, 1, w.watcherLog());
+  assert.doesNotMatch(parked[0].detail, /\/autonomous-sdlc-harness:branch-answer/);
+  assert.doesNotMatch(parked[0].detail, /Run workflow on/);
 });
 
 test("add-dir: job mode appends the profile's additionalDirectories after the two fixed ones", async (t) => {
@@ -329,6 +348,7 @@ test('answer: a seeded park_loop_cycles and a no-progress re-park become park_lo
   const loop = j.notifications().filter((n) => n.event === 'park_loop');
   assert.equal(loop.length, 1);
   assert.match(loop[0].detail, /\/autonomous-sdlc-harness:branch-status feat_x/);
+  assert.match(loop[0].detail, /resume answer, park_loop_clear true/);
   j.assertLaneUntouched();
 });
 
@@ -398,6 +418,7 @@ test('control poll: a harness pause run newer than the start pauses the run for 
   const paused = j.notifications().filter((n) => n.event === 'paused');
   assert.equal(paused.length, 1);
   assert.match(paused[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(paused[0].detail, /resume pause/);
   assert.ok(j.ghCalls().some((c) => c.startsWith('run list')), j.ghCalls().join('\n'));
   j.assertLaneUntouched();
 });
@@ -630,6 +651,7 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
     const last = paused.at(-1).detail;
     assert.match(last, /the in-job wait passed 2s after the reset without a resume/);
     assert.match(last, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+    assert.match(last, /resume pause/);
     assert.doesNotMatch(last, /usage limit reached — resumes automatically after/);
 
     assert.equal(j.status().pause_reason, 'usage');

@@ -422,7 +422,7 @@ watcher-owned resume, and differ only in **who notices** and **who resumes**:
 | **API overload** (`529` / `500` / `503`) | the **run itself**, from a failed Agent dispatch | run writes `PAUSE_ACK` directly — **no `PAUSE` request** (**§2.5**) | no — an outage has no predictable reset; waits for `/autonomous-sdlc-harness:branch-resume` (a remote job's bounded exception: §2.5 **Who resumes.**) |
 | **Job time budget** (remote execution, GitHub-hosted runner) | the **job's watcher** | drops `<state_dir>/PAUSE` → run honors it (**§2.2**) | **yes** — the next chained job resumes from the ledger |
 
-A remote run's operator pause reaches the job as a relayed request, and the job's watcher drops `PAUSE` into
+A remote run's operator pause reaches the job as the `harness pause <branch>` dispatch the operator's command sends, and the job's watcher drops `PAUSE` into
 its checkout, so it is honored by the same §2.2 path. Nothing in §2.2 or §2.4 changes for a remote run.
 
 So the usage gate is *not* a self-pause: it is watcher-detected and routed through the ordinary request/ack

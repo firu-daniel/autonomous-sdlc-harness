@@ -4,8 +4,8 @@
 # workflow's input contract has exactly one producer on the shell side.
 #
 # THE VERBS AND THE EXIT MAP, stated once for every consumer (the watcher's
-# inbox and relay passes, the job-side `continue` / `poll`, the guard's deny
-# entry and the plugin commands that name this file):
+# inbox pass, the job-side `continue` / `poll`, the guard's deny entry and the
+# plugin commands that name this file):
 #
 #   remote-run.sh dispatch <branch> --engine <kind> [--resume none|answer|pause]
 #                 [--answers-from <clar_dir> --indexes "<n> <n>..."]
@@ -15,31 +15,44 @@
 #   remote-run.sh stop <branch> [--repo <root>]
 #   remote-run.sh status <branch> [--repo <root>]
 #   remote-run.sh sync <branch> [--repo <root>]
+#   remote-run.sh fetch <branch> <out_dir> [--repo <root>]
 #   remote-run.sh restore <branch> --resume none|answer|pause [--repo <root>]
 #   remote-run.sh save <branch> <out_dir> [--repo <root>]
 #   remote-run.sh continue <branch> <bundle_dir> [--repo <root>]
 #   remote-run.sh poll [--repo <root>]
 #   remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]
 #   remote-run.sh run-created-at <run_id> [--repo <root>]
+#   remote-run.sh start <branch> --prompt-file <file> [--repo <root>]
+#   remote-run.sh review <branch> --review-file <file> [--repo <root>]
+#   remote-run.sh trigger [--repo <root>]   (its own exit map: its paragraph)
+#   remote-run.sh list [--repo <root>]
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
-#        asked to cancel, or there was none); for status: printed; for sync: the record is
+#        asked to cancel, or there was none); for status and fetch: printed
+#        (for fetch, `state: none` included); for sync: the record is
 #        current (including "no run listed yet", which writes nothing); for
 #        restore: restored, or no previous bundle (or an expired one, with a
 #        `::warning::` line) under --resume none|pause;
 #        for save: ALWAYS, whatever happened; for continue: whatever it
 #        decided — every outcome a person must act on is a notification; for
 #        poll: the tick finished; for pause-requested: such a run exists; for
-#        run-created-at: printed
+#        run-created-at: printed; for review: placed, pushed and dispatched;
+#        for list: printed
 #     1  usage error, or the library or the configuration could not be
-#        resolved; for sync and restore, a local copy or write failed; for
+#        resolved; for fetch, <out_dir> is not an existing, empty directory;
+#        for sync and restore, a local copy or write failed; for
 #        pause-requested, also NO such run — a caller that reads 1 as "no
 #        pause" passes arguments it has already validated
 #     2  refused, nothing sent or written: execution.target is not
-#        github-actions (sending verbs); the branch's local record does not
-#        carry `execution: github-actions` (status, sync); the record's mirror
-#        working copy is missing, or a downloaded bundle is unrecognised
-#        (sync, restore); the inputs payload is over the limit; a named answer
+#        github-actions (sending verbs, fetch, review and list); for
+#        review, a protected branch, a review file that is not a readable
+#        regular file, or a run in flight (its paragraph); for sync, the
+#        branch's local record does not carry `execution: github-actions`; for
+#        status, a local record that does not carry `execution:
+#        github-actions`, or no record and `execution.target` not
+#        `github-actions`; the record's mirror working copy is missing, or a
+#        downloaded bundle is unrecognised (sync, restore, and status with no
+#        local record); the inputs payload is over the limit; a named answer
 #        file is missing. For restore under --resume answer, "nothing more":
 #        no previous bundle, the previous bundle expired (the message names
 #        its expiry and the resume command), `HARNESS_INPUT_ANSWERS` not an object of
@@ -49,7 +62,142 @@
 #     3  gh failed: not found, or a non-zero exit — the first line of gh's
 #        stderr is named. For poll: the listing or the disable failed. For
 #        pause-requested and run-created-at, also an answer that is not the
-#        expected JSON; a caller never pauses on a failed read
+#        expected JSON; a caller never pauses on a failed read. For start, the
+#        dispatch failed AFTER the branch and its task prompt were pushed; for
+#        review, the listing failed, or the dispatch failed AFTER the review
+#        was pushed. For
+#        list, the listing or `git ls-remote` failed; nothing written
+#     4  start: placement failed — the branch cut, the copy, the commit or the
+#        push — and nothing was dispatched; the working copy and the local
+#        branch the cut created were removed. review: placement failed — the
+#        copy (the branch checked out in another working copy included), the
+#        fast-forward, the commit or the push — and nothing was dispatched; a
+#        copy it cut was removed
+#
+# `start` IS THE ADAPTERS' ONE ENTRY: every trigger (an issue event, a forge
+# dispatch, anything later) reduces to a branch and a task text and ends here.
+# In order, stopping at the first failure: refuse a protected branch (2); refuse
+# a prompt file that is not a readable regular file (2); cut the branch from
+# `origin/<defaultBranch>` with `create-worktree.sh --no-bootstrap`; place the
+# file at `<state_dir>/task_prompts/<branch>_task_prompt.md` in that working
+# copy (the state directory resolved there, never in the main checkout), commit
+# it as `chore: add task prompt for <branch>` and confirm `origin/<branch>`
+# equals `HEAD` (each failure 4); then remove the working copy and the local
+# branch it created — on every exit after the cut, success included and
+# wherever `start` runs, because nothing reads the copy once the push has landed
+# and a leftover branch makes the next cut of that name refuse; a copy or branch
+# that existed before the cut is never removed — and `dispatch --engine task
+# --resume none --chain 0`, composed by `verb_dispatch` itself. The placement is the library's
+# (`hr_task_prompt_rel`, `hr_place_artifact`, `hr_commit_placed`,
+# `hr_push_landed`), the same calls the watcher's inbox pass makes, so nothing
+# downstream can tell where a task came from. It writes no registry record: a
+# trigger job has no registry, and such a run needs no local record: the local
+# commands act on it through GitHub.
+#
+# `fetch` IS THE COMMANDS' READ OF ONE BRANCH ON GITHUB, needing no local
+# record. Gated like a sending verb. <out_dir> must be an existing, empty
+# directory. It reads the newest `harness run <branch>` run through the same
+# derivation `sync` makes (`remote_state`), downloads that run's state bundle
+# into <out_dir> when one applies, and prints these lines, each always present
+# and empty when unknown — the key names are a wire the commands parse:
+#   run_id:  run_url:  run_status:   the newest `harness run <branch>` run
+#   state:           `none` when no such run is listed, else the derivation's
+#   pause_reason:  engine:  detail:   from the derivation
+#   open_questions:  space-separated <n> of every top-level
+#                    `<out_dir>/clarifications/<branch>/question_<n>.md` with
+#                    no `answer_<n>.md` beside it, ascending
+#   bundle_dir:      <out_dir> when a bundle was downloaded
+#
+# `review` PLACES A USER REVIEW ROUND ON THE BRANCH TIP AND DISPATCHES IT, for
+# `/autonomous-sdlc-harness:branch-user-review` on a run that executes on
+# GitHub. In order, stopping at the first failure: refuse a protected branch
+# and a review file that is not a readable regular file (2; a relative
+# --review-file resolves against the caller's directory); refuse a branch whose
+# newest `harness run <branch>` run, by `remote_state`, is anything but
+# `completed` or `failed` — none listed, `running`, `parked`, `park_loop` or
+# `paused`, an expired bundle naming its expiry (2); the bundle it reads is
+# downloaded to `sync`'s directory, the one write a refusal makes. The copy: the main
+# checkout's remote record's mirror when its `worktree` exists and is on the
+# branch, never removed; otherwise `create-worktree.sh --existing
+# --no-bootstrap` into `hr_worktree_dir`, removed with the local branch it
+# DWIM-created on every exit, as `start` removes its cut. Either copy is
+# fast-forwarded to `origin/<branch>`. No bootstrap runs: the copy holds one
+# placed file. The round comes from `git ls-tree` of the copy's `HEAD` under
+# `<state_dir>/user_reviews/` — the engine's own round source: each basename
+# matching `^(.+)_review(_[0-9]+)?\.md$` whose captured branch EQUALS <branch>,
+# the unsuffixed file being round 1; next is `<branch>_review.md` when none
+# matched, else `<branch>_review_<max+1>.md`. It is placed, committed as
+# `hr_user_review_subject`'s `chore: add user review for <branch>` and pushed
+# (each failure 4); the cut copy is removed; then `dispatch --engine
+# user_review --resume none --chain 0`. A remote record, when one exists, is
+# set `running` / `user_review` in one write after the dispatch.
+#
+# `trigger` IS THE GITHUB EVENT ADAPTER, the one step of the trigger
+# workflow's job: event -> (branch, task text) -> `start`. It handles
+# `GITHUB_EVENT_NAME` `issues` and `repository_dispatch`; any other name, or an
+# event file it cannot read, exits 1. Like `restore` it acts on `hr_repo_root` of the working
+# directory, and it takes no part in the sending-verb gate: it gates itself, so
+# a refusal can still be commented. It reads, only from the environment:
+#   GITHUB_EVENT_NAME, GITHUB_EVENT_PATH   the event; each field is read by `jq`
+#                        into a variable and is only ever an argument or file
+#                        bytes, never shell source
+#   GITHUB_REPOSITORY, GITHUB_SERVER_URL, GITHUB_RUN_ID   the `gh` target and
+#                        the URLs its comments name
+#   HARNESS_REMOTE_STOP  non-empty: every start is refused
+#   HARNESS_TRIGGER_LABEL   the trigger label; `DEFAULT_TRIGGER_LABEL` when empty
+#   HARNESS_TRIGGER_ALLOWED_BOTS   comma-separated bot logins allowed to start
+#   HARNESS_TRIGGER_LOOKUP_SECS    seconds between run lookups; `5` when empty.
+#                        A test seam
+#   RUNNER_TEMP          where the prompt snapshot is written; a `mktemp -d`
+#                        directory when empty
+# An `action` other than `labeled`, or another label, is one line and exit 0
+# with no `gh` call. Otherwise refused, in this order, each refusal one issue
+# comment naming the reason and the way on:
+#   1. `HARNESS_REMOTE_STOP` is set
+#   2. `hr_forge` is not `github` or `hr_execution_target` is not
+#      `github-actions` — before any authorisation, so a disabled trigger asks
+#      GitHub nothing about the labeller
+#   3. the issue is not `open`
+#   4. `sender.login` is `ghost` (GitHub's placeholder for a deleted account),
+#      empty, or not a login shape (`^[A-Za-z0-9][A-Za-z0-9-]*$`, plus `[bot]`
+#      for a `Bot`)
+#   5. `sender.type` is not `User` and the login is not an exact entry of
+#      `HARNESS_TRIGGER_ALLOWED_BOTS` — checked by the listing alone, with no
+#      permission call, because the permission API answers `none` or 404 for a bot
+#   6. a `User` whose `collaborators/<login>/permission` is not `admin` or
+#      `write` — `maintain` reads as `write` and `triage` as `read` there; a
+#      failed call is "could not confirm write access", never a pass
+# Then it fetches `origin <defaultBranch>` (a failure tolerated), derives the
+# branch with `hr_derive_branch <title> issue_<number>` (2 or 3 refused), writes
+# the snapshot — `# <title>`, the body's bytes, `---` and a provenance sentence
+# naming the issue, the labeller, the label and the time — and runs `start` as a
+# child. After a start it looks up the `harness run <branch>` run, at most
+# `TRIGGER_RUN_LOOKUP_TRIES` times, falling back to the branch's filtered run
+# list, and comments the branch and that URL. Every comment is followed by
+# removing the label, so re-applying it is deliberate; a removal that fails is
+# one `::warning::` line.
+# A `repository_dispatch` reads `.action` (where GitHub puts the `event_type`)
+# and `client_payload`'s `title`, `body` and `source`, the contract being
+#   {"event_type": TRIGGER_DISPATCH_EVENT_TYPE, "client_payload": {"title": …,
+#    "body": …, "source": …}}
+# within GitHub's `client_payload` limits: at most 10 top-level properties and
+# under 64 KB, so a longer task text does not fit. Another `.action` is one line
+# and exit 0 with no `gh` call; an empty or missing `title` is refused. It has
+# no labeller: GitHub sends one only for a fine-grained token with Contents
+# write or a classic token with `repo`, so the token holder is the authority,
+# and refusals 3 to 6 do not apply. The fallback name is `task_<GITHUB_RUN_ID>`
+# and the snapshot's provenance sentence names the event type, `source` when
+# set, and the time. There is no issue, so no comment and no label: every
+# outcome is printed to stdout and appended as a Markdown block to
+# `GITHUB_STEP_SUMMARY` when that is set, an append failure one `::warning::`.
+#     0  started (commented), or ignored
+#     1  not an `issues` or `repository_dispatch` event, or the event could not
+#        be read
+#     2  refused (commented)
+#     3  a `gh` step after the decision failed: the comment could not be posted
+#        (an `::error::` line; issues only), or `start` pushed the branch but
+#        its dispatch failed (commented with the manual Run-workflow way on)
+#     4  `start` refused or failed its placement (commented)
 #
 # `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
 # its job, before and (under `always()`) after the harness step. Without
@@ -204,11 +352,28 @@
 # `gh run view <run_id> --json createdAt` as an epoch second.
 #
 # `status` AND `sync` READ THE RECORD, NOT THE KEY. A run keeps the execution
-# it started with, so they test the record's `execution` field and never
-# `execution.target`; the configuration is still read for `stateDir`.
+# it started with, so where a record exists they test its `execution` field and
+# never `execution.target`; the configuration is still read for `stateDir`.
+# Only `status` with no record reads the key.
 #
-# `status` WRITES NOTHING AT ALL — no registry (it does not even create an
-# absent one), no download, no file. It prints the branch's newest runs titled
+# `status` WITH NO LOCAL RECORD (no registry file, or no record of the branch)
+# is gated like a sending verb and answers from GitHub alone: the same runs
+# listing, then `remote_state` with the bundle downloaded into a `mktemp -d`
+# directory removed on exit, printing the state, pause reason, detail, engine
+# and run URL, each open question (the rule `fetch` states) with its `## Q<k>`
+# heading lines; an expired bundle's expired line is its `detail`. No `harness run
+# <branch>` run listed prints one line and exits 0. There is no sync to compare
+# against, so no finished-since line.
+#
+# `list` IS `branch-status`'s DIGEST: one listing (`list_all_runs`) and one
+# `git ls-remote --heads origin`, never a bundle. It prints `on GitHub, no
+# local record: <branch> <url>` for each branch `unrecorded_runs` keeps — its
+# newest run titled exactly `harness run <branch>`, no registry record,
+# unprotected and a live head on origin — or `no run on GitHub without a local
+# record`.
+#
+# `status` WITH A RECORD WRITES NOTHING AT ALL — no registry (it does not even
+# create an absent one), no download, no file. It prints the branch's newest runs titled
 # `harness run <branch>` or `harness pause <branch>` (bounded), the record's
 # `status`, `pause_reason`, `remote_run_url` and `remote_synced_at`, whether
 # a `harness run` finished after the last sync, and — reading the newest
@@ -234,7 +399,8 @@
 #      `mirror` mode into the record's `worktree`, `run.log` copied to the main
 #      checkout's `autonomous_logs/<branch>.remote.log`, and `status`,
 #      `pause_reason`, `usage_resume_at`, `park_loop_cycles`, `remote_run_id`,
-#      `remote_run_url`, `remote_detail` and `remote_synced_at` written. A
+#      `remote_run_url`, `remote_detail` and `remote_synced_at` written, and
+#      `engine` when the bundle names `task`, `user_review` or `docs`. A
 #      `mirror` restore places no planning draft
 #   4. no artifact, while some bundle exists (`remote_run_id` is set, or an
 #      older finished run carries one): a job that died before its upload.
@@ -294,7 +460,18 @@
 # root's `harness.config.json`.
 #
 # WHAT IT NEVER DOES. It never launches a local session, never writes the
-# inbox, never pushes, and never watches a run it sent. Its only writes are the
+# inbox, and never watches a run it sent. Only `start` and `review` push, and
+# only through `create-worktree.sh` and `push-branch.sh`; `start`'s writes are
+# the prompt committed on `origin/<branch>`, through a working copy and a local
+# branch it removes before it returns; `review`'s are the round committed on
+# `origin/<branch>`, through the record's mirror or a copy and a local branch
+# it removes, the record's `status` / `engine`, and the bundle download
+# directory `sync` uses. A user's chain-0 `dispatch --resume answer|pause`
+# writes the record's `status`, `resumed_at` and `resume_kind` in one write
+# when the main checkout's registry file exists and holds a record with
+# `execution: github-actions`; any other `dispatch` writes nothing. `trigger` writes its snapshot and comment
+# files under `RUNNER_TEMP`, one comment on the issue and the label removal, or
+# for a dispatch event a block in the step summary. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
 # `<branch>.remote.log` in the main checkout, plus the mirror restore
@@ -304,7 +481,9 @@
 # `park_loop_cycles` rewrite of `remote_status.json`, all in the job's
 # checkout; for `save`, <out_dir> and the step summary; for `poll`, its
 # download directories and `<state_dir>/autonomous_logs/poll_state/previous/`
-# and `current/`. `pause-requested` and `run-created-at` write nothing.
+# and `current/`. For `fetch`, <out_dir> only. `pause-requested`,
+# `run-created-at`, `list` and `status` write nothing; a no-record `status`
+# downloads into a temporary directory it removes on exit.
 #
 # MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
 # rename there is an edit here, byte for byte:
@@ -313,6 +492,10 @@
 #   STATE_ARTIFACT_NAME  mirrors  STATE_ARTIFACT_NAME
 #   POLL_STATE_ARTIFACT_NAME mirrors POLL_STATE_ARTIFACT_NAME
 #   HARNESS_GH_CLI       mirrors  GH_CLI_VARIABLE (the binary run as `gh`)
+#   HARNESS_TRIGGER_LABEL        mirrors  TRIGGER_LABEL_VARIABLE
+#   DEFAULT_TRIGGER_LABEL        mirrors  DEFAULT_TRIGGER_LABEL
+#   HARNESS_TRIGGER_ALLOWED_BOTS mirrors  TRIGGER_ALLOWED_BOTS_VARIABLE
+#   TRIGGER_DISPATCH_EVENT_TYPE  mirrors  TRIGGER_DISPATCH_EVENT_TYPE ('harness-task')
 #
 # `set -u` WITHOUT `-e`: every refusal is reported with its own exit code rather
 # than aborting mid-decision.
@@ -344,6 +527,37 @@
 #   gh fails   printf '%s\n' '#!/bin/sh' 'echo "boom" >&2' 'exit 4' > "$s"
 #              bash scripts/remote-run.sh pause feat_x        -> 3, names `boom`
 #   gh absent  HARNESS_GH_CLI=/nonexistent bash scripts/remote-run.sh warm   -> 3
+#
+#   start needs the adopted tree on origin's default branch (commit and push
+#   it first) and a prompt file outside the checkout, say /tmp/p.md:
+#   start      bash scripts/remote-run.sh start feat_x --prompt-file /tmp/p.md
+#              -> 0; origin/feat_x gains `chore: add task prompt for feat_x`,
+#                 then "$s.log" gains the same `workflow run` line as dispatch
+#   protected  bash scripts/remote-run.sh start main --prompt-file /tmp/p.md
+#              -> 2, log unchanged, nothing pushed
+#   no prompt  bash scripts/remote-run.sh start feat_y --prompt-file /nonexistent
+#              -> 2, log unchanged, nothing pushed
+#   review     after that start, a `run list` answer whose newest `harness run
+#              feat_x` run is `completed` with a bundle saying `completed`:
+#              bash scripts/remote-run.sh review feat_x --review-file /tmp/r.md
+#              -> 0; origin/feat_x gains `chore: add user review for feat_x`
+#                 placing feat_x_review.md, then one `-f engine=user_review`
+#                 dispatch; no copy or local feat_x is left
+#   in flight  the newest run `in_progress` -> 2, nothing pushed or sent
+#   fetch      t=$(mktemp -d); bash scripts/remote-run.sh fetch feat_x "$t"
+#              -> 0; prints `state: running` (or, with no run listed,
+#                 `state: none`), every other key present
+#
+#   no record  with no registry, the "a bundle" stub below with question_1.md:
+#              bash scripts/remote-run.sh status feat_x -> 0; prints `state:
+#              parked` and `open question question_1.md`; nothing written
+#   list       start's setup, a feat_x pushed to origin, no registry, and a
+#              `run list` answer carrying `headBranch` feat_x, `displayTitle`
+#              `harness run feat_x` and a `url`: bash scripts/remote-run.sh
+#              list -> 0; prints `on GitHub, no local record: feat_x <url>`;
+#              no registry is created
+#   adopt      bash scripts/remote-run.sh adopt -> 1, an unknown verb; no gh
+#              call, no registry
 #
 #   status and sync need a remote record, and a `run list` answer whose runs
 #   carry `displayTitle` `harness run feat_x` and a `url`:
@@ -432,6 +646,26 @@
 #   run-created-at   a stub answering `run view 42 --json createdAt` with
 #              {"createdAt":"2026-01-01T00:00:10Z"}: bash scripts/remote-run.sh
 #              run-created-at 42 -> prints 1767225610, 0; a failing stub -> 3
+#
+#   trigger needs start's setup plus `"forge": "github"`, an event file e.json
+#   {"action":"labeled","label":{"name":"harness"},"sender":{"login":"alice",
+#   "type":"User"},"issue":{"number":7,"title":"Add comments","body":"x",
+#   "html_url":"https://github.com/o/r/issues/7","state":"open"}}, and a stub
+#   answering `api repos/o/r/collaborators/alice/permission` with
+#   {"permission":"write"}; export GITHUB_EVENT_NAME=issues GITHUB_EVENT_PATH=e.json
+#   GITHUB_REPOSITORY=o/r HARNESS_TRIGGER_LOOKUP_SECS=0:
+#   trigger    bash scripts/remote-run.sh trigger -> 0; origin/add_comments gains
+#              the prompt commit, "$s.log" gains `workflow run harness-run.yml
+#              --ref add_comments ...`, `issue comment 7 ...` naming the branch,
+#              then `issue edit 7 ... --remove-label harness`
+#   read       the permission answer {"permission":"read"} -> 2, no `workflow
+#              run`, one comment naming write access, the label removed
+#   ignored    e.json's label name `bug` -> 0, one line, "$s.log" unchanged
+#   dispatch   GITHUB_EVENT_NAME=repository_dispatch GITHUB_RUN_ID=9
+#              GITHUB_STEP_SUMMARY=/tmp/s, e.json {"action":<TRIGGER_DISPATCH_EVENT_TYPE>,
+#              "client_payload":{"title":"Add tags","body":"x","source":"jira"}}
+#              -> 0; `workflow run ... --ref add_tags ...`, /tmp/s names
+#              add_tags, no `issue` call; without "title" -> 2, no `workflow run`
 
 set -u
 
@@ -448,6 +682,8 @@ WORKFLOW_RUN_FILE='harness-run.yml'
 WORKFLOW_RESUME_FILE='harness-resume.yml'
 STATE_ARTIFACT_NAME='harness-state'
 POLL_STATE_ARTIFACT_NAME='harness-poll-state'
+DEFAULT_TRIGGER_LABEL='harness'
+TRIGGER_DISPATCH_EVENT_TYPE='harness-task'
 GH="${HARNESS_GH_CLI:-gh}"
 
 # How many runs `status` prints, and how many `run list` returns for status
@@ -468,6 +704,10 @@ POLL_GIVE_UP_AFTER_MINUTES_DEFAULT=360
 # How many of the poller's own runs `poll` searches for the previous tick's
 # state artifact; each one without it costs an artifact lookup.
 POLL_STATE_RUNS_LIMIT=10
+# `trigger`'s bound on looking up the run its `start` dispatched; the wait
+# between tries is `HARNESS_TRIGGER_LOOKUP_SECS`, a test seam.
+TRIGGER_RUN_LOOKUP_TRIES=6
+TRIGGER_LOOKUP_SECS_DEFAULT=5
 
 # GitHub's documented limit on a `workflow_dispatch` inputs payload: "The
 # maximum payload for inputs is 65,535 characters."
@@ -478,6 +718,7 @@ EXIT_OK=0
 EXIT_USAGE=1
 EXIT_REFUSED=2
 EXIT_GH=3
+EXIT_PLACEMENT=4
 # pause-requested only: the read succeeded and found no pause.
 EXIT_NO_PAUSE=1
 
@@ -489,12 +730,17 @@ usage() {
   echo "       remote-run.sh stop <branch> [--repo <root>]" >&2
   echo "       remote-run.sh status <branch> [--repo <root>]" >&2
   echo "       remote-run.sh sync <branch> [--repo <root>]" >&2
+  echo "       remote-run.sh fetch <branch> <out_dir> [--repo <root>]" >&2
   echo "       remote-run.sh restore <branch> --resume none|answer|pause [--repo <root>]" >&2
   echo "       remote-run.sh save <branch> <out_dir> [--repo <root>]" >&2
   echo "       remote-run.sh continue <branch> <bundle_dir> [--repo <root>]" >&2
   echo "       remote-run.sh poll [--repo <root>]" >&2
   echo "       remote-run.sh pause-requested <branch> <since_epoch> [--repo <root>]" >&2
   echo "       remote-run.sh run-created-at <run_id> [--repo <root>]" >&2
+  echo "       remote-run.sh start <branch> --prompt-file <file> [--repo <root>]" >&2
+  echo "       remote-run.sh review <branch> --review-file <file> [--repo <root>]" >&2
+  echo "       remote-run.sh trigger [--repo <root>]" >&2
+  echo "       remote-run.sh list [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -545,7 +791,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|restore|save|continue|poll|pause-requested|run-created-at) ;;
+  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -563,6 +809,8 @@ chain="0"
 repo_arg=""
 since_arg=""
 run_id_arg=""
+prompt_file=""
+review_file=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -586,10 +834,19 @@ while [ "$#" -gt 0 ]; do
     --park-loop-clear)
       [ "$verb" = dispatch ] || usage "$1 is a dispatch option"
       park_loop_clear=1; shift ;;
+    --prompt-file)
+      [ "$verb" = start ] || usage "$1 is a start option"
+      [ "$#" -ge 2 ] && [ -n "$2" ] || usage "$1 needs a value"
+      prompt_file="$2"; shift 2 ;;
+    --review-file)
+      [ "$verb" = review ] || usage "$1 is a review option"
+      [ "$#" -ge 2 ] && [ -n "$2" ] || usage "$1 needs a value"
+      review_file="$2"; shift 2 ;;
     -*)
       usage "unknown option '$1'" ;;
     *)
-      [ "$verb" != warm ] && [ "$verb" != poll ] || usage "$verb takes no branch"
+      [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != trigger ] \
+        && [ "$verb" != list ] || usage "$verb takes no branch"
       if [ "$verb" = run-created-at ]; then
         [ -z "$run_id_arg" ] || usage "unexpected argument '$1'"
         run_id_arg="$1"
@@ -597,7 +854,7 @@ while [ "$#" -gt 0 ]; do
         branch="$1"
       elif [ "$verb" = pause-requested ] && [ -z "$since_arg" ]; then
         since_arg="$1"
-      elif [ "$verb" = save ] && [ -z "$out_dir" ]; then
+      elif { [ "$verb" = save ] || [ "$verb" = fetch ]; } && [ -z "$out_dir" ]; then
         out_dir="$1"
       elif [ "$verb" = continue ] && [ -z "$bundle_dir" ]; then
         bundle_dir="$1"
@@ -608,7 +865,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != run-created-at ]; then
+if [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != run-created-at ] && [ "$verb" != trigger ] \
+  && [ "$verb" != list ]; then
   valid_branch "$branch" || usage "$verb needs a <branch>"
 fi
 
@@ -632,6 +890,18 @@ fi
 
 if [ "$verb" = save ] && [ -z "$out_dir" ]; then
   usage "save needs an <out_dir>"
+fi
+
+if [ "$verb" = fetch ] && [ -z "$out_dir" ]; then
+  usage "fetch needs an <out_dir>"
+fi
+
+if [ "$verb" = review ] && [ -z "$review_file" ]; then
+  usage "review needs --review-file"
+fi
+
+if [ "$verb" = start ] && [ -z "$prompt_file" ]; then
+  usage "start needs --prompt-file"
 fi
 
 if [ "$verb" = restore ]; then
@@ -683,7 +953,7 @@ setup_fail() {
 if [ -n "$repo_arg" ]; then
   root=$(hr_repo_root "$repo_arg") || setup_fail "'$repo_arg' is not a git repository"
 elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ] \
-  || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ]; then
+  || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ] || [ "$verb" = trigger ]; then
   root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
@@ -691,12 +961,16 @@ fi
 
 hr_config_load "$root" || :
 registry=""
+status_no_record=0
 case "$verb" in
   restore|save|continue|poll)
     hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/harness.config.json'"
     ;;
   pause-requested|run-created-at)
     # Read verbs: no gate, and nothing of the configuration is read.
+    ;;
+  trigger)
+    # Gates itself, after reading the event, so a refusal can still be commented.
     ;;
   status|sync)
     registry=$(hr_state_path "$root" autonomous_logs/registry.json) || {
@@ -705,7 +979,18 @@ case "$verb" in
     }
     # Tested with -f first: hr_registry_get creates an absent registry, and
     # status writes nothing.
-    if [ ! -f "$registry" ] || [ "$(hr_registry_get "$registry" "$branch" execution)" != github-actions ]; then
+    if [ "$verb" = status ] && { [ ! -f "$registry" ] || [ -z "$(hr_registry_get "$registry" "$branch" branch)" ]; }; then
+      # No record: GitHub alone answers, behind the sending verbs' gate.
+      status_no_record=1
+      target=$(hr_execution_target "$root") || {
+        echo "remote-run.sh: cannot resolve '$root/harness.config.json' (or execution.target is outside its enum)" >&2
+        exit "$EXIT_USAGE"
+      }
+      if [ "$target" != github-actions ]; then
+        echo "remote-run.sh: refused, nothing sent: execution.target is '$target', not github-actions" >&2
+        exit "$EXIT_REFUSED"
+      fi
+    elif [ ! -f "$registry" ] || [ "$(hr_registry_get "$registry" "$branch" execution)" != github-actions ]; then
       echo "remote-run.sh: refused, nothing written: the local record of '$branch' does not carry execution: github-actions" >&2
       exit "$EXIT_REFUSED"
     fi
@@ -727,12 +1012,29 @@ case "$bundle_dir" in
   ''|/*) ;;
   *) bundle_dir="${PWD-.}/$bundle_dir" ;;
 esac
+case "$prompt_file" in
+  ''|/*) ;;
+  *) prompt_file="${PWD-.}/$prompt_file" ;;
+esac
+case "$review_file" in
+  ''|/*) ;;
+  *) review_file="${PWD-.}/$review_file" ;;
+esac
+if [ "$verb" = fetch ]; then
+  case "$out_dir" in
+    /*) ;;
+    *) out_dir="${PWD-.}/$out_dir" ;;
+  esac
+fi
 
 cd "$root" || setup_fail "cannot enter '$root'"
 
 # ---------------------------------------------------------------------------
 # The verbs.
 # ---------------------------------------------------------------------------
+
+# Appended to a failed dispatch's message; `start` sets it once its branch is pushed.
+dispatch_fail_note=""
 
 verb_dispatch() {
   local answers="" value n file payload
@@ -770,8 +1072,19 @@ verb_dispatch() {
     exit "$EXIT_REFUSED"
   fi
 
-  gh_call workflow run "$WORKFLOW_RUN_FILE" --ref "$branch" "${inputs[@]}" || gh_fail "dispatch of '$branch' failed"
+  gh_call workflow run "$WORKFLOW_RUN_FILE" --ref "$branch" "${inputs[@]}" || gh_fail "dispatch of '$branch' failed$dispatch_fail_note"
   echo "remote-run.sh: dispatched action=run engine=$engine resume=$resume for $branch"
+
+  # A user's resume: the main checkout's remote record, when one exists, is
+  # running now.
+  if [ "$((10#$chain))" -eq 0 ] && { [ "$resume" = answer ] || [ "$resume" = pause ]; }; then
+    local reg
+    reg=$(hr_state_path "$root" autonomous_logs/registry.json) || reg=""
+    if remote_record_exists "$reg"; then
+      hr_registry_set "$reg" "$branch" status running resumed_at "$(date '+%Y-%m-%dT%H:%M:%S')" resume_kind "$resume" \
+        || echo "remote-run.sh: dispatched, but the local record of $branch could not be updated" >&2
+    fi
+  fi
 }
 
 verb_pause() {
@@ -921,6 +1234,55 @@ set_many_or_fail() {
   }
 }
 
+# open_questions_in <bundle_dir> — OPEN_QUESTIONS: the space-separated <n>,
+# ascending, of every top-level `clarifications/<branch>/question_<n>.md` in the
+# bundle with no `answer_<n>.md` beside it.
+OPEN_QUESTIONS=""
+open_questions_in() {
+  local clar f n
+  OPEN_QUESTIONS=""
+  hr_remote_names_var
+  clar="$1/$HR_REMOTE_CLARIFY_DIR/$branch"
+  for f in "$clar"/question_*.md; do
+    [ -f "$f" ] || continue
+    n="${f##*/question_}"
+    n="${n%.md}"
+    [[ "$n" =~ ^[0-9]+$ ]] || continue
+    [ -e "$clar/answer_$n.md" ] || OPEN_QUESTIONS="$OPEN_QUESTIONS $n"
+  done
+  if [ -n "$OPEN_QUESTIONS" ]; then
+    OPEN_QUESTIONS=$(printf '%s\n' $OPEN_QUESTIONS | sort -n | tr '\n' ' ')
+    OPEN_QUESTIONS="${OPEN_QUESTIONS% }"
+  fi
+}
+
+# status_from_github — `status` with no local record: the newest run's state
+# read through `remote_state` into a temporary directory removed on exit.
+status_tmp=""
+status_from_github() {
+  local n
+  if [ -z "$(titled_runs "harness run $branch" | jq -c '.[0] // empty')" ]; then
+    echo "remote-run.sh: no local record, and no run titled 'harness run $branch' on GitHub"
+    return 0
+  fi
+  echo "remote-run.sh: no local record; state from GitHub (newest run):"
+  status_tmp=$(mktemp -d) || { echo "remote-run.sh: cannot create a temporary directory" >&2; exit "$EXIT_USAGE"; }
+  trap 'rm -rf "$status_tmp"' EXIT
+  remote_state "$status_tmp"
+  printf '  state: %s\n' "$RS_STATE"
+  printf '  pause_reason: %s\n' "$RS_PAUSE_REASON"
+  printf '  detail: %s\n' "$RS_DETAIL"
+  printf '  engine: %s\n' "$RS_ENGINE"
+  printf '  run_url: %s\n' "$RS_RUN_URL"
+  if [ "$RS_BUNDLE" -eq 1 ]; then
+    open_questions_in "$status_tmp"
+    for n in $OPEN_QUESTIONS; do
+      echo "remote-run.sh: open question question_$n.md"
+      grep -E '^## Q[0-9]+' "$status_tmp/$HR_REMOTE_CLARIFY_DIR/$branch/question_$n.md" | sed 's/^/  /'
+    done
+  fi
+}
+
 verb_status() {
   local runs finished_id synced_id field
   list_runs
@@ -929,6 +1291,10 @@ verb_status() {
   printf '%s' "$runs" | jq -r --argjson n "$STATUS_RUNS_SHOWN" '
     if length == 0 then "  (none)" else
     .[:$n][] | "  \(.databaseId)  \(.displayTitle)  \(.status)/\(.conclusion // "")  \(.createdAt)  \(.url)" end'
+  if [ "$status_no_record" -eq 1 ]; then
+    status_from_github
+    return 0
+  fi
   echo "remote-run.sh: local record (last synced):"
   for field in status pause_reason remote_run_url remote_synced_at; do
     printf '  %s: %s\n' "$field" "$(hr_registry_get "$registry" "$branch" "$field")"
@@ -957,78 +1323,171 @@ sync_expired() {
   echo "remote-run.sh: $line"
 }
 
-verb_sync() {
-  local worktree runs newest id state url synced_id now older download status_file
-  local status reason detail resume_at cycles
-  worktree=$(hr_registry_get "$registry" "$branch" worktree)
-  if [ -z "$worktree" ] || [ ! -d "$worktree" ]; then
-    echo "remote-run.sh: refused, nothing written: the mirror working copy '$worktree' of $branch is missing" >&2
-    exit "$EXIT_REFUSED"
-  fi
-  list_runs
-  runs=$(titled_runs "harness run $branch") || runs='[]'
-  newest=$(printf '%s' "$runs" | jq -c '.[0] // empty')
+# remote_state <download_dir> [<applied_run_id>] — the one derivation of a
+# branch's newest remote state, from list_runs' answer in GH_OUT; `sync`,
+# `fetch`, `review` and `status` with no local record all call it. RS_STATE is `none` (no `harness run
+# <branch>` run listed), `running` (the newest is not `completed`), `applied`
+# (its id is <applied_run_id>: `sync`'s case 1, decided there), or the state
+# of `sync`'s cases 2-5, which it derives in that order. A bundle is downloaded
+# into <download_dir> — `sync`'s per-run directory under the main checkout when
+# empty — skipped when that directory already holds its status.json, and
+# RS_BUNDLE is then 1. <applied_run_id>, when set, also counts as a bundle
+# existing for case 4. Exits 3 when gh fails, 2 for an unrecognised bundle.
+RS_RUNS=""
+RS_RUN_ID=""
+RS_RUN_URL=""
+RS_GH_STATUS=""
+RS_STATE=""
+RS_PAUSE_REASON=""
+RS_DETAIL=""
+RS_ENGINE=""
+RS_USAGE_RESUME_AT=""
+RS_PARK_LOOP_CYCLES=""
+RS_BUNDLE=0
+RS_DOWNLOAD=""
+remote_state() {
+  local download="${1-}" applied="${2-}" newest status_file older bundle_exists=0
+  RS_RUNS=""; RS_RUN_ID=""; RS_RUN_URL=""; RS_GH_STATUS=""; RS_STATE=""
+  RS_PAUSE_REASON=""; RS_DETAIL=""; RS_ENGINE=""; RS_USAGE_RESUME_AT=""
+  RS_PARK_LOOP_CYCLES=""; RS_BUNDLE=0; RS_DOWNLOAD=""
+  RS_RUNS=$(titled_runs "harness run $branch") || RS_RUNS='[]'
+  newest=$(printf '%s' "$RS_RUNS" | jq -c '.[0] // empty')
   if [ -z "$newest" ]; then
-    echo "remote-run.sh: no run titled 'harness run $branch' is listed yet; the record is unchanged"
+    RS_STATE=none
     return 0
   fi
-  id=$(printf '%s' "$newest" | jq -r '.databaseId | tostring')
-  state=$(printf '%s' "$newest" | jq -r '.status // ""')
-  url=$(printf '%s' "$newest" | jq -r '.url // ""')
-  now=$(date +%s)
-
-  if [ "$state" != completed ]; then
-    set_many_or_fail status running remote_synced_at "$now"
-    echo "remote-run.sh: run $id of $branch is $state; the record is running, nothing downloaded"
+  RS_RUN_ID=$(printf '%s' "$newest" | jq -r '.databaseId | tostring')
+  RS_GH_STATUS=$(printf '%s' "$newest" | jq -r '.status // ""')
+  RS_RUN_URL=$(printf '%s' "$newest" | jq -r '.url // ""')
+  if [ "$RS_GH_STATUS" != completed ]; then
+    RS_STATE=running
     return 0
   fi
-
-  synced_id=$(hr_registry_get "$registry" "$branch" remote_run_id)
-  # Case 1 — already applied. A record still waiting on this run's bundle is
-  # re-checked: once it expires, the job can no longer take an answer.
-  if [ "$id" = "$synced_id" ]; then
-    case "$(hr_registry_get "$registry" "$branch" status)/$(hr_registry_get "$registry" "$branch" pause_reason)" in
-      paused/expired) ;;
-      parked/*|park_loop/*|paused/*)
-        bundle_state "$id"
-        if [ "$BUNDLE_STATE" = expired ]; then
-          sync_expired "$id" "$url" "$now"
-          return 0
-        fi
-        ;;
-    esac
-    set_or_fail remote_synced_at "$now"
-    echo "remote-run.sh: run $id of $branch is the one last synced; the mirror is current"
+  if [ -n "$applied" ] && [ "$RS_RUN_ID" = "$applied" ]; then
+    RS_STATE=applied
     return 0
   fi
 
-  # Case 2 — a newer run whose bundle has expired.
-  bundle_state "$id"
+  # Case 2 — its bundle has expired.
+  bundle_state "$RS_RUN_ID"
   if [ "$BUNDLE_STATE" = expired ]; then
-    sync_expired "$id" "$url" "$now"
+    RS_STATE=paused
+    RS_PAUSE_REASON=expired
+    RS_DETAIL=$(expired_line "$RS_RUN_ID")
     return 0
   fi
 
-  # Case 3 — a newer run with a bundle.
+  # Case 3 — a bundle.
   if [ "$BUNDLE_STATE" = present ]; then
     hr_remote_names_var
-    download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$id") || {
-      echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
-      exit "$EXIT_USAGE"
-    }
+    if [ -z "$download" ]; then
+      download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$RS_RUN_ID") || {
+        echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
+        exit "$EXIT_USAGE"
+      }
+    fi
+    RS_DOWNLOAD="$download"
     status_file="$download/$HR_REMOTE_STATUS_FILE"
     if [ ! -f "$status_file" ]; then
       mkdir -p "$download" || { echo "remote-run.sh: cannot create '$download'" >&2; exit "$EXIT_USAGE"; }
-      gh_call run download "$id" -n "$STATE_ARTIFACT_NAME" -D "$download" || gh_fail "downloading the bundle of run $id failed"
+      gh_call run download "$RS_RUN_ID" -n "$STATE_ARTIFACT_NAME" -D "$download" || gh_fail "downloading the bundle of run $RS_RUN_ID failed"
     fi
-    status=$(hr_remote_status_get "$status_file" status) || status=""
-    case "$status" in
+    RS_BUNDLE=1
+    RS_STATE=$(hr_remote_status_get "$status_file" status) || RS_STATE=""
+    case "$RS_STATE" in
       running|parked|park_loop|paused|completed|failed) ;;
       *)
         echo "remote-run.sh: refused, nothing written: the bundle in '$download' is unrecognised" >&2
         exit "$EXIT_REFUSED"
         ;;
     esac
+    RS_PAUSE_REASON=$(hr_remote_status_get "$status_file" pause_reason) || RS_PAUSE_REASON=""
+    RS_DETAIL=$(hr_remote_status_get "$status_file" detail) || RS_DETAIL=""
+    if [ "$RS_STATE" = running ]; then
+      RS_STATE=paused
+      RS_PAUSE_REASON=killed
+      RS_DETAIL="the job ended mid-run (its bundle still says running): $RS_RUN_URL"
+    fi
+    RS_USAGE_RESUME_AT=$(hr_remote_status_get "$status_file" usage_resume_at) || RS_USAGE_RESUME_AT=""
+    RS_PARK_LOOP_CYCLES=$(hr_remote_status_get "$status_file" park_loop_cycles) || RS_PARK_LOOP_CYCLES=""
+    RS_ENGINE=$(hr_remote_status_get "$status_file" engine) || RS_ENGINE=""
+    return 0
+  fi
+
+  # Case 4 — no bundle, while some bundle exists.
+  if [ -n "$applied" ]; then
+    bundle_exists=1
+  else
+    for older in $(printf '%s' "$RS_RUNS" | jq -r '.[1:][] | select(.status == "completed") | .databaseId | tostring'); do
+      if has_bundle "$older"; then bundle_exists=1; break; fi
+    done
+  fi
+  if [ "$bundle_exists" -eq 1 ]; then
+    RS_STATE=paused
+    RS_PAUSE_REASON=killed
+    RS_DETAIL="run $RS_RUN_ID ended with no state bundle (killed, cancelled or replaced): $RS_RUN_URL"
+    return 0
+  fi
+
+  # Case 5 — no bundle in any run.
+  RS_STATE=failed
+  RS_DETAIL="no run of $branch ever uploaded a state bundle; newest: $RS_RUN_URL"
+  return 0
+}
+
+verb_sync() {
+  local worktree id url synced_id now download
+  local status reason detail
+  worktree=$(hr_registry_get "$registry" "$branch" worktree)
+  if [ -z "$worktree" ] || [ ! -d "$worktree" ]; then
+    echo "remote-run.sh: refused, nothing written: the mirror working copy '$worktree' of $branch is missing" >&2
+    exit "$EXIT_REFUSED"
+  fi
+  list_runs
+  synced_id=$(hr_registry_get "$registry" "$branch" remote_run_id)
+  now=$(date +%s)
+  remote_state "" "$synced_id"
+  id="$RS_RUN_ID"
+  url="$RS_RUN_URL"
+
+  case "$RS_STATE" in
+    none)
+      echo "remote-run.sh: no run titled 'harness run $branch' is listed yet; the record is unchanged"
+      return 0
+      ;;
+    running)
+      set_many_or_fail status running remote_synced_at "$now"
+      echo "remote-run.sh: run $id of $branch is $RS_GH_STATUS; the record is running, nothing downloaded"
+      return 0
+      ;;
+    applied)
+      # Case 1 — already applied. A record still waiting on this run's bundle
+      # is re-checked: once it expires, the job can no longer take an answer.
+      case "$(hr_registry_get "$registry" "$branch" status)/$(hr_registry_get "$registry" "$branch" pause_reason)" in
+        paused/expired) ;;
+        parked/*|park_loop/*|paused/*)
+          bundle_state "$id"
+          if [ "$BUNDLE_STATE" = expired ]; then
+            sync_expired "$id" "$url" "$now"
+            return 0
+          fi
+          ;;
+      esac
+      set_or_fail remote_synced_at "$now"
+      echo "remote-run.sh: run $id of $branch is the one last synced; the mirror is current"
+      return 0
+      ;;
+  esac
+
+  # Case 2 — a newer run whose bundle has expired.
+  if [ "$RS_PAUSE_REASON" = expired ] && [ "$RS_BUNDLE" -eq 0 ]; then
+    sync_expired "$id" "$url" "$now"
+    return 0
+  fi
+
+  # Case 3 — a newer run with a bundle.
+  if [ "$RS_BUNDLE" -eq 1 ]; then
+    download="$RS_DOWNLOAD"
     hr_remote_bundle_restore "$download" "$worktree" "$branch" mirror
     case $? in
       0) ;;
@@ -1043,44 +1502,33 @@ verb_sync() {
           || { echo "remote-run.sh: copying the run log to '$remote_log' failed" >&2; exit "$EXIT_USAGE"; }
       fi
     fi
-    reason=$(hr_remote_status_get "$status_file" pause_reason) || reason=""
-    detail=$(hr_remote_status_get "$status_file" detail) || detail=""
-    if [ "$status" = running ]; then
-      status=paused
-      reason=killed
-      detail="the job ended mid-run (its bundle still says running): $url"
-    fi
+    status="$RS_STATE"
+    reason="$RS_PAUSE_REASON"
+    detail="$RS_DETAIL"
     [ -n "$detail" ] || detail="synced from $url"
-    resume_at=$(hr_remote_status_get "$status_file" usage_resume_at) || resume_at=""
-    cycles=$(hr_remote_status_get "$status_file" park_loop_cycles) || cycles=""
-    set_many_or_fail status "$status" pause_reason "$reason" usage_resume_at "$resume_at" \
-      park_loop_cycles "$cycles" remote_run_id "$id" remote_run_url "$url" \
-      remote_detail "$detail" remote_synced_at "$now"
+    if valid_engine "$RS_ENGINE"; then
+      set_many_or_fail status "$status" pause_reason "$reason" usage_resume_at "$RS_USAGE_RESUME_AT" \
+        park_loop_cycles "$RS_PARK_LOOP_CYCLES" remote_run_id "$id" remote_run_url "$url" \
+        remote_detail "$detail" remote_synced_at "$now" engine "$RS_ENGINE"
+    else
+      set_many_or_fail status "$status" pause_reason "$reason" usage_resume_at "$RS_USAGE_RESUME_AT" \
+        park_loop_cycles "$RS_PARK_LOOP_CYCLES" remote_run_id "$id" remote_run_url "$url" \
+        remote_detail "$detail" remote_synced_at "$now"
+    fi
     echo "remote-run.sh: synced run $id of $branch: $status${reason:+ ($reason)}"
     return 0
   fi
 
   # Case 4 — a newer run with no bundle, while some bundle exists.
-  local bundle_exists=0
-  if [ -n "$synced_id" ]; then
-    bundle_exists=1
-  else
-    for older in $(printf '%s' "$runs" | jq -r '.[1:][] | select(.status == "completed") | .databaseId | tostring'); do
-      if has_bundle "$older"; then bundle_exists=1; break; fi
-    done
-  fi
-  if [ "$bundle_exists" -eq 1 ]; then
+  if [ "$RS_STATE" = paused ]; then
     set_many_or_fail status paused pause_reason killed remote_run_id "$id" remote_run_url "$url" \
-      remote_detail "run $id ended with no state bundle (killed, cancelled or replaced): $url" \
-      remote_synced_at "$now"
+      remote_detail "$RS_DETAIL" remote_synced_at "$now"
     echo "remote-run.sh: run $id of $branch left no bundle; the record is paused (killed), nothing restored"
     return 0
   fi
 
   # Case 5 — no bundle in any run.
-  set_many_or_fail status failed \
-    remote_detail "no run of $branch ever uploaded a state bundle; newest: $url" \
-    remote_synced_at "$now"
+  set_many_or_fail status failed remote_detail "$RS_DETAIL" remote_synced_at "$now"
   echo "remote-run.sh: no run of $branch carries a state bundle; the record is failed"
 }
 
@@ -1315,7 +1763,7 @@ ALL_RUNS_LISTED=0
 list_all_runs() {
   [ "$ALL_RUNS_LISTED" -eq 0 ] || return 0
   gh_call run list --workflow "$WORKFLOW_RUN_FILE" \
-    --json databaseId,headBranch,displayTitle,status,createdAt --limit "$ALL_RUNS_LIMIT" || return 1
+    --json databaseId,headBranch,displayTitle,status,createdAt,url --limit "$ALL_RUNS_LIMIT" || return 1
   printf '%s' "$GH_OUT" | jq -e 'type == "array"' >/dev/null 2>&1 || {
     GH_ERR="its run list is not the expected JSON"
     return 1
@@ -1389,13 +1837,13 @@ RESUME_HINT="/autonomous-sdlc-harness:branch-resume"
 continue_redispatch() {
   local status_file="$1" engine_value
   if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
-    notify paused "$branch" "Not re-dispatched: remote stop is set. Run $RESUME_HINT $branch to continue."
+    notify paused "$branch" "Not re-dispatched: remote stop is set. Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")."
     return 0
   fi
   remote_branch_stopped "$branch"
   case $? in
     0) echo "remote-run.sh: $branch is stopped ($STOPPED_LINE); not re-dispatched"; return 0 ;;
-    2) notify paused "$branch" "Not re-dispatched: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue."; return 0 ;;
+    2) notify paused "$branch" "Not re-dispatched: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")."; return 0 ;;
   esac
   if ! max_chain_var; then
     notify failed "$branch" "Not re-dispatched: HARNESS_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer."
@@ -1412,19 +1860,19 @@ continue_redispatch() {
     return 0
   fi
   redispatch "$engine_value" "$NEXT_CHAIN" \
-    || notify paused "$branch" "Re-dispatch failed ($REDISPATCH_ERR). Run $RESUME_HINT $branch to continue."
+    || notify paused "$branch" "Re-dispatch failed ($REDISPATCH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "$engine_value")."
 }
 
 continue_wait_poller() {
   remote_branch_stopped "$branch"
   case $? in
     0) echo "remote-run.sh: $branch is stopped ($STOPPED_LINE); the resume poller is not enabled"; return 0 ;;
-    2) notify paused "$branch" "Auto-resume not enabled: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue."; return 0 ;;
+    2) notify paused "$branch" "Auto-resume not enabled: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")."; return 0 ;;
   esac
   if gh_call workflow enable "$WORKFLOW_RESUME_FILE"; then
     echo "remote-run.sh: enabled $WORKFLOW_RESUME_FILE for $branch"
   else
-    notify paused "$branch" "Auto-resume is unavailable: enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $branch after the usage reset."
+    notify paused "$branch" "Auto-resume is unavailable: enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $branch after the usage reset; $(hr_github_resume_route "$branch" "")."
   fi
 }
 
@@ -1648,7 +2096,7 @@ poll_branch() {
   if [ "$failures" -ge "$((10#$POLL_MAX_FAILURES))" ] \
     || [ "$now" -gt "$((10#$at + 10#$POLL_GIVE_UP_MINUTES * 60))" ]; then
     poll_state_put "$branch" "$id" "$failures" 1
-    notify paused "$branch" "The resume poller could not re-dispatch $branch ($REDISPATCH_ERR) after $failures attempts; automatic resume has stopped. Run $RESUME_HINT $branch."
+    notify paused "$branch" "The resume poller could not re-dispatch $branch ($REDISPATCH_ERR) after $failures attempts; automatic resume has stopped. Run $RESUME_HINT $branch; $(hr_github_resume_route "$branch" "$engine_value")."
     return 1
   fi
   poll_state_put "$branch" "$id" "$failures" ""
@@ -1705,7 +2153,7 @@ poll_recheck() {
     return 0
   fi
   for b in $POLL_WAITING; do
-    notify paused "$b" "Auto-resume is unavailable: re-enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $b after the usage reset."
+    notify paused "$b" "Auto-resume is unavailable: re-enabling $WORKFLOW_RESUME_FILE failed ($GH_ERR). Run $RESUME_HINT $b after the usage reset; $(hr_github_resume_route "$b" "")."
   done
 }
 
@@ -1778,6 +2226,626 @@ verb_run_created_at() {
   printf '%s\n' "$epoch"
 }
 
+# placement_fail <step> — exit 4, naming the step; nothing was dispatched.
+placement_fail() {
+  echo "remote-run.sh: start of '$branch' failed at $1; nothing was dispatched" >&2
+  exit "$EXIT_PLACEMENT"
+}
+
+# start_remove_copy — remove the working copy and the local branch `start`
+# cut, and only those: `had_copy` / `had_branch` record what existed before the
+# cut. Idempotent; a failed step is one stderr line and never changes the exit
+# status already decided. `--force` because a failure exit may leave the placed,
+# uncommitted prompt, which is only a copy of --prompt-file.
+start_remove_copy() {
+  if [ "$had_copy" -eq 0 ] && [ -e "$worktree" ]; then
+    git -C "$root" worktree remove --force "$worktree" >/dev/null 2>&1 \
+      || echo "remote-run.sh: could not remove the working copy '$worktree'" >&2
+  fi
+  git -C "$root" worktree prune >/dev/null 2>&1 \
+    || echo "remote-run.sh: git worktree prune failed in '$root'" >&2
+  if [ "$had_branch" -eq 0 ] && git -C "$root" show-ref --verify --quiet "refs/heads/$branch"; then
+    git -C "$root" branch -D "$branch" >/dev/null 2>&1 \
+      || echo "remote-run.sh: could not delete the local branch '$branch'" >&2
+  fi
+  return 0
+}
+
+verb_start() {
+  local protected=0 status=0 state_rel rel subject
+  hr_branch_is_protected "$root" "$branch" || protected=$?
+  case "$protected" in
+    0)
+      echo "remote-run.sh: refused, nothing written: $branch is protected" >&2
+      exit "$EXIT_REFUSED" ;;
+    2)
+      echo "remote-run.sh: refused, nothing written: cannot judge whether $branch is protected" >&2
+      exit "$EXIT_REFUSED" ;;
+  esac
+  if [ ! -f "$prompt_file" ] || [ ! -r "$prompt_file" ]; then
+    echo "remote-run.sh: refused, nothing written: the prompt file '$prompt_file' is not a readable regular file" >&2
+    exit "$EXIT_REFUSED"
+  fi
+
+  # Global, not local: the EXIT trap runs after this function's frame is gone.
+  worktree=$(hr_worktree_dir "$root" "$branch") || placement_fail "resolving the working copy"
+  had_copy=0
+  [ ! -e "$worktree" ] || had_copy=1
+  had_branch=0
+  ! git -C "$root" show-ref --verify --quiet "refs/heads/$branch" || had_branch=1
+
+  # The cut itself can leave a half-created copy, and every failure below exits.
+  trap start_remove_copy EXIT
+  bash "$script_dir/create-worktree.sh" --no-bootstrap "$branch" >&2 || status=$?
+  [ "$status" -eq 0 ] || placement_fail "the branch cut (create-worktree.sh exited $status)"
+
+  state_rel=$(hr_state_dir "$worktree") || placement_fail "resolving the state directory in '$worktree'"
+  [ -n "$state_rel" ] || placement_fail "resolving the state directory in '$worktree'"
+  rel=$(hr_task_prompt_rel "$state_rel" "$branch")
+  subject=$(hr_task_prompt_subject "$branch")
+
+  hr_place_artifact "$worktree" "$prompt_file" "$rel" || placement_fail "copying the prompt to '$worktree/$rel'"
+  # 3 (nothing staged) cannot happen on a freshly cut branch, so it reads as 0.
+  status=0
+  hr_commit_placed "$script_dir/commit-on-branch.sh" "$worktree" "$rel" "$subject" >&2 || status=$?
+  [ "$status" -ne 1 ] || placement_fail "committing '$rel'"
+  hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 \
+    || placement_fail "pushing $branch (origin/$branch is not HEAD)"
+  start_remove_copy
+  trap - EXIT
+
+  engine=task
+  resume=none
+  chain=0
+  dispatch_fail_note="; $branch and its task prompt are already pushed to origin, so re-send with: remote-run.sh dispatch $branch --engine task"
+  verb_dispatch
+  echo "remote-run.sh: started $branch"
+}
+
+# ---------------------------------------------------------------------------
+# `fetch` — the newest remote state of one branch, for the plugin commands.
+# ---------------------------------------------------------------------------
+
+verb_fetch() {
+  local open_questions="" bundle_dir=""
+  if [ ! -d "$out_dir" ]; then
+    echo "remote-run.sh: fetch needs an existing directory, not '$out_dir'" >&2
+    exit "$EXIT_USAGE"
+  fi
+  if [ -n "$(ls -A "$out_dir" 2>/dev/null)" ]; then
+    echo "remote-run.sh: fetch needs an empty directory, and '$out_dir' is not" >&2
+    exit "$EXIT_USAGE"
+  fi
+  list_runs
+  remote_state "$out_dir"
+  if [ "$RS_BUNDLE" -eq 1 ]; then
+    bundle_dir="$out_dir"
+    open_questions_in "$out_dir"
+    open_questions="$OPEN_QUESTIONS"
+  fi
+  printf 'run_id: %s\n' "$RS_RUN_ID"
+  printf 'run_url: %s\n' "$RS_RUN_URL"
+  printf 'run_status: %s\n' "$RS_GH_STATUS"
+  printf 'state: %s\n' "$RS_STATE"
+  printf 'pause_reason: %s\n' "$RS_PAUSE_REASON"
+  printf 'engine: %s\n' "$RS_ENGINE"
+  printf 'detail: %s\n' "$RS_DETAIL"
+  printf 'open_questions: %s\n' "$open_questions"
+  printf 'bundle_dir: %s\n' "$bundle_dir"
+}
+
+# ---------------------------------------------------------------------------
+# `review` — a user review round placed on the branch tip, then dispatched.
+# ---------------------------------------------------------------------------
+
+# review_fail <step> — exit 4, naming the step; nothing was dispatched.
+review_fail() {
+  echo "remote-run.sh: review of '$branch' failed at $1; nothing was dispatched" >&2
+  exit "$EXIT_PLACEMENT"
+}
+
+# remote_record_exists <registry> — 0 when <registry> is a file holding a
+# record of the branch with `execution: github-actions`. Tested with -f first:
+# hr_registry_get creates an absent registry.
+remote_record_exists() {
+  [ -n "${1-}" ] && [ -f "$1" ] && [ "$(hr_registry_get "$1" "$branch" execution)" = github-actions ]
+}
+
+verb_review() {
+  local protected=0 status=0 reg="" record_wt="" use_mirror=0 state_rel names name round max=0 next rel
+  hr_branch_is_protected "$root" "$branch" || protected=$?
+  case "$protected" in
+    0)
+      echo "remote-run.sh: refused, nothing written: $branch is protected" >&2
+      exit "$EXIT_REFUSED" ;;
+    2)
+      echo "remote-run.sh: refused, nothing written: cannot judge whether $branch is protected" >&2
+      exit "$EXIT_REFUSED" ;;
+  esac
+  if [ ! -f "$review_file" ] || [ ! -r "$review_file" ]; then
+    echo "remote-run.sh: refused, nothing written: the review file '$review_file' is not a readable regular file" >&2
+    exit "$EXIT_REFUSED"
+  fi
+
+  # A run in flight takes no review: the local rule, `completed` or `failed` only.
+  list_runs
+  remote_state ""
+  case "$RS_STATE" in
+    completed|failed) ;;
+    none)
+      echo "remote-run.sh: refused, nothing written: no \`harness run $branch\` run on GitHub" >&2
+      exit "$EXIT_REFUSED" ;;
+    paused)
+      if [ "$RS_PAUSE_REASON" = expired ]; then
+        echo "remote-run.sh: refused, nothing written: $RS_DETAIL" >&2
+      else
+        echo "remote-run.sh: refused, nothing written: $branch is paused${RS_PAUSE_REASON:+ ($RS_PAUSE_REASON)} on GitHub; a review waits until its run is completed or failed" >&2
+      fi
+      exit "$EXIT_REFUSED" ;;
+    *)
+      echo "remote-run.sh: refused, nothing written: $branch is $RS_STATE on GitHub; a review waits until its run is completed or failed" >&2
+      exit "$EXIT_REFUSED" ;;
+  esac
+
+  # The copy: the remote record's mirror when it is on the branch, never
+  # removed; else a copy this verb cuts and removes on every exit.
+  reg=$(hr_state_path "$root" autonomous_logs/registry.json) || reg=""
+  if remote_record_exists "$reg"; then
+    record_wt=$(hr_registry_get "$reg" "$branch" worktree)
+    if [ -n "$record_wt" ] && [ -d "$record_wt" ] \
+      && [ "$(git -C "$record_wt" symbolic-ref --short HEAD 2>/dev/null)" = "$branch" ]; then
+      use_mirror=1
+    fi
+  fi
+  if [ "$use_mirror" -eq 1 ]; then
+    worktree="$record_wt"
+  else
+    # Global, not local: the EXIT trap runs after this function's frame is gone.
+    worktree=$(hr_worktree_dir "$root" "$branch") || review_fail "resolving the working copy"
+    had_copy=0
+    [ ! -e "$worktree" ] || had_copy=1
+    had_branch=0
+    ! git -C "$root" show-ref --verify --quiet "refs/heads/$branch" || had_branch=1
+    trap start_remove_copy EXIT
+    bash "$script_dir/create-worktree.sh" --existing --no-bootstrap "$branch" >&2 || status=$?
+    [ "$status" -eq 0 ] || review_fail "the working copy (create-worktree.sh exited $status)"
+  fi
+  # Also for a cut copy: a local branch that existed before may be behind origin.
+  git -C "$worktree" fetch origin "$branch" >&2 || review_fail "git fetch origin $branch in '$worktree'"
+  git -C "$worktree" merge --ff-only "origin/$branch" >&2 || review_fail "git merge --ff-only origin/$branch in '$worktree'"
+
+  # The round, from the branch tip: the engine's own round source.
+  state_rel=$(hr_state_dir "$worktree") || review_fail "resolving the state directory in '$worktree'"
+  [ -n "$state_rel" ] || review_fail "resolving the state directory in '$worktree'"
+  state_rel="${state_rel%/}"
+  names=$(git -C "$worktree" ls-tree --name-only HEAD -- "$state_rel/user_reviews/") \
+    || review_fail "listing $state_rel/user_reviews/ on $branch"
+  while IFS= read -r name; do
+    name="${name##*/}"
+    [[ "$name" =~ ^(.+)_review(_([0-9]+))?\.md$ ]] || continue
+    [ "${BASH_REMATCH[1]}" = "$branch" ] || continue
+    round="${BASH_REMATCH[3]:-1}"
+    round=$((10#$round))
+    [ "$round" -le "$max" ] || max="$round"
+  done <<NAMES
+$names
+NAMES
+  if [ "$max" -eq 0 ]; then
+    round=1
+    next="${branch}_review.md"
+  else
+    round=$((max + 1))
+    next="${branch}_review_$round.md"
+  fi
+  rel="$state_rel/user_reviews/$next"
+
+  hr_place_artifact "$worktree" "$review_file" "$rel" || review_fail "copying the review to '$worktree/$rel'"
+  # 3 (nothing staged) cannot happen for a new round's file, so it reads as a failure.
+  status=0
+  hr_commit_placed "$script_dir/commit-on-branch.sh" "$worktree" "$rel" "$(hr_user_review_subject "$branch")" >&2 || status=$?
+  [ "$status" -eq 0 ] || review_fail "committing '$rel'"
+  hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 \
+    || review_fail "pushing $branch (origin/$branch is not HEAD)"
+  if [ "$use_mirror" -eq 0 ]; then
+    start_remove_copy
+    trap - EXIT
+  fi
+
+  echo "remote-run.sh: placed $rel (round $round) on $branch"
+  engine=user_review
+  resume=none
+  chain=0
+  dispatch_fail_note="; the review is already pushed to origin/$branch, so re-send with: remote-run.sh dispatch $branch --engine user_review"
+  verb_dispatch
+
+  if remote_record_exists "$reg"; then
+    hr_registry_set "$reg" "$branch" status running engine user_review \
+      || echo "remote-run.sh: dispatched, but the local record of $branch could not be updated" >&2
+  fi
+}
+
+# unrecorded_runs — UNRECORDED: one `<branch>\t<url>` line per branch whose
+# newest `harness run <branch>` run is on GitHub, newest first, dropping a
+# branch with a registry record, one `hr_branch_is_protected` does not answer 1
+# for, and one that is not a live head on origin. One listing and one
+# `ls-remote`; writes nothing. Exits 3 when either fails.
+UNRECORDED=""
+unrecorded_runs() {
+  local titled reg recorded="" heads="" live=$'\n' ref b url protected
+  UNRECORDED=""
+  reg=$(hr_state_path "$root" autonomous_logs/registry.json) || {
+    echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
+    exit "$EXIT_USAGE"
+  }
+  list_all_runs || gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
+  # Newest first, one line per branch: its newest `harness run <branch>` run.
+  titled=$(printf '%s' "$ALL_RUNS" | jq -r '
+    [.[] | select((.displayTitle // "") | startswith("harness run "))
+         | . + {b: (.displayTitle | ltrimstr("harness run "))}]
+    | sort_by([.createdAt, .databaseId]) | reverse
+    | reduce .[] as $r ({seen: {}, out: []};
+        if .seen[$r.b] then . else (.seen[$r.b] = true | .out += [$r]) end)
+    | .out[] | "\(.b)\t\(.url // "")"' 2>/dev/null) || {
+    GH_ERR="its run list is not the expected JSON"
+    gh_fail "listing the runs of $WORKFLOW_RUN_FILE failed"
+  }
+
+  # Tested with -f first: hr_registry_get creates an absent registry.
+  if [ -f "$reg" ]; then
+    recorded=$(jq -r '.runs | keys[]' "$reg" 2>/dev/null) || {
+      echo "remote-run.sh: cannot read the registry '$reg'" >&2
+      exit "$EXIT_USAGE"
+    }
+  fi
+  recorded=$'\n'"$recorded"$'\n'
+
+  if [ -n "$titled" ]; then
+    heads=$(git -C "$root" ls-remote --heads origin 2>&1) || {
+      echo "remote-run.sh: reading origin's branches failed: ${heads%%$'\n'*}" >&2
+      exit "$EXIT_GH"
+    }
+    while IFS=$'\t' read -r _ ref; do
+      case "$ref" in refs/heads/*) live="$live${ref#refs/heads/}"$'\n' ;; esac
+    done <<EOF
+$heads
+EOF
+  fi
+
+  while IFS=$'\t' read -r b url; do
+    valid_branch "$b" || continue
+    case "$recorded" in *$'\n'"$b"$'\n'*) continue ;; esac
+    protected=0
+    hr_branch_is_protected "$root" "$b" || protected=$?
+    [ "$protected" -eq 1 ] || continue
+    case "$live" in *$'\n'"$b"$'\n'*) ;; *) continue ;; esac
+    UNRECORDED="$UNRECORDED$b"$'\t'"$url"$'\n'
+  done <<EOF
+$titled
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# `list` — the runs on GitHub with no local record, for `branch-status`.
+# ---------------------------------------------------------------------------
+
+verb_list() {
+  local b url
+  unrecorded_runs
+  if [ -z "$UNRECORDED" ]; then
+    echo "remote-run.sh: no run on GitHub without a local record"
+    return 0
+  fi
+  while IFS=$'\t' read -r b url; do
+    [ -n "$b" ] || continue
+    echo "remote-run.sh: on GitHub, no local record: $b $url"
+  done <<EOF
+$UNRECORDED
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# `trigger` — the event adapter. Event text is data: every field is read by
+# `jq` into a variable and reaches a command only as one argument or as file
+# bytes, never as shell source.
+# ---------------------------------------------------------------------------
+
+trigger_tmp=""
+trigger_label=""
+issue_number=""
+# `issue` or `dispatch`: where trigger_finish reports.
+trigger_source=""
+
+# event_field <jq filter> — one field of the event into EVENT_VALUE, its bytes
+# kept (a command substitution alone would drop trailing newlines). 1 when jq
+# cannot read it.
+EVENT_VALUE=""
+event_field() {
+  local out
+  out=$(jq -j "$1" "$GITHUB_EVENT_PATH" 2>/dev/null && printf x) || return 1
+  EVENT_VALUE=${out%x}
+}
+
+# trigger_finish <exit> <comment> — post <comment> on the issue, remove the
+# trigger label, and exit <exit>. A comment that cannot be posted makes the exit
+# 3; a label that cannot be removed is a warning only. For a dispatch event,
+# print <comment> and append it to GITHUB_STEP_SUMMARY when set; a summary that
+# cannot be appended is a warning only, since stdout already carries it.
+trigger_finish() {
+  local code="$1" body="$2" file
+  if [ "$trigger_source" = dispatch ]; then
+    printf '%s\n' "$body"
+    if [ -n "${GITHUB_STEP_SUMMARY-}" ]; then
+      printf '%s\n' "### harness trigger" "" "$body" "" >>"$GITHUB_STEP_SUMMARY" \
+        || echo "::warning::remote-run.sh: trigger: cannot append to GITHUB_STEP_SUMMARY"
+    fi
+    exit "$code"
+  fi
+  if [ -n "${GITHUB_RUN_ID-}" ]; then
+    body="$body
+
+_Posted by the trigger job ${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY-}/actions/runs/$GITHUB_RUN_ID._"
+  fi
+  if ! file=$(mktemp "$trigger_tmp/harness-trigger-comment.XXXXXX"); then
+    echo "::error::remote-run.sh: trigger: cannot create the comment file for issue #$issue_number under '$trigger_tmp'"
+    exit "$EXIT_GH"
+  fi
+  printf '%s\n' "$body" >"$file"
+  if ! gh_call issue comment "$issue_number" --repo "${GITHUB_REPOSITORY-}" --body-file "$file"; then
+    echo "::error::remote-run.sh: trigger: the comment on issue #$issue_number could not be posted: $GH_ERR"
+    code="$EXIT_GH"
+  fi
+  rm -f "$file"
+  if ! gh_call issue edit "$issue_number" --repo "${GITHUB_REPOSITORY-}" --remove-label "$trigger_label"; then
+    echo "::warning::remote-run.sh: trigger: removing the label '$trigger_label' from issue #$issue_number failed: $GH_ERR"
+  fi
+  exit "$code"
+}
+
+# trigger_refuse <reason> <way on> — print the reason, comment both, exit 2.
+trigger_refuse() {
+  echo "remote-run.sh: trigger: refused, nothing sent: $1" >&2
+  trigger_finish "$EXIT_REFUSED" "No run started: $1
+
+$2"
+}
+
+# trigger_bot_listed <login> — 0 when <login> is an exact entry of
+# HARNESS_TRIGGER_ALLOWED_BOTS, split on `,` with each entry trimmed.
+trigger_bot_listed() {
+  local rest="${HARNESS_TRIGGER_ALLOWED_BOTS-}," entry
+  while [ -n "$rest" ]; do
+    entry=${rest%%,*}
+    rest=${rest#*,}
+    entry=${entry#"${entry%%[![:space:]]*}"}
+    entry=${entry%"${entry##*[![:space:]]}"}
+    [ -n "$entry" ] && [ "$entry" = "$1" ] && return 0
+  done
+  return 1
+}
+
+# trigger_run_url — the URL of the `harness run <branch>` run `start` just
+# dispatched, looked up at most TRIGGER_RUN_LOOKUP_TRIES times; the branch's
+# filtered run list when none appears. Never fails.
+trigger_run_url() {
+  local try=1 secs url=""
+  secs="${HARNESS_TRIGGER_LOOKUP_SECS-}"
+  case "$secs" in
+    ''|*[!0-9]*) secs="$TRIGGER_LOOKUP_SECS_DEFAULT" ;;
+  esac
+  while :; do
+    if gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json url,displayTitle --limit 5; then
+      url=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" \
+        '[.[]? | select(.displayTitle == $t) | .url | strings] | first // empty' 2>/dev/null) || url=""
+      [ -z "$url" ] || break
+    else
+      echo "remote-run.sh: trigger: looking up the run of $branch failed: $GH_ERR" >&2
+    fi
+    [ "$try" -lt "$TRIGGER_RUN_LOOKUP_TRIES" ] || break
+    try=$((try + 1))
+    sleep "$secs"
+  done
+  # A derived name is `[a-z0-9_]` only, so it needs no encoding in the query.
+  [ -n "$url" ] || url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY-}/actions/workflows/${WORKFLOW_RUN_FILE}?query=branch%3A$branch"
+  printf '%s\n' "$url"
+}
+
+verb_trigger() {
+  local LC_ALL=C
+  local action label title body html_url state login sender_type source=""
+  local forge="" target="" default name_file status permission prompt errfile last url
+  local fallback retry_then retry_again task_what
+  case "${GITHUB_EVENT_NAME-}" in
+    issues) trigger_source=issue ;;
+    repository_dispatch) trigger_source=dispatch ;;
+    *)
+      echo "remote-run.sh: trigger handles GITHUB_EVENT_NAME issues or repository_dispatch, not '${GITHUB_EVENT_NAME-}'" >&2
+      exit "$EXIT_USAGE" ;;
+  esac
+  if [ -z "${GITHUB_EVENT_PATH-}" ] || [ ! -f "$GITHUB_EVENT_PATH" ] || [ ! -r "$GITHUB_EVENT_PATH" ]; then
+    echo "remote-run.sh: trigger: cannot read the event file '${GITHUB_EVENT_PATH-}'" >&2
+    exit "$EXIT_USAGE"
+  fi
+  hr_have_jq || { echo "remote-run.sh: trigger needs jq" >&2; exit "$EXIT_USAGE"; }
+
+  if [ "$trigger_source" = issue ]; then
+    { event_field '.action // ""' && action="$EVENT_VALUE" \
+      && event_field '.label.name // ""' && label="$EVENT_VALUE" \
+      && event_field '.issue.number // ""' && issue_number="$EVENT_VALUE" \
+      && event_field '.issue.title // ""' && title="$EVENT_VALUE" \
+      && event_field '.issue.body // ""' && body="$EVENT_VALUE" \
+      && event_field '.issue.html_url // ""' && html_url="$EVENT_VALUE" \
+      && event_field '.issue.state // ""' && state="$EVENT_VALUE" \
+      && event_field '.sender.login // ""' && login="$EVENT_VALUE" \
+      && event_field '.sender.type // ""' && sender_type="$EVENT_VALUE"; } || {
+      echo "remote-run.sh: trigger: '$GITHUB_EVENT_PATH' is not a readable event" >&2
+      exit "$EXIT_USAGE"
+    }
+    trigger_label="${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}"
+    if [ "$action" != labeled ] || [ "$label" != "$trigger_label" ]; then
+      echo "remote-run.sh: trigger: ignored, not the label '$trigger_label' being applied"
+      return 0
+    fi
+    case "$issue_number" in
+      ''|*[!0-9]*|0*)
+        echo "remote-run.sh: trigger: the event carries no issue number" >&2
+        exit "$EXIT_USAGE" ;;
+    esac
+    fallback="issue_$issue_number"
+    retry_then="re-apply the label \`$trigger_label\`"
+    retry_again="Re-apply the label \`$trigger_label\` to try again."
+    task_what="this issue's task"
+  else
+    # GitHub puts a repository_dispatch's `event_type` in `.action`.
+    { event_field '.action // ""' && action="$EVENT_VALUE" \
+      && event_field '.client_payload.title // ""' && title="$EVENT_VALUE" \
+      && event_field '.client_payload.body // ""' && body="$EVENT_VALUE" \
+      && event_field '.client_payload.source // ""' && source="$EVENT_VALUE"; } || {
+      echo "remote-run.sh: trigger: '$GITHUB_EVENT_PATH' is not a readable event" >&2
+      exit "$EXIT_USAGE"
+    }
+    if [ "$action" != "$TRIGGER_DISPATCH_EVENT_TYPE" ]; then
+      echo "remote-run.sh: trigger: ignored, a repository_dispatch of type '$action', not '$TRIGGER_DISPATCH_EVENT_TYPE'"
+      return 0
+    fi
+    fallback="task_${GITHUB_RUN_ID-}"
+    retry_then="send the \`$TRIGGER_DISPATCH_EVENT_TYPE\` dispatch again"
+    retry_again="Send the \`$TRIGGER_DISPATCH_EVENT_TYPE\` dispatch again to try again."
+    task_what="the dispatched task"
+  fi
+
+  trigger_tmp="${RUNNER_TEMP-}"
+  if [ -z "$trigger_tmp" ] || [ ! -d "$trigger_tmp" ]; then
+    trigger_tmp=$(mktemp -d) || { echo "remote-run.sh: trigger: mktemp failed" >&2; exit "$EXIT_USAGE"; }
+  fi
+
+  if [ "$trigger_source" = dispatch ] && [ -z "$title" ]; then
+    trigger_refuse "the dispatch's \`client_payload\` carries no \`title\`." \
+      "Send it as \`{\"event_type\": \"$TRIGGER_DISPATCH_EVENT_TYPE\", \"client_payload\": {\"title\": …, \"body\": …, \"source\": …}}\`, with a non-empty \`title\`."
+  fi
+
+  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
+    trigger_refuse "the repository variable \`HARNESS_REMOTE_STOP\` is set, which stops every start." \
+      "Clear it under **Settings → Secrets and variables → Actions → Variables**, then $retry_then."
+  fi
+
+  forge=$(hr_forge "$root") || forge=""
+  target=$(hr_execution_target "$root") || target=""
+  if [ "$forge" != github ] || [ "$target" != github-actions ]; then
+    trigger_refuse "the default branch's \`harness.config.json\` does not turn the $trigger_source trigger on: it needs \`forge\` set to \`github\` (it is ${forge:-not set or unreadable}) and \`execution.target\` set to \`github-actions\` (it is ${target:-unreadable})." \
+      "Set both keys on the default branch, then $retry_then."
+  fi
+
+  if [ "$trigger_source" = issue ]; then
+    if [ "$state" != open ]; then
+      trigger_refuse "this issue is not open." "Reopen it, then re-apply the label \`$trigger_label\`."
+    fi
+
+    if [ "$login" = ghost ] || [ -z "$login" ] \
+      || ! { [[ "$login" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] \
+        || { [ "$sender_type" = Bot ] && [[ "$login" =~ ^[A-Za-z0-9][A-Za-z0-9-]*\[bot\]$ ]]; }; }; then
+      trigger_refuse "the label was applied by an account GitHub does not name (a deleted account shows as \`ghost\`)." \
+        "A collaborator with write access can re-apply the label \`$trigger_label\`."
+    fi
+
+    if [ "$sender_type" != User ]; then
+      trigger_bot_listed "$login" || trigger_refuse \
+        "@$login is not a person, and is not listed in the repository variable \`HARNESS_TRIGGER_ALLOWED_BOTS\`." \
+        "Add \`$login\` to that comma-separated list to let it start runs, or have a collaborator with write access apply the label \`$trigger_label\`."
+    else
+      permission=""
+      if gh_call api "repos/${GITHUB_REPOSITORY-}/collaborators/$login/permission"; then
+        permission=$(printf '%s' "$GH_OUT" | jq -r '.permission // empty' 2>/dev/null) || permission=""
+        case "$permission" in
+          admin|write) ;;
+          *) trigger_refuse "could not confirm write access for @$login: GitHub reports their permission as \`${permission:-nothing}\`." \
+               "Only a collaborator with write, maintain or admin access starts a run by labelling an issue; one of them can re-apply the label \`$trigger_label\`." ;;
+        esac
+      else
+        trigger_refuse "could not confirm write access for @$login: the permission check failed ($GH_ERR)." \
+          "Re-apply the label \`$trigger_label\` to try again."
+      fi
+    fi
+  fi
+
+  # The name check reads origin/<defaultBranch>; a failed fetch leaves it to say so.
+  default=$(hr_default_branch "$root") || default=""
+  if [ -n "$default" ]; then
+    git -C "$root" fetch --quiet origin "$default" >&2 || echo "remote-run.sh: trigger: fetching origin $default failed" >&2
+  fi
+  name_file=$(mktemp "$trigger_tmp/harness-trigger-branch.XXXXXX") || trigger_refuse \
+    "the branch name could not be derived (mktemp failed)." "$retry_again"
+  status=0
+  hr_derive_branch "$root" "$title" "$fallback" >"$name_file" || status=$?
+  branch=""
+  IFS= read -r branch <"$name_file" || :
+  rm -f "$name_file"
+  case "$status" in
+    0) ;;
+    3) if [ "$trigger_source" = issue ]; then
+         trigger_refuse "every branch name derived from this issue's title, through the suffix \`_99\`, is already taken." \
+           "Retitle the issue, then re-apply the label \`$trigger_label\`."
+       fi
+       trigger_refuse "every branch name derived from the dispatch's \`title\`, through the suffix \`_99\`, is already taken." \
+         "Send the dispatch again with another \`title\`." ;;
+    *) trigger_refuse "the branch name for $task_what could not be checked (${HR_TAKEN_WHY:-no usable name})." \
+         "$retry_again" ;;
+  esac
+
+  prompt=$(mktemp "$trigger_tmp/harness-trigger-prompt.XXXXXX") || trigger_finish "$EXIT_PLACEMENT" \
+    "No run started: the task prompt for \`$branch\` could not be written. $retry_again"
+  if [ "$trigger_source" = issue ]; then
+    printf '# %s\n\n%s\n\n---\n\nStarted from %s by @%s, who applied the label `%s` at %s. This is the issue'"'"'s text at that moment; later edits to the issue do not reach this run.\n' \
+      "$title" "$body" "$html_url" "$login" "$trigger_label" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$prompt"
+  else
+    [ -z "$source" ] || source=", from $source"
+    printf '# %s\n\n%s\n\n---\n\nStarted by a repository_dispatch event of type `%s`%s at %s.\n' \
+      "$title" "$body" "$TRIGGER_DISPATCH_EVENT_TYPE" "$source" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$prompt"
+  fi
+
+  errfile=$(mktemp "$trigger_tmp/harness-trigger-start.XXXXXX") || errfile=/dev/null
+  status=0
+  bash "$script_dir/remote-run.sh" start "$branch" --prompt-file "$prompt" --repo "$root" 2>"$errfile" || status=$?
+  last=""
+  if [ "$errfile" != /dev/null ]; then
+    cat "$errfile" >&2
+    last=$(grep -v '^[[:space:]]*$' "$errfile" | tail -n 1)
+    rm -f "$errfile"
+  fi
+  case "$status" in
+    0) ;;
+    3)
+      echo "remote-run.sh: trigger: $branch is pushed, but its dispatch failed" >&2
+      trigger_finish "$EXIT_GH" "The branch \`$branch\` was pushed with $task_what, but dispatching its run failed:
+
+\`\`\`
+$last
+\`\`\`
+
+Start it by hand: **Actions → \`$WORKFLOW_RUN_FILE\` → Run workflow**, with *Use workflow from* set to \`$branch\`, \`action\` \`run\` and \`branch\` \`$branch\`." ;;
+    *)
+      echo "remote-run.sh: trigger: the start of $branch failed (exit $status)" >&2
+      trigger_finish "$EXIT_PLACEMENT" "No run started: placing $task_what on the branch \`$branch\` failed:
+
+\`\`\`
+$last
+\`\`\`
+
+$retry_again" ;;
+  esac
+
+  url=$(trigger_run_url)
+  if [ "$trigger_source" = issue ]; then
+    echo "remote-run.sh: trigger: started $branch from issue #$issue_number: $url"
+    trigger_finish "$EXIT_OK" "Started a harness run on the branch \`$branch\`: $url
+
+The task is this issue's title and body as they were when the label \`$trigger_label\` was applied; later edits to the issue do not reach this run. Re-applying the label starts another run, on the next indexed branch."
+  fi
+  echo "remote-run.sh: trigger: started $branch from a repository_dispatch: $url"
+  trigger_finish "$EXIT_OK" "Started a harness run on the branch \`$branch\`: $url
+
+The task is the dispatch's \`client_payload\` title and body. Sending the same dispatch again starts another run, on the next indexed branch."
+}
+
 case "$verb" in
   dispatch) verb_dispatch ;;
   pause) verb_pause ;;
@@ -1791,5 +2859,10 @@ case "$verb" in
   poll) verb_poll ;;
   pause-requested) verb_pause_requested ;;
   run-created-at) verb_run_created_at ;;
+  start) verb_start ;;
+  fetch) verb_fetch ;;
+  review) verb_review ;;
+  trigger) verb_trigger ;;
+  list) verb_list ;;
 esac
 exit "$EXIT_OK"

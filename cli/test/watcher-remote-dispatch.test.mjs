@@ -9,18 +9,20 @@
  * `origin/<branch>`, and with the key absent the inbox pass is today's.** A failed push sends no
  * `workflow run` at all; the key-absent case launches the agent stub and sends nothing to `gh`.
  *
- * The later cases seed a remote record as `launch_remote_run` leaves it and hold the relays to the
- * same line: a user's answer, RESUME or PAUSE in the mirror becomes a dispatch, only a sent one
- * changes the record or removes a file, and no local-only pass touches the record.
+ * The later cases seed a remote record as `launch_remote_run` leaves it and hold the watcher to
+ * relaying nothing: the user's commands send pause, resume and answer to GitHub themselves, so a
+ * fully answered park, a RESUME, a PAUSE or a PARK_LOOP_CLEAR in a remote mirror draws no `gh` call,
+ * launches nothing and leaves every mirror file and the record's `status` as it was — and no
+ * local-only pass touches the record.
  */
 
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
-import { mkdir, rm, utimes, writeFile } from 'node:fs/promises';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { rm, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { runBash, runGit } from './helpers/fixture.mjs';
+import { runGit, snapshotTree } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
@@ -56,13 +58,13 @@ const taskDispatch = (branch, engine) =>
 /**
  * A watcher fixture adopted on `origin`'s default branch, with `execution.target` set to `target`
  * (or absent when `null`) and the bootstrap's install and build unset, so `create-worktree.sh` runs
- * offline.
+ * offline. `branch` is the run branch the fixture's record and working copy are read under.
  *
  * @param {import('node:test').TestContext} t
- * @param {{ target?: string | null }} [options]
+ * @param {{ target?: string | null, branch?: string }} [options]
  */
-async function createDispatchFixture(t, { target = 'github-actions' } = {}) {
-  const w = await createWatcherFixture(t);
+async function createDispatchFixture(t, { target = 'github-actions', branch } = {}) {
+  const w = await createWatcherFixture(t, branch === undefined ? undefined : { branch });
   if (w === null) return null;
 
   const configPath = join(w.dir, 'harness.config.json');
@@ -196,6 +198,34 @@ test('a push origin refuses blocks the dispatch', async (t) => {
   assert.deepEqual(f.prompts(), []);
 });
 
+// A task or docs re-drop never reaches the placement: `create-worktree.sh` refuses the branch the first
+// drop cut. A review re-drop reuses the working copy, so it is where an identical re-drop is pushed.
+test('an identical re-drop after a refused push skips the commit, lands the push and dispatches once', async (t) => {
+  const f = await createDispatchFixture(t);
+  if (f === null) return;
+
+  await f.drop('feat_x_task_prompt.md', 'do the thing\n');
+  await f.tick();
+  await f.patchRecord({ status: 'completed' });
+  await f.rejectUpdates();
+  await f.drop('feat_x_review.md', 'fix the button\n');
+  await f.tick();
+  assert.equal(await f.subject(), 'chore: add user review for feat_x');
+  assert.notEqual(await f.originTip(), await f.head());
+  assert.equal(f.workflowRuns().length, 1, 'a refused push was followed by a dispatch');
+
+  const committed = await f.head();
+  await rm(join(f.origin, 'hooks', 'pre-receive'));
+  await f.drop('feat_x_review.md', 'fix the button\n');
+  await f.tick();
+
+  assert.equal(await f.head(), committed, 'the identical re-drop made a commit');
+  assert.match(f.watcherLog(), /already committed \(identical re-drop\) — skipping the commit, pushing anyway/);
+  assert.equal(await f.originTip(), committed, 'the push did not land');
+  assert.deepEqual(f.workflowRuns(), [taskDispatch('feat_x', 'task'), taskDispatch('feat_x', 'user_review')]);
+  assert.equal(f.record().status, 'running');
+});
+
 test('a remote review drop fast-forwards, commits, pushes and dispatches; a refused re-push blocks', async (t) => {
   const f = await createDispatchFixture(t);
   if (f === null) return;
@@ -269,6 +299,26 @@ test('with the key absent the same drop launches the agent and sends nothing to 
   assert.deepEqual(launched.map((n) => n.detail), ['engine=task']);
 });
 
+test('with the key absent a drop routes through the library: task engine on its branch, junk rejected', async (t) => {
+  const f = await createDispatchFixture(t, { target: null, branch: 'feat_x_review' });
+  if (f === null) return;
+
+  await f.drop('feat_x_review_task_prompt.md', 'do the thing\n');
+  await f.drop('notes.md', 'not a drop\n');
+  await f.tick();
+
+  assert.equal(f.prompts().length, 1, 'expected exactly one launch, for the routable drop');
+  const record = f.record();
+  assert.equal(record.engine, 'task');
+  assert.equal(record.worktree, f.worktree);
+  assert.equal(await f.subject(), 'chore: add task prompt for feat_x_review');
+
+  assert.equal(f.inInbox('notes.md'), false, 'the unroutable drop was left in the inbox');
+  const archived = readdirSync(join(f.dir, STATE_DIR, 'autonomous_inbox', '.processed'));
+  assert.equal(archived.filter((name) => /^rejected_\d+_notes\.md$/.test(name)).length, 1);
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(f.dir, REGISTRY_PATH), 'utf8')).runs), ['feat_x_review']);
+});
+
 /** A remote record as launch_remote_run leaves it, with `fields` over it. */
 const remoteRecord = (f, branch, fields = {}) => ({
   status: 'running',
@@ -279,20 +329,6 @@ const remoteRecord = (f, branch, fields = {}) => ({
   pid: '',
   ...fields,
 });
-
-/** The `-f <name>=<value>` inputs of one recorded `workflow run`, as an object. */
-function workflowInputs(argv) {
-  const inputs = {};
-  argv.forEach((arg, i) => {
-    if (argv[i - 1] !== '-f') return;
-    const eq = arg.indexOf('=');
-    inputs[arg.slice(0, eq)] = arg.slice(eq + 1);
-  });
-  return inputs;
-}
-
-const dispatchedInputs = (f) =>
-  f.ghArgv().filter((a) => a[0] === 'workflow' && a[1] === 'run').map(workflowInputs);
 
 const statePath = (root, name) => join(root, STATE_DIR, name);
 
@@ -342,154 +378,62 @@ test('a running remote record is never reconciled, counted, stall-killed or usag
   assert.deepEqual(f.ghCalls(), []);
 });
 
-test('a fully answered remote park is relayed as one answer dispatch, never launched', async (t) => {
-  const f = await createDispatchFixture(t);
-  if (f === null) return;
-
-  await f.writeRegistry({ feat_x: remoteRecord(f, 'feat_x', { status: 'parked' }) });
-  await f.writeQuestion(1, 'which colour?\n');
-  await f.writeAnswer(1, 'blue, with "quotes"\nand a second line\n');
-
-  const status = await runBash(f.dir, [join(f.dir, 'scripts', 'autonomous-watcher.sh'), 'status'], {
-    HOME: join(f.dir, 'home'),
-    XDG_CONFIG_HOME: join(f.dir, 'home', '.config'),
-    XDG_STATE_HOME: join(f.dir, 'home', '.local', 'state'),
-  });
-  assert.match(status.stdout, /\tfeat_x\t.*\texecution=github-actions/);
-
-  await f.tick();
-
-  const sent = dispatchedInputs(f);
-  assert.equal(sent.length, 1, JSON.stringify(f.ghCalls()));
-  assert.equal(sent[0].resume, 'answer');
-  assert.equal(sent[0].engine, 'task');
-  assert.equal(sent[0].chain, '0');
-  assert.equal('park_loop_clear' in sent[0], false);
-  assert.deepEqual(JSON.parse(sent[0].answers), { 1: 'blue, with "quotes"\nand a second line\n' });
-  assert.deepEqual(f.prompts(), [], 'the agent stub was launched');
-  const record = f.record();
-  assert.equal(record.status, 'running');
-  assert.equal(record.resume_kind, 'answer');
-  assert.deepEqual(await f.topLevel(), ['answer_1.md', 'question_1.md'], 'the pairs left the mirror');
-  const resumed = f.notifications().filter((n) => n.event === 'resumed');
-  assert.deepEqual(resumed.map((n) => n.detail), ['answered clarification(s) #1, dispatched']);
-});
-
-test('a PARK_LOOP_CLEAR on a remote park-loop record rides the answer dispatch', async (t) => {
-  const f = await createDispatchFixture(t);
-  if (f === null) return;
-
-  await f.writeRegistry({ feat_x: remoteRecord(f, 'feat_x', { status: 'park_loop', park_loop_cycles: '2' }) });
-  await f.writeQuestion(1, 'which colour?\n');
-  await f.writeAnswer(1, 'blue\n');
-  await writeFile(join(f.clarDir, 'PARK_LOOP_CLEAR'), '', 'utf8');
-  await f.tick();
-
-  const sent = dispatchedInputs(f);
-  assert.equal(sent.length, 1, JSON.stringify(f.ghCalls()));
-  assert.equal(sent[0].resume, 'answer');
-  assert.equal(sent[0].park_loop_clear, 'true');
-  assert.equal(f.record().status, 'running');
-  assert.equal(f.record().park_loop_clear_pending, '');
-  assert.equal(existsSync(join(f.clarDir, 'PARK_LOOP_CLEAR')), false);
-  assert.deepEqual(f.prompts(), []);
-});
-
-test('a RESUME in a paused remote mirror is relayed as one pause dispatch', async (t) => {
-  const f = await createDispatchFixture(t);
-  if (f === null) return;
-
-  await f.writeRegistry({ feat_x: remoteRecord(f, 'feat_x', { status: 'paused', pause_reason: 'user' }) });
-  for (const name of ['PAUSE', 'RESUME', 'PAUSE_ACK', 'PAUSE_PROGRESS.md']) {
-    await writeFile(statePath(f.dir, name), 'x\n', 'utf8');
-  }
-  await f.tick();
-
-  const sent = dispatchedInputs(f);
-  assert.equal(sent.length, 1, JSON.stringify(f.ghCalls()));
-  assert.equal(sent[0].action, 'run');
-  assert.equal(sent[0].resume, 'pause');
-  assert.equal(sent[0].chain, '0');
-  for (const name of ['PAUSE', 'RESUME', 'PAUSE_ACK']) {
-    assert.equal(existsSync(statePath(f.dir, name)), false, `${name} is still in the mirror`);
-  }
-  assert.ok(existsSync(statePath(f.dir, 'PAUSE_PROGRESS.md')), 'PAUSE_PROGRESS.md was removed');
-  assert.equal(f.record().status, 'running');
-  assert.equal(f.record().resume_kind, 'pause');
-  assert.deepEqual(f.prompts(), []);
-  const resumed = f.notifications().filter((n) => n.event === 'resumed');
-  assert.deepEqual(resumed.map((n) => n.detail), ['after pause, dispatched']);
-});
-
-test('a PAUSE in a running remote mirror is relayed as one pause action', async (t) => {
-  const f = await createDispatchFixture(t);
-  if (f === null) return;
-
-  await f.writeRegistry({ feat_x: remoteRecord(f, 'feat_x') });
-  await writeFile(statePath(f.dir, 'PAUSE'), '', 'utf8');
-  await f.tick();
-
-  assert.deepEqual(f.workflowRuns(), ['workflow run harness-run.yml --ref feat_x -f action=pause -f branch=feat_x']);
-  assert.equal(existsSync(statePath(f.dir, 'PAUSE')), false);
-  assert.match(f.record().pause_relayed_at, /^\d+$/);
-  assert.equal(f.record().status, 'running');
-});
-
 /**
- * Three remote records, each with the file a user's command writes: `feat_x` parked and answered in
- * the main checkout's clarification channel, `feat_p` paused with RESUME and `feat_r` running with
- * PAUSE, each of the last two in a mirror of its own.
+ * One tick over a remote record seeded by `seed`, then the assertions every relay-free case shares:
+ * no `gh` call, no launch, the record's `status` unchanged and every file under the mirror's state
+ * directory byte-identical.
  */
-async function seedThreeRelays(f) {
-  const mirrorP = join(f.dir, 'watcher-test', 'mirror-p');
-  const mirrorR = join(f.dir, 'watcher-test', 'mirror-r');
-  await mkdir(join(mirrorP, STATE_DIR), { recursive: true });
-  await mkdir(join(mirrorR, STATE_DIR), { recursive: true });
-  await f.writeRegistry({
-    feat_x: remoteRecord(f, 'feat_x', { status: 'parked' }),
-    feat_p: remoteRecord(f, 'feat_p', { status: 'paused', worktree: mirrorP }),
-    feat_r: remoteRecord(f, 'feat_r', { worktree: mirrorR }),
-  });
-  await f.writeQuestion(1, 'which colour?\n');
-  await f.writeAnswer(1, 'blue\n');
-  for (const name of ['PAUSE', 'RESUME', 'PAUSE_ACK']) await writeFile(statePath(mirrorP, name), '', 'utf8');
-  await writeFile(statePath(mirrorR, 'PAUSE'), '', 'utf8');
-  return { mirrorP, mirrorR };
+async function assertTickRelaysNothing(t, status, seed, fields = {}) {
+  const f = await createDispatchFixture(t);
+  if (f === null) return;
+
+  await f.writeRegistry({ feat_x: remoteRecord(f, 'feat_x', { status, ...fields }) });
+  await seed(f);
+  const before = await snapshotTree(join(f.dir, STATE_DIR), { exclude: ['.git', 'autonomous_logs', 'autonomous_inbox'] });
+  await f.tick();
+
+  assert.deepEqual(f.ghCalls(), []);
+  assert.deepEqual(f.prompts(), [], 'the agent stub was launched');
+  assert.equal(f.recordOf('feat_x').status, status);
+  assert.deepEqual(await snapshotTree(join(f.dir, STATE_DIR), { exclude: ['.git', 'autonomous_logs', 'autonomous_inbox'] }), before);
+  assert.deepEqual(f.notifications().filter((n) => n.event === 'resumed' || n.event === 'failed'), []);
 }
 
-test('under AUTONOMOUS_STOP only the pause relay sends, and every other file stays', async (t) => {
-  const f = await createDispatchFixture(t);
-  if (f === null) return;
-
-  const { mirrorP, mirrorR } = await seedThreeRelays(f);
-  await writeFile(statePath(f.dir, 'AUTONOMOUS_STOP'), '', 'utf8');
-  await f.tick();
-
-  assert.deepEqual(f.workflowRuns(), ['workflow run harness-run.yml --ref feat_r -f action=pause -f branch=feat_r']);
-  assert.equal(existsSync(statePath(mirrorR, 'PAUSE')), false);
-  assert.deepEqual(await f.topLevel(), ['answer_1.md', 'question_1.md']);
-  for (const name of ['PAUSE', 'RESUME', 'PAUSE_ACK']) assert.ok(existsSync(statePath(mirrorP, name)), name);
-  assert.equal(f.recordOf('feat_x').status, 'parked');
-  assert.equal(f.recordOf('feat_p').status, 'paused');
-  assert.ok(existsSync(statePath(f.dir, 'AUTONOMOUS_STOP')));
+test('a fully answered remote park draws no gh call and no launch, and every file stays', async (t) => {
+  await assertTickRelaysNothing(t, 'parked', async (f) => {
+    await f.writeQuestion(1, 'which colour?\n');
+    await f.writeAnswer(1, 'blue\n');
+  });
 });
 
-test('a failing gh leaves every relay file and status in place', async (t) => {
-  const f = await createDispatchFixture(t);
-  if (f === null) return;
+test('a RESUME in a paused remote mirror draws no gh call and no launch, and every file stays', async (t) => {
+  await assertTickRelaysNothing(
+    t,
+    'paused',
+    async (f) => {
+      for (const name of ['PAUSE', 'RESUME', 'PAUSE_ACK', 'PAUSE_PROGRESS.md']) {
+        await writeFile(statePath(f.dir, name), 'x\n', 'utf8');
+      }
+    },
+    { pause_reason: 'user' },
+  );
+});
 
-  const { mirrorP, mirrorR } = await seedThreeRelays(f);
-  await f.tick({ STUB_FAIL_ON: 'workflow run' });
+test('a PAUSE in a running remote mirror draws no gh call, and every file stays', async (t) => {
+  await assertTickRelaysNothing(t, 'running', async (f) => {
+    await writeFile(statePath(f.dir, 'PAUSE'), '', 'utf8');
+  });
+});
 
-  assert.equal(f.workflowRuns().length, 3, JSON.stringify(f.ghCalls()));
-  assert.deepEqual(await f.topLevel(), ['answer_1.md', 'question_1.md']);
-  for (const name of ['PAUSE', 'RESUME', 'PAUSE_ACK']) assert.ok(existsSync(statePath(mirrorP, name)), name);
-  assert.ok(existsSync(statePath(mirrorR, 'PAUSE')));
-  assert.equal(f.recordOf('feat_x').status, 'parked');
-  assert.equal(f.recordOf('feat_p').status, 'paused');
-  assert.equal(f.recordOf('feat_r').status, 'running');
-  assert.equal(f.recordOf('feat_r').pause_relayed_at, undefined);
-  assert.deepEqual(f.notifications().filter((n) => n.event === 'resumed' || n.event === 'failed'), []);
-  assert.deepEqual(f.prompts(), []);
-  assert.match(f.watcherLog(), /remote-run\.sh pause for 'feat_r' failed \(exit 3\)/);
+test('a PARK_LOOP_CLEAR in a park-loop remote mirror draws no gh call and clears nothing', async (t) => {
+  await assertTickRelaysNothing(
+    t,
+    'park_loop',
+    async (f) => {
+      await f.writeQuestion(1, 'which colour?\n');
+      await f.writeAnswer(1, 'blue\n');
+      await writeFile(join(f.clarDir, 'PARK_LOOP_CLEAR'), '', 'utf8');
+    },
+    { park_loop_cycles: '2' },
+  );
 });

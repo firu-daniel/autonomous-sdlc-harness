@@ -563,7 +563,7 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
     'forge',
     '',
     FORGE_KINDS,
-    'The key is optional and nothing reads it in this release; set "none" to say the repository has no forge integration at all — work stays on branches and no pull request is opened — rather than leaving the decision unmade.',
+    '"github", with execution.target "github-actions", makes init write the issue-trigger workflow; "gitlab" writes nothing in this release; "none" records that the repository has no forge integration — work stays on branches and no pull request is opened; an unset key is a decision not yet made.',
     problems,
   );
   checkEnum(

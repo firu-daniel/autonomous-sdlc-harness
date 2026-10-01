@@ -45,7 +45,7 @@
     "forge": {
       "type": "string",
       "enum": ["github", "gitlab", "none"],
-      "description": "Which code-hosting platform's pull-request and remote conventions the flow uses. 'none' means no forge integration at all: work stays on branches and no pull request is opened. Deliberately has no default, because nothing reads this key in this release: an absent value must read as 'not yet decided' rather than as a silent assumption of one platform, and a default here would oblige the configuration model's defaults to carry a value no generator writes."
+      "description": "Which code-hosting platform's pull-request and remote conventions the flow uses. 'none' means no forge integration at all: work stays on branches and no pull request is opened. 'github', with execution.target 'github-actions', makes init write the issue-trigger workflow, which starts runs from labelled issues; 'gitlab' writes nothing in this release. Deliberately has no default: an absent value must read as 'not yet decided', which doctor's forge check reports, rather than as a silent assumption of one platform, and a default here would oblige the configuration model's defaults to carry a value no generator writes."
     },
     "stateDir": {
       "type": "string",

@@ -46,8 +46,9 @@
  * | `.gitignore` | `merge-lines` (a managed block, lines not already present) | Every repo already has one. |
  * | The `stateDir` tree and its per-directory READMEs | `ensure-dir` + `create-if-absent` | Creating what is missing is the whole operation; an adopter may have rewritten a contract sentence. |
  * | The ledgers `lessons.md` / `improvement_suggestions.md` | `create-if-absent`, **not upgraded by `--force`** | Ledgers accumulate and nothing can re-derive one; the engine's `.bak` is single-generation, so `--force` may not touch them. |
- * | `.github/workflows/harness-run.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the timeouts and the runner, and `--force` after a `.bak` is the upgrade path, which also re-pins the CLI version rendered into it. |
- * | `.github/workflows/harness-resume.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the cron, and `--force` after a `.bak` is the upgrade path. |
+ * | `.github/workflows/harness-run.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the timeouts and the runner. `init --upgrade-workflows` is the upgrade path: it replaces the file after a `.bak`, only when its rendered CLI-version pin differs from this CLI's, and re-pins it. `--force` after a `.bak` is the blunt alternative. |
+ * | `.github/workflows/harness-resume.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the cron. `init --upgrade-workflows` is the upgrade path: after a `.bak`, only when `harness-run.yml`'s rendered pin differs, carrying the file's `- cron:` lines into the re-render. `--force` after a `.bak` is the blunt alternative. |
+ * | `.github/workflows/harness-trigger.yml` | `create-if-absent` | Written only when `forge` is `github` and `execution.target` is `github-actions`; no pin, so `init --upgrade-workflows` leaves it; `--force` after a `.bak` is its upgrade path, as for the scripts it calls. |
  * | Git hook `pre-push`, wrapper scripts | `create-if-absent` | Adopter may have edited the guard. The hook alone is also replaced, after a `.bak`, by the one run that rebuilt the config it is rendered from (`init --reset-config`) — and only where its rendered `case` label no longer matches the set that config resolves, never where the label cannot be read. |
  *
  * `--force` upgrades **`create-if-absent` only** to overwrite-after-backup, and only where the
@@ -60,7 +61,7 @@
  * callers take it up **for a whole artifact class**: `config/io.ts`'s `saveConfig` for
  * `harness.config.json` — `'never'` on an ordinary `init`, `'always'` on `init --reset-config` —
  * and `generators/stateDir.ts` for the two ledgers, `'never'` and nothing else, because no command
- * rebuilds a ledger. **Two more** read the tree and answer **per request**: `generators/claudeContext.ts`
+ * rebuilds a ledger. **Three more** read the tree and answer **per request**: `generators/claudeContext.ts`
  * sets `'never'` on a conventions stub that is already a skeleton whose `.bak` holds a filled
  * document, because that one write would replace the only surviving copy of the analysis with a
  * skeleton — and on `.claude/CLAUDE.md` when its bytes already are the text that run renders, because
@@ -68,8 +69,11 @@
  * `generators/githooks.ts` sets `'always'` on the `pre-push` hook when the run rebuilt
  * `harness.config.json` (`init --reset-config`) **and** the hook's rendered `case` label no longer
  * matches the set that config resolves, so the run that made the guard wrong is the run that
- * re-renders it. None of them is a further row above — all keep `create-if-absent`, and every other
- * forced run over them still replaces after a `.bak`.
+ * re-renders it; and `generators/githubWorkflows.ts` sets `'always'` on both workflows under
+ * `init --upgrade-workflows` when `harness-run.yml`'s rendered CLI-version pin differs from this CLI's
+ * (on `harness-resume.yml` only when its bytes differ from the re-render). None of them is a further
+ * row above — all keep `create-if-absent`, and every other forced run over them still replaces after
+ * a `.bak`.
  *
  * The reason the default is create-if-absent rather than overwrite is `docs/config.md` §1: the
  * files `init` generates are ones "the adopter then owns and edits like any other checked-in

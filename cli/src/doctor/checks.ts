@@ -22,9 +22,10 @@
  *    push-settings precedence is `generators/notifications.ts`'s {@link pushEnvCandidates}, the
  *    repository registry's location, reader and staleness grading are `machine/registry.ts`'s {@link registryPath},
  *    {@link readRegistry} and {@link inspect} — the same three `daemon list` enumerates through — the
- *    remote-execution switch is `config/model.ts`'s {@link remoteExecutionApplies}, the workflow
- *    paths and the binary run as `gh` are `remote/githubActions.ts`'s ({@link WORKFLOW_RUN_PATH},
- *    {@link WORKFLOW_RESUME_PATH}, {@link GH_CLI_VARIABLE}, {@link ghCli}), whether a ref carries a
+ *    remote-execution switch is `config/model.ts`'s {@link remoteExecutionApplies} and the
+ *    issue-trigger switch its {@link forgeTriggerApplies}, the workflow paths and the binary run as
+ *    `gh` are `remote/githubActions.ts`'s ({@link WORKFLOW_RUN_PATH}, {@link WORKFLOW_RESUME_PATH},
+ *    {@link WORKFLOW_TRIGGER_PATH}, {@link GH_CLI_VARIABLE}, {@link ghCli}), whether a ref carries a
  *    file is `core/git.ts`'s {@link pathAtRef}, and
  *    the writability probe is the write engine's {@link probeWritable}. A
  *    check that wanted a slightly different answer would be a second definition of the thing being
@@ -59,8 +60,8 @@
  *    be fetched.
  *
  *    **Remote setup keeps the same line: it is graded from local evidence by default and asks GitHub
- *    only under `--check-github`.** {@link REMOTE_EXECUTION_CHECK} reads files, refs and `PATH`, and
- *    spawns no `gh` subcommand; {@link REMOTE_GITHUB_CHECK} spawns them only under
+ *    only under `--check-github`.** {@link REMOTE_EXECUTION_CHECK} and {@link FORGE_CHECK} read files,
+ *    refs and `PATH`, and spawn no `gh` subcommand; {@link REMOTE_GITHUB_CHECK} spawns them only under
  *    {@link CheckContext.probeGithub}, and each is a read.
  *
  *    **The three docs-retrieval checks keep that line.** `retrieval-dependencies` and
@@ -93,6 +94,8 @@ import {
   CONFIG_FILENAME,
   DEFAULTS,
   FALLBACK_PRESET,
+  FORGE_KINDS,
+  forgeTriggerApplies,
   isPlaceholder,
   LAYER_CATCH_ALL_PATH,
   remoteExecutionApplies,
@@ -125,7 +128,7 @@ import {
 import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
-import { readTemplate, workRoot } from '../core/paths.js';
+import { ownManifestString, readTemplate, workRoot } from '../core/paths.js';
 import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
 import { normalizeRepoPathStrict } from '../core/repoPaths.js';
 import { probeWritable } from '../core/writer.js';
@@ -157,6 +160,7 @@ import {
   pushEnvCandidates,
   type PushEnvCandidate,
 } from '../generators/notifications.js';
+import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
 import { DOCS_SEARCH_SERVER_SCRIPT_NAME, outerLoopScriptsDir } from '../generators/outerLoopScripts.js';
 import {
   bashScriptRule,
@@ -213,19 +217,26 @@ import {
 import { inspect, readRegistry, registryPath, type EntryState, type InspectedEntry } from '../machine/registry.js';
 import {
   API_KEY_SECRET,
+  CLI_VERSION_VARIABLE,
   DEFAULT_GH_CLI,
+  DEFAULT_TRIGGER_LABEL,
   GH_CLI_VARIABLE,
   ghCli,
   GIT_TOKEN_SECRET,
   OAUTH_TOKEN_SECRET,
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
+  renderedCliVersions,
   runGh,
   RUNNER_VARIABLE,
+  TRIGGER_ALLOWED_BOTS_VARIABLE,
+  TRIGGER_LABEL_VARIABLE,
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RESUME_PATH,
   WORKFLOW_RUN_FILE,
   WORKFLOW_RUN_PATH,
+  WORKFLOW_TRIGGER_FILE,
+  WORKFLOW_TRIGGER_PATH,
   type GhResult,
 } from '../remote/githubActions.js';
 import { modelFilesPresent } from '../retrieval/models.js';
@@ -2351,8 +2362,16 @@ const DAEMON_PATH_CHECK: Check = {
  *
  * **Every finding is reported, and the grade is the worst of them.** Two `fail`s: no
  * `harness-run.yml`, because no remote run can be dispatched; and no `gh`, because the watcher
- * dispatches through it. Three `warn`s: no `harness-resume.yml`, because a usage-paused hosted run then
- * waits for `/autonomous-sdlc-harness:branch-resume`; a `harness-run.yml` that
+ * dispatches through it. Four `warn`s: a `harness-run.yml` pinned (`remote/githubActions.ts` →
+ * {@link renderedCliVersions}) to a version other than this CLI's — never a `fail`, because the job
+ * installs its pin and the adopter may stay on it deliberately; the remedy is
+ * `generators/githubWorkflows.ts` → {@link upgradeWorkflowsCommand}, the alternative `doctor` at the
+ * pin, both prefixed by that module's {@link pinnedCliCommand} so the two cannot name different
+ * packages. The warning also prints that module's {@link IN_FLIGHT_RUNS_NOTE}; its move route names
+ * no commit set of its own but the paths the upgrade's printed `git add` names; and its `push`
+ * fragment is a complete sentence in both of its forms, so the join adds no punctuation of its own.
+ * Under `--remote-job` the job runs `doctor` at its own pin, so this cannot arise there. A file with no pin, or unreadable, is a note. No `harness-resume.yml`, because a usage-paused
+ * hosted run then waits for `/autonomous-sdlc-harness:branch-resume`; a `harness-run.yml` that
  * `origin/<defaultBranch>` does not carry, because GitHub dispatches only a workflow its default
  * branch has — the run starts once it is pushed, so nothing is broken here, and its remedy's push
  * skips the hook because the `pre-push` hook `init` wired refuses every push to the default branch
@@ -2421,9 +2440,32 @@ const REMOTE_EXECUTION_CHECK: Check = {
       );
     }
 
+    const version = ownManifestString('version');
+    let pinnedHere = false;
     if (runPresent) {
       const branch = ctx.config.defaultBranch;
-      if (typeof branch !== 'string' || branch.trim() === '') {
+      const branchUsable = typeof branch === 'string' && branch.trim() !== '';
+      let text: string | undefined;
+      try {
+        text = readFileSync(join(root, ...WORKFLOW_RUN_PATH.split('/')), 'utf8');
+      } catch (error) {
+        notes.push(`which version ${WORKFLOW_RUN_PATH} was rendered for is not graded, because it could not be read (${messageOf(error)})`);
+      }
+      const pins = text === undefined ? undefined : renderedCliVersions(text);
+      if (pins !== undefined && pins.length === 0) {
+        notes.push(`which version ${WORKFLOW_RUN_PATH} was rendered for could not be read, because it carries no ${CLI_VERSION_VARIABLE} line`);
+      } else if (pins !== undefined && pins[0] !== undefined && pins.some((pin) => pin !== version)) {
+        const push = branchUsable
+          ? `run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`
+          : 'push them to the default branch.';
+        warnings.push(
+          `${WORKFLOW_RUN_PATH} was rendered for ${nameList(pins)} (${CLI_VERSION_VARIABLE}), and this CLI is ${version}; the job installs and runs the version it names, so nothing is broken, and moving is your choice. To move to ${version}: run \`${upgradeWorkflowsCommand(version)}\`, commit the paths its printed \`git add\` names, then ${push} ${IN_FLIGHT_RUNS_NOTE} To stay on ${nameList(pins)}: run doctor at that version instead, \`${pinnedCliCommand(pins[0])} doctor\``,
+        );
+      } else if (pins !== undefined) {
+        pinnedHere = true;
+      }
+
+      if (!branchUsable) {
         notes.push(`whether GitHub's default branch carries ${WORKFLOW_RUN_PATH} is not graded, because defaultBranch is not a branch name (see the config check)`);
       } else if (!remoteTrackingBranchResolves(root, branch)) {
         notes.push(`whether origin/${branch} carries ${WORKFLOW_RUN_PATH} is not graded, because there is no origin/${branch} (see the remote check)`);
@@ -2439,7 +2481,7 @@ const REMOTE_EXECUTION_CHECK: Check = {
     if (failures.length > 0) return fail(`${on}: ${[...failures, ...warnings].join('; ')}${noted}`);
     if (warnings.length > 0) return warn(`${on}: ${warnings.join('; ')}${noted}`);
     return pass(
-      `${on}: ${WORKFLOW_RUN_PATH} and ${WORKFLOW_RESUME_PATH} are present and ${gh} resolves on PATH${noted}. What this cannot see lives on GitHub — a credential secret (${OAUTH_TOKEN_SECRET} or ${API_KEY_SECRET}), the ${PUSH_URL_SECRET} and ${GIT_TOKEN_SECRET} secrets, and the ${RUNNER_VARIABLE} and ${REMOTE_STOP_VARIABLE} variables; \`${CLI} doctor --check-github\` asks GitHub`,
+      `${on}: ${WORKFLOW_RUN_PATH} and ${WORKFLOW_RESUME_PATH} are present${pinnedHere ? `, ${WORKFLOW_RUN_PATH} is rendered for this CLI's own version, ${version},` : ''} and ${gh} resolves on PATH${noted}. What this cannot see lives on GitHub — a credential secret (${OAUTH_TOKEN_SECRET} or ${API_KEY_SECRET}), the ${PUSH_URL_SECRET} and ${GIT_TOKEN_SECRET} secrets, and the ${RUNNER_VARIABLE} and ${REMOTE_STOP_VARIABLE} variables; \`${CLI} doctor --check-github\` asks GitHub`,
     );
   },
 };
@@ -2510,10 +2552,14 @@ function retentionDaysOf(stdout: string): number | undefined {
  * - `fail` — `gh` does not spawn or `gh auth status` refuses (nothing further is asked); GitHub does
  *   not know `harness-run.yml`; neither credential secret is set.
  * - `warn` — `HARNESS_PUSH_URL` absent; `harness-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
- *   set; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; and any call that timed
+ *   set; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
+ *   {@link forgeTriggerApplies}, `harness-trigger.yml` unknown to GitHub, or no label named by
+ *   `HARNESS_TRIGGER_LABEL` (default {@link DEFAULT_TRIGGER_LABEL}); and any call that timed
  *   out, could not reach GitHub, or answered in a shape not understood — *cannot tell* is not
  *   *missing*, so it never fails.
  * - both credential secrets present is a note, not a finding: billing follows `ANTHROPIC_API_KEY`.
+ * - a non-empty `HARNESS_TRIGGER_ALLOWED_BOTS` is a note naming the bots, which start runs without a
+ *   permission check. When the trigger does not apply, neither trigger read is made.
  * - the retention read refused (typically HTTP 403: the endpoint needs admin access) is a note too —
  *   the read is best-effort, and a collaborator without admin can still run remotely.
  *
@@ -2617,11 +2663,132 @@ const REMOTE_GITHUB_CHECK: Check = {
       }
     }
 
+    let triggerKnown = '';
+    if (forgeTriggerApplies(ctx.config)) {
+      const trigger = ask(['workflow', 'view', WORKFLOW_TRIGGER_FILE]);
+      if (trigger.answer === undefined) return fail(noSpawn);
+      if (trigger.answer.kind === 'unknown') warnings.push(cannotTell(trigger.call, trigger.answer.why, `whether GitHub knows ${WORKFLOW_TRIGGER_FILE}`));
+      if (trigger.answer.kind === 'refused') {
+        warnings.push(`GitHub does not know ${WORKFLOW_TRIGGER_FILE} (${trigger.call}: ${trigger.answer.why}), so labelling an issue starts nothing: push ${WORKFLOW_TRIGGER_PATH} to the repository's default branch`);
+      }
+
+      // The label's name is a repository variable, so an unread variable listing leaves nothing to compare.
+      const configured = variableValues?.get(TRIGGER_LABEL_VARIABLE)?.trim() ?? '';
+      const labelName = configured === '' ? DEFAULT_TRIGGER_LABEL : configured;
+      let labelFound = false;
+      if (variableValues === undefined) {
+        warnings.push(`cannot tell whether the trigger label exists: its name is the ${TRIGGER_LABEL_VARIABLE} variable, and ${variables.call} gave no readable answer`);
+      } else {
+        const labels = ask(['label', 'list', '--json', 'name', '--limit', '1000']);
+        if (labels.answer === undefined) return fail(noSpawn);
+        const labelNames = labels.answer.kind === 'answered' ? ghJsonEntries(labels.answer.stdout) : undefined;
+        if (labels.answer.kind !== 'answered') {
+          warnings.push(cannotTell(labels.call, labels.answer.why, `whether the label \`${labelName}\` exists`));
+        } else if (labelNames === undefined) {
+          warnings.push(`cannot tell whether the label \`${labelName}\` exists: ${labels.call} answered in a shape this check does not read`);
+        } else if (!labelNames.has(labelName)) {
+          warnings.push(`no label \`${labelName}\` exists, so nobody can apply it: \`gh label create ${labelName}\``);
+        } else {
+          labelFound = true;
+        }
+        const bots = (variableValues.get(TRIGGER_ALLOWED_BOTS_VARIABLE) ?? '').split(',').map((bot) => bot.trim()).filter((bot) => bot !== '');
+        if (bots.length > 0) {
+          notes.push(`${TRIGGER_ALLOWED_BOTS_VARIABLE} admits ${nameList(bots)}, each of which can start a run without a permission check`);
+        }
+      }
+      if (trigger.answer.kind === 'answered' && labelFound) triggerKnown = `; GitHub knows ${WORKFLOW_TRIGGER_FILE} and the label \`${labelName}\` exists`;
+    }
+
     const noted = notes.length > 0 ? `; ${notes.join('; ')}` : '';
     if (failures.length > 0) return fail(`${[...failures, ...warnings].join('; ')}${noted}`);
     if (warnings.length > 0) return warn(`${warnings.join('; ')}${noted}`);
     const kept = retentionDays === undefined ? '' : `, and the repository keeps artifacts for ${retentionDays} days`;
-    return pass(`gh is authenticated, GitHub knows ${WORKFLOW_RUN_FILE} and ${WORKFLOW_RESUME_FILE}, a credential secret and ${PUSH_URL_SECRET} are set, and remote runs use ${runner as string}${kept}${noted}`);
+    return pass(`gh is authenticated, GitHub knows ${WORKFLOW_RUN_FILE} and ${WORKFLOW_RESUME_FILE}, a credential secret and ${PUSH_URL_SECRET} are set, and remote runs use ${runner as string}${kept}${triggerKnown}${noted}`);
+  },
+};
+
+/**
+ * The configured `forge`, and what starts a run from it — the key's reporter.
+ *
+ * **Every state is named, the absent one included**, because a declared seam needs something that
+ * observes it (`ARCHITECTURE.md` → `## 8. Declaring a seam before building it`), and the config
+ * check speaks only about a value outside {@link FORGE_KINDS}. An absent key is a decision not yet
+ * made, and this line is where an operator learns the decision exists.
+ *
+ * **Graded from local evidence only** (the module header's choice 3): the trigger workflow, one git
+ * ref and the configuration. Whether the label exists and whether GitHub knows the workflow are left
+ * to `--check-github`.
+ *
+ * **Its worst grade is `warn`**: no `forge` state stops a run, because the inbox path works whatever
+ * the key says. The three `warn`s are all `github`: remote execution off, because a run started from
+ * GitHub always executes through {@link WORKFLOW_RUN_FILE}; the trigger workflow absent; and the
+ * trigger workflow not carried by `origin/<defaultBranch>`, because GitHub runs an `issues` workflow
+ * only from its default branch — that last with {@link REMOTE_EXECUTION_CHECK}'s push remedy and its
+ * two *not graded* notes, on the same reasoning.
+ *
+ * Draft-pull-request output and comment park-and-ask are not graded, because nothing implements them
+ * yet; the `github` pass names them as still to come, so the line never implies the whole coupling
+ * exists. A value outside {@link FORGE_KINDS} is the config check's `fail`, and is not graded here.
+ */
+const FORGE_CHECK: Check = {
+  id: 'forge',
+  title: 'the configured forge, and what starts a run from it',
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+
+    const root = ctx.repoRoot;
+    const forge = ctx.config.forge;
+    const triggerPresent = existsSync(join(root, ...WORKFLOW_TRIGGER_PATH.split('/')));
+
+    if (forge === undefined) {
+      return pass(
+        `forge is not set, so the decision is not yet made and nothing starts a run from an issue. \`${CLI} config set forge github\`, with execution.target github-actions, turns the issue trigger on; \`${CLI} config set forge none\` records that this repository has no forge integration`,
+      );
+    }
+    if (!(FORGE_KINDS as readonly unknown[]).includes(forge)) {
+      return pass('not graded, because forge holds a value this CLI does not know (see the config check)');
+    }
+    if (forge === 'none') {
+      const left = triggerPresent
+        ? `. ${WORKFLOW_TRIGGER_PATH} is present and unused: the job it starts refuses every event while forge is not github`
+        : '';
+      return pass(`forge is none: this repository has no forge integration, and nothing starts a run from an issue${left}`);
+    }
+    if (forge === 'gitlab') {
+      return pass(
+        "forge is gitlab, and this release has no GitLab trigger: GitLab has no issue-label pipeline trigger, so starting a run from a GitLab issue needs a webhook relay calling GitHub's repository_dispatch or a GitLab pipeline trigger (docs/github-integration-research.md → T6). Nothing is written for it, and runs start from this machine as before",
+      );
+    }
+
+    if (!remoteExecutionApplies(ctx.config)) {
+      return warn(
+        `forge is github, but remote execution is off (\`execution.target\`), so no trigger workflow is written: a run started from GitHub always executes through ${WORKFLOW_RUN_FILE}, because GitHub cannot reach this machine. Run \`${CLI} config set execution.target github-actions\`, then \`${CLI} init\`; to run such runs on your own hardware, register a self-hosted runner and name its label in the ${RUNNER_VARIABLE} repository variable (docs/remote-execution.md → ## 8. Choosing a runner)`,
+      );
+    }
+
+    const on = 'forge is github and remote execution is on';
+    if (!triggerPresent) {
+      return warn(`${on}, but ${WORKFLOW_TRIGGER_PATH} is absent, so labelling an issue starts nothing: re-run \`${CLI} init\`, which writes it create-if-absent`);
+    }
+
+    const branch = ctx.config.defaultBranch;
+    let carried: string;
+    if (typeof branch !== 'string' || branch.trim() === '') {
+      carried = `; whether GitHub's default branch carries it is not graded, because defaultBranch is not a branch name (see the config check)`;
+    } else if (!remoteTrackingBranchResolves(root, branch)) {
+      carried = `; whether origin/${branch} carries it is not graded, because there is no origin/${branch} (see the remote check)`;
+    } else if (!pathAtRef(root, `origin/${branch}`, WORKFLOW_TRIGGER_PATH)) {
+      return warn(
+        `${on}, but origin/${branch} does not carry ${WORKFLOW_TRIGGER_PATH}, as this checkout last fetched it, and GitHub runs an issues workflow only from its default branch, so labelling an issue starts nothing yet: commit it, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`,
+      );
+    } else {
+      carried = ` and origin/${branch} carries it`;
+    }
+
+    return pass(
+      `${on}: ${WORKFLOW_TRIGGER_PATH} is present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; draft-pull-request output and comment park-and-ask are still to come. What this cannot see lives on GitHub — whether that label exists and whether GitHub knows ${WORKFLOW_TRIGGER_FILE}; \`${CLI} doctor --check-github\` asks GitHub`,
+    );
   },
 };
 
@@ -4783,7 +4950,8 @@ const RETRIEVAL_INDEX_CHECK: Check = {
  * five above it are answered, and it says so rather than guessing.
  * `remote-execution` follows it because it asks the same "can this run unattended" question of a run
  * the watcher dispatches to GitHub rather than spawns here, and `remote-github` follows that because it
- * asks GitHub the half of the same question local evidence cannot answer.
+ * asks GitHub the half of the same question local evidence cannot answer. `forge` closes that block
+ * because the trigger it grades starts a run through the same remote setup the two above it grade.
  *
  * `profile-tracked` sits under `profile-paths` because the two name the same file carried somewhere it
  * does not belong, and a committed profile is the usual reason a job's `profile-paths` fails.
@@ -4814,6 +4982,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
   DAEMON_PATH_CHECK,
   REMOTE_EXECUTION_CHECK,
   REMOTE_GITHUB_CHECK,
+  FORGE_CHECK,
   CONFIG_CHECK,
   COMMAND_WRAPPERS_CHECK,
   COMMAND_PERMISSIONS_CHECK,
