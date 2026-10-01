@@ -5,7 +5,9 @@
  * **The rule these tests exist to enforce: a start sends the run's inputs only once the prompt is
  * committed on `origin/<branch>`, and a refusal sends nothing.** A protected branch, a target other
  * than `github-actions` and a missing prompt file send nothing and push nothing; a branch cut that
- * fails sends no `workflow run`; a dispatch that fails still leaves the prompt commit on origin.
+ * fails sends no `workflow run`; a dispatch that fails still leaves the prompt commit on origin. And
+ * **a start leaves no working copy and no local branch it created, on success or on any failure after
+ * the cut, while one that existed before the cut is never touched.**
  *
  * Each case drives a fixture `init` wired, with `execution.target` set and the adopted tree committed
  * and pushed to the fixture's bare `origin` as its default branch, so `create-worktree.sh` cuts a real
@@ -101,6 +103,13 @@ async function startFixture(t, target = 'github-actions') {
     originHas: async (branch) =>
       (await runBash(origin, ['-c', 'git show-ref --verify --quiet "refs/heads/$1"', '_', branch])).status === 0,
     git,
+    /** Neither the sibling copy, its `git worktree list` entry, nor `refs/heads/feat_x` remains. */
+    assertNothingLeft: async () => {
+      assert.equal(existsSync(worktree), false, 'the working copy was left behind');
+      const ref = await runBash(dir, ['-c', 'git show-ref --verify --quiet refs/heads/feat_x']);
+      assert.notEqual(ref.status, 0, 'the local branch feat_x was left behind');
+      assert.doesNotMatch((await runGit(dir, ['worktree', 'list'])).stdout, /-feat_x\b/);
+    },
   };
 }
 
@@ -110,7 +119,7 @@ test('a start commits the prompt on origin/feat_x, then sends exactly one task d
 
   const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /remote-run\.sh: started feat_x \(worktree .*-feat_x\)/);
+  assert.match(result.stdout, /^remote-run\.sh: started feat_x$/m);
 
   const base = await f.git(f.origin, ['rev-parse', `refs/heads/${f.defaultBranch}`]);
   assert.equal(await f.git(f.origin, ['rev-list', '--count', `${base}..refs/heads/feat_x`]), '1');
@@ -120,7 +129,7 @@ test('a start commits the prompt on origin/feat_x, then sends exactly one task d
     PROMPT_REL,
   );
   assert.equal((await runGit(f.origin, ['show', `refs/heads/feat_x:${PROMPT_REL}`])).stdout, PROMPT_BYTES);
-  assert.equal(readFileSync(join(f.worktree, PROMPT_REL), 'utf8'), PROMPT_BYTES);
+  await f.assertNothingLeft();
 
   assert.deepEqual(f.calls(), [TASK_DISPATCH]);
   const registryAfter = existsSync(join(f.dir, REGISTRY)) ? readFileSync(join(f.dir, REGISTRY), 'utf8') : null;
@@ -134,7 +143,7 @@ test('a relative --prompt-file resolves against the caller\'s directory', async 
     STUB_LOG: join(dirname(f.prompt), 'gh.log'),
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(readFileSync(join(f.worktree, PROMPT_REL), 'utf8'), PROMPT_BYTES);
+  assert.equal((await runGit(f.origin, ['show', `refs/heads/feat_x:${PROMPT_REL}`])).stdout, PROMPT_BYTES);
 });
 
 test('start on a protected branch exits 2, calls no gh and leaves origin unchanged', async (t) => {
@@ -187,6 +196,55 @@ test('a feat_x already on origin exits 4 and sends no workflow run', async (t) =
   assert.match(result.stderr, /nothing was dispatched/);
   assert.deepEqual(f.calls().filter((call) => call.startsWith('workflow run')), []);
   assert.equal(await f.git(f.origin, ['rev-parse', 'refs/heads/feat_x']), ahead);
+  await f.assertNothingLeft();
+});
+
+test('a refused start leaves a working copy that already stood at the copy\'s path untouched', async (t) => {
+  const f = await startFixture(t);
+  // A registered working tree, so `git worktree remove --force` would delete it were the guard gone.
+  await runGit(f.dir, ['worktree', 'add', '--quiet', '--detach', f.worktree]);
+  writeFileSync(join(f.worktree, 'keep.txt'), 'not start\'s\n');
+
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  assert.equal(result.status, 4, result.stderr);
+  assert.deepEqual(f.calls(), []);
+  assert.equal(readFileSync(join(f.worktree, 'keep.txt'), 'utf8'), 'not start\'s\n');
+  assert.match((await runGit(f.dir, ['worktree', 'list'])).stdout, /-feat_x\b/);
+  assert.equal(await f.originHas('feat_x'), false);
+});
+
+test('a refused start leaves a local feat_x that existed before the cut untouched', async (t) => {
+  const f = await startFixture(t);
+  await runGit(f.dir, ['branch', 'feat_x']);
+  const before = await f.git(f.dir, ['rev-parse', 'refs/heads/feat_x']);
+
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  assert.equal(result.status, 4, result.stderr);
+  assert.deepEqual(f.calls(), []);
+  assert.equal(await f.git(f.dir, ['rev-parse', 'refs/heads/feat_x']), before);
+  assert.equal(await f.originHas('feat_x'), false);
+});
+
+test('a push of the prompt commit that origin rejects exits 4, calls no gh and leaves nothing local', async (t) => {
+  const f = await startFixture(t);
+  // Accepts the cut's own push, rejects the one carrying the prompt commit.
+  const hook = join(f.origin, 'hooks', 'pre-receive');
+  writeFileSync(
+    hook,
+    `#!/bin/sh
+while read -r old new ref; do
+  [ "$(git log -1 --format=%s "$new" 2>/dev/null)" = "chore: add task prompt for feat_x" ] && exit 1
+done
+exit 0
+`,
+    { mode: 0o755 },
+  );
+
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  assert.equal(result.status, 4, result.stderr);
+  assert.match(result.stderr, /failed at pushing feat_x/);
+  assert.deepEqual(f.calls(), []);
+  await f.assertNothingLeft();
 });
 
 test('a failed dispatch exits 3 while origin/feat_x carries the prompt commit', async (t) => {
@@ -197,4 +255,6 @@ test('a failed dispatch exits 3 while origin/feat_x carries the prompt commit', 
   assert.deepEqual(f.calls(), [TASK_DISPATCH]);
   assert.ok(await f.originHas('feat_x'));
   assert.equal(await f.git(f.origin, ['log', '-1', '--format=%s', 'refs/heads/feat_x']), 'chore: add task prompt for feat_x');
+  assert.equal((await runGit(f.origin, ['show', `refs/heads/feat_x:${PROMPT_REL}`])).stdout, PROMPT_BYTES);
+  await f.assertNothingLeft();
 });

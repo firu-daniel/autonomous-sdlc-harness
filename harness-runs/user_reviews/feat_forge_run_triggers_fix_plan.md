@@ -33,7 +33,7 @@ Each entry resolves to a self-contained `harness-runs/user_reviews/feat_forge_ru
 
 All four edit `cli/templates/scripts/remote-run.sh`, so they run in this order.
 
-1. [ ] **Finding 4** — `remote-run.sh start` removes the working copy and local branch it created once the push lands, and on every failure exit after the cut. It never removes a copy or branch it did not create. The `start` header states the removal applies wherever `start` runs. _(layer: cli, general)_
+1. [x] **Finding 4** — `remote-run.sh start` removes the working copy and local branch it created once the push lands, and on every failure exit after the cut. It never removes a copy or branch it did not create. The `start` header states the removal applies wherever `start` runs. _(layer: cli, general)_
 2. [ ] **Finding 3** — The four acting commands act on GitHub directly for a remote run:
    - `remote-run.sh` gains a shared remote-state derivation, a `fetch` read verb and a `review` verb, plus a record update after a user's chain-0 resume dispatch;
    - `create-worktree.sh` accepts `--existing --no-bootstrap`;

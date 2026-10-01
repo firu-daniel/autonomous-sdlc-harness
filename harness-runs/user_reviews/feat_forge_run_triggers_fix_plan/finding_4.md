@@ -32,3 +32,5 @@ A failed start is worse. The `create-worktree.sh` header says a failed run leave
 
   Update the stdout match `/remote-run\.sh: started feat_x \(worktree .*-feat_x\)/` to the new line.
 - [ ] **Docs.** In `docs/github-issue-trigger.md` → `## 1.`, item 5, add one sentence after the push: the working copy and its local branch are removed once the push lands, and on any failure after the cut, so a self-hosted runner accumulates nothing.
+
+- **Deviations from plan:** The pre-existing-copy test makes the copy a registered working tree (`git worktree add --detach`) rather than a plain directory, and a further case pins that a local `feat_x` existing before the cut keeps its SHA — both from `item_4/review_0.md`, because a plain directory and an untested `had_branch` guard let the guards regress unnoticed. The guard mutation (both `had_copy` and `had_branch` checks dropped) was run by editing `remote-run.sh` in place and restoring it byte-for-byte (`cmp` confirmed), not through `scratch-run.sh`: under it, exactly those two cases failed (9 pass, 2 fail); restored, 11 of 11 pass.

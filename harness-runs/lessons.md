@@ -46,4 +46,12 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **A new execution environment must state, for every configurable phase, whether that phase runs there. A phase switched off in this repository is not thereby unsupported for every adopter.** _(taught by: feat_remote_execution_github_actions)_
 
+## Remote and branch-scoped operations
+
+- **A command scoped to one branch reads and writes that branch's state only: never create a working copy, record or sync for any other branch as a side effect.** _(taught by: feat_forge_run_triggers)_
+
+- **Act on remote state where it lives: when the remote accepts an action directly, send it there, and never build a local copy, record or relay just to forward it.** _(taught by: feat_forge_run_triggers)_
+
+- **A script that creates a temporary working copy or branch removes it on every exit path, success and failure alike, and never removes one it did not create.** _(taught by: feat_forge_run_triggers)_
+
 _Written by `autonomous-sdlc-harness init`, and yours from there on: a re-run never touches a ledger that already exists._

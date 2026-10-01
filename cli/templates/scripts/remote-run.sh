@@ -58,7 +58,8 @@
 #        adopt (and --list), the listing or `git ls-remote` failed; nothing
 #        written
 #     4  start: placement failed — the branch cut, the copy, the commit or the
-#        push — and nothing was dispatched. adopt: at least one candidate was
+#        push — and nothing was dispatched; the working copy and the local
+#        branch the cut created were removed. adopt: at least one candidate was
 #        not adopted (each named by a `could not adopt` line); the others were
 #
 # `start` IS THE ADAPTERS' ONE ENTRY: every trigger (an issue event, a forge
@@ -69,8 +70,12 @@
 # file at `<state_dir>/task_prompts/<branch>_task_prompt.md` in that working
 # copy (the state directory resolved there, never in the main checkout), commit
 # it as `chore: add task prompt for <branch>` and confirm `origin/<branch>`
-# equals `HEAD` (each failure 4); then `dispatch --engine task --resume none
-# --chain 0`, composed by `verb_dispatch` itself. The placement is the library's
+# equals `HEAD` (each failure 4); then remove the working copy and the local
+# branch it created — on every exit after the cut, success included and
+# wherever `start` runs, because nothing reads the copy once the push has landed
+# and a leftover branch makes the next cut of that name refuse; a copy or branch
+# that existed before the cut is never removed — and `dispatch --engine task
+# --resume none --chain 0`, composed by `verb_dispatch` itself. The placement is the library's
 # (`hr_task_prompt_rel`, `hr_place_artifact`, `hr_commit_placed`,
 # `hr_push_landed`), the same calls the watcher's inbox pass makes, so nothing
 # downstream can tell where a task came from. It writes no registry record: a
@@ -411,8 +416,9 @@
 #
 # WHAT IT NEVER DOES. It never launches a local session, never writes the
 # inbox, and never watches a run it sent. Only `start` pushes, and only through
-# `create-worktree.sh` and `push-branch.sh`; its writes are the new working
-# copy and the prompt committed in it. `trigger` writes its snapshot and comment
+# `create-worktree.sh` and `push-branch.sh`; its writes are the prompt
+# committed on `origin/<branch>`, through a working copy and a local branch it
+# removes before it returns. `trigger` writes its snapshot and comment
 # files under `RUNNER_TEMP`, one comment on the issue and the label removal, or
 # for a dispatch event a block in the step summary. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
@@ -1992,8 +1998,27 @@ placement_fail() {
   exit "$EXIT_PLACEMENT"
 }
 
+# start_remove_copy — remove the working copy and the local branch `start`
+# cut, and only those: `had_copy` / `had_branch` record what existed before the
+# cut. Idempotent; a failed step is one stderr line and never changes the exit
+# status already decided. `--force` because a failure exit may leave the placed,
+# uncommitted prompt, which is only a copy of --prompt-file.
+start_remove_copy() {
+  if [ "$had_copy" -eq 0 ] && [ -e "$worktree" ]; then
+    git -C "$root" worktree remove --force "$worktree" >/dev/null 2>&1 \
+      || echo "remote-run.sh: could not remove the working copy '$worktree'" >&2
+  fi
+  git -C "$root" worktree prune >/dev/null 2>&1 \
+    || echo "remote-run.sh: git worktree prune failed in '$root'" >&2
+  if [ "$had_branch" -eq 0 ] && git -C "$root" show-ref --verify --quiet "refs/heads/$branch"; then
+    git -C "$root" branch -D "$branch" >/dev/null 2>&1 \
+      || echo "remote-run.sh: could not delete the local branch '$branch'" >&2
+  fi
+  return 0
+}
+
 verb_start() {
-  local protected=0 status=0 worktree state_rel rel subject
+  local protected=0 status=0 state_rel rel subject
   hr_branch_is_protected "$root" "$branch" || protected=$?
   case "$protected" in
     0)
@@ -2008,10 +2033,18 @@ verb_start() {
     exit "$EXIT_REFUSED"
   fi
 
+  # Global, not local: the EXIT trap runs after this function's frame is gone.
+  worktree=$(hr_worktree_dir "$root" "$branch") || placement_fail "resolving the working copy"
+  had_copy=0
+  [ ! -e "$worktree" ] || had_copy=1
+  had_branch=0
+  ! git -C "$root" show-ref --verify --quiet "refs/heads/$branch" || had_branch=1
+
+  # The cut itself can leave a half-created copy, and every failure below exits.
+  trap start_remove_copy EXIT
   bash "$script_dir/create-worktree.sh" --no-bootstrap "$branch" >&2 || status=$?
   [ "$status" -eq 0 ] || placement_fail "the branch cut (create-worktree.sh exited $status)"
 
-  worktree=$(hr_worktree_dir "$root" "$branch") || placement_fail "resolving the working copy"
   state_rel=$(hr_state_dir "$worktree") || placement_fail "resolving the state directory in '$worktree'"
   [ -n "$state_rel" ] || placement_fail "resolving the state directory in '$worktree'"
   rel=$(hr_task_prompt_rel "$state_rel" "$branch")
@@ -2024,13 +2057,15 @@ verb_start() {
   [ "$status" -ne 1 ] || placement_fail "committing '$rel'"
   hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 \
     || placement_fail "pushing $branch (origin/$branch is not HEAD)"
+  start_remove_copy
+  trap - EXIT
 
   engine=task
   resume=none
   chain=0
   dispatch_fail_note="; $branch and its task prompt are already pushed to origin, so re-send with: remote-run.sh dispatch $branch --engine task"
   verb_dispatch
-  echo "remote-run.sh: started $branch (worktree $worktree)"
+  echo "remote-run.sh: started $branch"
 }
 
 # ---------------------------------------------------------------------------
