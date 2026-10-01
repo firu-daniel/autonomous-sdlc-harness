@@ -52,7 +52,7 @@ The `<scripts_dir>` row added to `## Resolved values` uses the three-column form
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Name `@sdlc-harness resume` as the way on in the `stopped` comment and its documentation row _(layer: cli, general)_
+1. [x] **Finding 2** — Name `@sdlc-harness resume` as the way on in the `stopped` comment and its documentation row _(layer: cli, general)_
 2. [ ] **Finding 1** — Report a job-mode `failed` to GitHub only once the job's automatic resumes are ruled out _(layer: cli, general)_
 
 ---

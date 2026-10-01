@@ -3725,7 +3725,7 @@ forge_report() {
         text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, re-apply the label \`$trigger_label\` to this issue; that starts a new run, on the next indexed branch."
       fi ;;
     stopped)
-      text="The harness run on \`$br\` was stopped. Nothing runs on it until a new review or label starts another round or run." ;;
+      text="The harness run on \`$br\` was stopped. Comment \`${COMMAND_HANDLE} resume\` to continue it from its committed ledger. A review that requests changes starts a round only once a run of the branch has completed or failed." ;;
     round)
       text="A user-review round started on \`$br\`; a \`completed\` comment follows when the branch is ready for review again." ;;
   esac
