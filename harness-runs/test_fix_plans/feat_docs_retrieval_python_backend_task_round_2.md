@@ -15,7 +15,7 @@
 Sorted lowest blast-radius first. The two findings are independent: each clears a different part of 13a's output, and the gate passes only when both have landed.
 
 1. [x] **Finding 1** — Join the over-wrapped generator expression in `heading_slug` that `ruff format --check` flags at `src/harness_docs_retrieval/chunk.py:58`. _(layer: general)_
-2. [ ] **Finding 2** — Rewrap the four docstring lines over 100 columns (E501) in `chunk.py`, `tests/ts_bridge.py`, `tests/test_stubs.py` and `tests/test_chunk_parity.py`. _(layer: general)_
+2. [x] **Finding 2** — Rewrap the four docstring lines over 100 columns (E501) in `chunk.py`, `tests/ts_bridge.py`, `tests/test_stubs.py` and `tests/test_chunk_parity.py`. _(layer: general)_
 
 ---
 

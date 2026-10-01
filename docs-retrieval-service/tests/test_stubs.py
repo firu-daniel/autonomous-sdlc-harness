@@ -1,5 +1,5 @@
-"""The rule this file exists to enforce: the stubs are a test seam and must agree with the TypeScript
-stubs exactly, or the end-to-end comparison measures the stubs instead of the backends.
+"""The rule this file exists to enforce: the stubs are a test seam and must agree with the
+TypeScript stubs exactly, or the end-to-end comparison measures the stubs instead of the backends.
 
 Vectors and scores are compared with `==`, never approximately: they cross the bridge as JSON, which
 round-trips every IEEE double, so any difference is a real one. The refusal message is asserted

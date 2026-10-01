@@ -66,3 +66,5 @@ Found 4 errors.
 
 - [ ] Apply the four rewraps and check that no line in the four files is longer than 100 characters.
 - [ ] Change prose line breaks only. Do not change code, the docstring wording or other lines.
+
+**Deviations from plan:** The finding names no test file (`none — 13a Python lint`), so no single-file run was possible and the gate script was not run: the "no line over 100 characters" check rests on `grep -rnE '^.{101,}$' --include='*.py'` over `docs-retrieval-service/src` and `docs-retrieval-service/tests`, which returned no match after the rewraps. The `ruff check` run is deferred to the Run gates phase.

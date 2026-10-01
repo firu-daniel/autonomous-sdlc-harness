@@ -92,7 +92,9 @@ def _join_body(lines: list[str]) -> str:
 def _make_chunk(
     path: str, anchor: str | None, heading: str, heading_path: str, title: str, body: str
 ) -> DocChunk:
-    """`makeChunk`: `anchor` is `None` for the preamble alone, so an empty slug still keys `path#`."""
+    """`makeChunk`: `anchor` is `None` for the preamble alone, so an empty slug still keys
+    `path#`.
+    """
     text = f"{title}\n{heading_path}\n\n{body}"
     # Node's `Hash.update(string)` writes each lone surrogate as U+FFFD; the UTF-16 round trip does
     # the same and keeps a surrogate pair whole, where `errors="replace"` on UTF-8 would write `?`.

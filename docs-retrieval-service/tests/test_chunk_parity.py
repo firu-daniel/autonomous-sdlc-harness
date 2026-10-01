@@ -4,9 +4,9 @@ the same path, anchor, heading, embedded text, body and hash, as the running Typ
 
 This is the cheapest insurance in the three-branch sequence: a chunk key or hash that differs makes
 every later comparison between the backends measure two different indexes. The corpus composition
-has one source, the eval's `corpora.mjs`, read through the bridge, and the Python side is handed that
-same config. `self-docs` is this checkout's live `docs/` and conventions documents; both sides read
-the same bytes in the same run, so a moving corpus moves both sides together.
+has one source, the eval's `corpora.mjs`, read through the bridge, and the Python side is handed
+that same config. `self-docs` is this checkout's live `docs/` and conventions documents; both sides
+read the same bytes in the same run, so a moving corpus moves both sides together.
 """
 
 from typing import Any

@@ -1,8 +1,8 @@
 """The Python side of `ts_bridge.mjs`: the suite's one way to ask the running TypeScript code.
 
 The rule this module exists to enforce: a parity case compares against the compiled TypeScript under
-`cli/dist`, never against a copy of it, and a missing build or a bridge failure fails the test rather
-than skipping it, because a skipped parity case reads as a passing one.
+`cli/dist`, never against a copy of it, and a missing build or a bridge failure fails the test
+rather than skipping it, because a skipped parity case reads as a passing one.
 
 `ts_fixture` makes its directories under the system temp directory, never inside this checkout, and
 removes both on every exit path.
