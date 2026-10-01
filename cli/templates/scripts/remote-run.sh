@@ -194,6 +194,7 @@
 #   6. a `User` whose `collaborators/<login>/permission` is not `admin` or
 #      `write` — `maintain` reads as `write` and `triage` as `read` there; a
 #      failed call is "could not confirm write access", never a pass
+# Refusals 4 to 6 are `authorise_actor`, the one actor check `control` reuses.
 # Then it fetches `origin <defaultBranch>` (a failure tolerated), derives the
 # branch with `hr_derive_branch <title> issue_<number>`, passing `gh` so a name
 # with run-workflow history counts as taken (2 or 3 refused), writes
@@ -203,9 +204,13 @@
 # `headSha` is the `origin/<branch>` commit `start` pushed, at most
 # `TRIGGER_RUN_LOOKUP_TRIES` times, falling back to the branch's filtered run
 # list, and comments the branch and that URL; the comment never names an older
-# run of the branch. Every comment is followed by
-# removing the label, so re-applying it is deliberate; a removal that fails is
-# one `::warning::` line.
+# run of the branch. Every comment ends with the marker
+# `<!-- sdlc-harness event=started branch=<branch> -->` on a start and
+# `event=refused` otherwise (`branch=` empty before one is derived), and is
+# followed by removing the label, so re-applying it is deliberate; then a start
+# sets the state label `sdlc-harness: running`. That comment, that removal and
+# that one label are the trigger's only writes to the issue; a refusal sets no
+# label. A removal or a label set that fails is one `::warning::` line.
 # A `repository_dispatch` reads `.action` (where GitHub puts the `event_type`)
 # and `client_payload`'s `title`, `body` and `source`, the contract being
 #   {"event_type": TRIGGER_DISPATCH_EVENT_TYPE, "client_payload": {"title": …,
@@ -2772,13 +2777,16 @@ event_field() {
   EVENT_VALUE=${out%x}
 }
 
-# trigger_finish <exit> <comment> — post <comment> on the issue, remove the
-# trigger label, and exit <exit>. A comment that cannot be posted makes the exit
-# 3; a label that cannot be removed is a warning only. For a dispatch event,
-# print <comment> and append it to GITHUB_STEP_SUMMARY when set; a summary that
-# cannot be appended is a warning only, since stdout already carries it.
+# trigger_finish <exit> <comment> <event> — post <comment> on the issue with the
+# marker for <event> (`started` or `refused`; `branch=` is empty before a branch
+# is derived), remove the trigger label, on `started` set the state label
+# `running`, and exit <exit>. A comment that cannot be posted makes the exit 3;
+# a label that cannot be removed or set is a warning only. For a dispatch event,
+# print <comment> with no marker and append it to GITHUB_STEP_SUMMARY when set;
+# a summary that cannot be appended is a warning only, since stdout already
+# carries it.
 trigger_finish() {
-  local code="$1" body="$2" file
+  local code="$1" body="$2" event="$3" file
   if [ "$trigger_source" = dispatch ]; then
     printf '%s\n' "$body"
     if [ -n "${GITHUB_STEP_SUMMARY-}" ]; then
@@ -2796,7 +2804,7 @@ _Posted by the trigger job ${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REP
     echo "::error::remote-run.sh: trigger: cannot create the comment file for issue #$issue_number under '$trigger_tmp'"
     exit "$EXIT_GH"
   fi
-  printf '%s\n' "$body" >"$file"
+  { printf '%s\n\n' "$body"; forge_marker "$event" "$branch"; } >"$file"
   if ! gh_call issue comment "$issue_number" --repo "${GITHUB_REPOSITORY-}" --body-file "$file"; then
     echo "::error::remote-run.sh: trigger: the comment on issue #$issue_number could not be posted: $GH_ERR"
     code="$EXIT_GH"
@@ -2804,6 +2812,11 @@ _Posted by the trigger job ${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REP
   rm -f "$file"
   if ! gh_call issue edit "$issue_number" --repo "${GITHUB_REPOSITORY-}" --remove-label "$trigger_label"; then
     echo "::warning::remote-run.sh: trigger: removing the label '$trigger_label' from issue #$issue_number failed: $GH_ERR"
+  fi
+  if [ "$event" = started ]; then
+    if ! { forge_repo_var && forge_set_state "$issue_number" running; }; then
+      echo "::warning::remote-run.sh: trigger: setting the label '${STATE_LABEL_PREFIX}running' on issue #$issue_number failed: $GH_ERR"
+    fi
   fi
   exit "$code"
 }
@@ -2813,7 +2826,7 @@ trigger_refuse() {
   echo "remote-run.sh: trigger: refused, nothing sent: $1" >&2
   trigger_finish "$EXIT_REFUSED" "No run started: $1
 
-$2"
+$2" refused
 }
 
 # trigger_bot_listed <login> — 0 when <login> is an exact entry of
@@ -2828,6 +2841,42 @@ trigger_bot_listed() {
     [ -n "$entry" ] && [ "$entry" = "$1" ] && return 0
   done
   return 1
+}
+
+# authorise_actor <login> <type> — the one actor check, shared by `trigger` and
+# `control`: 0 when authorised. Otherwise AUTH_WHY holds one sentence and the
+# status names the arm: 1 `ghost`, empty or not a login shape; 2 a non-`User`
+# not listed in HARNESS_TRIGGER_ALLOWED_BOTS, decided with no permission call,
+# because the permission API answers `none` or 404 for a bot; 3 a `User` whose
+# permission is not `admin` or `write` (AUTH_PERMISSION holds it); 4 that
+# permission call failed (GH_ERR holds why). Prints nothing and never posts.
+AUTH_WHY=""
+AUTH_PERMISSION=""
+authorise_actor() {
+  local login="$1" type="$2"
+  AUTH_WHY=""
+  AUTH_PERMISSION=""
+  if [ "$login" = ghost ] || [ -z "$login" ] \
+    || ! { [[ "$login" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] \
+      || { [ "$type" = Bot ] && [[ "$login" =~ ^[A-Za-z0-9][A-Za-z0-9-]*\[bot\]$ ]]; }; }; then
+    AUTH_WHY="the actor is an account GitHub does not name, or not a login."
+    return 1
+  fi
+  if [ "$type" != User ]; then
+    trigger_bot_listed "$login" && return 0
+    AUTH_WHY="@$login is not a person, and is not listed in HARNESS_TRIGGER_ALLOWED_BOTS."
+    return 2
+  fi
+  if ! gh_call api "repos/${GITHUB_REPOSITORY-}/collaborators/$login/permission"; then
+    AUTH_WHY="the permission check for @$login failed ($GH_ERR)."
+    return 4
+  fi
+  AUTH_PERMISSION=$(printf '%s' "$GH_OUT" | jq -r '.permission // empty' 2>/dev/null) || AUTH_PERMISSION=""
+  case "$AUTH_PERMISSION" in
+    admin|write) return 0 ;;
+  esac
+  AUTH_WHY="GitHub reports the permission of @$login as ${AUTH_PERMISSION:-nothing}, not write or admin."
+  return 3
 }
 
 # trigger_run_url <sha> — the URL of the `harness run <branch>` run whose
@@ -2863,7 +2912,7 @@ trigger_run_url() {
 verb_trigger() {
   local LC_ALL=C
   local action label title body html_url state login sender_type source=""
-  local forge="" target="" default name_file status permission prompt errfile last url sha
+  local forge="" target="" default name_file status prompt errfile last url sha
   local fallback retry_then retry_again task_what
   case "${GITHUB_EVENT_NAME-}" in
     issues) trigger_source=issue ;;
@@ -2954,31 +3003,19 @@ verb_trigger() {
       trigger_refuse "this issue is not open." "Reopen it, then re-apply the label \`$trigger_label\`."
     fi
 
-    if [ "$login" = ghost ] || [ -z "$login" ] \
-      || ! { [[ "$login" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] \
-        || { [ "$sender_type" = Bot ] && [[ "$login" =~ ^[A-Za-z0-9][A-Za-z0-9-]*\[bot\]$ ]]; }; }; then
-      trigger_refuse "the label was applied by an account GitHub does not name (a deleted account shows as \`ghost\`)." \
-        "A collaborator with write access can re-apply the label \`$trigger_label\`."
-    fi
-
-    if [ "$sender_type" != User ]; then
-      trigger_bot_listed "$login" || trigger_refuse \
-        "@$login is not a person, and is not listed in the repository variable \`HARNESS_TRIGGER_ALLOWED_BOTS\`." \
-        "Add \`$login\` to that comma-separated list to let it start runs, or have a collaborator with write access apply the label \`$trigger_label\`."
-    else
-      permission=""
-      if gh_call api "repos/${GITHUB_REPOSITORY-}/collaborators/$login/permission"; then
-        permission=$(printf '%s' "$GH_OUT" | jq -r '.permission // empty' 2>/dev/null) || permission=""
-        case "$permission" in
-          admin|write) ;;
-          *) trigger_refuse "could not confirm write access for @$login: GitHub reports their permission as \`${permission:-nothing}\`." \
-               "Only a collaborator with write, maintain or admin access starts a run by labelling an issue; one of them can re-apply the label \`$trigger_label\`." ;;
-        esac
-      else
-        trigger_refuse "could not confirm write access for @$login: the permission check failed ($GH_ERR)." \
-          "Re-apply the label \`$trigger_label\` to try again."
-      fi
-    fi
+    status=0
+    authorise_actor "$login" "$sender_type" || status=$?
+    case "$status" in
+      0) ;;
+      1) trigger_refuse "the label was applied by an account GitHub does not name (a deleted account shows as \`ghost\`)." \
+           "A collaborator with write access can re-apply the label \`$trigger_label\`." ;;
+      2) trigger_refuse "@$login is not a person, and is not listed in the repository variable \`HARNESS_TRIGGER_ALLOWED_BOTS\`." \
+           "Add \`$login\` to that comma-separated list to let it start runs, or have a collaborator with write access apply the label \`$trigger_label\`." ;;
+      3) trigger_refuse "could not confirm write access for @$login: GitHub reports their permission as \`${AUTH_PERMISSION:-nothing}\`." \
+           "Only a collaborator with write, maintain or admin access starts a run by labelling an issue; one of them can re-apply the label \`$trigger_label\`." ;;
+      *) trigger_refuse "could not confirm write access for @$login: the permission check failed ($GH_ERR)." \
+           "Re-apply the label \`$trigger_label\` to try again." ;;
+    esac
   fi
 
   # The name check reads origin/<defaultBranch>; a failed fetch leaves it to say so.
@@ -3006,7 +3043,7 @@ verb_trigger() {
   esac
 
   prompt=$(mktemp "$trigger_tmp/harness-trigger-prompt.XXXXXX") || trigger_finish "$EXIT_PLACEMENT" \
-    "No run started: the task prompt for \`$branch\` could not be written. $retry_again"
+    "No run started: the task prompt for \`$branch\` could not be written. $retry_again" refused
   if [ "$trigger_source" = issue ]; then
     printf '# %s\n\n%s\n\n---\n\nStarted from %s by @%s, who applied the label `%s` at %s. This is the issue'"'"'s text at that moment; later edits to the issue do not reach this run.\n' \
       "$title" "$body" "$html_url" "$login" "$trigger_label" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$prompt"
@@ -3035,7 +3072,7 @@ verb_trigger() {
 $last
 \`\`\`
 
-Start it by hand: **Actions → \`$WORKFLOW_RUN_FILE\` → Run workflow**, with *Use workflow from* set to \`$branch\`, \`action\` \`run\` and \`branch\` \`$branch\`." ;;
+Start it by hand: **Actions → \`$WORKFLOW_RUN_FILE\` → Run workflow**, with *Use workflow from* set to \`$branch\`, \`action\` \`run\` and \`branch\` \`$branch\`." refused ;;
     *)
       echo "remote-run.sh: trigger: the start of $branch failed (exit $status)" >&2
       trigger_finish "$EXIT_PLACEMENT" "No run started: placing $task_what on the branch \`$branch\` failed:
@@ -3044,7 +3081,7 @@ Start it by hand: **Actions → \`$WORKFLOW_RUN_FILE\` → Run workflow**, with 
 $last
 \`\`\`
 
-$retry_again" ;;
+$retry_again" refused ;;
   esac
 
   # The ref `start`'s `hr_push_landed` confirmed equal to the pushed `HEAD`;
@@ -3055,12 +3092,12 @@ $retry_again" ;;
     echo "remote-run.sh: trigger: started $branch from issue #$issue_number: $url"
     trigger_finish "$EXIT_OK" "Started a harness run on the branch \`$branch\`: $url
 
-The task is this issue's title and body as they were when the label \`$trigger_label\` was applied; later edits to the issue do not reach this run. Re-applying the label starts another run, on the next indexed branch."
+The task is this issue's title and body as they were when the label \`$trigger_label\` was applied; later edits to the issue do not reach this run. Re-applying the label starts another run, on the next indexed branch." started
   fi
   echo "remote-run.sh: trigger: started $branch from a repository_dispatch: $url"
   trigger_finish "$EXIT_OK" "Started a harness run on the branch \`$branch\`: $url
 
-The task is the dispatch's \`client_payload\` title and body. Sending the same dispatch again starts another run, on the next indexed branch."
+The task is the dispatch's \`client_payload\` title and body. Sending the same dispatch again starts another run, on the next indexed branch." started
 }
 
 # ---------------------------------------------------------------------------

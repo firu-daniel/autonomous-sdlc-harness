@@ -49,3 +49,8 @@ The repository is `${GITHUB_REPOSITORY}`, as today. The function prints nothing 
 - `npm test -- test/remote-trigger.test.mjs` from `cli/` passes, every pre-existing refusal case unchanged.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n "collaborators/" -- cli/templates/scripts/remote-run.sh` has its only code hit inside `authorise_actor`: one permission check for every actor.
+
+**Deviations from plan:**
+
+- The `bash -n cli/templates/scripts/remote-run.sh` verification bullet was not executed: the command was refused by the permission layer in this session (twice, plain and compound). The claim that the script parses rests instead on `npm test -- test/remote-trigger.test.mjs` from `cli/`, which runs the script through `bash` in every one of its 29 cases, all passing.
+- `trigger_finish`'s two non-refusal, non-start callers — the dispatch that failed after the push (exit 3) and the failed placement (exit 4) — pass `refused`: no run started, so neither sets `sdlc-harness: running` and neither posts a `started` marker the Task 10 lookup would follow.
