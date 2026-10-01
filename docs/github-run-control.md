@@ -104,3 +104,95 @@ Other people's comments are not collected. Only the reviewer who submitted the r
 **A run in flight.** A review arriving while the branch's newest run is queued, running, parked, held in a park loop or paused is refused with a reply that names the state. Nothing is queued. Submit the review again once the run finishes. The local `/autonomous-sdlc-harness:branch-user-review` refuses the same way, because its GitHub route runs the same `remote-run.sh review`.
 
 **Comments left while a round runs are not lost.** The reviewer's inline comments made after the previous round's file was committed are collected by the next round, so comments left during a round, or on a refused review, are carried into the next review that requests changes.
+
+---
+
+## 3. Answering a park in a comment
+
+**Each open question is posted whole, as one comment.** When a run parks, `report` posts one comment per open `question_<n>.md`, in ascending order, on the run's target (§5, *The target rule*). The comment opens with which run is waiting and on which question, then carries the file unchanged, then states the answer form. One question per comment keeps the answer to it unambiguous, since issue comments have no threads.
+
+**The size bound.** GitHub refuses a comment body over 262,144 bytes of UTF-8, with a refusal text that says `65536 characters` and so misstates the unit (S6). A question file larger than 250,000 bytes is cut at its last whole line within that bound, which leaves room for the comment's own lines. The comment then names the file, `question_<n>.md`, in the run's `harness-state` artifact, where the whole question is. S6 measured the bound on an issue comment; on a pull request's conversation it is unverified.
+
+**The answer** is a new comment whose first line is `@sdlc-harness answer <n>` and whose following lines are the answer. This one answers question 2:
+
+```
+@sdlc-harness answer 2
+Keep the existing retry count of three.
+The new timeout applies only to the upload call.
+```
+
+- `<n>` may be left out when exactly one question is open; the question's comment says when that is so.
+- A short answer may follow the index on the first line, when nothing follows below it.
+- The answer is written byte for byte, a trailing carriage return stripped from each line, as untrusted task data: it is never run as a command.
+
+**One answer, one dispatch.** Each comment is one event, so each answer is sent as its own `resume: answer` dispatch carrying that one answer, and nothing holds state between comments. That is safe because a job whose park is not fully answered stops parked before it starts a session, and its bundle then carries the answer it was sent, so the job for the last answer finds the set complete. While questions remain open, the reply names them and the label stays `sdlc-harness: parked`. Once none remain, the reply says the run resumes and the label moves to `sdlc-harness: running`.
+
+**The refusals**, each a reply on the item that was commented on:
+
+| The run, or the comment | The reply's way on |
+|---|---|
+| held in a park loop | comment `@sdlc-harness clear` |
+| paused, its bundle expired included | comment `@sdlc-harness resume`, which restarts from the committed ledger |
+| a job in flight | send the answer again once that job finishes; nothing is queued behind it |
+| `<n>` is not an open question | the reply lists the open ones |
+| several questions open and no `<n>` | the reply lists the open ones |
+| an empty answer | send it again with the answer below the first line |
+| the dispatch payload over GitHub's 65,535-character `workflow_dispatch` inputs limit (S5) | shorten the answer, or commit the text to a file on the branch |
+
+A refused answer is refused rather than queued for the reason §1 gives: a newer pending run in the branch's concurrency group could cancel the job it waited behind.
+
+**The comment is a transport, not a second format.** The question and answer files stay the ones `plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Clarification channel — file format (canonical, single source of truth)` defines: the question comment carries `question_<n>.md` unchanged, and `control` writes the answer to `answer_<n>.md` before it dispatches. A park answered by `/autonomous-sdlc-harness:branch-answer` and one answered in a comment reach the run in the same shape.
+
+On a public repository a question comment and its answer are public, as the `harness-state` artifact already is ([`remote-execution.md`](remote-execution.md) → `## 11. Security`, *What a reader of the repository's Actions runs can see*).
+
+---
+
+## 4. The draft pull request
+
+**When it opens.** `deliver`, a step of `harness-run.yml` after the branch is pushed, opens a draft pull request from the branch to the default branch when the run completed, executes on GitHub, and the default branch's `harness.config.json` sets `forge` to `github`. An open pull request from the branch is reused and no second one is opened. The flow itself opens none and merges none, and `push-branch.sh` still opens none: the flow runs unchanged wherever it executes, and opening a pull request is a forge concern of the GitHub job. It is a draft so that marking it ready for review is a person's step.
+
+**The token.** The pull request is opened with the `HARNESS_GIT_TOKEN` secret when it is set, and otherwise with the job's own token.
+
+- With `HARNESS_GIT_TOKEN`, the repository's CI runs on the pull request without an approval click (S3). To open it, that token needs *Pull requests* write beside *Contents* write and, for workflow files, *Workflows* write as a fine-grained token, or `repo` plus `workflow` as a classic token ([`github-integration-research.md`](github-integration-research.md) → S2, **Consequence**). A token without that access opens no pull request, and the `completed` comment names `gh`'s error.
+- **What that costs.** A pull request opened with `HARNESS_GIT_TOKEN` is authored by the token's owner, and GitHub does not let a pull request's author request changes on their own pull request. So when the token is a person's own, that person cannot start a round from GitHub with *Request changes* (§2). This is GitHub's documented behaviour, not retrieved in [`github-integration-research.md`](github-integration-research.md). A solo maintainer sets the token of a machine account instead, or starts the round locally:
+
+  ```
+  /autonomous-sdlc-harness:branch-user-review
+  ```
+
+  Another reviewer with write access can still request changes on it.
+- With the job's own token, anyone with write access can request changes, and CI on the pull request waits for a person to select **Approve workflows to run** (S3). The job's token needs Settings → Actions → General → Workflow permissions → *Allow GitHub Actions to create and approve pull requests*, off by default for a new repository on a personal account and for a new organisation (S4, C3). With it off, the `completed` comment names that setting and `HARNESS_GIT_TOKEN`, and the branch's compare link for opening this one by hand.
+
+**The plain mention.** The body names the issue the run was started from as `Started from #<n>.`, never a closing keyword such as `Closes #<n>` or `Fixes #<n>`, because the flow does not own the issue's lifecycle: merging the pull request never closes the issue. A maintainer who wants that adds the keyword. The body also states that a review requesting changes starts a round and which `@sdlc-harness` commands act on it.
+
+**The one retry.** A draft that fails to open is retried once as a ready pull request, because drafts depend on the account's plan and the plan cannot be read from the job (C3; the fallback case is unmeasured). A refusal because of the Actions setting is not retried, since a ready pull request is refused the same way. A second failure is named in the `completed` comment with the compare link.
+
+**A locally executed run gets none.** Nothing new is required of an adopter who runs only locally: no secret, no setting, no pull request appearing unasked. A person may open one by hand from the branch; it is then recognised like any other pull request from the run's branch (§2, *Which pull requests count*) and receives the run's comments and labels.
+
+---
+
+## 5. Lifecycle comments and state labels
+
+**The target rule.** A lifecycle comment is posted on the run's recognised open pull request — one from the run's branch whose tip carries the flow-progress ledger (§2, *Which pull requests count*) — else on the issue the run was started from, read from the task prompt's provenance line, else nowhere. One rule means a team watches one place: the issue until there is a pull request, then the pull request. `completed` is the one event placed differently, as its row says, so that whoever watches the issue learns where the pull request is.
+
+| Event | Where it is posted | What it says | The next GitHub action | The label it sets |
+|---|---|---|---|---|
+| `launched` | the issue, as the trigger's own `started` comment | the branch and the run's URL | none; work the run with the §1 commands | `sdlc-harness: running` |
+| `parked` | the target, one comment per open question (§3) | the question whole, then the answer form | `@sdlc-harness answer <n>` | `sdlc-harness: parked` |
+| `park_loop` | the target | the run parked again and again without progress and is on hold | `@sdlc-harness clear` | `sdlc-harness: parked` |
+| `paused` | the target | the run paused, and why; a usage pause names the reset time | `@sdlc-harness resume`; for a usage pause none, since it resumes by itself after the reset | `sdlc-harness: paused` |
+| `resumed` | the target | the run resumed | none | `sdlc-harness: running` |
+| `failed` | the target | the run failed, and where its log is | on a pull request, a review that requests changes; on an issue, re-applying the trigger label, which starts a new run on the next indexed branch | `sdlc-harness: failed` |
+| `stopped` | the target | the run was stopped | a new review or trigger label starts another round or run | `sdlc-harness: stopped` |
+| a started round | the pull request | a user-review round started, and a `completed` comment follows | none; wait for `completed` | `sdlc-harness: running` |
+| `completed` | the issue, naming the new pull request; the pull request when there is no issue or it existed before this run; the issue alone when none could be opened | the run completed, and the pull request, or why it could not be opened | review the pull request; a review that requests changes starts another round. With `phases.qa` on, it also names the local `/autonomous-sdlc-harness:branch-qa-test` still owed | `sdlc-harness: done` |
+
+Every comment names its next action as something done on GitHub, never a slash command, except where the step has no GitHub form. A `failed` caused by stopping the run posts nothing, so it never overwrites `stopped`.
+
+**The budget is silent.** A run that reaches the hosted job's time budget pauses and continues in a chained job, and neither the pause nor the resume is posted: a chained continuation is not an event anyone acts on.
+
+**Push notifications are unchanged.** `autonomous-notify.sh` sends the same notifications as before, beside the comments; they still name the local slash command for each next action.
+
+**The state labels** are `sdlc-harness: running`, `sdlc-harness: parked`, `sdlc-harness: paused`, `sdlc-harness: done`, `sdlc-harness: failed` and `sdlc-harness: stopped`. Exactly one is kept on the issue and one on the pull request, each when known; every transition removes the others. The trigger sets `sdlc-harness: running` when it removes the trigger label. A label is created the first time the harness sets it. Do not apply them by hand: the next transition overwrites a hand-applied one, so it says nothing about the run.
+
+The labels let a team filter runs by state from the issue and pull-request lists without opening a comment. They are a view: the run list on GitHub is the authority on what a run is doing.

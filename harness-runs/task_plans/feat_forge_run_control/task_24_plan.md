@@ -54,3 +54,9 @@
 - `git grep -n -E '^## ' -- docs/github-run-control.md` lists `## 1.` through `## 5.` in order, and nothing else.
 - `git grep -n -i "closes #\|fixes #" -- docs/github-run-control.md` has its only hits in the sentence explaining why the body does not use a closing keyword.
 - The `## 5.` table has one row for each event Task 24's **Depends on** lists, and no other.
+
+**Deviations from plan:**
+
+- The plan places `completed` by the general target rule (pull request, else issue). `cli/templates/scripts/remote-run.sh` → `verb_deliver` posts it on the issue, naming the new pull request, when this run opened the pull request and an issue is known; on the pull request only when there is no issue or the pull request existed before the run; on the issue alone when none could be opened. Documented as the code does it, as the one exception to the target rule.
+- The plan says a token without the access "names `gh`'s error" in the `completed` comment. The code adds a separate case: a refusal matching `PR_CREATE_FORBIDDEN` (the Actions setting off) is not retried and its comment names the setting and `HARNESS_GIT_TOKEN` instead. Both are documented.
+- The `## 3.` refusals table adds two refusals the code carries and the plan omits: several questions open with no `<n>`, and an empty answer (`remote-run.sh` header → `control`'s `answer` arm).
