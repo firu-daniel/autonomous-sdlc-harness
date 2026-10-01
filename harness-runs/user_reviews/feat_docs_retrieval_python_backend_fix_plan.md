@@ -14,7 +14,7 @@
 
 Each entry resolves to a self-contained `harness-runs/user_reviews/feat_docs_retrieval_python_backend_fix_plan/finding_<K>.md` file via its `**Finding K**` reference (1-to-1 with the `### K. <title>` pointers below). Sorted "lowest blast-radius first" → "wider refactors last".
 
-1. [ ] **Finding 3** — Record in the README's `## The seam, as found` that the Postgres store holds one connection with no reconnect, so a dropped connection fails every later call. _(layer: general)_
+1. [x] **Finding 3** — Record in the README's `## The seam, as found` that the Postgres store holds one connection with no reconnect, so a dropped connection fails every later call. _(layer: general)_
 2. [ ] **Finding 4** — Add the entry-point deferred-work marker at the refresh-failure remedy in `service.py` → `answer`, and mark the README's wire difference as temporary. _(layer: general)_
 3. [ ] **Finding 5** — Make `fetch-models` refuse (exit 1) under the stub, as `docs fetch-models` does; update the README and `tests/test_self_check.py`. _(layer: general)_
 4. [ ] **Finding 2** — Add `store.py` → `driver_message` and use it in both `answer` failure texts so a driver error reaches the client on one line. _(layer: general)_
