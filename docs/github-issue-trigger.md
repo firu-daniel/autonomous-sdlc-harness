@@ -72,7 +72,7 @@ gh variable set HARNESS_TRIGGER_LABEL --body <label>
 gh variable set HARNESS_TRIGGER_ALLOWED_BOTS --body <bot login>,<bot login>
 ```
 
-**6. Check the setup.** `doctor`'s `forge` check reads local evidence only: it warns when remote execution is off, when the trigger workflow is absent, or when `origin/<default branch>` does not carry it. `--check-github` adds whether GitHub knows `harness-trigger.yml` and whether the trigger label exists, and notes every bot `HARNESS_TRIGGER_ALLOWED_BOTS` admits. Both answers appear in the `remote-github` check's report whatever else it reports, `pass`, `warn` or `fail`.
+**6. Check the setup.** `doctor`'s `forge` check reads local evidence only: it warns when remote execution is off, when the trigger workflow is absent, or when `origin/<default branch>` does not carry it. `--check-github` adds whether GitHub knows `harness-trigger.yml` and whether the trigger label exists, and notes every bot `HARNESS_TRIGGER_ALLOWED_BOTS` admits. Once `gh` is authenticated, both answers appear in the `remote-github` check's report whatever else it reports, `pass`, `warn` or `fail`. A `gh` that cannot run or reports no usable login stops that check before GitHub is asked about the trigger.
 
 ```
 npx autonomous-sdlc-harness doctor --check-github

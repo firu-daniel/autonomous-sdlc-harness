@@ -2562,8 +2562,10 @@ function retentionDaysOf(stdout: string): number | undefined {
  *   permission check. When the trigger does not apply, neither trigger read is made.
  * - the retention read refused (typically HTTP 403: the endpoint needs admin access) is a note too —
  *   the read is best-effort, and a collaborator without admin can still run remotely.
- * - both trigger answers positive is confirmed on **every** outcome, `fail` and `warn` included, so an
- *   unrelated finding never hides it; either answer not positive is already among the warnings.
+ * - both trigger answers positive is confirmed on every outcome that reaches the trigger reads, `fail`
+ *   and `warn` included, so an unrelated finding never hides it; either answer not positive is already
+ *   among the warnings. An outcome returned before those reads — `gh` not runnable, no usable login,
+ *   or no readable answer to the login probe — asks GitHub nothing about the trigger.
  *
  * **Why 30 days.** A parked run waits on a human answer and a usage-paused one on a reset, and the
  * `harness-state` bundle is the only remote copy of either; once the repository's retention expires
