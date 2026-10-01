@@ -10,13 +10,19 @@ stub value, an unreachable database — is raised before it starts.
 
 Departure from `server.ts`: after each call that searched, one stderr line carries the library-level
 `search_docs` duration, `TIMING_LINE_PREFIX` followed by the milliseconds to three decimals.
+
+Every outgoing message is serialized by `jscompat.json_stringify`, as the TypeScript SDK's transport
+does with `JSON.stringify`: the Python SDK's own `model_dump_json` refuses a lone surrogate, which a
+snippet cut inside a surrogate pair carries.
 """
 
 import asyncio
 import signal
 import sys
-from collections.abc import AsyncIterable
-from typing import Any
+from collections.abc import AsyncIterable, AsyncIterator
+from contextlib import asynccontextmanager
+from types import TracebackType
+from typing import Any, Self, cast
 
 import anyio
 from anyio.streams.memory import MemoryObjectSendStream
@@ -24,10 +30,11 @@ from mcp import types
 from mcp.server import ServerRequestContext
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
+from mcp.shared._stream_protocols import ReadStream, WriteStream  # typing only; no public export
 from mcp.shared.message import SessionMessage
 
 from harness_docs_retrieval import __version__
-from harness_docs_retrieval.jscompat import js_to_fixed, json_stringify_str
+from harness_docs_retrieval.jscompat import js_to_fixed, json_stringify, json_stringify_str
 from harness_docs_retrieval.service import (
     RetrievalSession,
     ServiceConfig,
@@ -83,6 +90,56 @@ def build_server(session: RetrievalSession) -> Server[Any]:
     )
 
 
+def _encode_outgoing(message: SessionMessage) -> str:
+    """One outgoing message as a line of the wire, without its newline."""
+    # The dump arguments are the ones the SDK's stdio writer passes to `model_dump_json`.
+    dumped = message.message.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return json_stringify(dumped)
+
+
+class _EncodedMessage:
+    """Stands in for the message model in the one call the SDK's stdio writer makes on it,
+    `model_dump_json`, so that writer, and the stdout descriptor it alone holds, stay in use."""
+
+    def __init__(self, line: str) -> None:
+        self._line = line
+
+    def model_dump_json(self, **_: object) -> str:
+        return self._line
+
+
+class _EncodingWriteStream:
+    def __init__(self, inner: WriteStream[SessionMessage]) -> None:
+        self._inner = inner
+
+    async def send(self, item: SessionMessage, /) -> None:
+        encoded = cast(types.JSONRPCMessage, _EncodedMessage(_encode_outgoing(item)))
+        await self._inner.send(SessionMessage(encoded, item.metadata))
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None:
+        await self.aclose()
+        return None
+
+
+@asynccontextmanager
+async def _stdio_transport() -> AsyncIterator[
+    tuple[ReadStream[SessionMessage | Exception], WriteStream[SessionMessage]]
+]:
+    async with stdio_server() as (read_stream, write_stream):
+        yield read_stream, _EncodingWriteStream(write_stream)
+
+
 async def _relay(
     source: AsyncIterable[SessionMessage | Exception],
     sink: MemoryObjectSendStream[SessionMessage | Exception],
@@ -120,7 +177,7 @@ async def serve_mcp(config: ServiceConfig) -> None:
             pass
         with anyio.CancelScope() as transport_scope:
             async with (
-                stdio_server() as (stdin_stream, write_stream),
+                _stdio_transport() as (stdin_stream, write_stream),
                 anyio.create_task_group() as relay_group,
             ):
                 relay_group.start_soon(_relay, stdin_stream, incoming_send)

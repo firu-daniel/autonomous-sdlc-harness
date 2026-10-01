@@ -156,9 +156,9 @@ The `DocStore` contract carried over method for method. **Every SQL statement `s
 - `tests/test_chunk_parity.py`: chunk keys and hashes;
 - `tests/test_stubs.py`: stub vectors and scores;
 - `tests/test_render_parity.py`: rendering;
-- `tests/test_mcp_parity.py`: tool listing and refusals.
+- `tests/test_mcp_parity.py`: tool listing and refusals, and the stdio encoding of an outgoing message, which writes a lone surrogate as `JSON.stringify` does.
 
-`tests/test_backend_parity_e2e.py` asserts that both servers render byte-identical `search_docs` output, with the stub models, over one corpus. It runs the TypeScript server on PGlite and this one on a real Postgres, so it needs the container gate. An engine-level divergence that case finds, such as tie order among equal scores or a different planner choice, is not a port defect to paper over. It belongs in this section.
+`tests/test_backend_parity_e2e.py` asserts that both servers render byte-identical `search_docs` output, with the stub models, over one corpus. A second case asks a query whose snippet ends in a lone surrogate over raw JSON-RPC lines and compares the parsed text, because the Python SDK's client cannot parse that escape from either server. It runs the TypeScript server on PGlite and this one on a real Postgres, so it needs the container gate. An engine-level divergence that case finds, such as tie order among equal scores or a different planner choice, is not a port defect to paper over. It belongs in this section.
 
 ## Testing
 

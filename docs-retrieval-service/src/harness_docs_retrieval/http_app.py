@@ -5,6 +5,9 @@ The rule this module exists to enforce: one search module, two entry points. `PO
 reaches search only through `service.answer()`, so its `text` is byte-identical to the MCP tool's
 for the same query, and it validates nothing but `mode`. `GET /health` reaches the store only
 through `session.probe()`, which takes `session.lock` itself, so the endpoint never takes it.
+
+Every `POST /search` body is serialized by `jscompat.json_stringify`: Starlette's `JSONResponse`
+refuses a lone surrogate, which a snippet cut inside a surrogate pair carries.
 """
 
 from collections.abc import AsyncIterator
@@ -13,8 +16,9 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
+from harness_docs_retrieval.jscompat import json_stringify
 from harness_docs_retrieval.search import SEARCH_MODES, SearchMode
 from harness_docs_retrieval.service import (
     RetrievalSession,
@@ -30,8 +34,12 @@ MODE_REFUSAL = f'search: "mode" must be one of {", ".join(SEARCH_MODES)}'
 BODY_REFUSAL = "search: the request body is not valid JSON"
 
 
-def _error(status: int, text: str) -> JSONResponse:
-    return JSONResponse({"error": text}, status_code=status)
+def _json(body: dict[str, Any], status: int = 200) -> Response:
+    return Response(json_stringify(body), status_code=status, media_type="application/json")
+
+
+def _error(status: int, text: str) -> Response:
+    return _json({"error": text}, status)
 
 
 def create_app(session: RetrievalSession) -> FastAPI:
@@ -47,7 +55,7 @@ def create_app(session: RetrievalSession) -> FastAPI:
     app = FastAPI(lifespan=lifespan)
 
     @app.post("/search")
-    async def search(request: Request) -> JSONResponse:
+    async def search(request: Request) -> Response:
         try:
             body: Any = await request.json()
         except ValueError:
@@ -68,7 +76,7 @@ def create_app(session: RetrievalSession) -> FastAPI:
             return _error(400, got.text)
         if got.is_error or got.result is None:
             return _error(500, got.text)
-        return JSONResponse(
+        return _json(
             {
                 "text": got.text,
                 "mode": mode,

@@ -6,6 +6,8 @@ Every expected literal is what Node v20.19.5 printed for the same JS expression,
 each case as `# JS: <expression>`, so a reviewer can re-derive it by running that expression.
 """
 
+import json
+
 import pytest
 
 from harness_docs_retrieval.jscompat import (
@@ -15,6 +17,7 @@ from harness_docs_retrieval.jscompat import (
     js_trim,
     js_trim_end,
     js_whitespace_runs,
+    json_stringify,
     json_stringify_str,
     utf16_len,
     utf16_slice,
@@ -103,6 +106,43 @@ def test_json_stringify_of_a_string() -> None:
     assert json_stringify_str(controls) == '"\\u0000\\u001f\\b\\t\\f\\r\\\\é/ "'
     assert json_stringify_str("\ud800x") == '"\\ud800x"'  # JS: JSON.stringify('\ud800x')
     assert json_stringify_str("😀") == '"😀"'  # JS: JSON.stringify('😀')
+
+
+def test_json_stringify_of_a_value() -> None:
+    # JS: JSON.stringify({ text: 'ab\ud83d...', n: 1.0, f: 0.5, z: -0, big: 1e21, small: 1e-7,
+    #   nan: NaN, inf: -Infinity, t: true, u: null, list: [1, 'é', '😀', false], 2: 'x' })
+    value = {
+        "text": "ab\ud83d...",
+        "n": 1.0,
+        "f": 0.5,
+        "z": -0.0,
+        "big": 1e21,
+        "small": 1e-7,
+        "nan": float("nan"),
+        "inf": float("-inf"),
+        "t": True,
+        "u": None,
+        "list": [1, "é", "😀", False],
+        "2": "x",
+    }
+    expected = (
+        '{"2":"x","text":"ab\\ud83d...","n":1,"f":0.5,"z":0,"big":1e+21,"small":1e-7,'
+        '"nan":null,"inf":null,"t":true,"u":null,"list":[1,"é","😀",false]}'
+    )
+    assert json_stringify(value) == expected
+
+
+def test_json_stringify_of_a_lone_surrogate_is_valid_utf8_json() -> None:
+    value = {"content": [{"type": "text", "text": "a" * 239 + "\ud83d..."}], "isError": False}
+    encoded = json_stringify(value)
+    encoded.encode("utf-8")
+    assert json.loads(encoded) == value
+
+
+@pytest.mark.parametrize("value", [{1: "x"}, {"a": object()}, b"bytes"])
+def test_json_stringify_refuses_what_is_not_a_json_value(value: object) -> None:
+    with pytest.raises(TypeError):
+        json_stringify(value)
 
 
 def test_object_keys_put_array_indices_first() -> None:

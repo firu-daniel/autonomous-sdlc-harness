@@ -2,7 +2,7 @@
 a call already in flight, so that call's refresh and search finish before the store closes, as
 `serveDocs` in `cli/src/retrieval/server.ts` awaits its queue before closing the session.
 
-The transport is an in-memory stream pair standing in for `stdio_server`, the session a
+The transport is an in-memory stream pair standing in for `_stdio_transport`, the session a
 `FakeSession` whose refresh waits to be released, and the signal a real `SIGTERM` to this process,
 handled by the loop handler `serve_mcp` installs. Event loops that take no signal handlers are not
 covered: the signal would end the test process instead.
@@ -74,7 +74,7 @@ def test_sigterm_lets_an_in_flight_call_finish_before_the_store_closes(
             return session
 
         monkeypatch.setattr(mcp_server, "open_session", fake_open_session)
-        monkeypatch.setattr(mcp_server, "stdio_server", fake_stdio_server)
+        monkeypatch.setattr(mcp_server, "_stdio_transport", fake_stdio_server)
         monkeypatch.setattr(mcp_server, "answer", recording_answer)
         config = ServiceConfig(repo_root="", corpus_config={}, database_url="")
 

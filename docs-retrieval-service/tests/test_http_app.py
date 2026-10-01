@@ -16,9 +16,11 @@ import httpx
 import pytest
 
 from fakes import FakeSession, InMemoryDocStore, doc_chunk
+from harness_docs_retrieval import http_app
 from harness_docs_retrieval.http_app import create_app
 from harness_docs_retrieval.refresh import RefreshResult
-from harness_docs_retrieval.service import answer
+from harness_docs_retrieval.search import SearchHit, SearchResult
+from harness_docs_retrieval.service import Answer, answer
 
 QUERY = "hybrid search fusion"
 
@@ -169,6 +171,29 @@ def test_a_refresh_failure_is_a_500() -> None:
             "run harness-docs-retrieval self-check in this repository"
         )
     }
+
+
+def test_a_snippet_ending_in_a_lone_surrogate_is_served(monkeypatch: pytest.MonkeyPatch) -> None:
+    # What `snippet_of` leaves when its cut splits a surrogate pair.
+    snippet = "a" * 239 + "\ud83d..."
+    hit = SearchHit(
+        ref="docs/a.md#cut", path="docs/a.md", anchor="cut", heading="Cut", snippet=snippet, score=1
+    )
+    result = SearchResult(abstained=False, hits=(hit,), best_rerank_score=None)
+    canned = Answer(
+        text=snippet, is_error=False, refused=False, result=result, notes=(), search_ms=0.5
+    )
+
+    async def canned_answer(*args: Any, **kwargs: Any) -> Answer:
+        return canned
+
+    monkeypatch.setattr(http_app, "answer", canned_answer)
+    response = _post(FakeSession(), {"query": QUERY})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["text"] == snippet
+    assert body["hits"][0]["snippet"] == snippet
 
 
 # --- GET /health ------------------------------------------------------------------------------

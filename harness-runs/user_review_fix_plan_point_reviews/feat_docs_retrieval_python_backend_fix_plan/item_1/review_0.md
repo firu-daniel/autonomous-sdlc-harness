@@ -1,0 +1,22 @@
+# general review — 1. A snippet ending in a lone surrogate cannot be serialized on either Python transport, where the TypeScript server answers — iteration 0
+
+## Must Fix
+1. **The new corpus file makes the existing byte-parity e2e test hang** — `docs-retrieval-service/tests/test_backend_parity_e2e.py` (`_corpus`) — "files[\"docs/lone-surrogate.md\"] = _lone_surrogate()"
+   `_corpus()` is shared by `test_both_backends_answer_byte_identically`, which asks every query through `mcp.Client`. The task file's own deviation says that client cannot parse a `\ud83d` escape and hangs the call. `docs/lone-surrogate.md`'s heading "Unspaced astral cut" shares the token `astral` with `SNIPPET_EDGES_QUERY` ("snippet edges whitespace astral boundary"), so that query's answer now carries the lone surrogate. Two scratch probes confirmed this by running it, not by reading:
+   - Each of the 20 calls from `_calls()` was sent over raw JSON-RPC to the real TypeScript server, with the fixture built from `_corpus()`. Exactly one answer carries the `lone-surrogate.md` hit with a lone surrogate: `{'query': 'snippet edges whitespace astral boundary'}` (`harness-runs/scratch/review_probe_main_corpus_test.py`, run with `bash scripts/python-service.sh test ../harness-runs/scratch/review_probe_main_corpus_test.py -s -q`, output `affected calls: 1`).
+   - `mcp.Client(ts_parameters).call_tool(SEARCH_TOOL_NAME, {"query": SNIPPET_EDGES_QUERY})` over the same fixture had not returned after 60 s and printed `timed out after 60 s (cancelled=True)` (`harness-runs/scratch/review_probe_client_snippet_edges_test.py`).
+   So once the container gate runs, the existing parity test hangs on the TypeScript side of that call, and nothing in `_compare` times it out. The unit replaced a passing test with a hanging one. The deviation "the existing queries' snippet-edges document is unchanged" did not stop the new document from reaching those queries' results.
+   **Fix:** Keep `docs/lone-surrogate.md` out of the corpus that `test_both_backends_answer_byte_identically` uses. For example, drop the line from `_corpus()` and have `test_both_backends_deliver_a_snippet_ending_in_a_lone_surrogate` build `{**_corpus(), "docs/lone-surrogate.md": _lone_surrogate()}`, or add a `lone_surrogate: bool = False` parameter to `_corpus`. Then re-run the TypeScript-side probe over the main test's corpus and confirm no call's answer fails `text.encode("utf-8")`.
+
+## Should Fix
+1. **No non-container case checks that `serve_mcp` actually uses the encoding transport** — `docs-retrieval-service/tests/test_mcp_shutdown.py` (`test_sigterm_lets_an_in_flight_call_finish_before_the_store_closes`) — "monkeypatch.setattr(mcp_server, \"_stdio_transport\", fake_stdio_server)"
+   `_encode_outgoing` and `_EncodingWriteStream` are each tested on their own (`test_mcp_parity.py`). The one test that runs `serve_mcp` now patches out `_stdio_transport` as a whole. If someone reverted `serve_mcp` to `stdio_server()`, or `_stdio_transport` stopped wrapping the write stream, every non-container case would still pass. Only the container-gated e2e would catch it.
+   **Fix:** Add a unit case that monkeypatches `mcp_server.stdio_server` with an in-memory pair, enters `_stdio_transport()`, and asserts that a `SessionMessage` sent through the yielded write stream arrives with `message.model_dump_json(by_alias=True, exclude_unset=True)` returning the `json_stringify` line.
+
+## Nice to Have
+1. **Import from a private SDK module** — `docs-retrieval-service/src/harness_docs_retrieval/mcp_server.py` — "from mcp.shared._stream_protocols import ReadStream, WriteStream"
+   `_stream_protocols` is underscore-private in the MCP SDK and could be renamed without notice. `uv.lock` pins it for now, and it is used only for type annotations.
+   **Fix:** Add a one-line comment saying it is used only for typing, or annotate with the anyio memory-stream types `stdio_server` already returns.
+2. **README's list of parity assertions does not mention the new wire-encoding cases** — `docs-retrieval-service/README.md` (`## The seam, as found`) — "`tests/test_mcp_parity.py`: tool listing and refusals."
+   `test_mcp_parity.py` now also checks the outgoing-message encoding. The e2e file now has a second test that compares parsed text over raw JSON-RPC instead of comparing bytes through `mcp.Client`.
+   **Fix:** Extend those two bullets by a clause each.

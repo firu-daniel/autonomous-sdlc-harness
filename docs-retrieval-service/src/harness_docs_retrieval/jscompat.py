@@ -163,6 +163,37 @@ def json_stringify_str(s: str) -> str:
     return "".join(out)
 
 
+def json_stringify(value: object) -> str:
+    """`JSON.stringify(value)` of a JSON-compatible value: `None`, `bool`, `int`, `float`, `str`,
+    a `list` or `tuple`, or a `dict` with `str` keys.
+
+    A number is the JS number it converts to, a non-finite one is `null`, and keys follow
+    `Object.keys` order. The result encodes to UTF-8 even when a string holds a lone surrogate.
+    """
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        number = float(value)
+        if not math.isfinite(number):
+            return "null"
+        return "0" if number == 0 else _js_number_to_string(number)
+    if isinstance(value, str):
+        return json_stringify_str(value)
+    if isinstance(value, list | tuple):
+        return "[" + ",".join(json_stringify(item) for item in value) + "]"
+    if isinstance(value, dict):
+        if not all(isinstance(key, str) for key in value):
+            raise TypeError("json_stringify: a dict key is not a str")
+        members = (
+            f"{json_stringify_str(key)}:{json_stringify(value[key])}"
+            for key in js_object_keys(list(value))
+        )
+        return "{" + ",".join(members) + "}"
+    raise TypeError(f"json_stringify: {type(value).__name__} is not a JSON value")
+
+
 def _is_array_index(key: str) -> bool:
     return _ARRAY_INDEX.fullmatch(key) is not None and int(key) <= _MAX_ARRAY_INDEX
 
