@@ -63,7 +63,8 @@
 #        positive-integer keys to strings, or an answer whose `question_<n>.md`
 #        is not at the top level of the previous bundle — nothing is restored
 #        and no answer is written. For discard, <dir> does not resolve
-#        strictly inside `<state_dir>/scratch/`, or is a symlink; nothing removed
+#        strictly inside `<state_dir>/scratch/`, is a symlink, or exists and
+#        is not a directory; nothing removed
 #     3  gh failed: not found, or a non-zero exit — the first line of gh's
 #        stderr is named. For poll: the listing or the disable failed. For
 #        pause-requested and run-created-at, also an answer that is not the
@@ -116,7 +117,8 @@
 # `discard` REMOVES THE DIRECTORY A COMMAND FETCHED INTO, so the command needs
 # no recursive `rm` of its own. It removes <dir> only when the library's
 # `hr_scratch_path_var` accepts it: strictly inside the checkout's
-# `<state_dir>/scratch/` and not a symlink (2 otherwise). A relative <dir>
+# `<state_dir>/scratch/`, not a symlink, and a directory when it exists
+# (2 otherwise). A relative <dir>
 # resolves against the caller's directory; the root is `--repo`, or else
 # `hr_repo_root` of the working directory, as for `restore`. No `gh` call and
 # no `execution.target` gate. A <dir> that does not exist is exit 0. It
@@ -3006,6 +3008,10 @@ verb_discard() {
   if [ ! -e "$HR_SCRATCH_TARGET" ]; then
     echo "remote-run.sh: $discard_dir does not exist; nothing removed"
     return 0
+  fi
+  if [ ! -d "$HR_SCRATCH_TARGET" ]; then
+    echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' is not a directory" >&2
+    exit "$EXIT_REFUSED"
   fi
   if ! rm -rf -- "$HR_SCRATCH_TARGET" || [ -e "$HR_SCRATCH_TARGET" ]; then
     echo "remote-run.sh: discard: removing '$discard_dir' failed" >&2

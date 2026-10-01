@@ -69,7 +69,7 @@
  * **For the commands' `discard`, the rule is that it removes a directory only when it resolves
  * strictly inside `<state_dir>/scratch/` and is not a symlink, and calls no `gh`**: every refused
  * path — the scratch directory itself, a sibling under the state directory, a `..`, an absolute path
- * outside the fixture, a symlink out of scratch — exits 2 with the fixture and the outside directory
+ * outside the fixture, a symlink out of scratch, or a file — exits 2 with the fixture and the outside directory
  * byte-identical, and a removed branch directory leaves `scratch/` listing as it did before.
  */
 
@@ -2082,7 +2082,7 @@ test('discard of a slash-bearing branch\'s folded directory leaves nothing under
   assert.deepEqual(calls(fx), []);
 });
 
-test('discard refuses every path not strictly inside scratch, or a symlink, with exit 2 and every byte unchanged', async (t) => {
+test('discard refuses every path not strictly inside scratch, or a symlink, or a file, with exit 2 and every byte unchanged', async (t) => {
   const fx = await remoteFixture(t);
   const outside = mkdtempSync(join(tmpdir(), 'remote-discard-'));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
@@ -2100,6 +2100,7 @@ test('discard refuses every path not strictly inside scratch, or a symlink, with
     `${SCRATCH}/../autonomous_logs`,
     outside,
     `${SCRATCH}/link`,
+    `${SCRATCH}/README.md`,
   ]) {
     const result = await remoteRun(fx, ['discard', target]);
     assert.equal(result.status, 2, `${target}: ${result.stderr}`);
