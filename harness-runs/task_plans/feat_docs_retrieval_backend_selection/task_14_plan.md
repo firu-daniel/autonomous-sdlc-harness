@@ -42,3 +42,9 @@
 - `git grep -n "retrieval-python-" -- docs/cli.md` shows the three ids in the §7 table and bullets, each spelled as Task 5 registers it.
 - Every adopter command added sits in a fenced block, one per line (the lessons ledger's fenced-command rule).
 - `docs/watcher.md`'s row keeps its four columns, and its `agentInvocable` column still reads `no`.
+
+**Deviations from plan:**
+
+- `docs/cli.md` → `## 7. \`doctor\``'s opening "Nothing is repaired and nothing is written" sentence also gained the `retrieval-python-index` exception, so the section's first statement of the no-write promise is not contradicted by the bullet the plan amends.
+- The two remedies the Python check bullets name that an adopter runs, `harness-docs-retrieval fetch-models` and `docker compose up -d --wait postgres`, sit in fenced blocks under their bullets (the lessons ledger's fenced-command rule); the install remedy is cited to `docs/retrieval.md` → `## Turning on the Python backend` rather than restated.
+- The `self-check` bullet also states that a failure prints the database's host, port and name and never its password, from `cli/src/doctor/checks.ts` → `databaseLocation`.
