@@ -35,3 +35,8 @@
 
 - `tests/test_refresh.py` passes (subject to the story index's test-run note).
 - `refresh.py` reads files only through `read_corpus_file`. `grep -n "open(" docs-retrieval-service/src/harness_docs_retrieval/refresh.py` finds nothing.
+
+**Deviations from plan:**
+
+- `tests/test_refresh.py passes` is deferred to the Run gates phase: no conventions document states a single-file Python test command (the story index's test-run note), so the file was not executed. Python lint (`ruff`) and type-check (`mypy`) were not run either, for the same reason; the 100-column limit was checked by `grep -nE '^.{101,}$'` over both targets, which finds nothing. The claim rests on reading, not execution.
+- The 70-chunk batch case adds a 70-section document to an already-built corpus, so the 70 chunks are "changed" (new keys) on the second refresh rather than on a first build.
