@@ -1268,7 +1268,15 @@ Passes when the `harness-control.yml` run for it is `skipped`. While (e)'s round
 gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text>"
 ```
 
-Passes when the reply names the run's state and says to submit again once it finishes, and no second `chore: add user review for <slug>` commit appears. Then, on the issue:
+Passes when the reply says the review was collected, with no `submit again`, and no second `chore: add user review for <slug>` commit appears while (e)'s round runs; then, once that round completes, the `harness-run.yml` run's `collect` job places `<slug>_review_2.md` carrying that review's body under `## Review by @<login>`, a `harness run <slug>` run follows, and the pull request carries the started-round comment naming the reviewer. Record the reply, the `collect` job's log and the round file verbatim.
+
+Once that round completes too, from a second account with write access, submit a review requesting changes at the same moment as the first account submits one:
+
+```
+gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text>"
+```
+
+Passes when one round file carries both `## Review by` sections and only one new `chore: add user review for <slug>` commit appears. Where only one account with write access exists, record this step as not run. Then, on the issue:
 
 ```
 gh issue comment <number> --repo <owner>/<scratch-repo> --body "@SDLC-HARNESS pause"
@@ -1284,7 +1292,7 @@ gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness st
 
 Passes when a reply names the actor, a `stopped` comment names the actor, and the label moves to `sdlc-harness: stopped`.
 
-**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); *A pull request's author cannot request changes on their own pull request*, by leg (e) where `HARNESS_GIT_TOKEN` was the reviewing account's own token; and *The whole chain on GitHub*, by the legs together.
+**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); *A pull request's author cannot request changes on their own pull request*, by leg (e) where `HARNESS_GIT_TOKEN` was the reviewing account's own token; *An artifact uploaded by a job is listable before its workflow run completes* and *The jobs API names a job with no `name:` key by its key, `run`*, by leg (f)'s round placed by the `collect` job; *A concurrency group spans workflows in one repository*, by leg (f) only where a review job of `harness-control.yml` and the `collect` job are listed pending or in progress at the same time, which the two workflows' `gh run list` outputs show; and *The whole chain on GitHub*, by the legs together.
 
 **Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set. Where (xiv) ran, close the round's pull request first, before any branch is deleted:
 

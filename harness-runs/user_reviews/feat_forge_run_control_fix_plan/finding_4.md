@@ -70,3 +70,11 @@ So a lost push stays a loud failure. `review` exits 4 and nothing is dispatched.
 - In **What it settles.**, add the three new §8 rows to the list of rows these legs settle.
 
 **Note for the implementer.** This finding contains no lessons-ledger or rule-document edits. The decision on the open question is recorded only in §2 of `docs/github-run-control.md`.
+
+**Deviations from plan:**
+
+- `general` layer: §2's opening paragraph said "The round is built from the review event alone", which Finding 2 made false; it now reads "Only the review event starts a round". The comment-listing sentence in **Why each comment carries its commit and hunk.** now names both paginated listings.
+- `general` layer: item 2's overlap, id check and legacy boundary went into their own paragraph, **Since the previous round, and never twice.**, which also states Finding 2's deviation that a comment belonging to a pending review is collected whatever its time. The §6 statement is its own paragraph, **Each author vouches for their own text.**
+- `general` layer: **How it is sent.** also states that `review` waits until GitHub lists the dispatched run (Finding 1, item 3); **A run in flight.** names each state's way on, as `control_review_in_flight` replies it.
+- `general` layer: the `queue: max` row in §8 gives "Nothing changes" as its *If it is wrong* consequence, since nothing rests on it.
+- `general` layer: in `docs/development.md` → **What it settles.**, *A concurrency group spans workflows in one repository* is settled by leg (f) only where a review job and the `collect` job are listed pending or in progress at the same time. Leg (f)'s steps do not force that overlap: the second review's job answers "collected" and ends before `collect` runs. The simultaneous-review step runs after the collected round completes, and the collected-round pass also asks for the reply, the `collect` job's log and the round file to be recorded.
