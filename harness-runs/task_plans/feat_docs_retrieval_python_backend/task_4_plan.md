@@ -28,3 +28,10 @@
 - `tests/test_chunk_parity.py` passes (subject to the story index's test-run note). If it fails on a real chunking difference, fix it in `chunk.py` or `jscompat.py`. If the difference traces to a Unicode-version disagreement between Node's `\p{L}` / `\p{N}` and Python's `unicodedata`, return a blocker naming the character and the file. Never filter the corpus or relax the comparison.
 - `grep -rn "cli/src" docs-retrieval-service/tests/ts_bridge.mjs` finds nothing. The bridge imports compiled `cli/dist` and the two named `.mjs` helpers only.
 - The bridge's `constants` output contains no value that is typed in `ts_bridge.mjs` as a literal.
+
+**Deviations from plan:**
+
+- `tests/test_chunk_parity.py` was **not run**: deferred to the Run gates phase, per the story index's test-run note (no conventions document states a single-file Python command). Python lint and type-check were likewise not run. An attempt to execute the parity comparison through a `scratch-run.sh` `.py` probe failed before comparing: the probe interpreter is `/usr/bin/python3` 3.9.6, and `jscompat.py`'s `int | None` annotation raises `TypeError` there. So the "passes" claim rests on nothing executed on the Python side.
+- What **was** executed: a `scratch-run.sh` `.mjs` probe spawned `ts_bridge.mjs` for every sub-command. `corpus fixture-catalog` and `corpus self-docs` exited 0 with seven-field chunk records; `constants` printed every value from its owner; `render`, `stub-models` (`hash-v1`) and `prepare-ts-fixture` (into two `mkdtemp` directories, removed afterwards) exited 0; an unknown sub-command, `corpus` with no id, and a `prepare-ts-fixture` path escaping `dir` each exited 1 with a `ts_bridge:` stderr line.
+- `ts_bridge.mjs` additionally refuses a `corpus` id outside the eval's `BUILT_IN_CORPORA`, and a `prepare-ts-fixture` file path that resolves outside `dir` (the plan's "creates nothing outside `dir` and `cacheHome`").
+- `test_chunk_parity.py` adds one assertion past the plan's: the ordered key sequence is equal on both sides, which catches a duplicated key that two equal key sets would hide. It strengthens the comparison and relaxes nothing.
