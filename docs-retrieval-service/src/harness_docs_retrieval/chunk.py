@@ -43,7 +43,7 @@ class DocChunk:
 
 
 _LINE_BREAK = re.compile(r"\r?\n")
-_ATX_HEADING = re.compile(r"(#{1,6})[ \t]+([^\n\r  ]*?)(?:[ \t]+#+)?[ \t]*\Z")
+_ATX_HEADING = re.compile(r"(#{1,6})[ \t]+([^\n\r\u2028\u2029]*?)(?:[ \t]+#+)?[ \t]*\Z")
 _FENCE_OPEN = re.compile(r" {0,3}(`{3,}|~{3,})")
 
 

@@ -28,7 +28,7 @@ Pass 2 found no per-unit review folder under `harness-runs/task_plan_point_revie
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom. The committing role flips each one to `[x]` as that fix's commit lands. Each entry resolves to `harness-runs/code_reviews/feat_docs_retrieval_python_backend_code_review/finding_<K>.md` through its `**Finding K**` reference. Entries are sorted from smallest and safest to the one that reaches the network.
 
 1. [x] **Finding 3** — Correct `run-gates.sh`'s header from "the other five automatable gates" to "the other six" _(layer: general)_
-2. [ ] **Finding 4** — Spell `JS_WHITESPACE` and `_ATX_HEADING`'s line-separator class with `\u` escapes instead of invisible literals _(layer: general)_
+2. [x] **Finding 4** — Spell `JS_WHITESPACE` and `_ATX_HEADING`'s line-separator class with `\u` escapes instead of invisible literals _(layer: general)_
 3. [ ] **Finding 2** — Record in `## The seam, as found` and in `store.py`'s departures that the index is one per database, not one per checkout _(layer: general)_
 4. [ ] **Finding 1** — Floor the `models` extra at `sentence-transformers>=4.0`, re-lock, and guard the locked version from `tests/test_lock.py` _(layer: general)_
 
