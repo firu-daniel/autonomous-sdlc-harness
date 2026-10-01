@@ -122,6 +122,23 @@ export const DEFAULT_TRIGGER_LABEL = 'sdlc-harness';
  */
 export const LEGACY_TRIGGER_LABEL = 'harness';
 
+const TRIGGER_FALLBACK_PATTERN = new RegExp(`\\(\\s*vars\\.${TRIGGER_LABEL_VARIABLE}\\s*\\|\\|\\s*'([^']+)'\\s*\\)`);
+
+/**
+ * The label a trigger workflow's text falls back to when {@link TRIGGER_LABEL_VARIABLE} is unset: the
+ * single-quoted literal of the first `(vars.HARNESS_TRIGGER_LABEL || '<label>')`, or `undefined` when
+ * no line carries one. Pure — the caller reads the file. It exists because the committed
+ * `harness-trigger.yml` carries no version pin and is never upgraded, so its own fallback, not
+ * {@link DEFAULT_TRIGGER_LABEL}, is what starts a run in a repository wired by an earlier release.
+ */
+export function triggerFallbackLabel(text: string): string | undefined {
+  for (const line of text.split(/\r?\n/)) {
+    const match = TRIGGER_FALLBACK_PATTERN.exec(line);
+    if (match !== null) return match[1];
+  }
+  return undefined;
+}
+
 /** Repository variable: comma-separated bot logins that may start a run; unset or empty admits none. */
 export const TRIGGER_ALLOWED_BOTS_VARIABLE = 'HARNESS_TRIGGER_ALLOWED_BOTS';
 

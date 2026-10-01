@@ -5790,20 +5790,25 @@ async function checkGithub(dir, stub, gh = stub.path) {
   return runCli(dir, ['doctor', '--check-github'], { [GH_CLI_VARIABLE]: gh });
 }
 
-/** The two reads the check adds when the issue trigger applies, answered apart from {@link GH_CALLS}. */
+/** The reads the check adds when the issue trigger applies, answered apart from {@link GH_CALLS}. */
 const TRIGGER_GH_CALLS = Object.freeze({
   trigger: ['workflow', 'view', 'harness-trigger.yml'],
+  control: ['workflow', 'view', 'harness-control.yml'],
   labels: ['label', 'list', '--json', 'name', '--limit', '1000'],
+  prSetting: ['api', 'repos/{owner}/{repo}/actions/permissions/workflow'],
 });
 
-/** Answer the trigger reads: the workflow known and a `sdlc-harness` label, then per-call overrides. */
+/** Answer the trigger reads: both workflows known, a `sdlc-harness` label and the pull-request setting on, then per-call overrides. */
 function answerTriggerGh(stub, overrides = {}) {
   const healthy = {
     trigger: { out: 'Harness trigger - harness-trigger.yml\n' },
+    control: { out: 'Harness control - harness-control.yml\n' },
     labels: { out: JSON.stringify([{ name: 'bug' }, { name: 'sdlc-harness' }]) },
+    prSetting: { out: JSON.stringify({ default_workflow_permissions: 'read', can_approve_pull_request_reviews: true }) },
   };
   for (const [call, args] of Object.entries(TRIGGER_GH_CALLS)) {
     const stem = join(stub.answers, ghAnswerKey(args));
+    mkdirSync(dirname(stem), { recursive: true });
     for (const [field, value] of Object.entries({ ...healthy[call], ...(overrides[call] ?? {}) })) {
       writeFileSync(`${stem}.${field}`, String(value));
     }
@@ -5959,7 +5964,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(reportLine(stderr, 'warn', 'remote-github'), undefined, stderr);
   });
 
-  await t.test('with forge absent it asks neither trigger read', async (subtest) => {
+  await t.test('with forge absent it asks none of the trigger reads', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);
     answerGh(stub);
@@ -5969,8 +5974,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const calls = ghInvocations(stub);
-    assert.ok(!calls.includes(TRIGGER_GH_CALLS.labels.join(' ')), calls.join('\n'));
-    assert.ok(!calls.includes(TRIGGER_GH_CALLS.trigger.join(' ')), calls.join('\n'));
+    for (const args of Object.values(TRIGGER_GH_CALLS)) assert.ok(!calls.includes(args.join(' ')), calls.join('\n'));
     assert.ok(!reportLine(stdout, 'pass', 'remote-github')?.includes('harness-trigger.yml'), stdout);
   });
 
@@ -5984,9 +5988,10 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('GitHub knows harness-trigger.yml and the label `sdlc-harness` exists'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists'), `${stdout}\n${stderr}`);
+    assert.ok(!line.includes('earlier release'), line);
     const calls = ghInvocations(stub);
-    assert.ok(calls.includes(TRIGGER_GH_CALLS.trigger.join(' ')) && calls.includes(TRIGGER_GH_CALLS.labels.join(' ')), calls.join('\n'));
+    for (const args of Object.values(TRIGGER_GH_CALLS)) assert.ok(calls.includes(args.join(' ')), calls.join('\n'));
   });
 
   await t.test('with the trigger on, a warning grade still carries the trigger confirmation', async (subtest) => {
@@ -6000,7 +6005,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
     assert.ok(line?.includes('HARNESS_PUSH_URL is not a repository secret'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('GitHub knows harness-trigger.yml and the label `sdlc-harness` exists'), line);
+    assert.ok(line.includes('GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists'), line);
   });
 
   await t.test('with the trigger on, a failing grade still carries the trigger confirmation', async (subtest) => {
@@ -6014,7 +6019,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 1, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'fail', 'remote-github');
     assert.ok(line?.includes('neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is a repository secret'), `${stdout}\n${stderr}`);
-    assert.ok(line.includes('GitHub knows harness-trigger.yml and the label `sdlc-harness` exists'), line);
+    assert.ok(line.includes('GitHub knows harness-trigger.yml and harness-control.yml, and the label `sdlc-harness` exists'), line);
   });
 
   await t.test('with the trigger on, an unknown harness-trigger.yml warns with the push', async (subtest) => {
@@ -6055,6 +6060,86 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stderr, 'warn', 'remote-github');
     assert.ok(line?.includes('cannot tell whether the label `sdlc-harness` exists'), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('with the trigger on, an unknown harness-control.yml warns with the push', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub);
+    answerTriggerGh(stub, { control: { err: 'could not find any workflows named harness-control.yml\n', status: 1 } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-github');
+    assert.ok(line?.includes('GitHub does not know harness-control.yml'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes("so comments and reviews start nothing: push .github/workflows/harness-control.yml to the repository's default branch"), line);
+    assert.ok(!line.includes('GitHub knows harness-trigger.yml'), line);
+  });
+
+  const prSettingOff = { prSetting: { out: JSON.stringify({ default_workflow_permissions: 'read', can_approve_pull_request_reviews: false }) } };
+
+  await t.test('with the trigger on, the pull-request setting off and no HARNESS_GIT_TOKEN warns naming the setting', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub);
+    answerTriggerGh(stub, prSettingOff);
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-github');
+    assert.ok(line?.includes('Allow GitHub Actions to create and approve pull requests is off and HARNESS_GIT_TOKEN is not a repository secret'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('Settings → Actions → General → Workflow permissions'), line);
+    assert.ok(line.includes('`gh secret set HARNESS_GIT_TOKEN`'), line);
+  });
+
+  await t.test('with the trigger on, the pull-request setting off and HARNESS_GIT_TOKEN set is a note', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    const names = ['CLAUDE_CODE_OAUTH_TOKEN', 'HARNESS_PUSH_URL', 'HARNESS_GIT_TOKEN'];
+    answerGh(stub, { secrets: { out: JSON.stringify(names.map((name) => ({ name }))) } });
+    answerTriggerGh(stub, prSettingOff);
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'remote-github');
+    assert.ok(line?.includes('a completed run opens its draft pull request with HARNESS_GIT_TOKEN'), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('with the trigger on, a refused pull-request-setting read is a not-checked note', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub);
+    answerTriggerGh(stub, { prSetting: { err: 'HTTP 403: Resource not accessible by integration\n', status: 1 } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'remote-github');
+    assert.ok(line?.includes('the pull-request setting was not checked: `gh api repos/{owner}/{repo}/actions/permissions/workflow` may need more access than this login has (it exited 1: HTTP 403'), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('with the trigger on and the variable unset, a committed workflow falling back to harness is asked about and noted', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    const trigger = join(dir, '.github', 'workflows', 'harness-trigger.yml');
+    const current = readFileSync(trigger, 'utf8');
+    const previousRelease = current.replace("(vars.HARNESS_TRIGGER_LABEL || 'sdlc-harness')", "(vars.HARNESS_TRIGGER_LABEL || 'harness')");
+    assert.notEqual(previousRelease, current, 'the fixture trigger workflow carries no sdlc-harness fallback');
+    writeFileSync(trigger, previousRelease);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub);
+    answerTriggerGh(stub, { labels: { out: JSON.stringify([{ name: 'harness' }]) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'remote-github');
+    assert.ok(line?.includes('and the label `harness` exists'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('was written by an earlier release and falls back to `harness`, which keeps starting runs'), line);
+    assert.ok(line.includes('init --force` re-renders it and the scripts to `sdlc-harness`'), line);
+    assert.ok(line.includes('setting HARNESS_TRIGGER_LABEL keeps a name of your choosing under either'), line);
   });
 
   await t.test('with the trigger on, HARNESS_TRIGGER_LABEL names the label and allowed bots are a note', async (subtest) => {

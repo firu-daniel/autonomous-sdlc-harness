@@ -41,6 +41,7 @@ import {
   WORKFLOW_TRIGGER_PATH,
   ghCli,
   runGh,
+  triggerFallbackLabel,
 } from '../dist/remote/githubActions.js';
 
 const scratch = mkdtempSync(join(tmpdir(), 'harness-remote-names-'));
@@ -104,6 +105,14 @@ test('remote-run.sh mirrors the two trigger labels byte for byte', () => {
   for (const line of [`DEFAULT_TRIGGER_LABEL='${DEFAULT_TRIGGER_LABEL}'`, `LEGACY_TRIGGER_LABEL='${LEGACY_TRIGGER_LABEL}'`]) {
     assert.ok(lines.includes(line), `remote-run.sh lacks the line ${line}`);
   }
+});
+
+test('triggerFallbackLabel reads the label a committed trigger workflow falls back to', () => {
+  const template = readFileSync(join(PACKAGE_ROOT, 'templates', 'github', 'workflows', WORKFLOW_TRIGGER_FILE), 'utf8');
+  assert.equal(triggerFallbackLabel(template), DEFAULT_TRIGGER_LABEL);
+  const previousRelease = "    if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.HARNESS_TRIGGER_LABEL || 'harness')\n";
+  assert.equal(triggerFallbackLabel(`jobs:\n  run:\n${previousRelease}`), LEGACY_TRIGGER_LABEL);
+  assert.equal(triggerFallbackLabel('on:\n  issues:\n    types: [labeled]\n'), undefined);
 });
 
 test('harness-run-lib.sh mirrors WORKFLOW_RUN_FILE and STATE_ARTIFACT_NAME byte for byte', () => {

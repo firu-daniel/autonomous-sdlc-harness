@@ -224,6 +224,7 @@ import {
   GH_CLI_VARIABLE,
   ghCli,
   GIT_TOKEN_SECRET,
+  LEGACY_TRIGGER_LABEL,
   OAUTH_TOKEN_SECRET,
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
@@ -232,6 +233,7 @@ import {
   RUNNER_VARIABLE,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_LABEL_VARIABLE,
+  triggerFallbackLabel,
   WORKFLOW_CONTROL_FILE,
   WORKFLOW_CONTROL_PATH,
   WORKFLOW_RESUME_FILE,
@@ -287,6 +289,14 @@ const REMOTE_RUN_SCRIPT = 'remote-run.sh';
  * YAML file spells this endpoint.
  */
 const ARTIFACT_RETENTION_ENDPOINT = 'repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention';
+
+/**
+ * The `gh api` path {@link REMOTE_GITHUB_CHECK} reads the *Allow GitHub Actions to create and approve
+ * pull requests* setting from — `can_approve_pull_request_reviews`. Local for
+ * {@link ARTIFACT_RETENTION_ENDPOINT}'s reason. A workflow's own token cannot read it; a person's `gh`
+ * usually can.
+ */
+const PR_SETTING_ENDPOINT = 'repos/{owner}/{repo}/actions/permissions/workflow';
 
 /** Below this many days of artifact retention {@link REMOTE_GITHUB_CHECK} warns; argued there. */
 const ARTIFACT_RETENTION_WARN_DAYS = 30;
@@ -2544,6 +2554,19 @@ function retentionDaysOf(stdout: string): number | undefined {
   return typeof days === 'number' && Number.isInteger(days) && days > 0 ? days : undefined;
 }
 
+/** The boolean `can_approve_pull_request_reviews` of a workflow-permissions answer, or `undefined` for any other shape. */
+function prApprovalSettingOf(stdout: string): boolean | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isJsonObject(parsed as JsonValue)) return undefined;
+  const allowed = (parsed as { readonly can_approve_pull_request_reviews?: unknown }).can_approve_pull_request_reviews;
+  return typeof allowed === 'boolean' ? allowed : undefined;
+}
+
 /**
  * What GitHub says about the remote setup — asked only under {@link CheckContext.probeGithub}.
  *
@@ -2556,19 +2579,27 @@ function retentionDaysOf(stdout: string): number | undefined {
  *   not know `harness-run.yml`; neither credential secret is set.
  * - `warn` — `HARNESS_PUSH_URL` absent; `harness-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
  *   set; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
- *   {@link forgeTriggerApplies}, `harness-trigger.yml` unknown to GitHub, or no label named by
- *   `HARNESS_TRIGGER_LABEL` (default {@link DEFAULT_TRIGGER_LABEL}); and any call that timed
- *   out, could not reach GitHub, or answered in a shape not understood — *cannot tell* is not
- *   *missing*, so it never fails.
+ *   {@link forgeTriggerApplies}, `harness-trigger.yml` or `harness-control.yml` unknown to GitHub, no
+ *   label by the effective trigger name, or the pull-request setting off with no `HARNESS_GIT_TOKEN`
+ *   secret; and any call that timed out, could not reach GitHub, or answered in a shape not
+ *   understood — *cannot tell* is not *missing*, so it never fails.
+ * - the effective trigger label is `HARNESS_TRIGGER_LABEL`, else the fallback the committed
+ *   `harness-trigger.yml` carries ({@link triggerFallbackLabel}), else {@link DEFAULT_TRIGGER_LABEL};
+ *   a fallback of {@link LEGACY_TRIGGER_LABEL} is a note, since it still starts runs.
  * - both credential secrets present is a note, not a finding: billing follows `ANTHROPIC_API_KEY`.
  * - a non-empty `HARNESS_TRIGGER_ALLOWED_BOTS` is a note naming the bots, which start runs without a
- *   permission check. When the trigger does not apply, neither trigger read is made.
+ *   permission check. When the trigger does not apply, no trigger, control or pull-request-setting
+ *   read is made.
  * - the retention read refused (typically HTTP 403: the endpoint needs admin access) is a note too —
- *   the read is best-effort, and a collaborator without admin can still run remotely.
- * - both trigger answers positive is confirmed on every outcome that reaches the trigger reads, `fail`
- *   and `warn` included, so an unrelated finding never hides it; either answer not positive is already
- *   among the warnings. An outcome returned before those reads — `gh` not runnable, no usable login,
- *   or no readable answer to the login probe — asks GitHub nothing about the trigger.
+ *   the read is best-effort, and a collaborator without admin can still run remotely. A refused
+ *   pull-request-setting read is a note on the same terms.
+ * - the pull-request setting off with `HARNESS_GIT_TOKEN` set is a note: `deliver` opens the pull
+ *   request with that token instead.
+ * - all three trigger answers positive — both workflows known and the label present — is confirmed on
+ *   every outcome that reaches the trigger reads, `fail` and `warn` included, so an unrelated finding
+ *   never hides it; any answer not positive is already among the warnings. An outcome returned before
+ *   those reads — `gh` not runnable, no usable login, or no readable answer to the login probe — asks
+ *   GitHub nothing about the trigger.
  *
  * **Why 30 days.** A parked run waits on a human answer and a usage-paused one on a reset, and the
  * `harness-state` bundle is the only remote copy of either; once the repository's retention expires
@@ -2678,10 +2709,29 @@ const REMOTE_GITHUB_CHECK: Check = {
       if (trigger.answer.kind === 'refused') {
         warnings.push(`GitHub does not know ${WORKFLOW_TRIGGER_FILE} (${trigger.call}: ${trigger.answer.why}), so labelling an issue starts nothing: push ${WORKFLOW_TRIGGER_PATH} to the repository's default branch`);
       }
+      const control = ask(['workflow', 'view', WORKFLOW_CONTROL_FILE]);
+      if (control.answer === undefined) return fail(noSpawn);
+      if (control.answer.kind === 'unknown') warnings.push(cannotTell(control.call, control.answer.why, `whether GitHub knows ${WORKFLOW_CONTROL_FILE}`));
+      if (control.answer.kind === 'refused') {
+        warnings.push(`GitHub does not know ${WORKFLOW_CONTROL_FILE} (${control.call}: ${control.answer.why}), so comments and reviews start nothing: push ${WORKFLOW_CONTROL_PATH} to the repository's default branch`);
+      }
 
       // The label's name is a repository variable, so an unread variable listing leaves nothing to compare.
       const configured = variableValues?.get(TRIGGER_LABEL_VARIABLE)?.trim() ?? '';
-      const labelName = configured === '' ? DEFAULT_TRIGGER_LABEL : configured;
+      let labelName = configured;
+      if (configured === '') {
+        // Unset, the committed workflow's own fallback starts a run; it is never re-rendered by an upgrade.
+        let committed: string | undefined;
+        try {
+          committed = triggerFallbackLabel(readFileSync(join(root, ...WORKFLOW_TRIGGER_PATH.split('/')), 'utf8'));
+        } catch {
+          committed = undefined;
+        }
+        labelName = committed ?? DEFAULT_TRIGGER_LABEL;
+        if (variableValues !== undefined && labelName === LEGACY_TRIGGER_LABEL) {
+          notes.push(`${WORKFLOW_TRIGGER_PATH} was written by an earlier release and falls back to \`${LEGACY_TRIGGER_LABEL}\`, which keeps starting runs; \`${CLI} init --force\` re-renders it and the scripts to \`${DEFAULT_TRIGGER_LABEL}\`, and setting ${TRIGGER_LABEL_VARIABLE} keeps a name of your choosing under either`);
+        }
+      }
       let labelFound = false;
       if (variableValues === undefined) {
         warnings.push(`cannot tell whether the trigger label exists: its name is the ${TRIGGER_LABEL_VARIABLE} variable, and ${variables.call} gave no readable answer`);
@@ -2703,7 +2753,27 @@ const REMOTE_GITHUB_CHECK: Check = {
           notes.push(`${TRIGGER_ALLOWED_BOTS_VARIABLE} admits ${nameList(bots)}, each of which can start a run without a permission check`);
         }
       }
-      if (trigger.answer.kind === 'answered' && labelFound) triggerKnown = `; GitHub knows ${WORKFLOW_TRIGGER_FILE} and the label \`${labelName}\` exists`;
+      if (trigger.answer.kind === 'answered' && control.answer.kind === 'answered' && labelFound) {
+        triggerKnown = `; GitHub knows ${WORKFLOW_TRIGGER_FILE} and ${WORKFLOW_CONTROL_FILE}, and the label \`${labelName}\` exists`;
+      }
+
+      const prSetting = ask(['api', PR_SETTING_ENDPOINT]);
+      if (prSetting.answer === undefined) return fail(noSpawn);
+      const settingName = 'Allow GitHub Actions to create and approve pull requests';
+      if (prSetting.answer.kind === 'unknown') {
+        warnings.push(cannotTell(prSetting.call, prSetting.answer.why, `whether a run's own token may open its pull request (${settingName})`));
+      } else if (prSetting.answer.kind === 'refused') {
+        notes.push(`the pull-request setting was not checked: ${prSetting.call} may need more access than this login has (${prSetting.answer.why})`);
+      } else {
+        const allowed = prApprovalSettingOf(prSetting.answer.stdout);
+        if (allowed === undefined) {
+          warnings.push(`cannot tell whether a run's own token may open its pull request: ${prSetting.call} answered in a shape this check does not read`);
+        } else if (!allowed && secretNames?.has(GIT_TOKEN_SECRET) === true) {
+          notes.push(`${settingName} is off, so a completed run opens its draft pull request with ${GIT_TOKEN_SECRET}`);
+        } else if (!allowed) {
+          warnings.push(`${settingName} is off and ${GIT_TOKEN_SECRET} is not a repository secret, so a completed run cannot open its draft pull request with the job's token: turn it on under Settings → Actions → General → Workflow permissions, or set ${GIT_TOKEN_SECRET} with \`gh secret set ${GIT_TOKEN_SECRET}\``);
+        }
+      }
     }
 
     const noted = notes.length > 0 ? `; ${notes.join('; ')}` : '';
