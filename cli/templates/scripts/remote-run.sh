@@ -26,20 +26,23 @@
 #   remote-run.sh review <branch> --review-file <file> [--repo <root>]
 #   remote-run.sh trigger [--repo <root>]   (its own exit map: its paragraph)
 #   remote-run.sh list [--repo <root>]
+#   remote-run.sh discard <dir> [--repo <root>]
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status and fetch: printed
 #        (for fetch, `state: none` included); for sync: the record is
 #        current (including "no run listed yet", which writes nothing); for
-#        restore: restored, or no previous bundle (or an expired one, with a
-#        `::warning::` line) under --resume none|pause;
+#        restore: restored, or no previous bundle of the branch's current
+#        lineage (or an expired one, with a `::warning::` line) under
+#        --resume none|pause;
 #        for save: ALWAYS, whatever happened; for continue: whatever it
 #        decided — every outcome a person must act on is a notification; for
 #        poll: the tick finished; for pause-requested: such a run exists; for
 #        run-created-at: printed; for review: placed, pushed and dispatched;
-#        for list: printed
+#        for list: printed; for discard: <dir> removed, or it did not exist
 #     1  usage error, or the library or the configuration could not be
 #        resolved; for fetch, <out_dir> is not an existing, empty directory;
+#        for discard, <dir>'s parent does not resolve or the removal failed;
 #        for sync and restore, a local copy or write failed; for
 #        pause-requested, also NO such run — a caller that reads 1 as "no
 #        pause" passes arguments it has already validated
@@ -53,12 +56,16 @@
 #        `github-actions`; the record's mirror working copy is missing, or a
 #        downloaded bundle is unrecognised (sync, restore, and status with no
 #        local record); the inputs payload is over the limit; a named answer
-#        file is missing. For restore under --resume answer, "nothing more":
-#        no previous bundle, the previous bundle expired (the message names
+#        file is missing (a relative --answers-from resolves against the
+#        caller's directory). For restore under --resume answer, "nothing more":
+#        no previous bundle of the branch's current lineage, the previous
+#        bundle expired (the message names
 #        its expiry and the resume command), `HARNESS_INPUT_ANSWERS` not an object of
 #        positive-integer keys to strings, or an answer whose `question_<n>.md`
 #        is not at the top level of the previous bundle — nothing is restored
-#        and no answer is written
+#        and no answer is written. For discard, <dir> does not resolve
+#        strictly inside `<state_dir>/scratch/`, is a symlink, or exists and
+#        is not a directory; nothing removed
 #     3  gh failed: not found, or a non-zero exit — the first line of gh's
 #        stderr is named. For poll: the listing or the disable failed. For
 #        pause-requested and run-created-at, also an answer that is not the
@@ -107,6 +114,16 @@
 #                    `<out_dir>/clarifications/<branch>/question_<n>.md` with
 #                    no `answer_<n>.md` beside it, ascending
 #   bundle_dir:      <out_dir> when a bundle was downloaded
+#
+# `discard` REMOVES THE DIRECTORY A COMMAND FETCHED INTO, so the command needs
+# no recursive `rm` of its own. It removes <dir> only when the library's
+# `hr_scratch_path_var` accepts it: strictly inside the checkout's
+# `<state_dir>/scratch/`, not a symlink, and a directory when it exists
+# (2 otherwise). A relative <dir>
+# resolves against the caller's directory; the root is `--repo`, or else
+# `hr_repo_root` of the working directory, as for `restore`. No `gh` call and
+# no `execution.target` gate. A <dir> that does not exist is exit 0. It
+# creates nothing and writes nothing else.
 #
 # `review` PLACES A USER REVIEW ROUND ON THE BRANCH TIP AND DISPATCHES IT, for
 # `/autonomous-sdlc-harness:branch-user-review` on a run that executes on
@@ -168,12 +185,15 @@
 #      `write` — `maintain` reads as `write` and `triage` as `read` there; a
 #      failed call is "could not confirm write access", never a pass
 # Then it fetches `origin <defaultBranch>` (a failure tolerated), derives the
-# branch with `hr_derive_branch <title> issue_<number>` (2 or 3 refused), writes
+# branch with `hr_derive_branch <title> issue_<number>`, passing `gh` so a name
+# with run-workflow history counts as taken (2 or 3 refused), writes
 # the snapshot — `# <title>`, the body's bytes, `---` and a provenance sentence
 # naming the issue, the labeller, the label and the time — and runs `start` as a
-# child. After a start it looks up the `harness run <branch>` run, at most
+# child. After a start it looks up the `harness run <branch>` run whose
+# `headSha` is the `origin/<branch>` commit `start` pushed, at most
 # `TRIGGER_RUN_LOOKUP_TRIES` times, falling back to the branch's filtered run
-# list, and comments the branch and that URL. Every comment is followed by
+# list, and comments the branch and that URL; the comment never names an older
+# run of the branch. Every comment is followed by
 # removing the label, so re-applying it is deliberate; a removal that fails is
 # one `::warning::` line.
 # A `repository_dispatch` reads `.action` (where GitHub puts the `event_type`)
@@ -232,7 +252,21 @@
 # with the exact bytes, after checking every entry first; and with
 # `HARNESS_INPUT_PARK_LOOP_CLEAR` exactly `true` it sets `park_loop_cycles` to
 # "0" in the restored `autonomous_logs/remote_status.json`. No bundle in any
-# run is an ordinary first job (exit 0, one line) except under --resume answer.
+# candidate run is an ordinary first job (exit 0, one line) except under
+# --resume answer, whose refusal names the current lineage.
+#
+# THE CANDIDATES ARE BOUNDED TO THE BRANCH'S CURRENT LINEAGE, so a branch
+# recreated under a reused name never restores an earlier, unrelated run's
+# bundle. The listing reads each run's `headSha`, and `lineage_commits_var`
+# lists `git rev-list refs/remotes/origin/<defaultBranch>..HEAD` in the job's
+# checkout; a run whose `headSha` is not among those commits, or that carries
+# none, is dropped before the walk, so the expired-bundle stop applies to
+# lineage runs only. When any was dropped it prints `skipped <n> finished
+# run(s) of <branch> from before its current lineage`. When the lineage cannot
+# be listed — the configuration unreadable, `origin/<defaultBranch>` not
+# present, or HEAD carrying no commit beyond it — every finished run is a
+# candidate, as before the bound, and it prints `the lineage of <branch> is
+# not bounded (<reason>); every finished run of it is a candidate`.
 #
 # `save` WRAPS `hr_remote_bundle_write` into <out_dir>, and with
 # `GITHUB_STEP_SUMMARY` set appends a Markdown table of the bundle's `status`,
@@ -481,7 +515,8 @@
 # `park_loop_cycles` rewrite of `remote_status.json`, all in the job's
 # checkout; for `save`, <out_dir> and the step summary; for `poll`, its
 # download directories and `<state_dir>/autonomous_logs/poll_state/previous/`
-# and `current/`. For `fetch`, <out_dir> only. `pause-requested`,
+# and `current/`. For `fetch`, <out_dir> only. For `discard`, the removal of
+# <dir> only. `pause-requested`,
 # `run-created-at`, `list` and `status` write nothing; a no-record `status`
 # downloads into a temporary directory it removes on exit.
 #
@@ -547,6 +582,10 @@
 #   fetch      t=$(mktemp -d); bash scripts/remote-run.sh fetch feat_x "$t"
 #              -> 0; prints `state: running` (or, with no run listed,
 #                 `state: none`), every other key present
+#   discard    mkdir -p sdlc-harness/scratch/branch-pause-feat_x, then
+#              bash scripts/remote-run.sh discard sdlc-harness/scratch/branch-pause-feat_x
+#              -> 0, the directory gone; discard sdlc-harness/autonomous_logs
+#              -> 2, nothing removed; no gh call either way
 #
 #   no record  with no registry, the "a bundle" stub below with question_1.md:
 #              bash scripts/remote-run.sh status feat_x -> 0; prints `state:
@@ -594,6 +633,13 @@
 #   first job  a `run list` answer with no finished run: --resume none -> 0;
 #              --resume answer -> 2
 #   own run    GITHUB_RUN_ID=<the bundle run's id> -> that run is skipped
+#   lineage    the checkout on feat_x one commit beyond origin/main, and a `run
+#              list` answer holding only an older completed run whose `headSha`
+#              is another commit: --resume none -> 0, prints `skipped 1 finished
+#              run(s) of feat_x from before its current lineage` and `this is
+#              its first job`, no `run download`
+#   own lineage  that same branch plus a newer completed run whose `headSha`
+#              is that commit -> that run's bundle is restored
 #   expired    the artifact list answering {"artifacts":[{"name":"harness-state",
 #              "expired":true,"expires_at":"2026-01-02T00:00:00Z"}]}: --resume
 #              pause -> 0, a `::warning::` line, no `run download`, no older
@@ -741,6 +787,7 @@ usage() {
   echo "       remote-run.sh review <branch> --review-file <file> [--repo <root>]" >&2
   echo "       remote-run.sh trigger [--repo <root>]" >&2
   echo "       remote-run.sh list [--repo <root>]" >&2
+  echo "       remote-run.sh discard <dir> [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -791,7 +838,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list) ;;
+  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -811,6 +858,8 @@ since_arg=""
 run_id_arg=""
 prompt_file=""
 review_file=""
+discard_dir=""
+discard_base=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -850,6 +899,9 @@ while [ "$#" -gt 0 ]; do
       if [ "$verb" = run-created-at ]; then
         [ -z "$run_id_arg" ] || usage "unexpected argument '$1'"
         run_id_arg="$1"
+      elif [ "$verb" = discard ]; then
+        [ -z "$discard_dir" ] || usage "unexpected argument '$1'"
+        discard_dir="$1"
       elif [ -z "$branch" ]; then
         branch="$1"
       elif [ "$verb" = pause-requested ] && [ -z "$since_arg" ]; then
@@ -866,8 +918,12 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$verb" != warm ] && [ "$verb" != poll ] && [ "$verb" != run-created-at ] && [ "$verb" != trigger ] \
-  && [ "$verb" != list ]; then
+  && [ "$verb" != list ] && [ "$verb" != discard ]; then
   valid_branch "$branch" || usage "$verb needs a <branch>"
+fi
+
+if [ "$verb" = discard ] && [ -z "$discard_dir" ]; then
+  usage "discard needs a <dir>"
 fi
 
 if [ "$verb" = pause-requested ]; then
@@ -953,7 +1009,8 @@ setup_fail() {
 if [ -n "$repo_arg" ]; then
   root=$(hr_repo_root "$repo_arg") || setup_fail "'$repo_arg' is not a git repository"
 elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ] \
-  || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ] || [ "$verb" = trigger ]; then
+  || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ] || [ "$verb" = trigger ] \
+  || [ "$verb" = discard ]; then
   root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
@@ -963,7 +1020,7 @@ hr_config_load "$root" || :
 registry=""
 status_no_record=0
 case "$verb" in
-  restore|save|continue|poll)
+  restore|save|continue|poll|discard)
     hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/harness.config.json'"
     ;;
   pause-requested|run-created-at)
@@ -1020,12 +1077,18 @@ case "$review_file" in
   ''|/*) ;;
   *) review_file="${PWD-.}/$review_file" ;;
 esac
+case "$answers_from" in
+  ''|/*) ;;
+  *) answers_from="${PWD-.}/$answers_from" ;;
+esac
 if [ "$verb" = fetch ]; then
   case "$out_dir" in
     /*) ;;
     *) out_dir="${PWD-.}/$out_dir" ;;
   esac
 fi
+# Kept apart from <dir>, so the library's character tests see it as typed.
+[ "$verb" != discard ] || discard_base="${PWD-.}"
 
 cd "$root" || setup_fail "cannot enter '$root'"
 
@@ -1542,26 +1605,71 @@ restore_refuse() {
   exit "$EXIT_REFUSED"
 }
 
+# lineage_commits_var <checkout> — the branch's current lineage, read from refs
+# alone: never a fetch, never gh, nothing on stdout. A run is of the current
+# lineage when its `headSha` is a commit reachable from HEAD and not from
+# `origin/<defaultBranch>`. The list is complete because `harness-run.yml`
+# checks out with `fetch-depth: 0`. It survives the branch's own history
+# edits because `refresh-branch.sh` merges and never rebases and
+# `push-branch.sh` never forces, so every own run's `headSha` stays an ancestor
+# of HEAD; a deleted, unmerged branch's commits are not ancestors of a branch
+# recreated under its name. An empty list leaves the lineage unbounded.
+# 0: LINEAGE_COMMITS holds the newline-separated full SHAs. 1: it is empty and
+# LINEAGE_WHY names the reason.
+LINEAGE_COMMITS=""
+LINEAGE_WHY=""
+lineage_commits_var() {
+  local checkout="${1-}" default
+  LINEAGE_COMMITS=""
+  LINEAGE_WHY=""
+  default=$(hr_default_branch "$checkout") && [ -n "$default" ] || {
+    LINEAGE_WHY="the configuration could not be read"
+    return 1
+  }
+  git -C "$checkout" rev-parse --verify --quiet "refs/remotes/origin/$default^{commit}" >/dev/null 2>&1 || {
+    LINEAGE_WHY="origin/$default is not present"
+    return 1
+  }
+  LINEAGE_COMMITS=$(git -C "$checkout" rev-list "refs/remotes/origin/$default..HEAD" 2>/dev/null) || LINEAGE_COMMITS=""
+  [ -n "$LINEAGE_COMMITS" ] || {
+    LINEAGE_WHY="HEAD carries no commit beyond origin/$default"
+    return 1
+  }
+  return 0
+}
+
 # previous_bundle_run — PREV_RUN_ID is the newest finished `harness run
 # <branch>` run, other than this job's own, carrying a state artifact, and
-# PREV_RUN_STATE is `present`, `expired` or empty when no run carries one. A
-# run with no artifact is walked past; an expired one stops the walk, because
+# PREV_RUN_STATE is `present`, `expired` or empty when no run carries one. When
+# `lineage_commits_var` bounds the lineage, a run whose `headSha` is not in it
+# (or that has none) is dropped before the walk and counted in LINEAGE_SKIPPED.
+# A run with no artifact is walked past; an expired one stops the walk, because
 # an older copy is staler state. Exits 3 when gh fails.
 PREV_RUN_ID=""
 PREV_RUN_STATE=""
+LINEAGE_SKIPPED=0
 previous_bundle_run() {
-  local ids id
+  local ids id out bounded=0
   PREV_RUN_ID=""
   PREV_RUN_STATE=""
+  LINEAGE_SKIPPED=0
+  lineage_commits_var "$root" && bounded=1
   gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" \
-    --json databaseId,displayTitle,status,createdAt --limit "$RUN_LIST_LIMIT" \
+    --json databaseId,displayTitle,status,createdAt,headSha --limit "$RUN_LIST_LIMIT" \
     || gh_fail "listing the runs of '$branch' failed"
-  ids=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" --arg self "${GITHUB_RUN_ID-}" '
-    [.[] | select(.displayTitle == $t and .status == "completed" and (.databaseId | tostring) != $self)]
-    | sort_by([.createdAt, .databaseId]) | reverse | .[].databaseId | tostring' 2>/dev/null) || {
+  # jq 1.5: membership by `any(gen; cond)`, not `index` / `IN`.
+  out=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" --arg self "${GITHUB_RUN_ID-}" \
+    --arg bounded "$bounded" --arg lineage "$LINEAGE_COMMITS" '
+    ($lineage | split("\n")) as $l
+    | [.[] | select(.displayTitle == $t and .status == "completed" and (.databaseId | tostring) != $self)] as $done
+    | [$done[] | select($bounded != "1" or ((.headSha // "") as $h | any($l[]; . == $h)))] as $kept
+    | ((($done | length) - ($kept | length)) | tostring),
+      ($kept | sort_by([.createdAt, .databaseId]) | reverse | .[].databaseId | tostring)' 2>/dev/null) || {
     GH_ERR="its run list is not the expected JSON"
     gh_fail "listing the runs of '$branch' failed"
   }
+  LINEAGE_SKIPPED=$(printf '%s\n' "$out" | head -n 1)
+  ids=$(printf '%s\n' "$out" | tail -n +2)
   for id in $ids; do
     bundle_state "$id"
     if [ "$BUNDLE_STATE" != none ]; then
@@ -1592,13 +1700,18 @@ verb_restore() {
   previous_bundle_run
   id="$PREV_RUN_ID"
   hr_remote_names_var
+  if [ -n "$LINEAGE_WHY" ]; then
+    echo "remote-run.sh: the lineage of $branch is not bounded ($LINEAGE_WHY); every finished run of it is a candidate"
+  elif [ "${LINEAGE_SKIPPED:-0}" -gt 0 ]; then
+    echo "remote-run.sh: skipped $LINEAGE_SKIPPED finished run(s) of $branch from before its current lineage"
+  fi
   if [ "$PREV_RUN_STATE" = expired ]; then
     [ "$resume" != answer ] \
       || restore_refuse "the state bundle of run $id expired on $BUNDLE_EXPIRES_AT, so its questions can no longer be answered here: resume from the committed ledger with $RESUME_HINT $branch, or re-drop the task; nothing written"
     echo "::warning::remote-run.sh: the state bundle of run $id expired on $BUNDLE_EXPIRES_AT: the park-loop, auto-resume and stall counts, the clarification history and any planning drafts not yet committed that it carried are lost; this job continues from the committed ledger"
   elif [ -z "$id" ]; then
     [ "$resume" != answer ] \
-      || restore_refuse "--resume answer, but no finished run of $branch carries a state bundle; nothing written"
+      || restore_refuse "--resume answer, but no finished run of $branch's current lineage carries a state bundle; nothing written"
     echo "remote-run.sh: no previous bundle for $branch; this is its first job"
   else
     download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$id") \
@@ -2623,19 +2736,23 @@ trigger_bot_listed() {
   return 1
 }
 
-# trigger_run_url — the URL of the `harness run <branch>` run `start` just
-# dispatched, looked up at most TRIGGER_RUN_LOOKUP_TRIES times; the branch's
-# filtered run list when none appears. Never fails.
+# trigger_run_url <sha> — the URL of the `harness run <branch>` run whose
+# `headSha` is <sha>, the commit `start` just pushed, looked up at most
+# TRIGGER_RUN_LOOKUP_TRIES times; the branch's filtered run list when none
+# appears, and at once when <sha> is empty. Never fails. Matched on `headSha`
+# rather than a `createdAt` bound: the SHA identifies this dispatch exactly and
+# reads no runner clock, where a time bound still admits an unrelated run
+# created in the same second.
 trigger_run_url() {
-  local try=1 secs url=""
+  local sha="${1-}" try=1 secs url=""
   secs="${HARNESS_TRIGGER_LOOKUP_SECS-}"
   case "$secs" in
     ''|*[!0-9]*) secs="$TRIGGER_LOOKUP_SECS_DEFAULT" ;;
   esac
-  while :; do
-    if gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json url,displayTitle --limit 5; then
-      url=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" \
-        '[.[]? | select(.displayTitle == $t) | .url | strings] | first // empty' 2>/dev/null) || url=""
+  while [ -n "$sha" ]; do
+    if gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json url,displayTitle,headSha --limit 5; then
+      url=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" --arg s "$sha" \
+        '[.[]? | select(.displayTitle == $t and .headSha == $s) | .url | strings] | first // empty' 2>/dev/null) || url=""
       [ -z "$url" ] || break
     else
       echo "remote-run.sh: trigger: looking up the run of $branch failed: $GH_ERR" >&2
@@ -2652,7 +2769,7 @@ trigger_run_url() {
 verb_trigger() {
   local LC_ALL=C
   local action label title body html_url state login sender_type source=""
-  local forge="" target="" default name_file status permission prompt errfile last url
+  local forge="" target="" default name_file status permission prompt errfile last url sha
   local fallback retry_then retry_again task_what
   case "${GITHUB_EVENT_NAME-}" in
     issues) trigger_source=issue ;;
@@ -2775,7 +2892,7 @@ verb_trigger() {
   name_file=$(mktemp "$trigger_tmp/harness-trigger-branch.XXXXXX") || trigger_refuse \
     "the branch name could not be derived (mktemp failed)." "$retry_again"
   status=0
-  hr_derive_branch "$root" "$title" "$fallback" >"$name_file" || status=$?
+  hr_derive_branch "$root" "$title" "$fallback" "" "$GH" >"$name_file" || status=$?
   branch=""
   IFS= read -r branch <"$name_file" || :
   rm -f "$name_file"
@@ -2833,7 +2950,10 @@ $last
 $retry_again" ;;
   esac
 
-  url=$(trigger_run_url)
+  # The ref `start`'s `hr_push_landed` confirmed equal to the pushed `HEAD`;
+  # `start_remove_copy` deletes only the local branch.
+  sha=$(git -C "$root" rev-parse --verify --quiet "refs/remotes/origin/$branch^{commit}") || sha=""
+  url=$(trigger_run_url "$sha")
   if [ "$trigger_source" = issue ]; then
     echo "remote-run.sh: trigger: started $branch from issue #$issue_number: $url"
     trigger_finish "$EXIT_OK" "Started a harness run on the branch \`$branch\`: $url
@@ -2844,6 +2964,65 @@ The task is this issue's title and body as they were when the label \`$trigger_l
   trigger_finish "$EXIT_OK" "Started a harness run on the branch \`$branch\`: $url
 
 The task is the dispatch's \`client_payload\` title and body. Sending the same dispatch again starts another run, on the next indexed branch."
+}
+
+# ---------------------------------------------------------------------------
+# `discard` — remove a directory a command fetched into, inside scratch only.
+# ---------------------------------------------------------------------------
+
+# The removal lives here rather than in the command because a supervised or
+# auto-mode session may refuse a recursive `rm` the agent types, and a
+# user-level `rm -rf` deny cannot be overridden (`.claude/context/
+# conventions.md` -> `## Shell assets`). The scope is the scratch directory
+# only, per the lessons ledger's rule that a script "never removes one it did
+# not create": scratch holds only throwaway files a session itself wrote. Containment is `hr_scratch_path_var`'s alone; this verb
+# maps its status and acts on `HR_SCRATCH_TARGET`. It never creates anything.
+verb_discard() {
+  local status
+  hr_scratch_path_var "$root" "$discard_dir" "$discard_base"
+  status=$?
+  case "$status:$HR_SCRATCH_WHY" in
+    0:*) ;;
+    1:dotdot)
+      echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' carries '..'" >&2
+      exit "$EXIT_REFUSED" ;;
+    1:charset)
+      echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' carries a character a scratch path may not" >&2
+      exit "$EXIT_REFUSED" ;;
+    1:itself)
+      echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' is the scratch directory itself" >&2
+      exit "$EXIT_REFUSED" ;;
+    1:symlink)
+      echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' is a symlink" >&2
+      exit "$EXIT_REFUSED" ;;
+    1:*)
+      echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' is not inside '$HR_SCRATCH_DIR/'" >&2
+      exit "$EXIT_REFUSED" ;;
+    2:*)
+      echo "remote-run.sh: discard: the parent directory of '$discard_dir' cannot be resolved; nothing removed" >&2
+      exit "$EXIT_USAGE" ;;
+    3:no-scratch)
+      echo "remote-run.sh: discard: the state directory's scratch/ under '$root' does not exist; nothing removed" >&2
+      exit "$EXIT_USAGE" ;;
+    3:*)
+      echo "remote-run.sh: cannot resolve '$root/harness.config.json'" >&2
+      exit "$EXIT_USAGE" ;;
+    *)
+      usage "discard needs a <dir>" ;;
+  esac
+  if [ ! -e "$HR_SCRATCH_TARGET" ]; then
+    echo "remote-run.sh: $discard_dir does not exist; nothing removed"
+    return 0
+  fi
+  if [ ! -d "$HR_SCRATCH_TARGET" ]; then
+    echo "remote-run.sh: discard refused, nothing removed: '$discard_dir' is not a directory" >&2
+    exit "$EXIT_REFUSED"
+  fi
+  if ! rm -rf -- "$HR_SCRATCH_TARGET" || [ -e "$HR_SCRATCH_TARGET" ]; then
+    echo "remote-run.sh: discard: removing '$discard_dir' failed" >&2
+    exit "$EXIT_USAGE"
+  fi
+  echo "remote-run.sh: removed $discard_dir"
 }
 
 case "$verb" in
@@ -2864,5 +3043,6 @@ case "$verb" in
   review) verb_review ;;
   trigger) verb_trigger ;;
   list) verb_list ;;
+  discard) verb_discard ;;
 esac
 exit "$EXIT_OK"

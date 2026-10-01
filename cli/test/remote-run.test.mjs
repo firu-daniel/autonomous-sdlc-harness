@@ -20,7 +20,12 @@
  * previous job's bundle — never its own run's — and an answer lands with its exact bytes or not at
  * all**: every answer is checked against a top-level `question_<n>.md` before any is written, and
  * `save` exits 0 whatever it met. An uncommitted planning draft crosses a job boundary only into a
- * job checkout, and never over a file that checkout already has.
+ * job checkout, and never over a file that checkout already has. **A previous job is one of the
+ * branch's current lineage**: a run whose `headSha` is not a commit of `origin/<defaultBranch>..HEAD`
+ * is never restored, so a branch recreated under a reused name is a first job, while a resume, a
+ * user-review round or a chain on the branch's own commits still restores its own bundle; a checkout
+ * with no commit beyond `origin/<defaultBranch>` — every fixture that commits nothing — selects
+ * unbounded and says so. The lineage cases commit on a local `feat_x` in the fixture itself.
  *
  * **For `continue` and `poll`, the rule is that a re-dispatch carries the bundle's own `chain` plus
  * one, and nothing is sent for a branch that is stopped, under `HARNESS_REMOTE_STOP`, or at the chain
@@ -60,11 +65,17 @@
  * those cases push to the fixture's bare `origin`, as `remote-start.test.mjs` does. The bootstrap
  * sentinel is a `commands.depInstall` writing a marker outside the copy, because the copy itself is
  * removed before the case can look in it.
+ *
+ * **For the commands' `discard`, the rule is that it removes a directory only when it resolves
+ * strictly inside `<state_dir>/scratch/` and is not a symlink, and calls no `gh`**: every refused
+ * path — the scratch directory itself, a sibling under the state directory, a `..`, an absolute path
+ * outside the fixture, a symlink out of scratch, or a file — exits 2 with the fixture and the outside directory
+ * byte-identical, and a removed branch directory leaves `scratch/` listing as it did before.
  */
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -138,6 +149,12 @@ async function remoteFixture(t, target = 'github-actions') {
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target };
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  // `init`'s first commit is not a descendant of the seeded origin, so it would read as a lineage of its
+  // own; with `origin/<defaultBranch>` at HEAD, `restore` selects unbounded as it did before the bound.
+  const head = await runGit(dir, ['rev-parse', '--verify', '--quiet', 'HEAD']);
+  if (head.status === 0) {
+    await runGit(dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${config.defaultBranch}`]);
+  }
 
   // Beside the fixture's state directory, which is gitignored, so the stub is never part of a snapshot.
   const stubDir = join(dir, STATE_DIR, 'stub');
@@ -215,6 +232,22 @@ test('a named answer file that is missing exits 2 and sends nothing', async (t) 
   ]);
   assert.equal(result.status, 2, result.stderr);
   assert.deepEqual(calls(fx), []);
+});
+
+test('a relative --answers-from resolves against the caller\'s directory, not the main checkout', async (t) => {
+  const fx = await remoteFixture(t);
+  const sub = join(fx.dir, 'caller');
+  mkdirSync(join(sub, 'answers'), { recursive: true });
+  writeFileSync(join(sub, 'answers', 'answer_1.md'), 'Use B.\n');
+  const result = await runBash(sub, [join(fx.dir, SCRIPT),
+    'dispatch', 'feat_x', '--engine', 'task', '--resume', 'answer',
+    '--answers-from', 'answers', '--indexes', '1',
+  ], { HARNESS_GH_CLI: fx.stub, STUB_LOG: fx.log });
+  assert.equal(result.status, 0, result.stderr);
+  const [argv] = calls(fx);
+  const answersArgs = argv.filter((arg) => arg.startsWith('answers='));
+  assert.equal(answersArgs.length, 1, 'expected exactly one answers input');
+  assert.equal(execFileSync('jq', ['-j', '.["1"]'], { input: answersArgs[0].slice('answers='.length), encoding: 'utf8' }), 'Use B.\n');
 });
 
 test('execution.target local exits 2 and sends nothing, for every verb', async (t) => {
@@ -320,7 +353,7 @@ const REMOTE_LOG = `${STATE_DIR}/autonomous_logs/feat_x.remote.log`;
 const runUrl = (id) => `https://github.com/o/r/actions/runs/${id}`;
 
 /** One `gh run list` entry; `createdAt` orders runs, as GitHub's own list does. */
-function ghRun(id, status, minute, title = 'harness run feat_x') {
+function ghRun(id, status, minute, title = 'harness run feat_x', headSha = undefined) {
   return {
     databaseId: id,
     displayTitle: title,
@@ -328,6 +361,7 @@ function ghRun(id, status, minute, title = 'harness run feat_x') {
     conclusion: status === 'completed' ? 'success' : null,
     createdAt: `2026-01-01T00:${String(minute).padStart(2, '0')}:00Z`,
     url: runUrl(id),
+    ...(headSha === undefined ? {} : { headSha }),
   };
 }
 
@@ -687,7 +721,7 @@ test('restore places the previous bundle in job mode on --resume none', async (t
   assert.equal(readFileSync(mirror(fx, 'question_1.md'), 'utf8'), 'r question_1.md\n');
   assert.equal(readFileSync(join(fx.dir, WALKER), 'utf8'), 'r walker\n');
   assert.equal(JSON.parse(readFileSync(join(fx.dir, REMOTE_STATUS), 'utf8')).status, 'parked');
-  assert.ok(joined(fx)[0].includes('--json databaseId,displayTitle,status,createdAt '), joined(fx)[0]);
+  assert.ok(joined(fx)[0].includes('--json databaseId,displayTitle,status,createdAt,headSha '), joined(fx)[0]);
   assert.deepEqual(downloads(fx), [`run download 401 -n harness-state -D ${join(fx.dir, STATE_DIR, 'autonomous_logs/remote_download/feat_x/401')}`]);
 });
 
@@ -756,6 +790,122 @@ test('restore never selects the current GITHUB_RUN_ID', async (t) => {
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(downloads(fx).map((line) => line.split(' ')[2]), ['501']);
   assert.equal(readFileSync(join(fx.dir, WALKER), 'utf8'), 'old walker\n');
+});
+
+/** A commit no lineage in these fixtures carries: an earlier, unrelated branch of the same name. */
+const FOREIGN_SHA = '0123456789abcdef0123456789abcdef01234567';
+const LINEAGE_PROMPT = `${STATE_DIR}/task_prompts/feat_x_task_prompt.md`;
+const LINEAGE_DRAFT = `${STATE_DIR}/story_plans/feat_x_story_plan.md`;
+
+/**
+ * A remote fixture adopted on `origin/<defaultBranch>` and checked out on a local `feat_x` carrying
+ * `commits` commits beyond it, the first a task prompt; returns their SHAs, oldest first.
+ */
+async function lineageFixture(t, commits) {
+  const fx = await remoteFixture(t);
+  const { dir } = fx;
+  const { defaultBranch } = JSON.parse(readFileSync(join(dir, 'harness.config.json'), 'utf8'));
+  await runGit(dir, ['add', '-A']);
+  await runGit(dir, ['commit', '--quiet', '-m', 'fixture: adopt the harness']);
+  await runGit(dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${defaultBranch}`]);
+  const tracking = await runGit(dir, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${defaultBranch}`]);
+  if (tracking.status !== 0) await runGit(dir, ['fetch', '--quiet', 'origin', defaultBranch]);
+  await runGit(dir, ['checkout', '--quiet', '-b', 'feat_x']);
+  const shas = [];
+  for (let i = 0; i < commits; i += 1) {
+    const file = i === 0 ? LINEAGE_PROMPT : `${STATE_DIR}/task_prompts/feat_x_note_${i}.md`;
+    mkdirSync(dirname(join(dir, file)), { recursive: true });
+    writeFileSync(join(dir, file), `# feat_x ${i}\n`);
+    await runGit(dir, ['add', '--force', file]);
+    await runGit(dir, ['commit', '--quiet', '-m', i === 0 ? 'chore: add task prompt for feat_x' : `fixture: commit ${i}`]);
+    shas.push((await runGit(dir, ['rev-parse', 'HEAD'])).stdout.trim());
+  }
+  return { ...fx, defaultBranch, shas };
+}
+
+/** A job bundle that also carries a planning draft, so a restore of it would place one. */
+function plannedBundle(fx, name) {
+  const dir = jobBundle(fx, name);
+  mkdirSync(join(dir, 'planning', 'story_plans'), { recursive: true });
+  writeFileSync(join(dir, 'planning', 'story_plans', 'feat_x_story_plan.md'), `${name} draft\n`);
+  return dir;
+}
+
+test('restore on a recreated branch skips the earlier lineage\'s run: a first job, and a refusal under answer', async (t) => {
+  const fx = await lineageFixture(t, 1);
+  const env = {
+    ...syncEnv({
+      runs: [ghRun(601, 'completed', 1, 'harness run feat_x', FOREIGN_SHA)],
+      artifacts: { 601: ['harness-state'] },
+      bundles: { 601: plannedBundle(fx, 'stale') },
+    }),
+    GITHUB_RUN_ID: '999',
+  };
+  const none = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'none'], env);
+  assert.equal(none.status, 0, none.stderr);
+  assert.match(none.stdout, /skipped 1 finished run\(s\) of feat_x from before its current lineage/);
+  assert.match(none.stdout, /this is its first job/);
+  assert.deepEqual(downloads(fx), []);
+  assert.equal(existsSync(join(fx.dir, REMOTE_STATUS)), false);
+  assert.equal(existsSync(join(fx.dir, LINEAGE_DRAFT)), false);
+  assert.equal(existsSync(join(fx.dir, WALKER)), false);
+
+  const answer = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'answer'], { ...env, HARNESS_INPUT_ANSWERS: JSON.stringify({ 1: 'x' }) });
+  assert.equal(answer.status, 2, answer.stderr);
+  assert.match(answer.stderr, /no finished run of feat_x's current lineage carries a state bundle/);
+  assert.deepEqual(downloads(fx), []);
+  assert.equal(existsSync(mirror(fx, 'answer_1.md')), false);
+});
+
+test('restore of a branch resumed in its own lineage downloads exactly its own run', async (t) => {
+  const fx = await lineageFixture(t, 1);
+  const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'pause'], {
+    ...syncEnv({
+      runs: [ghRun(602, 'completed', 2, 'harness run feat_x', fx.shas[0]), ghRun(601, 'completed', 1, 'harness run feat_x', FOREIGN_SHA)],
+      artifacts: { 601: ['harness-state'], 602: ['harness-state'] },
+      bundles: { 601: jobBundle(fx, 'stale'), 602: jobBundle(fx, 'own') },
+    }),
+    GITHUB_RUN_ID: '999',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(downloads(fx).map((line) => line.split(' ')[2]), ['602']);
+  assert.equal(readFileSync(join(fx.dir, WALKER), 'utf8'), 'own walker\n');
+  assert.equal(readFileSync(mirror(fx, 'question_1.md'), 'utf8'), 'own question_1.md\n');
+  assert.doesNotMatch(result.stdout, /first job/);
+});
+
+test('restore selects a run dispatched on an earlier own commit of a branch with two', async (t) => {
+  const fx = await lineageFixture(t, 2);
+  const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'pause'], {
+    ...syncEnv({
+      runs: [ghRun(701, 'completed', 1, 'harness run feat_x', fx.shas[0])],
+      artifacts: { 701: ['harness-state'] },
+      bundles: { 701: jobBundle(fx, 'first') },
+    }),
+    GITHUB_RUN_ID: '999',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(downloads(fx).map((line) => line.split(' ')[2]), ['701']);
+  assert.equal(readFileSync(join(fx.dir, WALKER), 'utf8'), 'first walker\n');
+  assert.doesNotMatch(result.stdout, /skipped/);
+});
+
+test('restore with HEAD at origin/<defaultBranch> selects unbounded and says so', async (t) => {
+  const fx = await lineageFixture(t, 0);
+  const result = await remoteRun(fx, ['restore', 'feat_x', '--resume', 'none'], {
+    ...syncEnv({
+      runs: [ghRun(801, 'completed', 1, 'harness run feat_x', FOREIGN_SHA)],
+      artifacts: { 801: ['harness-state'] },
+      bundles: { 801: jobBundle(fx, 'any') },
+    }),
+    GITHUB_RUN_ID: '999',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(result.stdout.includes(
+    `the lineage of feat_x is not bounded (HEAD carries no commit beyond origin/${fx.defaultBranch}); every finished run of it is a candidate`,
+  ), result.stdout);
+  assert.deepEqual(downloads(fx).map((line) => line.split(' ')[2]), ['801']);
+  assert.equal(readFileSync(join(fx.dir, WALKER), 'utf8'), 'any walker\n');
 });
 
 const EXPIRES_AT = '2026-01-02T00:00:00Z';
@@ -897,9 +1047,9 @@ async function saveJob(fx) {
 }
 
 /** Serve `out` as run 401's `harness-state` to `fx`, whose job is run 999, and restore it. */
-function restoreFrom(fx, out) {
+function restoreFrom(fx, out, headSha = undefined) {
   return remoteRun(fx, ['restore', 'feat_x', '--resume', 'pause'], {
-    ...syncEnv({ runs: [ghRun(401, 'completed', 1)], artifacts: { 401: ['harness-state'] }, bundles: { 401: out } }),
+    ...syncEnv({ runs: [ghRun(401, 'completed', 1, 'harness run feat_x', headSha)], artifacts: { 401: ['harness-state'] }, bundles: { 401: out } }),
     GITHUB_RUN_ID: '999',
   });
 }
@@ -957,7 +1107,9 @@ test('restore keeps a planning file the fresh checkout already carries, and repo
   await runGit(b.dir, ['add', '--force', STORY_INDEX]);
   await runGit(b.dir, ['commit', '--quiet', '-m', 'story index']);
 
-  const restored = await restoreFrom(b, out);
+  // That commit is beyond origin/<defaultBranch>, so run 401 must carry it as its headSha to be of the lineage.
+  const head = (await runGit(b.dir, ['rev-parse', 'HEAD'])).stdout.trim();
+  const restored = await restoreFrom(b, out, head);
   assert.equal(restored.status, 0, restored.stderr);
   assert.match(restored.stdout, /placed 0 planning file\(s\) for feat_x; kept 1/);
   assert.equal(readFileSync(join(b.dir, STORY_INDEX), 'utf8'), 'committed on the branch\n');
@@ -1900,4 +2052,86 @@ test('review of a branch with no earlier round places round 1', async (t) => {
   const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile], finishedEnv(fx, 'failed'));
   assert.equal(result.status, 0, result.stderr);
   assert.equal((await runGit(fx.origin, ['show', `refs/heads/feat_x:${REVIEW_DIR}/feat_x_review.md`])).stdout, REVIEW_BYTES);
+});
+
+// ---------------------------------------------------------------------------
+// discard — the commands' removal of a directory they fetched into.
+// ---------------------------------------------------------------------------
+
+const SCRATCH = `${STATE_DIR}/scratch`;
+
+test('discard removes a nested directory under scratch with its files, and calls nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const target = `${SCRATCH}/branch-answer-feat_x`;
+  mkdirSync(join(fx.dir, target, 'clarifications', 'feat_x'), { recursive: true });
+  writeFileSync(join(fx.dir, target, 'status.json'), '{}\n');
+  writeFileSync(join(fx.dir, target, 'clarifications', 'feat_x', 'question_1.md'), 'q\n');
+
+  const result = await remoteRun(fx, ['discard', target]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, new RegExp(`removed ${target}`));
+  assert.equal(existsSync(join(fx.dir, target)), false);
+  assert.equal(existsSync(join(fx.dir, SCRATCH)), true, 'the scratch directory itself was removed');
+  assert.deepEqual(calls(fx), []);
+});
+
+test('discard of an absent directory exits 0 with the does-not-exist line, under any execution.target', async (t) => {
+  const fx = await remoteFixture(t, 'local');
+  const before = await snapshotTree(fx.dir, { exclude: ['.git', 'stub'] });
+  const result = await remoteRun(fx, ['discard', `${SCRATCH}/branch-pause-feat_x`]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /branch-pause-feat_x does not exist; nothing removed/);
+  assert.deepEqual(await snapshotTree(fx.dir, { exclude: ['.git', 'stub'] }), before);
+  assert.deepEqual(calls(fx), []);
+});
+
+test('discard of a slash-bearing branch\'s folded directory leaves nothing under scratch', async (t) => {
+  const fx = await remoteFixture(t);
+  const before = readdirSync(join(fx.dir, SCRATCH)).sort();
+  const target = `${SCRATCH}/branch-pause-feat_recent_searches_panel`;
+  mkdirSync(join(fx.dir, target), { recursive: true });
+  writeFileSync(join(fx.dir, target, 'status.json'), '{}\n');
+
+  const result = await remoteRun(fx, ['discard', target]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(readdirSync(join(fx.dir, SCRATCH)).sort(), before);
+  assert.deepEqual(calls(fx), []);
+});
+
+test('discard refuses every path not strictly inside scratch, or a symlink, or a file, with exit 2 and every byte unchanged', async (t) => {
+  const fx = await remoteFixture(t);
+  const outside = mkdtempSync(join(tmpdir(), 'remote-discard-'));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  writeFileSync(join(outside, 'keep.txt'), 'keep\n');
+  symlinkSync(outside, join(fx.dir, SCRATCH, 'link'));
+  mkdirSync(join(fx.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+  writeFileSync(join(fx.dir, STATE_DIR, 'autonomous_logs', 'keep.log'), 'keep\n');
+  const fixtureBefore = await snapshotTree(fx.dir, { exclude: ['.git', 'stub'] });
+  const outsideBefore = await snapshotTree(outside);
+
+  for (const target of [
+    SCRATCH,
+    `${SCRATCH}/.`,
+    `${STATE_DIR}/autonomous_logs`,
+    `${SCRATCH}/../autonomous_logs`,
+    outside,
+    `${SCRATCH}/link`,
+    `${SCRATCH}/README.md`,
+  ]) {
+    const result = await remoteRun(fx, ['discard', target]);
+    assert.equal(result.status, 2, `${target}: ${result.stderr}`);
+    assert.match(result.stderr, /nothing removed/, target);
+  }
+  assert.deepEqual(await snapshotTree(fx.dir, { exclude: ['.git', 'stub'] }), fixtureBefore);
+  assert.deepEqual(await snapshotTree(outside), outsideBefore);
+  assert.deepEqual(calls(fx), []);
+});
+
+test('discard with no <dir>, or with two, is a usage error that calls nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  for (const args of [['discard'], ['discard', `${SCRATCH}/a`, `${SCRATCH}/b`]]) {
+    const result = await remoteRun(fx, args);
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}`);
+  }
+  assert.deepEqual(calls(fx), []);
 });

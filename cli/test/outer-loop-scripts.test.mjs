@@ -898,8 +898,8 @@ function assertContextEstablished(status, stderr) {
 
 /**
  * Every path the runner must refuse, with the substring its message has to carry: the reason, never
- * a helper name — the script defines none, and its refusal contract is one `scratch-run.sh: <reason>`
- * line on stderr followed by a non-zero exit.
+ * a helper name. The path test is the shared library's `hr_scratch_path_var`, and the refusal contract
+ * still names no helper: one `scratch-run.sh: <reason>` line on stderr followed by a non-zero exit.
  */
 const REFUSED = [
   ['a path in another state directory', [`${STATE_DIR}/story_plans/x.py`], /outside/],
@@ -912,6 +912,7 @@ const REFUSED = [
   ['an extension the interpreter table does not carry', [`${SCRATCH_DIR}/x.pl`], /no interpreter for extension/],
   ['a shell script, the extension the table omits on purpose', [`${SCRATCH_DIR}/x.sh`], /no interpreter for extension/],
   ['no argument at all', [], /no file argument/],
+  ['the scratch directory itself', [`${SCRATCH_DIR}/.`], /scratch directory itself/],
 ];
 
 test('the scratch runner refuses every path that is not a file inside the scratch directory', async (t) => {

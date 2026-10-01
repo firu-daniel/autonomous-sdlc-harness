@@ -1,0 +1,12 @@
+# Review plan meta-review — iteration 0
+
+## Must Fix
+1. **The `plugin` layer is touched, but the review shows no check drawn from `.claude/context/plugin.md`** — refers to "Structure" (missed check). Offending file: the index, `harness-runs/code_reviews/fix_forge_trigger_run_lineage_code_review.md` (its `## Context` section).
+   The diff changes four files under the `plugin` layer's path (`plugin/commands/branch-answer.md`, `branch-pause.md`, `branch-resume.md`, `branch-user-review.md`). Each one gains new `<branch_fold>` / `<scratch>` tokens, a re-worded `<scripts_dir>` row in `## Resolved values` that now cites the `discard` verb, a scratch sequence written as literal commands (`mkdir -p <scratch>`, `bash <scripts_dir>/remote-run.sh discard <scratch>`), and a rewritten closing scope fence. None of the four findings targets a `plugin` file. The Context paragraph only lists "the four `branch-*` commands' scratch-directory sequence" among the things reviewed. It gives no clean-pass rationale tied to any rule in `.claude/context/plugin.md`, or to the cross-layer rules that document says the layer depends on. The other two touched layers each have a check drawn from their document: `cli` has Findings 3 and 4 plus the suite-coverage paragraph, and `general` has Findings 1 and 2. For `plugin` the review says nothing, so a reader cannot tell whether that layer's rules were applied or skipped.
+   **Fix:** In the index's `## Context`, add one paragraph with an explicit clean-pass rationale for the `plugin` layer, citing the rules it checked. At minimum cover these:
+   - `.claude/context/plugin.md` → `## The sections an asset carries` and `## The placeholder vocabulary`: the new `<branch_fold>` / `<scratch>` tokens are declared where each command's resolved-values preamble says they are, and each `<scripts_dir>` row's verb list matches the verbs the body actually invokes.
+   - `.claude/context/plugin.md` → `## Wires: dispatch in, return out`: the `discard` verb, its arguments and its quoted exit behaviour agree with `cli/templates/scripts/remote-run.sh` → `verb_discard`.
+   - `.claude/context/conventions.md` → `## Shell assets`: no recursive `rm`, and every new command can be spelled as a literal.
+   - `.claude/context/plugin.md` → `## What this layer is`: no adopter value appears as a literal.
+
+   If any of these checks fails, write it as a new `finding_5.md` with a site anchor, add its `### 5.` pointer under the right severity section, and add a readiness entry tagged `_(layer: plugin)_`. Do not add a clean-pass sentence for it.

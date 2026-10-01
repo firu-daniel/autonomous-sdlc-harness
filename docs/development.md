@@ -744,7 +744,7 @@ The findings:
 2. `doctor --check-github` reports that GitHub knows `harness-trigger.yml` and that the label exists only when `remote-github` passes outright, so any other warning on that check hides it, and (xiii)'s setup condition cannot be met without every remote secret set.
 3. `/autonomous-sdlc-harness:branch-pause`'s GitHub route makes its temporary directory with `mktemp -d`; in an auto-mode session the composed `$(mktemp -d)` command and the `rm -rf` of the directory, outside the repository, were both refused, and the session fell back to `rmdir`.
 
-All three are carried to a follow-up fix. The trigger's lookup-bound row in `docs/github-issue-trigger.md` → `## 7. What is not verified here` is settled for a branch with no run history and moved to *Verified in Gate 12 round 5*; the rest of that table stands.
+All three are carried to a follow-up fix. For finding 1, `fix_forge_trigger_run_lineage` bounded `restore`'s previous-bundle pick to runs whose `headSha` is in the branch's current lineage, made the trigger comment's lookup match the run whose `headSha` is the commit `start` pushed, and counted a name's run history as taken when deriving a branch name — *not yet re-observed; leg (d) records it*. For finding 2, it made `remote-github` carry the trigger workflow and label answers on every outcome, not only on a pass — *not yet re-observed; (xiii)'s setup records it*. For finding 3, it moved `/autonomous-sdlc-harness:branch-pause`'s fetch into a scratch directory under `<stateDir>/scratch/` that `remote-run.sh discard` removes — *not yet re-observed; leg (c) records it*. The trigger's lookup-bound row in `docs/github-issue-trigger.md` → `## 7. What is not verified here` is settled for a branch with no run history and moved to *Verified in Gate 12 round 5*; the rest of that table stands.
 
 What still owes a first recording: (v)'s enable and its in-progress artifact listing; (vii), (ix) and (x); (xi)'s convergence and the `/autonomous-sdlc-harness:branch-answer` command itself; (xii)'s last leg on a real release after the one under test; and (xiii)'s run to "branch ready for review", its machine-off condition and its leg (b) refusal.
 
@@ -944,7 +944,7 @@ Record too whether that job's session `init` record names the plugin path under 
 
 On the release after `<version>`, drop one more task in the same repository, its workflows still rendered for `<version>`. Passes when the job installs `<version>` while `main` carries the newer version, and runs. Record the installed version and the run id.
 
-**(xiii) An issue label starts a run with the machine off.** It observes the issue trigger end to end (`docs/github-issue-trigger.md`), and settles that document's `## 7. What is not verified here` rows on labelling an issue with the machine off, on the permission API's answer for a triage user, and on the lookup bound `TRIGGER_RUN_LOOKUP_TRIES`. On the scratch repository, turn the trigger on:
+**(xiii) An issue label starts a run with the machine off.** It observes the issue trigger end to end (`docs/github-issue-trigger.md`), and settles that document's `## 7. What is not verified here` rows on labelling an issue with the machine off, on the permission API's answer for a triage user, and on the lookup bound `TRIGGER_RUN_LOOKUP_TRIES`; it also settles the `headSha` row that `docs/github-issue-trigger.md` → `## 7.` and `docs/remote-execution.md` → `## 6.` carry. On the scratch repository, turn the trigger on:
 
 ```
 npx --yes autonomous-sdlc-harness@<version> config set forge github
@@ -1020,12 +1020,12 @@ gh api "repos/<owner>/<scratch-repo>/contents/<stateDir>/task_prompts/<slug>_tas
 
 `<slug>` is the branch the comment names. Passes when, and record each verbatim:
 
-- within the lookup bound, the issue carries one comment naming `<slug>` and a `harness run <slug>` run URL, and the label is gone;
+- within the lookup bound, the issue carries one comment naming `<slug>` and the URL of the `harness run <slug>` run whose `headSha` is `origin/<slug>`'s tip, and the label is gone;
 - `origin/<slug>` carries one commit `chore: add task prompt for <slug>`, whose prompt is the issue's title and body plus the provenance line;
 - the run reaches "branch ready for review", with a `completed` notification where `HARNESS_PUSH_URL` is set;
 - editing the issue after labelling changes nothing in the committed prompt.
 
-Then three legs, each passing on its own condition.
+Then four legs, each passing on its own condition.
 
 **(a) A second issue with the same title.** Open it and label it as above. Passes when its comment names `<slug>_2`. Record the comment.
 
@@ -1047,9 +1047,60 @@ Record whether it answered `read`, which settles research T3's unmeasured row.
 /autonomous-sdlc-harness:branch-pause <slug>
 ```
 
-Passes when `/autonomous-sdlc-harness:branch-status` prints the run's state from GitHub with no local record; `/autonomous-sdlc-harness:branch-pause` produces a `harness pause <slug>` run the job finds; and no registry record, no sibling working copy and no `deps.marker` appear on the machine. Record the status output, the pause output and the job-log line where the pause was found.
+Passes when `/autonomous-sdlc-harness:branch-status` prints the run's state from GitHub with no local record; `/autonomous-sdlc-harness:branch-pause` produces a `harness pause <slug>` run the job finds; no registry record, no sibling working copy and no `deps.marker` appear on the machine; and after the command no `<stateDir>/scratch/branch-pause-<slug>/` directory remains and nothing else is new under `<stateDir>/scratch/`. `<slug>` is its own fold, because the derived name holds only characters the fold rule in `<stateDir>/scratch/README.md` keeps. Record the status output, the pause output and the job-log line where the pause was found.
 
-**Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set. Where (xiii) ran, delete the trigger label with `gh label delete harness` and the issues the round created with `gh issue delete <number>`, and unset `forge` before the seed reset by removing its key from `harness.config.json` by hand, since `config` has no verb that unsets a key (`docs/cli.md` → ``## 8. `config` ``). Then return the scratch repository to its seed rather than deleting it, so the next round starts from the same tree: delete each run's branch on the remote, reset the default branch to the seed commit and force-push it with `--no-verify`, and remove each run's local worktree. The next round's setup skips `gh repo create` and starts at the first `init`.
+**(d) A name with run history.** Run it after leg (a), once `<slug>_2`'s runs have all finished. Stop the run leg (a) started, then list its runs:
+
+```
+bash <scriptsDir>/remote-run.sh stop <slug>_2
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>_2 --json databaseId,displayTitle,status
+```
+
+Repeat the listing until every `harness run <slug>_2` entry has `status` `completed`. A stopped run is `completed` with conclusion `cancelled`, and `restore` counts it as a finished run. Then delete `<slug>_2`'s remote branch:
+
+```
+git push --no-verify origin --delete <slug>_2
+```
+
+1. Open a third issue with the same title and apply the label, as above. Read the outcome:
+
+   ```
+   gh issue view <number> --repo <owner>/<scratch-repo> --comments
+   ```
+
+   ```
+   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>_3 --json databaseId,headSha,url
+   ```
+
+   ```
+   git ls-remote origin <slug>_3
+   ```
+
+   Passes when the comment names `<slug>_3` and the URL of a run whose `headSha` is the commit `git ls-remote` shows.
+2. From the machine, start the deleted name explicitly:
+
+   ```
+   bash <scriptsDir>/remote-run.sh start <slug>_2 --prompt-file <file>
+   ```
+
+   Read that job's log:
+
+   ```
+   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>_2 --json databaseId,headSha,url
+   ```
+
+   ```
+   gh run view <run id> --repo <owner>/<scratch-repo> --log
+   ```
+
+   Passes when its `Restore the previous job's state` step logs `remote-run.sh: skipped <n> finished run(s) of <slug>_2 from before its current lineage` and `remote-run.sh: no previous bundle for <slug>_2; this is its first job`, logs no `placed <n> planning file(s)` line, and its session does not say it is resuming a plan draft.
+
+Record the comment, both `gh run list` outputs and the restore step's log verbatim.
+
+**Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set. Where (xiii) ran, delete the trigger label with `gh label delete harness` and the issues the round created with `gh issue delete <number>`, leg (d)'s third issue included, delete `<slug>_3` on the remote with the other runs' branches, and unset `forge` before the seed reset by removing its key from `harness.config.json` by hand, since `config` has no verb that unsets a key (`docs/cli.md` → ``## 8. `config` ``). Then return the scratch repository to its seed rather than deleting it, so the next round starts from the same tree: delete each run's branch on the remote, reset the default branch to the seed commit and force-push it with `--no-verify`, and remove each run's local worktree. The next round's setup skips `gh repo create` and starts at the first `init`.
 
 **Where the results go.** A dated paragraph under this gate, as gate 10's opens, carrying the CLI version, the `claude` version the job installed and each observation's recorded output; and for each behaviour an observation settled, its row in `docs/remote-execution.md` → `## 6. What is not verified here` is moved from *not verified* to *verified on <date>*, citing this gate. A behaviour an observation corrected rather than confirmed changes the design text it rests on, not only that row. A run that could not execute an observation names it and why.
 

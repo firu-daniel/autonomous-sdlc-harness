@@ -2562,6 +2562,10 @@ function retentionDaysOf(stdout: string): number | undefined {
  *   permission check. When the trigger does not apply, neither trigger read is made.
  * - the retention read refused (typically HTTP 403: the endpoint needs admin access) is a note too —
  *   the read is best-effort, and a collaborator without admin can still run remotely.
+ * - both trigger answers positive is confirmed on every outcome that reaches the trigger reads, `fail`
+ *   and `warn` included, so an unrelated finding never hides it; either answer not positive is already
+ *   among the warnings. An outcome returned before those reads — `gh` not runnable, no usable login,
+ *   or no readable answer to the login probe — asks GitHub nothing about the trigger.
  *
  * **Why 30 days.** A parked run waits on a human answer and a usage-paused one on a reset, and the
  * `harness-state` bundle is the only remote copy of either; once the repository's retention expires
@@ -2700,8 +2704,8 @@ const REMOTE_GITHUB_CHECK: Check = {
     }
 
     const noted = notes.length > 0 ? `; ${notes.join('; ')}` : '';
-    if (failures.length > 0) return fail(`${[...failures, ...warnings].join('; ')}${noted}`);
-    if (warnings.length > 0) return warn(`${warnings.join('; ')}${noted}`);
+    if (failures.length > 0) return fail(`${[...failures, ...warnings].join('; ')}${triggerKnown}${noted}`);
+    if (warnings.length > 0) return warn(`${warnings.join('; ')}${triggerKnown}${noted}`);
     const kept = retentionDays === undefined ? '' : `, and the repository keeps artifacts for ${retentionDays} days`;
     return pass(`gh is authenticated, GitHub knows ${WORKFLOW_RUN_FILE} and ${WORKFLOW_RESUME_FILE}, a credential secret and ${PUSH_URL_SECRET} are set, and remote runs use ${runner as string}${kept}${triggerKnown}${noted}`);
   },
@@ -2717,7 +2721,8 @@ const REMOTE_GITHUB_CHECK: Check = {
  *
  * **Graded from local evidence only** (the module header's choice 3): the trigger workflow, one git
  * ref and the configuration. Whether the label exists and whether GitHub knows the workflow are left
- * to `--check-github`.
+ * to `--check-github`: the `github` pass names that flag when it is absent, and under it names
+ * {@link REMOTE_GITHUB_CHECK}, which {@link CHECKS} runs first and which carries GitHub's answer.
  *
  * **Its worst grade is `warn`**: no `forge` state stops a run, because the inbox path works whatever
  * the key says. The three `warn`s are all `github`: remote execution off, because a run started from
@@ -2786,8 +2791,11 @@ const FORGE_CHECK: Check = {
       carried = ` and origin/${branch} carries it`;
     }
 
+    const asked = ctx.probeGithub
+      ? `the ${REMOTE_GITHUB_CHECK.id} check above reports what GitHub says`
+      : `\`${CLI} doctor --check-github\` asks GitHub`;
     return pass(
-      `${on}: ${WORKFLOW_TRIGGER_PATH} is present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; draft-pull-request output and comment park-and-ask are still to come. What this cannot see lives on GitHub — whether that label exists and whether GitHub knows ${WORKFLOW_TRIGGER_FILE}; \`${CLI} doctor --check-github\` asks GitHub`,
+      `${on}: ${WORKFLOW_TRIGGER_PATH} is present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; draft-pull-request output and comment park-and-ask are still to come. What this cannot see lives on GitHub — whether that label exists and whether GitHub knows ${WORKFLOW_TRIGGER_FILE}; ${asked}`,
     );
   },
 };
