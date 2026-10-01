@@ -110,9 +110,7 @@ def _first_text(result: types.CallToolResult) -> str:
 
 
 def _tools(listed: types.ListToolsResult) -> list[dict[str, object]]:
-    return [
-        tool.model_dump(mode="json", by_alias=True, exclude_none=True) for tool in listed.tools
-    ]
+    return [tool.model_dump(mode="json", by_alias=True, exclude_none=True) for tool in listed.tools]
 
 
 async def _compare(ts_client: Client, py_client: Client) -> None:

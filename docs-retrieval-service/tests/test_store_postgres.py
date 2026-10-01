@@ -89,9 +89,7 @@ def test_an_upsert_lists_the_hashes(
 def test_a_lexical_search_ranks_the_one_holder_first(
     monkeypatch: pytest.MonkeyPatch, fresh_database_url: str
 ) -> None:
-    async def scenario(
-        store: DocStore, chunks: list[DocChunk], vectors: list[list[float]]
-    ) -> None:
+    async def scenario(store: DocStore, chunks: list[DocChunk], vectors: list[list[float]]) -> None:
         lighthouse = await _id_of(store, vectors[1])
         hits = await store.lexical_search("lighthouses", 10)
         assert hits[0].id == lighthouse
@@ -104,9 +102,7 @@ def test_a_lexical_search_ranks_the_one_holder_first(
 def test_a_vector_search_ranks_the_own_vector_first(
     monkeypatch: pytest.MonkeyPatch, fresh_database_url: str
 ) -> None:
-    async def scenario(
-        store: DocStore, chunks: list[DocChunk], vectors: list[list[float]]
-    ) -> None:
+    async def scenario(store: DocStore, chunks: list[DocChunk], vectors: list[list[float]]) -> None:
         for chunk, vector in zip(chunks, vectors, strict=True):
             hits = await store.vector_search(vector, 3)
             assert [hit.rank for hit in hits] == [1, 2, 3]
@@ -119,9 +115,7 @@ def test_a_vector_search_ranks_the_own_vector_first(
 def test_get_chunks_keeps_the_given_order_and_skips_unknown_ids(
     monkeypatch: pytest.MonkeyPatch, fresh_database_url: str
 ) -> None:
-    async def scenario(
-        store: DocStore, chunks: list[DocChunk], vectors: list[list[float]]
-    ) -> None:
+    async def scenario(store: DocStore, chunks: list[DocChunk], vectors: list[list[float]]) -> None:
         a = await _id_of(store, vectors[0])
         b = await _id_of(store, vectors[1])
         missing = max(a, b) + 1000

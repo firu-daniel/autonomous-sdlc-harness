@@ -43,17 +43,23 @@ These five match the files most likely in the "6 files" count. The sixth file wa
 
 **Fix:** collapse each site to a single line at its current indentation. The formatter would produce exactly this:
 
-- [ ] `tests/test_store_postgres.py`, all three helpers:
+- [x] `tests/test_store_postgres.py`, all three helpers:
   `    async def scenario(store: DocStore, chunks: list[DocChunk], vectors: list[list[float]]) -> None:`
-- [ ] `src/harness_docs_retrieval/store.py`, in `_PostgresStore`:
+- [x] `src/harness_docs_retrieval/store.py`, in `_PostgresStore`:
   `    def __init__(self, conn: psycopg.AsyncConnection[tuple[Any, ...]], dimensions: int) -> None:`
-- [ ] `tests/test_http_app.py`:
+- [x] `tests/test_http_app.py`:
   `async def _request(session: FakeSession, method: str, path: str, **kwargs: Any) -> httpx.Response:`
-- [ ] `tests/test_backend_parity_e2e.py`, in `_tools`:
+- [x] `tests/test_backend_parity_e2e.py`, in `_tools`:
   `    return [tool.model_dump(mode="json", by_alias=True, exclude_none=True) for tool in listed.tools]`
-- [ ] `tests/fakes.py`, in the lexical-search fake:
+- [x] `tests/fakes.py`, in the lexical-search fake:
   `        scored = [(len(wanted & _tokens(row.chunk.text)), row.id) for row in self._rows.values()]`
 - [ ] For the unidentified sixth file: if `ruff format` (the formatter, not the lint gate) can be run from `docs-retrieval-service/` in this session, run it over `src` and `tests` and keep only formatting changes. If it cannot be run, apply the five edits above and record in the return that the sixth file could not be located from the log. The next Run gates phase will name it.
-- [ ] Do not change `line-length` in `pyproject.toml` to match the old wrapping. The 100-column limit is the package's setting, and the 33 files already in format comply with it.
+- [x] Do not change `line-length` in `pyproject.toml` to match the old wrapping. The 100-column limit is the package's setting, and the 33 files already in format comply with it.
 
 These are formatting changes only, so behaviour does not change. `bash scripts/typecheck.sh` still applies to the edited files.
+
+**Deviations from plan:**
+
+- The five collapses were applied exactly as written above. The sixth file was **not** located. `ruff format` could not be run in this session: `scripts/python-service.sh` has no formatter sub-command (only `lint`, which is the gate and so not run here), the synced environment lives under `${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/`, which is outside this session's readable directories (a listing of it was refused), and `ruff` is not on PATH. The sixth-file claim therefore rests on reading, not execution.
+- What was read instead: three throwaway probes run through `bash scripts/scratch-run.sh` over `src/**/*.py` and `tests/**/*.py`, after the edits. They checked for (1) bracketed constructs with no magic trailing comma whose joined form fits in 100 columns; (2) single-quoted strings with no `"` inside, comments missing a space after `#`, inline comments with fewer than two spaces before them, trailing whitespace, CRs, a missing or doubled final newline, and the blank-line count before top-level and nested definitions; (3) lines wider than 100 display columns. No formatter-relevant hit came back. The over-100 lines are four docstring lines (`src/harness_docs_retrieval/chunk.py`, `tests/test_chunk_parity.py`, `tests/test_stubs.py`, `tests/ts_bridge.py`), which `ruff format` does not rewrap. The blank-line hits were all definitions under a multi-line decorator, which is a false positive. Limits: probe (1) skips constructs that contain a nested opener at a line end, and none of the probes model parenthesis removal or how `ruff format` splits a line.
+- Re-running the formatter gate is deferred to the Run gates phase, which will name the sixth file if it is still out of form.

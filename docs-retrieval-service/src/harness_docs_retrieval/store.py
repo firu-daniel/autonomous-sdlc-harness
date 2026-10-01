@@ -196,9 +196,7 @@ def _ranked(rows: Sequence[tuple[Any, ...]]) -> list[RankedId]:
 
 
 class _PostgresStore:
-    def __init__(
-        self, conn: psycopg.AsyncConnection[tuple[Any, ...]], dimensions: int
-    ) -> None:
+    def __init__(self, conn: psycopg.AsyncConnection[tuple[Any, ...]], dimensions: int) -> None:
         self._conn = conn
         self._dimensions = dimensions
         self._sql = statements(dimensions)

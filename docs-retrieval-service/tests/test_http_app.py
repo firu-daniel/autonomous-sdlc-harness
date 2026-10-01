@@ -48,9 +48,7 @@ def _populated_store(
     return store
 
 
-async def _request(
-    session: FakeSession, method: str, path: str, **kwargs: Any
-) -> httpx.Response:
+async def _request(session: FakeSession, method: str, path: str, **kwargs: Any) -> httpx.Response:
     transport = httpx.ASGITransport(app=create_app(session))
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         return await client.request(method, path, **kwargs)

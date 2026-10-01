@@ -121,9 +121,7 @@ class InMemoryDocStore:
         if self._lexical_ranking is not None:
             return _ranked(self._lexical_ranking(query), limit)
         wanted = _tokens(query)
-        scored = [
-            (len(wanted & _tokens(row.chunk.text)), row.id) for row in self._rows.values()
-        ]
+        scored = [(len(wanted & _tokens(row.chunk.text)), row.id) for row in self._rows.values()]
         order = sorted((pair for pair in scored if pair[0] > 0), key=lambda p: (-p[0], p[1]))
         return _ranked([id_ for _, id_ in order], limit)
 

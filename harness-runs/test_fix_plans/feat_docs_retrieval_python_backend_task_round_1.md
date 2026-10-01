@@ -13,7 +13,7 @@
 **This section is the single source of truth for the fix loop.** The loop walks the `[ ]` entries below from top to bottom, and only the committing role flips an entry to `[x]`. `[ ]` markers anywhere else, including sub-step bullets inside a per-finding file, are informational only.
 
 1. [x] **Finding 1** — Remove the leftover scratch probes and the `__pycache__` bytecode that put the home directory in the working tree. _(layer: general)_
-2. [ ] **Finding 2** — Collapse the over-wrapped Python constructs `ruff format` would join at `line-length = 100`. _(layer: general)_
+2. [x] **Finding 2** — Collapse the over-wrapped Python constructs `ruff format` would join at `line-length = 100`. _(layer: general)_
 
 ---
 
