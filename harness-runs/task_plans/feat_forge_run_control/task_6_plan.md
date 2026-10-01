@@ -67,3 +67,10 @@ It also reads Task 1's `COMMAND_HANDLE`, and the existing `hr_remote_status_get 
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n "pr create" -- cli/templates/scripts` has every code hit inside `remote-run.sh`'s `deliver`, and none in `push-branch.sh`: the flow's own push still opens no pull request.
 - `git grep -n -i "closes #\|fixes #\|resolves #" -- cli/templates/scripts/remote-run.sh` finds nothing: the issue is a plain mention.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the permission layer and not run. The syntax claim rests instead on `npm test -- test/remote-deliver.test.mjs` executing the edited script end to end (10 of 10 pass), which a parse error would fail.
+- The `gh` runner is factored into `gh_run`, which both `gh_call` and the new `gh_call_token` call, rather than duplicating `gh_call`'s body; `gh_call`'s behaviour is unchanged. The full suite is deferred to the Run gates phase.
+- A failed `pr list` lookup opens no pull request (a duplicate cannot be ruled out); the comment names the failed lookup and the compare URL. The plan did not state this arm.
+- The script header describes the create without the literal `pr create`, so the plan's `git grep -n "pr create"` check returns only `deliver_create`'s two lines.

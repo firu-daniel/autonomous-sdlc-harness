@@ -29,6 +29,8 @@
 #   remote-run.sh discard <dir> [--repo <root>]
 #   remote-run.sh report <event> <branch> [--note <text>] [--repo <root>]
 #                 (always 0, 1 only on a usage error: its paragraph)
+#   remote-run.sh deliver <branch> <bundle_dir> [--repo <root>]
+#                 (always 0, 1 only on a usage error: its paragraph)
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status and fetch: printed
@@ -266,6 +268,35 @@
 # (`docs/remote-execution.md` -> `## 11. Security`, *What a reader of the
 # repository's Actions runs can see*).
 # It never fails its caller: every problem is one line and exit 0.
+#
+# `deliver` HANDS A COMPLETED RUN TO REVIEW: the run workflow's step after the
+# job's own `push-branch.sh`, which opens no pull request. Job-side for its
+# root and self-gated, as `report` is (`forge_on`, one line when off). Anything
+# but `status: completed` in <bundle_dir>/status.json, or no status.json, is
+# one line and nothing sent. Otherwise, by the forge surface: an open
+# same-repository pull request whose head is <branch> is reused and no second
+# one is opened; else a draft is created against `defaultBranch`, titled from
+# the task prompt's `# ` first line (cut to `PR_TITLE_MAX_CHARS`, else
+# <branch>), whose body names the issue as `Started from #<n>.` — a plain
+# mention, never a closing keyword — states what a review requesting changes
+# and the `COMMAND_HANDLE` commands do, and ends with the `pull-request`
+# marker. The create runs with `HARNESS_PR_TOKEN` as `GH_TOKEN` when that is
+# set, so the adopter's CI runs without an approval click; every other call
+# uses the job's token. A pull request so opened is authored by that token's
+# owner, who therefore cannot request changes on it: use a machine account's
+# token, another reviewer, or a local `branch-user-review` round. A create
+# refused with `PR_CREATE_FORBIDDEN` is not retried, and the comment names the
+# Actions setting and `HARNESS_GIT_TOKEN`; any other failure is retried once
+# without `--draft`, and a second failure is named in the comment with the
+# branch's compare URL. A pull-request lookup that fails opens nothing. Then
+# one `completed` comment: on the issue naming the new pull request's URL; on
+# the pull request when there is no issue, or when it existed before this run
+# (saying the round finished); on the issue alone when none could be opened;
+# nowhere when neither is known. It names reviewing and requesting changes as
+# the next action, and with `phases.qa` true the local `branch-qa-test` still
+# owed. Then `sdlc-harness: done` on the issue and the pull request, each when
+# known. It writes at most one pull request, one comment and those labels, and
+# never pushes. It never fails its caller: every problem is one line and exit 0.
 #
 # `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
 # its job, before and (under `always()`) after the harness step. Without
@@ -555,7 +586,9 @@
 # files under `RUNNER_TEMP`, one comment on the issue and the label removal, or
 # for a dispatch event a block in the step summary. `report` writes its comment
 # file under `RUNNER_TEMP` (removed), one comment and the state labels on the
-# issue and the pull request, and nothing local. Every other verb's only writes are the
+# issue and the pull request, and nothing local. `deliver` writes its body and
+# comment files under `RUNNER_TEMP` (removed), at most one pull request, one
+# comment and the state labels. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
 # `<branch>.remote.log` in the main checkout, plus the mirror restore
@@ -780,6 +813,15 @@
 #              naming `@sdlc-harness resume`, then `api --method POST
 #              repos/o/r/issues/7/labels -f labels[]=sdlc-harness: paused`
 #   forge off  `"forge": "none"`, then the same -> 0, one line, "$s.log" unchanged
+#
+#   deliver needs report's setup, a stub answering the create with
+#   https://github.com/o/r/pull/12, and <b> a bundle directory whose status.json
+#   carries schema "1" and status completed:
+#   deliver    bash scripts/remote-run.sh deliver feat_x <b> -> 0; "$s.log" gains
+#              a `--draft` create with `--base main --head feat_x`, then one
+#              comment on issue 7 naming /pull/12, then `sdlc-harness: done` on
+#              7 and 12
+#   not done   status parked, or an empty <b> -> 0, one line, "$s.log" unchanged
 
 set -u
 
@@ -870,6 +912,7 @@ usage() {
   echo "       remote-run.sh list [--repo <root>]" >&2
   echo "       remote-run.sh discard <dir> [--repo <root>]" >&2
   echo "       remote-run.sh report <event> <branch> [--note <text>] [--repo <root>]" >&2
+  echo "       remote-run.sh deliver <branch> <bundle_dir> [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -880,7 +923,22 @@ usage() {
 GH_OUT=""
 GH_ERR=""
 gh_call() {
-  local errfile status
+  gh_run 0 "" "$@"
+}
+
+# gh_call_token <token> <args...> — gh_call with GH_TOKEN set to <token> for
+# that one gh process only; every other call keeps the environment's token.
+gh_call_token() {
+  local token="$1"
+  shift
+  gh_run 1 "$token" "$@"
+}
+
+# gh_run <0|1> <token> <args...> — gh_call's body; with 1, GH_TOKEN is a prefix
+# assignment on the external command, never on a function, so it cannot leak.
+gh_run() {
+  local with_token="$1" token="$2" errfile status
+  shift 2
   GH_OUT=""
   GH_ERR=""
   if ! command -v "$GH" >/dev/null 2>&1; then
@@ -888,7 +946,11 @@ gh_call() {
     return 127
   fi
   errfile=$(mktemp) || { GH_ERR="mktemp failed"; return 1; }
-  GH_OUT=$("$GH" "$@" 2>"$errfile")
+  if [ "$with_token" = 1 ]; then
+    GH_OUT=$(GH_TOKEN="$token" "$GH" "$@" 2>"$errfile")
+  else
+    GH_OUT=$("$GH" "$@" 2>"$errfile")
+  fi
   status=$?
   if [ "$status" -ne 0 ]; then
     IFS= read -r GH_ERR <"$errfile" || :
@@ -920,7 +982,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard|report) ;;
+  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard|report|deliver) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -998,7 +1060,7 @@ while [ "$#" -gt 0 ]; do
         since_arg="$1"
       elif { [ "$verb" = save ] || [ "$verb" = fetch ]; } && [ -z "$out_dir" ]; then
         out_dir="$1"
-      elif [ "$verb" = continue ] && [ -z "$bundle_dir" ]; then
+      elif { [ "$verb" = continue ] || [ "$verb" = deliver ]; } && [ -z "$bundle_dir" ]; then
         bundle_dir="$1"
       else
         usage "unexpected argument '$1'"
@@ -1035,8 +1097,8 @@ if [ "$verb" = run-created-at ]; then
   esac
 fi
 
-if [ "$verb" = continue ] && [ -z "$bundle_dir" ]; then
-  usage "continue needs a <bundle_dir>"
+if { [ "$verb" = continue ] || [ "$verb" = deliver ]; } && [ -z "$bundle_dir" ]; then
+  usage "$verb needs a <bundle_dir>"
 fi
 
 if [ "$verb" = save ] && [ -z "$out_dir" ]; then
@@ -1094,11 +1156,11 @@ fi
 # The repository and its configuration.
 # ---------------------------------------------------------------------------
 
-# setup_fail <message> — a configuration problem: exit 1, except for save and
-# report, which never fail the step that calls them.
+# setup_fail <message> — a configuration problem: exit 1, except for save,
+# report and deliver, which never fail the step that calls them.
 setup_fail() {
   echo "remote-run.sh: $1" >&2
-  [ "$verb" != save ] && [ "$verb" != report ] || exit "$EXIT_OK"
+  [ "$verb" != save ] && [ "$verb" != report ] && [ "$verb" != deliver ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
 
@@ -1106,7 +1168,7 @@ if [ -n "$repo_arg" ]; then
   root=$(hr_repo_root "$repo_arg") || setup_fail "'$repo_arg' is not a git repository"
 elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ] \
   || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ] || [ "$verb" = trigger ] \
-  || [ "$verb" = discard ] || [ "$verb" = report ]; then
+  || [ "$verb" = discard ] || [ "$verb" = report ] || [ "$verb" = deliver ]; then
   root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
@@ -1125,7 +1187,7 @@ case "$verb" in
   trigger)
     # Gates itself, after reading the event, so a refusal can still be commented.
     ;;
-  report)
+  report|deliver)
     # Gates itself (`forge_on`) and exits 0 on every outcome.
     ;;
   status|sync)
@@ -3475,6 +3537,166 @@ verb_report() {
   exit "$EXIT_OK"
 }
 
+# GitHub's refusal of a pull request created with the job's own token while the
+# repository's Actions setting is off (docs/github-integration-research.md -> C3).
+PR_CREATE_FORBIDDEN='GitHub Actions is not permitted to create or approve pull requests'
+# GitHub's limit on a pull request title.
+PR_TITLE_MAX_CHARS=256
+
+# deliver_title_var <branch> — DELIVER_TITLE: the committed task prompt's first
+# line without its `# ` when it is a heading, cut to PR_TITLE_MAX_CHARS, else <branch>.
+DELIVER_TITLE=""
+deliver_title_var() {
+  local state_rel first=""
+  DELIVER_TITLE="$1"
+  state_rel=$(hr_state_dir "$root" 2>/dev/null) || return 0
+  [ -n "$state_rel" ] || return 0
+  IFS= read -r first < <(git -C "$root" show "refs/remotes/origin/$1:$(hr_task_prompt_rel "$state_rel" "$1")" 2>/dev/null) || :
+  case "$first" in
+    '# '?*) DELIVER_TITLE="${first#'# '}"; DELIVER_TITLE="${DELIVER_TITLE:0:$PR_TITLE_MAX_CHARS}" ;;
+  esac
+  return 0
+}
+
+# deliver_pr_body <file> <branch> — the pull request's body: what it is, the
+# issue as a plain mention (never a closing keyword: the flow does not own the
+# issue's lifecycle), what a reviewer can do here, and the marker.
+deliver_pr_body() {
+  {
+    printf 'This pull request carries the harness run on `%s`, ready for your review. The harness never merges it.\n' "$2"
+    [ -z "$FORGE_ISSUE" ] || printf '\nStarted from #%s.\n' "$FORGE_ISSUE"
+    printf '\nA review that requests changes starts a user-review round on this branch.\n'
+    printf 'While a round is running, comment `%s pause`, `%s resume`, `%s stop` or `%s answer <n>` to act on it.\n' \
+      "$COMMAND_HANDLE" "$COMMAND_HANDLE" "$COMMAND_HANDLE" "$COMMAND_HANDLE"
+    printf '\n'
+    forge_marker pull-request "$2"
+  } >"$1"
+}
+
+# deliver_create <base> <branch> <body_file> [--draft] — one `gh pr create`,
+# with HARNESS_PR_TOKEN when it is set, else the job's own token.
+deliver_create() {
+  local base="$1" br="$2" body="$3"
+  shift 3
+  set -- pr create --repo "$FORGE_REPO" --base "$base" --head "$br" "$@" --title "$DELIVER_TITLE" --body-file "$body"
+  if [ -n "${HARNESS_PR_TOKEN-}" ]; then
+    gh_call_token "$HARNESS_PR_TOKEN" "$@"
+  else
+    gh_call "$@"
+  fi
+}
+
+# verb_deliver — after a `completed` bundle: find or open the branch's pull
+# request, post the one `completed` comment, and set `done`. Always exit 0.
+verb_deliver() {
+  local status base="" pr_url="" opened=0 lookup_failed=0 create_err="" forbidden=0
+  local tmp made_tmp="" body="" file target text compare
+  if ! forge_on; then
+    echo "remote-run.sh: deliver: the forge coupling is off (forge github and execution.target github-actions); nothing posted"
+    exit "$EXIT_OK"
+  fi
+  hr_remote_names_var
+  status=$(hr_remote_status_get "$bundle_dir/$HR_REMOTE_STATUS_FILE" status 2>/dev/null) || status=""
+  if [ "$status" != completed ]; then
+    echo "remote-run.sh: deliver: the bundle's status is '${status:-unreadable}', not completed; nothing posted"
+    exit "$EXIT_OK"
+  fi
+  forge_repo_var || exit "$EXIT_OK"
+
+  forge_fetch_branch "$branch"
+  forge_issue_var "$branch" || FORGE_ISSUE=""
+  forge_pr_var "$branch" || { FORGE_PR=""; lookup_failed=1; create_err="whether a pull request is already open could not be read ($GH_ERR)"; }
+
+  tmp="${RUNNER_TEMP-}"
+  if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
+    tmp=$(mktemp -d) || tmp=""
+    made_tmp="$tmp"
+  fi
+
+  if [ -n "$FORGE_PR" ]; then
+    pr_url="$FORGE_SERVER/$FORGE_REPO/pull/$FORGE_PR"
+    echo "remote-run.sh: deliver: $branch already has pull request #$FORGE_PR; none opened"
+  elif [ "$lookup_failed" -eq 0 ]; then
+    base=$(hr_default_branch "$root" 2>/dev/null) || base=""
+    deliver_title_var "$branch"
+    if [ -z "$base" ]; then
+      create_err="the configured defaultBranch could not be read"
+    elif [ -z "$tmp" ] || ! body=$(mktemp "$tmp/harness-deliver-body.XXXXXX") || ! deliver_pr_body "$body" "$branch"; then
+      create_err="its body file could not be written"
+    elif deliver_create "$base" "$branch" "$body" --draft; then
+      opened=1
+    else
+      create_err="$GH_ERR"
+      case "$GH_ERR" in
+        *"$PR_CREATE_FORBIDDEN"*) forbidden=1 ;;
+        *)
+          # Drafts depend on the account's plan (C3, not measured): one retry as ready.
+          echo "remote-run.sh: deliver: opening a draft pull request failed ($GH_ERR); retrying once without --draft" >&2
+          if deliver_create "$base" "$branch" "$body"; then
+            opened=1
+          else
+            create_err="$GH_ERR"
+          fi ;;
+      esac
+    fi
+    [ -z "$body" ] || rm -f "$body"
+    if [ "$opened" -eq 1 ]; then
+      FORGE_PR=$(printf '%s\n' "$GH_OUT" | sed -n 's|.*/pull/\([0-9][0-9]*\).*|\1|p' | tail -n 1)
+      if [ -n "$FORGE_PR" ]; then
+        pr_url="$FORGE_SERVER/$FORGE_REPO/pull/$FORGE_PR"
+        echo "remote-run.sh: deliver: opened pull request #$FORGE_PR for $branch"
+      else
+        opened=0
+        create_err="gh printed no pull request URL"
+      fi
+    fi
+  fi
+
+  compare="$FORGE_SERVER/$FORGE_REPO/compare/${base:-<default branch>}...$branch?expand=1"
+  if [ -z "$pr_url" ]; then
+    target="$FORGE_ISSUE"
+    if [ "$forbidden" -eq 1 ]; then
+      text="The harness run on \`$branch\` completed, but its pull request could not be opened: GitHub Actions is not permitted to create pull requests in this repository. Turn on Settings → Actions → General → Workflow permissions → *Allow GitHub Actions to create and approve pull requests*, or set the \`HARNESS_GIT_TOKEN\` secret, for the next run. For this one, open the pull request from the branch: $compare"
+    else
+      text="The harness run on \`$branch\` completed, but its pull request could not be opened: $create_err. Open it by hand from the branch: $compare"
+    fi
+  elif [ "$opened" -eq 0 ]; then
+    target="$FORGE_PR"
+    text="The harness round on \`$branch\` finished. Review this pull request; a review that requests changes starts another round."
+  elif [ -n "$FORGE_ISSUE" ]; then
+    target="$FORGE_ISSUE"
+    text="The harness run on \`$branch\` completed. Its pull request is ready for your review: $pr_url
+Review it there; a review that requests changes starts another round."
+  else
+    target="$FORGE_PR"
+    text="The harness run on \`$branch\` completed and opened this pull request. Review it; a review that requests changes starts another round."
+  fi
+  if hr_phase_enabled "$root" qa; then
+    text="$text
+
+The interactive-test phase was skipped on GitHub Actions. Before merging, run \`/autonomous-sdlc-harness:branch-qa-test $branch\` locally."
+  fi
+
+  if [ -z "$target" ]; then
+    echo "remote-run.sh: deliver: $branch has no pull request and no issue it was started from; nothing posted"
+  elif [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-deliver-comment.XXXXXX"); then
+    {
+      printf '%s\n' "$text"
+      [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
+    } >"$file"
+    forge_comment "$target" completed "$branch" "$file" || :
+    rm -f "$file"
+  else
+    echo "remote-run.sh: deliver: cannot create the comment file for #$target; no comment posted" >&2
+  fi
+  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+
+  [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" done || :
+  [ -z "$FORGE_PR" ] || forge_set_state "$FORGE_PR" done || :
+  echo "remote-run.sh: deliver: completed on $branch reported${target:+ on #$target}"
+  exit "$EXIT_OK"
+}
+
 # ---------------------------------------------------------------------------
 # `discard` — remove a directory a command fetched into, inside scratch only.
 # ---------------------------------------------------------------------------
@@ -3554,5 +3776,6 @@ case "$verb" in
   list) verb_list ;;
   discard) verb_discard ;;
   report) verb_report ;;
+  deliver) verb_deliver ;;
 esac
 exit "$EXIT_OK"
