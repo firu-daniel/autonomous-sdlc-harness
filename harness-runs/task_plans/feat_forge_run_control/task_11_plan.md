@@ -53,3 +53,10 @@ On GitHub, typing `clear` is the confirmation.
 - `npm test -- test/remote-control.test.mjs` from `cli/` passes.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n "park-loop-clear" -- cli/templates/scripts/remote-run.sh` has its `control` hits only in the `clear` arm: no other comment command clears a hold.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the permission layer and not run. The parse claim rests on `npm test -- test/remote-control.test.mjs` instead: it executes the script, all 41 cases passed, and the new `resume` and `clear` arms ran in that test run.
+- "Reply, then `forge_set_state running`" needs a reply that does not exit, and `control_reply` exits. The posting half is split out as `control_post`. `control_reply` is now `control_post` followed by an exit, and its behaviour is unchanged. On a dispatch exit of 0, the reply is posted first, the labels are set second, and the exit is 3 only when the reply could not be posted. A failed label write is ignored, as `report` already ignores one.
+- `fetch` gives a run whose bundle really expired (and a killed run that left no bundle) an empty `engine`. The shared empty-engine rule therefore refuses `resume` on those runs and names the Run workflow form. The `paused` / `expired` case is dispatched only when the bundle records an engine. The test sets one up with a `status.json` that carries `pause_reason: expired` and `engine: task`.
+- The empty-engine refusal passes `hr_github_resume_route` an engine placeholder that names the three choices. With an empty engine, that route would send the reader to the run's own `engine` field, which is the empty value being refused.

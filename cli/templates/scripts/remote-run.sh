@@ -357,8 +357,18 @@
 # child, which posts its own `stopped` comment to the run's target; on 0 a reply
 # is ALWAYS posted where the command was typed too, so a command on the issue of
 # a branch with a pull request is answered there; on 3 the reply says the stop
-# was partial and to comment `stop` again. A child's failure is a reply naming
-# its last stderr line, and exit 3. Every reply goes to the item the comment was
+# was partial and to comment `stop` again. `resume` accepts only `paused`, any
+# `pause_reason` (`expired` and `killed` included); `park_loop` is refused
+# pointing at `clear`, `parked` pointing at `answer <n>` with the open indexes,
+# `running`, `completed`, `failed` and `none` each naming the state. `clear`
+# accepts only `park_loop`, the GitHub form of `branch-resume`'s confirmation;
+# any other state is a refusal naming it. Each sends the local relay's dispatch,
+# `dispatch <branch> --engine <the state's engine> --resume pause --chain 0`,
+# `clear` with `park_loop_clear` set, and no other command sets it. An empty
+# engine is refused, never guessed (the `engine` input defaults to `task`),
+# naming the Run workflow form. On 0 a reply, then `running` on the run's issue
+# and pull request; on 2 a refusal and exit 2. A child's failure is a reply
+# naming its last stderr line, and exit 3. Every reply goes to the item the comment was
 # typed on, opens `@<login>`, and carries the `reply` marker; a refusal reads
 # `@<login>: `<verb>` was not run: <reason>. <way on>`.
 #     0  handled (replied), or ignored
@@ -3875,17 +3885,17 @@ control_cleanup() {
   return 0
 }
 
-# control_reply <exit> <text> — post <text> on CONTROL_NUMBER as a `reply`
-# comment, then exit <exit>; a reply that cannot be posted makes the exit 3.
-control_reply() {
-  local code="$1" text="$2" file
+# control_post <text> — post <text> on CONTROL_NUMBER as a `reply` comment;
+# 1, after an `::error::` line, when it cannot be posted.
+control_post() {
+  local text="$1" file status=0
   if ! forge_repo_var; then
     echo "::error::remote-run.sh: control: the reply on #$CONTROL_NUMBER could not be posted: $GH_ERR"
-    exit "$EXIT_GH"
+    return 1
   fi
   if ! file=$(mktemp "$control_tmp/harness-control-reply.XXXXXX"); then
     echo "::error::remote-run.sh: control: cannot create the reply file for #$CONTROL_NUMBER under '$control_tmp'"
-    exit "$EXIT_GH"
+    return 1
   fi
   {
     printf '%s\n' "$text"
@@ -3893,10 +3903,17 @@ control_reply() {
   } >"$file"
   if ! forge_comment "$CONTROL_NUMBER" reply "$CONTROL_BRANCH" "$file"; then
     echo "::error::remote-run.sh: control: the reply on #$CONTROL_NUMBER could not be posted: $GH_ERR"
-    code="$EXIT_GH"
+    status=1
   fi
   rm -f "$file"
-  exit "$code"
+  return "$status"
+}
+
+# control_reply <exit> <text> — control_post <text>, then exit <exit>; a reply
+# that cannot be posted makes the exit 3.
+control_reply() {
+  control_post "$2" || exit "$EXIT_GH"
+  exit "$1"
 }
 
 # control_refuse <exit> <reason> <way on> — the refusal reply, then exit.
@@ -4057,9 +4074,79 @@ control_branch_from_issue() {
 # control_verb_handled <verb> — 0 when an arm below carries out <verb>.
 control_verb_handled() {
   case "$1" in
-    pause|stop) return 0 ;;
+    pause|stop|resume|clear) return 0 ;;
   esac
   return 1
+}
+
+# control_resume_dispatch <reply> [<dispatch flag>] — the resume dispatch the
+# local relay sends for CS_ENGINE; on 0, <reply>, then `running` on the run's
+# issue and pull request. An empty engine is refused, never guessed: the run
+# workflow's `engine` input defaults to `task`.
+control_resume_dispatch() {
+  local done_text="$1" out status route clear=""
+  shift
+  if [ -z "$CS_ENGINE" ]; then
+    # The run's own engine is unrecorded, so the route names the choice.
+    route=$(hr_github_resume_route "$CONTROL_BRANCH" "<task, user_review or docs: the one the run was started with>")
+    route=${route#or from GitHub: }
+    [ "$#" -eq 0 ] || clear=", with park_loop_clear true as well"
+    control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` (\`$CS_STATE\`${CS_REASON:+, \`$CS_REASON\`}) records no engine, and the harness does not guess one" \
+      "Resume it with the **Run workflow** form instead: $route$clear."
+  fi
+  out=$(mktemp "$control_tmp/harness-control-out.XXXXXX") || out=/dev/null
+  control_child "$out" dispatch "$CONTROL_BRANCH" --engine "$CS_ENGINE" --resume pause "$@" --chain 0 --repo "$root"
+  [ "$out" = /dev/null ] || { cat "$out"; rm -f "$out"; }
+  case "$CHILD_STATUS" in
+    0) ;;
+    2) control_refuse "$EXIT_REFUSED" "the dispatch was refused ($CHILD_LAST)" "Comment \`$COMMAND_HANDLE $CONTROL_VERB\` again once that is fixed." ;;
+    *) control_refuse "$EXIT_GH" "the dispatch could not be sent ($CHILD_LAST)" "Comment \`$COMMAND_HANDLE $CONTROL_VERB\` again to retry." ;;
+  esac
+  status="$EXIT_OK"
+  control_post "$done_text" || status="$EXIT_GH"
+  # The job posts its own `resumed` comment; the labels say `running` now.
+  forge_issue_var "$CONTROL_BRANCH" || FORGE_ISSUE=""
+  forge_pr_var "$CONTROL_BRANCH" || FORGE_PR=""
+  [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" running || :
+  [ -z "$FORGE_PR" ] || forge_set_state "$FORGE_PR" running || :
+  exit "$status"
+}
+
+control_resume() {
+  local open
+  control_state_var "$CONTROL_BRANCH" \
+    || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($CS_ERR)" "Comment again to retry."
+  case "$CS_STATE" in
+    paused)
+      # Every pause reason, `expired` and `killed` included, resumes from the
+      # committed ledger, as the local route does.
+      control_resume_dispatch "Resume requested by @$CONTROL_ACTOR: \`$CONTROL_BRANCH\` continues from its committed ledger." ;;
+    park_loop)
+      control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` is held by the park-loop guard" \
+        "Comment \`$COMMAND_HANDLE clear\` to release the hold and resume it." ;;
+    parked)
+      open=""
+      [ -z "$CS_OPEN" ] || open=" (open: $CS_OPEN)"
+      control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` is \`parked\`, waiting for an answer$open" \
+        "Comment \`$COMMAND_HANDLE answer <n>\` with the answer to question <n> on the lines below it." ;;
+    running)
+      control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` is already \`running\`" "Nothing needs resuming." ;;
+    *)
+      control_refuse "$EXIT_REFUSED" "only a paused run can be resumed, and the run on \`$CONTROL_BRANCH\` is \`${CS_STATE:-unknown}\`" \
+        "A finished run continues by a review requesting changes on its pull request, or by applying the trigger label to its issue again." ;;
+  esac
+}
+
+control_clear() {
+  control_state_var "$CONTROL_BRANCH" \
+    || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($CS_ERR)" "Comment again to retry."
+  if [ "$CS_STATE" != park_loop ]; then
+    control_refuse "$EXIT_REFUSED" "there is no park-loop hold to clear: the run on \`$CONTROL_BRANCH\` is \`${CS_STATE:-unknown}\`" \
+      "Only a run held by the park-loop guard is cleared."
+  fi
+  # On GitHub, typing `clear` is the confirmation `branch-resume` asks for.
+  control_resume_dispatch "Park-loop hold on \`$CONTROL_BRANCH\` cleared by @$CONTROL_ACTOR; the run resumes from its committed ledger." \
+    --park-loop-clear
 }
 
 control_pause() {
@@ -4204,6 +4291,8 @@ verb_control() {
   case "$CONTROL_VERB" in
     pause) control_pause ;;
     stop) control_stop ;;
+    resume) control_resume ;;
+    clear) control_clear ;;
   esac
 }
 

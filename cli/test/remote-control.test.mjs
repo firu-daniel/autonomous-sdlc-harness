@@ -20,7 +20,11 @@
  * permission call from the `STUB_PERMISSIONS` table (`FAIL` exits 4), `run list` from `STUB_RUN_LIST` (by
  * default one `in_progress` `harness run <branch>` run), a run's artifact list from `STUB_ARTIFACTS`, a
  * `run download` by writing a status.json whose `status` is `STUB_BUNDLE_STATUS`, and the labels GET with
- * `[]`. No case reaches the network.
+ * `[]`. `STUB_BUNDLE_FIELDS` adds fields to that status.json, and `STUB_BUNDLE_QUESTIONS` writes an open
+ * `clarifications/feat_x/question_<n>.md` beside it for each <n>. No case reaches the network.
+ *
+ * `resume` and `clear` are asserted to send exactly the local relay's dispatch — `clear` alone adding
+ * `park_loop_clear` — and to refuse every other state, and an unrecorded engine, with no `workflow run`.
  */
 
 import assert from 'node:assert/strict';
@@ -76,7 +80,14 @@ if (args[0] === 'pr' && args[1] === 'view') {
 } else if (args[0] === 'run' && args[1] === 'download') {
   const dir = args[args.indexOf('-D') + 1];
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'status.json'), JSON.stringify({ schema: '1', branch: 'feat_x', status: process.env.STUB_BUNDLE_STATUS || 'parked' }));
+  writeFileSync(join(dir, 'status.json'), JSON.stringify({
+    schema: '1', branch: 'feat_x', status: process.env.STUB_BUNDLE_STATUS || 'parked',
+    ...JSON.parse(process.env.STUB_BUNDLE_FIELDS || '{}'),
+  }));
+  for (const n of (process.env.STUB_BUNDLE_QUESTIONS || '').split(' ').filter(Boolean)) {
+    mkdirSync(join(dir, 'clarifications', 'feat_x'), { recursive: true });
+    writeFileSync(join(dir, 'clarifications', 'feat_x', 'question_' + n + '.md'), 'Which one?\\n');
+  }
 }
 `;
 
@@ -170,6 +181,8 @@ async function controlFixture(t, { forge = 'github' } = {}) {
         STUB_RUN_LIST: '',
         STUB_ARTIFACTS: '',
         STUB_BUNDLE_STATUS: '',
+        STUB_BUNDLE_FIELDS: '',
+        STUB_BUNDLE_QUESTIONS: '',
         STUB_FAIL_ON: '',
         ...env,
       });
@@ -312,7 +325,7 @@ test('an unknown verb gets a reply listing the five commands', async (t) => {
 
 test('a known verb no arm handles yet gets the same reply', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness resume');
+  const result = await f.control('@sdlc-harness answer 1');
   const reply = assertRefused(f, result, /docs\/github-run-control\.md/);
   assert.match(reply.body, /`@sdlc-harness clear`/);
 });
@@ -478,6 +491,101 @@ test('another event name, or an unreadable event file, exits 1 with no gh call',
   const missing = await f.control('@sdlc-harness pause', {}, { GITHUB_EVENT_PATH: join(f.dir, 'nope.json') });
   assert.equal(missing.status, 1);
   assert.deepEqual(f.calls(), []);
+});
+
+const RESUME_DISPATCH = 'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f chain=0';
+const CLEAR_DISPATCH = 'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f park_loop_clear=true -f chain=0';
+
+/** The environment of a completed `harness run feat_x` run whose bundle carries <status> and <fields>. */
+const finishedRun = (status, fields = {}, questions = '') => ({
+  STUB_RUN_LIST: JSON.stringify([{ databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]),
+  STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: false }] }),
+  STUB_BUNDLE_STATUS: status,
+  STUB_BUNDLE_FIELDS: JSON.stringify(fields),
+  STUB_BUNDLE_QUESTIONS: questions,
+  STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+});
+
+/** Assert a sent resume: exit 0, <dispatch> alone, one reply matching <pattern>, `running` on 7 and 12. */
+const assertResumed = (f, result, dispatch, pattern) => {
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(dispatches(calls).map((call) => call.line), [dispatch]);
+  const posted = replies(calls);
+  assert.equal(posted.length, 1);
+  assert.equal(allComments(calls).length, 1);
+  assert.match(posted[0].body, pattern);
+  for (const n of [7, 12]) {
+    assert.ok(
+      calls.some((call) => call.line === `api --method POST repos/${REPOSITORY}/issues/${n}/labels -f labels[]=sdlc-harness: running`),
+      `${n}: ${JSON.stringify(calls.map((call) => call.line))}`,
+    );
+  }
+  const lines = calls.map((call) => call.line);
+  assert.ok(lines.indexOf(posted[0].line) > lines.indexOf(dispatch));
+};
+
+test('resume on a paused run sends the relay\'s dispatch, replies naming @alice and labels it running', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness resume', {}, finishedRun('paused', { pause_reason: 'user', engine: 'task' }));
+  assertResumed(f, result, RESUME_DISPATCH, /^Resume requested by @alice: `feat_x` continues from its committed ledger\.\n/);
+});
+
+test('resume on a run paused as expired is dispatched the same way', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness resume', {}, finishedRun('paused', { pause_reason: 'expired', engine: 'task' }));
+  assertResumed(f, result, RESUME_DISPATCH, /^Resume requested by @alice/);
+});
+
+test('resume on a park-loop hold is refused pointing at clear', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness resume', {}, finishedRun('park_loop', { engine: 'task' }));
+  assertRefused(f, result, /`@sdlc-harness clear`/);
+});
+
+test('clear on a park-loop hold sends the same dispatch with park_loop_clear', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness clear', {}, finishedRun('park_loop', { engine: 'task' }));
+  assertResumed(f, result, CLEAR_DISPATCH, /^Park-loop hold on `feat_x` cleared by @alice; the run resumes from its committed ledger\.\n/);
+});
+
+test('resume on a parked run is refused naming answer and the open index', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness resume', {}, finishedRun('parked', { engine: 'task' }, '2'));
+  const reply = assertRefused(f, result, /`@sdlc-harness answer <n>`/);
+  assert.match(reply.body, /open: 2\)/);
+});
+
+test('resume with no recorded engine is refused naming the Run workflow form', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness resume', {}, finishedRun('paused', { pause_reason: 'user' }));
+  const reply = assertRefused(f, result, /\*\*Run workflow\*\* form/);
+  assert.match(reply.body, /resume pause/);
+});
+
+test('clear on a paused run is refused, with no dispatch', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness clear', {}, finishedRun('paused', { pause_reason: 'user', engine: 'task' }));
+  assertRefused(f, result, /no park-loop hold to clear: the run on `feat_x` is `paused`/);
+});
+
+test('resume on a running run is refused as already running', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness resume');
+  assertRefused(f, result, /already `running`/);
+});
+
+test('a resume whose dispatch fails replies naming the failure and exits 3', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness resume', {}, {
+    ...finishedRun('paused', { pause_reason: 'user', engine: 'task' }),
+    STUB_FAIL_ON: 'workflow run',
+  });
+  assert.equal(result.status, 3, `${result.stdout}\n${result.stderr}`);
+  const posted = replies(f.calls());
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].body, /stub gh failure/);
+  assert.ok(!f.calls().some((call) => /\/labels -f labels\[\]=/.test(call.line)));
 });
 
 /** The entries of <dir>, for asserting that control removed what it created there. */
