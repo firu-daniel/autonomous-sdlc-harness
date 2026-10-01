@@ -173,9 +173,11 @@
 # branch with `hr_derive_branch <title> issue_<number>` (2 or 3 refused), writes
 # the snapshot — `# <title>`, the body's bytes, `---` and a provenance sentence
 # naming the issue, the labeller, the label and the time — and runs `start` as a
-# child. After a start it looks up the `harness run <branch>` run, at most
+# child. After a start it looks up the `harness run <branch>` run whose
+# `headSha` is the `origin/<branch>` commit `start` pushed, at most
 # `TRIGGER_RUN_LOOKUP_TRIES` times, falling back to the branch's filtered run
-# list, and comments the branch and that URL. Every comment is followed by
+# list, and comments the branch and that URL; the comment never names an older
+# run of the branch. Every comment is followed by
 # removing the label, so re-applying it is deliberate; a removal that fails is
 # one `::warning::` line.
 # A `repository_dispatch` reads `.action` (where GitHub puts the `event_type`)
@@ -2696,19 +2698,23 @@ trigger_bot_listed() {
   return 1
 }
 
-# trigger_run_url — the URL of the `harness run <branch>` run `start` just
-# dispatched, looked up at most TRIGGER_RUN_LOOKUP_TRIES times; the branch's
-# filtered run list when none appears. Never fails.
+# trigger_run_url <sha> — the URL of the `harness run <branch>` run whose
+# `headSha` is <sha>, the commit `start` just pushed, looked up at most
+# TRIGGER_RUN_LOOKUP_TRIES times; the branch's filtered run list when none
+# appears, and at once when <sha> is empty. Never fails. Matched on `headSha`
+# rather than a `createdAt` bound: the SHA identifies this dispatch exactly and
+# reads no runner clock, where a time bound still admits an unrelated run
+# created in the same second.
 trigger_run_url() {
-  local try=1 secs url=""
+  local sha="${1-}" try=1 secs url=""
   secs="${HARNESS_TRIGGER_LOOKUP_SECS-}"
   case "$secs" in
     ''|*[!0-9]*) secs="$TRIGGER_LOOKUP_SECS_DEFAULT" ;;
   esac
-  while :; do
-    if gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json url,displayTitle --limit 5; then
-      url=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" \
-        '[.[]? | select(.displayTitle == $t) | .url | strings] | first // empty' 2>/dev/null) || url=""
+  while [ -n "$sha" ]; do
+    if gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json url,displayTitle,headSha --limit 5; then
+      url=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" --arg s "$sha" \
+        '[.[]? | select(.displayTitle == $t and .headSha == $s) | .url | strings] | first // empty' 2>/dev/null) || url=""
       [ -z "$url" ] || break
     else
       echo "remote-run.sh: trigger: looking up the run of $branch failed: $GH_ERR" >&2
@@ -2725,7 +2731,7 @@ trigger_run_url() {
 verb_trigger() {
   local LC_ALL=C
   local action label title body html_url state login sender_type source=""
-  local forge="" target="" default name_file status permission prompt errfile last url
+  local forge="" target="" default name_file status permission prompt errfile last url sha
   local fallback retry_then retry_again task_what
   case "${GITHUB_EVENT_NAME-}" in
     issues) trigger_source=issue ;;
@@ -2906,7 +2912,10 @@ $last
 $retry_again" ;;
   esac
 
-  url=$(trigger_run_url)
+  # The ref `start`'s `hr_push_landed` confirmed equal to the pushed `HEAD`;
+  # `start_remove_copy` deletes only the local branch.
+  sha=$(git -C "$root" rev-parse --verify --quiet "refs/remotes/origin/$branch^{commit}") || sha=""
+  url=$(trigger_run_url "$sha")
   if [ "$trigger_source" = issue ]; then
     echo "remote-run.sh: trigger: started $branch from issue #$issue_number: $url"
     trigger_finish "$EXIT_OK" "Started a harness run on the branch \`$branch\`: $url

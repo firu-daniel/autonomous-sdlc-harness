@@ -12,9 +12,10 @@
  * Each case drives `remote-start.test.mjs`'s fixture shape — `init`, `execution.target` set, the
  * adopted tree pushed to the fixture's bare `origin` — plus `forge: "github"` and an event file the
  * test writes. `gh` is a stub reached through `HARNESS_GH_CLI`: it answers the permission call from a
- * per-login table, answers `run list` with a `harness run <branch>` run carrying a `url`, and logs each
- * argument vector with any `--body-file`'s content; a call starting `STUB_FAIL_ON` exits 4. No case
- * reaches the network.
+ * per-login table, answers `run list` from `STUB_RUN_LIST` — one answer per call, the last repeated, its
+ * `headSha` `ORIGIN` replaced by `refs/heads/<branch>` of the bare origin at `STUB_ORIGIN` — by default one
+ * `harness run <branch>` run carrying a `url` and that `headSha`, and logs each argument vector with any
+ * `--body-file`'s content; a call starting `STUB_FAIL_ON` exits 4. No case reaches the network.
  */
 
 import assert from 'node:assert/strict';
@@ -33,9 +34,10 @@ const BRANCH = 'add_comments_to_items';
 
 /**
  * `gh`, answered and recorded. `STUB_PERMISSIONS` maps a login to its `.permission`, or to `FAIL` for a
- * call that exits 4; `run list` answers one `harness run <--branch>` run.
+ * call that exits 4; `run list` answers `STUB_RUN_LIST`'s entry for this call, the last one repeated.
  */
 const STUB = `#!/usr/bin/env node
+const { execFileSync } = require('node:child_process');
 const { appendFileSync, readFileSync } = require('node:fs');
 const args = process.argv.slice(2);
 const at = args.indexOf('--body-file');
@@ -55,7 +57,16 @@ if (args[0] === 'api' && permission) {
   process.stdout.write(JSON.stringify({ permission: answer }));
 } else if (args[0] === 'run' && args[1] === 'list') {
   const branch = args[args.indexOf('--branch') + 1];
-  process.stdout.write(JSON.stringify([{ displayTitle: 'harness run ' + branch, url: 'https://example.test/runs/' + branch }]));
+  let sha = '';
+  try {
+    sha = execFileSync('git', ['--git-dir', process.env.STUB_ORIGIN, 'rev-parse', '--verify', '--quiet', 'refs/heads/' + branch], { encoding: 'utf8' }).trim();
+  } catch {}
+  const answers = process.env.STUB_RUN_LIST
+    ? JSON.parse(process.env.STUB_RUN_LIST)
+    : [[{ displayTitle: 'harness run ' + branch, url: 'https://example.test/runs/' + branch, headSha: 'ORIGIN' }]];
+  const made = readFileSync(process.env.STUB_LOG, 'utf8').split('\\n').filter((line) => line.includes('"args":["run","list"')).length;
+  const runs = answers[Math.min(made, answers.length) - 1];
+  process.stdout.write(JSON.stringify(runs.map((run) => (run.headSha === 'ORIGIN' ? { ...run, headSha: sha } : run))));
 }
 `;
 
@@ -136,6 +147,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
         HARNESS_GH_CLI: stub,
         STUB_LOG: log,
         STUB_PERMISSIONS: JSON.stringify(permissions),
+        STUB_ORIGIN: origin,
         GITHUB_EVENT_NAME: 'issues',
         GITHUB_EVENT_PATH: eventPath,
         GITHUB_REPOSITORY: REPOSITORY,
@@ -166,6 +178,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
         HARNESS_GH_CLI: stub,
         STUB_LOG: log,
         STUB_PERMISSIONS: '{}',
+        STUB_ORIGIN: origin,
         GITHUB_EVENT_NAME: 'repository_dispatch',
         GITHUB_EVENT_PATH: eventPath,
         GITHUB_REPOSITORY: REPOSITORY,
@@ -357,6 +370,42 @@ test('a dispatch that fails after the push exits 3 and comments the manual way o
   assert.match(posted[0].body, /harness-run\.yml.*Run workflow/s);
   assert.match(posted[0].body, /Use workflow from\* set to/);
   assert.equal(removals(calls).length, 1);
+});
+
+/** A `harness run <BRANCH>` run of an earlier push: same title, another `headSha`. */
+const OLDER_RUN = {
+  displayTitle: `harness run ${BRANCH}`,
+  url: 'https://example.test/runs/older',
+  headSha: '0123456789abcdef0123456789abcdef01234567',
+};
+const DISPATCHED_RUN = { displayTitle: `harness run ${BRANCH}`, url: 'https://example.test/runs/dispatched', headSha: 'ORIGIN' };
+
+test('the comment names the run whose headSha was pushed, when it appears on a later lookup', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.trigger({}, {
+    HARNESS_TRIGGER_LOOKUP_SECS: '0',
+    STUB_RUN_LIST: JSON.stringify([[OLDER_RUN], [OLDER_RUN, DISPATCHED_RUN]]),
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.equal(calls.filter((call) => call.line.startsWith('run list')).length, 2);
+  const posted = comments(calls);
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].body, /https:\/\/example\.test\/runs\/dispatched/);
+  assert.doesNotMatch(posted[0].body, /runs\/older/);
+});
+
+test('the comment names the filtered run list, never an older run, when the dispatched run never appears', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.trigger({}, { HARNESS_TRIGGER_LOOKUP_SECS: '0', STUB_RUN_LIST: JSON.stringify([[OLDER_RUN]]) });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const posted = comments(f.calls());
+  assert.equal(posted.length, 1);
+  assert.ok(
+    posted[0].body.includes(`https://github.com/${REPOSITORY}/actions/workflows/harness-run.yml?query=branch%3A${BRANCH}`),
+    posted[0].body,
+  );
+  assert.doesNotMatch(posted[0].body, /runs\/older/);
 });
 
 const issueCalls = (calls) => calls.filter((call) => call.args[0] === 'issue');
