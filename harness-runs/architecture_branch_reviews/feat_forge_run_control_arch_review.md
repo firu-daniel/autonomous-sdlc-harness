@@ -11,7 +11,7 @@ The headline: the layering holds. Every new GitHub name has one owner, `cli/src/
 1. [x] **Finding 1** — Build the `branch-user-review` command spelling in `core/pluginIdentity.ts` _(layer: cli)_
 2. [x] **Finding 2** — Give GitHub's pull-request setting name and path one owner in `remote/githubActions.ts` _(layer: cli)_
 3. [x] **Finding 3** — Derive the forge check's verb list from `COMMAND_VERBS` _(layer: cli)_
-4. [ ] **Finding 4** — Point the `user_reviews/` template README at the pull-request round's owner instead of restating it _(layer: cli)_
+4. [x] **Finding 4** — Point the `user_reviews/` template README at the pull-request round's owner instead of restating it _(layer: cli)_
 
 ## Must Fix
 
