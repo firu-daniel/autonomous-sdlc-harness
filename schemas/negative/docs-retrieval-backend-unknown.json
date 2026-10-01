@@ -32,14 +32,14 @@
     "devServer": "bash packages/storefront/scripts/start-dev-server.sh",
     "depInstall": "npm ci"
   },
-  "phases": { "qa": true, "docs": true, "parity": false },
+  "phases": { "qa": true, "docs": false, "parity": false },
   "qa": {
     "driver": "web-playwright",
     "portSeed": 3001,
     "credentialsPath": ".claude/qa-accounts.env",
     "authProvider": "email-password"
   },
-  "docs": { "root": "packages/storefront/docs", "retrieval": true, "retrievalBackend": "java" },
+  "docs": { "root": "packages/storefront/docs", "retrievalBackend": "java" },
   "deploy": {
     "provider": "acme-cloud",
     "target": "acme-shop-production",
