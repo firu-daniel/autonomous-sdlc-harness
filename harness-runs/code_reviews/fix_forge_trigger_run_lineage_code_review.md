@@ -21,7 +21,7 @@ The four findings below are what is left. Pass 2 found no per-unit review files 
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 4** — Name `hr_branch_run_history` among the consumers of `HR_REMOTE_WORKFLOW_RUN_FILE` in the run library's bundle-format header _(layer: cli)_
-2. [ ] **Finding 1** — Make Gate 12 (xiii) leg (d) stop `<slug>_2`'s run and wait for it to finish before deleting the branch _(layer: general)_
+2. [x] **Finding 1** — Make Gate 12 (xiii) leg (d) stop `<slug>_2`'s run and wait for it to finish before deleting the branch _(layer: general)_
 3. [ ] **Finding 2** — Qualify the "every `remote-github` outcome" claim for the trigger answers, which early returns contradict _(layer: cli, general)_
 4. [ ] **Finding 3** — Make `remote-run.sh discard` refuse a target that is not a directory, so it cannot delete `scratch/README.md` _(layer: cli)_
 

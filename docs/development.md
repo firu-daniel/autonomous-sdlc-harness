@@ -1049,7 +1049,17 @@ Record whether it answered `read`, which settles research T3's unmeasured row.
 
 Passes when `/autonomous-sdlc-harness:branch-status` prints the run's state from GitHub with no local record; `/autonomous-sdlc-harness:branch-pause` produces a `harness pause <slug>` run the job finds; no registry record, no sibling working copy and no `deps.marker` appear on the machine; and after the command no `<stateDir>/scratch/branch-pause-<slug>/` directory remains and nothing else is new under `<stateDir>/scratch/`. `<slug>` is its own fold, because the derived name holds only characters the fold rule in `<stateDir>/scratch/README.md` keeps. Record the status output, the pause output and the job-log line where the pause was found.
 
-**(d) A name with run history.** Run it after leg (a), while `<slug>` and `<slug>_2` both have runs. Delete `<slug>_2`'s remote branch:
+**(d) A name with run history.** Run it after leg (a), once `<slug>_2`'s runs have all finished. Stop the run leg (a) started, then list its runs:
+
+```
+bash <scriptsDir>/remote-run.sh stop <slug>_2
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>_2 --json databaseId,displayTitle,status
+```
+
+Repeat the listing until every `harness run <slug>_2` entry has `status` `completed`. A stopped run is `completed` with conclusion `cancelled`, and `restore` counts it as a finished run. Then delete `<slug>_2`'s remote branch:
 
 ```
 git push --no-verify origin --delete <slug>_2
