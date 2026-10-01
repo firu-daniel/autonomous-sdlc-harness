@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # The harness's own verification, as one command.
 #
-# `docs/development.md` §5 defines twelve gates. This script runs the six a process can run
-# unattended — gate 11 among them where the retrieval model cache is provisioned and the workspace's
-# retrieval packages are installed, and reported with the hand-run gates where they are not — and
-# reports the six it cannot, so that a reviewer — human or agent — reading a green result has read
-# the whole automatable half rather than one suite of it.
+# `docs/development.md` §5 defines thirteen gates. This script runs the seven a process can run
+# unattended — gates 1, 2, 3, 4, 6, 11 and 13 — and reports the six it cannot, so that a reviewer —
+# human or agent — reading a green result has read the whole automatable half rather than one suite
+# of it. Two of the seven are conditional. Gate 11 runs where the retrieval model cache is
+# provisioned and the workspace's retrieval packages are installed, and is reported BLOCKED with the
+# hand-run gates where they are not. Gate 13 (the Python docs-retrieval service) reports a leg
+# BLOCKED where `uv` or its synced environment is missing, and its container leg 13d SKIPPED unless
+# HARNESS_GATES_CONTAINERS=1 is set on a machine with Docker. Neither outcome is a pass or a failure.
 # `commands.test` in `harness.config.json` points here for exactly that reason: `npm test` is gate 4
 # alone, and a branch review that reads it as "verified" is reading the other five automatable
 # gates' worth of silence as a pass.
@@ -34,6 +37,9 @@ failed=()
 passed=()
 # Gate 11's third outcome, which is neither of the two arrays: see that gate's own block below.
 floor_blocked=0
+# Gate 13's BLOCKED and SKIPPED outcomes, also in neither array: see that gate's own block below.
+python_blocked=()
+python_skip_reason=""
 
 # Run one command and grade it by its EXIT STATUS. Output goes to a file rather than through a
 # pipe: §5's opening rule is that piping a gate into a pager or into `head` returns the *pager's*
@@ -177,6 +183,51 @@ else
   sed 's/^/        /' "$log" | tail -25
 fi
 
+echo "== gate 13 — Python docs-retrieval service"
+# Hand-written beside gate 11 and for the same reason: `gate` grades two outcomes, and
+# `scripts/python-service.sh`'s exit contract has two more that are neither a pass nor a failure.
+# Status 3 is an unprovisioned toolchain (`uv` missing, or no synced environment), BLOCKED on gate
+# 11's terms: provisioning a checkout is not a property of the code. Status 4 is `container-test`'s
+# no-Docker skip, honoured only when the caller says the leg may produce it ($2 = skip4); on any
+# other leg the wrapper never produces it, so it falls through to a failure. 13c's bridge cases run
+# `cli/dist`, so 13c depends on gate 2a.
+python_gate() {
+  local name="$1" skip4="$2"; shift 2
+  "$@" >"$log" 2>&1
+  local status=$?
+  if [ "$status" -eq 0 ]; then
+    passed+=("$name")
+    echo "  ok    $name"
+  elif [ "$status" -eq 3 ]; then
+    python_blocked+=("$name")
+    echo "  BLOCKED $name — uv or the synced Python environment is missing; run bash scripts/python-service.sh sync"
+    sed 's/^/        /' "$log" | tail -25
+  elif [ "$status" -eq 4 ] && [ "$skip4" = "skip4" ]; then
+    python_skip_reason="docker is not on PATH"
+    echo "  SKIPPED $name — docker is not on PATH; the container leg needs Docker"
+    sed 's/^/        /' "$log" | tail -25
+  else
+    failed+=("$name")
+    echo "  FAIL  $name (exit $status)"
+    sed 's/^/        /' "$log" | tail -25
+  fi
+}
+python_gate "13a Python lint" noskip bash scripts/python-service.sh lint
+python_gate "13b Python typecheck" noskip bash scripts/python-service.sh typecheck
+python_gate "13c Python tests" noskip bash scripts/python-service.sh test
+if [ "${HARNESS_GATES_CONTAINERS:-}" = "1" ]; then
+  python_gate "13d Python container tests" skip4 bash scripts/python-service.sh container-test
+else
+  python_skip_reason="not opted in; set HARNESS_GATES_CONTAINERS=1 on a machine with Docker"
+  echo "  SKIPPED 13d Python container tests — opt in with HARNESS_GATES_CONTAINERS=1 on a machine with Docker"
+fi
+python_blocked_list=""
+if [ ${#python_blocked[@]} -gt 0 ]; then
+  for name in "${python_blocked[@]}"; do
+    python_blocked_list="${python_blocked_list:+$python_blocked_list, }$name"
+  done
+fi
+
 echo
 echo "== gates this script cannot run"
 echo "  5  doctor's exit contract, by hand against gate 4's scratch repository"
@@ -190,12 +241,26 @@ if [ "$floor_blocked" -eq 1 ]; then
   echo "     retrieval model cache is provisioned and the workspace's retrieval packages are installed,"
   echo "     and is listed here where they are not"
 fi
+if [ -n "$python_blocked_list" ]; then
+  echo "  13 the Python docs-retrieval service, reported BLOCKED above (${python_blocked_list}): it runs"
+  echo "     unattended once bash scripts/python-service.sh sync has provisioned its environment, and is"
+  echo "     listed here until then"
+fi
+if [ -n "$python_skip_reason" ]; then
+  echo "  13d the Python service's container tests, reported SKIPPED above: ${python_skip_reason}"
+fi
 echo "     -> docs/development.md §5"
 
-# The same conditional the block above states, in the line a caller reads off a green run.
+# The same conditionals the block above states, in the line a caller reads off a green run.
 hand_run="gates 5, 7, 8, 9, 10 and 12 remain hand-run"
 if [ "$floor_blocked" -eq 1 ]; then
   hand_run="$hand_run, and gate 11 with them — it runs unattended only where the model cache is provisioned and the workspace's retrieval packages are installed"
+fi
+if [ -n "$python_blocked_list" ]; then
+  hand_run="$hand_run; gate 13 was BLOCKED (${python_blocked_list}) — those legs ran no Python; provision it with bash scripts/python-service.sh sync"
+fi
+if [ -n "$python_skip_reason" ]; then
+  hand_run="$hand_run; 13d was SKIPPED — ${python_skip_reason}"
 fi
 
 echo

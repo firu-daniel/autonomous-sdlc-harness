@@ -39,3 +39,8 @@
   `git grep -nE -i 'twelve gates|of the twelve|gates 5, 7, 8, 9, 10 and 12|gates 1, 2, 3, 4, 6 and 11|run-gates\.sh' -- docs README.md CONTRIBUTING.md ARCHITECTURE.md ROADMAP.md llms.txt .claude/context`
   Every hit must fall within a site the register lists. The new Gate 13 paragraph is row 10. No hit may remain on rows 1 and 2's old wording.
 - `git diff --stat` shows `docs/development.md` changed only inside `## 5. Verifying a change`, and no other file under `docs/`.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the `bash -n scripts/run-gates.sh` syntax check was refused by the permission layer (both `bash -n` and `/bin/bash -n` returned "This command requires approval"), so the "`bash -n` is clean" claim rests on reading the edited script, not on execution. The status-to-outcome mapping and the absence of pipes on every 13x command were verified by reading the gate 13 block. Phase G's run of `scripts/run-gates.sh` executes it.
+- Not run, per the story index's test-run note: `scripts/run-gates.sh`, `commands.test` and every `scripts/python-service.sh` gate sub-command, deferred to the Run gates phase.
