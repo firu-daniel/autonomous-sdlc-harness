@@ -220,6 +220,7 @@ import {
   CLI_VERSION_VARIABLE,
   DEFAULT_GH_CLI,
   COMMAND_HANDLE,
+  COMMAND_VERBS,
   DEFAULT_TRIGGER_LABEL,
   GH_CLI_VARIABLE,
   ghCli,
@@ -2881,7 +2882,7 @@ const FORGE_CHECK: Check = {
       ? `the ${REMOTE_GITHUB_CHECK.id} check above reports what GitHub says`
       : `\`${CLI} doctor --check-github\` asks GitHub`;
     return pass(
-      `${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; a \`${COMMAND_HANDLE} <verb>\` comment answers, pauses, resumes, stops or clears it; a review requesting changes on the run's pull request starts a user-review round; and a completed run opens a draft pull request. What this cannot see lives on GitHub — the label, the workflows GitHub knows (${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE}) and the pull-request setting; ${asked}`,
+      `${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; a \`${COMMAND_HANDLE} <verb>\` comment (${nameList([...COMMAND_VERBS])}) steers it; a review requesting changes on the run's pull request starts a user-review round; and a completed run opens a draft pull request. What this cannot see lives on GitHub — the label, the workflows GitHub knows (${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE}) and the pull-request setting; ${asked}`,
     );
   },
 };
