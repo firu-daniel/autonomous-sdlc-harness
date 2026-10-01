@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # harness-run-lib.sh — the one place every generated outer-loop script resolves
 # the repository it is operating on, reads that repository's
-# `harness.config.json` at run time, answers "is this branch protected?", and
-# derives the anchors (main checkout, work root, worktree directory, repo slug,
+# `harness.config.json` at run time, answers "is this branch protected?",
+# routes an inbox filename to its engine and branch (`hr_inbox_route_var`),
+# derives a branch name from a title (`hr_derive_branch`), places a dropped
+# artifact in a working copy and commits and pushes it, and derives the
+# anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
 # differently. It also implements the run registry's reads and writes for the
 # scripts that share that registry, and states the remote state bundle's format
-# with the one writer and restorer every remote-execution consumer shares.
+# with the one writer and restorer every remote-execution consumer shares, and
+# the GitHub route a job-side notification names beside its local command.
 #
 # WHO SOURCES THIS, AND HOW. Every script in the configured `scriptsDir` that
 # needs this library sources it by a path computed from `${BASH_SOURCE[0]}` —
@@ -62,8 +66,9 @@
 #      `.stale.*` move-aside and `.break` mutex while a stale one is broken)
 #      and the temp files
 #      `.registry.*` in the registry's own directory. Written only by
-#      `hr_registry_init`, `hr_registry_set` and the `hr_registry_lock` /
-#      `hr_registry_unlock` pair `hr_registry_set` calls.
+#      `hr_registry_init`, `hr_registry_set`, `hr_remote_record_init` (through
+#      `hr_registry_set`) and the `hr_registry_lock` / `hr_registry_unlock`
+#      pair `hr_registry_set` calls.
 #   3. THE REMOTE STATE BUNDLE writes the files its format lists. Fence: inside
 #      `<root>/<state_dir>/` (resolved through `hr_state_dir`), only
 #      `autonomous_logs/remote_status.json`, `clarifications/<branch>/`,
@@ -75,10 +80,21 @@
 #      of `hr_remote_status_write`. Written only by `hr_remote_status_write`,
 #      `hr_remote_bundle_write` and `hr_remote_bundle_restore`, and nothing
 #      there but a writer's own failed temp file is ever removed.
+#   4. THE ARTIFACT PLACEMENT writes one artifact into a working copy. Fence:
+#      the caller-named `<worktree>/<rel>`, its parent directories and that
+#      path's index entry, plus whatever the two caller-named wrappers do.
+#      Written only by `hr_place_artifact`, `hr_commit_placed` and
+#      `hr_push_landed`.
+#
+# MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
+# rename there is an edit here, byte for byte:
+#   HR_REMOTE_WORKFLOW_RUN_FILE mirrors  WORKFLOW_RUN_FILE
+#   HR_REMOTE_STATE_ARTIFACT    mirrors  STATE_ARTIFACT_NAME
 #
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
-# `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
-# `hr_remote_bundle_write` or `hr_remote_bundle_restore` function still gets a library that only reads. The
+# `hr_remote_record_init`, `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
+# `hr_remote_bundle_write`, `hr_remote_bundle_restore`, `hr_place_artifact`,
+# `hr_commit_placed` or `hr_push_landed` function still gets a library that only reads. The
 # lane's ceilings are the only environment values here that carry policy, because
 # the lane is machine-scoped and has no configuration key to carry them; each is
 # named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
@@ -173,7 +189,10 @@
 # `mktemp`'s and `jq`'s own stderr on a failed write to the caller, as the
 # watcher's bodies they replaced did — that stream is the watcher's log — and
 # add one line of their own, naming the lock, when `hr_registry_set` cannot
-# take the registry lock. That silence is why the lane reports a lock it BROKE through a
+# take the registry lock. The artifact placement's three writers likewise leave
+# `mkdir`'s, `cp`'s, `git add`'s and both wrappers' own output on their stdout
+# and stderr for the caller to redirect into its log.
+# That silence is why the lane reports a lock it BROKE through a
 # variable instead of a log line — the caller owns the log.
 #
 # NAMING. Every function is prefixed `hr_`; every variable this file touches
@@ -181,7 +200,10 @@
 # value WITHOUT a command substitution — a `$(…)` forks a subshell, and the
 # watcher calls these on every tick: `HR_CFG_PID`, `HR_CFG_ROOT`,
 # `HR_CFG_STATE`, `HR_CFG_FILE`, `HR_CFG_SCALARS`, `HR_CFG_LISTS`,
-# `HR_CFG_VALUE`, `HR_CFG_COMMAND_KEYS`, `HR_PROTECTED_DEFAULT`, and the lane's
+# `HR_CFG_VALUE`, `HR_CFG_COMMAND_KEYS`, `HR_PROTECTED_DEFAULT`,
+# `HR_INBOX_KIND`, `HR_INBOX_BRANCH`, the branch derivation's
+# `HR_BRANCH_SLUG_MAX`, `HR_BRANCH_SUFFIX_MAX`, `HR_TAKEN_REMOTE`,
+# `HR_TAKEN_ARTIFACTS` and `HR_TAKEN_WHY`, and the lane's
 # `HR_LANE_RANK`, `HR_LANE_STATE`, `HR_LANE_RESUME_AT`, `HR_LANE_OBSERVED_AT`,
 # `HR_LANE_OBSERVED_REPO`, `HR_LANE_OWNER_SLUG`, `HR_LANE_OWNER_PID`,
 # `HR_LANE_OWNER_AT` and `HR_LANE_BROKEN_OWNER`, and the remote state bundle's
@@ -609,6 +631,7 @@ hr_config_load() {
       s("phases.qa";             try (.phases.qa     | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("phases.docs";           try (.phases.docs   | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("execution.target";      try .execution.target     catch null),
+      s("forge";                 try .forge                catch null),
       s("protectedBranches.present";
         try (if (.protectedBranches | type) == "array" then "1" else null end) catch null),
       l("protectedBranches";     try .protectedBranches    catch null)
@@ -873,6 +896,68 @@ hr_execution_target() {
       ;;
   esac
   return 2
+}
+
+# `forge` — which code-hosting platform the flow integrates with: `github`,
+# `gitlab` or `none`. THE ONE READER OF THE KEY IN THIS FAMILY, and the shell
+# mirror of `cli/src/config/model.ts` → `FORGE_KINDS`: change the enum there and
+# here together. 1 — printing nothing — when the key is absent: "not yet
+# decided", which is not `none`, and the schema withholds a default on purpose.
+# 2 — printing nothing — when the configuration is unresolvable or the value is
+# outside the enum, a refusal rather than a guess.
+hr_forge() {
+  local root="${1-}"
+  hr_config_load "$root" || return 2
+  hr_cfg_scalar_var "forge" || return 1
+  case "$HR_CFG_VALUE" in
+    github|gitlab|none)
+      printf '%s\n' "$HR_CFG_VALUE"
+      return 0
+      ;;
+  esac
+  return 2
+}
+
+# ---------------------------------------------------------------------------
+# Inbox routing — the one owner of the drop filename patterns.
+# ---------------------------------------------------------------------------
+
+# Route one inbox filename: set `HR_INBOX_KIND` (`task` | `user_review` |
+# `docs`) and `HR_INBOX_BRANCH`, and return 0; on no match return 1 with both
+# empty. Takes a basename, not a path.
+#
+# The task-prompt pattern is tested FIRST (the more specific suffix), but the
+# anchored SUFFIX regexes are mutually exclusive by construction: a filename
+# cannot end in more than one of `_task_prompt.md` / `_review[_<n>].md` /
+# `_docs.md`, so a branch whose own name contains `review` or `task_prompt`
+# cannot be mis-routed — `foo_review_task_prompt.md` is the task engine on branch
+# `foo_review`, and `foo_task_prompt_review.md` is the review engine on branch
+# `foo_task_prompt`. POSIX leftmost-longest matching of the greedy `(.+)` derives
+# the right branch from a round-suffixed name: `foo_review_2.md` -> branch `foo`
+# (the `_2` is consumed by the optional `(_[0-9]+)?`), while
+# `foo_review_2_review.md` -> branch `foo_review_2`. THE WATCHER DERIVES ONLY THE
+# BRANCH, never the round: the engine resolves the latest round itself, inside
+# the working copy, which is why nothing here has to remember one.
+hr_inbox_route_var() {
+  local fname="${1-}" branch
+  HR_INBOX_KIND=""
+  HR_INBOX_BRANCH=""
+  [ -n "$fname" ] || return 1
+  branch="$(printf '%s' "$fname" | sed -nE 's/^(.+)_task_prompt\.md$/\1/p')"
+  if [ -n "$branch" ]; then
+    HR_INBOX_KIND="task"
+  else
+    branch="$(printf '%s' "$fname" | sed -nE 's/^(.+)_review(_[0-9]+)?\.md$/\1/p')"
+    if [ -n "$branch" ]; then
+      HR_INBOX_KIND="user_review"
+    else
+      branch="$(printf '%s' "$fname" | sed -nE 's/^(.+)_docs\.md$/\1/p')"
+      [ -n "$branch" ] || return 1
+      HR_INBOX_KIND="docs"
+    fi
+  fi
+  HR_INBOX_BRANCH="$branch"
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -1319,12 +1404,308 @@ hr_registry_branches() {
   jq -r '.runs | keys[]' "$file" 2>/dev/null
 }
 
+# hr_remote_record_init <file> <branch> <worktree> <log_path> <engine>
+# The fields a remote run's record starts with — the one list, written by the
+# watcher's `launch_remote_run` — in one write, so no reader sees half of them. `status` is left to the caller, which writes it only
+# once its run exists. 1 when the write failed.
+hr_remote_record_init() {
+  local file="${1-}" branch="${2-}"
+  hr_registry_set "$file" "$branch" \
+    worktree "${3-}" log_path "${4-}" engine "${5-}" \
+    execution github-actions \
+    started_at "$(date '+%Y-%m-%dT%H:%M:%S')" \
+    pid "" remote_dispatched_at "" \
+    stall_restarts 0 stall_warned "" stall_killing "" \
+    paused_by "" usage_resume_at "" \
+    resume_kind "" park_loop_cycles 0
+}
+
+# ---------------------------------------------------------------------------
+# DERIVING A BRANCH NAME FROM A TITLE.
+#
+# THE RULE. A title becomes a branch name by a fixed fold, with no model and no
+# confirmation step: lowercase A–Z, turn every run of characters outside
+# `[a-z0-9]` into one `_`, trim `_` from both ends, cut to `HR_BRANCH_SLUG_MAX`
+# and trim a trailing `_` the cut exposed. An empty result takes the caller's
+# <fallback> (`issue_<number>` for an issue, `task_<run id>` for a dispatch). A
+# taken name takes the lowest free `<name>_<n>`, `_2` through
+# `HR_BRANCH_SUFFIX_MAX`; the first branch carries no suffix (`Version bump` →
+# `version_bump`), and `_2` reads as "the second".
+#
+# - The fold is ASCII-only under `LC_ALL=C`, so `é` is a separator, never a
+#   letter — `hr_repo_slug`'s precedent. A locale-dependent fold would derive
+#   different names on different runners; a lowercase ASCII name passes every
+#   `git check-ref-format` rule and cannot collide by case on macOS or Windows.
+# - The cap is 60, cut before the suffix. The name becomes a working-copy
+#   directory component (`<projectName>-<branch>`) and prefixes artifact names
+#   (`<branch>_task_prompt.md`); 60 keeps each far under a 255-byte file-name
+#   limit and readable in the Actions run list. GitHub documents no ref limit.
+#
+# THIS SECTION ONLY READS. It fetches nothing and creates no branch or file; a
+# caller that wants `origin` fresh fetches first. A registry is read only when
+# it already exists, because `hr_registry_get` creates an absent one.
+# ---------------------------------------------------------------------------
+
+# The two limits the rule above names.
+hr_branch_limits_var() {
+  HR_BRANCH_SLUG_MAX=60
+  HR_BRANCH_SUFFIX_MAX=99
+}
+
+# hr_branch_slug <text> — print the slug and return 0; print nothing and return
+# 1 when the fold leaves nothing (`🚀🚀`).
+hr_branch_slug() {
+  # `[!a-z0-9]` is a collation range: under a UTF-8 locale it would keep `é`.
+  local LC_ALL=C
+  local text="${1-}" slug
+  hr_branch_limits_var
+  slug=$(printf '%s' "$text" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+  slug=${slug//[!a-z0-9]/_}
+  while :; do
+    case "$slug" in
+      *__*) slug=${slug//__/_} ;;
+      *) break ;;
+    esac
+  done
+  slug=${slug#_}
+  slug=${slug%_}
+  if [ "${#slug}" -gt "$HR_BRANCH_SLUG_MAX" ]; then
+    slug=${slug:0:$HR_BRANCH_SLUG_MAX}
+    slug=${slug%_}
+  fi
+  [ -n "$slug" ] || return 1
+  printf '%s\n' "$slug"
+}
+
+# Read, once, the two listings every `taken` judgement compares against:
+# `HR_TAKEN_REMOTE` — each branch on `origin`, lowercased — and
+# `HR_TAKEN_ARTIFACTS` — the basename of every file and directory under
+# `<state_dir>` on `origin/<defaultBranch>`; one per line in both. 0 when both
+# were read; 2, with `HR_TAKEN_WHY` naming which, when either could not be.
+hr_branch_taken_lists_var() {
+  local LC_ALL=C
+  local root="${1-}" heads state default tree line tab
+  tab=$(printf '\t')
+  HR_TAKEN_REMOTE=""
+  HR_TAKEN_ARTIFACTS=""
+  HR_TAKEN_WHY=""
+  if ! heads=$(git -C "$root" ls-remote --heads origin 2>/dev/null); then
+    HR_TAKEN_WHY="the branches on origin could not be listed"
+    return 2
+  fi
+  while IFS= read -r line; do
+    line=${line#*"$tab"refs/heads/}
+    [ -n "$line" ] || continue
+    HR_TAKEN_REMOTE="$HR_TAKEN_REMOTE$line
+"
+  done <<EOF
+$heads
+EOF
+  HR_TAKEN_REMOTE=$(printf '%s' "$HR_TAKEN_REMOTE" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+
+  if ! state=$(hr_state_dir "$root") || ! default=$(hr_default_branch "$root"); then
+    HR_TAKEN_WHY="the configuration could not be read"
+    return 2
+  fi
+  if ! git -C "$root" rev-parse --verify --quiet "refs/remotes/origin/$default^{commit}" >/dev/null 2>&1; then
+    HR_TAKEN_WHY="origin/$default is not present"
+    return 2
+  fi
+  if ! tree=$(git -C "$root" ls-tree -r -t --name-only "refs/remotes/origin/$default" -- "$state/" 2>/dev/null); then
+    HR_TAKEN_WHY="the tree of origin/$default could not be read"
+    return 2
+  fi
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    HR_TAKEN_ARTIFACTS="$HR_TAKEN_ARTIFACTS${line##*/}
+"
+  done <<EOF
+$tree
+EOF
+  return 0
+}
+
+# Judge <name> against the listings `hr_branch_taken_lists_var` last read. The
+# answers and `HR_TAKEN_WHY` are `hr_branch_name_taken`'s.
+hr_branch_taken_judge() {
+  local LC_ALL=C
+  local root="${1-}" name="${2-}" registry="${3-}" lower status nl
+  nl='
+'
+  HR_TAKEN_WHY=""
+  status=0
+  hr_branch_is_protected "$root" "$name" || status=$?
+  case "$status" in
+    0) HR_TAKEN_WHY="a protected branch"; return 0 ;;
+    2) HR_TAKEN_WHY="the protected branches could not be resolved"; return 2 ;;
+  esac
+  lower=$(printf '%s' "$name" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+  case "$nl$HR_TAKEN_REMOTE$nl" in
+    *"$nl$lower$nl"*) HR_TAKEN_WHY="a branch on origin"; return 0 ;;
+  esac
+  if git -C "$root" show-ref --verify --quiet "refs/heads/$name" 2>/dev/null; then
+    HR_TAKEN_WHY="a local branch"
+    return 0
+  fi
+  case "$nl$HR_TAKEN_ARTIFACTS" in
+    *"$nl$name$nl"* | *"$nl${name}_task_prompt.md$nl"* | *"$nl${name}_story_plan.md$nl"* | *"$nl${name}_docs.md$nl"*)
+      HR_TAKEN_WHY="a run's artifacts on the default branch"
+      return 0
+      ;;
+  esac
+  if [ -n "$registry" ] && [ -f "$registry" ] && [ -n "$(hr_registry_get "$registry" "$name" branch)" ]; then
+    HR_TAKEN_WHY="a run registry record"
+    return 0
+  fi
+  return 1
+}
+
+# hr_branch_name_taken <root> <name> [<registry>] — 0 taken, 1 free, 2 cannot
+# tell. Sets `HR_TAKEN_WHY` to a short phrase naming the collision or the
+# failure. Taken: a protected name; a branch on `origin`, compared
+# case-insensitively; a local branch; under `<state_dir>` on
+# `origin/<defaultBranch>`, a directory named <name> or a file
+# `<name>_task_prompt.md`, `<name>_story_plan.md` or `<name>_docs.md` — which a
+# merged and deleted branch still leaves; a record in an existing <registry>.
+hr_branch_name_taken() {
+  local root="${1-}" name="${2-}" registry="${3-}"
+  HR_TAKEN_WHY=""
+  if [ -z "$root" ] || [ -z "$name" ]; then
+    HR_TAKEN_WHY="no branch name to judge"
+    return 2
+  fi
+  hr_config_load "$root" || :
+  hr_branch_taken_lists_var "$root" || return 2
+  hr_branch_taken_judge "$root" "$name" "$registry"
+}
+
+# hr_derive_branch <root> <text> <fallback> [<registry>] — print the derived name
+# and return 0; return 2, printing nothing, when a `taken` judgement could not
+# tell or no base routes back to itself; return 3, printing nothing, when every
+# suffix through `HR_BRANCH_SUFFIX_MAX` is taken. Never a guessed name.
+#
+# THE BASE MUST ROUTE BACK TO ITSELF: `hr_inbox_route_var` on each drop filename
+# a run of that name produces has to give the base as its branch, so no derived
+# name makes the inbox patterns ambiguous. A base that does not is replaced by
+# <fallback> once.
+hr_derive_branch() {
+  local root="${1-}" text="${2-}" fallback="${3-}" registry="${4-}"
+  local base="" candidate suffix routes n status
+  hr_branch_limits_var
+  candidate=$(hr_branch_slug "$text") || candidate="$fallback"
+  for candidate in "$candidate" "$fallback"; do
+    [ -n "$candidate" ] || continue
+    routes=0
+    for suffix in _task_prompt.md _review.md _review_2.md _docs.md; do
+      if ! hr_inbox_route_var "$candidate$suffix" || [ "$HR_INBOX_BRANCH" != "$candidate" ]; then
+        routes=1
+        break
+      fi
+    done
+    if [ "$routes" -eq 0 ]; then
+      base="$candidate"
+      break
+    fi
+  done
+  [ -n "$base" ] || return 2
+
+  hr_config_load "$root" || :
+  hr_branch_taken_lists_var "$root" || return 2
+  candidate="$base"
+  n=1
+  while :; do
+    status=0
+    hr_branch_taken_judge "$root" "$candidate" "$registry" || status=$?
+    case "$status" in
+      1) printf '%s\n' "$candidate"; return 0 ;;
+      2) return 2 ;;
+    esac
+    n=$((n + 1))
+    [ "$n" -le "$HR_BRANCH_SUFFIX_MAX" ] || return 3
+    candidate="${base}_$n"
+  done
+}
+
+# ---------------------------------------------------------------------------
+# THE ARTIFACT PLACEMENT.
+#
+# THE CONTRACT. The one placement the watcher's inbox pass and a job starting a
+# run both perform: copy a dropped artifact into a working copy, stage exactly
+# that path, skip an identical re-drop, commit through the caller-named commit
+# wrapper, push through the caller-named push wrapper, and read "landed" as
+# `origin/<branch>` equal to `HEAD`. Every step reports by exit status only;
+# what a failure means — log and launch anyway, or block the dispatch — is the
+# caller's decision. The wrapper paths are arguments because this library
+# resolves no sibling script. Write exception 4 in the header is this section's.
+# ---------------------------------------------------------------------------
+
+# hr_task_prompt_rel <state_rel> <branch> — print the task prompt's
+# repo-relative path, with <state_rel>'s trailing `/` dropped.
+hr_task_prompt_rel() {
+  local state_rel="${1-}" branch="${2-}"
+  printf '%s/task_prompts/%s_task_prompt.md\n' "${state_rel%/}" "$branch"
+}
+
+# hr_task_prompt_subject <branch> — print the task prompt's commit subject. The
+# one producer of it; `.claude/context/conventions.md` → `## Commit-message
+# policy` lists it byte for byte.
+hr_task_prompt_subject() {
+  printf 'chore: add task prompt for %s\n' "${1-}"
+}
+
+# hr_user_review_subject <branch> — print a user review round's commit subject.
+# The one producer of it, for the watcher's remote inbox pass and
+# `remote-run.sh review`.
+hr_user_review_subject() {
+  printf 'chore: add user review for %s\n' "${1-}"
+}
+
+# hr_place_artifact <worktree> <src_file> <rel> — copy <src_file> to
+# <worktree>/<rel>, creating its parent. 0, or 1 on a failure.
+hr_place_artifact() {
+  local worktree="${1-}" src="${2-}" rel="${3-}" dest
+  [ -n "$worktree" ] && [ -n "$src" ] && [ -n "$rel" ] || return 1
+  dest="$worktree/$rel"
+  mkdir -p "${dest%/*}" || return 1
+  cp "$src" "$dest" || return 1
+  return 0
+}
+
+# hr_commit_placed <commit_wrapper> <worktree> <rel> <subject> — stage <rel> and
+# commit it through <commit_wrapper>. 0 committed; 3 nothing staged for <rel> (an
+# identical re-drop — nothing committed); 1 staging or the wrapper failed.
+hr_commit_placed() {
+  local wrapper="${1-}" worktree="${2-}" rel="${3-}" subject="${4-}"
+  [ -n "$wrapper" ] && [ -n "$worktree" ] && [ -n "$rel" ] && [ -n "$subject" ] || return 1
+  git -C "$worktree" add -- "$rel" || return 1
+  git -C "$worktree" diff --cached --quiet -- "$rel" && return 3
+  "$wrapper" --repo "$worktree" "$rel" -- "$subject" || return 1
+  return 0
+}
+
+# hr_push_landed <push_wrapper> <worktree> <branch> — run <push_wrapper>, then 0
+# only when `HEAD` and `refs/remotes/origin/<branch>` both resolve and are
+# equal; 1 otherwise. `push-branch.sh` exits 0 on every path, so its status is
+# never the answer.
+hr_push_landed() {
+  local wrapper="${1-}" worktree="${2-}" branch="${3-}" head upstream
+  [ -n "$wrapper" ] && [ -n "$worktree" ] && [ -n "$branch" ] || return 1
+  "$wrapper" "$worktree"
+  head=$(git -C "$worktree" rev-parse --verify --quiet HEAD) || return 1
+  upstream=$(git -C "$worktree" rev-parse --verify --quiet "refs/remotes/origin/$branch") || return 1
+  [ -n "$head" ] && [ "$head" = "$upstream" ]
+}
+
 # ---------------------------------------------------------------------------
 # THE REMOTE STATE BUNDLE.
 #
 # THE FORMAT OF RECORD. What a remote job carries across a job boundary and
-# reports back, uploaded as the Actions artifact `harness-state`. Every name
-# below is a variable `hr_remote_names_var` assigns; no function spells one.
+# reports back, uploaded as the Actions artifact `HR_REMOTE_STATE_ARTIFACT`
+# names. Every name below is a variable `hr_remote_names_var` assigns, and it
+# also assigns `HR_REMOTE_WORKFLOW_RUN_FILE`, the run workflow's file name, for
+# the GitHub-route producers `hr_github_answer_route` and
+# `hr_github_resume_route`. Those two are mirrors of the header's table; no
+# function spells either one, or any other name here.
 #
 #   <bundle>/status.json                 the job's record, fixed schema below
 #   <bundle>/clarifications/<branch>/    the whole branch directory, answered/ included
@@ -1402,6 +1783,46 @@ hr_remote_names_var() {
   HR_REMOTE_STATUS_SOURCE="$HR_REMOTE_LOGS_DIR/remote_status.json"
   HR_REMOTE_SUPERSEDED_DIR="$HR_REMOTE_LOGS_DIR/remote_superseded"
   HR_REMOTE_PLANNING_DIR='planning'
+  HR_REMOTE_WORKFLOW_RUN_FILE='harness-run.yml'
+  HR_REMOTE_STATE_ARTIFACT='harness-state'
+}
+
+# hr_github_answer_route <branch> <engine> [park_loop_clear]
+# hr_github_resume_route <branch> <engine>
+#
+# Print the GitHub route for a remote-only reader of a job-side notification,
+# one clause with no trailing period, for the caller to join after its local
+# command. The route names the engine because `harness-run.yml`'s `engine`
+# input defaults to `task`: an empty <engine> prints where to read the run's
+# own instead. It names the branch twice, as the form's *Use workflow from*
+# ref and as the `branch` input: a run dispatched from the default branch is
+# listed under that branch, where every `gh run list --branch <branch>`
+# lookup (`sync`, `status`, `restore`) misses it. A non-empty third argument to the answer route adds the
+# park-loop clear. The section cited is `## 1. The lifecycle of a remote run`;
+# renumbering or retitling it is an edit here.
+hr_github_answer_route() {
+  local branch="${1-}" engine="${2-}" clear='' eng
+  hr_remote_names_var
+  if [ -n "$engine" ]; then
+    eng="engine \`$engine\`"
+  else
+    eng="engine the run's own (the \`engine\` field of \`$HR_REMOTE_STATUS_FILE\` in its \`$HR_REMOTE_STATE_ARTIFACT\` artifact)"
+  fi
+  [ -n "${3-}" ] && clear=', park_loop_clear true'
+  printf 'or from GitHub: take the question from the run'"'"'s `%s` artifact, then Run workflow on %s from the branch `%s` (Use workflow from), with action run, branch `%s`, %s, resume answer%s and answers `{"<n>": "<your answer>"}` (docs/remote-execution.md, section 1)' \
+    "$HR_REMOTE_STATE_ARTIFACT" "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch" "$branch" "$eng" "$clear"
+}
+
+hr_github_resume_route() {
+  local branch="${1-}" engine="${2-}" eng
+  hr_remote_names_var
+  if [ -n "$engine" ]; then
+    eng="engine \`$engine\`"
+  else
+    eng="engine the run's own (the \`engine\` field of \`$HR_REMOTE_STATUS_FILE\` in its \`$HR_REMOTE_STATE_ARTIFACT\` artifact)"
+  fi
+  printf 'or from GitHub: Run workflow on %s from the branch `%s` (Use workflow from), with action run, branch `%s`, %s and resume pause (docs/remote-execution.md, section 1)' \
+    "$HR_REMOTE_WORKFLOW_RUN_FILE" "$branch" "$branch" "$eng"
 }
 
 # hr_remote_planning_paths <branch>

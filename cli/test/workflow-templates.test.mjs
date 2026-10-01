@@ -19,7 +19,15 @@
  * `HARNESS_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block;
  * its state upload under `always()` named `POLL_STATE_ARTIFACT_NAME`, as `remote-run.sh` spells it.
  *
- * For both: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
+ * For `harness-trigger.yml`: the `issues` and `repository_dispatch` triggers, `labeled` the only
+ * `issues` type so `opened` never starts a second run, and `TRIGGER_DISPATCH_EVENT_TYPE` the only
+ * dispatch type; the permissions exactly `contents: write`, `actions: write` and `issues: write`; the
+ * job's `if:` naming `TRIGGER_LABEL_VARIABLE` with `DEFAULT_TRIGGER_LABEL` as its fallback;
+ * `remote-run.sh trigger` its only call into the script family; no `secrets.` reference, so the
+ * credential secrets never reach the job reading issue text; no `concurrency:` key, which would drop a
+ * pending trigger; no template token; every expression spaced, and none inside a `run:` block.
+ *
+ * For all three: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
  * pin the file dropped or a bumped `uses:` the header forgot fails; and every `uses:` value is a major
  * tag of a GitHub `actions/` action, never a sha or a branch — the pinning decision that header states.
  */
@@ -31,17 +39,23 @@ import test from 'node:test';
 
 import { PACKAGE_ROOT } from './helpers/fixture.mjs';
 import {
+  DEFAULT_TRIGGER_LABEL,
   POLL_STATE_ARTIFACT_NAME,
   STATE_ARTIFACT_NAME,
+  TRIGGER_DISPATCH_EVENT_TYPE,
+  TRIGGER_LABEL_VARIABLE,
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RUN_FILE,
   WORKFLOW_TEMPLATE_DIR,
+  WORKFLOW_TRIGGER_FILE,
 } from '../dist/remote/githubActions.js';
 
 const TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_RUN_FILE), 'utf8');
 const LINES = TEXT.split('\n');
 const RESUME_TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_RESUME_FILE), 'utf8');
 const RESUME_LINES = RESUME_TEXT.split('\n');
+const TRIGGER_TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_TRIGGER_FILE), 'utf8');
+const TRIGGER_LINES = TRIGGER_TEXT.split('\n');
 
 const indentOf = (line) => line.length - line.trimStart().length;
 
@@ -228,6 +242,7 @@ const usesValues = (lines) =>
 for (const [file, lines] of [
   [WORKFLOW_RUN_FILE, LINES],
   [WORKFLOW_RESUME_FILE, RESUME_LINES],
+  [WORKFLOW_TRIGGER_FILE, TRIGGER_LINES],
 ]) {
   test(`${file}: the ACTION PINS header names exactly the uses: values, each a major tag of an actions/ action`, () => {
     const uses = usesValues(lines);
@@ -241,6 +256,57 @@ test('the poller carries no template token, and every expression is spaced and o
   assert.doesNotMatch(RESUME_TEXT, /\{\{[A-Za-z]/);
   assert.doesNotMatch(RESUME_TEXT, /\$\{\{[^ ]/);
   const bodies = runBodies(RESUME_LINES);
+  assert.ok(bodies.length > 0);
+  for (const body of bodies) assert.ok(!body.includes('${{'), `expression in run: ${body}`);
+});
+
+test('the trigger: a labelled issue or a harness-task dispatch, and never opened', () => {
+  const on = TRIGGER_LINES.indexOf('on:');
+  assert.notEqual(on, -1);
+  const under = blockUnder(on, TRIGGER_LINES);
+  const triggers = under.filter((l) => /^ {2}[a-z_]+:/.test(l)).map((l) => l.trim().replace(/:.*$/, ''));
+  assert.deepEqual(triggers, ['issues', 'repository_dispatch']);
+  const typesOf = (event) => {
+    const i = TRIGGER_LINES.indexOf(`  ${event}:`);
+    const line = blockUnder(i, TRIGGER_LINES).find((l) => /^\s*types:/.test(l));
+    return /types: \[(.*)\]$/.exec(line)[1].split(',').map((t) => t.trim());
+  };
+  assert.deepEqual(typesOf('issues'), ['labeled']);
+  assert.deepEqual(typesOf('repository_dispatch'), [TRIGGER_DISPATCH_EVENT_TYPE]);
+  assert.ok(!under.join('\n').includes('opened'));
+});
+
+test('the trigger: exactly its three permissions', () => {
+  const i = TRIGGER_LINES.indexOf('permissions:');
+  assert.deepEqual(
+    blockUnder(i, TRIGGER_LINES).filter((l) => l.trim() !== '').map((l) => l.trim()),
+    ['contents: write', 'actions: write', 'issues: write'],
+  );
+});
+
+test('the trigger job runs for a dispatch or the configured label, defaulting to DEFAULT_TRIGGER_LABEL', () => {
+  const jobIfs = TRIGGER_LINES.filter((l) => /^ {4}if: /.test(l)).map((l) => l.trim());
+  assert.deepEqual(jobIfs, [
+    `if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.${TRIGGER_LABEL_VARIABLE} || '${DEFAULT_TRIGGER_LABEL}')`,
+  ]);
+});
+
+test('the trigger runs remote-run.sh trigger and nothing else of the family', () => {
+  const calls = runBodies(TRIGGER_LINES).flatMap((body) =>
+    [...body.matchAll(/([A-Za-z0-9_-]+\.sh)"?\s+(\S*)/g)].map((m) => `${m[1]} ${m[2]}`),
+  );
+  assert.deepEqual(calls, ['remote-run.sh trigger']);
+});
+
+test('the trigger references no secret and declares no concurrency group', () => {
+  assert.doesNotMatch(TRIGGER_TEXT, /secrets\./);
+  assert.doesNotMatch(TRIGGER_TEXT, /^\s*concurrency:/m);
+});
+
+test('the trigger carries no template token, and every expression is spaced and outside run blocks', () => {
+  assert.doesNotMatch(TRIGGER_TEXT, /\{\{[A-Za-z]/);
+  assert.doesNotMatch(TRIGGER_TEXT, /\$\{\{[^ ]/);
+  const bodies = runBodies(TRIGGER_LINES);
   assert.ok(bodies.length > 0);
   for (const body of bodies) assert.ok(!body.includes('${{'), `expression in run: ${body}`);
 });

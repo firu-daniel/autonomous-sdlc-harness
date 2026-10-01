@@ -2,7 +2,7 @@
 
 **Who reads this:** a maintainer deciding whether to run the harness's unattended runs in a GitHub Actions job instead of on their own machine, and anyone changing the remote path — the watcher's dispatch, `remote-run.sh`, the two workflow templates. It owns the design of record: what happens between a dropped file and a pushed branch when a run executes remotely, each decision the design took and its reason, and the GitHub behaviours the design rests on without having verified them. Setup, runner choices, credentials, costs and security are §7 onward.
 
-It cites rather than restates. The key's contract is [`config.md`](config.md) → `## 5. Key reference`; the workflows `init` writes, `init --plugin-root-entries` and `doctor`'s `remote-execution` and `remote-github` checks are [`cli.md`](cli.md); the pause/resume protocol is `plugin/instructions/autonomous_pause_and_ledger.md`; the local watcher is [`watcher.md`](watcher.md). The code of record is `cli/templates/scripts/remote-run.sh` (its header states every verb and its exit map), `cli/templates/scripts/autonomous-watcher.sh` → the header's `REMOTE DISPATCH` and `JOB MODE` blocks, the headers of `cli/templates/github/workflows/harness-run.yml` and `harness-resume.yml`, and `cli/templates/scripts/lib/harness-run-lib.sh` → `THE REMOTE STATE BUNDLE`.
+It cites rather than restates. The key's contract is [`config.md`](config.md) → `## 5. Key reference`; the workflows `init` writes, `init --plugin-root-entries` and `doctor`'s `remote-execution` and `remote-github` checks are [`cli.md`](cli.md); the pause/resume protocol is `plugin/instructions/autonomous_pause_and_ledger.md`; the local watcher is [`watcher.md`](watcher.md); starting a run from a GitHub issue is [`github-issue-trigger.md`](github-issue-trigger.md). The code of record is `cli/templates/scripts/remote-run.sh` (its header states every verb and its exit map), `cli/templates/scripts/autonomous-watcher.sh` → the header's `REMOTE DISPATCH` and `JOB MODE` blocks, the headers of `cli/templates/github/workflows/harness-run.yml` and `harness-resume.yml`, and `cli/templates/scripts/lib/harness-run-lib.sh` → `THE REMOTE STATE BUNDLE`.
 
 ---
 
@@ -24,7 +24,7 @@ From a drop to a pushed branch:
 
 1. **The drop.** The user runs `/autonomous-sdlc-harness:branch-prompt` (or answers `Run it autonomously` to the task offer, which invokes it). The file lands in the main checkout's inbox exactly as it does for a local run.
 2. **Preparation.** The watcher's inbox pass reads `execution.target` from the configuration in effect for that drop, then does what it does locally: creates the working copy, copies the artifact in, commits it and pushes the branch. For a remote run a failed commit or push **blocks** the dispatch, because the job sees only what was pushed; locally it never blocks. The usage hold, the concurrency cap and the machine lane are skipped, since the job gates itself. The kill switch `AUTONOMOUS_STOP` still defers the drop.
-3. **Dispatch.** The watcher calls `remote-run.sh dispatch <branch> --engine <kind>`, which sends `workflow_dispatch` to `harness-run.yml` with `action: run` and `chain: 0`. The registry record is written with `execution: github-actions` and an empty `pid`; a run keeps the execution it started with for its whole life, and every later pass reads the record's field, never the current key. From here the local working copy is a **mirror** that only `remote-run.sh sync` fills.
+3. **Dispatch.** The watcher calls `remote-run.sh dispatch <branch> --engine <kind>`, which sends `workflow_dispatch` to `harness-run.yml` with `action: run` and `chain: 0`. The registry record is written with `execution: github-actions` and an empty `pid`; a run keeps the execution it started with for its whole life, and every later pass reads the record's field, never the current key. From here the local working copy is a **mirror** that only `remote-run.sh sync` fills, and that `remote-run.sh review` fast-forwards to place a user review.
 4. **The job's setup**, in the order `harness-run.yml` runs it: compute the time budget from `runner.environment`; stop if `HARNESS_REMOTE_STOP` is set; check out the branch; check for `jq` and `gh`; read `scriptsDir` and whether docs retrieval applies from `harness.config.json` at run time; set up Node; install the `claude` CLI when absent; refuse when neither credential secret is set; install the plugin from the marketplace repository's release tag for the workflow's version, and refuse when that tag is absent or the installed version differs (§4); restore the retrieval cache when retrieval applies; generate the job's permission profile with `init --plugin-root-entries` and fail if that changed a tracked file; run `doctor --remote-job` as a preflight, which stops the job on a committed profile, on one whose paths name another checkout, or on a missing plugin-root grant (§4); bootstrap the checkout with `setup-worktree.sh`; and `remote-run.sh restore` the previous job's state bundle.
 5. **The run.** `autonomous-watcher.sh job <branch> <engine> <resume>` launches one session through the watcher's own `spawn_engine` and supervises it (§3). It writes `status.json` with decision `continue` before the launch, so a job killed mid-run still leaves a bundle that says *continue*.
 6. **The end of the job.** Under `always()`: `push-branch.sh`, then `remote-run.sh save` and the upload of the bundle as the Actions artifact `harness-state`. Under `!cancelled()`: `remote-run.sh continue`. Under `cancelled()`: a best-effort `failed` notification.
@@ -51,12 +51,12 @@ flowchart LR
     J["Workflow steps"]
     X["autonomous-watcher.sh job"]
   end
-  U -->|"drop, answer, resume, pause"| IN
-  U --> M
+  U -->|"drop"| IN
+  U -->|"answer, resume, pause, review"| RR
   IN --> W
-  M --> W
   W ==>|"one-way: push the drop"| BR
   W --> RR
+  RR ==>|"one-way: push a review"| BR
   RR ==>|"one-way: dispatch, pause, stop, warm"| WD
   WD --> RL
   WD --> J
@@ -67,30 +67,52 @@ flowchart LR
   J -->|"continue: re-dispatch"| WD
   J -->|"enable on a usage pause"| PO
   PO -->|"resume: pause"| WD
-  RR -.->|"sync, status: on request"| AR
+  RR -.->|"sync, status, fetch: on request"| AR
+  RR -->|"sync fills; review commits"| M
 ```
 
-The thick arrows are the only edges from this machine to GitHub, and each is a user's action relayed. The dotted arrows are reads. Nothing flows from GitHub to this machine unless the user asks: once the dispatch is sent, the machine can be switched off for the rest of the run.
+The thick arrows are the only edges from this machine to GitHub, and each is a user's action, sent by the command itself. The dotted arrows are reads. Nothing flows from GitHub to this machine unless the user asks: once the dispatch is sent, the machine can be switched off for the rest of the run.
 
-**What each local command does for a remote run.** Every command that reads a remote record first runs `remote-run.sh sync` on each remote record not already `completed` or `failed`, so it acts on the job's newest state; the exception is `branch-status`, which never syncs.
+**What each local command does for a remote run.** `/autonomous-sdlc-harness:branch-answer`, `-resume`, `-pause` and `-user-review` act on GitHub directly: they write no file into a mirror, nothing relays them, and no local watcher takes part. A run takes this route when its record carries `execution: github-actions`, or when it has no local record and the command's `<branch>:` prefix names a branch with a `harness run <branch>` run on GitHub; without a prefix the candidates are the registry's, so a run with no record — one started from an issue, or dispatched from another machine — is reached only through the prefix. A remote record is first brought current with `remote-run.sh sync`; a branch with no record is read with `remote-run.sh fetch`, which downloads the newest bundle into a temporary directory and writes nothing else. `branch-status` never syncs (`remote-run.sh` → the header's `` `fetch` IS THE COMMANDS' READ OF ONE BRANCH ON GITHUB `` paragraph).
 
 | Command | What it does for a remote run |
 |---|---|
 | `/autonomous-sdlc-harness:branch-prompt` | Unchanged: it writes the inbox file, and the watcher is what dispatches it (steps 2–3). |
-| `/autonomous-sdlc-harness:branch-user-review` | Writes the review into the inbox. The watcher fast-forwards the working copy to `origin/<branch>` — the job, not this copy, is where the branch advanced — commits the review as `chore: add user review for <branch>`, pushes it and dispatches `engine: user_review`. A local run leaves the review for the flow's own commits; a remote one cannot, because a job boundary before that commit would lose it. |
-| `/autonomous-sdlc-harness:branch-answer` | Writes the answer into the mirror. Once every open question of the park has its answer, the watcher dispatches `resume: answer` carrying the answers as one JSON input, and refuses, naming the limit, a payload over GitHub's `workflow_dispatch` limit of 65,535 characters. An answer travels as an input because clarification files are gitignored by design. |
-| `/autonomous-sdlc-harness:branch-resume` | Writes `RESUME` into the mirror; the watcher dispatches `resume: pause`. A record synced as `paused` with `pause_reason: killed` — a job that ended mid-run — resumes the same way, and so does one with `pause_reason: expired` — its state bundle expired, so its carried counts, clarification history and any planning drafts not yet committed are lost (§4). |
-| `/autonomous-sdlc-harness:branch-pause` | Writes `PAUSE` into the mirror; the watcher relays it as `remote-run.sh pause`, a jobless run titled `harness pause <branch>`. The job finds it by polling and drops its own `PAUSE`, and the run yields at its next clean checkpoint exactly as a local one does (§3). |
-| `/autonomous-sdlc-harness:branch-status` | Runs `remote-run.sh status` once — the newest runs with their URLs and the last-synced record — and reads the synced `<branch>.remote.log`. It writes nothing and never syncs. |
+| `/autonomous-sdlc-harness:branch-user-review` | Runs `remote-run.sh review`, which refuses a branch whose newest run is anything but `completed` or `failed`. It places the next round on the branch tip — in the record's mirror fast-forwarded to `origin/<branch>`, or in a temporary copy it removes, never bootstrapped — commits it as `chore: add user review for <branch>`, pushes it and dispatches `engine: user_review`. A local run leaves the review for the flow's own commits; a remote one cannot, because a job boundary before that commit would lose it. |
+| `/autonomous-sdlc-harness:branch-answer` | Reads the park's questions from the job's newest bundle through `remote-run.sh fetch`, never from a mirror, and collects the answer to every open question file in one invocation: one declined answer sends nothing. It then dispatches `resume: answer` carrying the answers as one JSON input; `remote-run.sh` refuses, naming the limit, a payload over GitHub's `workflow_dispatch` limit of 65,535 characters. A `park_loop` hold is cleared with the answers only on the user's confirmation. An answer travels as an input because clarification files are gitignored by design. |
+| `/autonomous-sdlc-harness:branch-resume` | Dispatches `resume: pause` for a `paused` run, or, for a `park_loop` run, the same dispatch with `park_loop_clear` once the user confirms clearing the hold. A run `paused` with `pause_reason: killed` — a job that ended mid-run — resumes the same way, and so does one with `pause_reason: expired` — its state bundle expired, so its carried counts, clarification history and any planning drafts not yet committed are lost (§4). |
+| `/autonomous-sdlc-harness:branch-pause` | Runs `remote-run.sh pause` for a `running` run, which dispatches a jobless run titled `harness pause <branch>`. The job finds it by polling and drops its own `PAUSE`, and the run yields at its next clean checkpoint exactly as a local one does (§3). |
+| `/autonomous-sdlc-harness:branch-status` | Runs `remote-run.sh status` once — the newest runs with their URLs and the last-synced record — and reads the synced `<branch>.remote.log`. With no argument it also runs `remote-run.sh list` once, which lists each unprotected branch still live on `origin` whose newest `harness run <branch>` run has no local record, as `on GitHub, no local record: <branch> <url>`. For a branch the registry does not hold, `status` answers from GitHub alone: it reads the newest bundle into a temporary directory it removes on exit and prints the run's state, pause reason and open questions. It writes nothing and never syncs. |
 | `remote-run.sh stop <branch>` | Stops the run outright (§3, *The kill switch and stopping*). |
 | `gh run cancel <run id>` | Cancels one job. Its chain stops, because the re-dispatch step runs only under `!cancelled()`, but a usage-paused run waiting for the poller has no job to cancel and would still be resumed. Use `remote-run.sh stop` to reach both. |
 
-Each relay is a dispatch with `chain: 0` that takes no cap slot and consults no lane. A refusal or a `gh` failure is one log line, the mirror file stays, and the next watcher pass retries. So a relay needs the local watcher running at the moment the user acts, and at no other time.
+Each command's dispatch is `chain: 0`, takes no cap slot and consults no lane. A refusal or a `gh` failure is reported by the command, and nothing retries it. A chain-0 `resume: answer` or `resume: pause` sets an existing remote record `running`; the next `sync` remains the record's authority. The local kill switch `AUTONOMOUS_STOP` gates none of these dispatches; the job-side brake is `HARNESS_REMOTE_STOP` (§3, *The kill switch and stopping*).
 
 To stop a run, with the default `scriptsDir` of `scripts`:
 
 ```
 bash scripts/remote-run.sh stop <branch>
+```
+
+### Working a run from GitHub alone
+
+A maintainer with no local setup — no checkout, no watcher — works any remote run from the **Run workflow** form of `harness-run.yml` on the repository's Actions page. The form's inputs are `## 5.`'s table. Every action below picks the run's branch under *Use workflow from*, as `remote-run.sh` does with `--ref` (§7, *Upgrading*), and sets the `branch` input to it.
+
+- **Answering a park.** Take the question from the run's `harness-state` artifact, under `clarifications/<branch>/question_<n>.md`: download it from the run page's *Artifacts*, or with the GitHub CLI:
+
+  ```
+  gh run download <run id> -n harness-state
+  ```
+
+  Then **Run workflow** with `action` `run`, `engine` the run's own, `resume` `answer`, and `answers` a JSON object `{"<n>": "<answer text>"}` with one entry per open question. For a park loop, add `park_loop_clear` `true`. A run whose bundle has expired can no longer be answered (`## 4.`); `resume` `pause` continues it from the committed ledger instead.
+- **Resuming a pause.** The same form, with `resume` `pause`.
+- **Pausing.** `action` `pause`.
+- **Stopping.** `action` `stop`. This dispatches the stop marker only; cancel the running job from its run page as well, which is the part `remote-run.sh stop` does for a local maintainer (§3, *The kill switch and stopping*).
+
+The form's equivalent from the GitHub CLI, here resuming a paused task run:
+
+```
+gh workflow run harness-run.yml --ref <branch> -f action=run -f branch=<branch> -f engine=task -f resume=pause -f chain=0
 ```
 
 ---
@@ -123,11 +145,17 @@ Once dispatched, nothing on this machine watches, gates, restarts or resumes a r
 
 ### The park-loop guard
 
-**Decision:** its count, `park_loop_cycles`, and the resume baseline `resume_max_question_index` ride in the bundle's `status.json` and are seeded into the next job's registry record. A clear taken locally (`PARK_LOOP_CLEAR` in the mirror) reaches the job as the input `park_loop_clear`. **Reason:** a remote park and its answer always cross a job boundary — the parked job ends, and the answer arrives in a new one — so a count kept only in the job's registry would reset on every cycle and never trip.
+**Decision:** its count, `park_loop_cycles`, and the resume baseline `resume_max_question_index` ride in the bundle's `status.json` and are seeded into the next job's registry record. A clear taken locally — `/autonomous-sdlc-harness:branch-resume <branch>` or `/autonomous-sdlc-harness:branch-answer <branch>: …`, each after the user confirms clearing the hold — reaches the job as the input `park_loop_clear`; a `PARK_LOOP_CLEAR` file in the mirror is never read (§1). **Reason:** a remote park and its answer always cross a job boundary — the parked job ends, and the answer arrives in a new one — so a count kept only in the job's registry would reset on every cycle and never trip.
 
 ### Notifications
 
-**Decision:** the job sends lifecycle events through `autonomous-notify.sh`, unchanged, with `HARNESS_PUSH_URL` taken from a repository secret; titles carry the repository name rather than a runner path, and each message names the user's next action — `/autonomous-sdlc-harness:branch-answer <branch>` for a park, `/autonomous-sdlc-harness:branch-status <branch>` for a park loop, `/autonomous-sdlc-harness:branch-resume <branch>` for a user or exhausted overload pause, the reset time for a usage pause. **Reason:** with the machine off the desktop banner reaches no one, while the push arm works from anywhere. A `budget` pause (the self-pause below) sends no `paused` and the next job no `resumed`: a chained continuation is not an event the user acts on. The `cancelled()` step's `failed` notification is best-effort and nothing relies on it.
+**Decision:** the job sends lifecycle events through `autonomous-notify.sh`, unchanged, with `HARNESS_PUSH_URL` taken from a repository secret; titles carry the repository name rather than a runner path, and each message names the user's next action — `/autonomous-sdlc-harness:branch-answer <branch>` for a park, `/autonomous-sdlc-harness:branch-status <branch>` for a park loop, `/autonomous-sdlc-harness:branch-resume <branch>` for a user or exhausted overload pause, the reset time for a usage pause. For a remote run the same message also names the GitHub route (§1, *Working a run from GitHub alone*), since a maintainer who works only from GitHub has no local command to run. A `parked` detail, for example, reads:
+
+```
+answer with /autonomous-sdlc-harness:branch-answer <branch>; or from GitHub: take the question from the run's `harness-state` artifact, then Run workflow on harness-run.yml from the branch `<branch>` (Use workflow from), with action run, branch `<branch>`, engine `<engine>`, resume answer and answers `{"<n>": "<your answer>"}` (docs/remote-execution.md, section 1)
+```
+
+**Reason:** with the machine off the desktop banner reaches no one, while the push arm works from anywhere. A `budget` pause (the self-pause below) sends no `paused` and the next job no `resumed`: a chained continuation is not an event the user acts on. The `cancelled()` step's `failed` notification is best-effort and nothing relies on it.
 
 ### The kill switch and stopping
 
@@ -135,7 +163,7 @@ Once dispatched, nothing on this machine watches, gates, restarts or resumes a r
 
 **Stopping one run** is `remote-run.sh stop <branch>`, which does three things in order. It first always dispatches `action: stop`, a jobless run titled `harness stop <branch>` that GitHub keeps as a stop marker; then cancels every queued, waiting or in-progress run of the branch; then, only when both succeeded, marks the local record `failed`. The marker comes first because it is the only part that reaches a usage-paused run waiting for the poller, which has no job to cancel: `continue` and `poll` dispatch nothing, and enable nothing, for a branch whose newest `harness stop` run is newer than its newest `harness run` run. A user's later dispatch is newer than the marker, so it un-stops the branch with no extra step. A partial stop leaves the record alone and exits non-zero, and running `stop` again is the remedy. Gate 12 round 2 in [`development.md`](development.md) observed a stop on 2026-09-29: the marker was dispatched, the running job was cancelled while its post-steps still saved and uploaded the bundle, and nothing new started.
 
-**Pausing one run** travels as a workflow run for the same reason. `GITHUB_TOKEN` can neither read nor write repository variables, so the relayed `remote-run.sh pause` dispatches `action: pause`, whose job is skipped and whose run is titled `harness pause <branch>`. The job polls its own workflow's runs every `REMOTE_CONTROL_POLL_SECS` (default 60) for such a run created after a lower bound: this run's own creation time for a user's dispatch, the previous job's last poll (`control_polled_at`, carried in the bundle) for an automatic continuation. So a pause sent while the job was queued, or across a chained continuation, is not lost. On a hit the job drops `PAUSE` into its checkout, the run yields at its next clean checkpoint, and the decision is `stop`. Gate 12 round 2 in [`development.md`](development.md) measured it on 2026-09-29: the running job found a `harness pause` run 47 s after that run's creation, and ended with decision `stop`.
+**Pausing one run** travels as a workflow run for the same reason. `GITHUB_TOKEN` can neither read nor write repository variables, so the `remote-run.sh pause` that `/autonomous-sdlc-harness:branch-pause` sends dispatches `action: pause`, whose job is skipped and whose run is titled `harness pause <branch>`. The job polls its own workflow's runs every `REMOTE_CONTROL_POLL_SECS` (default 60) for such a run created after a lower bound: this run's own creation time for a user's dispatch, the previous job's last poll (`control_polled_at`, carried in the bundle) for an automatic continuation. So a pause sent while the job was queued, or across a chained continuation, is not lost. On a hit the job drops `PAUSE` into its checkout, the run yields at its next clean checkpoint, and the decision is `stop`. Gate 12 round 2 in [`development.md`](development.md) measured it on 2026-09-29: the running job found a `harness pause` run 47 s after that run's creation, and ended with decision `stop`.
 
 ### Runs longer than a job
 
@@ -236,7 +264,7 @@ The paragraph it reaches states that in the autonomous forks **every** commit po
 
 ## 5. The seam, and what stays open
 
-**The `workflow_dispatch` inputs are the seam the trigger half plugs into.** A run is started, continued, paused or stopped by one dispatch of `harness-run.yml`, whatever sends it. On the shell side `remote-run.sh dispatch` is the one producer; a trigger would send the same inputs.
+**The `workflow_dispatch` inputs are the seam, and the trigger half has plugged into it.** A run is started, continued, paused or stopped by one dispatch of `harness-run.yml`, whatever sends it. On the shell side `remote-run.sh dispatch` is still the one producer: `remote-run.sh start`, which the issue trigger calls ([`github-issue-trigger.md`](github-issue-trigger.md)), sends the same inputs through it.
 
 | Input | Values | Sent with |
 |---|---|---|
@@ -250,9 +278,9 @@ The paragraph it reaches states that in the autonomous forks **every** commit po
 
 The workflow's `run-name` is `harness <action> <branch>`, and the job's pause poll, `continue` and `poll` match runs by that title, so its spelling is part of the contract.
 
-**"Done" is still a pushed branch.** `push-branch.sh` opens no pull request, and `forge` gains no reader here: `execution.target` already names the platform the job runs on, while `forge` describes pull-request and remote conventions, whose reader is the draft-PR and trigger coupling.
+**"Done" is still a pushed branch.** `push-branch.sh` opens no pull request. `forge` is read by the issue trigger ([`github-issue-trigger.md`](github-issue-trigger.md)), not by this path: `execution.target` still names where the job runs, and a run still ends at a pushed branch with no pull request.
 
-**What stays open** is the trigger half of `ROADMAP.md` → *Cloud / CI execution*: starting a run from an issue, a pull request, a comment or another tracker, and controlling a remote run from GitHub's side rather than from this machine.
+**What stays open**: starting a run from a pull request or a comment, and controlling a run from GitHub's side beyond the **Run workflow** form (§1, *Working a run from GitHub alone*), which is `feat_forge_run_control`; and draft-pull-request output.
 
 ---
 
@@ -367,7 +395,7 @@ The commands below run from the repository root, on the machine the local watche
 npx autonomous-sdlc-harness config set execution.target github-actions
 ```
 
-**2. Write the two workflows.** `init` writes `.github/workflows/harness-run.yml` and `.github/workflows/harness-resume.yml`, each only if absent ([`cli.md`](cli.md) → `## 3.`). The run workflow is pinned to this CLI's version, and the job installs exactly that version of the plugin (§4).
+**2. Write the two workflows.** `init` writes `.github/workflows/harness-run.yml` and `.github/workflows/harness-resume.yml`, each only if absent ([`cli.md`](cli.md) → `## 3.`). The run workflow is pinned to this CLI's version, and the job installs exactly that version of the plugin (§4). With `forge` set to `github`, `init` writes a third, `.github/workflows/harness-trigger.yml`, which starts a run from a labelled issue ([`github-issue-trigger.md`](github-issue-trigger.md)).
 
 ```
 npx autonomous-sdlc-harness init
@@ -485,8 +513,10 @@ All are set on the GitHub repository (Settings → Secrets and variables → Act
 | `REMOTE_AUTO_RESUME_MAX` | variable | job mode: automatic resumes per run after a failure or an overload pause | 2 | no |
 | `REMOTE_AUTO_RESUME_DELAY_SECS` | variable | job mode: the wait before each automatic resume | 300 | no |
 | `REMOTE_CONTROL_POLL_SECS` | variable | job mode: how often the job looks for a `harness pause` run | 60 | no |
+| `HARNESS_TRIGGER_LABEL` | variable | `harness-trigger.yml`'s job filter and `remote-run.sh trigger` | `harness` | no |
+| `HARNESS_TRIGGER_ALLOWED_BOTS` | variable | `remote-run.sh trigger` | empty: no bot may start a run | no |
 
-The list of record is the `env:` block of the `run` job in `harness-run.yml`, and for the poller's own variables that of the `poll` job in `harness-resume.yml`; a tunable the watcher reads and that block does not map is not reachable from a repository variable.
+The list of record is the `env:` block of the `run` job in `harness-run.yml`, for the poller's own variables that of the `poll` job in `harness-resume.yml`, and for the trigger's that of the `trigger` job in `harness-trigger.yml`; a tunable the watcher reads and that block does not map is not reachable from a repository variable.
 
 ### Your own allow entries
 
@@ -541,6 +571,7 @@ The last two are needed for the reason step 3 above gives: the `workflow` scope,
   ```
 
   Carry over what you need by hand. The managed `.gitignore` block ignores both workflow `.bak` files, so `git add -A` leaves them out; delete them once compared.
+- **It does not re-render `harness-trigger.yml`.** That file carries no version pin and calls the scripts on the default branch, so it shares their route, `init --force`, like the outer-loop scripts in the next bullet.
 - **It does not re-render the outer-loop scripts** under `<scriptsDir>`. They stay create-if-absent ([`cli.md`](cli.md) → `## 3. The re-run contract`), so `init --force` remains their route. It also regenerates every other generated file after a `.bak`, including `.claude/CLAUDE.md` and the conventions documents the analyze command filled.
 
 **Moving a run in flight to the new version, on purpose.** Do it only after the upgrade is pushed to the default branch, and only while no job of that run is executing: the run is paused, parked or stopped. A job pushes the branch after every commit and at its end (`cli/templates/scripts/push-branch.sh`), and a push that fails because the remote moved is non-fatal by that script's own header (*"EVERY FAILURE PATH IS NON-FATAL"*). So a commit pushed beside a running job leaves the job's later commits off the remote without stopping it.
@@ -613,6 +644,8 @@ git switch -
 ## 8. Choosing a runner
 
 The runner is one repository variable, read by `runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}` in both workflows, so the resume poller runs where the jobs do. Unset, a run goes to a GitHub-hosted `ubuntu-latest` runner.
+
+**A run started from GitHub, on your own hardware.** A run started from an issue always executes through `harness-run.yml`, because GitHub cannot reach your machine to launch it there. A self-hosted runner registered on that machine and named in `HARNESS_RUNNER` runs it there, which is the way to run a GitHub-triggered run locally.
 
 **GitHub-hosted runners that work:** a standard Linux runner by label (`ubuntu-latest`, `ubuntu-24.04`), or a Linux larger runner by the runner label you gave it when you created it. **Not supported:** macOS and Windows GitHub-hosted runners — the outer-loop scripts and the job's `jq` / `gh` bootstrap are Linux-shaped.
 
@@ -719,10 +752,16 @@ Light use fits inside a private repository's included minutes: the Free plan's 2
 
 **On a GitHub-hosted runner** each job gets a fresh VM that GitHub destroys after the job. The checkout lives on that VM's disk for the job's duration; the credential lives in GitHub Secrets and reaches the job as an environment variable; the docs-retrieval cache, when used, is stored by GitHub. This is the task prompt's research, which gave no source; GitHub's page is https://docs.github.com/en/actions/concepts/runners/github-hosted-runners (not retrieved in this branch).
 
-**On a self-hosted runner** the code persists on your disk between jobs — the checkout, the installed plugin and anything the run wrote — unless the runner is ephemeral (§8). A persistent self-hosted runner on a **public** repository is a risk if pull requests from forks can run workflows on it: a `pull_request` workflow runs the file as the pull request has it, so a fork can add a job whose `runs-on` names your runner label. The harness's own workflows cannot be started that way — they trigger only on `workflow_dispatch`, which needs write access, and `schedule` — but any workflow can target the label. What prevents it: keep self-hosted runners off public repositories, or require approval for fork pull request workflows from outside contributors (Settings → Actions → General, the fork pull request approval setting), and at organization level restrict the runner through a runner group to the repositories and workflows that need it. GitHub's statement is https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security (not retrieved in this branch; check the setting's current wording there).
+**On a self-hosted runner** the code persists on your disk between jobs — the checkout, the installed plugin and anything the run wrote — unless the runner is ephemeral (§8). A persistent self-hosted runner on a **public** repository is a risk if pull requests from forks can run workflows on it: a `pull_request` workflow runs the file as the pull request has it, so a fork can add a job whose `runs-on` names your runner label. The harness's own workflows cannot be started that way — they trigger only on `workflow_dispatch`, which needs write access, `schedule`, and, for `harness-trigger.yml`, a labelled issue and `repository_dispatch`, none of them a pull-request event — but any workflow can target the label. What prevents it: keep self-hosted runners off public repositories, or require approval for fork pull request workflows from outside contributors (Settings → Actions → General, the fork pull request approval setting), and at organization level restrict the runner through a runner group to the repositories and workflows that need it. GitHub's statement is https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security (not retrieved in this branch; check the setting's current wording there).
 
-**What a reader of the repository's Actions runs can see.** The `harness-state` artifact — the clarification questions and answers, `PAUSE_PROGRESS.md`, the readable run log, which quotes the code and commands the agents worked with, and the unconverged planning drafts and plan-review findings (§3, *Runs longer than a job*) — the job logs, the step summary and each run's inputs, including the `answers` a `/autonomous-sdlc-harness:branch-answer` relay carries, are readable by anyone who can read the repository's Actions runs. On a public repository that is everyone.
+**What a reader of the repository's Actions runs can see.** The `harness-state` artifact — the clarification questions and answers, `PAUSE_PROGRESS.md`, the readable run log, which quotes the code and commands the agents worked with, and the unconverged planning drafts and plan-review findings (§3, *Runs longer than a job*) — the job logs, the step summary and each run's inputs, including the `answers` a `/autonomous-sdlc-harness:branch-answer` dispatch carries, are readable by anyone who can read the repository's Actions runs. On a public repository that is everyone.
 
 **Workflow inputs never become shell source.** Every input, variable and secret reaches a shell line through `env:`, never through a GitHub expression interpolated into `run:`, so an input shaped like a command is data (`harness-run.yml` → the header's `TWO RULES EVERY EDIT KEEPS`). Keep that rule in any edit you make to your copy.
+
+**The issue trigger** ([`github-issue-trigger.md`](github-issue-trigger.md)):
+
+- The `trigger` job reads untrusted issue text only through its event file and the environment, and references no secret.
+- A labelled issue's text becomes the task of a run job that holds the credential secrets, which is why only a person with `write` or `admin` permission, or a listed bot, may start one ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run` and `## 4. What the labeller vouches for`).
+- A run whose task edits `.github/workflows/*` cannot push that edit without a workflow-capable `HARNESS_GIT_TOKEN`: `GITHUB_TOKEN` cannot write a workflow file under any `permissions:` setting, and the push is refused with ``refusing to allow a GitHub App to create or update workflow … without `workflows` permission`` ([`github-integration-research.md`](github-integration-research.md) → S1).
 
 **On every option, the code the agents read goes to the Anthropic API**, exactly as it does when the run executes on your own machine. Choosing a remote runner changes where the session runs, not what it sends.

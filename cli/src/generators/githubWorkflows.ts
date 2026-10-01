@@ -1,16 +1,18 @@
 /**
- * Generator: the two GitHub Actions workflows remote execution runs on — `harness-run.yml`, the job
- * the watcher dispatches a run to, and `harness-resume.yml`, the self-disabling resume poller —
- * written into the adopter's `.github/workflows/`.
+ * Generator: the GitHub Actions workflows remote execution runs on — `harness-run.yml`, the job
+ * the watcher dispatches a run to, `harness-resume.yml`, the self-disabling resume poller, and
+ * `harness-trigger.yml`, the issue-label and `repository_dispatch` trigger — written into the
+ * adopter's `.github/workflows/`.
  *
- * **The rule this module exists to enforce: the workflows are written exactly when
- * `config/model.ts` → `remoteExecutionApplies(config)` holds, and from the two templates under
+ * **The rule this module exists to enforce: the first two workflows are written exactly when
+ * `config/model.ts` → `remoteExecutionApplies(config)` holds, the trigger exactly when
+ * `config/model.ts` → `forgeTriggerApplies(config)` also holds, and all three from the templates under
  * `cli/templates/` → {@link WORKFLOW_TEMPLATE_DIR} only.** With the key absent or `local` this module
  * enqueues nothing, so such a repository receives exactly what `init` wrote before remote execution
- * existed. Every name — the directory, both file names, the template directory — is imported from
+ * existed. Every name — the directory, the file names, the template directory — is imported from
  * `remote/githubActions.ts`, which owns them.
  *
- * ## Four non-obvious choices, and where each comes from
+ * ## Five non-obvious choices, and where each comes from
  *
  * 1. **No configured value is rendered into either file; only this CLI's own version is.** The job
  *    reads `harness.config.json` at run time, so a workflow frozen with a configured value would go
@@ -32,6 +34,9 @@
  *    carried into its re-render because the schedule is the one thing an adopter tunes inside that
  *    file; every other edit to either file survives only in its `.bak`. The runner and the timeouts
  *    are repository variables, which the re-render does not touch.
+ * 5. **The trigger workflow is gated on `forgeTriggerApplies`, carries no pin and is not upgraded,**
+ *    because it calls the scripts on the default branch and shares their re-run contract. It is
+ *    copied verbatim like `harness-resume.yml` (choice 3) and never carries a `forceOverride`.
  *
  * **Declared mirror.** `cli/templates/github/workflows/harness-run.yml`'s `Install the pinned plugin`
  * step spells the route {@link upgradeWorkflowsCommand} produces,
@@ -42,14 +47,14 @@
  * **This module owns {@link IN_FLIGHT_RUNS_NOTE}.** `init`'s upgrade report and `doctor`'s
  * `remote-execution` version warning both print it, and neither re-spells it.
  *
- * Both files are `create-if-absent`: the adopter tunes the cron, the timeouts and the runner, and a
+ * Every file is `create-if-absent`: the adopter tunes the cron, the timeouts and the runner, and a
  * re-run keeps that edit; `--force` replaces each after a `.bak` (`core/writer.ts`'s re-run table).
  */
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { remoteExecutionApplies, type HarnessConfig } from '../config/model.js';
+import { forgeTriggerApplies, remoteExecutionApplies, type HarnessConfig } from '../config/model.js';
 import { ownManifestString, readTemplate } from '../core/paths.js';
 import { renderTemplate } from '../core/templating.js';
 import type { WritePlan } from '../core/writer.js';
@@ -60,6 +65,8 @@ import {
   WORKFLOW_RUN_FILE,
   WORKFLOW_RUN_PATH,
   WORKFLOW_TEMPLATE_DIR,
+  WORKFLOW_TRIGGER_FILE,
+  WORKFLOW_TRIGGER_PATH,
   renderedCliVersions,
 } from '../remote/githubActions.js';
 
@@ -115,10 +122,12 @@ export interface WorkflowUpgrade {
 
 /** What the generator produced, for `init`'s closing report. */
 export interface GithubWorkflowsResult {
-  /** True when remote execution applied and both workflows were enqueued; `init` gates its block on it. */
+  /** True when remote execution applied and the workflows were enqueued; `init` gates its block on it. */
   readonly written: boolean;
   /** Each workflow enqueued — its absolute target and its repo-relative path — in the order written; empty when remote execution does not apply. */
   readonly workflows: readonly { readonly absolute: string; readonly repoPath: string }[];
+  /** True exactly when the trigger workflow was enqueued (choice 5); `init` gates its label step on it. */
+  readonly trigger: boolean;
   /** Present exactly when `upgrade` was set, remote execution applied and `harness-run.yml` existed. */
   readonly upgrade?: WorkflowUpgrade;
 }
@@ -141,7 +150,8 @@ function carryCron(template: string, cron: readonly string[]): string {
 }
 
 /**
- * Enqueue both workflows when remote execution is on, and nothing otherwise.
+ * Enqueue the workflows when remote execution is on — the trigger only when `forgeTriggerApplies` also
+ * holds — and nothing otherwise.
  *
  * Nothing here writes the filesystem: the generator plans, and `init` applies the plan once. The
  * upgrade mode reads the two existing workflows to decide.
@@ -152,7 +162,7 @@ export function writeGithubWorkflows({
   plan,
   upgrade = false,
 }: GithubWorkflowsOptions): GithubWorkflowsResult {
-  if (!remoteExecutionApplies(config)) return { written: false, workflows: [] };
+  if (!remoteExecutionApplies(config)) return { written: false, workflows: [], trigger: false };
 
   const runPath = join(repoRoot, ...WORKFLOW_RUN_PATH.split('/'));
   const resumePath = join(repoRoot, ...WORKFLOW_RESUME_PATH.split('/'));
@@ -198,12 +208,27 @@ export function writeGithubWorkflows({
     ...(replaceResume ? { forceOverride: 'always' as const } : {}),
   });
 
+  const workflows = [
+    { absolute: runPath, repoPath: WORKFLOW_RUN_PATH },
+    { absolute: resumePath, repoPath: WORKFLOW_RESUME_PATH },
+  ];
+
+  const trigger = forgeTriggerApplies(config);
+  if (trigger) {
+    const triggerPath = join(repoRoot, ...WORKFLOW_TRIGGER_PATH.split('/'));
+    plan.add({
+      path: triggerPath,
+      policy: 'create-if-absent',
+      content: readTemplate(`${WORKFLOW_TEMPLATE_DIR}/${WORKFLOW_TRIGGER_FILE}`),
+      label: `workflow ${WORKFLOW_TRIGGER_FILE}`,
+    });
+    workflows.push({ absolute: triggerPath, repoPath: WORKFLOW_TRIGGER_PATH });
+  }
+
   return {
     written: true,
-    workflows: [
-      { absolute: runPath, repoPath: WORKFLOW_RUN_PATH },
-      { absolute: resumePath, repoPath: WORKFLOW_RESUME_PATH },
-    ],
+    workflows,
+    trigger,
     ...(upgradeResult === undefined ? {} : { upgrade: upgradeResult }),
   };
 }
