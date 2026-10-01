@@ -1,0 +1,16 @@
+tests/
+postgres/
+compose.yaml
+Dockerfile
+.dockerignore
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.cache/
+**/*.egg-info/
+build/
+dist/
