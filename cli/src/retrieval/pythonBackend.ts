@@ -33,7 +33,7 @@
 /** The Python package's console script. */
 export const PYTHON_RETRIEVAL_COMMAND = 'harness-docs-retrieval';
 
-/** The sub-command the launcher `exec`s to serve MCP over stdio. */
+/** The sub-command the launcher runs as its child to serve MCP over stdio, never `exec`ed. */
 export const PYTHON_SERVE_SUB_COMMAND = 'serve-mcp';
 
 /** The sub-command whose stdout {@link parseSelfCheck} reads. */

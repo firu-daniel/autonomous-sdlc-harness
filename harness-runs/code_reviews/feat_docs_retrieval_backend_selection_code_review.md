@@ -38,7 +38,7 @@
 
 Each entry resolves to `harness-runs/code_reviews/feat_docs_retrieval_backend_selection_code_review/finding_<K>.md` through its `**Finding K**` reference. The list runs from small, safe fixes to wider ones, `cli` before the catch-all `general`. The leading `N.` is the fix order. The `K` is the finding's stable number.
 
-1. [ ] **Finding 6** — Correct `PYTHON_SERVE_SUB_COMMAND`'s doc comment: the launcher runs it as a child, never `exec`s it _(layer: cli)_
+1. [x] **Finding 6** — Correct `PYTHON_SERVE_SUB_COMMAND`'s doc comment: the launcher runs it as a child, never `exec`s it _(layer: cli)_
 2. [ ] **Finding 5** — Move `self-check`'s not-attempted pattern into `pythonBackend.ts` and declare it as a mirror _(layer: cli)_
 3. [ ] **Finding 2** — Name the clone's `docs-retrieval-service/` directory in `retrieval-python-index`'s compose remedy _(layer: cli)_
 4. [ ] **Finding 4** — Give the unreadable-`self-check` failure of `retrieval-python-dependencies` the install remedy _(layer: cli, general)_
