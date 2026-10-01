@@ -433,7 +433,7 @@
 # typed on, opens `@<login>`, and carries the `reply` marker; a refusal reads
 # `@<login>: `<verb>` was not run: <reason>. <way on>`.
 #     0  handled (replied), or ignored
-#     1  not an `issue_comment` event, or the event could not be read
+#     1  neither an `issue_comment` nor a `pull_request_review` event, or the event could not be read
 #     2  refused (replied)
 #     3  a `gh` step failed: the reply could not be posted (an `::error::`
 #        line), or the action failed and was replied to

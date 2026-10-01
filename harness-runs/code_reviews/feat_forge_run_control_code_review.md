@@ -61,7 +61,7 @@ The ledger's wall-clock rule was checked and is not exercised: the diff adds no 
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 7** — Name both events in `control`'s exit-map line for exit 1 _(layer: cli)_
+1. [x] **Finding 7** — Name both events in `control`'s exit-map line for exit 1 _(layer: cli)_
 2. [ ] **Finding 3** — Repoint `ARCHITECTURE.md` at README's renamed forge bullet _(layer: general)_
 3. [ ] **Finding 8** — Name the line-less file-comment heading in the fix-plan writer's pull-request review comment form _(layer: plugin)_
 4. [ ] **Finding 6** — Build the draft pull request's command list from `COMMAND_VERBS` _(layer: cli)_
