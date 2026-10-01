@@ -36,3 +36,8 @@ Task 7 also documents `<state_dir>/scratch/<command>-<branch_fold>/` as these co
 - `git grep -n 'scratch/branch-' -- plugin/commands/branch-pause.md plugin/commands/branch-resume.md` shows each file's directory, named with its own command and `<branch_fold>`, never a raw `<branch>`. The path appears only where `<scratch>` is defined; the create, fetch, leftover and `discard` sentences use `<scratch>`.
 - `git grep -n 'A-Za-z0-9_-' -- plugin/commands/branch-pause.md plugin/commands/branch-resume.md` shows the fold rule stated in each file.
 - Neither file carries `$(`, a backtick-wrapped substitution or a pipe in any command it tells the agent to run. The plugin manifest gate (`claude plugin validate --strict plugin`, `docs/development.md` → `## 5. Verifying a change`, **Gate 1**) is unaffected, because no frontmatter changes.
+
+**Deviations from plan:**
+- The `claude plugin validate --strict plugin` bullet was not executed: the call was refused pending approval in this session. It rests on reading the diff (no frontmatter changed) and is deferred to the Run gates phase.
+- The `$(` grep matches only the prohibition sentence each bullet carries (`no $(…)`), not a command the agent is told to run.
+- `branch-pause.md` Usage paragraph: "no file is written" on the GitHub route narrowed to "no `PAUSE` file", since the scratch directory is now a local write.
