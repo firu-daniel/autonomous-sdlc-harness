@@ -1,6 +1,6 @@
 # RAG (docs retrieval)
 
-**Who reads this:** contributors changing this repository's RAG. The eval that measures it has run: how to run it and what each metric means is [`retrieval-eval.md`](retrieval-eval.md), and what it measured is [`retrieval-eval-results.md`](retrieval-eval-results.md). This document owns the retrieval design of both backends and its measured facts: how the pieces fit, why each dependency and model was chosen, what was measured and how, what stays open, when to turn it on, what the design buys, where it goes next and what it costs. The `docs` verb's surface is [`cli.md`](cli.md) §11, its setup §2 and its `doctor` checks §7; the `docs.retrieval` and `docs.retrievalBackend` keys are [`config.md`](config.md) §5; the Python backend's own commands, weights and store departures are [`docs-retrieval-service/README.md`](../docs-retrieval-service/README.md). None is restated here.
+**Who reads this:** contributors changing this repository's RAG. The eval that measures it has run: how to run it and what each metric means is [`retrieval-eval.md`](retrieval-eval.md), and what it measured is [`retrieval-eval-results.md`](retrieval-eval-results.md). This document owns the retrieval design of both backends and its measured facts: how the pieces fit, why each dependency and model was chosen, what was measured and how, what stays open, when to turn it on, how to turn the Python backend on, what the design buys, where it goes next and what it costs. The `docs` verb's surface is [`cli.md`](cli.md) §11, its setup §2 and its `doctor` checks §7; the `docs.retrieval` and `docs.retrievalBackend` keys are [`config.md`](config.md) §5; the Python backend's own commands, weights and store departures are [`docs-retrieval-service/README.md`](../docs-retrieval-service/README.md). None is restated here.
 
 **Retrieval is off by default and opt-in. It has been measured against agent navigation, the verdict was withdrawn, and it is kept opt-in by maintainer decision.** That comparison is the eval's arm A, run by hand on a real documentation catalog in two variants, one told to read the catalog's index first and one told only where the catalog is; the decision rule applied to it names **withdrawn**, and `docs/retrieval-eval-results.md` → `## The decision, applied to the real catalog` is the verdict of record, with every figure it rests on. The maintainer did not execute the withdrawal: that section's `### The maintainer's decision` records why, and roadmap item 18 in [`development.md`](development.md) → `## 6. The roadmap this tree defers to` records that it was not executed. Everything below describes shipped code, and it stays. When turning it on is worth it is `## When to turn it on` below. The retrieval side of the comparison was measured on the real models over two committed corpora and that real catalog: per-arm recall, MRR, latency and cost, the abstention threshold's observed score distributions, the cold build and the index size on disk. [`retrieval-eval.md`](retrieval-eval.md) is how to run that eval, what each metric means and the decision rule; [`retrieval-eval-results.md`](retrieval-eval-results.md) is the record of what it measured, the arm A hand run included. The Markdown stays the source of truth: the index is a derived, uncommitted cache, and deleting it loses nothing.
 
@@ -136,6 +136,7 @@ A re-run on this branch (same date, macOS, Node v20.19.5; `@electric-sql/pglite`
 - **Whether any of this holds on Linux.** Every measurement above is macOS. Settled by Gate 10 run on a Linux host.
 - **Whether the agent runner resolves `.mcp.json`'s relative launcher path against the checkout root or against the session's own working directory.** Narrowed, not closed. Gate 10's leg (v) started its session at the checkout root, where the two are the same directory, and the server started and answered; a session started from a subdirectory has not been run, and under the second reading it would find no `scripts/docs-search-server.sh` and get no `harness-docs` server at all. Settled by one leg (v) repeated from a subdirectory of the same checkout.
 - **Whether the lexical arm filters to matching chunks on every index.** Narrowed, not closed. `cli/test/docs-retrieval-store.test.mjs` case (a) measures that `lexicalSearch` returns the matching chunk alone — and nothing at all for a term no chunk carries — at 40, 166 and 1024 synthetic rows, which bracket both committed corpora's recorded sizes — 41 and 177 chunks — and reach far above them; it holds there because `openPgliteStore` creates the BM25 index before any row exists, so the planner has no statistics for `chunks` and takes the index scan at every size. What stays open is the other plan: case (b) bisects the crossover on a stats-informed plan, with the index built after the rows, to **63 rows**, so an index whose statistics do describe its rows — after a `REINDEX`, or a dump restore — can sit below that crossover and return non-matching rows at score `0`. The number is a planner decision rather than a contract, and a PGlite or `pg_textsearch` bump can move it, which is why that case asserts it in a band and fails when it moves instead of trusting it.
+- **Whether `## Turning on the Python backend` works end to end on a real machine with real weights.** Not walked. The container case `docs-retrieval-service/tests/test_launcher_e2e.py` covers the launcher, the server and the database under the stub models only. Settled by `feat_docs_retrieval_backend_comparison`'s real-model run.
 
 ---
 
@@ -145,6 +146,97 @@ A re-run on this branch (same date, macOS, Node v20.19.5; `@electric-sql/pglite`
 - **Off costs nothing.** The runtime packages are optional peer dependencies npm does not install, and the runtime install and model download run only when `init` runs with `docs.retrieval` on, which requires `phases.docs`. Turning it on after adoption is [`cli.md`](cli.md) §2.
 - **The model-free mode scored higher on the one real catalog.** There, `lexical` scored above the shipped `fused-rerank` default on recall@5, **0.909** against **0.795** — `docs/retrieval-eval-results.md` → `### Corpus \`gate10-catalog\``, arms B and E. Those are single-repetition figures on one catalog. The default is not changed: `DEFAULT_MODE` stays `fused-rerank` (`cli/src/commands/docs.ts`), and that decision stays open in `docs/retrieval-eval-results.md` → `## The shipped default against fusion alone`.
 - **Not for your product's own search.** Do not use it for search boxes, support bots or any latency-bound product. It is a tool served to the harness's own agents over MCP and to the `docs search` command, not a component for an application.
+
+---
+
+## Turning on the Python backend
+
+**Who reads this:** an operator selecting `docs.retrievalBackend: "python"` on a repository where retrieval is already on. `init` provisions nothing for this backend, so every step below is done by hand. The two decisions that come with it, how the database is scoped and what a lost connection costs, are stated after the steps.
+
+1. **Set the key.** Retrieval itself must already be on, with `phases.docs` and `docs.retrieval` both `true` ([`cli.md`](cli.md) §2); with it off, the key selects nothing. No `init --force` is needed ([`config.md`](config.md) §5, the `docs.retrievalBackend` row). From the adopting repository's root:
+
+   ```bash
+   npx autonomous-sdlc-harness config set docs.retrievalBackend python
+   ```
+
+2. **Start the database.** The `postgres` image builds from `docs-retrieval-service/postgres/`, which no published package carries, so the compose stack runs from a clone of this repository at the release tag matching the installed CLI. The tag form is `autonomous-sdlc-harness--v<version>` ([`remote-execution.md`](remote-execution.md) → **Plugin install, and its pin.**). Read the version, clone at that tag, and start only the database:
+
+   ```bash
+   npx autonomous-sdlc-harness --version
+   git clone --branch autonomous-sdlc-harness--v<version> https://github.com/firu-daniel/autonomous-sdlc-harness.git
+   cd autonomous-sdlc-harness/docs-retrieval-service
+   docker compose up -d --wait postgres
+   ```
+
+   `--wait` returns once the container's health check passes. It publishes `127.0.0.1:5432`, the database the launcher defaults to (**Its database** below).
+
+3. **Install the package.** `harness-docs-retrieval` is not published to any package index, so it is installed from the clone. `uv tool install` puts its console script in `~/.local/bin`, one of the directories the launcher searches after `PATH`, with `/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, `/bin`, `/usr/sbin` and `/sbin`. The `models` extra brings `sentence-transformers` and `torch`, which the real models load through. From the clone's `docs-retrieval-service/`:
+
+   ```bash
+   uv tool install ".[models]"
+   ```
+
+4. **Fetch the weights.** This is the only command that downloads, so run it where an operator is present; an unattended run has no network to count on. It refuses while `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` is set ([`docs-retrieval-service/README.md`](../docs-retrieval-service/README.md) → `## Weights, precision and ids`).
+
+   ```bash
+   harness-docs-retrieval fetch-models
+   ```
+
+5. **Check readiness.** From the adopting repository's root:
+
+   ```bash
+   npx autonomous-sdlc-harness doctor
+   ```
+
+   Ready is all six retrieval checks passing. The three Python checks each pass with the detail `harness-docs-retrieval self-check` printed for its question, which `doctor` repeats and never rewrites. The three TypeScript checks pass as not applicable:
+
+   | Check id | Title | Ready means |
+   |---|---|---|
+   | `retrieval-dependencies` | RAG (docs retrieval) libraries resolve | `PASS`, not applicable under `python` |
+   | `retrieval-model-cache` | RAG's models are cached | `PASS`, not applicable under `python` |
+   | `retrieval-index` | the RAG index builds | `PASS`, not applicable under `python` |
+   | `retrieval-python-dependencies` | RAG's Python backend resolves | `PASS`, with `self-check`'s `packages` detail |
+   | `retrieval-python-model-cache` | RAG's Python backend weights are cached | `PASS`, with `self-check`'s `weights` detail |
+   | `retrieval-python-index` | the RAG Python backend's index builds | `PASS`, with `self-check`'s `index` detail |
+
+   `retrieval-python-index` refreshes the index in its database, the same write the server's first query makes, so the first `doctor` run after these steps pays the cold build. A failing check names its own remedy. While the backend cannot serve, because the command does not resolve or exits non-zero, the launcher exits `3` and the agent session has no `harness-docs` server.
+
+### Its database
+
+**Where the URL comes from.** The launcher uses `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` from the `harness-docs` server's environment, and when that carries no non-empty value it defaults to the compose file's loopback database, `postgresql://harness:harness@127.0.0.1:5432/docs_retrieval`, whose credentials are throwaway local values. A Postgres anywhere else is named in the `env` object of the `harness-docs` entry in `.mcp.json`, by the route **How the variable reaches the server, since an export does not.** above. `.mcp.json` is committed, so that URL carries no password, and libpq reads the password from `~/.pgpass`. Why there is no `docs.*` key for it is [`config.md`](config.md) §5, the `docs.retrievalBackend` row.
+
+```json
+"env": { "HARNESS_DOCS_RETRIEVAL_DATABASE_URL": "postgresql://harness@127.0.0.1:5432/docs_retrieval" }
+```
+
+**One database per repository, shared by its checkouts and worktrees.** Every checkout of a repository carries the same committed `.mcp.json`, so all of them name one database. A second repository on the same machine needs its own database, named in its own `.mcp.json`. Create it in the same container, from the clone's `docs-retrieval-service/`, with a name of your choosing:
+
+```bash
+docker compose exec postgres createdb -U harness <name>
+```
+
+**What sharing costs.** This cost is accepted, not measured:
+
+- Every `search_docs` call's refresh reconciles the shared index to the corpus of the checkout that made the call.
+- Worktrees on different branches re-embed the chunks that differ between them whenever they take turns refreshing.
+- Two servers refreshing at once can interleave, so a hit may name a section that only another branch has.
+- Two repositories left on one database delete each other's chunks on every refresh, and `doctor` cannot detect it.
+
+### A lost connection
+
+The server holds one database connection for its lifetime and never reconnects. After a Postgres restart, or a network drop, every `search_docs` call fails until the server process restarts. The agent runner starts a fresh server with each new agent session, so the next session recovers without a step of its own. The mechanism is [`docs-retrieval-service/README.md`](../docs-retrieval-service/README.md) → `## The seam, as found`, item 8.
+
+### Switching back, and what stays
+
+Set the key back to `typescript`, or delete `docs.retrievalBackend` from `harness.config.json` by hand, since an absent key means the same:
+
+```bash
+npx autonomous-sdlc-harness config set docs.retrievalBackend typescript
+```
+
+- **Nothing is reinstalled.** `init` kept the TypeScript runtime and models while `python` was selected, so the launcher starts them at once.
+- **The `docs` verb never changes backend.** `docs index` and `docs search` always answer from the TypeScript backend, whatever the key holds.
+- **A remote job does not run it.** A GitHub Actions job provisions the TypeScript runtime and models only ([`remote-execution.md`](remote-execution.md) → **Retrieval.**), and nothing of the Python backend, so with `python` selected the `harness-docs` server does not start there.
 
 ---
 
