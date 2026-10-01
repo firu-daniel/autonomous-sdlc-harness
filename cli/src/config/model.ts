@@ -212,7 +212,8 @@ export interface HarnessConfig {
  * about it, and inventing one here would be inventing configuration. `forge`, `design.source` and
  * `agentEffort` are the deliberate cases rather than the incidental ones: the schema withholds
  * `forge`'s default so an absent value reads as "not yet decided" rather than as a silent
- * assumption of one platform, withholds `design.source`'s for that same reason
+ * assumption of one platform — a default of `github` would switch {@link forgeTriggerApplies} on
+ * for a file that never chose it — withholds `design.source`'s for that same reason
  * ({@link DESIGN_SOURCES}), and withholds `agentEffort`'s because an absent value there is already
  * resolved ({@link AGENT_EFFORT_LEVELS}). In every case a value here would be a value no generator
  * writes.
@@ -246,6 +247,7 @@ export const DEFAULTS = {
  * `none` is a value rather than the absence of one — it says work stays on branches and no pull
  * request is opened, which is a decision. An **omitted** `forge` says the decision has not been
  * made; that is why the schema gives this key no `default` and {@link DEFAULTS} carries none.
+ * `github` has a reader, {@link forgeTriggerApplies}; `gitlab` and `none` write nothing.
  *
  * Exported so the check that validates the key imports the set rather than restating it: a list
  * spelled twice is a list that can disagree with the schema in one of its two copies.
@@ -565,6 +567,21 @@ export function retrievalApplies(config: HarnessConfig): boolean {
  */
 export function remoteExecutionApplies(config: HarnessConfig): boolean {
   return (config.execution?.target ?? DEFAULTS.execution.target) === 'github-actions';
+}
+
+/**
+ * Does this config have `init` write the issue-trigger workflow, so a labelled issue or a
+ * `repository_dispatch` event starts a remote run?
+ *
+ * **Declared once, here, because every consumer has to agree**: the trigger-workflow generator,
+ * `doctor`'s `forge` and `remote-github` checks, and — as the shell mirror `hr_forge` plus
+ * `hr_execution_target` — `remote-run.sh trigger`. A drift between them would write a trigger
+ * nothing grades, or grade a trigger nothing wrote. Import it; do not re-spell it.
+ *
+ * An absent `forge` is `false`: an undecided key starts nothing.
+ */
+export function forgeTriggerApplies(config: HarnessConfig): boolean {
+  return config.forge === 'github' && remoteExecutionApplies(config);
 }
 
 /** The schema's `qa.portSeed` bounds, mirrored verbatim. */

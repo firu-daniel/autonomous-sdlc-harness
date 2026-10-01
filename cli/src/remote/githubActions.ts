@@ -4,17 +4,26 @@
  * **The rule this module exists to enforce: every remote-execution name has one owner, and a copy
  * anywhere else in `cli/src` imports it.** The workflow file names and paths, the template directory,
  * the repository secret and variable names, the two artifact names and the `gh` test-seam variable
- * are declared here once; the generator that writes the workflows and the `doctor` checks that grade
- * them read these constants rather than retyping a literal.
+ * and the rendered CLI-version pin are declared here once; the generator that writes the workflows and the `doctor` checks that grade
+ * them read these constants rather than retyping a literal, and so does `generators/repoRoot.ts`,
+ * which spells the two workflow `.bak` ignore rules whatever `execution.target` says.
  *
- * Nothing here is consulted unless `config/model.ts` → `remoteExecutionApplies(config)` is true:
- * every consumer tests that switch first.
+ * Except in `generators/repoRoot.ts`, nothing here is consulted unless `config/model.ts` →
+ * `remoteExecutionApplies(config)` is true: every other consumer tests that switch first. That one
+ * is ungated because a gated rule would change `.gitignore` in the same run that turns remote
+ * execution on. The issue-trigger names (`WORKFLOW_TRIGGER_*`, `TRIGGER_*`, `DEFAULT_TRIGGER_LABEL`)
+ * are gated tighter still: they are consulted only where `forgeTriggerApplies(config)` is true.
  *
  * **Shell and YAML mirrors that must agree byte for byte.** The compiler cannot reach them, so each
  * declares the mirror in its own header, and a rename here is an edit to each of them:
- * `cli/templates/scripts/remote-run.sh`, `cli/templates/github/workflows/harness-run.yml` and
- * `cli/templates/github/workflows/harness-resume.yml`. `cli/templates/scripts/autonomous-watcher.sh`
- * is not one: it reaches GitHub only through `remote-run.sh` and spells none of these names in code.
+ * `cli/templates/scripts/remote-run.sh`, `cli/templates/github/workflows/harness-run.yml`,
+ * `cli/templates/github/workflows/harness-resume.yml`,
+ * `cli/templates/github/workflows/harness-trigger.yml` and
+ * `cli/templates/scripts/lib/harness-run-lib.sh`, which mirrors {@link WORKFLOW_RUN_FILE} and
+ * {@link STATE_ARTIFACT_NAME} for the GitHub route its notification producers print.
+ * `cli/templates/scripts/autonomous-watcher.sh` is not one: it reaches GitHub only through
+ * `remote-run.sh`, spells none of these names in code, and reaches the GitHub-route text only through
+ * the library's `hr_github_answer_route` and `hr_github_resume_route`.
  *
  * **Why {@link GH_CLI_VARIABLE} exists.** Every real route into `gh` reaches the network, which no
  * test may do, so the binary run as `gh` is taken from `${HARNESS_GH_CLI:-gh}` in both this CLI and
@@ -26,6 +35,8 @@
 
 import { spawnSync } from 'node:child_process';
 
+import { unquoteYamlScalar } from '../core/yamlScalar.js';
+
 /** The adopter-side directory GitHub reads workflows from. */
 export const WORKFLOWS_DIR = '.github/workflows';
 
@@ -34,6 +45,10 @@ export const WORKFLOW_RUN_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_RUN_FILE}`;
 
 export const WORKFLOW_RESUME_FILE = 'harness-resume.yml';
 export const WORKFLOW_RESUME_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_RESUME_FILE}`;
+
+/** The workflow that turns a labelled issue or a `repository_dispatch` event into a remote run. */
+export const WORKFLOW_TRIGGER_FILE = 'harness-trigger.yml';
+export const WORKFLOW_TRIGGER_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_TRIGGER_FILE}`;
 
 /** Under `cli/templates/`; stored without the dot, which `init` adds (`cli/templates/README.md`). */
 export const WORKFLOW_TEMPLATE_DIR = 'github/workflows';
@@ -50,6 +65,18 @@ export const RUNNER_VARIABLE = 'HARNESS_RUNNER';
 /** Repository variable: any non-empty value stops every job and poller tick before it launches. */
 export const REMOTE_STOP_VARIABLE = 'HARNESS_REMOTE_STOP';
 
+/** Repository variable naming the issue label that starts a run; unset or empty means {@link DEFAULT_TRIGGER_LABEL}. */
+export const TRIGGER_LABEL_VARIABLE = 'HARNESS_TRIGGER_LABEL';
+
+/** The issue label that starts a run when {@link TRIGGER_LABEL_VARIABLE} is unset or empty. */
+export const DEFAULT_TRIGGER_LABEL = 'harness';
+
+/** Repository variable: comma-separated bot logins that may start a run; unset or empty admits none. */
+export const TRIGGER_ALLOWED_BOTS_VARIABLE = 'HARNESS_TRIGGER_ALLOWED_BOTS';
+
+/** The `repository_dispatch` `event_type` the trigger workflow listens to. */
+export const TRIGGER_DISPATCH_EVENT_TYPE = 'harness-task';
+
 /** Repository secret for subscription billing. */
 export const OAUTH_TOKEN_SECRET = 'CLAUDE_CODE_OAUTH_TOKEN';
 
@@ -61,6 +88,30 @@ export const GIT_TOKEN_SECRET = 'HARNESS_GIT_TOKEN';
 
 /** The environment variable naming the binary run as `gh`: `${HARNESS_GH_CLI:-gh}`. */
 export const GH_CLI_VARIABLE = 'HARNESS_GH_CLI';
+
+/**
+ * The job-level `env:` variable carrying the CLI version a rendered `harness-run.yml` is pinned to.
+ * Mirrored in `cli/templates/github/workflows/harness-run.yml`, once per job.
+ */
+export const CLI_VERSION_VARIABLE = 'HARNESS_CLI_VERSION';
+
+const CLI_VERSION_LINE = new RegExp(`^[ \\t]*${CLI_VERSION_VARIABLE}:[ \\t]*(.*?)(?:[ \\t]+#.*)?[ \\t]*$`);
+
+/**
+ * Every version a workflow's text is pinned to: the value of each `<indent>HARNESS_CLI_VERSION: <value>`
+ * line, a trailing ` # comment` and the quotes stripped, distinct and in file order; `[]` when no such
+ * line exists. Pure — the caller reads the file.
+ */
+export function renderedCliVersions(text: string): readonly string[] {
+  const versions: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const match = CLI_VERSION_LINE.exec(line);
+    if (match === null) continue;
+    const value = unquoteYamlScalar(match[1] ?? '');
+    if (value !== '' && !versions.includes(value)) versions.push(value);
+  }
+  return versions;
+}
 
 /** The binary run as `gh` when {@link GH_CLI_VARIABLE} is unset or empty. */
 export const DEFAULT_GH_CLI = 'gh';

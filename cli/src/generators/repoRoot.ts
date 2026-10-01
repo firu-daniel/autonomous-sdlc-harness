@@ -55,15 +55,20 @@
  *    **either** predicate holds, as **one** `merge-json` request carrying whichever halves apply —
  *    two requests for one path would be two writers of one file. With retrieval on and no browser
  *    driven, the file declares the docs server alone.
- * 4. **The block covers files a harness command creates, and of the `.bak` siblings only the
- *    configuration's.** OS and editor noise (`.DS_Store`, `*~`) is per-developer and per-OS, so it
+ * 4. **The block covers files a harness command creates, and of the `.bak` siblings only four, each
+ *    by exact path.** OS and editor noise (`.DS_Store`, `*~`) is per-developer and per-OS, so it
  *    belongs in the adopter's own ignore file or a global `core.excludesFile` and not in a block
- *    every adopter shares. The `.bak` copies `init --force` takes of every other generated file are
- *    the adopter's previous copies of files they edit, from a deliberate regeneration whose value is
- *    that they stay visible — only the {@link CONFIG_FILENAME} `.bak`, which `config set` writes on
- *    the documented path, is ignored, and it is ignored root-anchored. A bare `*.bak` has no path
- *    component and so matches at every depth of the adopter's tree; this block is append-only, so a
- *    too-wide rule can be withdrawn only by hand in every adopter's file.
+ *    every adopter shares. Ignored: the {@link CONFIG_FILENAME} `.bak`, which `config set` writes on
+ *    the documented path, root-anchored; the two remote-execution workflows' `.bak` files, because
+ *    `init --upgrade-workflows` is the routine route on every release and its own report names each
+ *    copy, so `git status` visibility adds nothing; and the permission profile's `.bak`, because it
+ *    carries the same machine paths as the profile. The `.bak` copies `init --force` takes of every
+ *    other generated file are the adopter's previous copies of files they edit, from a deliberate
+ *    regeneration whose value is that they stay visible. No glob such as `.github/workflows/*.yml.bak`
+ *    stands in for the workflow pair: it would claim the adopter's own workflow backups, which no
+ *    harness command creates. A bare `*.bak` has no path component and so matches at every depth of
+ *    the adopter's tree; this block is append-only, so a too-wide rule can be withdrawn only by hand
+ *    in every adopter's file.
  *
  * Nothing here touches the filesystem beyond reading its templates: the generator plans, and `init`
  * applies the plan once.
@@ -78,6 +83,7 @@ import { readTemplate } from '../core/paths.js';
 import { normalizeRepoDir } from '../core/repoPaths.js';
 import { renderTemplate } from '../core/templating.js';
 import type { WritePlan } from '../core/writer.js';
+import { WORKFLOW_RESUME_PATH, WORKFLOW_RUN_PATH } from '../remote/githubActions.js';
 import { DOCS_SERVER_NAME } from '../retrieval/server.js';
 import { INDEX_DIR_NAME } from '../retrieval/store.js';
 import { PUSH_ENV_PATH, QA_CREDENTIALS_PATH } from './harnessConfig.js';
@@ -636,6 +642,9 @@ export function writeRepoRootFiles({ repoRoot, config, plan }: RepoRootOptions):
     testRunLogsReadmeException: testRunLogs.readmeException,
     // Derived from the configuration's own filename, so a rename moves its ignore rule with it.
     configBackupFile: `${CONFIG_FILENAME}.bak`,
+    // Ungated (choice 4): a rule gated on `remoteExecutionApplies` would change `.gitignore` in the
+    // same run that turns remote execution on. No leading slash: each path has an inner separator.
+    harnessBackups: [WORKFLOW_RUN_PATH, WORKFLOW_RESUME_PATH, PROFILE_PATH].map((path) => `${path}.bak`).join('\n'),
     qaBrowserArtifacts,
     docsRetrievalIndex,
   });

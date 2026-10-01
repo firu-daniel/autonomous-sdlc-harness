@@ -97,6 +97,7 @@ import {
   answersNone,
   asQaDriver,
   browserWiringApplies,
+  remoteExecutionApplies,
   CONFIG_FILENAME,
   DEFAULTS,
   isPlaceholder,
@@ -148,7 +149,12 @@ import {
   type AnalyzeOffer,
 } from '../generators/claudeContext.js';
 import { pointHooksPath, writeGitHooks } from '../generators/githooks.js';
-import { writeGithubWorkflows } from '../generators/githubWorkflows.js';
+import {
+  IN_FLIGHT_RUNS_NOTE,
+  UPGRADE_WORKFLOWS_FLAG,
+  writeGithubWorkflows,
+  type WorkflowUpgrade,
+} from '../generators/githubWorkflows.js';
 import { writeHarnessConfig, type AppDirSource, type HarnessConfigFlags } from '../generators/harnessConfig.js';
 import {
   writeNotifications,
@@ -191,8 +197,13 @@ import {
   API_KEY_SECRET,
   GIT_TOKEN_SECRET,
   OAUTH_TOKEN_SECRET,
+  CLI_VERSION_VARIABLE,
+  DEFAULT_TRIGGER_LABEL,
   PUSH_URL_SECRET,
+  REMOTE_STOP_VARIABLE,
   RUNNER_VARIABLE,
+  TRIGGER_ALLOWED_BOTS_VARIABLE,
+  TRIGGER_LABEL_VARIABLE,
 } from '../remote/githubActions.js';
 import { setUpRetrieval } from '../retrieval/setup.js';
 import type { CommandContext, Subcommand } from './registry.js';
@@ -450,6 +461,12 @@ export interface InitFlags extends HarnessConfigFlags, ProjectSettingsFlags {
    * (`generators/permissionProfile.ts`). Writes no config key.
    */
   readonly pluginRootEntries?: boolean;
+  /**
+   * `--upgrade-workflows`. Re-render the two remote-execution workflows at this CLI's version, after a
+   * `.bak`, when `harness-run.yml` was rendered for another (`generators/githubWorkflows.ts`, choice 4).
+   * Writes no config key.
+   */
+  readonly upgradeWorkflows?: boolean;
 }
 
 /**
@@ -494,7 +511,8 @@ type ValueFlagKey = Exclude<keyof InitFlags, SwitchFlagKey>;
  * (`generators/projectSettings.ts`) and `--reference-toolchain-path` reaches the permission profile
  * (`generators/permissionProfile.ts`), so both still take effect on a kept run; and the run-shape
  * rows — `--git-init`, `--reset-config`, the {@link ANALYZE_FLAG} / {@link NO_ANALYZE_FLAG} pair,
- * {@link NOTIFICATIONS_FLAG}, {@link PUSH_URL_FLAG} and {@link PLUGIN_ROOT_ENTRIES_FLAG} — are about
+ * {@link NOTIFICATIONS_FLAG}, {@link PUSH_URL_FLAG}, {@link PLUGIN_ROOT_ENTRIES_FLAG} and
+ * {@link UPGRADE_WORKFLOWS_FLAG} — are about
  * the shape of the run or about artifacts outside the repository's config.
  *
  * **Marked *and* detection-steering** is the sub-case, and {@link InitOption.steersDetection} is how
@@ -561,8 +579,9 @@ function initOptions<T extends readonly InitOption[]>(
  * phase toggles with their own inputs beside them, then the onboarding slug, then the pair that
  * answers the offer to analyze this repository — which decides the wording the generated
  * always-loaded file carries — then the pair that decides whether this account gets told when an
- * unattended run finishes, which is the one pair that writes nothing into the repository at all, and
- * last the switch that adds this machine's plugin-root entries to a freshly generated profile.
+ * unattended run finishes, which is the one pair that writes nothing into the repository at all, then
+ * the switch that adds this machine's plugin-root entries to a freshly generated profile, and last the
+ * switch that re-renders the two remote-execution workflows at this CLI's version.
  *
  * The first two sit together, and ahead of everything else, because they are the rows whose subject
  * is the **shape of the run** rather than a value in the generated file: one settles what `init` is
@@ -726,6 +745,12 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
     flag: PLUGIN_ROOT_ENTRIES_FLAG,
     kind: 'switch',
     summary: "Include this machine's plugin-root permission entries when the profile is generated (for a remote job)",
+  },
+  {
+    key: 'upgradeWorkflows',
+    flag: UPGRADE_WORKFLOWS_FLAG,
+    kind: 'switch',
+    summary: "Re-render the two remote-execution workflows at this CLI's version, after a .bak, when harness-run.yml was rendered for another",
   },
 ] as const);
 
@@ -946,6 +971,7 @@ function parseInitFlags(argv: readonly string[]): InitFlags {
     docsRetrieval: switches.has('docsRetrieval'),
     parity: switches.has('parity'),
     pluginRootEntries: switches.has('pluginRootEntries'),
+    upgradeWorkflows: switches.has('upgradeWorkflows'),
   } as InitFlags;
 }
 
@@ -2291,7 +2317,12 @@ async function run(ctx: CommandContext): Promise<number> {
 
   // After the scripts, which the workflows run, and before the permission profile. Enqueues nothing
   // unless `execution.target` is `github-actions` (`generators/githubWorkflows.ts`).
-  const workflows = writeGithubWorkflows({ repoRoot, config: effective, plan });
+  const workflows = writeGithubWorkflows({ repoRoot, config: effective, plan, upgrade: flags.upgradeWorkflows === true });
+  if (flags.upgradeWorkflows === true && !remoteExecutionApplies(effective)) {
+    warnings.push(
+      `${UPGRADE_WORKFLOWS_FLAG}: there is no workflow to upgrade, because execution.target is not github-actions — nothing under .github/workflows was written.`,
+    );
+  }
 
   const state = writeStateDir({ repoRoot, config: effective, plan });
   notes.push(...state.notes);
@@ -2439,14 +2470,106 @@ async function run(ctx: CommandContext): Promise<number> {
       return result !== undefined && result.effect !== 'kept';
     })
     .map(({ repoPath }) => repoPath);
-  if (freshWorkflows.length > 0) reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun, freshWorkflows);
+  if (workflows.upgrade !== undefined) {
+    const replacedWorkflows = workflows.workflows
+      .filter(({ absolute }) => applied.find((r) => r.path === absolute)?.effect === 'backed-up-and-replaced')
+      .map(({ repoPath }) => repoPath);
+    // Every tracked file this run merged into, so the upgrade's commit leaves no tracked change behind.
+    const mergedPaths = applied
+      .filter(
+        (r) =>
+          (r.policy === 'merge-lines' || r.policy === 'merge-json') &&
+          (r.effect === 'merged' || r.effect === 'created') &&
+          insideRepo(repoRoot, r.path),
+      )
+      .map((r) => normalizeRepoDir(relative(repoRoot, r.path)));
+    reportWorkflowUpgrade(ctx, {
+      upgrade: workflows.upgrade,
+      replacedWorkflows,
+      dryRun: ctx.flags.dryRun,
+      defaultBranch: effective.defaultBranch,
+      workflowPaths: freshWorkflows,
+      mergedPaths,
+    });
+  }
+  if (freshWorkflows.length > 0 && workflows.upgrade?.replaced !== true) {
+    reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun, freshWorkflows, workflows.trigger);
+  }
 
   return EXIT.OK;
 }
 
 /**
- * The GitHub-side steps only the adopter can take, printed when this run created or replaced at least
- * one of the two workflows; `workflowPaths` names those, repo-relative.
+ * What {@link UPGRADE_WORKFLOWS_FLAG} did, printed when the generator returned an upgrade result;
+ * `replacedWorkflows` names, repo-relative, the workflows the plan replaced after a `.bak`. What was
+ * replaced, and when, is the generator's decision (`generators/githubWorkflows.ts`, choice 4); this
+ * only reports it.
+ *
+ * An upgrade that replaced a workflow owns its commit-and-push steps here, and {@link reportGithubSteps}
+ * is not printed for it. The `git add` names `mergedPaths` — every tracked file this run merged lines
+ * or keys into — beside `workflowPaths`, because the remote job's own `init` fails its setup step on a
+ * changed tracked file, so a merge left uncommitted breaks the next run.
+ */
+function reportWorkflowUpgrade(
+  ctx: CommandContext,
+  options: {
+    readonly upgrade: WorkflowUpgrade;
+    readonly replacedWorkflows: readonly string[];
+    readonly dryRun: boolean;
+    readonly defaultBranch: string;
+    /** Every workflow this run created or replaced, repo-relative. */
+    readonly workflowPaths: readonly string[];
+    /** Every in-repository file a merge policy created or merged into, repo-relative. */
+    readonly mergedPaths: readonly string[];
+  },
+): void {
+  const { upgrade, replacedWorkflows, dryRun, defaultBranch, workflowPaths, mergedPaths } = options;
+  if (!upgrade.replaced) {
+    ctx.report.info(
+      `${UPGRADE_WORKFLOWS_FLAG}: the workflows are already rendered for ${upgrade.to}, so nothing was upgraded.`,
+    );
+    return;
+  }
+  const command = (line: string): void => ctx.report.info(`   ${line}`);
+  const from =
+    upgrade.renderedFor.length === 0
+      ? `no readable ${CLI_VERSION_VARIABLE} pin`
+      : `${CLI_VERSION_VARIABLE} ${upgrade.renderedFor.join(', ')}`;
+
+  ctx.report.step('workflow upgrade');
+  ctx.report.info(
+    `This run ${dryRun ? 'would re-render' : 're-rendered'} the workflows from ${from} to ${upgrade.to}. Each previous copy ${dryRun ? 'would be' : 'is'} kept beside it as a .bak; compare it with:`,
+  );
+  for (const path of replacedWorkflows) command(`git diff --no-index ${path}.bak ${path}`);
+  ctx.report.info(
+    upgrade.cron === undefined
+      ? "The resume poller's schedule is the template's default; no cron was carried."
+      : `The resume poller's schedule was carried: ${upgrade.cron.join(', ')}.`,
+  );
+  ctx.report.info(
+    `The .bak files ${dryRun ? 'would be' : 'are'} ignored by the managed .gitignore block, so git add -A leaves them out; delete them once compared. The runner (${RUNNER_VARIABLE}), the timeouts and the stop switch (${REMOTE_STOP_VARIABLE}) are repository variables and were not touched.`,
+  );
+  ctx.report.info('');
+  ctx.report.info('1. Check what the upgrade changed:');
+  command('git status --short');
+  ctx.report.info('');
+  ctx.report.info(
+    `2. Commit it and push it to GitHub's default branch (assumed \`${defaultBranch}\` below). ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(defaultBranch)}`,
+  );
+  command(`git add ${[...workflowPaths, ...mergedPaths].join(' ')}`);
+  command(`git commit -m "Upgrade the harness workflows to ${upgrade.to}"`);
+  command(WORKFLOW_SCOPE_COMMAND);
+  command(defaultBranchPushCommand(defaultBranch));
+  ctx.report.info('');
+  ctx.report.info(IN_FLIGHT_RUNS_NOTE);
+}
+
+/**
+ * The first-setup block: the GitHub-side steps only the adopter can take, printed when this run
+ * created or replaced at least one of the two workflows, and **not** printed for an upgrade that
+ * replaced a workflow — {@link reportWorkflowUpgrade} owns that run's steps. `workflowPaths` names
+ * the workflows, repo-relative; `trigger` is the generator's fact that the trigger workflow was
+ * enqueued, and adds the label step.
  *
  * Commands stand on their own lines so each can be pasted. The push comes first because GitHub
  * dispatches a `workflow_dispatch` workflow only once it exists on the default branch. It skips the
@@ -2459,13 +2582,19 @@ function reportGithubSteps(
   defaultBranch: string,
   dryRun: boolean,
   workflowPaths: readonly string[],
+  trigger: boolean,
 ): void {
   const wrote = dryRun ? 'would write' : 'wrote';
   const command = (line: string): void => ctx.report.info(`   ${line}`);
+  const listed =
+    workflowPaths.length === 1
+      ? workflowPaths[0]
+      : `${workflowPaths.slice(0, -1).join(', ')} and ${workflowPaths[workflowPaths.length - 1]}`;
+  let step = 4;
 
   ctx.report.step('remote execution');
   ctx.report.info(
-    `1. This run ${wrote} ${workflowPaths.join(' and ')}. Commit and push ${workflowPaths.length === 1 ? 'it' : 'both'} to GitHub's default branch (assumed \`${defaultBranch}\` below) — a workflow_dispatch workflow can be dispatched only once it exists there. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(defaultBranch)}`,
+    `1. This run ${wrote} ${listed}. Commit and push ${workflowPaths.length === 1 ? 'it' : 'them'} to GitHub's default branch (assumed \`${defaultBranch}\` below) — a workflow_dispatch workflow can be dispatched only once it exists there. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(defaultBranch)}`,
   );
   command(`git add ${workflowPaths.join(' ')}`);
   command('git commit -m "Add the harness workflows"');
@@ -2487,7 +2616,20 @@ function reportGithubSteps(
   ctx.report.info(`4. Optionally set the repository variable ${RUNNER_VARIABLE} to run on a self-hosted runner label instead of ubuntu-latest:`);
   command(`gh variable set ${RUNNER_VARIABLE} --body <runner-label>`);
   ctx.report.info('');
-  ctx.report.info('5. Then verify the GitHub side:');
+  if (trigger) {
+    step += 1;
+    ctx.report.info(
+      `${step}. Create the issue label the trigger workflow listens to; labelling an issue with it starts a run. Only a person with write or admin access, or a listed bot, starts one:`,
+    );
+    command(`gh label create ${DEFAULT_TRIGGER_LABEL} --description "Start a harness run from this issue"`);
+    ctx.report.info(
+      `   Optionally set the repository variable ${TRIGGER_LABEL_VARIABLE} to use another label, and ${TRIGGER_ALLOWED_BOTS_VARIABLE} to a comma-separated list of bot logins allowed to start runs:`,
+    );
+    command(`gh variable set ${TRIGGER_LABEL_VARIABLE} --body <label>`);
+    command(`gh variable set ${TRIGGER_ALLOWED_BOTS_VARIABLE} --body <bot-login,...>`);
+    ctx.report.info('');
+  }
+  ctx.report.info(`${step + 1}. Then verify the GitHub side:`);
   command(DOCTOR_CHECK_GITHUB_COMMAND);
   ctx.report.info('');
   ctx.report.info(

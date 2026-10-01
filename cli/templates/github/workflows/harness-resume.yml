@@ -4,6 +4,8 @@
 # WHO WRITES IT. `autonomous-sdlc-harness init`, only when harness.config.json's
 # `execution.target` is `github-actions`. Written create-if-absent: from then on
 # it is yours to tune, and a re-run of `init` keeps your copy.
+# `init --upgrade-workflows` re-renders it together with the run workflow, after
+# a `.bak`, carrying its `- cron:` lines.
 #
 # WHY A POLLER. A `schedule` trigger is a recurring cron read from the default
 # branch, not a one-shot timer, so resuming at a recorded reset time means

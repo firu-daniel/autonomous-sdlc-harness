@@ -1,6 +1,6 @@
 # Development
 
-**Who reads this:** anyone changing a file in this repository. It answers how to run the plugin from your working copy instead of from an installed copy, what that choice forces on the way references between plugin assets are written, which commands decide whether a change is good, and what the roadmap item numbers cited throughout the tree mean.
+**Who reads this:** anyone changing a file in this repository, and the maintainer cutting a release. It answers how to run the plugin from your working copy instead of from an installed copy, what that choice forces on the way references between plugin assets are written, which commands decide whether a change is good, what the roadmap item numbers cited throughout the tree mean, and which steps a release takes, in which order.
 
 Everything below was measured against the shipped `claude` CLI at version 2.1.226, except where a fact names its own version. Where a fact is a measurement, the command and the exact message are given, so a later version that behaves differently is detectable rather than merely surprising.
 
@@ -134,7 +134,7 @@ Six measured behaviours and one shipped contract, each of which costs a round if
   The probe stands an ordinary environment variable of that name in for the plugin runtime's own, which is faithful exactly insofar as the guard matches the raw command string — the same claim the result rests on, and one the literal-path run tests without any variable at all. The fourth run's finding — a `${…}` in a raw command defeats matching — **stands, and the one run measured against it never reached it**: §2 records the scan of every command the rehearsal's unattended run issued, with no unresolved token among them. Keep it anyway; it is what makes a resolved-root entry the only form worth adding.
 
   And the leg this bullet once called unmeasured — whether a helper invoked from an **instruction file** rather than an agent definition body reaches the guard with a resolved path — **is now measured, and it resolved in the hand-added entry's favour — at the cache root.** The same run invoked `find-free-port.sh`, `poll-dev-server.sh` and `kill-dev-server.sh`, all three from the instruction-file side, with the resolved **install** path, which its top-level orchestrator had located by hand, and under hand-added entries of that form; none stalled. §2 states why the call site is not the discriminator for **matching**: what the guard meets is the command an agent issues, not the text it read. Which root that resolved command names is a different question, and on a directory source it does differ by call site — the agent-body class resolves the source tree (§1) — so an entry is owed at each root. `doctor`'s `plugin-permissions` grades both, and `plugin/scripts/README.md` carries the corrected remedy.
-- **The marketplace entry carries no `version`.** `plugin.json` is the sole version of record and wins at install time. An entry that declares a version which drifts from `plugin.json` is a `--strict` failure, so the field is deliberately absent rather than duplicated and kept in sync by hand.
+- **The marketplace entry carries no `version`.** `plugin.json` is the sole version of record and wins at install time. An entry that declares a version which drifts from `plugin.json` is a `--strict` failure, so the field is deliberately absent rather than duplicated and kept in sync by hand. `.claude-plugin/marketplace.json` → `metadata.version` is a different number: it is the marketplace **catalogue's** own version, it moves when the catalogue's plugin list or an entry's source changes — which has not happened since `0.1.0` — and it is **not** a release number. The release number is `plugin/.claude-plugin/plugin.json` → `version`, and the release tag (§7) names it.
 - **`agents/` and `commands/` carry `README.txt`, not `README.md`.** Component discovery loads every `.md` file in those two directories as an agent or a command, so a `README.md` there is parsed as a component and fails `--strict` with `frontmatter: No frontmatter block found`. Every other directory that carries a README carries an ordinary `README.md`; only these two use `.txt`.
 - **A guard resolves the repository it judges from the command it was handed, and reads `harness.config.json` at that root and nowhere else.** In order: the first `git -C <dir>` in the command string, else a leading `cd <dir>`, else the hook payload's own `.cwd`, else the process `$PWD` — then `git -C <that anchor> rev-parse --show-toplevel`. Never a hardcoded path and never an assumed session root, because a plugin hook fires in every session the plugin is enabled for and the command it is handed may name a sibling worktree. Two outcomes are closed rather than left to the author: a resolved root with **no `harness.config.json`** — or one the guard's own process cannot read, which the `[ -f ] && [ -r ]` jurisdiction test puts *outside* jurisdiction rather than inside it — means that repository has not adopted the harness, so every guard stays silent in it; and **within** jurisdiction a configuration that will not resolve — invalid JSON, more than one JSON document, or a `jq` too old to run the load — must never produce an `allow`. Two near neighbours are not that invariant: an absent `jq` is a payload the guards cannot parse at all rather than a configuration they cannot resolve, and an absent `defaultBranch` closes only the three guards that consult the protected set — the other three go on permitting, correctly, because nothing they decide depends on it. Which non-permit each guard emits instead of that `allow` differs per guard and is tabulated in `plugin/hooks/README.md`; read it there rather than inferring it from one guard's behaviour.
 
@@ -693,7 +693,7 @@ npm ci
 
 A shortfall is not exempt: it fails the script. The floor policy itself — the margin between a measured figure and its recorded floor, why the graded corpus is `fixture-catalog` alone, and when a floor is re-recorded — is stated in `docs/retrieval-eval.md` → `## The regression floor`, which `floor.json`'s own `see` field names.
 
-**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a throwaway **private** repository created for the purpose — never this repository, for the reason gate 2 gives and for those gate 2's **This repository cannot host its own remote runs.** states — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Eleven observations, after a setup that is itself the first.
+**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, the issue trigger's behaviours live beside it in `docs/github-issue-trigger.md` → `## 7. What is not verified here`, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a **private** scratch repository kept for the purpose — `firu-daniel/harness-gate12` since round 3, reset to its seed commit between rounds rather than recreated — never this repository, for the reason gate 2 gives and for those gate 2's **This repository cannot host its own remote runs.** states — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Thirteen observations, after a setup that is itself the first.
 
 **Round 1 — 2026-09-28, CLI 0.4.0.** Run by hand against the scratch repository `firu-daniel/harness-gate12` (private, a small TypeScript library, `phases.qa`, `docs` and `parity` off, `execution.target: github-actions`), with one task dropped. It did not get past observation (ii): every run's session parked on its first read of a plugin instruction file. Run `36425634480`: the adoption commit had carried `.claude/settings.autonomous.json` with the adopting machine's absolute paths; the job's `init --plugin-root-entries` kept it; the preflight `doctor` printed `WARN  profile-paths  neither a path nor a pattern in .claude/settings.autonomous.json covers this repository root (/home/runner/work/harness-gate12/harness-gate12) …` and `PASS  plugin-permissions  not graded at this machine's plugin root (/home/runner/.claude/plugins/cache/autonomous-sdlc-harness/autonomous-sdlc-harness/0.4.0), because phases.qa is off, and the helper scripts are that phase's alone.` and exited 0; the session then parked asking for read access to the plugin's instruction files, every `Read` under the plugin cache asking permission and `cat`/`ls` refused as outside *"the allowed working directory `/home/runner/work/harness-gate12/harness-gate12`"*. Run `36426447207`: the profile untracked and gitignored in the scratch repository, so the job's `init` created one for the runner and `doctor` gave `PASS profile-paths` — but the generated profile carried no plugin-root entry, and the session parked the same way. Run `36428382006`: a `Read` rule and an `additionalDirectories` entry for the plugin cache added to the committed `.claude/settings.json`, which the session confirmed were in the file at `HEAD`; the same refusals, and the park-loop guard stopped the run. The eight findings, and what 0.4.1 changed for each:
 
@@ -713,7 +713,30 @@ The fixes shipped in 0.4.1, and round 2, below, ran on it.
 1. A pause during planning lost the untracked planning drafts, because each job starts in a fresh checkout: three consecutive jobs each ran the task-plan writer and paused before any reviewer, only the ledger reached the branch, the second job's bundle held exactly four files, and the run's own `PAUSE_PROGRESS.md` recorded that *"the untracked story index and per-task files from the first session were not on disk (the checkout was fresh)"* → the state bundle carries the untracked planning drafts, and a job restore puts them back without overwriting, as `docs/remote-execution.md` → `### Runs longer than a job` states.
 2. Every run printed *"Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/upload-artifact@v4."* → both workflow templates pin Node 24 majors, listed in each header's `# ACTION PINS.` block.
 
-What still owes a first recording: (i)'s and (ii)'s verbatim lines; (iii)'s push half; (v)'s enable and its in-progress artifact listing; (vii), (ix) and (x); (xi)'s convergence and the `/autonomous-sdlc-harness:branch-answer` command itself; (iii)'s `expires_at` on the `upload-artifact` major the templates now pin; and, in the next round's (ii), that no `Node.js 20 is deprecated` notice appears.
+The fixes shipped in 0.4.2, and round 3, below, ran on it.
+
+**Round 3 — 2026-09-29, CLI 0.4.2.** Scoped to the observations 0.4.2's changes touched — (ii), (iii), (iv), (vi) and (viii) — and run by hand against the scratch repository `firu-daniel/harness-gate12`, recreated private from its seed commit (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off, `execution.target: github-actions`, `HARNESS_SELF_PAUSE_AFTER_MINUTES=5`), adopted with `npx autonomous-sdlc-harness@0.4.2 init`, with one task dropped as `feat_invoices`. The job installed Claude Code `2.1.284`. `doctor --check-github`, run once before the drop, answered `PASS remote-execution` and warned only `remote-github … HARNESS_PUSH_URL is not a repository secret, so notifications from a remote run reach no one`, which is observation (i)'s pass. Observation (ii) **passed**: run `36566875418` ran on `ubuntu-latest` (image `ubuntu-24.04`), its `Generate the job's permission profile` step changed no tracked file, and its preflight printed `PASS  profile-paths           the profile's rules cover this repository root (/home/runner/work/harness-gate12/harness-gate12) — by naming it, or by a pattern such as the sibling-worktree glob that matches it — so they apply to this checkout`, `PASS  profile-tracked         .claude/settings.autonomous.json is not in the tree HEAD names, so no clone and no remote job receives this machine's copy; each generates its own` and `PASS  plugin-permissions      .claude/settings.autonomous.json carries all 1 \`permissions.allow\` entry this machine's plugin root needs — the one plugin root this machine resolves, recorded in /home/runner/.claude/plugins/installed_plugins.json — /home/runner/.claude/plugins/cache/autonomous-sdlc-harness/autonomous-sdlc-harness/0.4.2. …`. No job log and no run annotation carried a `Node.js 20 is deprecated` notice; the jobs downloaded `actions/checkout@v5`, `actions/setup-node@v5`, `actions/cache@v5` and `actions/upload-artifact@v6`. Observation (iii) **passed**, both halves: the job logged `300s of the hosted time budget have passed — dropped PAUSE (reason budget)`, `continue` logged `dispatched action=run engine=task resume=pause`, and the new run `36567615668` logged `restored the bundle of run 36566875418` and `placed 6 planning file(s) for feat_invoices; kept 0 the checkout already carries` — the story index and five per-task files the first job wrote and never committed. The session continued the saved walk, dispatching the plan reviewers on those drafts and then the writer in revision mode, rather than writing the plan again: round 2's finding 1 does not recur. On the push half, `push-probe.yml` ran for the two commits pushed with the operator's own credential, `0993498` and the task-prompt commit `be22b9e`, and for none of the six commits the jobs pushed as `github-actions[bot]`, so a `GITHUB_TOKEN` push started no workflow. On `upload-artifact@v6` the `harness-state` artifact's `expires_at` was 90 days after the run's creation, and every run carried one annotation, `Retention days cannot be greater than the maximum allowed retention set within the repository. Using 90 instead.` Observation (iv) **passed**: the `PAUSE` marker was written by hand into the mirror, the file `/autonomous-sdlc-harness:branch-pause` writes, and relayed by one `tick`; both jobs of the `harness pause` run `36567766244` were `skipped`, `timing` answered `{"billable":{"UBUNTU":{"total_ms":0,"jobs":2,…}},"run_duration_ms":2000}`, and the running job logged `a 'harness pause feat_invoices' run was created at or after 1790684562 — dropped PAUSE (reason user)` 25 s after the marker run's creation, then `decision stop for feat_invoices; nothing to do`. Observation (vi) **passed**: every run was accepted, and the budget step printed `runner github-hosted: step timeout 330 min, self-pause after 5 min`. Observation (viii) **passed**: `remote-run.sh stop` printed `dispatched the action=stop marker for feat_invoices`, `asked GitHub to cancel run 36568345973 of feat_invoices` and `stopped feat_invoices`; the `harness stop` run was `skipped`, the job ended `cancelled` with its `Save the state bundle` and `Upload the state bundle` steps `success`, no new run followed, and `sync` recorded `paused (killed)`. A `RESUME` written by hand into the mirror, the file `/autonomous-sdlc-harness:branch-resume` writes, and one `tick` started run `36568777468`, which logged `restored the bundle of run 36568345973` and `placed 7 planning file(s) for feat_invoices; kept 0 the checkout already carries`; planning converged in that job, `chore: Add task plan for feat_invoices` and the ledger's `P1` landing on the branch, followed by the first two tasks. The operator then stopped the run. Observations (v), (vii), (ix), (x) and (xi) were not run, by the round's scope. No finding.
+
+**Round 4 — 2026-09-30, the pinned plugin install before its release.** Scoped to the observations the pinned plugin install touched — (i), (ii), (vi) and (xii) — and run by hand against `firu-daniel/harness-gate12` from its seed commit (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off, `execution.target: github-actions`). The round ran before the fix's release, so the local `init`, `init --upgrade-workflows` and `doctor` calls ran the fix branch's CLI build, which reports 0.4.2. The jobs ran the published CLI their pin names, and cloned the backfilled release tags. Each job installed Claude Code `2.1.285`. Observation (i) **passed**: after the adoption push, `doctor --check-github` at 0.4.1 answered `PASS remote-execution` and warned only `remote-github … HARNESS_PUSH_URL is not a repository secret, so notifications from a remote run reach no one`. Observation (xii), in three legs:
+
+- **Leg A, the previous release's workflow.** The repository was adopted with `npx autonomous-sdlc-harness@0.4.1 init`, and the task `feat_invoices` was dropped. Run `36671123793` **refused** in `Install the pinned plugin` with `the installed plugin is version '0.4.2', but this workflow was rendered for 0.4.1. Publish the matching plugin, or re-run init with the installed version and commit the workflow.` That run's `continue` step notified `failed`, and `sync` recorded `paused (killed)`.
+- **Leg B, the upgrade.** The branch's `doctor` warned `remote-execution … .github/workflows/harness-run.yml was rendered for 0.4.1 (HARNESS_CLI_VERSION), and this CLI is 0.4.2 …` and named `npx autonomous-sdlc-harness@0.4.2 init --upgrade-workflows`. That command re-rendered both workflows with `HARNESS_CLI_VERSION: '0.4.2'`, left `harness-run.yml.bak` and `harness-resume.yml.bak` beside them, and carried the poller's `*/30 * * * *` schedule over. `doctor` then answered `PASS remote-execution`. After the push, a `RESUME` for `feat_invoices` started run `36671710773`, which **still ran the 0.4.1 workflow** and refused the same way. The run's branch was cut before the upgrade, and `remote-run.sh` dispatches with `--ref <branch>`, so GitHub ran the workflow file that branch carries. That is finding 1 below. A fresh drop, `feat_invoices_b`, was cut after the upgrade. Its run `36671794632` cloned `autonomous-sdlc-harness--v0.4.2` (`4dd0881`), passed the version check and ran. Its preflight printed `PASS profile-paths`, `PASS profile-tracked`, and `PASS  plugin-permissions      .claude/settings.autonomous.json carries all 1 \`permissions.allow\` entry this machine's plugin roots need — the directory this marketplace is sourced from (/home/runner/.claude/plugins/known_marketplaces.json → \`installLocation\` + the marketplace manifest's plugin \`source\`), which the runtime substitutes for \`${CLAUDE_PLUGIN_ROOT}\` — /home/runner/work/_temp/harness-marketplace/plugin: 1 entry; …`. The session read every plugin instruction file from `/home/runner/work/_temp/harness-marketplace/plugin/`, so the project-scope github entry of the same name did not win. It did not park, and the operator stopped it once `chore: Add flow-progress ledger for feat_invoices_b` had landed.
+- **Leg C, pinned to N while `main` carries N+1.** This leg was simulated, because no release after the fix exists yet. The re-rendered `harness-run.yml`'s two `HARNESS_CLI_VERSION` lines were edited by hand to `'0.4.1'`, and the task `feat_invoices_c` was dropped. Run `36672854611` cloned `autonomous-sdlc-harness--v0.4.1` (`355f1e8`) while `main` carried 0.4.2, passed the version check, and printed the same three `PASS` lines. Its session read the plugin from the clone, and the operator stopped it after `chore: Flow progress P3 for feat_invoices_c`.
+
+Observation (ii) **passed** on Legs B and C, and observation (vi) on every run. The other observations were not run, by the round's scope. After the round, `harness-resume.yml` was disabled by hand, because it had never run.
+
+The findings:
+
+1. An upgrade pushed to the default branch does not reach a run already in flight, because the dispatch runs the workflow its branch carries. A run whose branch carries a workflow rendered before the pinned install refuses on every resume.
+2. `doctor`'s version warning says `nothing is broken` for any older pin, including a workflow rendered before the pinned install, which is broken, as Leg A shows.
+3. The same warning carries `never makes it.. To stay on`.
+4. The `.bak` files `init --upgrade-workflows` writes are untracked but not ignored.
+5. The upgrade reprints the whole first-setup block, commit message `Add the harness workflows` included.
+6. The tag clone prints git's detached-HEAD advice into every job log.
+
+A follow-up fix answers findings 1, 3, 4, 5 and 6. For finding 1 the answer is documentation plus one sentence in the upgrade's report and in the version warning, because a run keeping the version it started with is intended. Finding 2 is not carried: no repository carries a workflow rendered before the pinned install, because remote execution has no adopters.
+
+What still owes a first recording: (v)'s enable and its in-progress artifact listing; (vii), (ix) and (x); (xi)'s convergence and the `/autonomous-sdlc-harness:branch-answer` command itself; (xii)'s last leg on a real release after the one under test; and (xiii).
 
 **Setup.**
 
@@ -811,15 +834,15 @@ One probe run is expected before any job ran. The watcher pushed the task-prompt
 
 Passes when the job drops its own `PAUSE`, ends with decision `continue`, its `remote-run.sh continue` step dispatches, and a **new** `harness run <branch>` run starts whose job restores the previous bundle and resumes from the pushed ledger. That second run starting is the evidence that a `workflow_dispatch` sent with `GITHUB_TOKEN` starts a run. Record both run ids, the `continue` step's output, the second job's `restore` line, and whether any `push-probe.yml` run's `headSha` is a commit the first job pushed, with the `gh run list` and `git log` output verbatim. Record too the `harness-state` artifact's `expires_at` from `gh api repos/<owner>/<scratch-repo>/actions/runs/<first run id>/artifacts`, which shows whether `retention-days: 400` was capped at the repository's retention or refused (`docs/remote-execution.md` §6).
 
-**(iv) A `pause` dispatch.** While a job is running, run `/autonomous-sdlc-harness:branch-pause <branch>` in the session, then relay it and read the marker run:
+**(iv) A `pause` dispatch.** While a job is running, run `/autonomous-sdlc-harness:branch-pause <branch>` in the session, then read the marker run it sent:
 
 ```
-bash <scriptsDir>/autonomous-watcher.sh tick
+gh run list --workflow harness-run.yml
 gh run view <pause run id>
 gh api repos/<owner>/<scratch-repo>/actions/runs/<pause run id>/timing
 ```
 
-Passes when the `harness pause <branch>` run's job is **skipped**, its billable time is zero, and within `REMOTE_CONTROL_POLL_SECS` of it the running job finds it, yields at its next clean checkpoint and ends with decision `stop`, re-dispatching nothing. Record the `timing` answer verbatim and the job-log line where the pause was found. Where the billable figure is not zero, record it: `docs/remote-execution.md` §6 already states that cost.
+Passes when the `harness pause <branch>` run appears after the command alone — no watcher tick — its job is **skipped**, its billable time is zero, and within `REMOTE_CONTROL_POLL_SECS` of it the running job finds it, yields at its next clean checkpoint and ends with decision `stop`, re-dispatching nothing. Record the `timing` answer verbatim and the job-log line where the pause was found. Where the billable figure is not zero, record it: `docs/remote-execution.md` §6 already states that cost.
 
 **(v) `gh workflow enable` and `disable` under the job's token.** The disable is reached by one hand-started poller tick with nothing waiting:
 
@@ -849,7 +872,7 @@ gh run list --workflow harness-run.yml
 bash <scriptsDir>/remote-run.sh sync <branch>
 ```
 
-Passes when a `harness stop <branch>` run appears, the running job is cancelled, and no new `harness run <branch>` run follows it. Then run `/autonomous-sdlc-harness:branch-resume <branch>` in the session and one more `tick`; passes when that dispatch starts a job that resumes from the pushed ledger. Record the `stop` output, the run list after it, and the resumed job's `restore` line — or, where the resume is refused, the exact refusal.
+Passes when a `harness stop <branch>` run appears, the running job is cancelled, and no new `harness run <branch>` run follows it. Then run `/autonomous-sdlc-harness:branch-resume <branch>` in the session; passes when the resume dispatch the command itself sends, with no watcher tick, starts a job that resumes from the pushed ledger. Record the `stop` output, the run list after it, and the resumed job's `restore` line — or, where the resume is refused, the exact refusal.
 
 **(ix) Both credentials.**
 
@@ -883,31 +906,140 @@ git push --no-verify origin <default branch>
 
 Then drop a small task and let it run to the end. Passes when the run ends at "ready for review" with its ledger's `E` entry `[-]` and `P2` `[x]`, the ledger's `## Run mode` block carrying `remote-skipped: qa`, the Done summary carrying the `QA (Phase E): skipped` line, and the `completed` notification's detail naming the skip and `/autonomous-sdlc-harness:branch-qa-test <branch>` (`docs/remote-execution.md` → `## 3.` → *The interactive-test phase*). Record the ledger's `## Run mode` block and the notification text verbatim.
 
-**(xi) A remote park answered and resumed.** Drop a task that leaves a decision undecided — a limit it names without setting — so the task-plan writer parks, and wait for the job log's `job: parked stop`. Then sync the branch:
+**(xi) A remote park answered and resumed.** Drop a task that leaves a decision undecided — a limit it names without setting — so the task-plan writer parks, and wait for the job log's `job: parked stop`. Answer the question in the session:
 
 ```
-bash <scriptsDir>/remote-run.sh sync <branch>
+/autonomous-sdlc-harness:branch-answer <branch>: <answer text>
 ```
 
-Answer the question in the session:
-
-```
-/autonomous-sdlc-harness:branch-answer <branch>
-```
-
-Relay the answers and read the next run:
-
-```
-bash <scriptsDir>/autonomous-watcher.sh tick
-```
+Then read the next run:
 
 ```
 gh run list --workflow harness-run.yml
 ```
 
-Passes when the tick relays the answers; the next job logs its `restore` line, `wrote answer_<n>.md for <branch>` and `resuming parked run '<branch>' (answers <n>)`; the run does not re-park on the same question; and P1 converges, meaning the ledger's `P1` flips `[x]` and `chore: Add task plan for <branch>` lands on the branch. Record the relay line, those three job-log lines and the commit.
+Passes when the command itself sends the `resume: answer` dispatch, with no watcher tick; the next job logs its `restore` line, `wrote answer_<n>.md for <branch>` and `resuming parked run '<branch>' (answers <n>)`; the run does not re-park on the same question; and P1 converges, meaning the ledger's `P1` flips `[x]` and `chore: Add task plan for <branch>` lands on the branch. Record the command's `dispatched` line, those three job-log lines and the commit.
 
-**Teardown.** Deregister the self-hosted runner, then delete the scratch repository with `gh repo delete <owner>/<scratch-repo>`.
+**(xii) A job rendered for the previous version, and the upgrade.** Start from the scratch repository adopted with the **previous** release, its workflows unchanged, once `<version>` has been published and `main` carries it. Drop a small task and let the watcher dispatch it. Passes when that job refuses in its `Install the pinned plugin` step. Record the step's `::error::` line exactly.
+
+Then re-render the two workflows with the CLI under test:
+
+```
+npx --yes autonomous-sdlc-harness@<version> init --upgrade-workflows
+```
+
+Passes when both `.github/workflows/harness-run.yml` and `.github/workflows/harness-resume.yml` are re-rendered with their pins at `<version>`, the resume workflow's cron is carried over, and a `.bak` of each sits beside it. Commit the paths the upgrade's printed `git add` names, which include `.gitignore` when the upgrade merged the managed block's new lines into it, and push them with `--no-verify`, as *Setup* does, then let the watcher dispatch the task again. Passes when the next job clones `autonomous-sdlc-harness--v<version>`, passes the version check and runs. Record the job's `claude plugin list --json` output for the installed version.
+
+Record too whether that job's session `init` record names the plugin path under `$RUNNER_TEMP/harness-marketplace/plugin`. This settles `docs/remote-execution.md` → `## 6. What is not verified here`, the row on the user-scope directory marketplace and the project-scope entry of the same name.
+
+On the release after `<version>`, drop one more task in the same repository, its workflows still rendered for `<version>`. Passes when the job installs `<version>` while `main` carries the newer version, and runs. Record the installed version and the run id.
+
+**(xiii) An issue label starts a run with the machine off.** It observes the issue trigger end to end (`docs/github-issue-trigger.md`), and settles that document's `## 7. What is not verified here` rows on labelling an issue with the machine off, on the permission API's answer for a triage user, and on the lookup bound `TRIGGER_RUN_LOOKUP_TRIES`. On the scratch repository, turn the trigger on:
+
+```
+npx --yes autonomous-sdlc-harness@<version> config set forge github
+```
+
+```
+npx --yes autonomous-sdlc-harness@<version> init
+```
+
+```
+git add .github/workflows/harness-trigger.yml
+```
+
+```
+git commit -m "Add the harness issue trigger"
+```
+
+```
+gh auth refresh -s workflow
+```
+
+```
+git push --no-verify origin <default branch>
+```
+
+```
+gh label create harness
+```
+
+```
+npx --yes autonomous-sdlc-harness@<version> doctor --check-github
+```
+
+The setup passes when `forge` answers `PASS` and `remote-github` names the trigger workflow and the trigger label. Record both lines. Then stop the local watcher:
+
+```
+npx --yes autonomous-sdlc-harness@<version> daemon stop
+```
+
+Switch the machine off or disconnect it. From another device, as a person with write access, open an issue and apply the trigger label:
+
+```
+gh issue create --repo <owner>/<scratch-repo> --title "<title>" --body "<body>"
+```
+
+```
+gh issue edit <number> --repo <owner>/<scratch-repo> --add-label harness
+```
+
+Once the issue carries the trigger's comment, edit the issue's body:
+
+```
+gh issue edit <number> --repo <owner>/<scratch-repo> --body "<edited body>"
+```
+
+Read the outcome from the same device:
+
+```
+gh issue view <number> --repo <owner>/<scratch-repo> --comments
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-trigger.yml
+```
+
+```
+gh api "repos/<owner>/<scratch-repo>/commits?sha=<slug>"
+```
+
+```
+gh api "repos/<owner>/<scratch-repo>/contents/<stateDir>/task_prompts/<slug>_task_prompt.md?ref=<slug>" -H "Accept: application/vnd.github.raw"
+```
+
+`<slug>` is the branch the comment names. Passes when, and record each verbatim:
+
+- within the lookup bound, the issue carries one comment naming `<slug>` and a `harness run <slug>` run URL, and the label is gone;
+- `origin/<slug>` carries one commit `chore: add task prompt for <slug>`, whose prompt is the issue's title and body plus the provenance line;
+- the run reaches "branch ready for review", with a `completed` notification where `HARNESS_PUSH_URL` is set;
+- editing the issue after labelling changes nothing in the committed prompt.
+
+Then three legs, each passing on its own condition.
+
+**(a) A second issue with the same title.** Open it and label it as above. Passes when its comment names `<slug>_2`. Record the comment.
+
+**(b) A labeller without write access.** Apply the label to a new issue from a second account holding the triage or read role, or as a bot not listed in `HARNESS_TRIGGER_ALLOWED_BOTS`. Passes when the issue carries a refusal comment naming write access, no `harness run` run follows, and the label is removed. Record the comment and the trigger job's log. For a triage account, read what the permission API answers for it:
+
+```
+gh api repos/<owner>/<scratch-repo>/collaborators/<login>/permission
+```
+
+Record whether it answered `read`, which settles research T3's unmeasured row.
+
+**(c) A local maintainer's command acts on the run.** While a run started from an issue is still going, in a `claude` session in the scratch repository:
+
+```
+/autonomous-sdlc-harness:branch-status <slug>
+```
+
+```
+/autonomous-sdlc-harness:branch-pause <slug>
+```
+
+Passes when `/autonomous-sdlc-harness:branch-status` prints the run's state from GitHub with no local record; `/autonomous-sdlc-harness:branch-pause` produces a `harness pause <slug>` run the job finds; and no registry record, no sibling working copy and no `deps.marker` appear on the machine. Record the status output, the pause output and the job-log line where the pause was found.
+
+**Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set. Where (xiii) ran, delete the trigger label with `gh label delete harness` and the issues the round created with `gh issue delete <number>`, and unset `forge` before the seed reset by removing its key from `harness.config.json` by hand, since `config` has no verb that unsets a key (`docs/cli.md` → ``## 8. `config` ``). Then return the scratch repository to its seed rather than deleting it, so the next round starts from the same tree: delete each run's branch on the remote, reset the default branch to the seed commit and force-push it with `--no-verify`, and remove each run's local worktree. The next round's setup skips `gh repo create` and starts at the first `init`.
 
 **Where the results go.** A dated paragraph under this gate, as gate 10's opens, carrying the CLI version, the `claude` version the job installed and each observation's recorded output; and for each behaviour an observation settled, its row in `docs/remote-execution.md` → `## 6. What is not verified here` is moved from *not verified* to *verified on <date>*, citing this gate. A behaviour an observation corrected rather than confirmed changes the design text it rests on, not only that row. A run that could not execute an observation names it and why.
 
@@ -942,9 +1074,9 @@ Items 1 and 2 — the extraction manifest and this layout — are omitted becaus
 
 **Item 6 owed two things its row did not name; one shipped with it and the other turned out not to be its.** The first was **the permission-profile coverage for the outer-loop trio** — `commit-on-branch.sh`, `push-branch.sh`, `autonomous-watcher.sh` — which had to land in the same change that ships them: the profile generator derived its script entries from the wrappers written under `scriptsDir` alone, so the trio would have got none, and a missing entry is a silent stall rather than a refusal. It landed. The shipped outer-loop table marks each row agent-invocable or not, and the profile generator emits the three literal forms only for a row that is. That coverage could not have been written earlier because the trio's destination was itself unsettled — `cli/scripts/README.md` had these scripts executing from the installed package while the shipped instruction corpus invoked them from `scriptsDir`. The resolution taken is `scriptsDir`, and that README now records it, the mechanism that was not chosen, and the cost of the one that was.
 
-The second was **the reader for the `forge` configuration key**, and item 6 is not where it belongs. `forge` — `"github"`, `"gitlab"` or `"none"` — is declared in the schema and documented in `config.md` §5 with no default and no consumer, on the principle that a config key costs an adopter nothing until something reads it, and `config.md`'s row used to name item 6 as the item delivering that reader, reasoning that pull-request and remote conventions are the outer-loop wrappers' business. Item 6 has now shipped and `push-branch.sh` opens no pull request and consults no platform: none of the key's three values would change a line of it. The reader belongs instead to the **forge coupling** — an issue-label trigger, draft-pull-request output, comment-based park-and-ask — which no row in this table delivers and which therefore carries no number to cite. That row in `config.md` has been rewritten to name the work rather than a number, because a numeric citation resolving through this table sent the reader to an item that shipped without it. A key that is declared and never read is the one outcome that principle does not survive, so the debt stands: until the coupling lands, `forge` stays declared and **unreported** — the configuration check speaks only when the key is present and is not one of the three (`checkEnum` returns on an absent optional key), and `doctor` carries no check of its own — which means the one state the principle relies on being visible, *the decision not yet made*, is the one state neither reporter names. Giving it a reporter is part of the coupling's work, not a separate debt.
+The second was **the reader for the `forge` configuration key**, and item 6 is not where it belongs. `forge` — `"github"`, `"gitlab"` or `"none"` — is declared in the schema with no default and documented in `config.md` §5, and was declared with no consumer, on the principle that a config key costs an adopter nothing until something reads it, and `config.md`'s row used to name item 6 as the item delivering that reader, reasoning that pull-request and remote conventions are the outer-loop wrappers' business. Item 6 has now shipped and `push-branch.sh` opens no pull request and consults no platform: none of the key's three values would change a line of it. The reader belongs instead to the **forge coupling** — an issue-label trigger, draft-pull-request output, comment-based park-and-ask — which no row in this table delivers and which therefore carries no number to cite. That row in `config.md` has been rewritten to name the work rather than a number, because a numeric citation resolving through this table sent the reader to an item that shipped without it. The coupling's first part, the issue-label trigger, has since landed with a reader — `init` and the trigger itself read the key — and a reporter, `doctor` → `forge`, which names every state, so *the decision not yet made* is now reported rather than silent (`github-issue-trigger.md`). The debt that remains is the coupling's other two parts, draft-pull-request output and comment-based park-and-ask: they carry no reader because nothing implements them, and `config.md`'s row names them.
 
-**A second key is now in that same state, and this release put it there.** `design.source` — `"figma"`, `"penpot"` or `"none"` — is declared in the schema and documented in `config.md` §5 with no default and no consumer, on the same principle. Its reader is the **design-source coupling**: an adapter reading design tokens and frame/node structure into the flow's inputs, which no row in this table delivers and which therefore carries no number to cite either. The root `ARCHITECTURE.md`'s `## 8. Declaring a seam before building it` states what that interface is and is not, and states plainly that the key repeats the `forge` outcome rather than `qa.driver`'s. The debt is the same debt rather than a new one: until the coupling lands, `design.source` stays declared and **unreported** — `checkEnum` returns on an absent optional key and `doctor` carries no check of its own — so *the decision not yet made* is again the one state no reporter names. Giving it a reporter is part of the coupling's work, not a separate debt.
+**A second key is now in the state `forge` was in before its trigger landed, and this release put it there.** `design.source` — `"figma"`, `"penpot"` or `"none"` — is declared in the schema and documented in `config.md` §5 with no default and no consumer, on the same principle. Its reader is the **design-source coupling**: an adapter reading design tokens and frame/node structure into the flow's inputs, which no row in this table delivers and which therefore carries no number to cite either. The root `ARCHITECTURE.md`'s `## 8. Declaring a seam before building it` states what that interface is and is not, and states plainly that the key repeats the `forge` outcome rather than `qa.driver`'s. The debt is the same debt rather than a new one: until the coupling lands, `design.source` stays declared and **unreported** — `checkEnum` returns on an absent optional key and `doctor` carries no check of its own — so *the decision not yet made* is again the one state no reporter names. Giving it a reporter is part of the coupling's work, not a separate debt.
 
 **A third debt belongs to no row at all, and it is paid:** this tree named the commands it ships without the prefix they are reached by, and the branch `chore_plugin_prefix_command_sweep` swept it in one pass. Once the plugin is installed a command resolves as `/<plugin>:<name>`, the prefix being the `name` in the plugin manifest, so all twenty under `plugin/commands/` take it with no file renamed. The rule the sweep applied, its carve-outs and the check that holds it are §5 gate 6's, as 6d; that check re-derives the set of bare spellings on every run, so no count of them is recorded here. **The classes the sweep decided.** Human-facing sites and model-read sites are both qualified, for the reason gate 6 states. The three strings the watcher interpolates into an unattended run's **first message** — `ENGINE_COMMAND_TASK`, `ENGINE_COMMAND_USER_REVIEW` and `ENGINE_COMMAND_DOCS` in `cli/templates/scripts/autonomous-watcher.sh` — meet no picker and no reader, so they were decided by measurement rather than respelled. **The watcher measurement**, from the comment block opening `# THE SPELLING OF THESE THREE IS MEASURED, NOT ASSUMED.`: Claude Code 2.1.274, plugin `autonomous-sdlc-harness 0.1.0` (per `claude plugin details autonomous-sdlc-harness@autonomous-sdlc-harness`), from a checkout that enables the plugin, running `claude -p "<the task-engine launch_prompt, spelled either way>" --permission-mode plan --max-turns 4 --output-format stream-json --verbose`. The `system`/`init` event of both legs listed `autonomous-sdlc-harness:branch-start-plan-autonomous` among its slash commands and did not list `branch-start-plan-autonomous`; neither appeared under skills. `"/branch-start-plan-autonomous"`: exit 0, no `Skill` tool_use, the first tool call `Bash`, result success, first line *"I didn't start `/branch-start-plan-autonomous`. The instructions don't match this checkout, and plan mode is on, so I couldn't have run it anyway. Nothing was changed, committed or parked."* `"/autonomous-sdlc-harness:branch-start-plan-autonomous"`: exit 0, no `Skill` tool_use, the tool calls `Bash` then `Write` (the plan-mode plan file), result success, first line *"I didn't start the autonomous run for `spelling_probe_no_such_branch`, and nothing in the repository changed. The request didn't match what's in this worktree:"*. Route: `bare`. The `prefixed` route needed the prefixed leg to emit a `Skill` tool_use naming `autonomous-sdlc-harness:branch-start-plan-autonomous` with a non-error result, and it emitted none, so the bare strings, which `fix_line_number_citations_never_block` and `feat_readme_summary_compact_llms_txt` launched and completed with, stand; the user-review and docs engines are launched by the same sentence, so the one route covers all three strings. **The headless leg**, from the `Headless first-message leg, re-measured:` paragraph on `ANALYZE_INVOCATION` in `cli/src/commands/init.ts`: Claude Code 2.1.274, from this checkout with the plugin enabled; the `system`/`init` event of both runs listed `autonomous-sdlc-harness:harness-analyze` among its slash commands and did not list `harness-analyze`. `claude -p "/autonomous-sdlc-harness:harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`: exit 1; no `Skill` call, the first tool call the command's own `Bash` read of the unfilled-stub markers; final `result` event `is_error: true`, `result: null`, verbatim message `Reached maximum number of turns (2)`. `claude -p "/harness-analyze" --permission-mode plan --max-turns 2 --output-format stream-json --verbose`: exit 1; the first tool call `Skill` naming `autonomous-sdlc-harness:harness-analyze`, which loaded the command; final `result` event `is_error: true`, `result: null`, verbatim message `Reached maximum number of turns (2)`. Both exits are the two-turn cap, not a resolution failure: the prefixed spelling ran the command directly, and the bare one reached it only through the model choosing the `Skill` tool. That is the spelling `ANALYZE_INVOCATION`, the `claude "…"` line `init` prints on the accepted arm, carries. **The earlier measurements this rests on, kept with their versions.** On Claude Code 2.1.237, under the former plugin slug `harness`, a `claude -p` session answered `Unknown command` both to the prefixed spelling under that slug and to the bare `/harness-analyze`, and `claude plugin details` reported the plugin's entries as **Skills (20)**; the 2.1.274 headless leg above answered `Unknown command` to neither spelling. On Claude Code 2.1.263, under the current slug, `claude plugin details autonomous-sdlc-harness@autonomous-sdlc-harness` exits 0 and reports **Skills (20)** with `harness-analyze` among them; and in an **interactive** session `/autonomous-sdlc-harness:harness-analyze` resolves in the `/` picker and runs, while the bare `harness-analyze` has no picker entry of its own and is fuzzy-matched onto the prefixed one. That picker result is why §5 gate 8's fenced two-line block keeps the bare spelling a person in that session types. **Two measurements were not taken, and are recorded as open rather than guessed.** What an interactive session does when `/harness-analyze presentation` or `/autonomous-sdlc-harness:harness-analyze presentation` is pasted and submitted was not measured, because an unattended run cannot drive an interactive session; so whether the picker's match survives an argument, and with it whether the gate-8 block's bare lines hold once an argument is added, is unsettled. And the confirmation that an unattended run launched with the decided strings reaches its first phase was not taken, because no such run can be launched before this branch merges; what it looks for is the launched session loading the engine command and the run's flow-progress ledger recording its first phase.
 
@@ -955,3 +1087,36 @@ grep -rn -E "items? [0-9]+" . --exclude-dir=node_modules --exclude-dir=dist
 ```
 
 Every number that command reports, other than 1 and 2, must have a row above. Adding a deferral to a new item means adding its row here in the same change.
+
+---
+
+## 7. Releasing
+
+A release is four steps, in this order. **The tag comes before the npm publication:** the `Install the pinned plugin` step of a workflow rendered by the new CLI clones the tag `autonomous-sdlc-harness--v<version>`, and refuses the run when that tag is missing (`cli/templates/github/workflows/harness-run.yml`).
+
+1. **The version bump, as a pull request onto `dev`.** It changes the version in `cli/package.json`, `package.json`, `package-lock.json` and `plugin/.claude-plugin/plugin.json` — the four files the 0.4.2 bump commit, `729af00`, touched.
+2. **The publication, as a pull request onto `main`, merged with Rebase and merge.** `scripts/publish-main.sh` → `MERGE IT WITH "REBASE AND MERGE"` states why no other merge method will do.
+3. **The release tag.** From a checkout of `dev`, at a terminal, check what the script would create first:
+
+   ```
+   bash scripts/tag-release.sh <version> --dry-run
+   ```
+
+   Then create and push it:
+
+   ```
+   bash scripts/tag-release.sh <version>
+   ```
+
+   The script tags the oldest commit on `origin/main`'s first-parent line whose `plugin/.claude-plugin/plugin.json` carries `<version>`. It exits `0` when it tagged or the tag already exists, `1` when it refused or failed, and `2` on bad usage. The script's own header is the full contract.
+4. **The npm publication.** No file in this tree states a release procedure for it. `cli/README.md` → **No lockfile of its own.** states that the package is publishable with this command:
+
+   ```
+   npm publish --workspace cli
+   ```
+
+**The tag's shape.** An annotated tag named `autonomous-sdlc-harness--v<version>`, with the message `autonomous-sdlc-harness <version>`. The maintainer created the first one, `autonomous-sdlc-harness--v0.1.0`, by hand on the initial commit, and the script copies its shape.
+
+**Why the push needs a terminal.** Without `--dry-run` the script refuses unless stdin is a terminal. A release tag is pushed by a person. An unattended run's Bash tool has no terminal, so this refusal stops such a run where the script-allowlist guard would otherwise permit the call.
+
+**Backfilled tags.** The decision is to backfill 0.2.0, 0.4.0, 0.4.1 and 0.4.2 with the same script, for the record. No workflow rendered before this fix reads a tag, so the backfill changes no existing adopter's run. 0.3.0 has no tag and cannot get one: it was bumped on `dev` (`908d822`) and was never published to `main` as its own commit, so the script refuses it.

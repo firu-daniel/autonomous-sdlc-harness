@@ -68,5 +68,10 @@
 # rule a wired repository carries an untracked file from its first `config set` onward. The leading
 # slash anchors it at the repository root, the only place the configuration is written.
 /{{configBackupFile}}
+# The copies `init --upgrade-workflows` and `init --force` take of the two remote-execution workflows
+# and of the permission profile. The upgrade's report names each workflow copy in a diff command, and
+# the profile copy carries this machine's absolute paths just as the profile does. Every other .bak a
+# forced run writes is left visible on purpose.
+{{harnessBackups}}
 {{qaBrowserArtifacts}}
 {{docsRetrievalIndex}}

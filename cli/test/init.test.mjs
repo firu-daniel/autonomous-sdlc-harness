@@ -6,7 +6,10 @@
  * content is a bug an adopter can see and correct; a re-run that silently rewrites a config, a
  * hand-tuned permission profile or a ledger destroys the only copy of something. So the idempotence,
  * `--force`-takes-a-backup and `--dry-run`-writes-nothing cases below are not an afterthought to the
- * first-run assertions — they are the reason this file exists.
+ * first-run assertions — they are the reason this file exists. The one sanctioned replacement outside
+ * `--force` is `--upgrade-workflows`, and it is held to the same bar: every workflow it replaces leaves
+ * a `.bak` the output names, the adopter's cron survives, a second run changes nothing, and without
+ * the flag, with remote execution off or under `--dry-run` it replaces nothing.
  *
  * These run against the **compiled** CLI at `dist/cli.js`: `npm run build` precedes `npm test`, and
  * `runCli` refuses with that sentence rather than leaving a module-resolution error to explain it.
@@ -8573,6 +8576,175 @@ test('the GitHub workflows arrive with execution.target github-actions, and only
     await initOk(dir, ['--force']);
     assert.equal(text(dir, `${WORKFLOW_RUN_FILE}.bak`), edited, 'the .bak does not hold the edited workflow');
     assert.equal(text(dir, WORKFLOW_RUN_FILE), rendered, '--force did not regenerate the workflow');
+  });
+});
+
+/** The switch under test, spelled as the adopter types it. */
+const UPGRADE_WORKFLOWS = '--upgrade-workflows';
+
+/** A pin line of the run workflow, the value captured without its quotes. */
+const CLI_VERSION_LINE = /^\s*HARNESS_CLI_VERSION: '([^']*)'$/gm;
+
+/** The schedule an adopter tuned, and the comment each planted file carries only before an upgrade. */
+const TUNED_CRON = "'0 * * * *'";
+const TUNED_COMMENT = '# tuned by hand before the upgrade';
+
+/**
+ * A wired fixture with remote execution on and both workflows written, then aged: every pin in the
+ * run workflow rewritten to `0.0.1`, the resume cron retuned, and a comment added to each file — the
+ * comment on the resume poller is what makes its re-render differ from the file, so it too is replaced.
+ */
+async function agedWorkflowFixture(subtest) {
+  const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+  await initOk(dir);
+  await enableRemoteExecution(dir);
+  await initOk(dir);
+  const run = text(dir, WORKFLOW_RUN_FILE).replace(CLI_VERSION_LINE, (line, pin) => line.replace(`'${pin}'`, "'0.0.1'"));
+  writeFileSync(join(dir, WORKFLOW_RUN_FILE), `${run}${TUNED_COMMENT}\n`, 'utf8');
+  const resume = text(dir, WORKFLOW_RESUME_FILE).replace(/- cron: '[^']*'/, `- cron: ${TUNED_CRON}`);
+  assert.ok(resume.includes(TUNED_CRON), 'the resume template carries no quoted - cron: line to retune');
+  writeFileSync(join(dir, WORKFLOW_RESUME_FILE), `${resume}${TUNED_COMMENT}\n`, 'utf8');
+  return dir;
+}
+
+/** The one indented `git add` command an upgrade report prints, without its indentation. */
+function upgradeAddLine(stdout) {
+  const matches = [...stdout.matchAll(/^\s+(git add .*)$/gm)].map((match) => match[1]);
+  assert.equal(matches.length, 1, `expected one git add line:\n${stdout}`);
+  return matches[0];
+}
+
+/** Every pin value the run workflow carries. */
+function pins(dir) {
+  return [...text(dir, WORKFLOW_RUN_FILE).matchAll(CLI_VERSION_LINE)].map((match) => match[1]);
+}
+
+test('init --upgrade-workflows re-pins an older workflow after a .bak, and nothing else does', async (t) => {
+  const version = readJson(join(PACKAGE_ROOT, 'package.json')).version;
+
+  await t.test('it re-renders both files from a planted older pin, keeps each as a .bak, carries the cron and names the .bak paths', async (subtest) => {
+    const dir = await agedWorkflowFixture(subtest);
+
+    const { stdout } = await initOk(dir, [UPGRADE_WORKFLOWS]);
+
+    const current = pins(dir);
+    assert.ok(current.length > 0, 'the re-rendered run workflow carries no pin');
+    assert.deepEqual(current, current.map(() => version), `a pin is not the built CLI's version: ${current.join(', ')}`);
+    const runBak = text(dir, `${WORKFLOW_RUN_FILE}.bak`);
+    assert.ok(runBak.includes("'0.0.1'") && runBak.includes(TUNED_COMMENT), 'harness-run.yml.bak does not hold the aged file');
+    assert.ok(!text(dir, WORKFLOW_RUN_FILE).includes(TUNED_COMMENT), 'the re-rendered run workflow kept the planted comment');
+    assert.ok(text(dir, WORKFLOW_RESUME_FILE).includes(`- cron: ${TUNED_CRON}`), 'the tuned cron was not carried');
+    assert.ok(text(dir, `${WORKFLOW_RESUME_FILE}.bak`).includes(TUNED_COMMENT), 'harness-resume.yml.bak does not hold the aged file');
+    for (const path of [WORKFLOW_RUN_FILE, WORKFLOW_RESUME_FILE]) {
+      assert.ok(stdout.includes(`${path}.bak`), `the output does not name ${path}.bak:\n${stdout}`);
+    }
+  });
+
+  await t.test('the managed block ignores the two workflow .bak files and the profile .bak, and no other .bak', async (subtest) => {
+    const dir = await agedWorkflowFixture(subtest);
+    const workflowBaks = [WORKFLOW_RUN_FILE, WORKFLOW_RESUME_FILE].map((path) => `${path}.bak`);
+    const visibleBaks = ['.github/workflows/ci.yml.bak', `${CLAUDE_MD}.bak`];
+    const profileBak = `${PROFILE_FILE}.bak`;
+
+    await initOk(dir, [UPGRADE_WORKFLOWS]);
+    for (const path of visibleBaks) writeFileSync(join(dir, path), 'planted\n', 'utf8');
+
+    assert.deepEqual(await ignoredAmong(dir, [...workflowBaks, ...visibleBaks]), workflowBaks);
+
+    await initOk(dir, ['--force']);
+    assert.ok(await exists(dir, profileBak), '--force wrote no profile .bak');
+    assert.deepEqual(await ignoredAmong(dir, [profileBak]), [profileBak]);
+
+    const ignoreFile = text(dir, GITIGNORE_FILE);
+    for (const line of [...workflowBaks, profileBak]) {
+      assert.ok(ignoreFile.split('\n').includes(line), `the block does not carry ${line} unanchored`);
+    }
+    assert.ok(!ignoreFile.split('\n').includes('*.bak'), 'the block carries a bare *.bak');
+    await initOk(dir);
+    assert.equal(text(dir, GITIGNORE_FILE), ignoreFile, 'a plain re-run changed .gitignore');
+  });
+
+  await t.test('an upgrade prints its own commit-and-push steps and the in-flight sentence, not the first-setup block', async (subtest) => {
+    const dir = await agedWorkflowFixture(subtest);
+    const { defaultBranch } = readJson(join(dir, CONFIG_FILE));
+
+    const { stdout } = await initOk(dir, [UPGRADE_WORKFLOWS]);
+
+    const addLine = upgradeAddLine(stdout);
+    for (const path of [WORKFLOW_RUN_FILE, WORKFLOW_RESUME_FILE]) {
+      assert.ok(addLine.includes(path), `the git add line does not name ${path}: ${addLine}`);
+    }
+    const present = [
+      'git status --short',
+      `Upgrade the harness workflows to ${version}`,
+      'gh auth refresh -s workflow',
+      `git push --no-verify origin ${defaultBranch}`,
+      'finishes on the version it started with',
+    ];
+    for (const name of present) assert.ok(stdout.includes(name), `the upgrade report does not name ${name}:\n${stdout}`);
+    for (const name of ['Add the harness workflows', 'gh secret set', 'gh variable set', 'Do not commit the .bak files']) {
+      assert.ok(!stdout.includes(name), `the upgrade report prints ${name}:\n${stdout}`);
+    }
+  });
+
+  await t.test("the upgrade's git add names .gitignore only when the run merged lines into it", async (subtest) => {
+    const harnessBackups = [WORKFLOW_RUN_FILE, WORKFLOW_RESUME_FILE, PROFILE_FILE].map((path) => `${path}.bak`);
+    const olderBlock = await agedWorkflowFixture(subtest);
+    const lines = text(olderBlock, GITIGNORE_FILE).split('\n');
+    assert.ok(harnessBackups.every((line) => lines.includes(line)), 'the fixture block does not carry the three .bak lines');
+    writeFileSync(
+      join(olderBlock, GITIGNORE_FILE),
+      lines.filter((line) => !harnessBackups.includes(line)).join('\n'),
+      'utf8',
+    );
+
+    const merged = upgradeAddLine((await initOk(olderBlock, [UPGRADE_WORKFLOWS])).stdout);
+    assert.ok(merged.split(' ').includes(GITIGNORE_FILE), `the git add line does not name ${GITIGNORE_FILE}: ${merged}`);
+
+    const currentBlock = await agedWorkflowFixture(subtest);
+    const kept = upgradeAddLine((await initOk(currentBlock, [UPGRADE_WORKFLOWS])).stdout);
+    assert.ok(!kept.split(' ').includes(GITIGNORE_FILE), `the git add line names an unchanged ${GITIGNORE_FILE}: ${kept}`);
+  });
+
+  await t.test('a second run leaves both workflows and both .bak files byte-identical', async (subtest) => {
+    const dir = await agedWorkflowFixture(subtest);
+    await initOk(dir, [UPGRADE_WORKFLOWS]);
+    const paths = [WORKFLOW_RUN_FILE, WORKFLOW_RESUME_FILE].flatMap((path) => [path, `${path}.bak`]);
+    const before = paths.map((path) => text(dir, path));
+
+    const { stdout } = await initOk(dir, [UPGRADE_WORKFLOWS]);
+
+    assert.deepEqual(paths.map((path) => text(dir, path)), before, 'a second upgrade changed a workflow or a .bak');
+    assert.ok(stdout.includes(`already rendered for ${version}`), `the second run does not say nothing was upgraded:\n${stdout}`);
+  });
+
+  await t.test('without the flag a planted older pin is kept', async (subtest) => {
+    const dir = await agedWorkflowFixture(subtest);
+    const aged = text(dir, WORKFLOW_RUN_FILE);
+
+    await initOk(dir);
+
+    assert.equal(text(dir, WORKFLOW_RUN_FILE), aged, 'a plain re-run replaced an older-pinned workflow');
+    assert.ok(!(await exists(dir, `${WORKFLOW_RUN_FILE}.bak`)), 'a plain re-run wrote a .bak');
+  });
+
+  await t.test('with remote execution off the flag warns and writes no workflow', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    await initOk(dir);
+
+    const { stderr } = await initOk(dir, [UPGRADE_WORKFLOWS]);
+
+    assert.ok(stderr.includes(UPGRADE_WORKFLOWS) && stderr.includes('github-actions'), `no warning:\n${stderr}`);
+    assert.ok(!(await exists(dir, '.github')), 'the flag wrote a .github path with remote execution off');
+  });
+
+  await t.test('--dry-run --upgrade-workflows leaves the tree byte-identical, with no .bak', async (subtest) => {
+    const dir = await agedWorkflowFixture(subtest);
+    const before = await snapshotTree(dir);
+
+    await initOk(dir, ['--dry-run', UPGRADE_WORKFLOWS]);
+
+    assert.deepEqual(await snapshotTree(dir), before, 'a dry-run upgrade changed the tree');
   });
 });
 

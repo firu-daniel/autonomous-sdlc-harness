@@ -1,5 +1,5 @@
 ---
-description: Pause a running autonomous run by dropping one PAUSE marker into its worktree, so it yields at a clean checkpoint and can be resumed later.
+description: Pause a running autonomous run so it yields at a clean checkpoint and can be resumed later — one PAUSE marker in a local run's worktree, or a pause dispatch sent straight to GitHub for a run that executes there.
 argument-hint: "[<branch>:] [reason]"
 ---
 
@@ -7,15 +7,15 @@ argument-hint: "[<branch>:] [reason]"
 
 ## Resolved values
 
-The tokens below are not ordinary **path placeholders** (`<branch>`, `<MAIN_REPO>`, `<worktree>`, which this
-file's own text resolves — `<MAIN_REPO>` in step 1 and `<worktree>` from the registry record in step 4): they
+The tokens below are not ordinary **path placeholders** (`<branch>`, `<MAIN_REPO>`, `<worktree>`, `<tmp>`, which this
+file's own text resolves — `<MAIN_REPO>` in step 1, `<worktree>` from the registry record in step 4 and `<tmp>` in step 2): they
 resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this
 table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
-| `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in, repo-relative; a script is invoked from the root of the checkout this session runs in. This file names two of them: `remote-run.sh`, which it invokes — its `sync` verb, for a remote record in step 2 — and `autonomous-watcher.sh`, **only** in the scope fence, as a file it must not modify and never invokes. It modifies neither. |
+| `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in, repo-relative; a script is invoked from the root of the checkout this session runs in. This file names two of them: `remote-run.sh`, which it invokes — its `sync` verb, for a remote record, and its `fetch` verb, for a prefix naming a branch with no record, both in step 2, and its `pause` verb, on the GitHub route in step 4 — and `autonomous-watcher.sh`, **only** in the scope fence, as a file it must not modify and never invokes. It modifies neither. |
 
 ---
 
@@ -29,15 +29,18 @@ session** — the watcher marks the run `paused` and notifies. Resume later with
 (the watcher re-launches from the committed flow-progress ledger). Wraps "Pause / resume a run" in
 `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`.
 
-Only a **running** run can honor a PAUSE (the engine must be alive to see it). This command writes ONE
-marker file and reports. The only script it invokes is `<scripts_dir>/remote-run.sh sync`, for a remote
-record; it names `remote-run.sh stop` in its report and never runs it. It must NOT modify
+Only a **running** run can honor a PAUSE (the engine must be alive to see it). For a local run this command
+writes ONE marker file and reports; for a run that executes on GitHub it writes no file and sends the pause
+dispatch itself. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for a remote record,
+`<scripts_dir>/remote-run.sh fetch`, for a prefix naming a branch with no record, and
+`<scripts_dir>/remote-run.sh pause`, on the GitHub route; it names `remote-run.sh stop` in its report and never runs it. It must NOT modify
 `<scripts_dir>/autonomous-watcher.sh`, `<scripts_dir>/remote-run.sh`, the engines, or the instruction forks.
 
 **Usage:** type `/autonomous-sdlc-harness:branch-pause`. Optionally target a branch with a leading `<branch>: ` prefix and add a
 free-text reason after it, e.g. `/autonomous-sdlc-harness:branch-pause feat_settings_search: session token window nearly full`. The
 reason (everything after any `<branch>: ` prefix) is written verbatim as the PAUSE file's body for your
-own audit — the orchestrator only checks the file's **presence**, never its content.
+own audit — the orchestrator only checks the file's **presence**, never its content. On the GitHub route no file is
+written and the reason is not sent.
 
 ## Steps
 
@@ -54,7 +57,16 @@ own audit — the orchestrator only checks the file's **presence**, never its co
      again, so a remote run that already finished is not "paused". A `sync` that exits non-zero is reported
      with its message, and that record is left out of the candidates — or, when the prefix named it, the
      command stops — never guessed about.
-3. **State check.** Read the target's status with `jq -r '.runs["<branch>"].status'`. If it is not
+   - **A prefix naming a branch the registry does not hold** may name a run that executes on GitHub with no
+     local record. Make a temporary directory with `mktemp -d`, run
+     `bash <scripts_dir>/remote-run.sh fetch <branch> <tmp>` once, and remove that directory before this
+     command ends, on every path. On exit 2, or on a printed `state: none`, report that no run of that name
+     is known locally or on GitHub and stop — never write a file for an unknown branch. On exit 1 or 3,
+     report its message and stop. Otherwise the branch takes the **GitHub route** with the printed `state:`.
+   - **The route.** A record carrying `execution: github-actions` takes the **GitHub route** with its
+     synced `status`. A record without `execution` takes the local steps 3–5 below, unchanged.
+3. **State check.** Read the target's status with `jq -r '.runs["<branch>"].status'` — on the GitHub route,
+   the synced `status` or `fetch`'s `state:`. If it is not
    `running` (e.g. already `paused`, `parked`, `completed`, `failed`), report the actual status and stop —
    dropping PAUSE on a non-running run has no effect (nothing is alive to honor it).
 4. From the registry record for `<branch>`, read the `worktree` field. Write the reason text (or an empty
@@ -68,8 +80,10 @@ own audit — the orchestrator only checks the file's **presence**, never its co
    not instantaneous — the checkpoint is reached between sub-agent dispatches, so an in-flight dispatch
    (e.g. a long interactive-test or review) finishes first.
 
-   For a **remote record** (`execution: github-actions`), report also that the local watcher relays the
-   pause to the GitHub Actions job, so the local watcher must be running for that to happen, and that the
-   job honours it at its next clean checkpoint exactly as a local run does. To stop a remote run outright
+   **GitHub route** — in place of steps 4 and 5. Never write `PAUSE`. Run
+   `bash <scripts_dir>/remote-run.sh pause <branch>` and report its result: exit 0, the pause dispatch was
+   sent; exit 2 or 3, report its message — nothing reached the run. On a send, report that the job finds the
+   `harness pause <branch>` run by polling and yields at its next clean checkpoint exactly as a local run
+   does, and that `/autonomous-sdlc-harness:branch-resume <branch>` resumes it. To stop a remote run outright
    rather than pause it, `bash <scripts_dir>/remote-run.sh stop <branch>` cancels its job and its chain —
    report that command; never run it.

@@ -48,12 +48,25 @@
  *
  * **For the job's read verbs `pause-requested` and `run-created-at`, the rule is that a failed read is
  * exit 3 and never an answer**, so job mode, which pauses only on exit 0, cannot pause on a gh fault.
+ *
+ * **For the commands' `fetch`, the rule is that it reads a branch's newest state from GitHub alone and
+ * writes nothing but its `<out_dir>`**; its `key: value` lines are a wire, so each case asserts the
+ * keys it reads. **No verb makes a run started on GitHub local: `adopt` is an unknown verb, so no
+ * command can create a working copy or a record for another branch through it.** **A user's chain-0
+ * resume dispatch marks an existing remote record `running`, and
+ * no other dispatch creates or touches a registry.** **For `review`, the rule is that a round lands
+ * on the branch tip only when no run is in flight, named by exact branch equality, committed under
+ * its fixed subject and dispatched once — leaving no copy, no local branch and no bootstrap behind**;
+ * those cases push to the fixture's bare `origin`, as `remote-start.test.mjs` does. The bootstrap
+ * sentinel is a `commands.depInstall` writing a marker outside the copy, because the copy itself is
+ * removed before the case can look in it.
  */
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import { createFixture, runBash, runCli, runGit, snapshotTree } from './helpers/fixture.mjs';
@@ -326,11 +339,11 @@ function remoteRecord(fx, extra = {}) {
 }
 
 /** A bundle directory in Task 4's format, under the stub's directory, for `run download` to copy. */
-function bundle(fx, name, { status = 'parked', questions = ['question_1.md'], detail = 'parked on a question' } = {}) {
+function bundle(fx, name, { status = 'parked', questions = ['question_1.md'], detail = 'parked on a question', engine = 'task' } = {}) {
   const dir = join(fx.dir, STATE_DIR, 'stub', 'bundles', name);
   mkdirSync(join(dir, 'clarifications', 'feat_x'), { recursive: true });
   writeFileSync(join(dir, 'status.json'), JSON.stringify({
-    schema: '1', branch: 'feat_x', engine: 'task', status, pause_reason: '', usage_resume_at: '',
+    schema: '1', branch: 'feat_x', engine, status, pause_reason: '', usage_resume_at: '',
     park_loop_cycles: '0', resume_max_question_index: '', auto_resumes: '', stall_restarts: '',
     chain: '0', control_polled_at: '', decision: 'stop', detail, run_id: '', run_url: '', written_at: '1',
   }));
@@ -387,6 +400,15 @@ test('sync applies a parked bundle, and a second sync of the same run downloads 
   assert.equal(second.status, 0, second.stderr);
   assert.equal(downloads(fx).length, 1, 'the second sync downloaded again');
   assert.deepEqual(stable(record(fx)), stable(rec));
+});
+
+test('sync takes the engine the downloaded bundle names', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx, { engine: 'task' });
+  const env = syncEnv({ runs: [ghRun(101, 'completed', 1)], artifacts: { 101: ['harness-state'] }, bundles: { 101: bundle(fx, 'e', { engine: 'docs' }) } });
+  const result = await remoteRun(fx, ['sync', 'feat_x'], env);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(record(fx).engine, 'docs');
 });
 
 test('an answer written into the mirror survives a second sync of the same run', async (t) => {
@@ -604,12 +626,10 @@ test('status prints the expired line and leaves every file under the state direc
   assert.deepEqual(await snapshotTree(fx.dir, { exclude: ['.git', 'stub'] }), before);
 });
 
-test('status and sync refuse a local record, or no record, with exit 2 and call nothing', async (t) => {
+test('status and sync refuse a local record, and sync refuses no record, with exit 2 and call nothing', async (t) => {
   const fx = await remoteFixture(t);
-  for (const verb of ['status', 'sync']) {
-    const absent = await remoteRun(fx, [verb, 'feat_x']);
-    assert.equal(absent.status, 2, `${verb}: ${absent.stderr}`);
-  }
+  const absent = await remoteRun(fx, ['sync', 'feat_x']);
+  assert.equal(absent.status, 2, absent.stderr);
   assert.equal(existsSync(join(fx.dir, REGISTRY)), false, 'a refusal created the registry');
 
   mkdirSync(join(fx.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
@@ -1065,6 +1085,8 @@ test('continue with HARNESS_REMOTE_STOP set sends nothing and notifies paused on
   assert.equal(notes().length, 1);
   assert.equal(notes()[0].event, 'paused');
   assert.match(notes()[0].detail, /remote stop is set/);
+  assert.match(notes()[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.match(notes()[0].detail, /Run workflow on harness-run\.yml .*resume pause/);
 });
 
 test('continue on wait-poller enables the resume poller and notifies nothing', async (t) => {
@@ -1480,4 +1502,402 @@ test('the read verbs refuse bad arguments with exit 1 and call nothing', async (
     assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}`);
   }
   assert.deepEqual(calls(fx), []);
+});
+
+// ---------------------------------------------------------------------------
+// fetch — the commands' read of one branch.
+// ---------------------------------------------------------------------------
+
+/** An empty directory outside the fixture's state directory, removed after the case. */
+function outDir(t) {
+  const dir = mkdtempSync(join(tmpdir(), 'remote-fetch-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+/** `fetch`'s `key: value` lines as an object. */
+function fetched(stdout) {
+  return Object.fromEntries(stdout.split('\n').filter(Boolean).map((line) => {
+    const at = line.indexOf(': ');
+    return at === -1 ? [line.replace(/:$/, ''), ''] : [line.slice(0, at), line.slice(at + 2)];
+  }));
+}
+
+const FETCH_KEYS = ['run_id', 'run_url', 'run_status', 'state', 'pause_reason', 'engine', 'detail', 'open_questions', 'bundle_dir'];
+
+/** Every file under the state directory except the stub's own, which records each call. */
+const stateSnapshot = (fx) => snapshotTree(join(fx.dir, STATE_DIR), { exclude: ['.git', 'stub'] });
+
+test('fetch with no harness run listed prints state none, every key present, and writes nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const out = outDir(t);
+  const before = await stateSnapshot(fx);
+  const result = await remoteRun(fx, ['fetch', 'feat_x', out], syncEnv({ runs: [] }));
+  assert.equal(result.status, 0, result.stderr);
+  const lines = fetched(result.stdout);
+  assert.deepEqual(Object.keys(lines), FETCH_KEYS);
+  assert.equal(lines.state, 'none');
+  assert.equal(lines.bundle_dir, '');
+  assert.deepEqual(readdirSync(out), []);
+  assert.deepEqual(await stateSnapshot(fx), before);
+});
+
+test('fetch of an in-progress newest run prints running and downloads nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const out = outDir(t);
+  const result = await remoteRun(fx, ['fetch', 'feat_x', out], syncEnv({ runs: [ghRun(102, 'in_progress', 2), ghRun(101, 'completed', 1)] }));
+  assert.equal(result.status, 0, result.stderr);
+  const lines = fetched(result.stdout);
+  assert.equal(lines.state, 'running');
+  assert.equal(lines.run_id, '102');
+  assert.equal(lines.run_url, runUrl(102));
+  assert.equal(lines.run_status, 'in_progress');
+  assert.deepEqual(downloads(fx), []);
+});
+
+test('fetch of a parked bundle prints the open questions and leaves the files in out_dir alone', async (t) => {
+  const fx = await remoteFixture(t);
+  const out = outDir(t);
+  const source = bundle(fx, 'p', { questions: ['question_1.md', 'question_2.md', 'question_10.md', 'question_3.md'] });
+  writeFileSync(join(source, 'clarifications', 'feat_x', 'answer_3.md'), 'already answered\n');
+  const before = await stateSnapshot(fx);
+
+  const result = await remoteRun(fx, ['fetch', 'feat_x', out], syncEnv({
+    runs: [ghRun(101, 'completed', 1)], artifacts: { 101: ['harness-state'] }, bundles: { 101: source },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  const lines = fetched(result.stdout);
+  assert.equal(lines.state, 'parked');
+  assert.equal(lines.engine, 'task');
+  assert.equal(lines.detail, 'parked on a question');
+  assert.equal(lines.open_questions, '1 2 10');
+  assert.equal(lines.bundle_dir, out);
+  assert.equal(readFileSync(join(out, 'clarifications', 'feat_x', 'question_2.md'), 'utf8'), 'p question_2.md\n');
+  assert.deepEqual(downloads(fx), [`run download 101 -n harness-state -D ${out}`]);
+  assert.deepEqual(await stateSnapshot(fx), before, 'fetch wrote under the state directory');
+  assert.equal(existsSync(join(fx.dir, REGISTRY)), false, 'fetch created a registry');
+});
+
+test('fetch of an expired bundle prints paused / expired and downloads nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const out = outDir(t);
+  const result = await remoteRun(fx, ['fetch', 'feat_x', out], syncEnv({
+    runs: [ghRun(101, 'completed', 1)],
+    artifacts: { 101: [{ name: 'harness-state', expired: true, expires_at: '2026-01-02T00:00:00Z' }] },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  const lines = fetched(result.stdout);
+  assert.equal(lines.state, 'paused');
+  assert.equal(lines.pause_reason, 'expired');
+  assert.match(lines.detail, /expired on 2026-01-02T00:00:00Z/);
+  assert.equal(lines.bundle_dir, '');
+  assert.deepEqual(downloads(fx), []);
+});
+
+test('fetch is refused under execution.target local, and needs an existing, empty out_dir', async (t) => {
+  const local = await remoteFixture(t, 'local');
+  const refused = await remoteRun(local, ['fetch', 'feat_x', outDir(t)]);
+  assert.equal(refused.status, 2, refused.stderr);
+  assert.deepEqual(calls(local), []);
+
+  const fx = await remoteFixture(t);
+  const full = outDir(t);
+  writeFileSync(join(full, 'x'), 'x');
+  for (const args of [['fetch', 'feat_x'], ['fetch', 'feat_x', join(full, 'missing')], ['fetch', 'feat_x', full]]) {
+    const result = await remoteRun(fx, args);
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}`);
+  }
+  assert.deepEqual(calls(fx), []);
+});
+
+// ---------------------------------------------------------------------------
+// status with no local record, and list — the commands' reads that need none.
+// ---------------------------------------------------------------------------
+
+/** A fresh TMPDIR for one run, so a temporary directory it leaves behind is seen. */
+function tmpRoot(t) {
+  const dir = mkdtempSync(join(tmpdir(), 'remote-status-tmp-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+test('status with no registry reads the newest bundle from GitHub, prints its open question, and writes nothing', async (t) => {
+  const fx = await remoteFixture(t);
+  const source = bundle(fx, 'q');
+  writeFileSync(join(source, 'clarifications', 'feat_x', 'question_1.md'), '# Questions\n\n## Q1 — Which colour?\n\nBody.\n');
+  const before = await stateSnapshot(fx);
+  const tmp = tmpRoot(t);
+
+  const result = await remoteRun(fx, ['status', 'feat_x'], {
+    ...syncEnv({ runs: [ghRun(101, 'completed', 1)], artifacts: { 101: ['harness-state'] }, bundles: { 101: source } }),
+    TMPDIR: tmp,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /101 {2}harness run feat_x/);
+  assert.match(result.stdout, /no local record; state from GitHub \(newest run\):/);
+  assert.match(result.stdout, /^ {2}state: parked$/m);
+  assert.match(result.stdout, /^remote-run\.sh: open question question_1\.md$/m);
+  assert.match(result.stdout, /^ {2}## Q1 — Which colour\?$/m);
+  assert.doesNotMatch(result.stdout, /finished after the last sync/);
+  assert.equal(downloads(fx).length, 1);
+
+  assert.deepEqual(await stateSnapshot(fx), before, 'status wrote under the state directory');
+  assert.equal(existsSync(join(fx.dir, REGISTRY)), false, 'status created a registry');
+  assert.equal(existsSync(join(fx.dir, STATE_DIR, 'autonomous_logs', 'remote_download')), false);
+  assert.deepEqual(readdirSync(tmp), [], 'status left a temporary directory');
+});
+
+test('status with no record is refused under execution.target local, calling nothing', async (t) => {
+  const fx = await remoteFixture(t, 'local');
+  const result = await remoteRun(fx, ['status', 'feat_x']);
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stderr, /execution\.target is 'local'/);
+  assert.deepEqual(calls(fx), []);
+  assert.equal(existsSync(join(fx.dir, REGISTRY)), false);
+});
+
+test('status with no record and no run on GitHub prints the no-run line and exits 0', async (t) => {
+  const fx = await remoteFixture(t);
+  const result = await remoteRun(fx, ['status', 'feat_x'], syncEnv({ runs: [] }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /remote-run\.sh: no local record, and no run titled 'harness run feat_x' on GitHub/);
+  assert.equal(existsSync(join(fx.dir, REGISTRY)), false);
+});
+
+test('status with no record and an expired newest bundle prints the expired line once, as its detail', async (t) => {
+  const fx = await remoteFixture(t);
+  const before = await stateSnapshot(fx);
+  const result = await remoteRun(fx, ['status', 'feat_x'], syncEnv({
+    runs: [ghRun(102, 'completed', 2)],
+    artifacts: { 102: [{ name: 'harness-state', expired: true, expires_at: '2026-01-02T00:00:00Z' }] },
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^ {2}pause_reason: expired$/m);
+  assert.equal(result.stdout.split('the state bundle of run 102 expired on 2026-01-02T00:00:00Z').length - 1, 1);
+  assert.equal(downloads(fx).length, 0);
+  assert.deepEqual(await stateSnapshot(fx), before);
+});
+
+test('status with no record and an unrecognised bundle is refused with exit 2, naming the bundle', async (t) => {
+  const fx = await remoteFixture(t);
+  const source = bundle(fx, 'odd', { status: 'not_a_status' });
+  const tmp = tmpRoot(t);
+  const result = await remoteRun(fx, ['status', 'feat_x'], {
+    ...syncEnv({ runs: [ghRun(101, 'completed', 1)], artifacts: { 101: ['harness-state'] }, bundles: { 101: source } }),
+    TMPDIR: tmp,
+  });
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stderr, /is unrecognised/);
+  assert.doesNotMatch(result.stderr, /execution\.target/);
+  assert.equal(existsSync(join(fx.dir, REGISTRY)), false);
+  assert.deepEqual(readdirSync(tmp), [], 'status left a temporary directory');
+});
+
+/** One `list_all_runs` entry, carrying the branch as `headBranch`. */
+const branchRun = (id, b, minute) => ({ ...ghRun(id, 'completed', minute, `harness run ${b}`), headBranch: b });
+
+test('list prints only the unrecorded, live, unprotected branch, and creates no registry', async (t) => {
+  const fx = await remoteFixture(t);
+  const configPath = join(fx.dir, 'harness.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.protectedBranches = [...new Set([...(config.protectedBranches ?? []), 'main', config.defaultBranch])];
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  await runGit(fx.dir, ['add', '-A']);
+  await runGit(fx.dir, ['commit', '--quiet', '-m', 'fixture: adopt the harness']);
+  for (const ref of [config.defaultBranch, 'main', 'feat_x', 'feat_rec']) {
+    await runGit(fx.dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${ref}`]);
+  }
+  const env = syncEnv({
+    runs: [
+      branchRun(5, 'feat_rec', 5),
+      branchRun(4, 'feat_x', 4),
+      { ...ghRun(3, 'completed', 3, 'harness pause feat_gone'), headBranch: 'feat_gone' },
+      branchRun(2, 'feat_gone', 2),
+      branchRun(1, 'main', 1),
+    ],
+  });
+
+  const unrecorded = await remoteRun(fx, ['list'], env);
+  assert.equal(unrecorded.status, 0, unrecorded.stderr);
+  assert.match(unrecorded.stdout, /on GitHub, no local record: feat_rec /);
+  assert.equal(existsSync(join(fx.dir, REGISTRY)), false, 'list created the registry');
+
+  mkdirSync(join(fx.dir, STATE_DIR, 'autonomous_logs'), { recursive: true });
+  writeFileSync(join(fx.dir, REGISTRY), JSON.stringify({ runs: { feat_rec: { branch: 'feat_rec', execution: 'local' } } }));
+  const registryBefore = readFileSync(join(fx.dir, REGISTRY));
+  const before = await stateSnapshot(fx);
+  const result = await remoteRun(fx, ['list'], env);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `remote-run.sh: on GitHub, no local record: feat_x ${runUrl(4)}\n`);
+  assert.deepEqual(readFileSync(join(fx.dir, REGISTRY)), registryBefore);
+  assert.deepEqual(await stateSnapshot(fx), before);
+  assert.equal(joined(fx).filter((line) => line.startsWith('run download') || line.startsWith('api ')).length, 0);
+});
+
+test('list with nothing unrecorded says so; under execution.target local it is refused; a failed listing is 3', async (t) => {
+  const fx = await remoteFixture(t);
+  const none = await remoteRun(fx, ['list'], syncEnv({ runs: [] }));
+  assert.equal(none.status, 0, none.stderr);
+  assert.equal(none.stdout, 'remote-run.sh: no run on GitHub without a local record\n');
+
+  const failed = await remoteRun(fx, ['list'], { STUB_FAIL_ON: 'run list' });
+  assert.equal(failed.status, 3, failed.stderr);
+  assert.equal(existsSync(join(fx.dir, REGISTRY)), false);
+
+  assert.equal((await remoteRun(fx, ['list', 'feat_x'])).status, 1);
+
+  const local = await remoteFixture(t, 'local');
+  const refused = await remoteRun(local, ['list']);
+  assert.equal(refused.status, 2, refused.stderr);
+  assert.deepEqual(calls(local), []);
+});
+
+test('adopt is an unknown verb: exit 1, no gh call, no registry', async (t) => {
+  const fx = await remoteFixture(t);
+  const env = syncEnv({ runs: [branchRun(4, 'feat_x', 4)] });
+  for (const args of [['adopt'], ['adopt', '--list'], ['adopt', 'feat_x']]) {
+    const result = await remoteRun(fx, args, env);
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}`);
+    assert.match(result.stderr, /unknown verb 'adopt'/);
+  }
+  assert.deepEqual(calls(fx), []);
+  assert.equal(existsSync(join(fx.dir, REGISTRY)), false);
+});
+
+// ---------------------------------------------------------------------------
+// dispatch — the record update after a user's resume.
+// ---------------------------------------------------------------------------
+
+test('a chain-0 answer dispatch marks an existing remote record running in one write', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx, { status: 'parked' });
+  mkdirSync(join(fx.dir, CLARIFY_DIR), { recursive: true });
+  writeFileSync(join(fx.dir, CLARIFY_DIR, 'answer_1.md'), 'blue\n');
+  const result = await remoteRun(fx, [
+    'dispatch', 'feat_x', '--engine', 'task', '--resume', 'answer',
+    '--answers-from', join(fx.dir, CLARIFY_DIR), '--indexes', '1', '--chain', '0',
+  ]);
+  assert.equal(result.status, 0, result.stderr);
+  const rec = record(fx);
+  assert.equal(rec.status, 'running');
+  assert.equal(rec.resume_kind, 'answer');
+  assert.match(rec.resumed_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+});
+
+test('a chain-1 resume leaves the record alone, and a dispatch with no registry creates none', async (t) => {
+  const fx = await remoteFixture(t);
+  remoteRecord(fx, { status: 'paused' });
+  const before = readFileSync(join(fx.dir, REGISTRY), 'utf8');
+  const chained = await remoteRun(fx, ['dispatch', 'feat_x', '--engine', 'task', '--resume', 'pause', '--chain', '1']);
+  assert.equal(chained.status, 0, chained.stderr);
+  assert.equal(readFileSync(join(fx.dir, REGISTRY), 'utf8'), before);
+
+  const bare = await remoteFixture(t);
+  const sent = await remoteRun(bare, ['dispatch', 'feat_x', '--engine', 'task', '--resume', 'pause', '--chain', '0']);
+  assert.equal(sent.status, 0, sent.stderr);
+  assert.equal(existsSync(join(bare.dir, REGISTRY)), false, 'the dispatch created a registry');
+});
+
+// ---------------------------------------------------------------------------
+// review — a user review round placed on the branch tip, then dispatched.
+// ---------------------------------------------------------------------------
+
+const REVIEW_DIR = `${STATE_DIR}/user_reviews`;
+const REVIEW_BYTES = 'The button is not centred.\n\n  "quoted" $HOME `tick`\n';
+const REVIEW_DISPATCH =
+  'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
+
+/**
+ * A remote fixture adopted on `origin`'s default branch, with `origin/feat_x` one commit ahead
+ * carrying `reviews` under the state directory's `user_reviews/`, no local `feat_x`, a review file
+ * outside the checkout, and a `commands.depInstall` that would write `bootstrapMarker`.
+ */
+async function reviewFixture(t, reviews = []) {
+  const fx = await remoteFixture(t);
+  const { dir } = fx;
+  const bootstrapMarker = join(dir, STATE_DIR, 'stub', 'bootstrap.marker');
+  const configPath = join(dir, 'harness.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.commands.depInstall = `printf x > '${bootstrapMarker}'`;
+  delete config.commands.build;
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  const copy = join(dirname(dir), `${config.projectName}-feat_x`);
+  t.after(() => rmSync(copy, { recursive: true, force: true }));
+
+  const origin = (await runGit(dir, ['remote', 'get-url', 'origin'])).stdout.trim();
+  await runGit(dir, ['add', '-A']);
+  await runGit(dir, ['commit', '--quiet', '-m', 'fixture: adopt the harness']);
+  await runGit(dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${config.defaultBranch}`]);
+  await runGit(dir, ['checkout', '--quiet', '-b', 'feat_x']);
+  for (const name of reviews) writeFileSync(join(dir, REVIEW_DIR, name), `${name}\n`);
+  if (reviews.length > 0) {
+    await runGit(dir, ['add', '--', ...reviews.map((name) => `${REVIEW_DIR}/${name}`)]);
+    await runGit(dir, ['commit', '--quiet', '-m', 'fixture: earlier rounds']);
+  }
+  await runGit(dir, ['push', '--quiet', '--no-verify', 'origin', 'HEAD:refs/heads/feat_x']);
+  await runGit(dir, ['checkout', '--quiet', config.defaultBranch]);
+  await runGit(dir, ['branch', '--quiet', '-D', 'feat_x']);
+
+  const reviewFile = join(dir, STATE_DIR, 'stub', 'review.md');
+  writeFileSync(reviewFile, REVIEW_BYTES);
+  const git = async (cwd, args) => (await runGit(cwd, args)).stdout.trim();
+  return {
+    ...fx,
+    origin,
+    copy,
+    bootstrapMarker,
+    reviewFile,
+    git,
+    originRefs: () => git(origin, ['for-each-ref', '--format=%(refname) %(objectname)']),
+  };
+}
+
+/** A completed newest run whose bundle says `status`. */
+function finishedEnv(fx, status) {
+  return syncEnv({
+    runs: [ghRun(101, 'completed', 1)],
+    artifacts: { 101: ['harness-state'] },
+    bundles: { 101: bundle(fx, status, { status, questions: [] }) },
+  });
+}
+
+test('review is refused while the newest run is in progress, or its bundle is parked; origin unchanged', async (t) => {
+  const fx = await reviewFixture(t);
+  const before = await fx.originRefs();
+  for (const env of [syncEnv({ runs: [ghRun(102, 'in_progress', 2)] }), finishedEnv(fx, 'parked')]) {
+    const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile], env);
+    assert.equal(result.status, 2, result.stderr);
+    assert.match(result.stderr, /feat_x is (running|parked) on GitHub/);
+  }
+  assert.equal(await fx.originRefs(), before);
+  assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow run')), []);
+  assert.equal(existsSync(fx.copy), false);
+});
+
+test('review places the next round by exact branch equality, commits it, and dispatches once', async (t) => {
+  const fx = await reviewFixture(t, ['feat_x_review.md', 'feat_x_extra_review_5.md']);
+  const tipBefore = await fx.git(fx.origin, ['rev-parse', 'refs/heads/feat_x']);
+
+  const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile], finishedEnv(fx, 'completed'));
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, new RegExp(`^remote-run\\.sh: placed ${REVIEW_DIR}/feat_x_review_2\\.md \\(round 2\\) on feat_x$`, 'm'));
+
+  assert.equal(await fx.git(fx.origin, ['rev-list', '--count', `${tipBefore}..refs/heads/feat_x`]), '1');
+  assert.equal(await fx.git(fx.origin, ['log', '-1', '--format=%s', 'refs/heads/feat_x']), 'chore: add user review for feat_x');
+  assert.equal(await fx.git(fx.origin, ['diff', '--name-only', tipBefore, 'refs/heads/feat_x']), `${REVIEW_DIR}/feat_x_review_2.md`);
+  assert.equal((await runGit(fx.origin, ['show', `refs/heads/feat_x:${REVIEW_DIR}/feat_x_review_2.md`])).stdout, REVIEW_BYTES);
+  assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow run')), [REVIEW_DISPATCH]);
+
+  assert.equal(existsSync(fx.copy), false, 'the copy was left behind');
+  const local = await runBash(fx.dir, ['-c', 'git show-ref --verify --quiet refs/heads/feat_x']);
+  assert.notEqual(local.status, 0, 'the local branch feat_x was left behind');
+  assert.doesNotMatch((await runGit(fx.dir, ['worktree', 'list'])).stdout, /-feat_x\b/);
+  assert.equal(existsSync(fx.bootstrapMarker), false, 'the copy was bootstrapped');
+});
+
+test('review of a branch with no earlier round places round 1', async (t) => {
+  const fx = await reviewFixture(t);
+  const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile], finishedEnv(fx, 'failed'));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal((await runGit(fx.origin, ['show', `refs/heads/feat_x:${REVIEW_DIR}/feat_x_review.md`])).stdout, REVIEW_BYTES);
 });
