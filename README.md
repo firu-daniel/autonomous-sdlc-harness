@@ -2,6 +2,8 @@
 
 An autonomous software-delivery harness for Claude Code.
 You ask for a change, and you get back a branch that has been planned, implemented and independently reviewed, pushed and ready for your review.
+It has two entry points, used together: locally, through the plugin and CLI installed below, and from GitHub, where labelling an issue starts a run and comments and reviews steer it to a draft pull request.
+The GitHub route works once one maintainer has done a one-time local setup.
 You install two things: a Claude Code plugin and a Node CLI.
 
 1. Install the plugin (step A):
@@ -178,6 +180,12 @@ npx autonomous-sdlc-harness doctor
 
 Which keys are written is [`docs/cli.md`](docs/cli.md) §2. `harness.config.json` is committed; the permission profile is not committed, which is why the teammate runs `init` once.
 
+### Working from GitHub
+
+Once the setup is done, labelling an issue `sdlc-harness` starts a run, and a review that requests changes on a pull request from the run's branch starts a user-review round. With `forge` set to `github` and `execution.target` to `github-actions`, a team member who uses only this route needs nothing local: no clone, no plugin and no `init`. Anyone may use both routes at once.
+
+The setup, the comment commands, what still needs a local machine and the caveats are in [`docs/github-run-control.md`](docs/github-run-control.md#the-github-entry-point).
+
 ## How it is measured
 
 **Every branch is scored against its own plan.** The denominator is the sum of the story points in that branch's own story index, so scope is weighted by complexity rather than counted as tasks. The subtraction is the severity-weighted cost of what a hands-on human review found in the finished branch.
@@ -209,7 +217,7 @@ What this harness does not do, in three groups: the shape of the system as desig
 - **Claude-bound today.** One engine: the process assets ship as a Claude Code plugin, and a run is one headless `claude -p` session. There is no second backend and no abstraction in front of the first, so changing engine means rewriting the outer loop's launch path. The engine/provider seam is designed and not built: [`ARCHITECTURE.md`](ARCHITECTURE.md) lists every site the engine is reached at, the contract an adapter would carry, and why a second engine stays unbuilt here.
 - **Local by default, one host for the daemons.** A run executes on the local host by default, or, opt-in, in a GitHub Actions job on a hosted or self-hosted runner ([`docs/remote-execution.md`](docs/remote-execution.md)); either way the daemons and the machine lane stay local, with a daemon per repository ([`docs/watcher.md`](docs/watcher.md) §3). The daemons agree through machine-local state: a published usage assessment, on by default, an opt-in advisory lock ([`docs/watcher.md`](docs/watcher.md) §5), and a record of which repositories have a daemon ([`docs/watcher.md`](docs/watcher.md) §7). Nothing spans two hosts, so two machines on one account each spend its rate-limit window as though alone. Nothing bounds burn rate either: the per-repository cap, the model and the effort level are the adopter's call and they multiply, so several concurrent high-effort runs will exhaust a rate-limit window that one would not ([`docs/watcher.md`](docs/watcher.md) §4).
 - **git only.** No SVN, no Mercurial. Outside a repository, `init` offers to create one, and refuses when it cannot ask. A `jj` repository adopts in both shapes. Why git is a hard gate is in [`docs/cli.md`](docs/cli.md) §2. What a `jj` adopter pays is in [`docs/cli.md`](docs/cli.md) §7, the `jj-repository` check.
-- **Forge-agnostic, which means the last step is yours.** The flow ends at a pushed branch; opening the pull request, requesting review and merging are not automated. `push-branch.sh` opens no pull request and consults no platform ([`docs/watcher.md`](docs/watcher.md) §2). A `forge` key (`github`, `gitlab` or `none`) is read only for the issue trigger, when it is `github` and runs execute on GitHub Actions ([`docs/github-issue-trigger.md`](docs/github-issue-trigger.md)), and `doctor` reports it ([`docs/config.md`](docs/config.md) §5). The configuration check speaks only when the key is present and holds none of those three.
+- **GitHub-coupled on request, and merging is always yours.** With `forge` set to `github` and runs on GitHub Actions, a labelled issue starts a run, comments and reviews steer it, and a completed run opens a draft pull request ([`docs/github-issue-trigger.md`](docs/github-issue-trigger.md), [`docs/github-run-control.md`](docs/github-run-control.md)). The flow never merges, and `push-branch.sh` still opens no pull request and consults no platform: the run workflow opens it ([`docs/watcher.md`](docs/watcher.md) §2). `gitlab` and `none` write nothing, and `doctor` reports the `forge` key ([`docs/config.md`](docs/config.md) §5). The configuration check speaks only when the key is present and holds none of those three.
 - **Design→code generation is out of scope.** Nothing in this release turns a design file into code. No phase reads a design file, so a design change reaches the code as text someone writes into a prompt. A `design.source` key (`figma`, `penpot` or `none`) is declared, but nothing reads it in this release ([`docs/config.md`](docs/config.md) §5). The configuration check speaks only when the key is present and holds none of those three. [`ARCHITECTURE.md`](ARCHITECTURE.md) `## 8. Declaring a seam before building it` states what that interface would be.
 
 ### What the shipped evidence covers, and what it does not
@@ -230,6 +238,7 @@ What this harness does not do, in three groups: the shape of the system as desig
 - [`docs/watcher.md`](docs/watcher.md) — the outer loop: what turns a dropped file into an unattended run, which script does what, the daemon's lifecycle, and the machine-level usage lane.
 - [`docs/remote-execution.md`](docs/remote-execution.md) — running unattended runs in a GitHub Actions job instead of locally: the design and a remote run's lifecycle, adopter setup, runner choices, credentials and billing, costs, security, and what is not yet verified.
 - [`docs/github-issue-trigger.md`](docs/github-issue-trigger.md) — starting a run by labelling a GitHub issue: turning it on, the branch name, who may start a run, what the labeller vouches for, and working the run locally or from GitHub.
+- [`docs/github-run-control.md`](docs/github-run-control.md) — working a run from GitHub: the GitHub entry point, comment commands, review rounds, answering a park, the draft pull request, lifecycle comments and state labels, and who can act.
 - [`docs/analyze.md`](docs/analyze.md) — `/autonomous-sdlc-harness:harness-analyze`'s decisions of record: what it fills in from real code, what it refuses to guess, and how the offer to run it reaches a session.
 - [`docs/cli.md`](docs/cli.md) — the five subcommands, their flags and exit codes, the `init` re-run contract, the stack-detection table, and the failure modes the generated permission profile encodes.
 - [`docs/retrieval.md`](docs/retrieval.md) — RAG (docs retrieval): opt-in and local; measured on a real catalog, verdict withdrawn, kept opt-in by maintainer decision; its design, measured facts, when to turn it on, what it buys and what it costs.
