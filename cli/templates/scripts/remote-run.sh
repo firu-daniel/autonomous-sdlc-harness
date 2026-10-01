@@ -531,6 +531,13 @@
 #   DEFAULT_TRIGGER_LABEL        mirrors  DEFAULT_TRIGGER_LABEL
 #   HARNESS_TRIGGER_ALLOWED_BOTS mirrors  TRIGGER_ALLOWED_BOTS_VARIABLE
 #   TRIGGER_DISPATCH_EVENT_TYPE  mirrors  TRIGGER_DISPATCH_EVENT_TYPE ('harness-task')
+#   WORKFLOW_CONTROL_FILE        mirrors  WORKFLOW_CONTROL_FILE
+#   COMMAND_HANDLE               mirrors  COMMAND_HANDLE
+#   COMMAND_VERBS                mirrors  COMMAND_VERBS, space-separated
+#   COMMENT_MARKER               mirrors  COMMENT_MARKER
+#   REVIEW_ROUND_STATE           mirrors  REVIEW_ROUND_STATE
+#   STATE_LABEL_PREFIX           mirrors  STATE_LABEL_PREFIX
+#   RUN_STATES                   mirrors  RUN_STATES, space-separated, same order
 #
 # `set -u` WITHOUT `-e`: every refusal is reported with its own exit code rather
 # than aborting mid-decision.
@@ -730,6 +737,13 @@ STATE_ARTIFACT_NAME='harness-state'
 POLL_STATE_ARTIFACT_NAME='harness-poll-state'
 DEFAULT_TRIGGER_LABEL='harness'
 TRIGGER_DISPATCH_EVENT_TYPE='harness-task'
+WORKFLOW_CONTROL_FILE='harness-control.yml'
+COMMAND_HANDLE='@sdlc-harness'
+COMMAND_VERBS='answer pause resume stop clear'
+COMMENT_MARKER='<!-- sdlc-harness'
+REVIEW_ROUND_STATE='changes_requested'
+STATE_LABEL_PREFIX='sdlc-harness: '
+RUN_STATES='running parked paused done failed stopped'
 GH="${HARNESS_GH_CLI:-gh}"
 
 # How many runs `status` prints, and how many `run list` returns for status

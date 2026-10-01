@@ -38,3 +38,7 @@
 - `npm test -- test/remote-names.test.mjs` from `cli/` passes.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n -e "'harness-control.yml'" -e "'@sdlc-harness'" -e "'sdlc-harness: '" -e "'<!-- sdlc-harness'" -- cli/src` has every hit inside `cli/src/remote/githubActions.ts`: no second owner of a literal in the package.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/remote-run.sh` was not executed: the run's permission layer refused the command (both as part of a compound call and alone). The claim rests on reading the diff instead: the seven added lines are plain single-quoted assignments, with no quote, `$` or backslash inside any value, so they add nothing a parser can reject. Deferred to the Run gates phase.

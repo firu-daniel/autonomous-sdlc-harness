@@ -247,7 +247,8 @@ export const DEFAULTS = {
  * `none` is a value rather than the absence of one — it says work stays on branches and no pull
  * request is opened, which is a decision. An **omitted** `forge` says the decision has not been
  * made; that is why the schema gives this key no `default` and {@link DEFAULTS} carries none.
- * `github` has a reader, {@link forgeTriggerApplies}; `gitlab` and `none` write nothing.
+ * `github` has a reader, {@link forgeTriggerApplies}, which switches the whole forge coupling;
+ * `gitlab` and `none` switch nothing.
  *
  * Exported so the check that validates the key imports the set rather than restating it: a list
  * spelled twice is a list that can disagree with the schema in one of its two copies.
@@ -570,13 +571,14 @@ export function remoteExecutionApplies(config: HarnessConfig): boolean {
 }
 
 /**
- * Does this config have `init` write the issue-trigger workflow, so a labelled issue or a
- * `repository_dispatch` event starts a remote run?
+ * Is the whole forge coupling on — the trigger and control workflows, the lifecycle comments, the
+ * run-state labels and the draft pull request?
  *
- * **Declared once, here, because every consumer has to agree**: the trigger-workflow generator,
- * `doctor`'s `forge` and `remote-github` checks, and — as the shell mirror `hr_forge` plus
- * `hr_execution_target` — `remote-run.sh trigger`. A drift between them would write a trigger
- * nothing grades, or grade a trigger nothing wrote. Import it; do not re-spell it.
+ * **Declared once, here, because every consumer has to agree**: the workflow generator, `doctor`'s
+ * `forge` and `remote-github` checks, and — as the shell mirror `hr_forge` plus
+ * `hr_execution_target` — `remote-run.sh`'s `trigger`, `control`, `report` and `deliver`. A drift
+ * between them would write a workflow nothing grades, or act on a coupling nothing wrote. Import it;
+ * do not re-spell it.
  *
  * An absent `forge` is `false`: an undecided key starts nothing.
  */

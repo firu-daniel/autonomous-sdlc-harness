@@ -12,13 +12,16 @@
  * `remoteExecutionApplies(config)` is true: every other consumer tests that switch first. That one
  * is ungated because a gated rule would change `.gitignore` in the same run that turns remote
  * execution on. The issue-trigger names (`WORKFLOW_TRIGGER_*`, `TRIGGER_*`, `DEFAULT_TRIGGER_LABEL`)
- * are gated tighter still: they are consulted only where `forgeTriggerApplies(config)` is true.
+ * and the run-control names (`WORKFLOW_CONTROL_*`, `COMMAND_*`, `COMMENT_MARKER`,
+ * `REVIEW_ROUND_STATE`, `STATE_LABEL_PREFIX`, `RUN_STATES`, `STATE_LABELS`) are gated tighter
+ * still: they are consulted only where `forgeTriggerApplies(config)` is true.
  *
  * **Shell and YAML mirrors that must agree byte for byte.** The compiler cannot reach them, so each
  * declares the mirror in its own header, and a rename here is an edit to each of them:
  * `cli/templates/scripts/remote-run.sh`, `cli/templates/github/workflows/harness-run.yml`,
  * `cli/templates/github/workflows/harness-resume.yml`,
- * `cli/templates/github/workflows/harness-trigger.yml` and
+ * `cli/templates/github/workflows/harness-trigger.yml`,
+ * `cli/templates/github/workflows/harness-control.yml` and
  * `cli/templates/scripts/lib/harness-run-lib.sh`, which mirrors {@link WORKFLOW_RUN_FILE} and
  * {@link STATE_ARTIFACT_NAME} for the GitHub route its notification producers print.
  * `cli/templates/scripts/autonomous-watcher.sh` is not one: it reaches GitHub only through
@@ -49,6 +52,46 @@ export const WORKFLOW_RESUME_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_RESUME_FILE}`;
 /** The workflow that turns a labelled issue or a `repository_dispatch` event into a remote run. */
 export const WORKFLOW_TRIGGER_FILE = 'harness-trigger.yml';
 export const WORKFLOW_TRIGGER_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_TRIGGER_FILE}`;
+
+/** The workflow that turns a comment command or a review into a harness action. */
+export const WORKFLOW_CONTROL_FILE = 'harness-control.yml';
+export const WORKFLOW_CONTROL_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_CONTROL_FILE}`;
+
+/** The first word of a command comment, matched case-insensitively. */
+export const COMMAND_HANDLE = '@sdlc-harness';
+
+/** The verbs a command comment may carry after {@link COMMAND_HANDLE}. */
+export const COMMAND_VERBS = ['answer', 'pause', 'resume', 'stop', 'clear'] as const;
+
+export type CommandVerb = (typeof COMMAND_VERBS)[number];
+
+/**
+ * The prefix of the hidden line every harness comment carries; the whole line is
+ * `<!-- sdlc-harness event=<event> branch=<branch>[ question=<n>] -->`. A comment containing the
+ * prefix anywhere is never a command.
+ */
+export const COMMENT_MARKER = '<!-- sdlc-harness';
+
+/** The `review.state` that starts a review round, lowercase as the webhook payload carries it. */
+export const REVIEW_ROUND_STATE = 'changes_requested';
+
+/** The prefix every run-state label's name starts with. */
+export const STATE_LABEL_PREFIX = 'sdlc-harness: ';
+
+/** The states a run's pull request is labelled with, one label each. */
+export const RUN_STATES = ['running', 'parked', 'paused', 'done', 'failed', 'stopped'] as const;
+
+export type RunState = (typeof RUN_STATES)[number];
+
+/** The label name for each {@link RunState}; total, so a new state fails to compile until it has one. */
+export const STATE_LABELS: Readonly<Record<RunState, string>> = {
+  running: `${STATE_LABEL_PREFIX}running`,
+  parked: `${STATE_LABEL_PREFIX}parked`,
+  paused: `${STATE_LABEL_PREFIX}paused`,
+  done: `${STATE_LABEL_PREFIX}done`,
+  failed: `${STATE_LABEL_PREFIX}failed`,
+  stopped: `${STATE_LABEL_PREFIX}stopped`,
+};
 
 /** Under `cli/templates/`; stored without the dot, which `init` adds (`cli/templates/README.md`). */
 export const WORKFLOW_TEMPLATE_DIR = 'github/workflows';
