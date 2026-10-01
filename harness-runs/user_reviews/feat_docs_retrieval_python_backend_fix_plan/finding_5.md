@@ -17,7 +17,7 @@ In this package that justification is false: `service.py` → `open_session` run
 
 ## Fix
 
-- [ ] In `cli.py` → `_run_fetch_models`, replace the exit-0 stub branch with a refusal:
+- [x] In `cli.py` → `_run_fetch_models`, replace the exit-0 stub branch with a refusal:
   ```python
   if stub_models_selected():
       raise ServiceError(
@@ -26,5 +26,5 @@ In this package that justification is false: `service.py` → `open_session` run
       )
   ```
   `cli.main` already turns a `ServiceError` into one stderr line (`harness-docs-retrieval: <message>`) and exit `1`. Import `ServiceError` from `harness_docs_retrieval.errors` if `cli.py` does not already. Rewrite the comment above it: drop *"Where `docs fetch-models` refuses under the stub, this succeeds: a stub needs no weights, and the cache check is a separate step"* and state instead that it refuses under the stub, as `docs fetch-models` does, because a stub run still needs a fetched cache.
-- [ ] In `docs-retrieval-service/README.md` → **Provisioning**, replace the sentence "With `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` set, `fetch-models` downloads nothing and writes no manifest, so unset it before fetching." with one stating that with the variable set `fetch-models` refuses with exit `1` and downloads nothing, so unset it before fetching.
-- [ ] In `tests/test_self_check.py`, rename `test_fetch_models_under_the_stub_downloads_nothing` to say it refuses (e.g. `test_fetch_models_under_the_stub_refuses_and_downloads_nothing`) and change its expectations: `cli.main(["fetch-models"]) == 1`, stdout is empty, and stderr is exactly `harness-docs-retrieval: fetch-models: refusing to download while AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB is set, because a stub run never downloads; unset it to fetch the real models\n` (build it from `RETRIEVAL_STUB_ENV`). Keep the `must_not_download` monkeypatch.
+- [x] In `docs-retrieval-service/README.md` → **Provisioning**, replace the sentence "With `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` set, `fetch-models` downloads nothing and writes no manifest, so unset it before fetching." with one stating that with the variable set `fetch-models` refuses with exit `1` and downloads nothing, so unset it before fetching.
+- [x] In `tests/test_self_check.py`, rename `test_fetch_models_under_the_stub_downloads_nothing` to say it refuses (e.g. `test_fetch_models_under_the_stub_refuses_and_downloads_nothing`) and change its expectations: `cli.main(["fetch-models"]) == 1`, stdout is empty, and stderr is exactly `harness-docs-retrieval: fetch-models: refusing to download while AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB is set, because a stub run never downloads; unset it to fetch the real models\n` (build it from `RETRIEVAL_STUB_ENV`). Keep the `must_not_download` monkeypatch.

@@ -153,7 +153,7 @@ def test_index_prints_the_summary_line_and_a_rerun_embeds_nothing(
     )
 
 
-def test_fetch_models_under_the_stub_downloads_nothing(
+def test_fetch_models_under_the_stub_refuses_and_downloads_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv(MODEL_CACHE_ENV, str(tmp_path / "cache"))
@@ -163,7 +163,10 @@ def test_fetch_models_under_the_stub_downloads_nothing(
         raise AssertionError("fetch-models downloaded under the stub")
 
     monkeypatch.setattr(cli, "fetch_models", must_not_download)
-    assert cli.main(["fetch-models"]) == 0
-    assert capsys.readouterr().out == (
-        f"fetch-models: stub models ({RETRIEVAL_STUB_ENV} set) need no download\n"
+    assert cli.main(["fetch-models"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == (
+        f"harness-docs-retrieval: fetch-models: refusing to download while {RETRIEVAL_STUB_ENV}"
+        " is set, because a stub run never downloads; unset it to fetch the real models\n"
     )

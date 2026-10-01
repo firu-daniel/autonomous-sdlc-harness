@@ -89,11 +89,13 @@ def _configure_fetch_models(parser: argparse.ArgumentParser) -> None:
 
 
 def _run_fetch_models(args: argparse.Namespace) -> int:
-    # The only call that downloads. Where `docs fetch-models` refuses under the stub, this
-    # succeeds: a stub needs no weights, and the cache check is a separate step.
+    # The only call that downloads. Refuses under the stub, as `docs fetch-models` does: a stub
+    # run still needs a fetched cache, so succeeding here would leave every later run refusing.
     if stub_models_selected():
-        print(f"fetch-models: stub models ({RETRIEVAL_STUB_ENV} set) need no download")
-        return 0
+        raise ServiceError(
+            f"fetch-models: refusing to download while {RETRIEVAL_STUB_ENV} is set, because a "
+            "stub run never downloads; unset it to fetch the real models"
+        )
     fetch_models()
     print(f"fetch-models: {EMBEDDING_MODEL} and {RERANK_MODEL} cached in {model_cache_dir()}")
     return 0
