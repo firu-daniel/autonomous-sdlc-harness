@@ -234,6 +234,22 @@ test('a named answer file that is missing exits 2 and sends nothing', async (t) 
   assert.deepEqual(calls(fx), []);
 });
 
+test('a relative --answers-from resolves against the caller\'s directory, not the main checkout', async (t) => {
+  const fx = await remoteFixture(t);
+  const sub = join(fx.dir, 'caller');
+  mkdirSync(join(sub, 'answers'), { recursive: true });
+  writeFileSync(join(sub, 'answers', 'answer_1.md'), 'Use B.\n');
+  const result = await runBash(sub, [join(fx.dir, SCRIPT),
+    'dispatch', 'feat_x', '--engine', 'task', '--resume', 'answer',
+    '--answers-from', 'answers', '--indexes', '1',
+  ], { HARNESS_GH_CLI: fx.stub, STUB_LOG: fx.log });
+  assert.equal(result.status, 0, result.stderr);
+  const [argv] = calls(fx);
+  const answersArgs = argv.filter((arg) => arg.startsWith('answers='));
+  assert.equal(answersArgs.length, 1, 'expected exactly one answers input');
+  assert.equal(execFileSync('jq', ['-j', '.["1"]'], { input: answersArgs[0].slice('answers='.length), encoding: 'utf8' }), 'Use B.\n');
+});
+
 test('execution.target local exits 2 and sends nothing, for every verb', async (t) => {
   const fx = await remoteFixture(t, 'local');
   for (const args of [['dispatch', 'feat_x', '--engine', 'task'], ['pause', 'feat_x'], ['warm'], ['stop', 'feat_x']]) {

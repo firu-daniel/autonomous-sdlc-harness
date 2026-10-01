@@ -56,7 +56,8 @@
 #        `github-actions`; the record's mirror working copy is missing, or a
 #        downloaded bundle is unrecognised (sync, restore, and status with no
 #        local record); the inputs payload is over the limit; a named answer
-#        file is missing. For restore under --resume answer, "nothing more":
+#        file is missing (a relative --answers-from resolves against the
+#        caller's directory). For restore under --resume answer, "nothing more":
 #        no previous bundle of the branch's current lineage, the previous
 #        bundle expired (the message names
 #        its expiry and the resume command), `HARNESS_INPUT_ANSWERS` not an object of
@@ -1075,6 +1076,10 @@ esac
 case "$review_file" in
   ''|/*) ;;
   *) review_file="${PWD-.}/$review_file" ;;
+esac
+case "$answers_from" in
+  ''|/*) ;;
+  *) answers_from="${PWD-.}/$answers_from" ;;
 esac
 if [ "$verb" = fetch ]; then
   case "$out_dir" in

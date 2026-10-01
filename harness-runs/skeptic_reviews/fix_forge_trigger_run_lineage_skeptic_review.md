@@ -26,7 +26,7 @@ One net-new defect remains, and it is in the scratch-directory change. `branch-a
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Resolve a relative `dispatch --answers-from` against the caller's directory, as `--review-file` already is _(layer: cli)_
+1. [x] **Finding 1** — Resolve a relative `dispatch --answers-from` against the caller's directory, as `--review-file` already is _(layer: cli)_
 
 ---
 
