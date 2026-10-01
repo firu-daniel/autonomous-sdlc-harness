@@ -1,0 +1,106 @@
+# Working a run from GitHub
+
+**Who reads this:** a maintainer or team member who works runs from GitHub, and anyone changing `harness-control.yml` or `remote-run.sh`'s `control`, `report` and `deliver`. It owns the design of record for comment commands, review rounds, parks over comments, the draft pull request, lifecycle comments and state labels.
+
+It cites rather than restates. Every GitHub fact below is cited from [`github-integration-research.md`](github-integration-research.md) by its ID (S3–S6, T1–T4, C1–C4), retrieved there on 2026-09-30 and not re-verified here. The run's own lifecycle is [`remote-execution.md`](remote-execution.md)'s, and starting a run is [`github-issue-trigger.md`](github-issue-trigger.md)'s. The code of record is `cli/templates/scripts/remote-run.sh` → the header's `control`, `report` and `deliver` paragraphs, and the header of `cli/templates/github/workflows/harness-control.yml`.
+
+---
+
+## 1. Commands in a comment
+
+**A command is a new comment whose first line opens with `@sdlc-harness`, followed by a verb.** The handle must be the first word of the first line; leading spaces and tabs are skipped, and the handle and the verb are matched case-insensitively. Text after `pause`, `resume`, `stop` or `clear` on the same line is ignored. A comment is read once, when it is created: an edited comment is never re-read, so a correction is a new comment.
+
+```
+@sdlc-harness pause
+```
+
+```
+@sdlc-harness resume
+```
+
+```
+@sdlc-harness stop
+```
+
+```
+@sdlc-harness clear
+```
+
+`answer` takes the question's index on the first line and the answer on the lines below it:
+
+```
+@sdlc-harness answer 2
+Use the existing date helper rather than adding a new one.
+```
+
+The index may be left out only when exactly one question is open, because issue comments have no threads to say which one a reply belongs to. When nothing follows the first line, the text after the index is the answer.
+
+| Command | What it does | Accepted when | The same as |
+|---|---|---|---|
+| `answer [<n>]` | Writes the answer to question `<n>` and sends it as its own `resume: answer` dispatch | The run is parked and `<n>` is an open question | `/autonomous-sdlc-harness:branch-answer` |
+| `pause` | Sends `remote-run.sh pause`; the run yields at its next clean checkpoint | The run is running | `/autonomous-sdlc-harness:branch-pause` |
+| `resume` | Sends the `resume: pause` dispatch for the run's engine | The run is paused, whatever its pause reason, `expired` and `killed` included | `/autonomous-sdlc-harness:branch-resume` |
+| `stop` | Sends `remote-run.sh stop`: the stop marker, then cancelling every queued or running job of the branch | Any run of the branch is known | `remote-run.sh stop <branch>` |
+| `clear` | Sends the `resume: pause` dispatch with `park_loop_clear` set, releasing the park-loop hold | The run is held in a park loop | `/autonomous-sdlc-harness:branch-resume` on a park loop |
+
+A command whose state does not match is refused with a reply naming the state and the command that does apply: `resume` on a park loop points at `clear`, and on a parked run at `answer` with the open indexes. `answer`, `resume` and `clear` on a run that is still running are refused rather than queued, so nothing waits behind a job and is lost when a newer pending run cancels it.
+
+**Never a command:**
+
+- `pause` — no handle;
+- `pause this` — no handle;
+- `Let's @sdlc-harness pause` — the handle is not the first word;
+- `> @sdlc-harness pause` — a quote is not the first word either;
+- an edited comment, whatever it now says;
+- any comment carrying the harness's hidden line, which opens `<!-- sdlc-harness`. Every comment the harness posts carries it, so a harness reply that quotes a command never acts on it, and the harness's own comments are ignored without a reply.
+
+**Who and where.** A command is obeyed only from a collaborator whose permission on the repository is `admin` or `write`, or from a bot listed in `HARNESS_TRIGGER_ALLOWED_BOTS`. The permission API reports the maintain role as `write`, so it passes, and triage as `read`, so it is refused (T3). This is the trigger's own check ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run`). A command on a pull request acts on its head branch. A command on an issue acts on the branch the trigger started from that issue, read from the trigger's own `started` comment, posted by `github-actions[bot]`. Either branch must be unprotected and carry the run's flow-progress ledger at its tip.
+
+**Replies.** Every accepted command gets a reply naming the actor, the command and what was done, for example:
+
+```
+Pause requested by @<login>; the run on `<branch>` yields at its next clean checkpoint, and a paused comment follows.
+```
+
+Every refused command gets a reply in one form, `` @<login>: `<verb>` was not run: <reason>. <way on> ``. The checks run in this order, and the first that fails is the one replied:
+
+1. the repository variable `HARNESS_REMOTE_STOP` is set;
+2. the default branch's `harness.config.json` does not set `forge` to `github` and `execution.target` to `github-actions`. This is checked before the actor, so a disabled coupling asks GitHub nothing about the commenter;
+3. the commenter is not authorised;
+4. the verb is not one of the five.
+
+An unknown verb's reply lists all five:
+
+```
+The commands are `@sdlc-harness answer [<n>]`, `@sdlc-harness pause`, `@sdlc-harness resume`, `@sdlc-harness stop`, `@sdlc-harness clear`; `docs/github-run-control.md` in the harness documentation states each.
+```
+
+**The handle.** Type `@sdlc-harness` in full: GitHub does not autocomplete it. It renders as a link to [github.com/sdlc-harness](https://github.com/sdlc-harness), a placeholder organisation created only so that nobody else can take the name. It is not a user, not an app and not a member of any repository, so nothing is notified. The command is matched as **text** in the comment by `control`, never delivered through the mention. A comment that contains `@claude` as a word also triggers `anthropics/claude-code-action` where that action is installed (C4), and a harness command needs no such word. The shorter `@harness` was not used because it belongs to another organisation (`gh api users/harness`, observed by the maintainer on 2026-10-01).
+
+---
+
+## 2. A review that requests changes starts a round
+
+**Only a submitted review whose state is `changes_requested` starts a round.** *Approve* and *Comment* start nothing, whatever their text. The event payload carries the state in lowercase and the REST API in uppercase (`CHANGES_REQUESTED`), so it is compared case-insensitively (C1). The round is built from the review event alone. `pull_request_review_comment` is not listened to, because one review raises one such event per inline comment, and the round would start once per comment (C1).
+
+**What the round carries.** One submitted review is one round file, `<stateDir>/user_reviews/<branch>_review[_<n>].md`, holding:
+
+- the review's body verbatim, or `(The review carries no summary.)` when it has none;
+- a provenance line naming the reviewer, the pull request, the review's URL and when it was submitted;
+- under `## Inline comments`, every inline comment of this review, plus the reviewer's own inline comments created since the previous round's file was committed (all of them when there is no previous round), oldest first.
+
+Other people's comments are not collected. Only the reviewer who submitted the review has vouched for them.
+
+**Why each comment carries its commit and hunk.** Each inline comment is written as a `` ### `<file>`, line <n> `` heading, then `` Made on commit `<sha>`. ``, its body verbatim, and its `diff_hunk` in a `diff` fence. Once a later push moves the code, GitHub reports the comment's `line` as `null` (C1), so an outdated comment's heading gives its original line instead and says `(outdated)`. The comments come from the pull request's comment listing, filtered as above, and not from the per-review endpoint, which carries no `line` at all (C1). The line is never the fix plan's coordinate. `user-review-fix-plan-writer` reads the file as the reviewer saw it at the recorded commit and re-locates the comment in the current tree by the hunk's context and added lines, because this round's fixes or an earlier round's may have moved it.
+
+**How the round is numbered.** From the branch tip on `origin`, by the anchored rule of `/autonomous-sdlc-harness:branch-user-review` step 3: each file under `<stateDir>/user_reviews/` matching `^(.+)_review(_[0-9]+)?\.md$` whose captured branch **equals** the branch, the unsuffixed file being round 1. The next round is `<branch>_review.md` when none matched, otherwise `<branch>_review_<max+1>.md`.
+
+**How it is sent.** `control` runs `remote-run.sh review`, which commits the round as `chore: add user review for <branch>`, pushes it and dispatches `engine: user_review`, exactly as the local command's GitHub route does (`plugin/commands/branch-user-review.md`, step 7). No working copy is bootstrapped and no code from the pull request is run.
+
+**Which pull requests count.** A review counts on **a pull request from the run's branch**: a head branch in this repository, unprotected, whose tip carries `<stateDir>/flow_progress/<branch>_progress.md`. Who opened the pull request does not matter, and neither does whether it is a draft. Marking it ready for review does not close it to rounds. The reviewer passes the same checks as a commenter (§1, *Who and where*). A refusal is a reply on the pull request.
+
+**The story index.** A round also needs `<stateDir>/story_plans/<branch>_story_plan.md` at the branch tip, because the round's statistics step reads it. A review on a branch without one is refused with a reply.
+
+**A run in flight.** A review arriving while the branch's newest run is queued, running, parked, held in a park loop or paused is refused with a reply that names the state. Nothing is queued. Submit the review again once the run finishes. The local `/autonomous-sdlc-harness:branch-user-review` refuses the same way, because its GitHub route runs the same `remote-run.sh review`.
+
+**Comments left while a round runs are not lost.** The reviewer's inline comments made after the previous round's file was committed are collected by the next round, so comments left during a round, or on a refused review, are carried into the next review that requests changes.

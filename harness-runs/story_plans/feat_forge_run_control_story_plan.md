@@ -56,7 +56,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control/task_
 20. [x] **Task 20** — Teach the user-review fix-plan writer to re-locate a pull-request review comment _(layer: plugin)_ _(points: 8)_
 21. [x] **Task 21** — Restate the forge coupling and the pull-request boundary in the plugin's flow documents _(layer: plugin)_ _(points: 12)_
 22. [x] **Task 22** — Restate `forge` in the schema, `ARCHITECTURE.md` and the `docs/config.md` row _(layer: general)_ _(points: 10)_
-23. [ ] **Task 23** — Write `docs/github-run-control.md`: comment commands and review rounds _(layer: general)_ _(points: 20)_
+23. [x] **Task 23** — Write `docs/github-run-control.md`: comment commands and review rounds _(layer: general)_ _(points: 20)_
 24. [ ] **Task 24** — Document parks over comments, the draft pull request, lifecycle comments and state labels _(layer: general)_ _(points: 20)_
 25. [ ] **Task 25** — Document security, both sides, what is not verified, and the GitHub entry point _(layer: general)_ _(points: 20)_
 26. [ ] **Task 26** — Bring `docs/github-issue-trigger.md` level with the new label and run control _(layer: general)_ _(points: 15)_
