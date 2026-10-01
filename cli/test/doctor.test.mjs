@@ -279,6 +279,9 @@ const { PLUGIN_NAME } = await loadCompiled('core/pluginIdentity.js');
  */
 const { CHECKS } = await loadCompiled('doctor/checks.js');
 
+/** The directories the Python retrieval checks always search, read by the case that must not run a real command. */
+const { LAUNCHER_PATH_FALLBACKS } = await loadCompiled('retrieval/pythonBackend.js');
+
 concurrentSuite('doctor', () => { // body deliberately not re-indented: keeps the diff and `git blame` readable
 
 test('doctor exits 0 on a freshly wired repository, warnings and all, and writes nothing', async (t) => {
@@ -5261,6 +5264,13 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
  *
  * The fixture is not wired by `init`, whose retrieval setup would install the runtime, so these cases
  * assert the three report lines rather than a clean summary.
+ *
+ * **The rule the `retrieval-python-*` cases below enforce: exactly one backend is graded, and the
+ * other's checks pass saying why.** With `docs.retrievalBackend` absent every pre-branch check reports
+ * what it did before. Under `python` the three Python checks grade one `self-check` run of a fake
+ * `harness-docs-retrieval` first on `PATH`, with `HOME` a temp directory, so no case reaches Python, a
+ * database, a model or the network; a case whose machine already has the command on a launcher
+ * fallback directory skips rather than run it.
  */
 const RETRIEVAL_CHECK_IDS = ['retrieval-dependencies', 'retrieval-model-cache', 'retrieval-index'];
 
@@ -5358,6 +5368,319 @@ test('Acceptance 6 (e): a passing index check quotes the coverage warning the bu
   const line = detailLine(stdout, passLine('retrieval-index'));
   assert.ok(line.includes('docs index: 1 files'), line);
   assert.ok(line.includes('docs.root docs is not a directory'), line);
+});
+
+const PYTHON_CHECK_IDS = ['retrieval-python-dependencies', 'retrieval-python-model-cache', 'retrieval-python-index'];
+
+/** The contract's sentences, restated so a reworded check fails here rather than passing with it. */
+const RETRIEVAL_OFF_SENTENCE =
+  'docs.retrieval is off (it needs phases.docs and docs.retrieval both true), so no RAG library is expected and none was resolved';
+const PYTHON_NOT_SELECTED_SENTENCE =
+  'docs.retrieval is on with docs.retrievalBackend not python, so the launcher starts the TypeScript runtime and nothing of the Python backend is expected or checked';
+const TYPESCRIPT_NOT_SELECTED_SENTENCE =
+  'docs.retrievalBackend is python, so the launcher starts the Python backend rather than this runtime and it is not graded; init still installs it, so switching back costs nothing';
+
+const PYTHON_INSTALL_REMEDY_TEXT = 'install the package with its `models` extra';
+const COMPOSE_DEFAULT_DATABASE_URL = 'postgresql://harness:harness@127.0.0.1:5432/docs_retrieval';
+const DATABASE_URL_VARIABLE = 'HARNESS_DOCS_RETRIEVAL_DATABASE_URL';
+
+/** The ids `CHECKS` held before `docs.retrievalBackend` existed, frozen so an added id is visible. */
+const PRE_BRANCH_CHECK_IDS = Object.freeze([
+  'git', 'jj-repository', 'default-branch', 'remote', 'base-freshness', 'pre-push-guard', 'protected-set', 'jq',
+  'worktrees', 'daemon-backend', 'run-watcher', 'notifications', 'repo-registry', 'machine-footprint', 'daemon-path',
+  'remote-execution', 'remote-github', 'forge', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
+  'state-dir', 'artifact-tree', 'setup-analysis', 'task-offer-rules', 'layer-profile', 'layer-drift', 'ignore-rules',
+  'plugin-wiring', 'permission-profile', 'profile-paths', 'profile-tracked', 'profile-browser-deny',
+  'profile-deny-floor', 'plugin-permissions', 'browser-wiring', 'retrieval-dependencies', 'retrieval-model-cache',
+  'retrieval-index',
+]);
+
+/** A real `harness-docs-retrieval` on a directory the check always searches, which no case may run. */
+const REAL_PYTHON_COMMAND = LAUNCHER_PATH_FALLBACKS.map((dir) => join(dir, 'harness-docs-retrieval')).find((path) => existsSync(path));
+
+/** Separates one fake invocation's record from the next. */
+const RECORD_SEPARATOR = '--- self-check invocation';
+
+/** `self-check`'s all-pass answer, in `CheckLine.render`'s shape. */
+const SELF_CHECK_ALL_OK = Object.freeze([
+  'ok   packages: harness_docs_retrieval and its models extra import',
+  'ok   weights: both weights are cached in the fake cache',
+  'ok   index: 2 files, 4 chunks',
+]);
+
+function shellQuote(value) {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+/**
+ * Every check line of one report, keyed by id, from both streams: `PASS` on stdout, `! WARN` and
+ * `!! FAIL` on stderr.
+ */
+function reportedChecks(stdout, stderr) {
+  const checks = new Map();
+  for (const line of `${stdout}\n${stderr}`.split('\n')) {
+    const match = /^(?:!{1,2} )?(PASS|WARN|FAIL)\s+(\S+)\s+(.*)$/.exec(line);
+    if (match !== null) checks.set(match[2], { status: match[1], detail: match[3] });
+  }
+  return checks;
+}
+
+/**
+ * A retrieval fixture for the Python checks, its machine directories under one temp root: `bin`
+ * (first on `PATH`, holding the fake when `fake` is given), `home` and the XDG cache. No TypeScript
+ * runtime or model cache is planted.
+ *
+ * @param {import('node:test').TestContext} t
+ * @param {{ backend?: string | null, docs?: boolean, fake?: { lines: readonly string[], status: number } }} [options]
+ *   `backend: null` leaves `docs.retrievalBackend` absent.
+ */
+async function pythonDoctorFixture(t, { backend = 'python', docs = true, fake } = {}) {
+  const fixture = await createFixture({
+    files: {
+      'docs/guide.md': '# Guide\nIntro line.\n',
+      'conventions.md': '# Conventions\n## Rules\nA line about the rules.\n',
+    },
+  });
+  t.after(fixture.cleanup);
+  await writeRetrievalConfig(fixture.dir);
+  editJson(fixture.dir, CONFIG_FILE, (config) => {
+    config.phases.docs = docs;
+    if (backend !== null) config.docs.retrievalBackend = backend;
+  });
+
+  const machine = await realpath(await mkdtemp(join(tmpdir(), 'harness-doctor-python-')));
+  t.after(() => rm(machine, { recursive: true, force: true }));
+  const bin = join(machine, 'bin');
+  const home = join(machine, 'home');
+  const cacheHome = join(machine, 'cache');
+  for (const path of [bin, home, cacheHome]) mkdirSync(path);
+  const record = join(machine, 'self-check-record');
+
+  if (fake !== undefined) {
+    const script = [
+      '#!/bin/sh',
+      `{ printf '%s\\n' ${shellQuote(RECORD_SEPARATOR)} "$${DATABASE_URL_VARIABLE}"; for arg in "$@"; do printf '%s\\n' "$arg"; done; } >> ${shellQuote(record)}`,
+      `printf '%s\\n' ${fake.lines.map(shellQuote).join(' ')}`,
+      `exit ${fake.status}`,
+      '',
+    ].join('\n');
+    writeFileSync(join(bin, 'harness-docs-retrieval'), script, { mode: 0o755 });
+  }
+
+  // git only, by symlink, so the repository checks resolve without putting a machine directory that
+  // could hold a real `harness-docs-retrieval` ahead of the launcher's own fallbacks.
+  const tools = await pathWithoutJq(t);
+  const env = { ...retrievalEnv(cacheHome), PATH: [bin, tools, '/usr/bin', '/bin'].join(delimiter), HOME: home };
+  return { dir: fixture.dir, record, env };
+}
+
+/** Each fake invocation as `{ databaseUrl, argv }`, or `[]` when the fake never ran. */
+function readRecord(record) {
+  if (!existsSync(record)) return [];
+  return readFileSync(record, 'utf8')
+    .split(`${RECORD_SEPARATOR}\n`)
+    .filter((block) => block !== '')
+    .map((block) => {
+      const [databaseUrl, ...argv] = block.replace(/\n$/, '').split('\n');
+      return { databaseUrl, argv };
+    });
+}
+
+/** Write `.mcp.json` with a `harness-docs` server carrying `env`. */
+function writeDocsServerEnv(dir, env) {
+  const mcp = { mcpServers: { 'harness-docs': { command: 'bash', args: ['scripts/docs-search-server.sh'], env } } };
+  writeFileSync(join(dir, MCP_FILE), `${JSON.stringify(mcp, null, 2)}\n`, 'utf8');
+}
+
+test('retrieval-python-* not applicable: phases.docs off, the key absent, and the TypeScript three under python', async (t) => {
+  await t.test('with phases.docs off, all six retrieval checks pass and the Python three carry the off sentence', async (subtest) => {
+    const { dir, record, env } = await pythonDoctorFixture(subtest, { docs: false, fake: { lines: SELF_CHECK_ALL_OK, status: 0 } });
+
+    const { stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+    const checks = reportedChecks(stdout, stderr);
+    for (const id of [...RETRIEVAL_CHECK_IDS, ...PYTHON_CHECK_IDS]) {
+      assert.equal(checks.get(id)?.status, 'PASS', `${id}:\n${stdout}\n${stderr}`);
+    }
+    for (const id of PYTHON_CHECK_IDS) assert.equal(checks.get(id).detail, RETRIEVAL_OFF_SENTENCE, id);
+    assert.deepEqual(readRecord(record), []);
+  });
+
+  await t.test('with retrieval on and the key absent, the Python three pass not selected and the fake never runs', async (subtest) => {
+    const { dir, record, env } = await pythonDoctorFixture(subtest, { backend: null, fake: { lines: SELF_CHECK_ALL_OK, status: 0 } });
+
+    const { stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+    const checks = reportedChecks(stdout, stderr);
+    for (const id of PYTHON_CHECK_IDS) {
+      assert.deepEqual(checks.get(id), { status: 'PASS', detail: PYTHON_NOT_SELECTED_SENTENCE }, `${id}:\n${stdout}\n${stderr}`);
+    }
+    assert.equal(existsSync(record), false, 'the fake self-check ran with the backend not selected');
+  });
+
+  await t.test('under python, the TypeScript three pass not selected with no runtime planted', async (subtest) => {
+    const { dir, env } = await pythonDoctorFixture(subtest, { fake: { lines: SELF_CHECK_ALL_OK, status: 0 } });
+
+    const { stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+    const checks = reportedChecks(stdout, stderr);
+    for (const id of RETRIEVAL_CHECK_IDS) {
+      assert.deepEqual(checks.get(id), { status: 'PASS', detail: TYPESCRIPT_NOT_SELECTED_SENTENCE }, `${id}:\n${stdout}\n${stderr}`);
+    }
+  });
+});
+
+test('retrieval-python-* under python: each self-check answer grades its check, from one run', async (t) => {
+  await t.test('all three ok pass with their details, from exactly one self-check --repo run', async (subtest) => {
+    const { dir, record, env } = await pythonDoctorFixture(subtest, { fake: { lines: SELF_CHECK_ALL_OK, status: 0 } });
+
+    const { stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+    const checks = reportedChecks(stdout, stderr);
+    const details = SELF_CHECK_ALL_OK.map((line) => line.slice(line.indexOf(': ') + 2));
+    PYTHON_CHECK_IDS.forEach((id, index) => {
+      assert.deepEqual(checks.get(id), { status: 'PASS', detail: details[index] }, `${id}:\n${stdout}\n${stderr}`);
+    });
+    const runs = readRecord(record);
+    assert.equal(runs.length, 1, `self-check ran ${runs.length} times`);
+    assert.deepEqual(runs[0].argv, ['self-check', '--repo', dir]);
+  });
+
+  await t.test('FAIL packages fails dependencies with the install remedy and the index points at it', async (subtest) => {
+    const lines = [
+      'FAIL packages: sentence_transformers is not importable',
+      'ok   weights: both weights are cached in the fake cache',
+      'FAIL index: not attempted, because packages failed',
+    ];
+    const { dir, env } = await pythonDoctorFixture(subtest, { fake: { lines, status: 1 } });
+
+    const { status, stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+    assert.notEqual(status, 0);
+    const checks = reportedChecks(stdout, stderr);
+    const dependencies = checks.get('retrieval-python-dependencies');
+    assert.equal(dependencies?.status, 'FAIL', stderr);
+    assert.ok(dependencies.detail.includes('sentence_transformers is not importable'), dependencies.detail);
+    assert.ok(dependencies.detail.includes(PYTHON_INSTALL_REMEDY_TEXT), dependencies.detail);
+    const index = checks.get('retrieval-python-index');
+    assert.equal(index?.status, 'FAIL', stderr);
+    assert.ok(index.detail.includes('(see retrieval-python-dependencies)'), index.detail);
+  });
+
+  await t.test('FAIL weights fails the model cache naming fetch-models', async (subtest) => {
+    const lines = [
+      'ok   packages: harness_docs_retrieval and its models extra import',
+      'FAIL weights: BAAI/bge-small-en-v1.5 is not cached',
+      'FAIL index: not attempted, because weights failed',
+    ];
+    const { dir, env } = await pythonDoctorFixture(subtest, { fake: { lines, status: 1 } });
+
+    const { stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+    const model = reportedChecks(stdout, stderr).get('retrieval-python-model-cache');
+    assert.equal(model?.status, 'FAIL', stderr);
+    assert.ok(model.detail.includes('BAAI/bge-small-en-v1.5 is not cached'), model.detail);
+    assert.ok(model.detail.includes('harness-docs-retrieval fetch-models'), model.detail);
+  });
+
+  await t.test('FAIL index fails naming the compose command, with no password in the line', async (subtest) => {
+    const lines = [
+      'ok   packages: harness_docs_retrieval and its models extra import',
+      'ok   weights: both weights are cached in the fake cache',
+      'FAIL index: could not connect to the database',
+    ];
+    const { dir, env } = await pythonDoctorFixture(subtest, { fake: { lines, status: 1 } });
+
+    const { stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+    const index = reportedChecks(stdout, stderr).get('retrieval-python-index');
+    assert.equal(index?.status, 'FAIL', stderr);
+    assert.ok(index.detail.includes('could not connect to the database'), index.detail);
+    assert.ok(index.detail.includes('docker compose up -d --wait postgres'), index.detail);
+    assert.ok(index.detail.includes('127.0.0.1:5432/docs_retrieval'), index.detail);
+    assert.ok(!index.detail.includes(':harness@'), `the line printed the password: ${index.detail}`);
+  });
+
+  await t.test('no command on PATH fails all three, the dependencies check naming the install remedy', { skip: REAL_PYTHON_COMMAND === undefined ? false : `a real harness-docs-retrieval is installed at ${REAL_PYTHON_COMMAND}, which this case would run` }, async (subtest) => {
+    const { dir, env } = await pythonDoctorFixture(subtest);
+
+    const { stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+    const checks = reportedChecks(stdout, stderr);
+    const dependencies = checks.get('retrieval-python-dependencies');
+    assert.equal(dependencies?.status, 'FAIL', stderr);
+    assert.ok(dependencies.detail.includes("does not resolve on the launcher's PATH"), dependencies.detail);
+    assert.ok(dependencies.detail.includes(PYTHON_INSTALL_REMEDY_TEXT), dependencies.detail);
+    for (const id of ['retrieval-python-model-cache', 'retrieval-python-index']) {
+      assert.equal(checks.get(id)?.status, 'FAIL', `${id}:\n${stderr}`);
+      assert.ok(checks.get(id).detail.includes('(see retrieval-python-dependencies)'), checks.get(id).detail);
+    }
+  });
+
+  await t.test('a two-line answer fails dependencies naming the shape it could not read', async (subtest) => {
+    const lines = SELF_CHECK_ALL_OK.slice(0, 2);
+    const { dir, env } = await pythonDoctorFixture(subtest, { fake: { lines, status: 0 } });
+
+    const { stdout, stderr } = await runCli(dir, ['doctor'], env);
+
+    const checks = reportedChecks(stdout, stderr);
+    const dependencies = checks.get('retrieval-python-dependencies');
+    assert.equal(dependencies?.status, 'FAIL', stderr);
+    assert.ok(dependencies.detail.includes('answered in a shape this CLI cannot grade'), dependencies.detail);
+    assert.ok(dependencies.detail.includes('exit status 0: ok   packages: '), dependencies.detail);
+    for (const id of ['retrieval-python-model-cache', 'retrieval-python-index']) {
+      assert.equal(checks.get(id)?.status, 'FAIL', `${id}:\n${stderr}`);
+    }
+  });
+});
+
+test('retrieval-python-*: the self-check child sees the .mcp.json database URL, never the shell export', async (t) => {
+  await t.test('with no .mcp.json env value, the compose default despite a shell export', async (subtest) => {
+    const { dir, record, env } = await pythonDoctorFixture(subtest, { fake: { lines: SELF_CHECK_ALL_OK, status: 0 } });
+
+    await runCli(dir, ['doctor'], { ...env, [DATABASE_URL_VARIABLE]: 'postgresql://shell@elsewhere/x' });
+
+    assert.deepEqual(readRecord(record).map((run) => run.databaseUrl), [COMPOSE_DEFAULT_DATABASE_URL]);
+  });
+
+  await t.test("with .mcp.json's harness-docs env carrying a URL, that URL", async (subtest) => {
+    const { dir, record, env } = await pythonDoctorFixture(subtest, { fake: { lines: SELF_CHECK_ALL_OK, status: 0 } });
+    const url = 'postgresql://other@127.0.0.1:5433/repo_two';
+    writeDocsServerEnv(dir, { [DATABASE_URL_VARIABLE]: url });
+
+    await runCli(dir, ['doctor'], { ...env, [DATABASE_URL_VARIABLE]: 'postgresql://shell@elsewhere/x' });
+
+    assert.deepEqual(readRecord(record).map((run) => run.databaseUrl), [url]);
+  });
+});
+
+test('Acceptance 1: with docs.retrievalBackend absent, doctor reports what an explicit typescript does, plus three not-selected passes', async (t) => {
+  const { dir, env } = await retrievalDoctorFixture(t);
+
+  const absent = await runCli(dir, ['doctor'], env);
+  editJson(dir, CONFIG_FILE, (config) => {
+    config.docs.retrievalBackend = 'typescript';
+  });
+  const explicit = await runCli(dir, ['doctor'], env);
+
+  const before = reportedChecks(absent.stdout, absent.stderr);
+  const after = reportedChecks(explicit.stdout, explicit.stderr);
+  const report = `${absent.stdout}\n${absent.stderr}`;
+
+  assert.deepEqual([...before.keys()].sort(), [...PRE_BRANCH_CHECK_IDS, ...PYTHON_CHECK_IDS].sort(), report);
+  for (const id of PRE_BRANCH_CHECK_IDS) {
+    assert.deepEqual(after.get(id), before.get(id), `${id} reported differently with the key written`);
+  }
+  for (const id of PYTHON_CHECK_IDS) {
+    assert.deepEqual(before.get(id), { status: 'PASS', detail: PYTHON_NOT_SELECTED_SENTENCE }, `${id}:\n${report}`);
+    assert.deepEqual(after.get(id), before.get(id), id);
+  }
+  assert.equal(before.get('retrieval-dependencies')?.status, 'PASS', report);
+  assert.ok(before.get('retrieval-dependencies').detail.startsWith('the RAG runtime is installed at '), report);
+  assert.equal(before.get('retrieval-model-cache')?.status, 'PASS', report);
+  assert.ok(before.get('retrieval-model-cache').detail.startsWith('every model file RAG loads offline is cached in '), report);
+  assert.equal(before.get('retrieval-index')?.status, 'PASS', report);
+  assert.ok(before.get('retrieval-index').detail.includes('docs index: 2 files'), report);
 });
 
 /**

@@ -42,3 +42,8 @@
 - `npm test -- test/doctor.test.mjs` from `cli/` passes.
 - No case starts a real `harness-docs-retrieval`, a database or a network: every invocation is the fake, and `HOME` is a temp directory.
 - The existing `Acceptance 6 (a)`–`(d)` retrieval cases pass unchanged.
+
+**Deviations from plan:**
+
+- The fake's `PATH` is `<bin>:<git-only symlink dir>:/usr/bin:/bin` rather than `<bin>:<system dirs>`, reusing the suite's `pathWithoutJq` so git resolves on a machine whose git lives outside the system dirs without adding a directory that could hold a real `harness-docs-retrieval`.
+- The "no fake on `PATH`" case skips, naming the path, when a real `harness-docs-retrieval` sits on one of `LAUNCHER_PATH_FALLBACKS`, which the check always searches; running it there would break "every invocation is the fake".
