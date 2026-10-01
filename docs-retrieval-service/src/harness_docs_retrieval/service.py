@@ -241,6 +241,10 @@ async def answer(
         try:
             refreshed = await session.refresh()
         except Exception as error:
+            # TODO: @claude add a follow up task for this: once
+            # feat_docs_retrieval_backend_selection makes doctor check this backend, restore
+            # server.ts's remedy text byte for byte:
+            # run `npx autonomous-sdlc-harness doctor` in this repository
             return _failure(
                 f"{SEARCH_TOOL_NAME}: refreshing the docs index failed: {error}; "
                 "run harness-docs-retrieval self-check in this repository"

@@ -134,7 +134,7 @@ A malformed body, a bad `mode` or an argument refusal answers `400 {"error": …
 
 **Deliberate wire differences.** A client can tell the backends apart in these places only:
 
-- The refresh-failure remedy names `harness-docs-retrieval self-check` in place of the CLI's `doctor`, which knows nothing of this backend.
+- The refresh-failure remedy names `harness-docs-retrieval self-check` in place of the CLI's `doctor`, which knows nothing of this backend. The difference is temporary: it is reverted to `server.ts`'s `npx autonomous-sdlc-harness doctor` remedy once `feat_docs_retrieval_backend_selection` makes `doctor` check this backend.
 - `serverInfo.version` is this package's version, kept equal to `pyproject.toml`'s.
 - stderr lines carry their own prefix. A corpus warning prints as `harness-docs: warning: <text>`, where the CLI's reporter prints `! <text>`. `index` prints `harness-docs-retrieval: warning: <text>`. The timing line has no TypeScript counterpart.
 
