@@ -319,7 +319,8 @@
 # and outside the sending-verb gate: it gates itself after reading the event,
 # so a refusal can still be replied to. The workflow's `if:` only saves a
 # runner; every rule below holds without it. It handles `GITHUB_EVENT_NAME`
-# `issue_comment`; any other name, or an event file it cannot read, exits 1.
+# `issue_comment` and `pull_request_review` (THE REVIEW, below); any other
+# name, or an event file it cannot read, exits 1.
 # It reads `.action`, `.comment.body`, `.issue.number`,
 # `.issue.pull_request.url`, `.sender.login` and `.sender.type`, each by `jq`
 # into a variable (data, never shell source), plus `trigger`'s environment.
@@ -392,6 +393,41 @@
 # `running` on its issue and pull request; with others open, a reply naming
 # them, and the label stays `parked`. An answer becomes a comment on the item,
 # public on a public repository, as the question already is.
+# THE REVIEW. A `pull_request_review` event reads `.action`, `.review.state`,
+# `.review.body`, `.review.id`, `.review.html_url`, `.review.submitted_at`,
+# `.pull_request.number`, `.pull_request.head.ref`,
+# `.pull_request.head.repo.full_name`, `.sender.login` and `.sender.type`.
+# Ignored, with one line and no `gh` call: an action other than `submitted`; a
+# state other than `REVIEW_ROUND_STATE`, compared lowercase (the REST API
+# reports it uppercase); a body carrying `COMMENT_MARKER`; and a head
+# repository other than `GITHUB_REPOSITORY`, not even replied to, because a
+# fork's review job holds a read-only token. So *Comment* and *Approve* start
+# nothing, and draft status plays no part. Then gates 1-3 above, in order, each
+# a reply on the pull request, and `control_check_branch` on the head; then a
+# head whose origin tip carries no `<state>/story_plans/<head>_story_plan.md`
+# is refused, because the round reads its story index. One submitted review is
+# one round, built in a fresh file under `RUNNER_TEMP`: the body verbatim (or
+# `(The review carries no summary.)`), a `---` line, the provenance sentence
+# naming @<login>, the pull request, the review URL and `submitted_at`; then,
+# when any is kept, `## Inline comments`. Those come from ONE paginated
+# `pulls/<n>/comments` listing — never the per-review endpoint, which carries
+# no `line` — keeping the reviewer's own comments that belong to this review or
+# were created after the committer time of the branch's newest
+# `user_reviews/<head>_review[_<n>].md` on origin (all of them when there is
+# none), sorted by `created_at`; nobody else's. Each is a `### `<path>`, line
+# <n>` heading (`original line <n> (outdated)` when `line` is null), `Made on
+# commit `<original_commit_id or commit_id>`.`, its body verbatim, and its
+# `diff_hunk` in a `diff` fence one backtick longer than the hunk's longest
+# backtick run, at least three — the commit and hunk let the fix plan re-locate
+# a line the fixes moved. Then `review <head> --review-file <file>
+# --allow-no-run --actor <login> --source <review url>` runs as a child, which
+# fast-forwards, commits `chore: add user review for <head>`, pushes,
+# dispatches `engine: user_review` and reports the round itself. Its 0 is exit
+# 0 with nothing more posted; 2 is a reply quoting its last line — adding that
+# a round is in progress when that line names a running run — and exit 2; 3 a
+# reply quoting the re-send line, exit 3; 4 a reply that placement failed and
+# nothing was dispatched, exit 4. A refusal reads `@<login>: `review` was not
+# run: …`.
 # A child's failure is a reply
 # naming its last stderr line, and exit 3. Every reply goes to the item the comment was
 # typed on, opens `@<login>`, and carries the `reply` marker; a refusal reads
@@ -401,6 +437,7 @@
 #     2  refused (replied)
 #     3  a `gh` step failed: the reply could not be posted (an `::error::`
 #        line), or the action failed and was replied to
+#     4  a review's round could not be placed; nothing was dispatched (replied)
 #
 # `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
 # its job, before and (under `always()`) after the harness step. Without
@@ -4341,39 +4378,196 @@ control_answer() {
   exit "$status"
 }
 
-verb_control() {
-  local LC_ALL=C
-  local action is_pr sender_type first word rest handle forge="" target="" status verbs="" v
-  case "${GITHUB_EVENT_NAME-}" in
-    issue_comment) ;;
+# The fields of a `pull_request_review` event control reads beyond the shared ones.
+REVIEW_ID=""
+REVIEW_URL=""
+REVIEW_AT=""
+REVIEW_HEAD=""
+
+# control_review_story — refused unless origin's tip of CONTROL_BRANCH carries
+# its story index, which the round's statistics step reads.
+control_review_story() {
+  local state_rel
+  state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
+  state_rel="${state_rel%/}"
+  if [ -z "$state_rel" ] \
+    || ! git -C "$root" cat-file -e "refs/remotes/origin/$CONTROL_BRANCH:$state_rel/story_plans/${CONTROL_BRANCH}_story_plan.md" 2>/dev/null; then
+    control_refuse "$EXIT_REFUSED" "\`$CONTROL_BRANCH\` carries no story index (\`$state_rel/story_plans/${CONTROL_BRANCH}_story_plan.md\`), which a user-review round reads, so the round cannot start on this branch" \
+      "Review a branch whose run has planned its stories."
+  fi
+}
+
+# control_review_round <file> — write the round to <file>: the review body
+# verbatim, the provenance, then the reviewer's inline comments from the pull
+# request's comments endpoint (the per-review one carries no line numbers). A
+# comment is kept when it belongs to this review, or was created after the
+# commit of the branch's newest round; with no round yet, every one is kept.
+control_review_round() {
+  local file="$1" state_rel boundary inline
+  if ! gh_call api --paginate "repos/$FORGE_REPO/pulls/$CONTROL_NUMBER/comments"; then
+    control_refuse "$EXIT_GH" "the inline comments of pull request #$CONTROL_NUMBER could not be read ($GH_ERR)" \
+      "Submit the review again to retry."
+  fi
+  state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
+  state_rel="${state_rel%/}"
+  # Epoch seconds, so the comparison with `created_at` reads no time zone.
+  if ! boundary=$(git -C "$root" log -1 --format=%ct "refs/remotes/origin/$CONTROL_BRANCH" -- \
+    "$state_rel/user_reviews/${CONTROL_BRANCH}_review.md" \
+    "$state_rel/user_reviews/${CONTROL_BRANCH}_review_[0-9]*.md" 2>/dev/null); then
+    control_refuse "$EXIT_PLACEMENT" "the previous round of \`$CONTROL_BRANCH\` could not be read, so nothing was dispatched" \
+      "Submit the review again to retry."
+  fi
+  # A paginated listing is one JSON array per page; jq builds the text, so a
+  # comment is data and never shell source. A hunk's fence is one backtick
+  # longer than its longest backtick run, at least three.
+  if ! inline=$(printf '%s' "$GH_OUT" | jq -s -j --arg who "$CONTROL_ACTOR" --argjson rid "$REVIEW_ID" --arg since "$boundary" '
+    [ .[] | if type == "array" then .[] else error("not a page") end
+      | select(.user.login == $who)
+      | select(.pull_request_review_id == $rid or $since == ""
+          or (((.created_at // "") | try fromdateiso8601 catch 0) > ($since | tonumber))) ]
+    | sort_by([.created_at, .id])
+    | if length == 0 then "" else
+        "\n## Inline comments\n" + (map(
+          (.diff_hunk // "") as $h
+          | (([$h | match("`+"; "g") | .length] | max) // 0) as $m
+          | ("`" * ([$m + 1, 3] | max)) as $f
+          | "\n### `" + (.path // "") + "`"
+            + (if .line != null then ", line \(.line)"
+               elif .original_line != null then ", original line \(.original_line) (outdated)"
+               else "" end)
+            + "\n\nMade on commit `" + (.original_commit_id // .commit_id // "") + "`.\n\n"
+            + (.body // "") + (if ((.body // "") | endswith("\n")) then "" else "\n" end)
+            + "\n" + $f + "diff\n" + $h + (if ($h | endswith("\n")) then "" else "\n" end) + $f + "\n"
+        ) | join(""))
+      end + "x"' 2>/dev/null); then
+    GH_ERR="its comment list is not the expected JSON"
+    control_refuse "$EXIT_GH" "the inline comments of pull request #$CONTROL_NUMBER could not be read ($GH_ERR)" \
+      "Submit the review again to retry."
+  fi
+  # The trailing `x` keeps the text's final newline through the substitution.
+  inline=${inline%x}
+  {
+    if [ -n "$CONTROL_BODY" ]; then
+      printf '%s' "$CONTROL_BODY"
+      case "$CONTROL_BODY" in *$'\n') ;; *) printf '\n' ;; esac
+    else
+      printf '%s\n' '(The review carries no summary.)'
+    fi
+    printf '\n---\n\nSubmitted as a review requesting changes by @%s on pull request #%s (%s) at %s.\n' \
+      "$CONTROL_ACTOR" "$CONTROL_NUMBER" "$REVIEW_URL" "$REVIEW_AT"
+    printf '%s' "$inline"
+  } >"$file" || control_refuse "$EXIT_PLACEMENT" "the round could not be written to '$file', so nothing was dispatched" \
+    "Submit the review again to retry."
+}
+
+# control_review — the round of one review requesting changes, placed and
+# dispatched by a `review` child, the local relay's own verb.
+control_review() {
+  local dir file out way
+  control_review_story
+  if ! dir=$(mktemp -d "$control_tmp/harness-control-review.XXXXXX"); then
+    control_refuse "$EXIT_PLACEMENT" "a round directory could not be created under '$control_tmp', so nothing was dispatched" \
+      "Submit the review again to retry."
+  fi
+  control_dirs="$control_dirs $dir"
+  file="$dir/review.md"
+  control_review_round "$file"
+  out="$dir/review.out"
+  set -- review "$CONTROL_BRANCH" --review-file "$file" --allow-no-run --actor "$CONTROL_ACTOR"
+  case "$REVIEW_URL" in
+    https://*) set -- "$@" --source "$REVIEW_URL" ;;
+  esac
+  control_child "$out" "$@" --repo "$root"
+  cat "$out" 2>/dev/null || :
+  case "$CHILD_STATUS" in
+    0) exit "$EXIT_OK" ;;
+    2)
+      way="Submit the review again once that is fixed."
+      case "$CHILD_LAST" in
+        *" is running on GitHub"*) way="A round is in progress; submit your review again once it completes." ;;
+      esac
+      control_refuse "$EXIT_REFUSED" "the round was refused ($CHILD_LAST)" "$way" ;;
+    3)
+      control_refuse "$EXIT_GH" "the round is pushed but its dispatch failed ($CHILD_LAST)" \
+        "Re-send the dispatch as that line says." ;;
+    4)
+      control_refuse "$EXIT_PLACEMENT" "placing the round failed and nothing was dispatched ($CHILD_LAST)" \
+        "Submit the review again to retry." ;;
     *)
-      echo "remote-run.sh: control handles GITHUB_EVENT_NAME issue_comment, not '${GITHUB_EVENT_NAME-}'" >&2
+      control_refuse "$EXIT_GH" "the round could not be started ($CHILD_LAST)" "Submit the review again to retry." ;;
+  esac
+}
+
+# control_review_intake — read a `pull_request_review` event; returns 1 when it
+# is ignored, after one line.
+control_review_intake() {
+  local action state head_repo
+  { event_field '.action // ""' && action="$EVENT_VALUE" \
+    && event_field '.review.state // ""' && state="$EVENT_VALUE" \
+    && event_field '.review.body // ""' && CONTROL_BODY="$EVENT_VALUE" \
+    && event_field '.review.id // ""' && REVIEW_ID="$EVENT_VALUE" \
+    && event_field '.review.html_url // ""' && REVIEW_URL="$EVENT_VALUE" \
+    && event_field '.review.submitted_at // ""' && REVIEW_AT="$EVENT_VALUE" \
+    && event_field '.pull_request.number // ""' && CONTROL_NUMBER="$EVENT_VALUE" \
+    && event_field '.pull_request.head.ref // ""' && REVIEW_HEAD="$EVENT_VALUE" \
+    && event_field '.pull_request.head.repo.full_name // ""' && head_repo="$EVENT_VALUE" \
+    && event_field '.sender.login // ""' && CONTROL_ACTOR="$EVENT_VALUE" \
+    && event_field '.sender.type // ""' && CONTROL_SENDER_TYPE="$EVENT_VALUE"; } || {
+    echo "remote-run.sh: control: '$GITHUB_EVENT_PATH' is not a readable event" >&2
+    exit "$EXIT_USAGE"
+  }
+  if [ "$action" != submitted ]; then
+    echo "remote-run.sh: control: ignored, a review $action, not submitted"
+    return 1
+  fi
+  # The REST API reports states in uppercase, the webhook in lowercase.
+  if [ "$(printf '%s' "$state" | tr '[:upper:]' '[:lower:]')" != "$REVIEW_ROUND_STATE" ]; then
+    echo "remote-run.sh: control: ignored, a review whose state is ${state:-empty}, not $REVIEW_ROUND_STATE"
+    return 1
+  fi
+  case "$CONTROL_BODY" in
+    *"$COMMENT_MARKER"*)
+      echo "remote-run.sh: control: ignored, a review carrying the harness's marker"
+      return 1 ;;
+  esac
+  # A fork's review job holds a read-only token, so it is not even replied to.
+  if [ -z "$head_repo" ] || [ "$head_repo" != "${GITHUB_REPOSITORY-}" ]; then
+    echo "remote-run.sh: control: ignored, a review of a head in ${head_repo:-an unnamed repository}, not ${GITHUB_REPOSITORY:-this repository}"
+    return 1
+  fi
+  case "$REVIEW_ID" in
+    ''|*[!0-9]*|0*)
+      echo "remote-run.sh: control: the event carries no review id" >&2
       exit "$EXIT_USAGE" ;;
   esac
-  if [ -z "${GITHUB_EVENT_PATH-}" ] || [ ! -f "$GITHUB_EVENT_PATH" ] || [ ! -r "$GITHUB_EVENT_PATH" ]; then
-    echo "remote-run.sh: control: cannot read the event file '${GITHUB_EVENT_PATH-}'" >&2
-    exit "$EXIT_USAGE"
-  fi
-  hr_have_jq || { echo "remote-run.sh: control needs jq" >&2; exit "$EXIT_USAGE"; }
+  CONTROL_VERB=review
+  return 0
+}
 
+# control_comment_intake — read an `issue_comment` event; returns 1 when it is
+# ignored, after one line.
+CONTROL_SENDER_TYPE=""
+CONTROL_IS_PR=""
+control_comment_intake() {
+  local action first word rest handle
   { event_field '.action // ""' && action="$EVENT_VALUE" \
     && event_field '.comment.body // ""' && CONTROL_BODY="$EVENT_VALUE" \
     && event_field '.issue.number // ""' && CONTROL_NUMBER="$EVENT_VALUE" \
-    && event_field '.issue.pull_request.url // ""' && is_pr="$EVENT_VALUE" \
+    && event_field '.issue.pull_request.url // ""' && CONTROL_IS_PR="$EVENT_VALUE" \
     && event_field '.sender.login // ""' && CONTROL_ACTOR="$EVENT_VALUE" \
-    && event_field '.sender.type // ""' && sender_type="$EVENT_VALUE"; } || {
+    && event_field '.sender.type // ""' && CONTROL_SENDER_TYPE="$EVENT_VALUE"; } || {
     echo "remote-run.sh: control: '$GITHUB_EVENT_PATH' is not a readable event" >&2
     exit "$EXIT_USAGE"
   }
 
   if [ "$action" != created ]; then
     echo "remote-run.sh: control: ignored, a comment $action, not created"
-    return 0
+    return 1
   fi
   case "$CONTROL_BODY" in
     *"$COMMENT_MARKER"*)
       echo "remote-run.sh: control: ignored, a comment the harness posted"
-      return 0 ;;
+      return 1 ;;
   esac
   first=${CONTROL_BODY%%$'\n'*}
   first=${first%$'\r'}
@@ -4384,12 +4578,36 @@ verb_control() {
   handle=$(printf '%s' "$COMMAND_HANDLE" | tr '[:upper:]' '[:lower:]')
   if [ "$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')" != "$handle" ]; then
     echo "remote-run.sh: control: ignored, the first line does not open with $COMMAND_HANDLE"
-    return 0
+    return 1
   fi
   word=${rest%%[$' \t']*}
   CONTROL_VERB=$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')
   CONTROL_ARGS=${rest#"$word"}
   CONTROL_ARGS=${CONTROL_ARGS#"${CONTROL_ARGS%%[!$' \t']*}"}
+  return 0
+}
+
+verb_control() {
+  local LC_ALL=C
+  local review=0 forge="" target="" status verbs="" v
+  case "${GITHUB_EVENT_NAME-}" in
+    issue_comment) ;;
+    pull_request_review) review=1 ;;
+    *)
+      echo "remote-run.sh: control handles GITHUB_EVENT_NAME issue_comment or pull_request_review, not '${GITHUB_EVENT_NAME-}'" >&2
+      exit "$EXIT_USAGE" ;;
+  esac
+  if [ -z "${GITHUB_EVENT_PATH-}" ] || [ ! -f "$GITHUB_EVENT_PATH" ] || [ ! -r "$GITHUB_EVENT_PATH" ]; then
+    echo "remote-run.sh: control: cannot read the event file '${GITHUB_EVENT_PATH-}'" >&2
+    exit "$EXIT_USAGE"
+  fi
+  hr_have_jq || { echo "remote-run.sh: control needs jq" >&2; exit "$EXIT_USAGE"; }
+
+  if [ "$review" -eq 1 ]; then
+    control_review_intake || return 0
+  else
+    control_comment_intake || return 0
+  fi
 
   case "$CONTROL_NUMBER" in
     ''|*[!0-9]*|0*)
@@ -4417,13 +4635,13 @@ verb_control() {
   fi
 
   status=0
-  authorise_actor "$CONTROL_ACTOR" "$sender_type" || status=$?
+  authorise_actor "$CONTROL_ACTOR" "$CONTROL_SENDER_TYPE" || status=$?
   if [ "$status" -ne 0 ]; then
     control_refuse "$EXIT_REFUSED" "${AUTH_WHY%.}" \
       "Only a collaborator with write, maintain or admin access, or a bot listed in the repository variable \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
   fi
 
-  if [ -z "$CONTROL_VERB" ] || ! control_verb_handled "$CONTROL_VERB"; then
+  if [ "$review" -eq 0 ] && { [ -z "$CONTROL_VERB" ] || ! control_verb_handled "$CONTROL_VERB"; }; then
     for v in $COMMAND_VERBS; do
       [ "$v" != answer ] || v="answer [<n>]"
       verbs="$verbs${verbs:+, }\`$COMMAND_HANDLE $v\`"
@@ -4433,7 +4651,9 @@ verb_control() {
   fi
 
   forge_repo_var || control_reply "$EXIT_GH" "@$CONTROL_ACTOR: \`$CONTROL_VERB\` was not run: the repository's name could not be read."
-  if [ -n "$is_pr" ]; then
+  if [ "$review" -eq 1 ]; then
+    control_check_branch "$REVIEW_HEAD"
+  elif [ -n "$CONTROL_IS_PR" ]; then
     control_branch_from_pr "$CONTROL_NUMBER"
   else
     control_branch_from_issue "$CONTROL_NUMBER"
@@ -4446,6 +4666,7 @@ verb_control() {
     stop) control_stop ;;
     resume) control_resume ;;
     clear) control_clear ;;
+    review) control_review ;;
   esac
 }
 

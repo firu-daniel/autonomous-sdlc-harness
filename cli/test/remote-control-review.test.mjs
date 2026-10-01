@@ -1,0 +1,362 @@
+/**
+ * `remote-run.sh control` on a `pull_request_review` event: a review requesting changes becomes the
+ * branch's next user-review round through the `review` verb the local relay uses.
+ *
+ * **The rule these tests exist to enforce: only a review requesting changes, by a write-or-admin
+ * reviewer, on a recognised same-repository harness branch carrying a story index, starts a round; it
+ * carries the body verbatim and the reviewer's inline comments with file, line, commit and hunk; anything
+ * arriving while a run is in flight is refused with a reply.** A started round is asserted on origin's
+ * bytes — the `chore: add user review for feat_x` commit and the round file — and on exactly one
+ * `engine=user_review` dispatch; every ignored shape is asserted to call no `gh` at all; every refusal is
+ * asserted to post one reply and push nothing.
+ *
+ * The fixture is `remote-control.test.mjs`'s — `init`, `execution.target` `github-actions`, `forge`
+ * `github`, the adopted tree pushed to the fixture's bare `origin`, and `feat_x` pushed carrying its task
+ * prompt and its flow-progress ledger — plus `feat_x`'s story index. `gh` is a stub reached through
+ * `HARNESS_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`, answers the
+ * paginated `pulls/<n>/comments` listing from `STUB_PR_COMMENTS` (raw API objects, one page each), the
+ * permission call from `STUB_PERMISSIONS`, `run list` from `STUB_RUN_LIST` (by default one completed
+ * `harness run <branch>` run with no state bundle, which reads as `failed`), artifact lists with none,
+ * and the labels GET with `[]`. No case reaches the network.
+ */
+
+import assert from 'node:assert/strict';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import test from 'node:test';
+
+import { createFixture, runBash, runCli, runGit } from './helpers/fixture.mjs';
+
+const SCRIPT = 'scripts/remote-run.sh';
+const STATE_DIR = 'sdlc-harness';
+const REPOSITORY = 'octo/fixture';
+const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
+const REVIEW_DIR = `${STATE_DIR}/user_reviews`;
+const REVIEW_ID = 900;
+const REVIEW_URL = `https://github.com/${REPOSITORY}/pull/12#pullrequestreview-${REVIEW_ID}`;
+const REVIEW_DISPATCH =
+  'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=user_review -f resume=none -f chain=0';
+
+const STUB = `#!/usr/bin/env node
+const { appendFileSync, readFileSync } = require('node:fs');
+const args = process.argv.slice(2);
+const at = args.findIndex((arg) => arg.startsWith('body=@'));
+const body = at >= 0 ? readFileSync(args[at].slice('body=@'.length), 'utf8') : null;
+appendFileSync(process.env.STUB_LOG, JSON.stringify({ args, body }) + '\\n');
+const fail = (why) => { process.stderr.write(why + '\\n'); process.exit(4); };
+const permission = /^repos\\/[^/]+\\/[^/]+\\/collaborators\\/([^/]+)\\/permission$/.exec(args[1] ?? '');
+if (args[0] === 'pr' && args[1] === 'list') {
+  process.stdout.write(process.env.STUB_PRS || '[]');
+} else if (args[0] === 'api' && args[1] === '--paginate' && /^repos\\/[^/]+\\/[^/]+\\/pulls\\/[0-9]+\\/comments$/.test(args[2] ?? '')) {
+  const comments = JSON.parse(process.env.STUB_PR_COMMENTS || '[]');
+  process.stdout.write(comments.length === 0 ? '[]' : comments.map((c) => JSON.stringify([c])).join(''));
+} else if (args[0] === 'api' && permission) {
+  const answer = JSON.parse(process.env.STUB_PERMISSIONS || '{}')[permission[1]];
+  if (answer === undefined || answer === 'FAIL') fail('stub permission failure');
+  process.stdout.write(JSON.stringify({ permission: answer }));
+} else if (args[0] === 'api' && /\\/actions\\/runs\\/[0-9]+\\/artifacts$/.test(args[1] ?? '')) {
+  process.stdout.write('{"artifacts":[]}');
+} else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1] ?? '')) {
+  process.stdout.write('[]');
+} else if (args[0] === 'api') {
+  process.stdout.write('{}');
+} else if (args[0] === 'run' && args[1] === 'list') {
+  const branch = args[args.indexOf('--branch') + 1];
+  process.stdout.write(process.env.STUB_RUN_LIST
+    || JSON.stringify([{ databaseId: 601, displayTitle: 'harness run ' + branch, status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' }]));
+}
+`;
+
+/**
+ * An adopted fixture on `origin`, with `feat_x` pushed carrying its provenance line, its ledger and its
+ * story index.
+ *
+ * @param {import('node:test').TestContext} t
+ */
+async function reviewFixture(t) {
+  const fixture = await createFixture({
+    files: {
+      'package.json': { name: 'fixture-project', private: true, version: '0.0.0', scripts: { test: 'echo test' } },
+    },
+  });
+  t.after(fixture.cleanup);
+  const { dir } = fixture;
+  const init = await runCli(dir, ['init']);
+  assert.equal(init.status, 0, `init exited ${init.status}\n${init.stdout}\n${init.stderr}`);
+
+  const configPath = join(dir, 'harness.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.execution = { target: 'github-actions' };
+  config.forge = 'github';
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  await runGit(dir, ['add', '-A']);
+  await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: adopt the harness']);
+  await runGit(dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${config.defaultBranch}`]);
+  const origin = (await runGit(dir, ['remote', 'get-url', 'origin'])).stdout.trim();
+
+  /** Commit <files> (path -> text) on <branch> and push it to origin. */
+  const commitOn = async (branch, files, message) => {
+    const exists = (await runBash(dir, ['-c', `git show-ref --verify --quiet refs/heads/${branch}`])).status === 0;
+    await runGit(dir, ['checkout', '--quiet', ...(exists ? [] : ['-b']), branch]);
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(dir, path)), { recursive: true });
+      writeFileSync(join(dir, path), text);
+    }
+    await runGit(dir, ['add', '--force', ...Object.keys(files)]);
+    await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', message]);
+    const push = await runGit(dir, ['push', '--quiet', '--no-verify', 'origin', `HEAD:refs/heads/${branch}`]);
+    assert.equal(push.status, 0, push.stderr);
+    await runGit(dir, ['checkout', '--quiet', config.defaultBranch]);
+  };
+
+  /** Push <branch> with its task prompt and, when asked, its ledger and its story index. */
+  const pushBranch = async (branch, { ledger = true, story = true } = {}) => {
+    const files = {
+      [`${STATE_DIR}/task_prompts/${branch}_task_prompt.md`]:
+        `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`,
+    };
+    if (ledger) files[`${STATE_DIR}/flow_progress/${branch}_progress.md`] = '# Progress\n';
+    if (story) files[`${STATE_DIR}/story_plans/${branch}_story_plan.md`] = '# Stories\n';
+    await commitOn(branch, files, `fixture: ${branch}`);
+    t.after(() => rmSync(join(dirname(dir), `${config.projectName}-${branch}`), { recursive: true, force: true }));
+  };
+  await pushBranch('feat_x');
+
+  const stubDir = join(dir, STATE_DIR, 'stub');
+  const runnerTemp = join(stubDir, 'runner-temp');
+  mkdirSync(runnerTemp, { recursive: true });
+  const stub = join(stubDir, 'gh');
+  writeFileSync(stub, STUB, { mode: 0o755 });
+  const log = join(stubDir, 'gh.log');
+  let events = 0;
+
+  const git = async (args) => (await runGit(origin, args)).stdout;
+  return {
+    dir,
+    commitOn,
+    pushBranch,
+    originRefs: () => git(['for-each-ref', '--format=%(refname) %(objectname)']),
+    originSubject: async (branch) => (await git(['log', '-1', '--format=%s', `refs/heads/${branch}`])).trim(),
+    originFile: (branch, path) => git(['show', `refs/heads/${branch}:${path}`]),
+    /**
+     * Run `control` on one `pull_request_review` event: by default `alice` (a `User`) submitting a
+     * `changes_requested` review on pull request 12, whose head is `feat_x` in this repository.
+     *
+     * @param {{ state?: string, body?: string, action?: string, login?: string, type?: string, head?: string, headRepo?: string }} [event]
+     * @param {Record<string, string>} [env]
+     */
+    control: async (
+      { state = 'changes_requested', body = 'Please fix these.', action = 'submitted', login = 'alice', type = 'User', head = 'feat_x', headRepo = REPOSITORY } = {},
+      env = {},
+    ) => {
+      events += 1;
+      const eventPath = join(stubDir, `event-${events}.json`);
+      writeFileSync(eventPath, JSON.stringify({
+        action,
+        review: { id: REVIEW_ID, state, body, html_url: REVIEW_URL, submitted_at: '2026-01-02T03:04:05Z', user: { login } },
+        pull_request: { number: 12, head: { ref: head, repo: { full_name: headRepo } } },
+        sender: { login, type },
+      }));
+      return runBash(dir, [SCRIPT, 'control'], {
+        HARNESS_GH_CLI: stub,
+        STUB_LOG: log,
+        GITHUB_EVENT_NAME: 'pull_request_review',
+        GITHUB_EVENT_PATH: eventPath,
+        GITHUB_REPOSITORY: REPOSITORY,
+        GITHUB_SERVER_URL: 'https://github.com',
+        GITHUB_RUN_ID: '',
+        RUNNER_TEMP: runnerTemp,
+        HARNESS_REMOTE_STOP: '',
+        HARNESS_TRIGGER_ALLOWED_BOTS: '',
+        HARNESS_TRIGGER_LABEL: '',
+        STUB_PERMISSIONS: JSON.stringify({ alice: 'write' }),
+        STUB_PRS: '',
+        STUB_PR_COMMENTS: '',
+        STUB_RUN_LIST: '',
+        ...env,
+      });
+    },
+    /** @returns {{ args: string[], body: string | null, line: string }[]} */
+    calls: () =>
+      existsSync(log)
+        ? readFileSync(log, 'utf8')
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => {
+              const { args, body } = JSON.parse(line);
+              return { args, body, line: args.join(' ') };
+            })
+        : [],
+  };
+}
+
+const allComments = (calls) => calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/comments /.test(call.line));
+const replies = (calls) => allComments(calls).filter((call) => /<!-- sdlc-harness event=reply /.test(call.body));
+const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workflow run '));
+
+/** One inline comment, as the pull request's comments endpoint returns it. */
+const inline = (id, fields = {}) => ({
+  id,
+  pull_request_review_id: REVIEW_ID,
+  user: { login: 'alice' },
+  path: `src/file_${id}.ts`,
+  line: 10 + id,
+  original_line: 10 + id,
+  commit_id: `head${id}`,
+  original_commit_id: `orig${id}`,
+  body: `Comment ${id} body.`,
+  diff_hunk: `@@ -1,3 +1,3 @@\n context\n-old ${id}\n+new ${id}`,
+  created_at: `2026-01-02T00:00:0${id}Z`,
+  ...fields,
+});
+
+/** Assert a started round: exit 0, `feat_x_review<suffix>.md` committed on origin, one dispatch, no reply. */
+const assertRound = async (f, result, name = 'feat_x_review.md') => {
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(await f.originSubject('feat_x'), 'chore: add user review for feat_x');
+  const calls = f.calls();
+  assert.deepEqual(dispatches(calls).map((call) => call.line), [REVIEW_DISPATCH]);
+  assert.deepEqual(replies(calls), []);
+  return f.originFile('feat_x', `${REVIEW_DIR}/${name}`);
+};
+
+/** Assert one refusal: exit 2, one reply naming @alice, no dispatch, origin unchanged. */
+const assertRefused = async (f, result, before, pattern) => {
+  assert.equal(result.status, 2, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(dispatches(calls), []);
+  const posted = replies(calls);
+  assert.equal(posted.length, 1, JSON.stringify(calls.map((call) => call.line)));
+  assert.equal(allComments(calls).length, 1);
+  assert.match(posted[0].body, /^@alice: `review` was not run: /);
+  assert.match(posted[0].body, pattern);
+  assert.equal(await f.originRefs(), before);
+  return posted[0];
+};
+
+for (const state of ['changes_requested', 'CHANGES_REQUESTED']) {
+  test(`a ${state} review with two inline comments places round 1 carrying both, and dispatches user_review once`, async (t) => {
+    const f = await reviewFixture(t);
+    const result = await f.control({ state, body: 'The button is not centred.\n\n  "quoted" $HOME `tick`' }, {
+      STUB_PR_COMMENTS: JSON.stringify([inline(2), inline(1)]),
+    });
+    const round = await assertRound(f, result);
+    assert.ok(round.startsWith('The button is not centred.\n\n  "quoted" $HOME `tick`\n\n---\n\n'), round);
+    assert.ok(round.includes(`Submitted as a review requesting changes by @alice on pull request #12 (${REVIEW_URL}) at 2026-01-02T03:04:05Z.\n`), round);
+    assert.ok(round.includes('\n## Inline comments\n'), round);
+    for (const id of [1, 2]) {
+      assert.ok(round.includes(`### \`src/file_${id}.ts\`, line ${10 + id}\n\nMade on commit \`orig${id}\`.\n\nComment ${id} body.\n`), round);
+      assert.ok(round.includes(`\`\`\`diff\n@@ -1,3 +1,3 @@\n context\n-old ${id}\n+new ${id}\n\`\`\`\n`), round);
+    }
+    assert.ok(round.indexOf('src/file_1.ts') < round.indexOf('src/file_2.ts'), 'sorted by created_at');
+    const lines = f.calls().map((call) => call.line);
+    assert.ok(lines.includes(`api --paginate repos/${REPOSITORY}/pulls/12/comments`), JSON.stringify(lines));
+    assert.ok(!lines.some((line) => /\/reviews\//.test(line)), JSON.stringify(lines));
+  });
+}
+
+for (const state of ['approved', 'commented']) {
+  test(`a review in state ${state} is ignored with no gh call`, async (t) => {
+    const f = await reviewFixture(t);
+    const before = await f.originRefs();
+    const result = await f.control({ state });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, /ignored/);
+    assert.deepEqual(f.calls(), []);
+    assert.equal(await f.originRefs(), before);
+  });
+}
+
+test('an empty review body reads as no summary', async (t) => {
+  const f = await reviewFixture(t);
+  const round = await assertRound(f, await f.control({ body: '' }));
+  assert.ok(round.startsWith('(The review carries no summary.)\n\n---\n\n'), round);
+  assert.ok(!round.includes('## Inline comments'), round);
+});
+
+test('an outdated comment reads original line <n> (outdated)', async (t) => {
+  const f = await reviewFixture(t);
+  const result = await f.control({}, { STUB_PR_COMMENTS: JSON.stringify([inline(1, { line: null, original_line: 7 })]) });
+  const round = await assertRound(f, result);
+  assert.ok(round.includes('### `src/file_1.ts`, original line 7 (outdated)\n'), round);
+});
+
+test('a comment by another user is absent', async (t) => {
+  const f = await reviewFixture(t);
+  const result = await f.control({}, {
+    STUB_PR_COMMENTS: JSON.stringify([inline(1), inline(2, { user: { login: 'mallory' }, body: 'Mallory says so.' })]),
+  });
+  const round = await assertRound(f, result);
+  assert.ok(round.includes('Comment 1 body.'), round);
+  assert.ok(!round.includes('Mallory says so.'), round);
+  assert.ok(!round.includes('src/file_2.ts'), round);
+});
+
+test('a reviewer comment from before the previous round is absent, and one after it is present', async (t) => {
+  const f = await reviewFixture(t);
+  await f.commitOn('feat_x', { [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n' }, 'chore: add user review for feat_x');
+  const result = await f.control({}, {
+    STUB_PR_COMMENTS: JSON.stringify([
+      inline(1, { pull_request_review_id: 800, created_at: '2000-01-01T00:00:00Z', body: 'Before the round.' }),
+      inline(2, { pull_request_review_id: 801, created_at: '2100-01-01T00:00:00Z', body: 'After the round.' }),
+    ]),
+  });
+  const round = await assertRound(f, result, 'feat_x_review_2.md');
+  assert.ok(!round.includes('Before the round.'), round);
+  assert.ok(round.includes('After the round.'), round);
+});
+
+test('a hunk carrying a triple-backtick line is fenced with four backticks', async (t) => {
+  const f = await reviewFixture(t);
+  const hunk = '@@ -1,2 +1,2 @@\n-```js\n+```ts';
+  const result = await f.control({}, { STUB_PR_COMMENTS: JSON.stringify([inline(1, { diff_hunk: hunk })]) });
+  const round = await assertRound(f, result);
+  assert.ok(round.includes(`\n\`\`\`\`diff\n${hunk}\n\`\`\`\`\n`), round);
+});
+
+test('with no run on GitHub at all, the round is placed and dispatched', async (t) => {
+  const f = await reviewFixture(t);
+  await assertRound(f, await f.control({}, { STUB_RUN_LIST: '[]' }));
+});
+
+test('a read reviewer is refused with a reply, and nothing is pushed', async (t) => {
+  const f = await reviewFixture(t);
+  const before = await f.originRefs();
+  const result = await f.control({}, { STUB_PERMISSIONS: JSON.stringify({ alice: 'read' }) });
+  await assertRefused(f, result, before, /permission of @alice as read/);
+});
+
+test('a head without the ledger is refused as not a harness branch', async (t) => {
+  const f = await reviewFixture(t);
+  await f.pushBranch('feat_y', { ledger: false });
+  const before = await f.originRefs();
+  await assertRefused(f, await f.control({ head: 'feat_y' }), before, /`feat_y` is not a harness branch/);
+});
+
+test('a head without the story index is refused: the round cannot start on it', async (t) => {
+  const f = await reviewFixture(t);
+  await f.pushBranch('feat_z', { story: false });
+  const before = await f.originRefs();
+  await assertRefused(f, await f.control({ head: 'feat_z' }), before,
+    /`feat_z` carries no story index \(`sdlc-harness\/story_plans\/feat_z_story_plan\.md`\).*cannot start on this branch/);
+});
+
+test('a review while the newest run is in progress is refused naming the round in flight; origin unchanged', async (t) => {
+  const f = await reviewFixture(t);
+  const before = await f.originRefs();
+  const result = await f.control({}, {
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+  });
+  const reply = await assertRefused(f, result, before, /feat_x is running on GitHub/);
+  assert.match(reply.body, /A round is in progress; submit your review again once it completes\./);
+});
+
+test('a review of a cross-repository head is ignored with no gh call', async (t) => {
+  const f = await reviewFixture(t);
+  const before = await f.originRefs();
+  const result = await f.control({ headRepo: 'mallory/fixture' });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /ignored/);
+  assert.deepEqual(f.calls(), []);
+  assert.equal(await f.originRefs(), before);
+});

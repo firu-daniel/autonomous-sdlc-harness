@@ -73,3 +73,10 @@
 - `npm test -- test/remote-control-review.test.mjs` from `cli/` passes.
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `git grep -n "reviews/.*comments" -- cli/templates/scripts/remote-run.sh` finds no code hit: the per-review endpoint, which lacks line numbers, is never used.
+
+**Deviations from plan:**
+
+- The previous round's boundary is read as the committer time in epoch seconds (`%ct`), not `%cI`, and compared with each comment's `created_at` through jq's `fromdateiso8601`. `%cI` carries the committer's local offset (`+02:00`), while `created_at` is UTC with a `Z`, so comparing the two strings gives the wrong order whenever the offset is not zero. The boundary is the same commit; only the format changed.
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the session's permission layer, so it was never run. The syntax claim rests on `npm test -- test/remote-control-review.test.mjs`: all 15 cases pass, and each one runs `remote-run.sh control` through its new review arm.
+- Beyond the plan's three heading forms, a comment with neither `line` nor `original_line` (a file-level comment) gets a heading with no line part.
+- When the child exits with something other than 0, 2, 3 or 4 (for example 1, a usage error), the reply quotes its last line and control exits 3.
