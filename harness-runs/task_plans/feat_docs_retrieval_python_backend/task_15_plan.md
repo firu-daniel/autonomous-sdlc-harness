@@ -34,3 +34,11 @@
 - `bash -n scripts/python-service.sh` is clean. Reading it shows that the `trap` is set before `up` returns and that `down -v` names only the project the script created.
 - `tests/test_backend_parity_e2e.py` collects and **skips loudly** wherever `HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL` is unset, which is the case on this machine. That reading needs no run. The case itself is run by `container-test` on a machine with Docker, listed in the story index's `Manual setup required:`, and by Task 16's opt-in gate.
 - `git diff --name-only` shows nothing under `evals/`. The eval corpus and query set are read and never written.
+
+**Deviations from plan:**
+
+- Plan said `container-test` exits with pytest's status; implemented as `0` on pytest's `0` and `1` on any other status, because pytest's own `2`–`4` collide with the wrapper's exit contract (`4` is graded `SKIPPED` by Task 16, `3` is "not provisioned"). The header's exit contract states this.
+- `HARNESS_DOCS_RETRIEVAL_PG_PORT` is derived per checkout (`40000 + checkout_key % 20000`), so two worktrees' runs neither collide with each other nor with the compose default `5432`.
+- The astral character in `docs/snippet-edges.md` straddles the 240-unit cut with a space before it, so the rendered snippet is well-formed. A cut that keeps a lone surrogate is not exercised end to end: a lone surrogate is not valid UTF-8 on the stdio transport, so that case would grade the MCP SDKs' encoders rather than the port. The test file's header records the gap.
+- Evidence downgrade: `bash -n scripts/python-service.sh` was refused by the permission layer. Syntax rests on executing `bash scripts/python-service.sh container-test` on this Docker-less machine, which parses the whole file (the final `case` is one compound command) and returned exit `4` with the planned `SKIPPED` line. The `trap`-before-`up` and project-scoped `down -v` claims rest on reading the script.
+- Deferred to the Run gates phase: the run of `tests/test_backend_parity_e2e.py` (no conventions document states a Python single-file command, per the story index's test-run note), and Python lint and type-check. The loud-skip claim rests on reading `tests/conftest.py` → `pytest_collection_modifyitems` and the file's module-level `pytestmark = pytest.mark.container`.

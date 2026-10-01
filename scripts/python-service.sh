@@ -14,16 +14,21 @@
 #   typecheck            mypy (strict, over src and tests).
 #   test [path...]       pytest, paths forwarded verbatim; default the whole suite.
 #   run [args...]        the `harness-docs-retrieval` console script, arguments forwarded verbatim.
-#   container-test       RESERVED for Task 15, with exit status 4; not implemented yet.
-# lint, typecheck, test and run go through `uv run --frozen --no-sync`, so they never reach the
-# network and never change the environment.
+#   container-test       the `container`-marked tests against a throwaway Postgres: starts only the
+#                        compose `postgres` service under a per-checkout project name on a
+#                        per-checkout loopback port, runs `pytest -m container -rs`, and removes that
+#                        project with `down -v` on every exit path. Builds the image on first use.
+#                        Its image build is the one step here that may reach the network.
+# lint, typecheck, test, run and container-test's pytest go through `uv run --frozen --no-sync`, so
+# they never reach the network and never change the environment.
 #
 # Exit contract:
 #   0  pass
-#   1  the tool reported failure (any non-zero status from it)
+#   1  the tool reported failure (any non-zero status from it, pytest's own 2-5 included), or
+#      container-test could not start its Postgres
 #   2  usage: missing or unknown sub-command, or a bad option
 #   3  not provisioned: `uv` is not on PATH, or no synced environment exists
-#   4  RESERVED for container-test (Task 15)
+#   4  container-test only: SKIPPED, because `docker` is not on PATH. A loud skip, not a pass.
 #
 # Nothing lands inside the checkout: the environment and every tool cache live under
 # ${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/, keyed per checkout, so gate 6a's `$HOME`
@@ -40,7 +45,7 @@ if [ -z "$repo_root" ] || ! cd "$repo_root/docs-retrieval-service"; then
 fi
 
 usage() {
-  echo "usage: bash scripts/python-service.sh <lock|sync [--with-models]|lint|typecheck|test [path...]|run [args...]>" >&2
+  echo "usage: bash scripts/python-service.sh <lock|sync [--with-models]|lint|typecheck|test [path...]|run [args...]|container-test>" >&2
 }
 
 cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval"
@@ -119,6 +124,38 @@ case "$command_name" in
   run)
     require_env
     graded uv run --frozen --no-sync harness-docs-retrieval "$@"
+    ;;
+  container-test)
+    if [ "$#" -ne 0 ]; then usage; exit 2; fi
+    if ! command -v docker >/dev/null 2>&1; then
+      echo "container-test: SKIPPED — docker is not on PATH; the container gate needs Docker" >&2
+      exit 4
+    fi
+    require_env
+    compose_file="$repo_root/docs-retrieval-service/compose.yaml"
+    project="harness-docs-retrieval-test-$checkout_key"
+    # Off the compose default 5432, and per checkout, so two worktrees' runs do not collide.
+    export HARNESS_DOCS_RETRIEVAL_PG_PORT="$((40000 + checkout_key % 20000))"
+    teardown() {
+      if ! docker compose -f "$compose_file" -p "$project" down -v >/dev/null 2>&1; then
+        echo "container-test: warning: 'docker compose -p ${project} down -v' failed; remove that project by hand" >&2
+      fi
+    }
+    # Set before `up`, so a failed or interrupted start is torn down too; INT and TERM route
+    # through `exit` so the EXIT trap fires on them.
+    trap teardown EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    if ! docker compose -f "$compose_file" -p "$project" up -d --wait postgres; then
+      echo "container-test: could not start the compose postgres service (project ${project})" >&2
+      exit 1
+    fi
+    # The credentials and database are compose.yaml's `postgres` service environment.
+    export HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL="postgresql://harness:harness@127.0.0.1:${HARNESS_DOCS_RETRIEVAL_PG_PORT}/docs_retrieval"
+    if uv run --frozen --no-sync pytest -m container -rs; then
+      exit 0
+    fi
+    exit 1
     ;;
   *)
     echo "python-service: unknown sub-command '${command_name}'" >&2
