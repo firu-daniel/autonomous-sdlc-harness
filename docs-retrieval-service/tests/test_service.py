@@ -10,8 +10,10 @@ No duration is asserted anywhere: `search_ms` is checked for presence and type o
 import asyncio
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, NoReturn
 
+import psycopg
 import pytest
 
 from fakes import FakeSession, InMemoryDocStore, doc_chunk
@@ -345,6 +347,37 @@ def test_a_search_failure_is_an_error_but_not_a_refusal(monkeypatch: pytest.Monk
         notes=(),
         search_ms=None,
     )
+
+
+def test_a_multi_line_failure_message_reaches_the_text_as_its_first_line() -> None:
+    session = FakeSession(refresh=RuntimeError("boom\nDETAIL: x\nHINT: y"))
+    got = asyncio.run(answer(session, {"query": "anything"}))
+    assert "\n" not in got.text
+    assert got.text == (
+        "search_docs: refreshing the docs index failed: boom; "
+        "run harness-docs-retrieval self-check in this repository"
+    )
+
+
+def test_a_driver_error_reaches_the_text_as_its_primary_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class DriverError(psycopg.Error):
+        @property
+        def diag(self) -> Any:
+            return SimpleNamespace(message_primary='relation "chunks" does not exist')
+
+    session = FakeSession()
+
+    async def broken(query: str, limit: int) -> NoReturn:
+        raise DriverError(
+            'ERROR:  relation "chunks" does not exist\nLINE 1: SELECT id FROM chunks\n'
+            "                       ^"
+        )
+
+    monkeypatch.setattr(session.fake_store, "lexical_search", broken)
+    got = asyncio.run(answer(session, {"query": "anything"}))
+    assert got.text == 'search_docs: the search failed: relation "chunks" does not exist'
 
 
 def test_the_mode_reaches_the_search() -> None:

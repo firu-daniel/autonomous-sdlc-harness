@@ -326,3 +326,19 @@ async def open_postgres_store(database_url: str, dimensions: int) -> DocStore:
         await conn.close()
         raise
     return store
+
+
+def driver_message(error: BaseException) -> str:
+    """`error`'s primary message on one line, matching what PGlite's `error.message` carries.
+
+    `str()` of a `psycopg.Error` is libpq's whole message, which can add a `LINE` pointer, `DETAIL`
+    and `HINT` lines, or a lost connection's tail; only the primary message is kept.
+    """
+    if isinstance(error, psycopg.Error):
+        primary = error.diag.message_primary
+        if isinstance(primary, str) and primary:
+            return primary
+    for line in str(error).splitlines():
+        if line.strip():
+            return line.strip()
+    return type(error).__name__

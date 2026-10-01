@@ -51,6 +51,7 @@ from harness_docs_retrieval.store import (
     DATABASE_URL_ENV,
     DIMENSIONS_META_KEY,
     DocStore,
+    driver_message,
     open_postgres_store,
 )
 from harness_docs_retrieval.stubs import resolve_models
@@ -246,7 +247,7 @@ async def answer(
             # server.ts's remedy text byte for byte:
             # run `npx autonomous-sdlc-harness doctor` in this repository
             return _failure(
-                f"{SEARCH_TOOL_NAME}: refreshing the docs index failed: {error}; "
+                f"{SEARCH_TOOL_NAME}: refreshing the docs index failed: {driver_message(error)}; "
                 "run harness-docs-retrieval self-check in this repository"
             )
         for warning in refreshed.warnings:
@@ -263,7 +264,7 @@ async def answer(
                 mode=mode,
             )
         except Exception as error:
-            return _failure(f"{SEARCH_TOOL_NAME}: the search failed: {error}")
+            return _failure(f"{SEARCH_TOOL_NAME}: the search failed: {driver_message(error)}")
         search_ms = (time.perf_counter() - started) * 1000
 
         # A truncated corpus is a degraded answer, not a failed call, so these are not an error.
