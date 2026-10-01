@@ -5988,6 +5988,34 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(calls.includes(TRIGGER_GH_CALLS.trigger.join(' ')) && calls.includes(TRIGGER_GH_CALLS.labels.join(' ')), calls.join('\n'));
   });
 
+  await t.test('with the trigger on, a warning grade still carries the trigger confirmation', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }]) } });
+    answerTriggerGh(stub);
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-github');
+    assert.ok(line?.includes('HARNESS_PUSH_URL is not a repository secret'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('GitHub knows harness-trigger.yml and the label `harness` exists'), line);
+  });
+
+  await t.test('with the trigger on, a failing grade still carries the trigger confirmation', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } });
+    answerTriggerGh(stub);
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 1, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'fail', 'remote-github');
+    assert.ok(line?.includes('neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is a repository secret'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('GitHub knows harness-trigger.yml and the label `harness` exists'), line);
+  });
+
   await t.test('with the trigger on, an unknown harness-trigger.yml warns with the push', async (subtest) => {
     const dir = await pushedTriggerFixture(subtest);
     const stub = await answeringGhStub(subtest);
@@ -6185,6 +6213,20 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line?.includes('HARNESS_TRIGGER_LABEL label (default `harness`) starts a task run'), `${stdout}\n${stderr}`);
     assert.ok(line.includes('still to come'), line);
     assert.ok(line.includes('doctor --check-github'), line);
+  });
+
+  await t.test('github under --check-github names remote-github instead of the flag', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub);
+    answerTriggerGh(stub);
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'forge');
+    assert.ok(line?.includes('the remote-github check above reports what GitHub says'), `${stdout}\n${stderr}`);
+    assert.ok(!line.includes('`npx autonomous-sdlc-harness doctor --check-github` asks GitHub'), line);
   });
 });
 
