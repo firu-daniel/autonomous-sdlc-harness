@@ -67,3 +67,8 @@ No gate can catch this. Gate 13 syncs without the `models` extra, and `mypy` ign
   ```
 
   `tests/test_lock.py` is the one test file this fix creates. No conventions document states a single-file command for a Python test file, so record the skip under `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`, point 3. The Run gates phase runs it.
+
+**Deviations from plan:**
+
+- `tests/test_lock.py` was not run: no conventions document states a single-file command for a Python test file, so the run is deferred to the Run gates phase (`unit_loop_core.md` → `## The test-run rule`, point 3).
+- The re-lock resolved `sentence-transformers` 6.1.0, `transformers` 5.18.0, `tokenizers` 0.23.2 (manylinux wheels present) and `huggingface-hub` 1.33.0. That the three keywords `load_models` passes still exist in 6.1.0 rests on the `>=4.0` floor, not on an import: no gate installs the `models` extra.

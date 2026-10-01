@@ -14,7 +14,8 @@ dependencies = [
 
 [project.optional-dependencies]
 models = [
-    "sentence-transformers",
+    # v4 is where CrossEncoder takes `activation_fn`, which models.py → load_models passes.
+    "sentence-transformers>=4.0",
     "torch",
 ]
 

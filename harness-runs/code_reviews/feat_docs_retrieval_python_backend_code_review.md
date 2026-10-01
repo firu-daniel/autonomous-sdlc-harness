@@ -30,7 +30,7 @@ Pass 2 found no per-unit review folder under `harness-runs/task_plan_point_revie
 1. [x] **Finding 3** — Correct `run-gates.sh`'s header from "the other five automatable gates" to "the other six" _(layer: general)_
 2. [x] **Finding 4** — Spell `JS_WHITESPACE` and `_ATX_HEADING`'s line-separator class with `\u` escapes instead of invisible literals _(layer: general)_
 3. [x] **Finding 2** — Record in `## The seam, as found` and in `store.py`'s departures that the index is one per database, not one per checkout _(layer: general)_
-4. [ ] **Finding 1** — Floor the `models` extra at `sentence-transformers>=4.0`, re-lock, and guard the locked version from `tests/test_lock.py` _(layer: general)_
+4. [x] **Finding 1** — Floor the `models` extra at `sentence-transformers>=4.0`, re-lock, and guard the locked version from `tests/test_lock.py` _(layer: general)_
 
 ---
 
