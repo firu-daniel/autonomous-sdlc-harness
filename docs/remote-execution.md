@@ -2,7 +2,7 @@
 
 **Who reads this:** a maintainer deciding whether to run the harness's unattended runs in a GitHub Actions job instead of on their own machine, and anyone changing the remote path — the watcher's dispatch, `remote-run.sh`, the two workflow templates. It owns the design of record: what happens between a dropped file and a pushed branch when a run executes remotely, each decision the design took and its reason, and the GitHub behaviours the design rests on without having verified them. Setup, runner choices, credentials, costs and security are §7 onward.
 
-It cites rather than restates. The key's contract is [`config.md`](config.md) → `## 5. Key reference`; the workflows `init` writes, `init --plugin-root-entries` and `doctor`'s `remote-execution` and `remote-github` checks are [`cli.md`](cli.md); the pause/resume protocol is `plugin/instructions/autonomous_pause_and_ledger.md`; the local watcher is [`watcher.md`](watcher.md); starting a run from a GitHub issue is [`github-issue-trigger.md`](github-issue-trigger.md). The code of record is `cli/templates/scripts/remote-run.sh` (its header states every verb and its exit map), `cli/templates/scripts/autonomous-watcher.sh` → the header's `REMOTE DISPATCH` and `JOB MODE` blocks, the headers of `cli/templates/github/workflows/harness-run.yml` and `harness-resume.yml`, and `cli/templates/scripts/lib/harness-run-lib.sh` → `THE REMOTE STATE BUNDLE`.
+It cites rather than restates. The key's contract is [`config.md`](config.md) → `## 5. Key reference`; the workflows `init` writes, `init --plugin-root-entries` and `doctor`'s `remote-execution` and `remote-github` checks are [`cli.md`](cli.md); the pause/resume protocol is `plugin/instructions/autonomous_pause_and_ledger.md`; the local watcher is [`watcher.md`](watcher.md); starting a run from a GitHub issue is [`github-issue-trigger.md`](github-issue-trigger.md); working a run from GitHub through comments, reviews and its draft pull request is [`github-run-control.md`](github-run-control.md). The code of record is `cli/templates/scripts/remote-run.sh` (its header states every verb and its exit map), `cli/templates/scripts/autonomous-watcher.sh` → the header's `REMOTE DISPATCH` and `JOB MODE` blocks, the headers of `cli/templates/github/workflows/harness-run.yml` and `harness-resume.yml`, and `cli/templates/scripts/lib/harness-run-lib.sh` → `THE REMOTE STATE BUNDLE`.
 
 ---
 
@@ -29,7 +29,7 @@ From a drop to a pushed branch:
 5. **The run.** `autonomous-watcher.sh job <branch> <engine> <resume>` launches one session through the watcher's own `spawn_engine` and supervises it (§3). It writes `status.json` with decision `continue` before the launch, so a job killed mid-run still leaves a bundle that says *continue*.
 6. **The end of the job.** Under `always()`: `push-branch.sh`, then `remote-run.sh save` and the upload of the bundle as the Actions artifact `harness-state`. Under `!cancelled()`: `remote-run.sh continue`. Under `cancelled()`: a best-effort `failed` notification.
 7. **The decision.** `continue` reads the bundle's `decision`. `continue` re-dispatches the same workflow with `resume: pause` and `chain` one higher; `wait-poller` enables `harness-resume.yml`; `stop` does nothing, because job mode has already notified.
-8. **Done.** A run that completes ends with status `completed`, decision `stop`, a `completed` notification and its branch pushed. No pull request is opened (§5). With `phases.qa` on, the interactive-test phase was skipped rather than run, and the branch still owes it a local run (§3, *The interactive-test phase*).
+8. **Done.** A run that completes ends with status `completed`, decision `stop`, a `completed` notification and its branch pushed. With `forge` set to `github`, the job's `deliver` step then opens a draft pull request from the branch, naming the issue the run was started from when there is one, and posts the `completed` comment naming it ([`github-run-control.md`](github-run-control.md) → `## 4. The draft pull request`). Without `forge` `github` none is opened, and the flow itself opens none either way (§5). With `phases.qa` on, the interactive-test phase was skipped rather than run, and the branch still owes it a local run (§3, *The interactive-test phase*).
 
 ```mermaid
 flowchart LR
@@ -96,7 +96,9 @@ bash scripts/remote-run.sh stop <branch>
 
 ### Working a run from GitHub alone
 
-A maintainer with no local setup — no checkout, no watcher — works any remote run from the **Run workflow** form of `harness-run.yml` on the repository's Actions page. The form's inputs are `## 5.`'s table. Every action below picks the run's branch under *Use workflow from*, as `remote-run.sh` does with `--ref` (§7, *Upgrading*), and sets the `branch` input to it.
+With `forge` set to `github`, a maintainer with no local setup — no checkout, no watcher — works a run by `@sdlc-harness` comments on its issue or pull request and by reviews that request changes ([`github-run-control.md`](github-run-control.md) → `## The GitHub entry point`).
+
+The fallback, which works with or without `forge`, is the **Run workflow** form of `harness-run.yml` on the repository's Actions page — for example when a park's bundle must be read in full, or when the control workflow is not installed. The form's inputs are `## 5.`'s table. Every action below picks the run's branch under *Use workflow from*, as `remote-run.sh` does with `--ref` (§7, *Upgrading*), and sets the `branch` input to it.
 
 - **Answering a park.** Take the question from the run's `harness-state` artifact, under `clarifications/<branch>/question_<n>.md`: download it from the run page's *Artifacts*, or with the GitHub CLI:
 
@@ -154,6 +156,8 @@ Once dispatched, nothing on this machine watches, gates, restarts or resumes a r
 ```
 answer with /autonomous-sdlc-harness:branch-answer <branch>; or from GitHub: take the question from the run's `harness-state` artifact, then Run workflow on harness-run.yml from the branch `<branch>` (Use workflow from), with action run, branch `<branch>`, engine `<engine>`, resume answer and answers `{"<n>": "<your answer>"}` (docs/remote-execution.md, section 1)
 ```
+
+With `forge` set to `github`, each lifecycle event the job sends also reaches the run's pull request, else its issue, as a comment naming the next GitHub action, and moves the run's `sdlc-harness: <state>` label. The notification itself and its text are unchanged, so a maintainer gets both. A `budget` continuation sends neither ([`github-run-control.md`](github-run-control.md) → `## 5. Lifecycle comments and state labels`).
 
 **Reason:** with the machine off the desktop banner reaches no one, while the push arm works from anywhere. A `budget` pause (the self-pause below) sends no `paused` and the next job no `resumed`: a chained continuation is not an event the user acts on. The `cancelled()` step's `failed` notification is best-effort and nothing relies on it.
 
@@ -264,7 +268,7 @@ The paragraph it reaches states that in the autonomous forks **every** commit po
 
 ## 5. The seam, and what stays open
 
-**The `workflow_dispatch` inputs are the seam, and the trigger half has plugged into it.** A run is started, continued, paused or stopped by one dispatch of `harness-run.yml`, whatever sends it. On the shell side `remote-run.sh dispatch` is still the one producer: `remote-run.sh start`, which the issue trigger calls ([`github-issue-trigger.md`](github-issue-trigger.md)), sends the same inputs through it.
+**The `workflow_dispatch` inputs are the seam, and the trigger and control halves have both plugged into it.** A run is started, continued, paused or stopped by one dispatch of `harness-run.yml`, whatever sends it. On the shell side `remote-run.sh dispatch` is still the one producer: `remote-run.sh start`, which the issue trigger calls ([`github-issue-trigger.md`](github-issue-trigger.md)), sends the same inputs through it, and so does `remote-run.sh control`, which `harness-control.yml` calls ([`github-run-control.md`](github-run-control.md)), through the existing `dispatch`, `pause`, `stop` and `review` verbs. No input was added for either: the issue a run was started from is read from the task prompt's provenance line on the branch, and the pull request is looked up when a comment is posted.
 
 | Input | Values | Sent with |
 |---|---|---|
@@ -278,9 +282,9 @@ The paragraph it reaches states that in the autonomous forks **every** commit po
 
 The workflow's `run-name` is `harness <action> <branch>`, and the job's pause poll, `continue` and `poll` match runs by that title, so its spelling is part of the contract.
 
-**"Done" is still a pushed branch.** `push-branch.sh` opens no pull request. `forge` is read by the issue trigger ([`github-issue-trigger.md`](github-issue-trigger.md)), not by this path: `execution.target` still names where the job runs, and a run still ends at a pushed branch with no pull request.
+**The draft pull request is the job's, not the flow's.** `push-branch.sh` still opens no pull request, and the flow runs unchanged wherever it executes. With `forge` set to `github`, the run workflow's `deliver` step opens a draft pull request after a completed run's branch is pushed ([`github-run-control.md`](github-run-control.md) → `## 4. The draft pull request`); without it, a run ends at a pushed branch. `execution.target` still names where the job runs, and `forge` names the forge it reports to.
 
-**What stays open**: starting a run from a pull request or a comment, and controlling a run from GitHub's side beyond the **Run workflow** form (§1, *Working a run from GitHub alone*), which is `feat_forge_run_control`; and draft-pull-request output.
+**What stays open**: adapters for forges beyond GitHub, and running the interactive-test phase remotely (`ROADMAP.md`'s *Cloud QA* row; §3, *The interactive-test phase*).
 
 ---
 
