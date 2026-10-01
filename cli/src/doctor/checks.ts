@@ -130,6 +130,7 @@ import {
   WORKFLOW_SCOPE_COMMAND,
   WORKFLOW_SCOPE_REASON,
 } from '../core/defaultBranchPush.js';
+import { internal } from '../core/errors.js';
 import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
@@ -4991,7 +4992,7 @@ function runPythonSelfCheck(repoRoot: string): PythonSelfCheck {
 /** One line of an answered `self-check`; `parseSelfCheck` guarantees all three are present. */
 function selfCheckLine(answer: { readonly lines: ReadonlyMap<SelfCheckQuestion, SelfCheckLine> }, question: SelfCheckQuestion): SelfCheckLine {
   const line = answer.lines.get(question);
-  if (line === undefined) throw new Error(`self-check answered without its ${question} line`);
+  if (line === undefined) throw internal(`self-check answered without its ${question} line, which parseSelfCheck guarantees`);
   return line;
 }
 
