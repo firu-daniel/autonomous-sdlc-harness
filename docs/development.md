@@ -1222,7 +1222,7 @@ Passes when `isDraft` is `true`, `headRefName` is `<slug>`, the body reads `Star
 gh pr view <number> --repo <owner>/<scratch-repo> --json author
 ```
 
-From an account with write access that is not that author, submit a review requesting changes with two inline comments on different lines, from the pull request's *Files changed* tab. Then read the branch:
+The reviewing account, which submits every review in legs (e) and (f), must have write access and must not be the pull request's author: GitHub never lets a pull request's author approve it or request changes on it, and the draft pull request is authored by the owner of `HARNESS_GIT_TOKEN` when that secret is set and otherwise by `github-actions[bot]` (`app/github-actions`), so the account that owns that token cannot run any review leg. From the reviewing account, submit a review requesting changes with two inline comments on different lines, from the pull request's *Files changed* tab. Then read the branch:
 
 ```
 gh api "repos/<owner>/<scratch-repo>/commits?sha=<slug>"
@@ -1236,7 +1236,7 @@ gh api "repos/<owner>/<scratch-repo>/contents/<stateDir>/user_reviews/<slug>_rev
 gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
 ```
 
-Passes when `<slug>` carries one commit `chore: add user review for <slug>`; the round file carries the review's body and both inline comments, each with its file, its line, the commit it was made on and its hunk; a `harness run <slug>` run follows; and the pull request carries the started-round comment. Record the round file verbatim. Where `HARNESS_GIT_TOKEN` was set with the reviewing account's own token, that account is the author: record the refusal GitHub gives it when it requests changes, instead of this leg's pass.
+Passes when `<slug>` carries one commit `chore: add user review for <slug>`; the round file carries the review's body and both inline comments, each with its file, its line, the commit it was made on and its hunk; a `harness run <slug>` run follows; and the pull request carries the started-round comment. Record the round file verbatim.
 
 **(f) The refusals.** On the issue:
 
@@ -1256,7 +1256,7 @@ Passes when no reply follows and no `harness-control.yml` run for it gets past i
 gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
 ```
 
-From the reviewing account, on the pull request:
+From leg (e)'s reviewing account, never the pull request's author, on the pull request:
 
 ```
 gh pr review <number> --repo <owner>/<scratch-repo> --approve
@@ -1270,13 +1270,42 @@ gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<t
 
 Passes when the reply says the review was collected, with no `submit again`, and no second `chore: add user review for <slug>` commit appears while (e)'s round runs; then, once that round completes, the `harness-run.yml` run's `collect` job places `<slug>_review_2.md` carrying that review's body under `## Review by @<login>`, a `harness run <slug>` run follows, and the pull request carries the started-round comment naming the reviewer. Record the reply, the `collect` job's log and the round file verbatim.
 
-Once that round completes too, from a second account with write access, submit a review requesting changes at the same moment as the first account submits one:
+Once that round completes too, from the same reviewing account, submit a review requesting changes:
 
 ```
-gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text>"
+gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text 1>"
 ```
 
-Passes when one round file carries both `## Review by` sections and only one new `chore: add user review for <slug>` commit appears. Where only one account with write access exists, record this step as not run. Then, on the issue:
+While the round it starts is running, submit a second review requesting changes, and then, back to back, a third and a fourth, each with its own text:
+
+```
+gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text 2>"
+```
+
+```
+gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text 3>"
+```
+
+```
+gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text 4>"
+```
+
+Then read the review jobs:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+```
+
+Passes when all of the following hold:
+
+- no review is refused;
+- each review job that ran replied "collected" (a pending review job that GitHub replaced may post no reply, which is recorded, not failed);
+- no second `chore: add user review for <slug>` commit appears while the first round runs;
+- once that round completes, the `harness-run.yml` run's `collect` job places one round file that carries the bodies of all three later reviews, each under its own `## Review by @<login>` section, and a `harness run <slug>` run follows.
+
+Record each reply, the `harness-control.yml` run list (which review jobs ran and which were cancelled), the `collect` job's log and the round file verbatim.
+
+Then, on the issue:
 
 ```
 gh issue comment <number> --repo <owner>/<scratch-repo> --body "@SDLC-HARNESS pause"
@@ -1292,7 +1321,7 @@ gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness st
 
 Passes when a reply names the actor, a `stopped` comment names the actor, and the label moves to `sdlc-harness: stopped`.
 
-**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); *A pull request's author cannot request changes on their own pull request*, by leg (e) where `HARNESS_GIT_TOKEN` was the reviewing account's own token; and *The whole chain on GitHub*, by the legs together.
+**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); and *The whole chain on GitHub*, by the legs together.
 
 **Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set. Where (xiv) ran, close the round's pull request first, before any branch is deleted:
 
