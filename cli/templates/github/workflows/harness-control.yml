@@ -56,7 +56,7 @@
 # (docs/github-integration-research.md, T2):
 #   contents: write        push a review round, and the contents read a
 #                          `stop --branch-gone` makes
-#   actions: write        dispatch, pause, stop and cancel runs, and read
+#   actions: write         dispatch, pause, stop and cancel runs, and read
 #                          runs and their artifacts
 #   issues: write          reply on the issue or pull request, and label it
 #   pull-requests: write   read the pull request, its reviews and comments,
