@@ -38,7 +38,7 @@ This branch **measures** the Python docs-retrieval backend (`docs-retrieval-serv
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_docs_retrieval_backend_comparison/task_<K>_plan.md`. The order is bottom-up by the configured layer order, with the catch-all layer last, and dependency order within a layer. So the one `cli`-layer task, **Task 13**, ships first. It is numbered 13 because it was added in review round 0, which keeps the twelve `general` tasks' numbers and their cross-file `**Depends on:**` links stable. Then come the `general` tasks: the tooling (Tasks 1–8), then the procedure (Task 9), then the record and the write-up (Tasks 10–12), which need the operator's hand run.
 
 1. [x] **Task 13** — Export the embedder's extraction options from `models.ts` as `EMBEDDING_EXTRACT_OPTIONS`, with no value changed _(layer: cli)_ _(points: 5)_
-2. [ ] **Task 1** — Lift the mirror fixture into `mirror-fixture.mjs`, and read the query-log pass's compared arm through `readCorpusMachineHalf` _(layer: general)_ _(points: 10)_
+2. [x] **Task 1** — Lift the mirror fixture into `mirror-fixture.mjs`, and read the query-log pass's compared arm through `readCorpusMachineHalf` _(layer: general)_ _(points: 10)_
 3. [ ] **Task 2** — Declare the backend vocabulary in `backends.mjs`, and key, label and transplant per-backend blocks in `results.mjs` _(layer: general)_ _(points: 20)_
 4. [ ] **Task 3** — Drive the Python package's `serve-http` as an eval session in `python-backend.mjs` _(layer: general)_ _(points: 20)_
 5. [ ] **Task 4** — Wire `--backend` through `args.mjs`, `run.mjs` and `arms.mjs`, leaving the flag-absent path unchanged _(layer: general)_ _(points: 15)_

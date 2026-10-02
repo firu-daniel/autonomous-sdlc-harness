@@ -25,3 +25,8 @@
 - A second scratch launcher reads `docs/retrieval-eval-results.md` and prints the `comparedArm` result before and after the edit: the same `mode`, `latency`, `snapshot`, `abstainScoreThreshold` and `generatedAt`. `comparedArm` is not exported, so the launcher calls `readCorpusMachineHalf(text, 'self-docs')` and the old scan side by side and compares them.
 - `grep -n "function buildFixture\|mkdtempSync" evals/docs-retrieval/*.mjs` finds the fixture's temp-directory creation in `mirror-fixture.mjs` and no second copy in `query-log-pass.mjs`. `cold-build.mjs` is untouched, because it creates no fixture.
 - `scripts/scratch-run.sh` is the only route used, and no bare `node evals/…` is issued (`docs/retrieval-eval.md` → `### The two execution routes, and the one that stalls`).
+
+**Deviations from plan:**
+
+- The fixture's throwaway commit keeps its original `user.name=query log pass` / `user.email=query-log-pass@invalid` identity, so the move stays byte for byte in behaviour; only the refusal prefix and the temp-directory prefix changed, as the plan asked.
+- `runQueryLogPass` was not run end to end (it needs the real models and a full MCP pass, and changes no figure). Its edited paths rest on: `harness-runs/scratch/qlp-load-probe.mjs` importing the module (exports resolve), the mirror probe exercising `buildMirrorFixture` / `removeMirrorFixture` directly, and the compared-arm probe showing the old scan and `readCorpusMachineHalf(text, 'self-docs')` yield identical `mode`, `latency`, `snapshot`, `abstainScoreThreshold` and `generatedAt`.
