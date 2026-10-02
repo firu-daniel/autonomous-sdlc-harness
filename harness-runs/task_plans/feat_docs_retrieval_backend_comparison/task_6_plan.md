@@ -35,3 +35,10 @@ renderVectorAgreement(result) -> string
 - A self-check inside the probe: the cosine of the TypeScript vector of one chunk with itself prints `1` to six places, which guards the cosine against a dot-product or norm slip.
 - With the compose `postgres` service stopped, the measurement refuses with the named `docker` / `psql` message rather than returning an empty summary.
 - For one probe run, export `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` to a non-default value (for example `postgresql://other:other@127.0.0.1:5432/other`) in that command's own environment: the measurement refuses by name before anything is indexed (no fixture directory is left behind and no `index:` line appears), and the captured output contains no `postgresql://` string.
+
+**Deviations from plan:**
+- `assertPythonBackendAvailable({ checkout, fixtureDir })` (`python-backend.mjs`) runs before `indexPythonCorpus`, as `openPythonSession` and `mcp-backend-pass.mjs` → `runMcpBackendPass` do, so a not-provisioned Python backend refuses by name rather than through `index`'s exit.
+- A `psql … -c 'SELECT 1'` probe runs before any embedding, fixture or index, so a stopped compose `postgres` refuses with the named `docker compose exec postgres psql` message rather than with `index`'s own connection failure.
+- `cosine` is exported beside the planned interface, so the probe's self-check exercises the module's own function rather than a copy.
+- The psql read sets `maxBuffer` to 1 GiB: a corpus's vectors exceed `execFileSync`'s 1 MiB default.
+- TypeScript vectors are embedded in batches of 32 in corpus order, mirroring `refresh.ts` → `EMBED_BATCH_SIZE` (not exported), so batch composition matches a cold refresh.
