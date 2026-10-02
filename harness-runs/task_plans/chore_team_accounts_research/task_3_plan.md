@@ -25,6 +25,7 @@
 - O1 names AI credits as current and premium requests as legacy, with the date June 1, 2026 as the evidence gives it.
 - No sentence in §3 or §4 recommends a pattern or describes a change to a harness file.
 - `grep -nE '/Users/|/home/|/private/|/tmp/' docs/team-accounts-research.md` finds nothing. Then `bash scripts/test.sh`, run without a pipe, fails no gate that does not also fail on the branch's base commit: gate 6a (*no machine paths*) is red in this self-adopted checkout by design (`scripts/run-gates.sh` → the comment above gate 6e), so compare its hits, and no hit may name a file this branch wrote.
+- **Deviations from plan:** the `bash scripts/test.sh` run in the last Verification bullet was not carried out by the implementer — deferred to the Run gates phase under `unit_loop_core.md` → `## The test-run rule`. The machine-path `grep` was run and found nothing, and `bash scripts/typecheck.sh` passed. The quote-against-evidence check rests on the implementer's reading of each quote against `### Evidence`, not on an automated grep of every quote.
 
 ### Evidence
 
