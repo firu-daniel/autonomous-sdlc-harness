@@ -1,0 +1,38 @@
+# Local-only: both published ports bind 127.0.0.1, the credentials below are throwaway local
+# values, and nothing here reaches a hosted endpoint. The `postgres` service name, its health
+# check and its loopback port are the container test gate's contract
+# (`docker compose up -d --wait postgres`).
+name: harness-docs-retrieval
+
+services:
+  postgres:
+    build: ./postgres
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: harness
+      POSTGRES_DB: docs_retrieval
+    # pg_textsearch refuses to load without the preload (postgres/Dockerfile header, record 3).
+    command: ["postgres", "-c", "shared_preload_libraries=pg_textsearch"]
+    ports:
+      - "127.0.0.1:${HARNESS_DOCS_RETRIEVAL_PG_PORT:-5432}:5432"
+    healthcheck:
+      # Over TCP, so the init-time server, which listens on the socket only, never reads healthy.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "harness", "-d", "docs_retrieval"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  service:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HARNESS_DOCS_RETRIEVAL_DATABASE_URL: postgresql://harness:harness@postgres:5432/docs_retrieval
+      AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB: ${AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB:-}
+    volumes:
+      # Defaults to this checkout's root: the service directory is a peer of `cli/`.
+      - ${HARNESS_DOCS_RETRIEVAL_REPO:-..}:/repo:ro
+      - ${HARNESS_DOCS_RETRIEVAL_MODEL_CACHE:-${HOME}/.cache/harness-docs-retrieval/models}:/models:ro
+    ports:
+      - "127.0.0.1:8080:8080"

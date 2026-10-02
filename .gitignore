@@ -2,3 +2,9 @@ node_modules/
 dist/
 .DS_Store
 *.env
+# Backstop for running uv directly: scripts/python-service.sh keeps these outside the checkout.
+docs-retrieval-service/.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/

@@ -1,12 +1,13 @@
 /**
  * Generator: the GitHub Actions workflows remote execution runs on — `harness-run.yml`, the job
- * the watcher dispatches a run to, `harness-resume.yml`, the self-disabling resume poller, and
- * `harness-trigger.yml`, the issue-label and `repository_dispatch` trigger — written into the
- * adopter's `.github/workflows/`.
+ * the watcher dispatches a run to, `harness-resume.yml`, the self-disabling resume poller,
+ * `harness-trigger.yml`, the issue-label and `repository_dispatch` trigger, and `harness-control.yml`,
+ * the comment-command and review handler — written into the adopter's `.github/workflows/`.
  *
  * **The rule this module exists to enforce: the first two workflows are written exactly when
- * `config/model.ts` → `remoteExecutionApplies(config)` holds, the trigger exactly when
- * `config/model.ts` → `forgeTriggerApplies(config)` also holds, and all three from the templates under
+ * `config/model.ts` → `remoteExecutionApplies(config)` holds, the two forge workflows — the trigger
+ * and the control workflow — exactly when `config/model.ts` → `forgeTriggerApplies(config)` also
+ * holds, and all four from the templates under
  * `cli/templates/` → {@link WORKFLOW_TEMPLATE_DIR} only.** With the key absent or `local` this module
  * enqueues nothing, so such a repository receives exactly what `init` wrote before remote execution
  * existed. Every name — the directory, the file names, the template directory — is imported from
@@ -34,9 +35,10 @@
  *    carried into its re-render because the schedule is the one thing an adopter tunes inside that
  *    file; every other edit to either file survives only in its `.bak`. The runner and the timeouts
  *    are repository variables, which the re-render does not touch.
- * 5. **The trigger workflow is gated on `forgeTriggerApplies`, carries no pin and is not upgraded,**
- *    because it calls the scripts on the default branch and shares their re-run contract. It is
- *    copied verbatim like `harness-resume.yml` (choice 3) and never carries a `forceOverride`.
+ * 5. **The two forge workflows — the trigger and the control workflow — are gated on
+ *    `forgeTriggerApplies`, carry no pin and are not upgraded,** because each calls the scripts on the
+ *    default branch and shares their re-run contract. Both are copied verbatim like
+ *    `harness-resume.yml` (choice 3) and never carry a `forceOverride`, upgrade mode included.
  *
  * **Declared mirror.** `cli/templates/github/workflows/harness-run.yml`'s `Install the pinned plugin`
  * step spells the route {@link upgradeWorkflowsCommand} produces,
@@ -62,6 +64,8 @@ import { unquoteYamlScalar } from '../core/yamlScalar.js';
 import {
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RESUME_PATH,
+  WORKFLOW_CONTROL_FILE,
+  WORKFLOW_CONTROL_PATH,
   WORKFLOW_RUN_FILE,
   WORKFLOW_RUN_PATH,
   WORKFLOW_TEMPLATE_DIR,
@@ -126,7 +130,7 @@ export interface GithubWorkflowsResult {
   readonly written: boolean;
   /** Each workflow enqueued — its absolute target and its repo-relative path — in the order written; empty when remote execution does not apply. */
   readonly workflows: readonly { readonly absolute: string; readonly repoPath: string }[];
-  /** True exactly when the trigger workflow was enqueued (choice 5); `init` gates its label step on it. */
+  /** True exactly when the trigger and control workflows were enqueued, which happens together (choice 5); `init` gates its forge steps on it. */
   readonly trigger: boolean;
   /** Present exactly when `upgrade` was set, remote execution applied and `harness-run.yml` existed. */
   readonly upgrade?: WorkflowUpgrade;
@@ -150,8 +154,8 @@ function carryCron(template: string, cron: readonly string[]): string {
 }
 
 /**
- * Enqueue the workflows when remote execution is on — the trigger only when `forgeTriggerApplies` also
- * holds — and nothing otherwise.
+ * Enqueue the workflows when remote execution is on — the trigger and control workflows only when
+ * `forgeTriggerApplies` also holds — and nothing otherwise.
  *
  * Nothing here writes the filesystem: the generator plans, and `init` applies the plan once. The
  * upgrade mode reads the two existing workflows to decide.
@@ -223,6 +227,15 @@ export function writeGithubWorkflows({
       label: `workflow ${WORKFLOW_TRIGGER_FILE}`,
     });
     workflows.push({ absolute: triggerPath, repoPath: WORKFLOW_TRIGGER_PATH });
+
+    const controlPath = join(repoRoot, ...WORKFLOW_CONTROL_PATH.split('/'));
+    plan.add({
+      path: controlPath,
+      policy: 'create-if-absent',
+      content: readTemplate(`${WORKFLOW_TEMPLATE_DIR}/${WORKFLOW_CONTROL_FILE}`),
+      label: `workflow ${WORKFLOW_CONTROL_FILE}`,
+    });
+    workflows.push({ absolute: controlPath, repoPath: WORKFLOW_CONTROL_PATH });
   }
 
   return {

@@ -7,15 +7,15 @@ argument-hint: "[<branch>:] [reason]"
 
 ## Resolved values
 
-The tokens below are not ordinary **path placeholders** (`<branch>`, `<MAIN_REPO>`, `<worktree>`, `<tmp>`, which this
-file's own text resolves — `<MAIN_REPO>` in step 1, `<worktree>` from the registry record in step 4 and `<tmp>` in step 2): they
+The tokens below are not ordinary **path placeholders** (`<branch>`, `<MAIN_REPO>`, `<worktree>`, `<branch_fold>`, `<scratch>`, which this
+file's own text resolves — `<MAIN_REPO>` in step 1, `<worktree>` from the registry record in step 4 and `<branch_fold>` and `<scratch>` in step 2): they
 resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this
 table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
-| `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in, repo-relative; a script is invoked from the root of the checkout this session runs in. This file names two of them: `remote-run.sh`, which it invokes — its `sync` verb, for a remote record, and its `fetch` verb, for a prefix naming a branch with no record, both in step 2, and its `pause` verb, on the GitHub route in step 4 — and `autonomous-watcher.sh`, **only** in the scope fence, as a file it must not modify and never invokes. It modifies neither. |
+| `<scripts_dir>` | config value | `scriptsDir` — the directory the outer-loop scripts live in, repo-relative; a script is invoked from the root of the checkout this session runs in. This file names two of them: `remote-run.sh`, which it invokes — its `sync` verb, for a remote record, and its `fetch` and `discard` verbs, for a prefix naming a branch with no record, all in step 2, and its `pause` verb, on the GitHub route in step 4 — and `autonomous-watcher.sh`, **only** in the scope fence, as a file it must not modify and never invokes. It modifies neither. |
 
 ---
 
@@ -30,16 +30,17 @@ session** — the watcher marks the run `paused` and notifies. Resume later with
 `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`.
 
 Only a **running** run can honor a PAUSE (the engine must be alive to see it). For a local run this command
-writes ONE marker file and reports; for a run that executes on GitHub it writes no file and sends the pause
-dispatch itself. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for a remote record,
-`<scripts_dir>/remote-run.sh fetch`, for a prefix naming a branch with no record, and
+writes ONE marker file and reports; for a run that executes on GitHub it writes no marker and sends the pause
+dispatch itself. Its only other local write is the step 2 scratch directory under `<state_dir>/scratch/`,
+which it removes before it ends. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for a remote record,
+`<scripts_dir>/remote-run.sh fetch` and `<scripts_dir>/remote-run.sh discard`, for a prefix naming a branch with no record, and
 `<scripts_dir>/remote-run.sh pause`, on the GitHub route; it names `remote-run.sh stop` in its report and never runs it. It must NOT modify
 `<scripts_dir>/autonomous-watcher.sh`, `<scripts_dir>/remote-run.sh`, the engines, or the instruction forks.
 
 **Usage:** type `/autonomous-sdlc-harness:branch-pause`. Optionally target a branch with a leading `<branch>: ` prefix and add a
 free-text reason after it, e.g. `/autonomous-sdlc-harness:branch-pause feat_settings_search: session token window nearly full`. The
 reason (everything after any `<branch>: ` prefix) is written verbatim as the PAUSE file's body for your
-own audit — the orchestrator only checks the file's **presence**, never its content. On the GitHub route no file is
+own audit — the orchestrator only checks the file's **presence**, never its content. On the GitHub route no `PAUSE` file is
 written and the reason is not sent.
 
 ## Steps
@@ -58,9 +59,22 @@ written and the reason is not sent.
      with its message, and that record is left out of the candidates — or, when the prefix named it, the
      command stops — never guessed about.
    - **A prefix naming a branch the registry does not hold** may name a run that executes on GitHub with no
-     local record. Make a temporary directory with `mktemp -d`, run
-     `bash <scripts_dir>/remote-run.sh fetch <branch> <tmp>` once, and remove that directory before this
-     command ends, on every path. On exit 2, or on a printed `state: none`, report that no run of that name
+     local record. `<branch_fold>` is `<branch>` with every character outside `A-Za-z0-9_-` replaced by
+     `_` (`feat/recent_searches_panel` gives `feat_recent_searches_panel`); `<scratch>` is
+     `<state_dir>/scratch/branch-pause-<branch_fold>`. Write each command below as a literal — the real
+     `<state_dir>`, `<scripts_dir>`, `<branch>` and `<branch_fold>` substituted, with no `$(…)`, no pipe and
+     no shell variable:
+     1. If `<scratch>` already exists, it is left over from an interrupted invocation or from another
+        branch that folds to the same name: report it, name `bash <scripts_dir>/remote-run.sh discard <scratch>`
+        as the way to clear it, and stop. Never remove a directory this invocation did not create.
+     2. Otherwise run `mkdir -p <scratch>`.
+     3. Run `bash <scripts_dir>/remote-run.sh fetch <branch> <scratch>` once, with the **unfolded**
+        `<branch>` — the name GitHub knows.
+     4. On every path after the `mkdir`, success or failure, end with
+        `bash <scripts_dir>/remote-run.sh discard <scratch>`; a `discard` that exits non-zero is reported
+        with its message.
+
+     On `fetch` exit 2, or on a printed `state: none`, report that no run of that name
      is known locally or on GitHub and stop — never write a file for an unknown branch. On exit 1 or 3,
      report its message and stop. Otherwise the branch takes the **GitHub route** with the printed `state:`.
    - **The route.** A record carrying `execution: github-actions` takes the **GitHub route** with its

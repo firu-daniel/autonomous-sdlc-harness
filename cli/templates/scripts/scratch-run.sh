@@ -42,16 +42,14 @@
 #
 # THE REFUSAL IS THE WHOLE OF THE SAFETY — over WHICH FILE, and over nothing
 # else, per the paragraph above. This script executes what it is given, so the
-# only thing standing between it and an arbitrary FILE is the path test below: the argument is rejected outright if it carries `..` or any
-# character outside `A-Za-z0-9._/-`, and what is left must resolve strictly
-# inside `<repo_root>/<state_dir>/scratch/`. A relative argument resolves against
-# `<repo_root>`; an absolute one is compared as given. Both sides of the
-# comparison are resolved PHYSICALLY (`cd … && pwd -P`), so a symlinked directory
-# planted inside the scratch tree cannot name a target outside it, and a target
-# that is itself a symlink is refused rather than followed. The `..` test rejects
-# the two characters anywhere in the argument rather than only a whole segment —
-# strictly stronger, and free, because nothing in that directory depends on a
-# file's name.
+# only thing standing between it and an arbitrary FILE is the path test: the
+# argument must resolve strictly inside `<repo_root>/<state_dir>/scratch/`, and a
+# `..`, a character outside `A-Za-z0-9._/-`, the scratch directory itself or a
+# symlinked target is refused. A relative argument resolves against
+# `<repo_root>`; an absolute one is compared as given. The test is
+# `hr_scratch_path_var` in `lib/harness-run-lib.sh`, shared with
+# `remote-run.sh discard`; the refusal reasons, and why each is refused, are the
+# ones that function names.
 #
 # THE INTERPRETER COMES FROM THE FILE'S OWN EXTENSION. The table is below, and it
 # is the only place it is stated. NOT from the detected preset, on two grounds
@@ -123,7 +121,8 @@
 #   0-N  the file ran; this is its own exit status, unmodified
 #   64   usage error — no file argument
 #   65   path refused — a `..`, a character outside `A-Za-z0-9._/-`, a symlink,
-#        or a target that does not resolve inside <state_dir>/scratch/
+#        the scratch directory itself, or a target that does not resolve
+#        inside <state_dir>/scratch/
 #   66   the extension has no interpreter in the table below
 #   67   the file is not there, or is not a readable regular file
 #   68   the run-time context could not be established — the shared library is
@@ -146,6 +145,7 @@
 #   outside         scripts/scratch-run.sh harness.config.json          -> exit 65
 #   traversal       scripts/scratch-run.sh sdlc-harness/scratch/../../harness.config.json
 #                                                                       -> exit 65
+#   itself          scripts/scratch-run.sh sdlc-harness/scratch/.       -> exit 65
 #   unknown ext     mv probe.py probe.pl; same call                     -> exit 66
 #   shell probe     mv probe.py probe.sh; same call                     -> exit 66
 #   absent file     scripts/scratch-run.sh sdlc-harness/scratch/nope.py -> exit 67
@@ -173,11 +173,6 @@ set -uo pipefail
 # the table's supported extensions in the message.
 SCRATCH_INTERPRETERS='py:python3 js:node mjs:node cjs:node rb:ruby dart:dart php:php'
 
-# The one directory under `<state_dir>` a file may be run out of. Spelled once
-# here, mirroring the `scratch` row of `STATE_DIR_ENTRIES` in
-# `cli/src/generators/stateDir.ts`.
-SCRATCH_SUBDIR='scratch'
-
 # The library is reached by a path computed from this script's own location — no
 # session root and no runtime-substituted token is assumed.
 hr_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/harness-run-lib.sh"
@@ -195,20 +190,6 @@ if [ "$#" -lt 1 ] || [ -z "${1-}" ]; then
 fi
 requested="$1"
 
-# --- The path tests, on the argument AS GIVEN, before anything is resolved.
-case "$requested" in
-  *..*)
-    echo "scratch-run.sh: '$requested' carries '..' — refusing, a scratch path names no parent" >&2
-    exit 65
-    ;;
-esac
-case "$requested" in
-  *[!A-Za-z0-9._/-]*)
-    echo "scratch-run.sh: '$requested' carries a character outside A-Za-z0-9._/- — refusing" >&2
-    exit 65
-    ;;
-esac
-
 # The repository is THIS FILE's own checkout, never the caller's directory: the
 # three forms the permission profile emits include a sibling worktree's own copy,
 # and each copy must answer for the checkout it belongs to whatever directory the
@@ -220,53 +201,53 @@ if [ -z "$repo_root" ]; then
   exit 68
 fi
 
-# `<repo_root>/<state_dir>/scratch`, from this repository's configuration at run
-# time. The library folds "not adopted" and "unreadable" into one non-zero
-# answer, and both are closed here: a configuration that cannot be read is a
-# scratch directory that cannot be located.
-scratch_dir="$(hr_state_path "$repo_root" "$SCRATCH_SUBDIR")"
-if [ -z "$scratch_dir" ]; then
-  echo "scratch-run.sh: cannot resolve '$repo_root/harness.config.json' — refusing to run anything" >&2
-  echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
-  exit 68
-fi
-
-scratch_real="$(cd "$scratch_dir" 2>/dev/null && pwd -P)"
-if [ -z "$scratch_real" ]; then
-  echo "scratch-run.sh: '$scratch_dir' does not exist — re-run 'init' to materialize the state tree" >&2
-  exit 68
-fi
-
-# A relative argument resolves against <repo_root>; an absolute one is taken as
-# given. Neither can carry `..` by the test above.
-case "$requested" in
-  /*) candidate="$requested" ;;
-  *) candidate="${repo_root%/}/$requested" ;;
-esac
-
-candidate_dir="$(cd "$(dirname "$candidate")" 2>/dev/null && pwd -P)"
-if [ -z "$candidate_dir" ]; then
-  echo "scratch-run.sh: '$requested' names no existing directory under '$repo_root'" >&2
-  exit 67
-fi
-
-# STRICTLY INSIDE: the scratch directory itself or a directory beneath it, on the
-# physical path of both sides, so a symlinked directory in the tree cannot widen
-# the fence.
-case "$candidate_dir" in
-  "$scratch_real" | "$scratch_real"/*) ;;
-  *)
-    echo "scratch-run.sh: '$requested' resolves to '$candidate_dir', outside '$scratch_real' — refusing" >&2
-    echo "  a file is runnable here only from <state_dir>/$SCRATCH_SUBDIR/ (see that directory's README.md)" >&2
+# A configuration that cannot be read is a scratch directory that cannot be
+# located: both are closed here.
+hr_scratch_path_var "$repo_root" "$requested"
+case "$HR_SCRATCH_WHY" in
+  "") ;;
+  dotdot)
+    echo "scratch-run.sh: '$requested' carries '..' — refusing, a scratch path names no parent" >&2
     exit 65
+    ;;
+  charset)
+    echo "scratch-run.sh: '$requested' carries a character outside A-Za-z0-9._/- — refusing" >&2
+    exit 65
+    ;;
+  outside)
+    echo "scratch-run.sh: '$requested' resolves to '$HR_SCRATCH_PARENT', outside '$HR_SCRATCH_DIR' — refusing" >&2
+    echo "  a file is runnable here only from <state_dir>/$HR_SCRATCH_SUBDIR/ (see that directory's README.md)" >&2
+    exit 65
+    ;;
+  itself)
+    echo "scratch-run.sh: '$requested' names the scratch directory itself — refusing" >&2
+    exit 65
+    ;;
+  symlink)
+    echo "scratch-run.sh: '$requested' is a symlink — refusing, its target is outside this script's judgement" >&2
+    exit 65
+    ;;
+  no-parent)
+    echo "scratch-run.sh: '$requested' names no existing directory under '$repo_root'" >&2
+    exit 67
+    ;;
+  no-config)
+    echo "scratch-run.sh: cannot resolve '$repo_root/harness.config.json' — refusing to run anything" >&2
+    echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
+    exit 68
+    ;;
+  no-scratch)
+    echo "scratch-run.sh: '$(hr_state_path "$repo_root" "$HR_SCRATCH_SUBDIR")' does not exist — re-run 'init' to materialize the state tree" >&2
+    exit 68
+    ;;
+  usage | *)
+    echo "scratch-run.sh: no file argument" >&2
+    echo "  usage: scratch-run.sh <file-under-state-dir-scratch> [<arg>...]" >&2
+    exit 64
     ;;
 esac
 
-target="$candidate_dir/$(basename "$candidate")"
-if [ -L "$target" ]; then
-  echo "scratch-run.sh: '$requested' is a symlink — refusing, its target is outside this script's judgement" >&2
-  exit 65
-fi
+target="$HR_SCRATCH_TARGET"
 if [ ! -f "$target" ] || [ ! -r "$target" ]; then
   echo "scratch-run.sh: '$target' is not a readable regular file" >&2
   exit 67

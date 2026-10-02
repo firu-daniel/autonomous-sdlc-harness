@@ -20,7 +20,8 @@
 #   issues, type `labeled` only, never `opened`: labelling an issue at creation
 #     raises `labeled` too, so listening to both would start twice
 #     (docs/github-integration-research.md, T1). The job runs only for the
-#     label the HARNESS_TRIGGER_LABEL variable names (`harness` when unset);
+#     label the HARNESS_TRIGGER_LABEL variable names (`sdlc-harness` when
+#     unset), and passes the job that same label, never an empty one;
 #     every other label yields a skipped job, which runs no runner and bills
 #     nothing (docs/remote-execution.md, `### Verified in Gate 12 round 2`).
 #   repository_dispatch, type `harness-task`: the entry for any other adapter
@@ -66,7 +67,7 @@
 # DECLARED MIRRORS — a rename on either side is an edit to both:
 #   cli/src/remote/githubActions.ts   WORKFLOW_TRIGGER_FILE, HARNESS_RUNNER,
 #                                     HARNESS_REMOTE_STOP, HARNESS_TRIGGER_LABEL,
-#                                     DEFAULT_TRIGGER_LABEL (`harness`),
+#                                     DEFAULT_TRIGGER_LABEL (`sdlc-harness`),
 #                                     HARNESS_TRIGGER_ALLOWED_BOTS,
 #                                     TRIGGER_DISPATCH_EVENT_TYPE (`harness-task`)
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir
@@ -103,13 +104,13 @@ defaults:
 
 jobs:
   trigger:
-    if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.HARNESS_TRIGGER_LABEL || 'harness')
+    if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.HARNESS_TRIGGER_LABEL || 'sdlc-harness')
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
     env:
       GH_TOKEN: ${{ github.token }}
       HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
-      HARNESS_TRIGGER_LABEL: ${{ vars.HARNESS_TRIGGER_LABEL }}
+      HARNESS_TRIGGER_LABEL: ${{ vars.HARNESS_TRIGGER_LABEL || 'sdlc-harness' }}
       HARNESS_TRIGGER_ALLOWED_BOTS: ${{ vars.HARNESS_TRIGGER_ALLOWED_BOTS }}
     steps:
       - name: Check out the default branch
