@@ -55,3 +55,12 @@ Read each from the file named, by its quoted anchor, before writing it; cite it 
 - `git diff --stat` on the branch shows no file outside `docs/` and `harness-runs/`: nothing described was changed.
 - `grep -c '_Written by a later task of this branch._' docs/team-accounts-research.md` prints `0`.
 - `grep -nE '/Users/|/home/|/private/|/tmp/' docs/team-accounts-research.md` finds nothing. Then `bash scripts/test.sh`, run without a pipe, fails no gate that does not also fail on the branch's base commit: gate 6a (*no machine paths*) is red in this self-adopted checkout by design (`scripts/run-gates.sh` → the comment above gate 6e), so compare its hits, and no hit may name a file this branch wrote.
+
+- **Deviations from plan:**
+  - The watcher's `gh` login is cited to `docs/remote-execution.md` → `## 7. Turning it on`, opening paragraph: the opening summary (`## Turning it on, in short`) does not state it.
+  - `remote-run.sh`'s composer sentence is cited as "its header comment", not by line number (durable-citation rule).
+  - Option B names no OIDC audience value: no R6 entry carries one, and the plan bars claims with no P/R/G/O entry behind them. The workspace is given as the rule's `workspace_id` (R6), not as a repository variable, since the WIF variable set R6 records has none for it.
+  - "The rule cannot pin one `ref`" is marked **Inference** (G7's `GITHUB_REF` for `workflow_dispatch`, R6's `sub` forms): no entry states it.
+  - Option A and C each name `cli/src/remote/githubActions.ts` in **What would change** (per-member naming scheme; the allow-list variable, as `TRIGGER_ALLOWED_BOTS_VARIABLE`); the plan's per-option text named it only under B.
+  - §6's Copilot example is phrased from O1's own words (co-author; approval) rather than "attributes a pull request to the person who assigned it".
+  - `bash scripts/test.sh` is deferred to the Run gates phase (`unit_loop_core.md` → `## The test-run rule`). The machine-path grep, the placeholder count, the anchor check and the branch diff scope were run here.

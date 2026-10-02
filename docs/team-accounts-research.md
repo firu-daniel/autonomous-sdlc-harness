@@ -30,7 +30,46 @@ Each entry's **Status** is one of: `documented` — the sources state the whole 
 
 ## Summary
 
-_Written by a later task of this branch._
+**The question:** may a run that a teammate starts on GitHub use another person's Claude credential, and whose usage does that run consume?
+
+| Credential | May teammates' runs use it? | Whose usage it consumes | Findings |
+|---|---|---|---|
+| Pro or Max subscription token | No | The one subscriber's 5-hour and weekly limits | P2, P4, P5 |
+| One Team seat's token | No: a seat is one member's | That member's own limits; Team limits are per member and not pooled | P1, P2, P4, P5 |
+| One Enterprise seat's token | No: a seat is one member's | The organisation's pooled balance at API rates, with optional per-user caps — Anthropic's two pages disagree (P1) | P1, P2, P4 |
+| Console API key, or workload identity federation through a service account | Yes, by the organisation's own authorised people | The organisation's, per workspace; per person only through personal keys or the Claude Code Analytics API | P4, R2, R4, R6 |
+
+The table does not settle how each member's runs could use that member's own credential on GitHub: Actions has no per-user secret scope (G1), any writer can read every repository secret by running an edited workflow (G7), and every harness run is dispatched by a token that is not the person who asked for it ([§5](#5-options-for-the-harness) → *The repository facts the options rest on*).
+
+| ID | Question | Status |
+|---|---|---|
+| [P1](#p1-what-do-pro-max-team-and-enterprise-give-for-claude-code-seats-per-member-usage-admin-controls-price) | What each plan gives for Claude Code | `partly documented` |
+| [P2](#p2-can-a-team-or-enterprise-seat-sign-claude-code-in-non-interactively-with-claude-setup-token-and-claude_code_oauth_token) | `claude setup-token` on a Team or Enterprise seat | `partly documented` |
+| [P3](#p3-which-terms-govern-which-plan) | Which terms govern which plan | `documented` |
+| [P4](#p4-what-do-the-terms-say-about-sharing-one-accounts-credentials-or-one-subscriptions-oauth-token-with-other-people-or-with-automation) | What the terms say about sharing credentials | `partly documented` |
+| [P5](#p5-what-happens-to-one-persons-subscription-limits-when-teammates-use-it) | One subscription's limits under teammates' use | `partly documented` |
+| [R1](#r1-how-does-a-console-organisation-organise-its-people-roles-members-workspaces-and-the-claude-code-workspace) | Console roles, members and workspaces | `documented` |
+| [R2](#r2-who-owns-a-console-api-key-and-who-may-use-it) | Who owns and may use a Console API key | `documented` |
+| [R3](#r3-what-limits-a-console-organisations-spend-and-request-rate-and-at-what-level) | Console spend and rate limits | `documented` |
+| [R4](#r4-how-is-console-usage-attributed-to-a-key-a-workspace-or-a-person) | How Console usage is attributed | `partly documented` |
+| [R5](#r5-how-does-a-team-run-claude-code-through-amazon-bedrock-or-google-vertex-ai-credentials-per-user-attribution-and-github-actions) | Bedrock and Vertex for a team | `partly documented` |
+| [R6](#r6-how-does-workload-identity-federation-take-a-github-actions-job-to-the-claude-api-and-does-the-stock-claude-cli-support-it) | Workload identity federation from GitHub Actions | `partly documented` |
+| [R7](#r7-what-does-anthropic-document-for-running-claude-code-in-ci-anthropicsclaude-code-action-and-the-claude-github-app) | `claude-code-action` and the Claude GitHub App | `partly documented` |
+| [G1](#g1-which-actions-secret-scopes-exist-what-may-a-secret-be-named-and-is-any-scope-per-user) | Actions secret scopes and names | `partly documented` |
+| [G2](#g2-how-is-the-person-who-started-a-run-named-and-what-happens-on-a-re-run) | Who started a run, and re-runs | `documented` |
+| [G3](#g3-can-each-member-have-an-environment-holding-that-members-secret-and-what-protects-it) | A per-member environment | `partly documented` |
+| [G4](#g4-can-a-workflow-pick-one-secret-per-login-with-an-expression) | A per-login secret chosen by expression | `partly documented` |
+| [G5](#g5-can-an-external-secret-store-release-a-members-credential-through-githubs-oidc-token) | An external store released by OIDC | `partly documented` |
+| [G6](#g6-can-each-members-runs-go-to-a-self-hosted-runner-holding-that-members-login) | A per-member self-hosted runner | `partly documented` |
+| [G7](#g7-who-can-read-a-secret-by-changing-a-workflow) | Who can read a secret by editing a workflow | `partly documented` |
+| [G8](#g8-what-can-an-organisation-control) | What an organisation can control | `partly documented` |
+| [G9](#g9-harness_git_token-per-member-fine-grained-tokens-or-a-github-app-installation-token) | `HARNESS_GIT_TOKEN`: per-member tokens or an App | `partly documented` |
+| [O1](#o1-github-copilot-cloud-agent-who-pays-for-and-who-is-credited-with-a-session-a-team-member-starts) | Copilot cloud agent: billing and attribution | `partly documented` |
+| [O2](#o2-third-party-agents-on-github-claude-and-codex-billing-and-attribution) | Third-party agents on GitHub | `partly documented` |
+| [O3](#o3-claude-code-on-the-web-whose-subscription-a-cloud-session-uses-and-whose-name-it-acts-under) | Claude Code on the web | `partly documented` |
+| [O4](#o4-anthropics-code-review-who-pays-for-a-review-and-whose-name-it-posts-under) | Anthropic's Code Review | `partly documented` |
+
+[§5](#5-options-for-the-harness) sets out three options, [§6](#6-recommendation) recommends one per kind of repository, and [§7](#7-open-questions) lists what only Anthropic, a live measurement or the maintainer can answer.
 
 ---
 
@@ -722,16 +761,122 @@ So a job that authenticates through federation leaves both `ANTHROPIC_API_KEY` a
 
 ## 5. Options for the harness
 
-_Written by a later task of this branch._
+Each option says what *would* change; this document changes nothing. The workflow files named below are the shipped templates under `cli/templates/github/workflows/`. An adopter's copy is written create-if-absent and is theirs to tune (`harness-run.yml`'s header, `WHO WRITES IT`), so a template change reaches an existing adopter only through `init --upgrade-workflows`.
+
+### The repository facts the options rest on
+
+Read from the tree, not from an external source.
+
+- **Only the run job holds a Claude credential.** `harness-run.yml` → the steps `Check the credentials` and `Run the harness` read `secrets.CLAUDE_CODE_OAUTH_TOKEN` and `secrets.ANTHROPIC_API_KEY` into `IN_OAUTH` / `IN_API`; the first fails before launch when both are empty, and the second exports each only when non-empty. `harness-trigger.yml` and `harness-control.yml` each say *"The job reads no repository secret"*, and `harness-control.yml` references no `secrets.` at all. The secret names are `OAUTH_TOKEN_SECRET` and `API_KEY_SECRET` in `cli/src/remote/githubActions.ts`, mirrored by `harness-run.yml`'s `DECLARED MIRRORS` header.
+- **The run job's permissions carry no `id-token`.** `harness-run.yml`'s workflow-level `permissions:` block grants `contents`, `actions`, `issues` and `pull-requests` write; its header's `THE PERMISSIONS` paragraph says every permission it does not list is `none`.
+- **Every run is dispatched by a token that is not the person who asked for it.** `harness-trigger.yml` and `harness-control.yml` run with `GH_TOKEN: ${{ github.token }}`; `remote-run.sh` is, by its header comment, *"the one place a `gh workflow run` of the run workflow is composed"*; a chained continuation is dispatched from the run job itself (`harness-run.yml`'s header: *"`remote-run.sh continue` chains a new job"*); and `harness-resume.yml`'s scheduled poller dispatches `resume: pause` with `GH_TOKEN: ${{ github.token }}`. A run the local watcher dispatches uses the `gh` login of the machine it runs on ([`remote-execution.md`](remote-execution.md) → `## 7. Turning it on`, opening paragraph).
+- **The run's inputs name no person.** `harness-run.yml` → `THE INPUT CONTRACT` lists `action`, `branch`, `engine`, `resume`, `answers`, `park_loop_clear` and `chain`; none records who started the run, and any writer can dispatch the workflow with any inputs (G7).
+- **The run job runs on the run's own branch**, not the default branch: `remote-run.sh`'s worked examples dispatch `workflow run harness-run.yml --ref feat_x`. An environment rule that admits only the default branch would refuse the run job itself (G3, G7).
+- **One actor check gates both the trigger and the commands.** `remote-run.sh` → `authorise_actor`: a person passes with `admin` or `write` from `repos/<repo>/collaborators/<login>/permission`, a bot only when listed in `HARNESS_TRIGGER_ALLOWED_BOTS`, and `ghost` or a non-login never ([`github-run-control.md`](github-run-control.md) → `## 6. Who can act, and pull requests from forks`).
+- **`doctor` reads secret names, never values.** `cli/src/doctor/checks.ts` → the remote check's header: *"Secret **values** are never read: `gh secret list` returns names only"*. It fails when neither credential secret is set, and notes when both are that *"billing follows `ANTHROPIC_API_KEY`"*.
+- **The job limits.** `harness-run.yml` sets `HARNESS_HOSTED_JOB_LIMIT_MINUTES: '360'` and `HARNESS_SELF_HOSTED_JOB_LIMIT_MINUTES: '7200'`. A run job outlasts a federated token's default lifetime of 3,600 seconds on either runner, and its maximum of 86,400 seconds only on a self-hosted one (R6).
+
+### Option A — each member's own credential, selected by who triggered the work
+
+**What it is.** Each member's own subscription token or own personal API key, held in a per-member environment (G3), a per-login secret (G4), an external store (G5) or a per-member runner (G6), or reached through a federation rule bound to that member's `actor` (R6, **Inference**). The run job uses the credential of the member who started the run.
+
+**Compliance with the terms.** A member's own subscription used only for their own runs is the use the legal-and-compliance page permits, *"an end user … with their own Claude subscription"* (P4); a personal API key falls under the same page's carve-out for keys used by the customer's own authorised users (P4). Each holds only while no other member's run can reach it.
+
+**Setup per member.** A credential of their own, registered under the name the chosen pattern needs: an environment, a secret, a store entry, a runner or a federation rule.
+
+**Security exposure.**
+
+- Every writer can read every repository and environment secret by running an edited workflow (G7), unless a protection rule seals it. A deployment branch rule naming the default branch would also refuse the run job, which runs on its own branch (repository facts); required reviewers turn every run into a manual approval, and need GitHub Enterprise on a private repository (G3).
+- A missing environment or secret reads as empty and does not fail closed (G3, G4).
+- A re-run spends the original actor's credential (G2).
+- The harness has no trustworthy record of who started a run: every dispatch is made by `GITHUB_TOKEN`, by the run itself or by the watcher's `gh` login, and an input naming the starter is forgeable by any writer (repository facts).
+
+**What would change.**
+
+- `harness-trigger.yml` and `harness-control.yml`: pass the authorised actor's login into the dispatch, through `remote-run.sh`, the input contract's one composer.
+- The run's state bundle: persist the starter, so chained continuations and `harness-resume.yml`'s `resume: pause` dispatches inherit it.
+- `harness-resume.yml`: dispatch with the inherited starter.
+- `harness-run.yml`: select the credential from the starter (an expression `environment:` name, G3), refuse an empty credential rather than run (G3), and refuse a re-run whose `github.triggering_actor` differs from `github.actor` (G2).
+- `authorise_actor`: also refuse an actor with no registered credential.
+- `doctor`: check that each member allowed to start runs has a credential registered, by name.
+- `cli/src/remote/githubActions.ts`: carry the per-member naming scheme beside `OAUTH_TOKEN_SECRET` and `API_KEY_SECRET`.
+- Docs: [`remote-execution.md`](remote-execution.md) → `## 7. Turning it on` step 4, `### Every secret and variable` and `## 9. Credentials and billing`; [`github-run-control.md`](github-run-control.md) → `## 6. Who can act, and pull requests from forks`; [`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run`.
+- A policy for a review round or an answer from someone other than the starter ([§7](#7-open-questions)).
+
+It rests on an open measurement: who `github.actor` is on a `workflow_dispatch` made with `GITHUB_TOKEN` ([§7](#7-open-questions)).
+
+### Option B — a team organisation on the Claude API
+
+**What it is.** One Console organisation with a workspace for the harness, its spend and rate limits set (R1, R3), and a service account the run job authenticates as: through workload identity federation, with no stored secret (R6), or through that service account's API key in `ANTHROPIC_API_KEY`, which the template already reads.
+
+**Compliance with the terms.** The legal-and-compliance page's carve-out for API keys used by the customer's own authorised users (P4), and Anthropic's guidance for CI, *"have an organization admin create a service account"* (R2). Billing is the organisation's, under the Commercial Terms (P3).
+
+**Setup per member.** None for runs on GitHub. A member who also works locally signs in with their own account.
+
+**Security exposure.**
+
+- Any writer can run an edited `harness-run.yml` on a branch and spend up to the workspace's limit (G7). **Inference:** a dispatched run's `sub` names its own branch (G7's `GITHUB_REF` for `workflow_dispatch`, R6's `sub` forms), and the run job runs on the run's branch, so the rule cannot pin one `ref` the way R6's fork warning advises.
+- With federation there is no long-lived secret to copy, and each token is short-lived (R6). With a stored service-account key, the key itself can be read and kept (G7).
+- Attribution is one service account in one workspace, not per member (R4).
+
+**What would change.**
+
+- `harness-run.yml`: grant `id-token: write` to the run job only (R6); fetch GitHub's identity token into the file `ANTHROPIC_IDENTITY_TOKEN_FILE` names and refresh it for the life of the job (R6's refresh, and the job limits above); export `ANTHROPIC_FEDERATION_RULE_ID`, `ANTHROPIC_ORGANIZATION_ID`, `ANTHROPIC_SERVICE_ACCOUNT_ID` from **repository variables**, since none is a secret, each only when set (R6); the workspace is the rule's own `workspace_id` (R6). Its credential check would accept federation as a third credential and refuse a job where `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` would shadow it (R6's precedence). The `Run the harness` step already exports each static credential only when non-empty, which is the unset-not-blank rule R6 states.
+- The federation rule, in the Console: pin the repository, the owner and `event_name` `workflow_dispatch` through `claims` or a CEL `condition` (R6).
+- `harness-trigger.yml`, `harness-control.yml`, `harness-resume.yml` and `authorise_actor`: no change, since none holds a credential.
+- `doctor`: report which credential kind is configured, reading the variable names; warn when a subscription token is set in a repository with more than one writer, read from the collaborators list with the `gh` it already runs.
+- `cli/src/remote/githubActions.ts`: carry the variable names as constants beside `OAUTH_TOKEN_SECRET` and `API_KEY_SECRET`.
+- Docs: [`remote-execution.md`](remote-execution.md) → `## 7. Turning it on` step 4, `### Every secret and variable` and `## 9. Credentials and billing`; [`github-run-control.md`](github-run-control.md) → `## The GitHub entry point`, setup step 8.
+
+### Option C — members run locally; only the maintainer's account runs unattended work on GitHub
+
+**What it is.** The repository's credential stays the maintainer's own. Every other member uses their own login on their own machine (`README.md` → *"A teammate clones"*), and only the maintainer may start or steer a run on GitHub.
+
+**Compliance with the terms.** The maintainer's subscription used for the maintainer's own runs (P4). It holds only while no one else can start or steer a run on it.
+
+**Setup per member.** Their own Claude account and a local `init`, as today.
+
+**Security exposure.** Other writers can still read the maintainer's token through an edited workflow (G7); the maintainer accepts that or closes it with a protected environment, at G3's cost. Whether that exposure alone is "make your Account available" under Consumer Terms § 2 is an **Inference** (P4), and a question for Anthropic ([§7](#7-open-questions)).
+
+**What would change.**
+
+- `authorise_actor`: accept a person only when their login is on an allow-list in a repository variable, as well as holding `write`. It is one check, so `harness-trigger.yml` and `harness-control.yml` honour it with no workflow change. What an unset list means — today's behaviour, or the repository owner only — is the maintainer's decision ([§7](#7-open-questions)).
+- `harness-run.yml` and `harness-resume.yml`: no change.
+- `doctor`: warn when a subscription token is set, the allow-list is unset and the repository has more than one writer.
+- `cli/src/remote/githubActions.ts`: carry the allow-list variable's name, as it carries `TRIGGER_ALLOWED_BOTS_VARIABLE`.
+- Docs: [`github-run-control.md`](github-run-control.md) → `## 6. Who can act, and pull requests from forks` and [`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run` describe the list.
 
 ---
 
 ## 6. Recommendation
 
-_Written by a later task of this branch._
+This is a recommendation from documented sources and inference. Nothing in it was measured, and the change it implies is a later branch's to make.
+
+- **Option B with workload identity federation, for any repository more than one person can trigger or steer.** It is the route the terms permit for shared use (P4), the one Anthropic recommends for CI (R2, and R7's organisation setup), and it leaves no long-lived secret for a writer to copy (R6, G7). Where federation cannot be set up, option B with a service-account key, accepting that any writer can read and keep that key (G7).
+- **Option C, for a repository one person drives.** It is what the shipped templates already assume.
+- **Option A, deferred.** It is the only option that bills each member's own subscription. It needs a trustworthy record of the starter that survives every dispatch — for example a dispatch made with an identity GitHub signs for that member, as GitHub marks the developer who assigned a Copilot cloud agent's work as its commits' co-author and treats its pull request as theirs for approval (O1) — and the measurements [§7](#7-open-questions) lists for it.
 
 ---
 
 ## 7. Open questions
 
-_Written by a later task of this branch._
+**For Anthropic.**
+
+- May a Team or Enterprise member hold their own `setup-token` token in a repository secret that other writers can read, used only for runs they start? (P2, P4)
+- What does the Consumer Terms text outside the EEA and Switzerland say? (P4)
+- On current Enterprise, does Claude Code draw on a per-seat allowance or on pooled billing at API rates? (P1)
+- How is a `setup-token` token revoked, and can an admin see or revoke a member's tokens? (P2)
+- Are a federated exchange's claims, such as `actor`, recorded against the usage it produces? (R4, R6)
+
+**For a live measurement**, in the standing test repository [`github-integration-research.md`](github-integration-research.md) measured in.
+
+- Who are `github.actor` and `github.triggering_actor` on a `harness-run.yml` run dispatched with `GITHUB_TOKEN`? ([§5](#5-options-for-the-harness) → *The repository facts the options rest on*, G2)
+- Does `secrets[format(…)]` resolve? (G4)
+- Does GitHub refuse **Request changes** from a pull request's own author? (G9)
+- Does an `actor`-bound federation rule authenticate the `claude` CLI in a run job end to end, including a refresh past the token's lifetime? (R6)
+
+**For the maintainer.**
+
+- Under option A, whose credential does a review round or an answer use: the run's starter, or the person commenting?
+- Under option C, what does an unset allow-list mean: today's behaviour, or the repository owner only?
+- Should the harness keep offering a subscription token for a repository with more than one writer at all? (P4)
