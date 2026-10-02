@@ -28,3 +28,5 @@
 - `npm test -- test/remote-run.test.mjs` from `cli/` passes.
 - `grep -n "ls-remote" cli/templates/scripts/remote-run.sh` shows the new helper and `verb_list`'s existing call, and no `ls-remote` composed into a pipe.
 - The poll tick's `POLL_WAITING_COUNT` excludes the absent branch, so a tick whose only waiting branch was deleted disables the poller, as the existing *"nothing waiting"* path does.
+
+**Deviations from plan:** The fixture's bare `origin` carried only the default branch, so every existing `continue` and `poll` case would have read its branch as deleted. Those cases now run on a new `loopFixture`, which pushes `feat_x`, `feat_a` and `feat_b` to `origin` first; their assertions are unchanged. Also added: one case where `origin` cannot be read (the unknown answer proceeds and still dispatches), and a `poll` assertion that the deleted branch's carried state entry is dropped.

@@ -633,12 +633,17 @@
 #                    run URL, no dispatch
 #   decision continue   refused, in this order: `HARNESS_REMOTE_STOP` set (one
 #                    `paused`); the branch stopped (one log line, no
-#                    notification — the user asked for it); chain unreadable
+#                    notification — the user asked for it); the branch absent
+#                    on origin (one log line, no notification; an
+#                    `ls-remote` that cannot answer is one line and proceeds,
+#                    since the dispatch then fails loudly); chain unreadable
 #                    or `chain + 1` over `HARNESS_MAX_CHAIN` (one `failed`);
 #                    otherwise re-dispatched. A dispatch that fails is one
 #                    `paused` naming its error
-#   decision wait-poller   the branch stopped: one log line. Otherwise `gh
-#                    workflow enable WORKFLOW_RESUME_FILE`; a failed enable
+#   decision wait-poller   the branch stopped, or absent on origin: one log
+#                    line (an `ls-remote` that cannot answer is one line and
+#                    proceeds). Otherwise `gh workflow enable
+#                    WORKFLOW_RESUME_FILE`; a failed enable
 #                    (the job token's enable permission is unverified) is one
 #                    `paused` saying auto-resume is unavailable
 #   decision stop    nothing: job mode has already notified
@@ -674,8 +679,10 @@
 # says `status: paused` / `pause_reason: usage` it is waiting, because the job
 # uploads before its `continue` step enables the poller; an artifact lookup or
 # download that fails for it is one line and waiting. For a `completed` run,
-# skipped, not waiting: a stopped branch, a bundle that cannot be downloaded
-# (one line), and anything but `status: paused` / `pause_reason: usage` with an
+# skipped, not waiting: a stopped branch, a branch absent on origin (its state
+# entry dropped, so a later branch of the name starts clean; an `ls-remote`
+# that cannot answer is one line and proceeds), a bundle that cannot be
+# downloaded (one line), and anything but `status: paused` / `pause_reason: usage` with an
 # integer `usage_resume_at`, and a run whose state entry says `notified`. Due
 # (reset passed): re-dispatched under the same chain limit — a refusal is one
 # `failed` and not waiting; a success drops the branch's state entry. A
@@ -2500,6 +2507,27 @@ remote_branch_stopped() {
   [ "$verdict" = stopped ]
 }
 
+# remote_branch_exists <branch> — 0 when origin lists refs/heads/<branch>, 1
+# when `ls-remote` answers 2 (no such head), 2 on any other failure, with
+# REMOTE_BRANCH_ERR holding its exit status and first stderr line.
+REMOTE_BRANCH_ERR=""
+remote_branch_exists() {
+  local errfile status
+  REMOTE_BRANCH_ERR=""
+  errfile=$(mktemp) || { REMOTE_BRANCH_ERR="mktemp failed"; return 2; }
+  git -C "$root" ls-remote --exit-code --heads origin "refs/heads/$1" >/dev/null 2>"$errfile"
+  status=$?
+  case "$status" in
+    0) rm -f "$errfile"; return 0 ;;
+    2) rm -f "$errfile"; return 1 ;;
+  esac
+  IFS= read -r REMOTE_BRANCH_ERR <"$errfile" || :
+  [ -n "$REMOTE_BRANCH_ERR" ] || REMOTE_BRANCH_ERR="(no stderr)"
+  REMOTE_BRANCH_ERR="git ls-remote exited $status: $REMOTE_BRANCH_ERR"
+  rm -f "$errfile"
+  return 2
+}
+
 # redispatch <engine> <chain> — `dispatch <branch> --engine <engine> --resume
 # pause --chain <chain>` for the global branch, in a subshell so dispatch's own
 # exits stay its own. On failure REDISPATCH_ERR holds its first stderr line.
@@ -2561,6 +2589,11 @@ continue_redispatch() {
     0) echo "remote-run.sh: $branch is stopped ($STOPPED_LINE); not re-dispatched"; return 0 ;;
     2) notify paused "$branch" "Not re-dispatched: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")." "Not continued: whether the run was stopped could not be checked ($GH_ERR)."; return 0 ;;
   esac
+  remote_branch_exists "$branch"
+  case $? in
+    1) echo "remote-run.sh: $branch no longer exists on origin; not re-dispatched"; return 0 ;;
+    2) echo "remote-run.sh: whether $branch exists on origin could not be checked ($REMOTE_BRANCH_ERR); proceeding" ;;
+  esac
   if ! max_chain_var; then
     notify failed "$branch" "Not re-dispatched: HARNESS_MAX_CHAIN '$MAX_CHAIN' is not a non-negative integer." "Not continued: the repository variable \`HARNESS_MAX_CHAIN\` ('$MAX_CHAIN') is not a non-negative integer."
     return 0
@@ -2584,6 +2617,11 @@ continue_wait_poller() {
   case $? in
     0) echo "remote-run.sh: $branch is stopped ($STOPPED_LINE); the resume poller is not enabled"; return 0 ;;
     2) notify paused "$branch" "Auto-resume not enabled: the stop-marker check failed ($GH_ERR). Run $RESUME_HINT $branch to continue; $(hr_github_resume_route "$branch" "")." "The automatic resume after the usage limit was not scheduled: whether the run was stopped could not be checked ($GH_ERR). $USAGE_RESUME_NOTE"; return 0 ;;
+  esac
+  remote_branch_exists "$branch"
+  case $? in
+    1) echo "remote-run.sh: $branch no longer exists on origin; the resume poller is not enabled"; return 0 ;;
+    2) echo "remote-run.sh: whether $branch exists on origin could not be checked ($REMOTE_BRANCH_ERR); proceeding" ;;
   esac
   if gh_call workflow enable "$WORKFLOW_RESUME_FILE"; then
     echo "remote-run.sh: enabled $WORKFLOW_RESUME_FILE for $branch"
@@ -2749,6 +2787,11 @@ poll_branch() {
   case $? in
     0) echo "remote-run.sh: poll: $branch is stopped ($STOPPED_LINE); skipped"; return 1 ;;
     2) echo "remote-run.sh: poll: the stop-marker check for $branch failed ($GH_ERR); skipped"; return 1 ;;
+  esac
+  remote_branch_exists "$branch"
+  case $? in
+    1) poll_state_drop "$branch"; echo "remote-run.sh: poll: $branch no longer exists on origin; skipped"; return 1 ;;
+    2) echo "remote-run.sh: poll: whether $branch exists on origin could not be checked ($REMOTE_BRANCH_ERR); proceeding" ;;
   esac
   if [ "$state" != completed ]; then
     # Never dispatched from here: the job's own `continue` step enables the
