@@ -22,7 +22,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/chore_team_
 2. [x] **Task 2** — Write §2, the Claude API organisation, Bedrock and Vertex, workload identity federation and `claude-code-action` (R1–R7) _(layer: general)_ _(points: 8)_
 3. [x] **Task 3** — Write §3, GitHub's side (G1–G9), and §4, what other agents do (O1–O4) _(layer: general)_ _(points: 13)_
 4. [x] **Task 4** — Write the summary with the sharing-and-usage table, §5 the three options, §6 the recommendation and §7 the open questions _(layer: general)_ _(points: 13)_
-5. [ ] **Task 5** — Link the document from the `README.md` and `llms.txt` documents lists and with one sentence each from `docs/remote-execution.md` and `docs/github-run-control.md` _(layer: general)_ _(points: 3)_
+5. [x] **Task 5** — Link the document from the `README.md` and `llms.txt` documents lists and with one sentence each from `docs/remote-execution.md` and `docs/github-run-control.md` _(layer: general)_ _(points: 3)_
 
 ## Scope register
 

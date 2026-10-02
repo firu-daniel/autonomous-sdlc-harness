@@ -26,3 +26,8 @@
 - Every link added resolves: the file exists, and each `#anchor` matches a heading in `docs/team-accounts-research.md` as GitHub slugs it.
 - Re-running the story index's two derivation commands reaches no site that the `## Scope register` does not list.
 - `bash scripts/test.sh`, run without a pipe, fails no gate that does not also fail on the branch's base commit: gate 6a (*no machine paths*) is red in this self-adopted checkout by design (`scripts/run-gates.sh` → the comment above gate 6e), so compare its hits, and no hit may name a file this branch wrote. Gate 6c (*llms.txt links resolve on main*) passes with the new `llms.txt` bullet in it: `bash scripts/check-llms-txt.sh` exits 0 on its own.
+
+**Deviations from plan:**
+
+- The `**Verification:**` bullet asking for `bash scripts/test.sh` and `bash scripts/check-llms-txt.sh` (gates 6a and 6c) is *deferred to the Run gates phase*: under `unit_loop_core.md` → `## The test-run rule` a unit does not run `commands.test` or a gate script. What was run instead: `bash scripts/typecheck.sh` passed. The new `llms.txt` target has no `#` or `?`, and `docs/team-accounts-research.md` is tracked; both were checked by reading, not by running the gate.
+- The `#5-options-for-the-harness` anchor in `docs/remote-execution.md` was checked by reading: `docs/team-accounts-research.md` has the heading `## 5. Options for the harness`, which GitHub slugs to that anchor. It was not checked by rendering the page.
