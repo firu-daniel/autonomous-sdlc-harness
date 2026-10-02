@@ -547,8 +547,8 @@
 # in order, is one line and exit 0, with no comment, label or dispatch —
 #   1. `HARNESS_REMOTE_STOP` is set
 #   2. `forge_on` fails
-#   3. the actor: on `issues` and `pull_request`, `authorise_actor` refused,
-#      the line naming the login and `AUTH_WHY`; on `delete`, only a `Bot`
+#   3. the actor: on `issues` and `pull_request`, `authorise_actor` refused
+#      (statuses 1–3), the line naming the login and `AUTH_WHY`; on `delete`, only a `Bot`
 #      sender `trigger_bot_listed` does not list, since deleting a branch
 #      already needs write access
 #   4. no branch: an issue's from `control_issue_branch_var` (no genuine start
@@ -579,7 +579,8 @@
 #        line), or the action failed and was replied to; for a close, an
 #        `::error::` line and no reply, because the item is closed: the stop
 #        child failed (naming `CHILD_LAST`), or the repository name, the
-#        issue's comments or the run's state could not be read
+#        closer's permission, the issue's comments or the run's state could
+#        not be read
 #     4  a review's round could not be placed; nothing was dispatched (replied)
 #
 # `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
@@ -5553,7 +5554,13 @@ control_close() {
         exit "$EXIT_USAGE" ;;
     esac
     authorise_actor "$CONTROL_ACTOR" "$CONTROL_SENDER_TYPE" || status=$?
-    [ "$status" -eq 0 ] || control_close_ignore "@$CONTROL_ACTOR is not authorised: ${AUTH_WHY%.}"
+    case "$status" in
+      0) ;;
+      4)
+        echo "::error::remote-run.sh: control: the close by @$CONTROL_ACTOR was not acted on: ${AUTH_WHY%.}"
+        exit "$EXIT_GH" ;;
+      *) control_close_ignore "@$CONTROL_ACTOR is not authorised: ${AUTH_WHY%.}" ;;
+    esac
   fi
 
   case "$CLOSE_KIND" in

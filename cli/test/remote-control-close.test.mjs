@@ -10,7 +10,8 @@
  * state label. Each ignored case — an unauthorised closer, an issue with no start comment, a fork's pull
  * request, a `reopened` action, a deleted tag, a completed run, a branch already stopped — is asserted on
  * stdout's one line and on the recorded `gh` calls: no `workflow run`, no `run cancel`, no comment POST
- * and no label write. A failing `stop` child is exit 3, an `::error::` line and no reply.
+ * and no label write. A failing `stop` child or a failing permission check is exit 3, an `::error::` line
+ * and no reply.
  *
  * Not covered here: the workflow's `on:` and `if:` prefilter for these events
  * (`cli/test/workflow-templates.test.mjs`, Task 13), and the skip of a branch absent on `origin` by
@@ -61,6 +62,9 @@ if (args[0] === 'repo' && args[1] === 'view') {
   for (const c of JSON.parse(process.env.STUB_COMMENTS || '[]')) {
     process.stdout.write(JSON.stringify({ login: c.user.login, body: c.body }) + '\\n');
   }
+} else if (args[0] === 'api' && permission && process.env.STUB_PERMISSION_FAIL) {
+  process.stderr.write('HTTP 502\\n');
+  process.exit(1);
 } else if (args[0] === 'api' && permission) {
   const answer = JSON.parse(process.env.STUB_PERMISSIONS || '{}')[permission[1]];
   if (answer === undefined || answer === 'FAIL') fail('stub permission failure');
@@ -335,4 +339,18 @@ test('a stop child that fails is exit 3, an ::error:: line and no reply', async 
   assert.equal(result.status, 3, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /::error::remote-run\.sh: control: the stop of `feat_x` after @alice closed issue #7 failed: /);
   assert.deepEqual(comments(f.calls()), []);
+});
+
+test('a permission check that fails on a close is exit 3, an ::error:: line naming the closer and no write', async (t) => {
+  const f = await closeFixture(t);
+  const result = await f.control('issues', issueClosed(), { STUB_PERMISSION_FAIL: '1' });
+  assert.equal(result.status, 3, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /::error::remote-run\.sh: control: the close by @alice was not acted on: the permission check for @alice failed \(.*HTTP 502/);
+  assert.doesNotMatch(result.stdout, /close ignored/);
+  const calls = f.calls();
+  const lines = calls.map((call) => call.line);
+  assert.ok(!lines.some((line) => line.startsWith('workflow run ')), JSON.stringify(lines));
+  assert.ok(!lines.some((line) => line.startsWith('run cancel')), JSON.stringify(lines));
+  assert.deepEqual(comments(calls), []);
+  assert.deepEqual(labelWrites(calls), []);
 });
