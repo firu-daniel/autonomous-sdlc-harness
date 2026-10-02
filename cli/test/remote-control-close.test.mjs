@@ -8,9 +8,9 @@
  * `run cancel`, the `stopped` comment naming the actor and the reason, the `sdlc-harness: stopped`
  * label, and the absence of any `run delete`, artifact `DELETE` or `--method DELETE` on anything but a
  * state label. Each ignored case — an unauthorised closer, an issue with no start comment, a fork's pull
- * request, a `reopened` action, a deleted tag, a completed run, a branch already stopped — is asserted on
- * stdout's one line and on the recorded `gh` calls: no `workflow run`, no `run cancel`, no comment POST
- * and no label write. A failing `stop` child or a failing permission check is exit 3, an `::error::` line
+ * request, a pull request whose head branch is already gone from `origin`, a `reopened` action, a
+ * deleted tag, a completed run, a branch already stopped — is asserted on stdout's one line and on the
+ * recorded `gh` calls: no `workflow run`, no `run cancel`, no comment POST and no label write. A failing `stop` child or a failing permission check is exit 3, an `::error::` line
  * and no reply.
  *
  * Not covered here: the workflow's `on:` and `if:` prefilter for these events
@@ -137,6 +137,7 @@ async function closeFixture(t) {
   let events = 0;
 
   return {
+    dir,
     /**
      * Run `control` on one <eventName> event whose payload is <payload>.
      *
@@ -306,6 +307,14 @@ test('a reopened issue or pull request does nothing and calls no gh', async (t) 
   assertIgnored(f, await f.control('issues', issueClosed('reopened')), /ignored, an issue reopened, not closed/);
   assertIgnored(f, await f.control('pull_request', prClosed({ action: 'reopened' })), /ignored, a pull request reopened, not closed/);
   assert.deepEqual(f.calls(), []);
+});
+
+test('a pull request closed because its branch was deleted does nothing: the deletion\'s own job stops the run', async (t) => {
+  const f = await closeFixture(t);
+  const gone = await runGit(f.dir, ['push', '--quiet', '--no-verify', 'origin', '--delete', 'feat_x']);
+  assert.equal(gone.status, 0, gone.stderr);
+  const result = await f.control('pull_request', prClosed());
+  assertIgnored(f, result, /close ignored: the branch `feat_x` of pull request #9 is gone from origin/);
 });
 
 test('a deleted tag does nothing and calls no gh', async (t) => {

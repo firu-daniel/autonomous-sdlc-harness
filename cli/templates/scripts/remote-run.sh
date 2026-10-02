@@ -555,6 +555,10 @@
 #      comment), a pull request's head ref, a deletion's `.ref`; then not a
 #      valid branch name
 #   5. `hr_branch_is_protected` does not answer 1
+#   6. on `pull_request`, the head branch absent on origin (`remote_branch_exists`
+#      answers 1): GitHub closed the pull request because the branch was
+#      deleted, and the `delete` event's job stops the run; an `ls-remote` that
+#      cannot answer is one line and proceeds
 # There is no ledger-at-tip check (`forge_recognised`): a merged or deleted
 # branch may no longer carry one, and a listed `harness run <b>` run is the
 # proof. The state is read by `control_state_var`: only `running`, `parked`,
@@ -5593,6 +5597,15 @@ control_close() {
     *) control_close_ignore "whether \`$b\` is protected could not be judged from harness.config.json" ;;
   esac
   CONTROL_BRANCH="$b"
+  if [ "$CLOSE_KIND" = pr_closed ] || [ "$CLOSE_KIND" = pr_merged ]; then
+    # GitHub closes a pull request whose head is deleted; the `delete` event's
+    # own job stops that run from the default branch, so this one stays quiet.
+    remote_branch_exists "$b"
+    case $? in
+      1) control_close_ignore "the branch \`$b\` of pull request #$CONTROL_NUMBER is gone from origin; the deletion's own job stops the run" ;;
+      2) echo "remote-run.sh: control: whether \`$b\` exists on origin could not be checked ($REMOTE_BRANCH_ERR); proceeding" ;;
+    esac
+  fi
 
   # No forge_recognised check: a merged or deleted branch may no longer carry
   # its ledger, and a listed `harness run <b>` run is what proves a harness run.
