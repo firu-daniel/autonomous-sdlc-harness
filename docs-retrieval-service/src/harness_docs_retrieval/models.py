@@ -209,9 +209,16 @@ class _CrossEncoderReranker:
         return [float(value) for value in scores.tolist()]
 
 
+def _pooling_mode(module: Any) -> Any:
+    """sentence-transformers 6 holds the mode as the `pooling_mode` attribute, a name or a tuple of
+    names, and has no `get_pooling_mode_str()`; earlier versions answer through that method."""
+    mode = getattr(module, "pooling_mode", None)
+    return module.get_pooling_mode_str() if mode is None else mode
+
+
 def _require_cls_pooling(model: Any, pooling_type: Any) -> None:
     """The embedder id claims `cls`; a snapshot pooling any other way is refused."""
-    modes = [module.get_pooling_mode_str() for module in model if isinstance(module, pooling_type)]
+    modes = [_pooling_mode(module) for module in model if isinstance(module, pooling_type)]
     if modes != ["cls"]:
         raise ServiceError(
             f"{EMBEDDING_MODEL} loaded with pooling {modes!r}, but its id {EMBEDDER_ID} claims cls"

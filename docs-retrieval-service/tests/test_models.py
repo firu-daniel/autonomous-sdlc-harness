@@ -3,10 +3,13 @@ downloaded only by `fetch_models`, at setup time, and every other load runs with
 disabled, so a run never reaches the network.
 
 What is covered is what holds without the `models` extra: the ids, where the weight cache lives,
-the file-existence presence check, and that importing the module loads neither
-`sentence_transformers` nor `torch`. `load_models` and `fetch_models` are deliberately not called:
-the gate environment never installs the extra, and `fetch_models` downloads. Every cache is built
-under `tmp_path`, never inside this checkout.
+the file-existence presence check, that importing the module loads neither `sentence_transformers`
+nor `torch`, and the `cls` pooling guard against both shapes of the library's pooling API.
+`load_models` and `fetch_models` are deliberately not called: the gate environment never installs
+the extra, and `fetch_models` downloads. One case builds the library's own `Pooling`, which needs no
+weights, so the guard is also checked against the installed library rather than only against a
+fake of it; that case skips loudly where the extra is absent, as it is in the gate. Every cache is
+built under `tmp_path`, never inside this checkout.
 """
 
 import subprocess
@@ -15,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from harness_docs_retrieval.errors import ServiceError
 from harness_docs_retrieval.models import (
     EMBEDDER_ID,
     EMBEDDING_MODEL,
@@ -22,6 +26,7 @@ from harness_docs_retrieval.models import (
     MODEL_CACHE_ENV,
     RERANK_MODEL,
     RERANKER_ID,
+    _require_cls_pooling,
     model_cache_dir,
     model_files_present,
 )
@@ -103,3 +108,47 @@ def test_importing_the_module_loads_no_model_library() -> None:
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True
     )
     assert completed.stdout.strip() == ""
+
+
+class _Pooling:
+    """A sentence-transformers 6 pooling module: the mode is an attribute."""
+
+    def __init__(self, pooling_mode: str | tuple[str, ...]) -> None:
+        self.pooling_mode = pooling_mode
+
+
+class _LegacyPooling:
+    """A pre-6 pooling module: the mode is only reachable through `get_pooling_mode_str()`."""
+
+    def __init__(self, mode: str) -> None:
+        self._mode = mode
+
+    def get_pooling_mode_str(self) -> str:
+        return self._mode
+
+
+@pytest.mark.parametrize("module", [_Pooling("cls"), _LegacyPooling("cls")])
+def test_cls_pooling_is_accepted_through_either_api(module: object) -> None:
+    _require_cls_pooling([object(), module], type(module))
+
+
+@pytest.mark.parametrize(
+    "module", [_Pooling("mean"), _Pooling(("cls", "mean")), _LegacyPooling("mean")]
+)
+def test_any_other_pooling_is_refused(module: object) -> None:
+    with pytest.raises(ServiceError, match="claims cls"):
+        _require_cls_pooling([module], type(module))
+
+
+def test_no_pooling_module_is_refused() -> None:
+    with pytest.raises(ServiceError, match="claims cls"):
+        _require_cls_pooling([object()], _Pooling)
+
+
+def test_the_installed_library_pooling_passes_the_guard() -> None:
+    models = pytest.importorskip(
+        "sentence_transformers.models", reason="the `models` extra is not installed"
+    )
+    _require_cls_pooling([models.Pooling(384, pooling_mode="cls")], models.Pooling)
+    with pytest.raises(ServiceError, match="claims cls"):
+        _require_cls_pooling([models.Pooling(384, pooling_mode="mean")], models.Pooling)
