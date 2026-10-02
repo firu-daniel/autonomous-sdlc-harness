@@ -15,6 +15,7 @@ This directory holds the runner for the relevance eval of the shipped docs-retri
 | `index-build.mjs` | Building the index a run measures against, and the `{ files, chunks }` snapshot every figure from that run is stamped with. |
 | `arms.mjs` | The arm table, and the runner that drives one arm over one query set. |
 | `backends.mjs` | The backend vocabulary, and the block id each backend's figures are written under. |
+| `python-backend.mjs` | The Python backend as an eval session — the package's `index` and `serve-http` run through `scripts/python-service.sh` over a mirror of the corpus, queried per arm with `POST /search`; latency is the server's own `search_ms`. |
 | `metrics.mjs` | The figures: graded recall@k, MRR, latency percentiles, and the two score distributions the abstention threshold was calibrated on. |
 | `results.mjs` | Rendering one run into the generated region of `docs/retrieval-eval-results.md` — the only writer of the bytes between that file's markers — one block per corpus and backend, `<id>` or `<id>@<backend>`, and moving a finished block between results files (`transplantCorpusBlock`). |
 | `calibrate.mjs` | The fixed re-calibration method of `ABSTAIN_SCORE_THRESHOLD`, over the uncensored scores the generated region publishes. |
