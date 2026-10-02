@@ -45,7 +45,7 @@
     "forge": {
       "type": "string",
       "enum": ["github", "gitlab", "none"],
-      "description": "Which code-hosting platform's pull-request and remote conventions the flow uses. 'none' means no forge integration at all: work stays on branches and no pull request is opened. 'github', with execution.target 'github-actions', makes init write the issue-trigger workflow, which starts runs from labelled issues; 'gitlab' writes nothing in this release. Deliberately has no default: an absent value must read as 'not yet decided', which doctor's forge check reports, rather than as a silent assumption of one platform, and a default here would oblige the configuration model's defaults to carry a value no generator writes."
+      "description": "Which code-hosting platform's pull-request and remote conventions the flow uses. 'none' means no forge integration at all: work stays on branches and no pull request is opened. With execution.target 'github-actions', 'github' makes init write the issue-trigger and run-control workflows: a labelled issue starts a run, comments and reviews steer it, lifecycle comments and state labels report it, and a completed run opens a draft pull request. 'gitlab' writes nothing in this release. Deliberately has no default: an absent value must read as 'not yet decided', which doctor's forge check reports, rather than as a silent assumption of one platform, and a default here would oblige the configuration model's defaults to carry a value no generator writes."
     },
     "stateDir": {
       "type": "string",
@@ -280,6 +280,12 @@
           "type": "boolean",
           "default": false,
           "description": "Turn on the local docs-retrieval search tool over 'docs.root' and the conventions documents the layers name, served to the plan writer and the reviewers over MCP. Legal only while 'phases.docs' is true. Off by default and opt-in: turning it on installs a local runtime and downloads two models at setup time. Measured against agent navigation on a real catalog, its verdict was withdrawn, and it is kept opt-in by maintainer decision (docs/retrieval-eval-results.md, 'The decision, applied to the real catalog'); when to turn it on is docs/retrieval.md, 'When to turn it on'."
+        },
+        "retrievalBackend": {
+          "type": "string",
+          "enum": ["typescript", "python"],
+          "default": "typescript",
+          "description": "Which docs-retrieval backend the search-server launcher starts and doctor grades. Read only while 'phases.docs' and 'docs.retrieval' are both true. Absent means 'typescript', the embedded default init installs. 'python' selects the opt-in Postgres-backed service in docs-retrieval-service/, which init does not provision; when to choose it and how to turn it on is docs/retrieval.md, 'Turning on the Python backend', and where its connection string comes from is docs/config.md §5."
         }
       }
     },

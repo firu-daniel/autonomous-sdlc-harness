@@ -383,6 +383,62 @@ test('set phases.docs false under a file holding docs.retrieval true is refused,
 });
 
 /**
+ * **`docs.retrievalBackend` takes exactly `typescript` or `python`**; a legal value with retrieval
+ * off is stored and warned about, never refused, because it selects nothing.
+ */
+const RETRIEVAL_BACKENDS_RENDERED = '"typescript", "python"';
+const RETRIEVAL_BACKEND_IDLE_WARNING =
+  'docs.retrievalBackend is set but docs retrieval is off (it needs phases.docs and docs.retrieval both true), so it selects nothing until both are on';
+
+test('set docs.retrievalBackend python with retrieval on is stored, and warns about nothing idle', async (t) => {
+  const dir = await wiredFixture(t);
+  await configOk(dir, ['set', 'phases.docs', 'true']);
+  await configOk(dir, ['set', 'docs.retrieval', 'true']);
+
+  const { stderr } = await configOk(dir, ['set', 'docs.retrievalBackend', 'python']);
+
+  assert.equal(readJson(join(dir, CONFIG_FILE)).docs.retrievalBackend, 'python');
+  assert.ok(!stderr.includes(RETRIEVAL_BACKEND_IDLE_WARNING), `a backend retrieval uses was warned about:\n${stderr}`);
+});
+
+test('set docs.retrievalBackend to a value outside the enum is refused, names both values, and writes nothing', async (t) => {
+  const dir = await wiredFixture(t);
+  await configOk(dir, ['set', 'phases.docs', 'true']);
+  await configOk(dir, ['set', 'docs.retrieval', 'true']);
+  const before = await snapshotTree(dir);
+
+  const { status, stderr } = await runCli(dir, ['config', 'set', 'docs.retrievalBackend', 'java']);
+
+  assert.notEqual(status, 0, 'config set docs.retrievalBackend java was accepted');
+  assert.ok(
+    stderr.includes(`"java" is not one of ${RETRIEVAL_BACKENDS_RENDERED}`),
+    `the refusal is not the enum's own:\n${stderr}`,
+  );
+  assert.deepEqual(await snapshotTree(dir), before, 'a refused set of docs.retrievalBackend changed the tree');
+});
+
+test('set docs.retrievalBackend to a non-string is refused, and writes nothing', async (t) => {
+  const dir = await wiredFixture(t);
+  const before = await snapshotTree(dir);
+
+  const { status, stderr } = await runCli(dir, ['config', 'set', 'docs.retrievalBackend', 'true']);
+
+  assert.notEqual(status, 0, 'config set docs.retrievalBackend true was accepted');
+  assert.match(stderr, /docs\.retrievalBackend: must be a string, not/);
+  assert.deepEqual(await snapshotTree(dir), before, 'a refused set of docs.retrievalBackend changed the tree');
+});
+
+test('set docs.retrievalBackend python with phases.docs off is stored and warns that it selects nothing', async (t) => {
+  const dir = await wiredFixture(t);
+  assert.equal(readJson(join(dir, CONFIG_FILE)).phases.docs, false, 'the fixture does not start with the docs phase off');
+
+  const { stderr } = await configOk(dir, ['set', 'docs.retrievalBackend', 'python']);
+
+  assert.equal(readJson(join(dir, CONFIG_FILE)).docs.retrievalBackend, 'python');
+  assert.ok(stderr.includes(RETRIEVAL_BACKEND_IDLE_WARNING), `the idle backend was not warned about:\n${stderr}`);
+});
+
+/**
  * The write path and the read guard agreeing about `detection.commandFamily`.
  *
  * The accepting arm is the one that matters: the key is written by `init` itself, so a guard that did

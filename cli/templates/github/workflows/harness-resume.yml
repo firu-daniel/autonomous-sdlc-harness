@@ -48,6 +48,11 @@
 #     The job's `actions: write` covers listing and downloading its own
 #     workflow's artifacts.
 #
+# THE PERMISSIONS. `issues: write` and `pull-requests: write` serve `poll`'s
+# reports, which comment on the waiting run's issue or pull request; a
+# workflow-level `permissions:` block sets every permission it does not list to
+# `none`.
+#
 # WHAT IT WRITES. The `harness-poll-state` artifact: the failed-dispatch count
 #   `poll` carries to the next tick, kept 7 days.
 #
@@ -85,6 +90,8 @@ on:
 permissions:
   contents: read
   actions: write
+  issues: write
+  pull-requests: write
 
 defaults:
   run:

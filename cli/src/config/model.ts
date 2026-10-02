@@ -109,6 +109,8 @@ export interface HarnessDocs {
   root?: string;
   /** Turn on the local docs-retrieval search tool over `docs.root` and the conventions documents; legal only while `phases.docs` is true. */
   retrieval?: boolean;
+  /** Which docs-retrieval backend the launcher starts and `doctor` grades when retrieval is on; absent means `typescript`. */
+  retrievalBackend?: HarnessRetrievalBackend;
 }
 
 /** Settings for the parity phase. Read only when `phases.parity` is true. */
@@ -247,7 +249,8 @@ export const DEFAULTS = {
  * `none` is a value rather than the absence of one — it says work stays on branches and no pull
  * request is opened, which is a decision. An **omitted** `forge` says the decision has not been
  * made; that is why the schema gives this key no `default` and {@link DEFAULTS} carries none.
- * `github` has a reader, {@link forgeTriggerApplies}; `gitlab` and `none` write nothing.
+ * `github` has a reader, {@link forgeTriggerApplies}, which switches the whole forge coupling;
+ * `gitlab` and `none` switch nothing.
  *
  * Exported so the check that validates the key imports the set rather than restating it: a list
  * spelled twice is a list that can disagree with the schema in one of its two copies.
@@ -498,6 +501,27 @@ export const EXECUTION_TARGETS = ['local', 'github-actions'] as const;
 export type HarnessExecutionTarget = (typeof EXECUTION_TARGETS)[number];
 
 /**
+ * The schema's `docs.retrievalBackend` `enum`, mirrored verbatim: the docs-retrieval backends the
+ * launcher can start. Its shell mirror is `hr_docs_retrieval_backend` in
+ * `cli/templates/scripts/lib/harness-run-lib.sh`, as {@link FORGE_KINDS}' is `hr_forge`.
+ *
+ * Exported for the same reason as {@link FORGE_KINDS}: one list, imported, not restated.
+ */
+export const RETRIEVAL_BACKENDS = ['typescript', 'python'] as const;
+
+export type HarnessRetrievalBackend = (typeof RETRIEVAL_BACKENDS)[number];
+
+/**
+ * The schema's `docs.retrievalBackend` `default`. Deliberately not in {@link DEFAULTS}: no generator
+ * writes the key, so `init`'s generated config stays byte-identical whatever this holds.
+ *
+ * Its shell mirrors are `hr_docs_retrieval_backend`'s absent-key answer in
+ * `cli/templates/scripts/lib/harness-run-lib.sh` and the `backend=typescript` seed in
+ * `cli/templates/scripts/docs-search-server.sh`; change all three together.
+ */
+export const DEFAULT_RETRIEVAL_BACKEND: HarnessRetrievalBackend = 'typescript';
+
+/**
  * The one lookup from a typed-in string to a {@link HarnessQaDriver}: `--qa-driver`'s parse-time
  * check and the config generator's check of an answer given at a prompt both go through it, so a
  * value is judged on the same terms wherever it was typed.
@@ -540,10 +564,13 @@ export function browserWiringApplies(config: HarnessConfig): boolean {
  * Does this config call for the docs-retrieval wiring — the search server, its permission-profile
  * entries, its ignore rules, `init`'s setup step, the `docs` verbs and `doctor`'s checks?
  *
- * **Declared once, here, because every one of those consumers has to agree.** A copy of this
- * predicate in one of them that drifted would register a server the permission profile never starts,
- * or start one nothing registers — and nothing checks two spellings of the config question against
- * each other, so there is only ever one. Import it; do not re-spell it.
+ * **Declared once, here, because every one of those consumers has to agree** — and, as the shell
+ * mirror `hr_docs_retrieval_applies` in `cli/templates/scripts/lib/harness-run-lib.sh`, the
+ * `docs-search-server.sh` launcher. A copy in one of them that drifted would register a server the
+ * permission profile never starts, or start one nothing registers; a drifted shell mirror would start
+ * a backend `init` and `doctor` never prepared or graded. Nothing checks the spellings against each
+ * other: change the predicate there and here together; import it everywhere else, and do not
+ * re-spell it.
  *
  * Both conditions are needed, and the phase test is not redundant with the structural check that
  * grades `docs.retrieval: true` without `phases.docs` an error: `config/io.ts` → `loadConfig` still
@@ -552,6 +579,29 @@ export function browserWiringApplies(config: HarnessConfig): boolean {
  */
 export function retrievalApplies(config: HarnessConfig): boolean {
   return config.phases?.docs === true && config.docs?.retrieval === true;
+}
+
+/**
+ * Which docs-retrieval backend this config selects; an absent key is
+ * {@link DEFAULT_RETRIEVAL_BACKEND}.
+ *
+ * **Declared once, here — import it; do not re-spell the fallback.** Its answer means something only
+ * inside the {@link retrievalApplies} gate: a caller outside it is asking which backend a retrieval
+ * that does not run would use.
+ */
+export function retrievalBackend(config: HarnessConfig): HarnessRetrievalBackend {
+  return config.docs?.retrievalBackend ?? DEFAULT_RETRIEVAL_BACKEND;
+}
+
+/**
+ * Does this config call for the Python docs-retrieval backend?
+ *
+ * **Declared once, here, because the launcher, `doctor` and `init` have to agree** — import it; do
+ * not re-spell it. The key is read **only inside** the {@link retrievalApplies} gate: a `python`
+ * value with retrieval off selects nothing, so this answers `false`.
+ */
+export function pythonRetrievalApplies(config: HarnessConfig): boolean {
+  return retrievalApplies(config) && retrievalBackend(config) === 'python';
 }
 
 /**
@@ -570,13 +620,14 @@ export function remoteExecutionApplies(config: HarnessConfig): boolean {
 }
 
 /**
- * Does this config have `init` write the issue-trigger workflow, so a labelled issue or a
- * `repository_dispatch` event starts a remote run?
+ * Is the whole forge coupling on — the trigger and control workflows, the lifecycle comments, the
+ * run-state labels and the draft pull request?
  *
- * **Declared once, here, because every consumer has to agree**: the trigger-workflow generator,
- * `doctor`'s `forge` and `remote-github` checks, and — as the shell mirror `hr_forge` plus
- * `hr_execution_target` — `remote-run.sh trigger`. A drift between them would write a trigger
- * nothing grades, or grade a trigger nothing wrote. Import it; do not re-spell it.
+ * **Declared once, here, because every consumer has to agree**: the workflow generator, `doctor`'s
+ * `forge` and `remote-github` checks, and — as the shell mirror `hr_forge` plus
+ * `hr_execution_target` — `remote-run.sh`'s `trigger`, `control`, `report`, `deliver` and `collect`. A drift
+ * between them would write a workflow nothing grades, or act on a coupling nothing wrote. Import it;
+ * do not re-spell it.
  *
  * An absent `forge` is `false`: an undecided key starts nothing.
  */

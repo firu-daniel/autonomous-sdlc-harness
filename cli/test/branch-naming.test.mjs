@@ -5,16 +5,19 @@
  * **The rule these tests exist to enforce: a title folds to ASCII lowercase with every run outside
  * `[a-z0-9]` as one `_`, trimmed and capped at 60; an empty fold takes the caller's fallback; and a
  * name that is protected, live on `origin` in any case, local, left behind as a merged run's
- * artifacts on `origin/<defaultBranch>`, or recorded in the registry is never returned — the lowest
- * free `_<n>` is, and a check that cannot tell returns 2 with nothing printed.**
+ * artifacts on `origin/<defaultBranch>`, recorded in the registry, or — given a `gh` — the branch of
+ * any listed run of the run workflow is never returned — the lowest free `_<n>` is, and a check that
+ * cannot tell, a failing run listing included, returns 2 with nothing printed. Without a `gh`, no
+ * run listing is made.**
  *
  * The library is sourced out of an `init`-wired fixture, as `cli/test/registry-writer.test.mjs`
  * does, so the copy under test is the one an adopter receives and `npm run build` precedes
- * `npm test`. `origin` is the fixture's own bare sibling; no case reaches the network.
+ * `npm test`. `origin` is the fixture's own bare sibling, and `gh` is a stub written into the
+ * fixture; no case reaches the network.
  */
 
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 
@@ -25,6 +28,25 @@ const LIB_PATH = 'scripts/lib/harness-run-lib.sh';
 
 /** A `protectedBranches` glob the suite adds, so a title folding into it is never returned. */
 const PROTECTED_GLOB = 'release_v*';
+
+/**
+ * `gh`, recorded to `STUB_LOG`. `run list` answers one run for a `--branch` that `STUB_HISTORY` (a JSON
+ * array of names) holds and `[]` otherwise; `STUB_FAIL` makes it exit 4.
+ */
+const GH_STUB = `#!/usr/bin/env node
+const { appendFileSync } = require('node:fs');
+const args = process.argv.slice(2);
+appendFileSync(process.env.STUB_LOG, JSON.stringify(args) + '\\n');
+if (args[0] === 'run' && args[1] === 'list') {
+  if (process.env.STUB_FAIL) {
+    process.stderr.write('stub gh failure\\n');
+    process.exit(4);
+  }
+  const branch = args[args.indexOf('--branch') + 1];
+  const history = JSON.parse(process.env.STUB_HISTORY ?? '[]');
+  process.stdout.write(JSON.stringify(history.includes(branch) ? [{ databaseId: 36569531374 }] : []));
+}
+`;
 
 const fixtures = [];
 let dir = '';
@@ -44,8 +66,22 @@ async function initFixture() {
 }
 
 /** Source the written library in `root`, then run `script` with the remaining values as `$1`, `$2`, …. */
-function libCall(root, script, args = []) {
-  return runBash(root, ['-c', `. "$1"; shift; ${script}`, '_', join(root, LIB_PATH), ...args]);
+function libCall(root, script, args = [], env = {}) {
+  return runBash(root, ['-c', `. "$1"; shift; ${script}`, '_', join(root, LIB_PATH), ...args], env);
+}
+
+let stubs = 0;
+
+/** Write the `gh` stub under the fixture's gitignored state directory, with a fresh, empty log. */
+function ghStub() {
+  const stubDir = join(dir, config.stateDir, 'gh-stub');
+  mkdirSync(stubDir, { recursive: true });
+  const gh = join(stubDir, 'gh');
+  writeFileSync(gh, GH_STUB, { mode: 0o755 });
+  stubs += 1;
+  const log = join(stubDir, `gh_${stubs}.log`);
+  writeFileSync(log, '');
+  return { gh, log };
 }
 
 /** Run a shell `script` in the fixture, asserting it succeeds. */
@@ -173,4 +209,37 @@ test('a failing ls-remote returns 2 with nothing printed', async () => {
   assert.deepEqual({ status: derived.status, stdout: derived.stdout }, { status: 2, stdout: '' });
   const taken = await libCall(unreachable, 'hr_branch_name_taken "$PWD" "$1"', ['version_bump']);
   assert.equal(taken.status, 2);
+});
+
+test('a name with run-workflow history is taken, and the derivation takes `_2`', async () => {
+  const { gh, log } = ghStub();
+  const env = { STUB_LOG: log, STUB_HISTORY: JSON.stringify(['feat_invoices']) };
+  const taken = await libCall(dir, 'hr_branch_name_taken "$PWD" "$@"; s=$?; echo "$s $HR_TAKEN_WHY"', ['feat_invoices', '', gh], env);
+  assert.equal(taken.stdout, '0 a run of the run workflow listed under that name\n');
+  const derived = await libCall(dir, 'hr_derive_branch "$PWD" "$@"', ['feat: invoices', 'issue_7', '', gh], env);
+  assert.deepEqual({ status: derived.status, stdout: derived.stdout }, { status: 0, stdout: 'feat_invoices_2\n' });
+  const calls = readFileSync(log, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(calls.at(-1), ['run', 'list', '--workflow', 'harness-run.yml', '--branch', 'feat_invoices_2', '--limit', '1', '--json', 'databaseId']);
+});
+
+test('history on both `<name>` and `<name>_2` derives `<name>_3`', async () => {
+  const { gh, log } = ghStub();
+  const env = { STUB_LOG: log, STUB_HISTORY: JSON.stringify(['feat_receipts', 'feat_receipts_2']) };
+  const derived = await libCall(dir, 'hr_derive_branch "$PWD" "$@"', ['feat: receipts', 'issue_7', '', gh], env);
+  assert.deepEqual({ status: derived.status, stdout: derived.stdout }, { status: 0, stdout: 'feat_receipts_3\n' });
+});
+
+test('a run listing that fails returns 2 with nothing printed and names the run history', async () => {
+  const { gh, log } = ghStub();
+  const env = { STUB_LOG: log, STUB_FAIL: '1' };
+  const derived = await libCall(dir, 'hr_derive_branch "$PWD" "$@"; s=$?; echo "$s $HR_TAKEN_WHY"', ['feat: invoices', 'issue_7', '', gh], env);
+  assert.equal(derived.stdout, '2 the run history of feat_invoices could not be listed\n');
+});
+
+test('without a `gh` the same fixture derives the bare name and lists no runs', async () => {
+  const { log } = ghStub();
+  const env = { STUB_LOG: log, STUB_HISTORY: JSON.stringify(['feat_invoices']) };
+  const derived = await libCall(dir, 'hr_derive_branch "$PWD" "$@"', ['feat: invoices', 'issue_7'], env);
+  assert.deepEqual({ status: derived.status, stdout: derived.stdout }, { status: 0, stdout: 'feat_invoices\n' });
+  assert.equal(readFileSync(log, 'utf8'), '', 'the stub was called');
 });

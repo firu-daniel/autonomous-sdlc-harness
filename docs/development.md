@@ -160,9 +160,9 @@ The repo-scoped side of the same boundary — what belongs in the committed `har
 
 ## 5. Verifying a change
 
-Twelve gates. Run each **without a pipe** and read the exit status: piping into a pager or into `head` returns the *pager's* status, not the tool's, so a failing gate reads as a passing one.
+Thirteen gates. Run each **without a pipe** and read the exit status: piping into a pager or into `head` returns the *pager's* status, not the tool's, so a failing gate reads as a passing one.
 
-**Six of the twelve run unattended, and `scripts/run-gates.sh` is how.** It runs gates 1, 2, 3, 4, 6 and 11 — every gate below that a process can run without a terminal, a browser, a model session or a network — grades each one the way this section says to grade it, and prints the remaining six, gates 5, 7, 8, 9, 10 and 12, rather than passing over them. **Gate 11 is the one conditional member of that six:** it runs unattended **where the retrieval model cache is provisioned and the workspace's own install resolves the retrieval packages**, and where either is missing it is printed with the gates the script cannot run and counted among neither the passes nor the failures — so the script's exit status never depends on a several-hundred-megabyte download. `commands.test` in `harness.config.json` points at it, so a branch review's verification is the automatable half of this section rather than gate 4 alone. It is hand-written and is not in the set `init --force` regenerates; the `scripts/test.sh` that wraps it is generated and is not this file. Running the gates by hand, as written below, stays correct and is what the script's own text is checked against.
+**Seven of the thirteen run unattended, and `scripts/run-gates.sh` is how.** It runs gates 1, 2, 3, 4, 6, 11 and 13 — every gate below that a process can run without a terminal, a browser, a model session or a network — grades each one the way this section says to grade it, and prints the remaining six, gates 5, 7, 8, 9, 10 and 12, rather than passing over them. **Two members of that seven are conditional.** Gate 11 runs unattended **where the retrieval model cache is provisioned and the workspace's own install resolves the retrieval packages**, and where either is missing it is printed as `BLOCKED` with the gates the script cannot run and counted among neither the passes nor the failures — so the script's exit status never depends on a several-hundred-megabyte download. Gate 13 is reported on the same terms in two ways: a leg is `BLOCKED` where `uv` or the synced Python environment is missing, and its container leg, 13d, is `SKIPPED` unless the run opts in on a machine with Docker; either is printed with the gates the script cannot run and counted among neither the passes nor the failures. `commands.test` in `harness.config.json` points at it, so a branch review's verification is the automatable half of this section rather than gate 4 alone. It is hand-written and is not in the set `init --force` regenerates; the `scripts/test.sh` that wraps it is generated and is not this file. Running the gates by hand, as written below, stays correct and is what the script's own text is checked against.
 
 **One standing exemption, stated here so no gate has to restate it.** `examples/notes-app/` is two
 things with different obligations, and its own README draws the line (*"The capture is frozen; the
@@ -693,7 +693,7 @@ npm ci
 
 A shortfall is not exempt: it fails the script. The floor policy itself — the margin between a measured figure and its recorded floor, why the graded corpus is `fixture-catalog` alone, and when a floor is re-recorded — is stated in `docs/retrieval-eval.md` → `## The regression floor`, which `floor.json`'s own `see` field names.
 
-**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, the issue trigger's behaviours live beside it in `docs/github-issue-trigger.md` → `## 7. What is not verified here`, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a **private** scratch repository kept for the purpose — `firu-daniel/harness-gate12` since round 3, reset to its seed commit between rounds rather than recreated — never this repository, for the reason gate 2 gives and for those gate 2's **This repository cannot host its own remote runs.** states — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Thirteen observations, after a setup that is itself the first.
+**Gate 12 — remote execution against a real GitHub repository.** Every remote-execution case in gate 4 drives a `gh` stub and an agent stub, so no gate above shows GitHub doing what the design in `docs/remote-execution.md` rests on; that document's `## 6. What is not verified here` lists each behaviour with its source, the issue trigger's behaviours live beside it in `docs/github-issue-trigger.md` → `## 7. What is not verified here`, and this gate is what records each one against a real repository. It is hand-run because it needs a real repository, a runner, a credential and billed minutes, none of which a suite may spend. Run it against a **private** scratch repository kept for the purpose — `firu-daniel/harness-gate12` since round 3, reset to its seed commit between rounds rather than recreated — never this repository, for the reason gate 2 gives and for those gate 2's **This repository cannot host its own remote runs.** states — from that repository's root on the machine that runs the local watcher, with `gh` logged in to an account that can push to it and dispatch its workflows. `<version>` throughout is the CLI version under test, pinned for the reason gate 10's pre-leg check gives; run that check here too. `<stateDir>` and `<scriptsDir>` are the values the scratch repository's own `harness.config.json` carries, `scripts` for the second by default. Run each command **without a pipe**. Fourteen observations, after a setup that is itself the first.
 
 **Round 1 — 2026-09-28, CLI 0.4.0.** Run by hand against the scratch repository `firu-daniel/harness-gate12` (private, a small TypeScript library, `phases.qa`, `docs` and `parity` off, `execution.target: github-actions`), with one task dropped. It did not get past observation (ii): every run's session parked on its first read of a plugin instruction file. Run `36425634480`: the adoption commit had carried `.claude/settings.autonomous.json` with the adopting machine's absolute paths; the job's `init --plugin-root-entries` kept it; the preflight `doctor` printed `WARN  profile-paths  neither a path nor a pattern in .claude/settings.autonomous.json covers this repository root (/home/runner/work/harness-gate12/harness-gate12) …` and `PASS  plugin-permissions  not graded at this machine's plugin root (/home/runner/.claude/plugins/cache/autonomous-sdlc-harness/autonomous-sdlc-harness/0.4.0), because phases.qa is off, and the helper scripts are that phase's alone.` and exited 0; the session then parked asking for read access to the plugin's instruction files, every `Read` under the plugin cache asking permission and `cat`/`ls` refused as outside *"the allowed working directory `/home/runner/work/harness-gate12/harness-gate12`"*. Run `36426447207`: the profile untracked and gitignored in the scratch repository, so the job's `init` created one for the runner and `doctor` gave `PASS profile-paths` — but the generated profile carried no plugin-root entry, and the session parked the same way. Run `36428382006`: a `Read` rule and an `additionalDirectories` entry for the plugin cache added to the committed `.claude/settings.json`, which the session confirmed were in the file at `HEAD`; the same refusals, and the park-loop guard stopped the run. The eight findings, and what 0.4.1 changed for each:
 
@@ -736,7 +736,17 @@ The findings:
 
 A follow-up fix answers findings 1, 3, 4, 5 and 6. For finding 1 the answer is documentation plus one sentence in the upgrade's report and in the version warning, because a run keeping the version it started with is intended. Finding 2 is not carried: no repository carries a workflow rendered before the pinned install, because remote execution has no adopters.
 
-What still owes a first recording: (v)'s enable and its in-progress artifact listing; (vii), (ix) and (x); (xi)'s convergence and the `/autonomous-sdlc-harness:branch-answer` command itself; (xii)'s last leg on a real release after the one under test; and (xiii).
+**Round 5 — 2026-10-01, CLI 0.5.0.** Scoped to observation (xiii), the issue trigger, and run by hand against `firu-daniel/harness-gate12` from its seed commit (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off), adopted with `npx autonomous-sdlc-harness@0.5.0 init --non-interactive`, then `config set execution.target github-actions`, `config set forge github` and a second `init`, which wrote `harness-run.yml`, `harness-resume.yml` and `harness-trigger.yml`. The trigger label `harness` already existed from an earlier probe. The job installed Claude Code `2.1.286`. The machine stayed on, but no run daemon had ever been installed from the checkout (`daemon stop` found no unit), so nothing local took part. The setup gave `PASS  forge  forge is github and remote execution is on: .github/workflows/harness-trigger.yml is present and origin/main carries it. …`, and `remote-github` warned only `HARNESS_PUSH_URL is not a repository secret, so notifications from a remote run reach no one` — without naming the trigger workflow or the label, which is finding 2 below. The main leg **passed** on its trigger half: issue #6, titled `feat: invoices` with the invoices task as its body, was labelled at 08:01:29Z; `harness trigger 6` succeeded in 19 s and dispatched `harness run feat_invoices` (`36833810996`) at 08:01:43Z; the issue carried one comment naming `feat_invoices` and a run URL, and the label was removed; `origin/feat_invoices` carried `chore: add task prompt for feat_invoices`, whose prompt was `# feat: invoices`, the body verbatim and the line `Started from https://github.com/firu-daniel/harness-gate12/issues/6 by @firu-daniel, who applied the label `harness` at 2026-10-01T08:01:39Z. …`; an edit of the issue's body after the comment did not reach the committed prompt. The comment's run URL was **wrong**, which is finding 1. The run did not reach "branch ready for review", because leg (c) paused it after the plan and two tasks were committed. Leg (a) **passed**: a second issue with the same title derived `feat_invoices_2`, whose comment named run `36835744979`, the run the trigger dispatched; that run was stopped with `remote-run.sh stop`. Leg (b) was **not run** as specified: the scratch repository is owned by a personal account, where every collaborator holds `write`, so no triage or read account was available. In its place a second account with `write`, `expause-admin`, applied the label to the leg (a) issue; the run started, and its provenance line named `@expause-admin`. Leg (c) **passed**: in a `claude` session in the scratch repository, `/autonomous-sdlc-harness:branch-status feat_invoices` printed the run as `running` from GitHub with no registry file; `/autonomous-sdlc-harness:branch-pause feat_invoices: gate12 round 5` ran `remote-run.sh fetch`, then `pause`, which printed `dispatched action=pause for feat_invoices`; the `harness pause` run was `skipped`; and the job logged `a 'harness pause feat_invoices' run was created at or after 1790842296 — dropped PAUSE (reason user)`, then `run 'feat_invoices' paused (PAUSE honored, reason user)` and `job: paused stop`. No registry record, sibling working copy, local branch or `deps.marker` appeared on the machine.
+
+The findings:
+
+1. **A run whose branch name was used before inherits that earlier run's state.** `feat_invoices` was the name rounds 3 and 4 used, and their branch had been deleted. The new run's `Restore the previous job's state` logged `restored the bundle of run 36569531374` (from 2026-09-29) and `placed 7 planning file(s) for feat_invoices; kept 0 the checkout already carries`; the session said `Resuming the planning phase: an unreviewed plan draft is on disk`, reviewed the inherited drafts and committed them as its plan. The issue comment likewise named `36671710773`, a failed run of 2026-09-30, instead of `36833810996`. Both lookups key on the branch and the `harness run <branch>` title with no bound to the branch's current lineage, and the branch-name rule does not count run history as taken. `feat_invoices_2`, with no history, logged `no previous bundle for feat_invoices_2; this is its first job`.
+2. `doctor --check-github` reports that GitHub knows `harness-trigger.yml` and that the label exists only when `remote-github` passes outright, so any other warning on that check hides it, and (xiii)'s setup condition cannot be met without every remote secret set.
+3. `/autonomous-sdlc-harness:branch-pause`'s GitHub route makes its temporary directory with `mktemp -d`; in an auto-mode session the composed `$(mktemp -d)` command and the `rm -rf` of the directory, outside the repository, were both refused, and the session fell back to `rmdir`.
+
+All three are carried to a follow-up fix. For finding 1, `fix_forge_trigger_run_lineage` bounded `restore`'s previous-bundle pick to runs whose `headSha` is in the branch's current lineage, made the trigger comment's lookup match the run whose `headSha` is the commit `start` pushed, and counted a name's run history as taken when deriving a branch name — *not yet re-observed; leg (d) records it*. For finding 2, it made `remote-github` carry the trigger workflow and label answers on every outcome, not only on a pass — *not yet re-observed; (xiii)'s setup records it*. For finding 3, it moved `/autonomous-sdlc-harness:branch-pause`'s fetch into a scratch directory under `<stateDir>/scratch/` that `remote-run.sh discard` removes — *not yet re-observed; leg (c) records it*. The trigger's lookup-bound row in `docs/github-issue-trigger.md` → `## 7. What is not verified here` is settled for a branch with no run history and moved to *Verified in Gate 12 round 5*; the rest of that table stands.
+
+What still owes a first recording: (v)'s enable and its in-progress artifact listing; (vii), (ix) and (x); (xi)'s convergence and the `/autonomous-sdlc-harness:branch-answer` command itself; (xii)'s last leg on a real release after the one under test; (xiii)'s run to "branch ready for review", its machine-off condition and its leg (b) refusal; and (xiv), run control from GitHub, in full.
 
 **Setup.**
 
@@ -934,7 +944,7 @@ Record too whether that job's session `init` record names the plugin path under 
 
 On the release after `<version>`, drop one more task in the same repository, its workflows still rendered for `<version>`. Passes when the job installs `<version>` while `main` carries the newer version, and runs. Record the installed version and the run id.
 
-**(xiii) An issue label starts a run with the machine off.** It observes the issue trigger end to end (`docs/github-issue-trigger.md`), and settles that document's `## 7. What is not verified here` rows on labelling an issue with the machine off, on the permission API's answer for a triage user, and on the lookup bound `TRIGGER_RUN_LOOKUP_TRIES`. On the scratch repository, turn the trigger on:
+**(xiii) An issue label starts a run with the machine off.** It observes the issue trigger end to end (`docs/github-issue-trigger.md`), and settles that document's `## 7. What is not verified here` rows on labelling an issue with the machine off, on the permission API's answer for a triage user, and on the lookup bound `TRIGGER_RUN_LOOKUP_TRIES`; it also settles the `headSha` row that `docs/github-issue-trigger.md` → `## 7.` and `docs/remote-execution.md` → `## 6.` carry. On the scratch repository, turn the trigger on:
 
 ```
 npx --yes autonomous-sdlc-harness@<version> config set forge github
@@ -961,7 +971,7 @@ git push --no-verify origin <default branch>
 ```
 
 ```
-gh label create harness
+gh label create sdlc-harness
 ```
 
 ```
@@ -981,7 +991,7 @@ gh issue create --repo <owner>/<scratch-repo> --title "<title>" --body "<body>"
 ```
 
 ```
-gh issue edit <number> --repo <owner>/<scratch-repo> --add-label harness
+gh issue edit <number> --repo <owner>/<scratch-repo> --add-label sdlc-harness
 ```
 
 Once the issue carries the trigger's comment, edit the issue's body:
@@ -1010,12 +1020,12 @@ gh api "repos/<owner>/<scratch-repo>/contents/<stateDir>/task_prompts/<slug>_tas
 
 `<slug>` is the branch the comment names. Passes when, and record each verbatim:
 
-- within the lookup bound, the issue carries one comment naming `<slug>` and a `harness run <slug>` run URL, and the label is gone;
+- within the lookup bound, the issue carries one comment naming `<slug>` and the URL of the `harness run <slug>` run whose `headSha` is `origin/<slug>`'s tip, and the label is gone;
 - `origin/<slug>` carries one commit `chore: add task prompt for <slug>`, whose prompt is the issue's title and body plus the provenance line;
 - the run reaches "branch ready for review", with a `completed` notification where `HARNESS_PUSH_URL` is set;
 - editing the issue after labelling changes nothing in the committed prompt.
 
-Then three legs, each passing on its own condition.
+Then four legs, each passing on its own condition.
 
 **(a) A second issue with the same title.** Open it and label it as above. Passes when its comment names `<slug>_2`. Record the comment.
 
@@ -1037,11 +1047,311 @@ Record whether it answered `read`, which settles research T3's unmeasured row.
 /autonomous-sdlc-harness:branch-pause <slug>
 ```
 
-Passes when `/autonomous-sdlc-harness:branch-status` prints the run's state from GitHub with no local record; `/autonomous-sdlc-harness:branch-pause` produces a `harness pause <slug>` run the job finds; and no registry record, no sibling working copy and no `deps.marker` appear on the machine. Record the status output, the pause output and the job-log line where the pause was found.
+Passes when `/autonomous-sdlc-harness:branch-status` prints the run's state from GitHub with no local record; `/autonomous-sdlc-harness:branch-pause` produces a `harness pause <slug>` run the job finds; no registry record, no sibling working copy and no `deps.marker` appear on the machine; and after the command no `<stateDir>/scratch/branch-pause-<slug>/` directory remains and nothing else is new under `<stateDir>/scratch/`. `<slug>` is its own fold, because the derived name holds only characters the fold rule in `<stateDir>/scratch/README.md` keeps. Record the status output, the pause output and the job-log line where the pause was found.
 
-**Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set. Where (xiii) ran, delete the trigger label with `gh label delete harness` and the issues the round created with `gh issue delete <number>`, and unset `forge` before the seed reset by removing its key from `harness.config.json` by hand, since `config` has no verb that unsets a key (`docs/cli.md` → ``## 8. `config` ``). Then return the scratch repository to its seed rather than deleting it, so the next round starts from the same tree: delete each run's branch on the remote, reset the default branch to the seed commit and force-push it with `--no-verify`, and remove each run's local worktree. The next round's setup skips `gh repo create` and starts at the first `init`.
+**(d) A name with run history.** Run it after leg (a), once `<slug>_2`'s runs have all finished. Stop the run leg (a) started, then list its runs:
+
+```
+bash <scriptsDir>/remote-run.sh stop <slug>_2
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>_2 --json databaseId,displayTitle,status
+```
+
+Repeat the listing until every `harness run <slug>_2` entry has `status` `completed`. A stopped run is `completed` with conclusion `cancelled`, and `restore` counts it as a finished run. Then delete `<slug>_2`'s remote branch:
+
+```
+git push --no-verify origin --delete <slug>_2
+```
+
+1. Open a third issue with the same title and apply the label, as above. Read the outcome:
+
+   ```
+   gh issue view <number> --repo <owner>/<scratch-repo> --comments
+   ```
+
+   ```
+   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>_3 --json databaseId,headSha,url
+   ```
+
+   ```
+   git ls-remote origin <slug>_3
+   ```
+
+   Passes when the comment names `<slug>_3` and the URL of a run whose `headSha` is the commit `git ls-remote` shows.
+2. From the machine, start the deleted name explicitly:
+
+   ```
+   bash <scriptsDir>/remote-run.sh start <slug>_2 --prompt-file <file>
+   ```
+
+   Read that job's log:
+
+   ```
+   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>_2 --json databaseId,headSha,url
+   ```
+
+   ```
+   gh run view <run id> --repo <owner>/<scratch-repo> --log
+   ```
+
+   Passes when its `Restore the previous job's state` step logs `remote-run.sh: skipped <n> finished run(s) of <slug>_2 from before its current lineage` and `remote-run.sh: no previous bundle for <slug>_2; this is its first job`, logs no `placed <n> planning file(s)` line, and its session does not say it is resuming a plan draft.
+
+Record the comment, both `gh run list` outputs and the restore step's log verbatim.
+
+**(xiv) Run control from GitHub with the machine off.** It observes run control end to end (`docs/github-run-control.md`): comment commands, a park answered in a comment, a review round, lifecycle comments, state labels and the draft pull request, with nothing local taking part. On the scratch repository, after *Setup*, turn the coupling on; where (xiii) ran in this round, skip the steps it already took:
+
+```
+npx --yes autonomous-sdlc-harness@<version> config set forge github
+```
+
+```
+npx --yes autonomous-sdlc-harness@<version> init
+```
+
+Passes when that `init` reports writing, or keeping, all four workflows: `harness-run.yml`, `harness-resume.yml`, `harness-trigger.yml` and `harness-control.yml` under `.github/workflows/`. Commit and push them:
+
+```
+git add <each path the init run reported writing>
+```
+
+```
+git commit -m "Add the harness run control"
+```
+
+```
+gh auth refresh -s workflow
+```
+
+```
+git push --no-verify origin <default branch>
+```
+
+```
+gh label create sdlc-harness
+```
+
+Read the pull-request setting:
+
+```
+gh api repos/<owner>/<scratch-repo>/actions/permissions/workflow
+```
+
+Switch on *Allow GitHub Actions to create and approve pull requests* by hand, under Settings → Actions → General → Workflow permissions, then read the setting again with the same command. Record both answers. Then:
+
+```
+npx --yes autonomous-sdlc-harness@<version> doctor --check-github
+```
+
+The setup passes when `remote-github` names both `harness-trigger.yml` and `harness-control.yml` and prints no warning about the pull-request setting. Record the `forge` and `remote-github` lines. Then stop the local watcher:
+
+```
+npx --yes autonomous-sdlc-harness@<version> daemon stop
+```
+
+Switch the machine off or disconnect it. Run every leg below from another device, as a person with write access, in order. `<number>` is the issue's number until leg (d) names the pull request's. After each leg, record each new reply's first line exactly and the labels each item carries:
+
+```
+gh issue view <number> --repo <owner>/<scratch-repo> --json labels
+```
+
+```
+gh pr view <number> --repo <owner>/<scratch-repo> --json labels
+```
+
+The comments are read with:
+
+```
+gh issue view <number> --repo <owner>/<scratch-repo> --comments
+```
+
+**(a) The trigger, and a park.** Open an issue whose task leaves a decision undecided — a limit it names without setting — so the task-plan writer parks, and label it:
+
+```
+gh issue create --repo <owner>/<scratch-repo> --title "<title>" --body "<body>"
+```
+
+```
+gh issue edit <number> --repo <owner>/<scratch-repo> --add-label sdlc-harness
+```
+
+Passes when the issue carries the trigger's comment naming `<slug>` and the label `sdlc-harness: running`, and, once the run parks, one comment per open question carrying that question whole, with the label `sdlc-harness: parked`.
+
+**(b) An answer in a comment.**
+
+```
+gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness answer 1 <answer>"
+```
+
+Passes when a reply names the actor and the answer, a `resumed` comment follows, and the label moves to `sdlc-harness: running`.
+
+**(c) Pause and resume.** While the run is running:
+
+```
+gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness pause"
+```
+
+Passes when a reply names the actor, a `paused` comment follows, and the label moves to `sdlc-harness: paused`. Then:
+
+```
+gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness resume"
+```
+
+Passes when a reply names the actor, a `resumed` comment follows, and the label moves to `sdlc-harness: running`.
+
+**(d) Completion and the draft pull request.** Let the run complete, then find and read its pull request:
+
+```
+gh pr list --repo <owner>/<scratch-repo> --head <slug>
+```
+
+```
+gh pr view <number> --repo <owner>/<scratch-repo> --json isDraft,body,headRefName
+```
+
+```
+gh api repos/<owner>/<scratch-repo>/issues/<issue number>/timeline
+```
+
+Passes when `isDraft` is `true`, `headRefName` is `<slug>`, the body reads `Started from #<issue number>.`, the issue's timeline shows the pull request, the issue carries a `completed` comment naming the pull request, and the issue and the pull request both carry `sdlc-harness: done`. Record the three outputs.
+
+**(e) A review that requests changes.** Record which token opened the pull request, from its author — `app/github-actions` for the job's token, otherwise the owner of `HARNESS_GIT_TOKEN`:
+
+```
+gh pr view <number> --repo <owner>/<scratch-repo> --json author
+```
+
+The reviewing account, which submits every review in legs (e) and (f), must have write access and must not be the pull request's author: GitHub never lets a pull request's author approve it or request changes on it, and the draft pull request is authored by the owner of `HARNESS_GIT_TOKEN` when that secret is set and otherwise by `github-actions[bot]` (`app/github-actions`), so the account that owns that token cannot run any review leg. From the reviewing account, submit a review requesting changes with two inline comments on different lines, from the pull request's *Files changed* tab. Then read the branch:
+
+```
+gh api "repos/<owner>/<scratch-repo>/commits?sha=<slug>"
+```
+
+```
+gh api "repos/<owner>/<scratch-repo>/contents/<stateDir>/user_reviews/<slug>_review.md?ref=<slug>" -H "Accept: application/vnd.github.raw"
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+```
+
+Passes when `<slug>` carries one commit `chore: add user review for <slug>`; the round file carries the review's body and both inline comments, each with its file, its line, the commit it was made on and its hunk; a `harness run <slug>` run follows; and the pull request carries the started-round comment. Record the round file verbatim.
+
+**(f) The refusals.** On the issue:
+
+```
+gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness approve"
+```
+
+Passes when the reply lists the five commands.
+
+```
+gh issue comment <number> --repo <owner>/<scratch-repo> --body "pause"
+```
+
+Passes when no reply follows and no `harness-control.yml` run for it gets past its `if:` — none appears, or it is `skipped`:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+```
+
+From leg (e)'s reviewing account, never the pull request's author, on the pull request:
+
+```
+gh pr review <number> --repo <owner>/<scratch-repo> --approve
+```
+
+Passes when the `harness-control.yml` run for it is `skipped`. While (e)'s round is still running, submit a second review requesting changes from the same account:
+
+```
+gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text>"
+```
+
+Passes when the reply says the review was collected, with no `submit again`, and no second `chore: add user review for <slug>` commit appears while (e)'s round runs; then, once that round completes, the `harness-run.yml` run's `collect` job places `<slug>_review_2.md` carrying that review's body under `## Review by @<login>`, a `harness run <slug>` run follows, and the pull request carries the started-round comment naming the reviewer. Record the reply, the `collect` job's log and the round file verbatim.
+
+Once that round completes too, from the same reviewing account, submit a review requesting changes:
+
+```
+gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text 1>"
+```
+
+While the round it starts is running, submit a second review requesting changes, and then, back to back, a third and a fourth, each with its own text:
+
+```
+gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text 2>"
+```
+
+```
+gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text 3>"
+```
+
+```
+gh pr review <number> --repo <owner>/<scratch-repo> --request-changes --body "<text 4>"
+```
+
+Then read the review jobs:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+```
+
+Passes when all of the following hold:
+
+- no review is refused;
+- each review job that ran replied "collected" (a pending review job that GitHub replaced may post no reply, which is recorded, not failed);
+- no second `chore: add user review for <slug>` commit appears while the first round runs;
+- once that round completes, the `harness-run.yml` run's `collect` job places one round file that carries the bodies of all three later reviews, each under its own `## Review by @<login>` section, and a `harness run <slug>` run follows.
+
+Record each reply, the `harness-control.yml` run list (which review jobs ran and which were cancelled), the `collect` job's log and the round file verbatim.
+
+Then, on the issue:
+
+```
+gh issue comment <number> --repo <owner>/<scratch-repo> --body "@SDLC-HARNESS pause"
+```
+
+Passes when a `harness-control.yml` run for it gets past its `if:` and a reply follows, accepted or refused by the run's state. A commenter without write access is not runnable on a scratch repository owned by a personal account, where every collaborator holds `write`, as round 5's leg (b) was not; record it as not run.
+
+**(g) Stop.**
+
+```
+gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness stop"
+```
+
+Passes when a reply names the actor, a `stopped` comment names the actor, and the label moves to `sdlc-harness: stopped`.
+
+**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); and *The whole chain on GitHub*, by the legs together.
+
+**Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set. Where (xiv) ran, close the round's pull request first, before any branch is deleted:
+
+```
+gh pr close <number> --delete-branch
+```
+
+Where (xiii) or (xiv) ran, delete the issues the round created with `gh issue delete <number>`, leg (d)'s third issue included, delete `<slug>_3` on the remote with the other runs' branches, and unset `forge` before the seed reset by removing its key from `harness.config.json` by hand, since `config` has no verb that unsets a key (`docs/cli.md` → ``## 8. `config` ``). Delete the trigger label `sdlc-harness` and, where (xiv) ran, the six state labels `sdlc-harness: running`, `sdlc-harness: parked`, `sdlc-harness: paused`, `sdlc-harness: done`, `sdlc-harness: failed` and `sdlc-harness: stopped`, one command per label, quoting a name that holds a space:
+
+```
+gh label delete "<name>" --yes
+```
+
+Then return the scratch repository to its seed rather than deleting it, so the next round starts from the same tree: delete each run's branch on the remote, reset the default branch to the seed commit and force-push it with `--no-verify`, and remove each run's local worktree. The next round's setup skips `gh repo create` and starts at the first `init`.
 
 **Where the results go.** A dated paragraph under this gate, as gate 10's opens, carrying the CLI version, the `claude` version the job installed and each observation's recorded output; and for each behaviour an observation settled, its row in `docs/remote-execution.md` → `## 6. What is not verified here` is moved from *not verified* to *verified on <date>*, citing this gate. A behaviour an observation corrected rather than confirmed changes the design text it rests on, not only that row. A run that could not execute an observation names it and why.
+
+**Gate 13 — the Python docs-retrieval service.** `docs-retrieval-service/` is a second implementation of docs retrieval, and this gate holds it to the same bar as the CLI. Every leg goes through one wrapper, `scripts/python-service.sh`, and `scripts/run-gates.sh` grades each by its exit status: **13a** runs `bash scripts/python-service.sh lint` (`ruff check`, then `ruff format --check`); **13b** runs `bash scripts/python-service.sh typecheck` (`mypy`, strict, over the package and its tests); **13c** runs `bash scripts/python-service.sh test`, the whole `pytest` suite, in which every `container`-marked case skips because no test database is named; **13d** runs `bash scripts/python-service.sh container-test`, those `container`-marked cases against a real Postgres. 13c's parity cases run the TypeScript implementation through `cli/dist`, so 13c depends on gate 2's build, `2a build` in the script. **No leg needs model weights or a network.** The suite selects the hash stub through `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` and plants a fake weight cache for the presence check, which runs even under the stub, so no model is downloaded or loaded; and every leg runs through `uv run --frozen --no-sync`, which neither reaches the network nor changes the environment. The one exception is 13d's first run on a machine, which builds the Postgres image and may reach the network to do it. **A leg is `BLOCKED`, not failed, where `uv` is not on `PATH` or no synced environment exists** — the wrapper exits `3`, and the script prints the leg as `BLOCKED` with the command that clears it, lists it with the gates it cannot run, names it in its closing line and counts it among neither the passes nor the failures, on gate 11's ground that provisioning a checkout is not a property of the code. Provision it once per checkout, after installing `uv`, from the repository root:
+
+```
+bash scripts/python-service.sh sync
+```
+
+`sync` reaches the network and installs the dev group without the `models` extra, so no gate installs or imports `torch`. **13d is opt-in.** It runs only when the script is started with `HARNESS_GATES_CONTAINERS=1` on a machine with Docker:
+
+```
+HARNESS_GATES_CONTAINERS=1 bash scripts/run-gates.sh
+```
+
+Without the variable the script prints `SKIPPED 13d` with the variable to set; with it and no `docker` on `PATH` the wrapper exits `4` and the script prints `SKIPPED 13d` with that reason. Either way 13d is listed with the gates the script cannot run and counted among neither the passes nor the failures, so a green run that did not reach Postgres says so. When it does run, it starts only the compose file's `postgres` service, under a project name and a loopback port derived from this checkout so that two worktrees do not collide, runs the `container`-marked cases against it, and removes that project with `docker compose … down -v` on every exit path. **The Python environment lives outside the checkout**: the wrapper keeps the virtual environment and every tool cache under `${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/`, keyed per checkout, which is why gate 6a's `$HOME` grep needs no exclusion for it. **Two things stay hand-run**: `docker compose up` of the full service stack from `docs-retrieval-service/`, and any run of the service with real models, whose weights only the operator-run `harness-docs-retrieval fetch-models` sub-command downloads.
 
 ---
 
@@ -1074,7 +1384,7 @@ Items 1 and 2 — the extraction manifest and this layout — are omitted becaus
 
 **Item 6 owed two things its row did not name; one shipped with it and the other turned out not to be its.** The first was **the permission-profile coverage for the outer-loop trio** — `commit-on-branch.sh`, `push-branch.sh`, `autonomous-watcher.sh` — which had to land in the same change that ships them: the profile generator derived its script entries from the wrappers written under `scriptsDir` alone, so the trio would have got none, and a missing entry is a silent stall rather than a refusal. It landed. The shipped outer-loop table marks each row agent-invocable or not, and the profile generator emits the three literal forms only for a row that is. That coverage could not have been written earlier because the trio's destination was itself unsettled — `cli/scripts/README.md` had these scripts executing from the installed package while the shipped instruction corpus invoked them from `scriptsDir`. The resolution taken is `scriptsDir`, and that README now records it, the mechanism that was not chosen, and the cost of the one that was.
 
-The second was **the reader for the `forge` configuration key**, and item 6 is not where it belongs. `forge` — `"github"`, `"gitlab"` or `"none"` — is declared in the schema with no default and documented in `config.md` §5, and was declared with no consumer, on the principle that a config key costs an adopter nothing until something reads it, and `config.md`'s row used to name item 6 as the item delivering that reader, reasoning that pull-request and remote conventions are the outer-loop wrappers' business. Item 6 has now shipped and `push-branch.sh` opens no pull request and consults no platform: none of the key's three values would change a line of it. The reader belongs instead to the **forge coupling** — an issue-label trigger, draft-pull-request output, comment-based park-and-ask — which no row in this table delivers and which therefore carries no number to cite. That row in `config.md` has been rewritten to name the work rather than a number, because a numeric citation resolving through this table sent the reader to an item that shipped without it. The coupling's first part, the issue-label trigger, has since landed with a reader — `init` and the trigger itself read the key — and a reporter, `doctor` → `forge`, which names every state, so *the decision not yet made* is now reported rather than silent (`github-issue-trigger.md`). The debt that remains is the coupling's other two parts, draft-pull-request output and comment-based park-and-ask: they carry no reader because nothing implements them, and `config.md`'s row names them.
+The second was **the reader for the `forge` configuration key**, and item 6 is not where it belongs. `forge` — `"github"`, `"gitlab"` or `"none"` — is declared in the schema with no default and documented in `config.md` §5, and was declared with no consumer, on the principle that a config key costs an adopter nothing until something reads it, and `config.md`'s row used to name item 6 as the item delivering that reader, reasoning that pull-request and remote conventions are the outer-loop wrappers' business. Item 6 has now shipped and `push-branch.sh` opens no pull request and consults no platform: none of the key's three values would change a line of it. The reader belongs instead to the **forge coupling** — an issue-label trigger, draft-pull-request output, comment-based park-and-ask — which no row in this table delivers and which therefore carries no number to cite. That row in `config.md` has been rewritten to name the work rather than a number, because a numeric citation resolving through this table sent the reader to an item that shipped without it. The coupling's first part, the issue-label trigger, has since landed with a reader — `init` and the trigger itself read the key — and a reporter, `doctor` → `forge`, which names every state, so *the decision not yet made* is now reported rather than silent (`github-issue-trigger.md`). The coupling's other two parts, draft-pull-request output and comment-based park-and-ask, have since landed with their readers — `remote-run.sh`'s `deliver`, `report` and `control`, and the `harness-control.yml` workflow `init` writes — under the same reporter, `doctor` → `forge`, which grades the control workflow (`github-run-control.md`). The debt is paid, and `config.md`'s row says the coupling is delivered.
 
 **A second key is now in the state `forge` was in before its trigger landed, and this release put it there.** `design.source` — `"figma"`, `"penpot"` or `"none"` — is declared in the schema and documented in `config.md` §5 with no default and no consumer, on the same principle. Its reader is the **design-source coupling**: an adapter reading design tokens and frame/node structure into the flow's inputs, which no row in this table delivers and which therefore carries no number to cite either. The root `ARCHITECTURE.md`'s `## 8. Declaring a seam before building it` states what that interface is and is not, and states plainly that the key repeats the `forge` outcome rather than `qa.driver`'s. The debt is the same debt rather than a new one: until the coupling lands, `design.source` stays declared and **unreported** — `checkEnum` returns on an absent optional key and `doctor` carries no check of its own — so *the decision not yet made* is again the one state no reporter names. Giving it a reporter is part of the coupling's work, not a separate debt.
 

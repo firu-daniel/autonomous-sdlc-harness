@@ -1,6 +1,6 @@
 # autonomous-sdlc-harness
 
-> An autonomous software-delivery harness for Claude Code: you ask for a change, and you get back a branch that has been planned, implemented, independently reviewed and pushed, ready for your review. You install two things, a Claude Code plugin and a Node CLI.
+> An autonomous software-delivery harness for Claude Code: you ask for a change, and you get back a branch that has been planned, implemented, independently reviewed and pushed, ready for your review. It is used locally and from GitHub, where labelling an issue starts a run, once one maintainer has done a one-time local setup. You install two things, a Claude Code plugin and a Node CLI.
 
 This file is for a language model choosing which document of this repository to read. The harness ships as two halves, `plugin/` and `cli/`. Its setup command is `/autonomous-sdlc-harness:harness-analyze`, typed into an interactive Claude Code session; every command the plugin ships carries that `autonomous-sdlc-harness:` prefix.
 
@@ -54,6 +54,7 @@ The quick start, in five steps:
 - [docs/watcher.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/watcher.md): the outer loop that turns a dropped file into an unattended run.
 - [docs/remote-execution.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/remote-execution.md): running unattended runs in a GitHub Actions job instead of locally: the design, adopter setup, runners, billing, costs and security.
 - [docs/github-issue-trigger.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/github-issue-trigger.md): starting a run by labelling a GitHub issue: setup, the branch-name rule, who can start a run, and other trackers.
+- [docs/github-run-control.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/github-run-control.md): working a run from GitHub: comment commands, review rounds, the draft pull request, lifecycle comments and state labels, and the GitHub entry point.
 - [docs/analyze.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/analyze.md): the decisions of record for `/autonomous-sdlc-harness:harness-analyze`, including what it fills in and what it refuses to guess.
 - [docs/cli.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/cli.md): the five subcommands, their flags and exit codes, and the `init` re-run contract.
 - [docs/retrieval.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/docs/retrieval.md): docs retrieval, opt-in and local; measured on a real catalog, verdict withdrawn, kept opt-in by maintainer decision: its design, measured facts, when to turn it on, what it buys and what it costs.

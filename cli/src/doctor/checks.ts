@@ -25,7 +25,7 @@
  *    remote-execution switch is `config/model.ts`'s {@link remoteExecutionApplies} and the
  *    issue-trigger switch its {@link forgeTriggerApplies}, the workflow paths and the binary run as
  *    `gh` are `remote/githubActions.ts`'s ({@link WORKFLOW_RUN_PATH}, {@link WORKFLOW_RESUME_PATH},
- *    {@link WORKFLOW_TRIGGER_PATH}, {@link GH_CLI_VARIABLE}, {@link ghCli}), whether a ref carries a
+ *    {@link WORKFLOW_TRIGGER_PATH}, {@link WORKFLOW_CONTROL_PATH}, {@link GH_CLI_VARIABLE}, {@link ghCli}), whether a ref carries a
  *    file is `core/git.ts`'s {@link pathAtRef}, and
  *    the writability probe is the write engine's {@link probeWritable}. A
  *    check that wanted a slightly different answer would be a second definition of the thing being
@@ -70,13 +70,17 @@
  *    nothing. `retrieval-index` spawns a child of this CLI running `docs index --in-memory`: a child
  *    because {@link Check.run} is synchronous and the store is not, and because the child is the
  *    installation whose optional peers resolve beside it. It builds in memory and exits, so it starts
- *    no server and writes nothing.
+ *    no server and writes nothing. The three `retrieval-python-*` checks share one child running the
+ *    Python package's own `self-check` and grade its three lines; that child starts no server either.
  *
  * ## What this module deliberately does not do
  *
  * - **It writes nothing** beyond {@link probeWritable}'s temp file, which that function removes with
  *   an in-process `fs.rm` on a single file — never a shelled-out recursive removal, which a
- *   user-level `permissions.deny` can silently block (`cli.ts`'s header).
+ *   user-level `permissions.deny` can silently block (`cli.ts`'s header). One exception:
+ *   `retrieval-python-index` refreshes the Python backend's index **in its database**, because
+ *   `self-check`'s `index` question builds it there — the same write the server's first query makes.
+ *   It writes nothing in the repository or the machine cache.
  * - **It repairs nothing.** Every failure names what to run — `init`, `init --force`, an edit to one
  *   config key — and `doctor` stays a command that is safe to run against a repository at any time.
  */
@@ -98,6 +102,7 @@ import {
   forgeTriggerApplies,
   isPlaceholder,
   LAYER_CATCH_ALL_PATH,
+  pythonRetrievalApplies,
   remoteExecutionApplies,
   retrievalApplies,
   STATE_DIR_DOT_PATTERN,
@@ -125,6 +130,7 @@ import {
   WORKFLOW_SCOPE_COMMAND,
   WORKFLOW_SCOPE_REASON,
 } from '../core/defaultBranchPush.js';
+import { internal } from '../core/errors.js';
 import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
@@ -219,11 +225,16 @@ import {
   API_KEY_SECRET,
   CLI_VERSION_VARIABLE,
   DEFAULT_GH_CLI,
+  COMMAND_HANDLE,
+  COMMAND_VERBS,
   DEFAULT_TRIGGER_LABEL,
   GH_CLI_VARIABLE,
   ghCli,
   GIT_TOKEN_SECRET,
+  LEGACY_TRIGGER_LABEL,
   OAUTH_TOKEN_SECRET,
+  PR_CREATE_SETTING,
+  PR_CREATE_SETTING_PATH,
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
   renderedCliVersions,
@@ -231,6 +242,9 @@ import {
   RUNNER_VARIABLE,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_LABEL_VARIABLE,
+  triggerFallbackLabel,
+  WORKFLOW_CONTROL_FILE,
+  WORKFLOW_CONTROL_PATH,
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RESUME_PATH,
   WORKFLOW_RUN_FILE,
@@ -241,11 +255,24 @@ import {
 } from '../remote/githubActions.js';
 import { modelFilesPresent } from '../retrieval/models.js';
 import {
+  launcherSearchPath,
+  parseSelfCheck,
+  PYTHON_DATABASE_URL_VARIABLE,
+  PYTHON_FETCH_MODELS_SUB_COMMAND,
+  PYTHON_RETRIEVAL_COMMAND,
+  PYTHON_SELF_CHECK_SUB_COMMAND,
+  pythonDatabaseUrl,
+  SELF_CHECK_INDEX_NOT_ATTEMPTED,
+  type SelfCheckLine,
+  type SelfCheckQuestion,
+} from '../retrieval/pythonBackend.js';
+import {
   retrievalCliEntry,
   retrievalModelCacheDir,
   retrievalRuntimeDir,
   retrievalRuntimeState,
 } from '../retrieval/runtime.js';
+import { DOCS_SERVER_NAME } from '../retrieval/server.js';
 
 /**
  * How the CLI is typed, for every remedy that tells an operator what to run next. The `npx` prefix
@@ -284,6 +311,14 @@ const REMOTE_RUN_SCRIPT = 'remote-run.sh';
  * YAML file spells this endpoint.
  */
 const ARTIFACT_RETENTION_ENDPOINT = 'repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention';
+
+/**
+ * The `gh api` path {@link REMOTE_GITHUB_CHECK} reads the *Allow GitHub Actions to create and approve
+ * pull requests* setting from — `can_approve_pull_request_reviews`. Local for
+ * {@link ARTIFACT_RETENTION_ENDPOINT}'s reason. A workflow's own token cannot read it; a person's `gh`
+ * usually can.
+ */
+const PR_SETTING_ENDPOINT = 'repos/{owner}/{repo}/actions/permissions/workflow';
 
 /** Below this many days of artifact retention {@link REMOTE_GITHUB_CHECK} warns; argued there. */
 const ARTIFACT_RETENTION_WARN_DAYS = 30;
@@ -2541,6 +2576,19 @@ function retentionDaysOf(stdout: string): number | undefined {
   return typeof days === 'number' && Number.isInteger(days) && days > 0 ? days : undefined;
 }
 
+/** The boolean `can_approve_pull_request_reviews` of a workflow-permissions answer, or `undefined` for any other shape. */
+function prApprovalSettingOf(stdout: string): boolean | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isJsonObject(parsed as JsonValue)) return undefined;
+  const allowed = (parsed as { readonly can_approve_pull_request_reviews?: unknown }).can_approve_pull_request_reviews;
+  return typeof allowed === 'boolean' ? allowed : undefined;
+}
+
 /**
  * What GitHub says about the remote setup — asked only under {@link CheckContext.probeGithub}.
  *
@@ -2553,15 +2601,29 @@ function retentionDaysOf(stdout: string): number | undefined {
  *   not know `harness-run.yml`; neither credential secret is set.
  * - `warn` — `HARNESS_PUSH_URL` absent; `harness-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
  *   set; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
- *   {@link forgeTriggerApplies}, `harness-trigger.yml` unknown to GitHub, or no label named by
- *   `HARNESS_TRIGGER_LABEL` (default {@link DEFAULT_TRIGGER_LABEL}); and any call that timed
- *   out, could not reach GitHub, or answered in a shape not understood — *cannot tell* is not
- *   *missing*, so it never fails.
+ *   {@link forgeTriggerApplies}, `harness-trigger.yml` or `harness-control.yml` unknown to GitHub, no
+ *   label by the effective trigger name, or the pull-request setting off with no `HARNESS_GIT_TOKEN`
+ *   secret; and any call that timed out, could not reach GitHub, or answered in a shape not
+ *   understood — *cannot tell* is not *missing*, so it never fails.
+ * - the pull-request setting off while the secret list was unreadable is a *cannot tell* warning,
+ *   never the missing-`HARNESS_GIT_TOKEN` one.
+ * - the effective trigger label is `HARNESS_TRIGGER_LABEL`, else the fallback the committed
+ *   `harness-trigger.yml` carries ({@link triggerFallbackLabel}), else {@link DEFAULT_TRIGGER_LABEL};
+ *   a fallback of {@link LEGACY_TRIGGER_LABEL} is a note, since it still starts runs.
  * - both credential secrets present is a note, not a finding: billing follows `ANTHROPIC_API_KEY`.
  * - a non-empty `HARNESS_TRIGGER_ALLOWED_BOTS` is a note naming the bots, which start runs without a
- *   permission check. When the trigger does not apply, neither trigger read is made.
+ *   permission check. When the trigger does not apply, no trigger, control or pull-request-setting
+ *   read is made.
  * - the retention read refused (typically HTTP 403: the endpoint needs admin access) is a note too —
- *   the read is best-effort, and a collaborator without admin can still run remotely.
+ *   the read is best-effort, and a collaborator without admin can still run remotely. A refused
+ *   pull-request-setting read is a note on the same terms.
+ * - the pull-request setting off with `HARNESS_GIT_TOKEN` set is a note: `deliver` opens the pull
+ *   request with that token instead.
+ * - all three trigger answers positive — both workflows known and the label present — is confirmed on
+ *   every outcome that reaches the trigger reads, `fail` and `warn` included, so an unrelated finding
+ *   never hides it; any answer not positive is already among the warnings. An outcome returned before
+ *   those reads — `gh` not runnable, no usable login, or no readable answer to the login probe — asks
+ *   GitHub nothing about the trigger.
  *
  * **Why 30 days.** A parked run waits on a human answer and a usage-paused one on a reset, and the
  * `harness-state` bundle is the only remote copy of either; once the repository's retention expires
@@ -2671,10 +2733,29 @@ const REMOTE_GITHUB_CHECK: Check = {
       if (trigger.answer.kind === 'refused') {
         warnings.push(`GitHub does not know ${WORKFLOW_TRIGGER_FILE} (${trigger.call}: ${trigger.answer.why}), so labelling an issue starts nothing: push ${WORKFLOW_TRIGGER_PATH} to the repository's default branch`);
       }
+      const control = ask(['workflow', 'view', WORKFLOW_CONTROL_FILE]);
+      if (control.answer === undefined) return fail(noSpawn);
+      if (control.answer.kind === 'unknown') warnings.push(cannotTell(control.call, control.answer.why, `whether GitHub knows ${WORKFLOW_CONTROL_FILE}`));
+      if (control.answer.kind === 'refused') {
+        warnings.push(`GitHub does not know ${WORKFLOW_CONTROL_FILE} (${control.call}: ${control.answer.why}), so comments and reviews start nothing: push ${WORKFLOW_CONTROL_PATH} to the repository's default branch`);
+      }
 
       // The label's name is a repository variable, so an unread variable listing leaves nothing to compare.
       const configured = variableValues?.get(TRIGGER_LABEL_VARIABLE)?.trim() ?? '';
-      const labelName = configured === '' ? DEFAULT_TRIGGER_LABEL : configured;
+      let labelName = configured;
+      if (configured === '') {
+        // Unset, the committed workflow's own fallback starts a run; it is never re-rendered by an upgrade.
+        let committed: string | undefined;
+        try {
+          committed = triggerFallbackLabel(readFileSync(join(root, ...WORKFLOW_TRIGGER_PATH.split('/')), 'utf8'));
+        } catch {
+          committed = undefined;
+        }
+        labelName = committed ?? DEFAULT_TRIGGER_LABEL;
+        if (variableValues !== undefined && labelName === LEGACY_TRIGGER_LABEL) {
+          notes.push(`${WORKFLOW_TRIGGER_PATH} was written by an earlier release and falls back to \`${LEGACY_TRIGGER_LABEL}\`, which keeps starting runs; \`${CLI} init --force\` re-renders it and the scripts to \`${DEFAULT_TRIGGER_LABEL}\`, and setting ${TRIGGER_LABEL_VARIABLE} keeps a name of your choosing under either`);
+        }
+      }
       let labelFound = false;
       if (variableValues === undefined) {
         warnings.push(`cannot tell whether the trigger label exists: its name is the ${TRIGGER_LABEL_VARIABLE} variable, and ${variables.call} gave no readable answer`);
@@ -2696,12 +2777,33 @@ const REMOTE_GITHUB_CHECK: Check = {
           notes.push(`${TRIGGER_ALLOWED_BOTS_VARIABLE} admits ${nameList(bots)}, each of which can start a run without a permission check`);
         }
       }
-      if (trigger.answer.kind === 'answered' && labelFound) triggerKnown = `; GitHub knows ${WORKFLOW_TRIGGER_FILE} and the label \`${labelName}\` exists`;
+      if (trigger.answer.kind === 'answered' && control.answer.kind === 'answered' && labelFound) {
+        triggerKnown = `; GitHub knows ${WORKFLOW_TRIGGER_FILE} and ${WORKFLOW_CONTROL_FILE}, and the label \`${labelName}\` exists`;
+      }
+
+      const prSetting = ask(['api', PR_SETTING_ENDPOINT]);
+      if (prSetting.answer === undefined) return fail(noSpawn);
+      if (prSetting.answer.kind === 'unknown') {
+        warnings.push(cannotTell(prSetting.call, prSetting.answer.why, `whether a run's own token may open its pull request (${PR_CREATE_SETTING})`));
+      } else if (prSetting.answer.kind === 'refused') {
+        notes.push(`the pull-request setting was not checked: ${prSetting.call} may need more access than this login has (${prSetting.answer.why})`);
+      } else {
+        const allowed = prApprovalSettingOf(prSetting.answer.stdout);
+        if (allowed === undefined) {
+          warnings.push(`cannot tell whether a run's own token may open its pull request: ${prSetting.call} answered in a shape this check does not read`);
+        } else if (!allowed && secretNames === undefined) {
+          warnings.push(`${PR_CREATE_SETTING} is off, and whether ${GIT_TOKEN_SECRET} is set could not be read, so a completed run may not be able to open its draft pull request: turn the setting on under ${PR_CREATE_SETTING_PATH}, or confirm ${GIT_TOKEN_SECRET} is a repository secret`);
+        } else if (!allowed && secretNames?.has(GIT_TOKEN_SECRET) === true) {
+          notes.push(`${PR_CREATE_SETTING} is off, so a completed run opens its draft pull request with ${GIT_TOKEN_SECRET}`);
+        } else if (!allowed) {
+          warnings.push(`${PR_CREATE_SETTING} is off and ${GIT_TOKEN_SECRET} is not a repository secret, so a completed run cannot open its draft pull request with the job's token: turn it on under ${PR_CREATE_SETTING_PATH}, or set ${GIT_TOKEN_SECRET} with \`gh secret set ${GIT_TOKEN_SECRET}\``);
+        }
+      }
     }
 
     const noted = notes.length > 0 ? `; ${notes.join('; ')}` : '';
-    if (failures.length > 0) return fail(`${[...failures, ...warnings].join('; ')}${noted}`);
-    if (warnings.length > 0) return warn(`${warnings.join('; ')}${noted}`);
+    if (failures.length > 0) return fail(`${[...failures, ...warnings].join('; ')}${triggerKnown}${noted}`);
+    if (warnings.length > 0) return warn(`${warnings.join('; ')}${triggerKnown}${noted}`);
     const kept = retentionDays === undefined ? '' : `, and the repository keeps artifacts for ${retentionDays} days`;
     return pass(`gh is authenticated, GitHub knows ${WORKFLOW_RUN_FILE} and ${WORKFLOW_RESUME_FILE}, a credential secret and ${PUSH_URL_SECRET} are set, and remote runs use ${runner as string}${kept}${triggerKnown}${noted}`);
   },
@@ -2715,20 +2817,21 @@ const REMOTE_GITHUB_CHECK: Check = {
  * check speaks only about a value outside {@link FORGE_KINDS}. An absent key is a decision not yet
  * made, and this line is where an operator learns the decision exists.
  *
- * **Graded from local evidence only** (the module header's choice 3): the trigger workflow, one git
- * ref and the configuration. Whether the label exists and whether GitHub knows the workflow are left
- * to `--check-github`.
+ * **Graded from local evidence only** (the module header's choice 3): the two forge workflows —
+ * {@link WORKFLOW_TRIGGER_FILE} and {@link WORKFLOW_CONTROL_FILE}, graded the same way — one git ref
+ * and the configuration. What GitHub says — whether the label exists, which workflows it knows, and
+ * the pull-request setting — is left to {@link REMOTE_GITHUB_CHECK}: the `github` pass names
+ * `--check-github` when it is absent, and under it names that check, which {@link CHECKS} runs first.
  *
  * **Its worst grade is `warn`**: no `forge` state stops a run, because the inbox path works whatever
  * the key says. The three `warn`s are all `github`: remote execution off, because a run started from
- * GitHub always executes through {@link WORKFLOW_RUN_FILE}; the trigger workflow absent; and the
- * trigger workflow not carried by `origin/<defaultBranch>`, because GitHub runs an `issues` workflow
- * only from its default branch — that last with {@link REMOTE_EXECUTION_CHECK}'s push remedy and its
- * two *not graded* notes, on the same reasoning.
+ * GitHub always executes through {@link WORKFLOW_RUN_FILE}; a forge workflow absent; and a forge
+ * workflow not carried by `origin/<defaultBranch>`, because GitHub runs an `issues` or
+ * `issue_comment` workflow only from its default branch — that last with
+ * {@link REMOTE_EXECUTION_CHECK}'s push remedy and its two *not graded* notes, on the same reasoning.
+ * Each warn names every file it is about, so two absent files are one line naming both.
  *
- * Draft-pull-request output and comment park-and-ask are not graded, because nothing implements them
- * yet; the `github` pass names them as still to come, so the line never implies the whole coupling
- * exists. A value outside {@link FORGE_KINDS} is the config check's `fail`, and is not graded here.
+ * A value outside {@link FORGE_KINDS} is the config check's `fail`, and is not graded here.
  */
 const FORGE_CHECK: Check = {
   id: 'forge',
@@ -2739,7 +2842,9 @@ const FORGE_CHECK: Check = {
 
     const root = ctx.repoRoot;
     const forge = ctx.config.forge;
-    const triggerPresent = existsSync(join(root, ...WORKFLOW_TRIGGER_PATH.split('/')));
+    const forgeWorkflows = [WORKFLOW_TRIGGER_PATH, WORKFLOW_CONTROL_PATH];
+    const presentWorkflows = forgeWorkflows.filter((path) => existsSync(join(root, ...path.split('/'))));
+    const isAre = (paths: readonly string[]) => (paths.length === 1 ? 'is' : 'are');
 
     if (forge === undefined) {
       return pass(
@@ -2750,8 +2855,8 @@ const FORGE_CHECK: Check = {
       return pass('not graded, because forge holds a value this CLI does not know (see the config check)');
     }
     if (forge === 'none') {
-      const left = triggerPresent
-        ? `. ${WORKFLOW_TRIGGER_PATH} is present and unused: the job it starts refuses every event while forge is not github`
+      const left = presentWorkflows.length > 0
+        ? `. ${nameList(presentWorkflows)} ${isAre(presentWorkflows)} present and unused: the job each starts refuses every event while forge is not github`
         : '';
       return pass(`forge is none: this repository has no forge integration, and nothing starts a run from an issue${left}`);
     }
@@ -2768,26 +2873,39 @@ const FORGE_CHECK: Check = {
     }
 
     const on = 'forge is github and remote execution is on';
-    if (!triggerPresent) {
-      return warn(`${on}, but ${WORKFLOW_TRIGGER_PATH} is absent, so labelling an issue starts nothing: re-run \`${CLI} init\`, which writes it create-if-absent`);
+    const startsNothing: Readonly<Record<string, string>> = {
+      [WORKFLOW_TRIGGER_PATH]: 'labelling an issue starts nothing',
+      [WORKFLOW_CONTROL_PATH]: 'comments and reviews start nothing',
+    };
+    const consequence = (paths: readonly string[]) => paths.map((path) => startsNothing[path]).join(', and ');
+    const absent = forgeWorkflows.filter((path) => !presentWorkflows.includes(path));
+    if (absent.length > 0) {
+      return warn(
+        `${on}, but ${nameList(absent)} ${isAre(absent)} absent, so ${consequence(absent)}: re-run \`${CLI} init\`, which writes ${absent.length === 1 ? 'it' : 'them'} create-if-absent`,
+      );
     }
 
     const branch = ctx.config.defaultBranch;
     let carried: string;
     if (typeof branch !== 'string' || branch.trim() === '') {
-      carried = `; whether GitHub's default branch carries it is not graded, because defaultBranch is not a branch name (see the config check)`;
+      carried = `; whether GitHub's default branch carries them is not graded, because defaultBranch is not a branch name (see the config check)`;
     } else if (!remoteTrackingBranchResolves(root, branch)) {
-      carried = `; whether origin/${branch} carries it is not graded, because there is no origin/${branch} (see the remote check)`;
-    } else if (!pathAtRef(root, `origin/${branch}`, WORKFLOW_TRIGGER_PATH)) {
-      return warn(
-        `${on}, but origin/${branch} does not carry ${WORKFLOW_TRIGGER_PATH}, as this checkout last fetched it, and GitHub runs an issues workflow only from its default branch, so labelling an issue starts nothing yet: commit it, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`,
-      );
+      carried = `; whether origin/${branch} carries them is not graded, because there is no origin/${branch} (see the remote check)`;
     } else {
-      carried = ` and origin/${branch} carries it`;
+      const uncarried = forgeWorkflows.filter((path) => !pathAtRef(root, `origin/${branch}`, path));
+      if (uncarried.length > 0) {
+        return warn(
+          `${on}, but origin/${branch} does not carry ${nameList(uncarried)}, as this checkout last fetched it, and GitHub runs an issues or issue_comment workflow only from its default branch, so ${consequence(uncarried)} yet: commit ${uncarried.length === 1 ? 'it' : 'them'}, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`,
+        );
+      }
+      carried = ` and origin/${branch} carries them`;
     }
 
+    const asked = ctx.probeGithub
+      ? `the ${REMOTE_GITHUB_CHECK.id} check above reports what GitHub says`
+      : `\`${CLI} doctor --check-github\` asks GitHub`;
     return pass(
-      `${on}: ${WORKFLOW_TRIGGER_PATH} is present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; draft-pull-request output and comment park-and-ask are still to come. What this cannot see lives on GitHub — whether that label exists and whether GitHub knows ${WORKFLOW_TRIGGER_FILE}; \`${CLI} doctor --check-github\` asks GitHub`,
+      `${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; a \`${COMMAND_HANDLE} <verb>\` comment (${nameList([...COMMAND_VERBS])}) steers it; a review requesting changes on the run's pull request starts a user-review round; and a completed run opens a draft pull request. What this cannot see lives on GitHub — the label, the workflows GitHub knows (${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE}) and the pull-request setting; ${asked}`,
     );
   },
 };
@@ -4750,6 +4868,14 @@ const BROWSER_WIRING_CHECK: Check = {
 const RETRIEVAL_OFF =
   'docs.retrieval is off (it needs phases.docs and docs.retrieval both true), so no RAG library is expected and none was resolved';
 
+/** The pass every `retrieval-python-*` check gives when retrieval is on under another backend. */
+const PYTHON_NOT_SELECTED =
+  'docs.retrieval is on with docs.retrievalBackend not python, so the launcher starts the TypeScript runtime and nothing of the Python backend is expected or checked';
+
+/** The pass the three TypeScript retrieval checks give when {@link pythonRetrievalApplies} is true. */
+const TYPESCRIPT_NOT_SELECTED =
+  'docs.retrievalBackend is python, so the launcher starts the Python backend rather than this runtime and it is not graded; init still installs it, so switching back costs nothing';
+
 /** How many missing model files {@link RETRIEVAL_MODEL_CACHE_CHECK} names before it counts the rest. */
 const MISSING_MODEL_FILES_NAMED = 5;
 
@@ -4776,6 +4902,7 @@ const RETRIEVAL_DEPENDENCIES_CHECK: Check = {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
     if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (pythonRetrievalApplies(ctx.config)) return pass(TYPESCRIPT_NOT_SELECTED);
 
     const runtime = retrievalRuntimeDir();
     const state = retrievalRuntimeState();
@@ -4798,6 +4925,7 @@ const RETRIEVAL_MODEL_CACHE_CHECK: Check = {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
     if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (pythonRetrievalApplies(ctx.config)) return pass(TYPESCRIPT_NOT_SELECTED);
 
     const dir = retrievalModelCacheDir();
     const { present, missing } = modelFilesPresent(dir);
@@ -4843,6 +4971,7 @@ const RETRIEVAL_INDEX_CHECK: Check = {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
     if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (pythonRetrievalApplies(ctx.config)) return pass(TYPESCRIPT_NOT_SELECTED);
 
     const resolved = retrievalCliEntry();
     if (resolved === undefined) return fail('cannot build without the RAG libraries (see retrieval-dependencies)');
@@ -4869,6 +4998,183 @@ const RETRIEVAL_INDEX_CHECK: Check = {
         `the RAG index did not build in memory: ${messageOf(error)} — run \`${CLI} init\` to set retrieval up`,
       );
     }
+  },
+};
+
+/** What the one `self-check` run answered, shared by the three `retrieval-python-*` checks. */
+type PythonSelfCheck =
+  | { readonly kind: 'unresolved'; readonly searched: string }
+  | { readonly kind: 'unreadable'; readonly text: string }
+  | {
+      readonly kind: 'answered';
+      readonly lines: ReadonlyMap<SelfCheckQuestion, SelfCheckLine>;
+      readonly databaseUrl: string;
+    };
+
+const pythonSelfCheckCache = new WeakMap<CheckContext, PythonSelfCheck>();
+
+/** The `self-check` question each `retrieval-python-*` check id grades, for the index's cross-reference. */
+const PYTHON_CHECK_ID: Readonly<Record<SelfCheckQuestion, string>> = Object.freeze({
+  packages: 'retrieval-python-dependencies',
+  weights: 'retrieval-python-model-cache',
+  index: 'retrieval-python-index',
+});
+
+/**
+ * Run the Python backend's own `self-check` once per {@link CheckContext}; the three
+ * `retrieval-python-*` checks grade its lines and never re-derive them (choice 1).
+ *
+ * The command is resolved on {@link launcherSearchPath} — the `PATH` the launcher resolves it on —
+ * not on this process's own, so a pass here is a pass on the server the launcher starts.
+ *
+ * **`spawnSync` rather than `execFileSync`:** `self-check` exits 1 whenever a line is `FAIL`, with its
+ * whole answer on stdout, and `execFileSync` would turn that answer into a thrown error.
+ *
+ * **The env is the server's, not the shell's.** `process.env` is overlaid by the string entries of the
+ * `.mcp.json` server's `env` object, which the agent runner passes to the server, and then
+ * {@link PYTHON_DATABASE_URL_VARIABLE} is set to {@link pythonDatabaseUrl}'s answer from that object
+ * alone: the runner never passes a shell export, so honouring one here would grade a database the
+ * server does not use.
+ */
+function pythonSelfCheck(ctx: CheckContext, repoRoot: string): PythonSelfCheck {
+  const cached = pythonSelfCheckCache.get(ctx);
+  if (cached !== undefined) return cached;
+
+  const answer = runPythonSelfCheck(repoRoot);
+  pythonSelfCheckCache.set(ctx, answer);
+  return answer;
+}
+
+function runPythonSelfCheck(repoRoot: string): PythonSelfCheck {
+  const searched = launcherSearchPath(process.env['PATH'] ?? '', process.env['HOME']);
+  const directory = locateOnPath(PYTHON_RETRIEVAL_COMMAND, searched);
+  if (directory === undefined) return { kind: 'unresolved', searched };
+
+  const mcp = readJsonFile(join(repoRoot, MCP_PATH));
+  const servers = isJsonObject(mcp) ? mcp[SERVERS_KEY] : undefined;
+  const server = isJsonObject(servers) ? servers[DOCS_SERVER_NAME] : undefined;
+  const serverEnv = isJsonObject(server) ? server['env'] : undefined;
+  const overlay: Record<string, string> = {};
+  if (isJsonObject(serverEnv)) {
+    for (const [key, value] of Object.entries(serverEnv)) {
+      if (typeof value === 'string') overlay[key] = value;
+    }
+  }
+  const databaseUrl = pythonDatabaseUrl(serverEnv);
+
+  const child = spawnSync(join(directory, PYTHON_RETRIEVAL_COMMAND), [PYTHON_SELF_CHECK_SUB_COMMAND, '--repo', repoRoot], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: RETRIEVAL_INDEX_TIMEOUT_MS,
+    env: { ...process.env, ...overlay, [PYTHON_DATABASE_URL_VARIABLE]: databaseUrl },
+  });
+  if (child.error !== undefined) return { kind: 'unreadable', text: messageOf(child.error) };
+
+  const lines = child.status === 0 || child.status === 1 ? parseSelfCheck(child.stdout ?? '') : undefined;
+  if (lines !== undefined) return { kind: 'answered', lines, databaseUrl };
+
+  const how = child.status === null ? `stopped by ${child.signal}` : `exit status ${child.status}`;
+  const said = firstLine(child.stderr ?? '') || firstLine(child.stdout ?? '');
+  return { kind: 'unreadable', text: said === '' ? how : `${how}: ${said}` };
+}
+
+/** One line of an answered `self-check`; `parseSelfCheck` guarantees all three are present. */
+function selfCheckLine(answer: { readonly lines: ReadonlyMap<SelfCheckQuestion, SelfCheckLine> }, question: SelfCheckQuestion): SelfCheckLine {
+  const line = answer.lines.get(question);
+  if (line === undefined) throw internal(`self-check answered without its ${question} line, which parseSelfCheck guarantees`);
+  return line;
+}
+
+/**
+ * Host, port and database of a connection string, with the credentials dropped — a check's text is
+ * printed and may be pasted, so the password never reaches it.
+ */
+function databaseLocation(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const port = parsed.port === '' ? '' : `:${parsed.port}`;
+    return `${parsed.hostname}${port}${parsed.pathname}`;
+  } catch {
+    return 'a connection string this check cannot parse (not printed, as it may carry a password)';
+  }
+}
+
+/** The install remedy every `retrieval-python-dependencies` failure names. */
+const PYTHON_INSTALL_REMEDY =
+  "install the package with its `models` extra (docs/retrieval.md → `## Turning on the Python backend`)";
+
+/** Do the Python backend's console script, interpreter and packages resolve? */
+const RETRIEVAL_PYTHON_DEPENDENCIES_CHECK: Check = {
+  id: 'retrieval-python-dependencies',
+  title: "RAG's Python backend resolves",
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (!pythonRetrievalApplies(ctx.config)) return pass(PYTHON_NOT_SELECTED);
+
+    const answer = pythonSelfCheck(ctx, ctx.repoRoot);
+    if (answer.kind === 'unresolved') {
+      return fail(
+        `${PYTHON_RETRIEVAL_COMMAND} does not resolve on the launcher's PATH (${answer.searched}), so the search server never starts — ${PYTHON_INSTALL_REMEDY}`,
+      );
+    }
+    if (answer.kind === 'unreadable') {
+      return fail(
+        `${PYTHON_RETRIEVAL_COMMAND} ${PYTHON_SELF_CHECK_SUB_COMMAND} answered in a shape this CLI cannot grade (${answer.text}) — ${PYTHON_INSTALL_REMEDY}, from a clone at the release tag matching this CLI's version, then run doctor again`,
+      );
+    }
+    const line = selfCheckLine(answer, 'packages');
+    return line.ok ? pass(line.detail) : fail(`${line.detail} — ${PYTHON_INSTALL_REMEDY}`);
+  },
+};
+
+/** Are the Python backend's model weights in its cache? */
+const RETRIEVAL_PYTHON_MODEL_CACHE_CHECK: Check = {
+  id: 'retrieval-python-model-cache',
+  title: "RAG's Python backend weights are cached",
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (!pythonRetrievalApplies(ctx.config)) return pass(PYTHON_NOT_SELECTED);
+
+    const answer = pythonSelfCheck(ctx, ctx.repoRoot);
+    if (answer.kind !== 'answered') {
+      return fail(`cannot be checked without the Python backend (see ${PYTHON_CHECK_ID.packages})`);
+    }
+    const line = selfCheckLine(answer, 'weights');
+    if (line.ok) return pass(line.detail);
+    return fail(
+      `${line.detail} — run \`${PYTHON_RETRIEVAL_COMMAND} ${PYTHON_FETCH_MODELS_SUB_COMMAND}\` where an operator is present. An unattended run has no web access, so a weight missing now is never fetched later`,
+    );
+  },
+};
+
+/** Does the Python backend build its index in its database? */
+const RETRIEVAL_PYTHON_INDEX_CHECK: Check = {
+  id: 'retrieval-python-index',
+  title: "the RAG Python backend's index builds",
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (!pythonRetrievalApplies(ctx.config)) return pass(PYTHON_NOT_SELECTED);
+
+    const answer = pythonSelfCheck(ctx, ctx.repoRoot);
+    if (answer.kind !== 'answered') {
+      return fail(`cannot be checked without the Python backend (see ${PYTHON_CHECK_ID.packages})`);
+    }
+    const line = selfCheckLine(answer, 'index');
+    if (line.ok) return pass(line.detail);
+
+    const stoppedBy = SELF_CHECK_INDEX_NOT_ATTEMPTED.exec(line.detail)?.[1] as SelfCheckQuestion | undefined;
+    if (stoppedBy !== undefined) {
+      return fail(`cannot build without the Python backend's ${stoppedBy} (see ${PYTHON_CHECK_ID[stoppedBy]})`);
+    }
+    return fail(
+      `${line.detail} — the backend's database is ${databaseLocation(answer.databaseUrl)} (${MCP_PATH}'s ${DOCS_SERVER_NAME} \`env\` ${PYTHON_DATABASE_URL_VARIABLE}, else the compose default): start the bundled one by running \`docker compose up -d --wait postgres\` in docs-retrieval-service/ of a clone of this CLI's repository at its release tag (docs/retrieval.md → \`## Turning on the Python backend\`, step 2), or point ${PYTHON_DATABASE_URL_VARIABLE} in that \`env\` object at yours`,
+    );
   },
 };
 
@@ -4962,7 +5268,9 @@ const RETRIEVAL_INDEX_CHECK: Check = {
  * profile lines all passed reads it as the last thing that can still be missing from that file.
  *
  * The three `retrieval-*` checks come last, under `browser-wiring`: the runtime, the models, then
- * whether an index builds, which needs libraries and models both and so reads after them.
+ * whether an index builds, which needs libraries and models both and so reads after them. The three
+ * `retrieval-python-*` checks follow them in the same runtime → models → index order; whichever
+ * backend `docs.retrievalBackend` does not select passes its three as not applicable.
  */
 export const CHECKS: readonly Check[] = Object.freeze([
   GIT_CHECK,
@@ -5005,6 +5313,9 @@ export const CHECKS: readonly Check[] = Object.freeze([
   RETRIEVAL_DEPENDENCIES_CHECK,
   RETRIEVAL_MODEL_CACHE_CHECK,
   RETRIEVAL_INDEX_CHECK,
+  RETRIEVAL_PYTHON_DEPENDENCIES_CHECK,
+  RETRIEVAL_PYTHON_MODEL_CACHE_CHECK,
+  RETRIEVAL_PYTHON_INDEX_CHECK,
 ]);
 
 /**

@@ -20,7 +20,7 @@
  * key at any level (mirroring `additionalProperties: false`, which is set at *every* level, so an
  * unknown key is a typo rather than a setting that is silently ignored); every declared key has the
  * declared type; every string key is non-empty (the schema's `minLength: 1`); `forge`, `agentEffort`,
- * `qa.driver`, `design.source`, `execution.target`, `detection.preset` and `detection.review.verdict` each hold one of
+ * `qa.driver`, `design.source`, `execution.target`, `docs.retrievalBackend`, `detection.preset` and `detection.review.verdict` each hold one of
  * the values their schema `enum` lists; `stateDir`
  * satisfies **both** of its clauses; `layers` is non-empty, each entry is complete with a legal
  * `name`, and at least one entry is the catch-all row the schema's `contains` clause requires;
@@ -30,7 +30,8 @@
  * within the schema's bounds — the only numeric constraint the schema states anywhere;
  * `docs.retrieval` is `true` only while `phases.docs` is `true`, mirroring the schema's top-level
  * `allOf` clause — the one cross-field error, graded beside the phase-section warnings rather than
- * among them.
+ * among them; and a legal `docs.retrievalBackend` with docs retrieval off is a warning, since it
+ * selects nothing.
  *
  * ## What it deliberately does not re-implement
  *
@@ -60,6 +61,7 @@ import {
   PORT_SEED_MAX,
   PORT_SEED_MIN,
   QA_DRIVERS,
+  RETRIEVAL_BACKENDS,
   STATE_DIR_DOT_PATTERN,
   STATE_DIR_PATTERN,
 } from './model.js';
@@ -133,7 +135,7 @@ const COMMAND_REQUIRED = ['typecheck', 'test'] as const;
 const PHASE_KEYS = ['qa', 'docs', 'parity'] as const;
 const QA_KEYS = ['driver', 'portSeed', 'credentialsPath', 'authProvider'] as const;
 const QA_STRING_KEYS = ['credentialsPath', 'authProvider'] as const;
-const DOCS_KEYS = ['root', 'retrieval'] as const;
+const DOCS_KEYS = ['root', 'retrieval', 'retrievalBackend'] as const;
 const DOCS_STRING_KEYS = ['root'] as const;
 const PARITY_KEYS = ['referenceName', 'referenceImplPath', 'toolchainCommands'] as const;
 const PARITY_STRING_KEYS = ['referenceName', 'referenceImplPath'] as const;
@@ -271,7 +273,9 @@ function checkBoolean(parent: Record<string, unknown>, key: string, prefix: stri
  * runtime either: it warns, ignores the flag and runs at its own default, so the run costs a level
  * the file did not choose, an unfilled `design.source` is likewise a decision not yet made —
  * nothing reports that a change has no stated design source of truth — a misspelt `execution.target`
- * reads as local everywhere, so runs stay on this machine with nothing saying why — and the two
+ * reads as local everywhere, so runs stay on this machine with nothing saying why — a
+ * `docs.retrievalBackend` outside its set is refused by the launcher, so the search server does not
+ * start — and the two
  * `detection` enums record what a run and a review concluded, which nothing re-derives afterwards.
  */
 function checkEnum(
@@ -529,6 +533,29 @@ function checkRetrievalPhase(
 }
 
 /**
+ * A legal `docs.retrievalBackend` while docs retrieval is off — `phases.docs` and `docs.retrieval`
+ * not both `true`. A **warning**, not an error: the combination is harmless — the key is read only
+ * inside the retrieval gate, so it selects nothing — and the schema accepts it, so refusing it would
+ * make the write guard stricter than the schema gate.
+ *
+ * An illegal value is not reported here: {@link checkConfigShape}'s `checkEnum` call already grades
+ * it an error.
+ */
+function checkRetrievalBackend(
+  docs: Record<string, unknown> | undefined,
+  phases: Record<string, unknown> | undefined,
+  problems: Problems,
+): void {
+  const backend = docs?.['retrievalBackend'];
+  if (typeof backend !== 'string' || !(RETRIEVAL_BACKENDS as readonly string[]).includes(backend)) return;
+  if (phases?.['docs'] === true && docs?.['retrieval'] === true) return;
+  problems.warn(
+    'docs.retrievalBackend',
+    'docs.retrievalBackend is set but docs retrieval is off (it needs phases.docs and docs.retrieval both true), so it selects nothing until both are on',
+  );
+}
+
+/**
  * Check a parsed value against the shape `harness.config.json` must have, and return everything
  * wrong with it — never throwing, so one pass names every problem.
  *
@@ -638,6 +665,14 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
   if (docs !== undefined) {
     for (const key of DOCS_STRING_KEYS) checkString(docs, key, 'docs', problems);
     checkBoolean(docs, 'retrieval', 'docs', problems);
+    checkEnum(
+      docs,
+      'retrievalBackend',
+      'docs',
+      RETRIEVAL_BACKENDS,
+      'The key is optional and leaving it out keeps the TypeScript backend. The launcher refuses a value outside this set rather than guessing one, so the search server would not start.',
+      problems,
+    );
   }
 
   const parity = section(value, 'parity', PARITY_KEYS, problems);
@@ -675,6 +710,7 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
 
   checkPhaseSections(value, phases, problems);
   checkRetrievalPhase(docs, phases, problems);
+  checkRetrievalBackend(docs, phases, problems);
 
   return problems.found;
 }
