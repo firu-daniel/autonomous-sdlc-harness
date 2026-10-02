@@ -378,6 +378,107 @@ test('a pause resume launched with an answered pair at the top level ends comple
   j.assertLaneUntouched();
 });
 
+test('pause note: kept only for a pause resume of a paused job of the same engine', async (t) => {
+  const NOTE = '# Pause note\n\nstopped mid Phase B\n';
+  const STOP_KILL = /RESUME after the previous job was stopped or ended without pausing: there is no pause note/;
+  const PARK_RESUME = /This is a RESUME: every question file of this park has been answered/;
+
+  const fixture = async (t, { restored, note }) => {
+    const j = await createJobFixture(t);
+    if (j === null) return null;
+    if (restored) await j.restoreStatus(restored);
+    if (note) await writeFile(join(j.dir, STATE_DIR, 'PAUSE_PROGRESS.md'), NOTE, 'utf8');
+    const notePath = join(j.dir, STATE_DIR, 'PAUSE_PROGRESS.md');
+    const supersededDir = join(j.dir, STATE_DIR, 'autonomous_logs', 'remote_superseded');
+    const superseded = () =>
+      existsSync(supersededDir)
+        ? readdirSync(supersededDir, { recursive: true }).filter((p) => p.endsWith('PAUSE_PROGRESS.md'))
+        : [];
+    const assertMovedAside = (label) => {
+      assert.equal(existsSync(notePath), false, `${label}: the top-level note is still there`);
+      const moved = superseded();
+      assert.equal(moved.length, 1, `${label}: ${JSON.stringify(moved)}`);
+      assert.equal(readFileSync(join(supersededDir, moved[0]), 'utf8'), NOTE, `${label}: the moved note changed`);
+    };
+    return { j, notePath, supersededDir, superseded, assertMovedAside };
+  };
+
+  await t.test('restored running + a note, resume pause: stop/kill clause, note moved aside', async (t) => {
+    const f = await fixture(t, { restored: { status: 'running' }, note: true });
+    if (f === null) return;
+    const result = await f.j.job([f.j.branch, 'task', 'pause']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const prompt = f.j.prompts().at(-1);
+    assert.match(prompt, STOP_KILL);
+    assert.doesNotMatch(prompt, /PAUSE_PROGRESS\.md/);
+    f.assertMovedAside('running');
+  });
+
+  await t.test('restored paused, same engine + a note, resume pause: the note is named and kept byte-identical', async (t) => {
+    const f = await fixture(t, { restored: { status: 'paused', engine: 'task' }, note: true });
+    if (f === null) return;
+    const result = await f.j.job([f.j.branch, 'task', 'pause']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const prompt = f.j.prompts().at(-1);
+    assert.match(prompt, /RESUME from a PAUSE: read sdlc-harness\/PAUSE_PROGRESS\.md/);
+    assert.doesNotMatch(prompt, STOP_KILL);
+    assert.equal(readFileSync(f.notePath, 'utf8'), NOTE);
+    assert.deepEqual(f.superseded(), []);
+  });
+
+  await t.test('restored paused by engine task, job engine user_review: stop/kill clause, note moved aside', async (t) => {
+    const f = await fixture(t, { restored: { status: 'paused', engine: 'task' }, note: true });
+    if (f === null) return;
+    const result = await f.j.job([f.j.branch, 'user_review', 'pause']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const prompt = f.j.prompts().at(-1);
+    assert.match(prompt, STOP_KILL);
+    assert.doesNotMatch(prompt, /PAUSE_PROGRESS\.md/);
+    f.assertMovedAside('engine mismatch');
+  });
+
+  await t.test('resume none with a carried note: moved aside, the fresh prompt unchanged', async (t) => {
+    const f = await fixture(t, { restored: null, note: false });
+    if (f === null) return;
+    const baseline = await f.j.job([f.j.branch, 'task', 'none']);
+    assert.equal(baseline.status, 0, `${baseline.stdout}\n${baseline.stderr}`);
+    const fresh = f.j.prompts().at(-1);
+
+    await writeFile(f.notePath, NOTE, 'utf8');
+    const result = await f.j.job([f.j.branch, 'task', 'none']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(f.j.prompts().at(-1), fresh);
+    f.assertMovedAside('none');
+  });
+
+  await t.test('resume answer, restored parked, same engine + a note: moved aside, park-resume clause only', async (t) => {
+    const f = await fixture(t, { restored: { status: 'parked', engine: 'task' }, note: true });
+    if (f === null) return;
+    await f.j.writeQuestion(1, '## Q1\n');
+    await f.j.writeAnswer(1, 'a1\n');
+    const result = await f.j.job([f.j.branch, 'task', 'answer']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const prompt = f.j.prompts().at(-1);
+    assert.match(prompt, PARK_RESUME);
+    assert.doesNotMatch(prompt, /PAUSE_PROGRESS\.md/);
+    assert.doesNotMatch(prompt, STOP_KILL);
+    f.assertMovedAside('answer');
+    assert.equal(f.j.record().pause_note_stale ?? '', '');
+  });
+
+  await t.test('restored running, no note, resume pause: stop/kill clause, nothing moved, no aside logged', async (t) => {
+    const f = await fixture(t, { restored: { status: 'running' }, note: false });
+    if (f === null) return;
+    const result = await f.j.job([f.j.branch, 'task', 'pause']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const prompt = f.j.prompts().at(-1);
+    assert.match(prompt, STOP_KILL);
+    assert.doesNotMatch(prompt, /PAUSE_PROGRESS\.md/);
+    assert.equal(existsSync(f.supersededDir), false, 'something was moved under remote_superseded/');
+    assert.doesNotMatch(f.j.watcherLog(), /moved aside|remote_superseded/);
+  });
+});
+
 test('chain and auto_resumes: chain is this job input, auto_resumes resets on a user dispatch', async (t) => {
   const j = await createJobFixture(t);
   if (j === null) return;

@@ -329,6 +329,20 @@
 #     count are seeded from it; the auto-resume count only when
 #     HARNESS_INPUT_CHAIN is above 0, because a chain of 0 is a user's own
 #     dispatch; `chain` never — every write records this job's own input.
+#   * THE PAUSE NOTE belongs to the run that wrote it. Before its own first
+#     write, the job reads the restored `remote_status.json`'s `status` and
+#     `engine`. In job mode, a carried `PAUSE_PROGRESS.md` is kept only when
+#     the job's `resume` is `pause`, the restored `remote_status.json` says
+#     `status: paused`, and its `engine` equals the job's engine. In every other
+#     case — a fresh launch (`resume none`), an answer resume (`resume
+#     answer`), a pause resume whose previous job did not pause (a stop or a
+#     kill), or a different engine — it is moved aside, never deleted, to
+#     `<state_dir>/autonomous_logs/remote_superseded/<epoch>[-<n>]/PAUSE_PROGRESS.md`.
+#     The move is lib/harness-run-lib.sh's `hr_remote_move_aside`; this script
+#     writes nothing under `remote_superseded/` itself. Separately, a pause
+#     resume whose previous job did not pause, or paused for a different
+#     engine, is re-launched with a clause saying there is no pause note,
+#     whether or not a note was carried (`pause_note_stale` in the registry).
 #   * IT WRITES `remote_status.json` with decision `continue` before the spawn,
 #     so a job killed mid-run leaves a bundle that says continue, again after
 #     every successful control poll, and once more when the run leaves
@@ -1321,7 +1335,14 @@ job_report() {
 #                       bound of the next control poll, this job's or the next
 #                       chained one's. Set at start (see JOB MODE) and advanced
 #                       by every successful poll
-#   execution           `github-actions` on a remote record — one
+#   pause_note_stale    job mode only: `1` when a `pause` job's restored
+#                       `status.json` was not `paused` or named another engine,
+#                       so spawn_engine's pause-resume prompt says there is no
+#                       pause note instead of naming PAUSE_PROGRESS.md. Cleared
+#                       with run_job's fresh-launch defaults, and by
+#                       classify_run_exit's job-mode pause arm, whose session
+#                       just wrote its own note for a later relaunch to read
+#   execution          `github-actions` on a remote record — one
 #                       launch_remote_run wrote through
 #                       lib/harness-run-lib.sh's `hr_remote_record_init` — and
 #                       absent on a local one. Fixed for the run's life: a later
@@ -1813,8 +1834,18 @@ files, each paired by index with its question_<i>.md, and resume from the park p
   # committed flow-progress LEDGER (deterministic), with PAUSE_PROGRESS.md as a
   # human-readable hint. Mutually exclusive with the clarification resume above:
   # a run resumes from a park OR from a pause, never both.
+  # JOB MODE ONLY: `pause_note_stale` (see the registry) swaps the note-naming
+  # opening for the stop/kill one; a local record never carries the field.
+  local pause_note_stale=""
+  if [ -n "$pause_resume" ] && [ "$JOB_MODE" = "1" ]; then
+    pause_note_stale="$(registry_get "$branch" pause_note_stale)"
+  fi
   local pause_resume_clause=""
-  if [ -n "$pause_resume" ]; then
+  if [ -n "$pause_resume" ] && [ "$pause_note_stale" = "1" ]; then
+    pause_resume_clause="This is a RESUME after the previous job was stopped or ended without pausing: there is no pause \
+note — resume strictly from the committed flow-progress ledger ${state_rel}/flow_progress/${branch}_progress.md — continue \
+at the first phase entry still marked [ ] and SKIP every phase already marked [x]; do NOT restart completed phases. "
+  elif [ -n "$pause_resume" ]; then
     pause_resume_clause="This is a RESUME from a PAUSE: read ${state_rel}/PAUSE_PROGRESS.md for the pause note, then \
 resume strictly from the committed flow-progress ledger ${state_rel}/flow_progress/${branch}_progress.md — continue at the \
 first phase entry still marked [ ] and SKIP every phase already marked [x]; do NOT restart completed phases. "
@@ -1862,7 +1893,11 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
     # own pause-resume clause pointing at the checklist, and omits the
     # clarification-channel language the other two carry.
     local docs_pause_clause=""
-    if [ -n "$pause_resume" ]; then
+    if [ -n "$pause_resume" ] && [ "$pause_note_stale" = "1" ]; then
+      docs_pause_clause="This is a RESUME after the previous job was stopped or ended without pausing: there is no \
+pause note — resume strictly from the checklist ${state_rel}/docs_catalog/${branch}_docs.md — continue at the first entry \
+still marked [ ] and SKIP every entry already marked [x]; do NOT rewrite completed docs. "
+    elif [ -n "$pause_resume" ]; then
       docs_pause_clause="This is a RESUME from a PAUSE: read ${state_rel}/PAUSE_PROGRESS.md for the pause note, then \
 resume strictly from the checklist ${state_rel}/docs_catalog/${branch}_docs.md — continue at the first entry still marked [ ] \
 and SKIP every entry already marked [x]; do NOT rewrite completed docs. "
@@ -2243,7 +2278,9 @@ classify_run_exit() {
           reason=overload
         fi
       fi
-      registry_set "$branch" pause_reason "$reason" status paused
+      # pause_note_stale is cleared here, not in a shell global: this runs in the
+      # launch subshell, and only a registry write reaches run_job.
+      registry_set "$branch" pause_reason "$reason" status paused pause_note_stale ""
       log "run '$branch' paused (PAUSE honored, reason $reason) — rc=$rc"
       if [ "$reason" = "user" ]; then
         notify paused "$branch" "$log_path" "paused as you asked — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch" "$(registry_get "$branch" engine)")"
@@ -4105,6 +4142,7 @@ run_job() {
   local branch="$1" engine="$2" resume="$3"
   local worktree="$MAIN_REPO" log_path="$LOGS_DIR/$branch.log"
   local state_rel state_abs clar_dir remote_status key value answered_set="" prev_reason=""
+  local prev_status="" prev_engine="" aside_rc
 
   JOB_START_EPOCH="$(job_int "${HARNESS_JOB_STARTED_EPOCH:-}")" || JOB_START_EPOCH="$(date +%s)"
   state_rel="$(run_state_dir "$worktree")" || fatal "job: the state directory in '$worktree' is unresolvable"
@@ -4128,8 +4166,11 @@ run_job() {
   registry_set "$branch" auto_resumes 0
   registry_set "$branch" pause_reason ""
   registry_set "$branch" control_polled_at ""
+  registry_set "$branch" pause_note_stale ""
   if [ -f "$remote_status" ]; then
     prev_reason="$(hr_remote_status_get "$remote_status" pause_reason)" || prev_reason=""
+    prev_status="$(hr_remote_status_get "$remote_status" status)" || prev_status=""
+    prev_engine="$(hr_remote_status_get "$remote_status" engine)" || prev_engine=""
     for key in park_loop_cycles resume_max_question_index stall_restarts; do
       value="$(hr_remote_status_get "$remote_status" "$key")" && registry_set "$branch" "$key" "$value"
     done
@@ -4138,6 +4179,25 @@ run_job() {
     if [ "$((10#$HARNESS_INPUT_CHAIN))" -gt 0 ]; then
       value="$(hr_remote_status_get "$remote_status" auto_resumes)" && registry_set "$branch" auto_resumes "$value"
     fi
+  fi
+
+  # The pause note belongs to the run that wrote it (the header's JOB MODE
+  # block). Two decisions, deliberately independent: the clause reads the
+  # restored status alone, so a run stopped before it ever paused is never
+  # pointed at a note; the move governs only a note that exists.
+  if [ "$resume" = "pause" ] && { [ "$prev_status" != "paused" ] || [ "$prev_engine" != "$engine" ]; }; then
+    registry_set "$branch" pause_note_stale 1
+    log "job: '$branch' resumes after a job that did not pause for engine $engine (prev_status '${prev_status}', prev_engine '${prev_engine}') — no pause note"
+  fi
+  if ! { [ "$resume" = "pause" ] && [ "$prev_status" = "paused" ] && [ "$prev_engine" = "$engine" ]; } \
+    && [ -f "$state_abs/$HR_REMOTE_PAUSE_FILE" ]; then
+    aside_rc=0
+    hr_remote_move_aside "$worktree" "$HR_REMOTE_PAUSE_FILE" || aside_rc=$?
+    case "$aside_rc" in
+      0) log "job: '$branch' carried a $HR_REMOTE_PAUSE_FILE that is not this run's (resume $resume, prev_status '${prev_status}', prev_engine '${prev_engine}', engine $engine) — moved aside to $HR_REMOTE_ASIDE" ;;
+      3) ;;
+      *) log "job: WARNING — could not move the carried $HR_REMOTE_PAUSE_FILE of '$branch' aside (hr_remote_move_aside exit $aside_rc); continuing" ;;
+    esac
   fi
 
   registry_set "$branch" engine "$engine"
