@@ -79,9 +79,12 @@
 #      files under the eight planning paths `hr_remote_planning_paths` assigns;
 #      outside it, only the caller-named `<out_dir>` (its `planning/` included)
 #      of `hr_remote_bundle_write` and the caller-named `<out_json>`
-#      of `hr_remote_status_write`. Written only by `hr_remote_status_write`,
-#      `hr_remote_bundle_write` and `hr_remote_bundle_restore`, and nothing
-#      there but a writer's own failed temp file is ever removed.
+#      of `hr_remote_status_write`. The move-aside directory receives the
+#      clarification directory and `PAUSE_PROGRESS.md`, both moved there by
+#      `hr_remote_move_aside` alone. Written only by `hr_remote_status_write`,
+#      `hr_remote_bundle_write`, `hr_remote_bundle_restore` and
+#      `hr_remote_move_aside`, and nothing there but a writer's own failed temp
+#      file is ever removed.
 #   4. THE ARTIFACT PLACEMENT writes one artifact into a working copy. Fence:
 #      the caller-named `<worktree>/<rel>`, its parent directories and that
 #      path's index entry, plus whatever the two caller-named wrappers do.
@@ -95,7 +98,7 @@
 #
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
 # `hr_remote_record_init`, `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
-# `hr_remote_bundle_write`, `hr_remote_bundle_restore`, `hr_place_artifact`,
+# `hr_remote_bundle_write`, `hr_remote_bundle_restore`, `hr_remote_move_aside`, `hr_place_artifact`,
 # `hr_commit_placed` or `hr_push_landed` function still gets a library that only reads. The
 # lane's ceilings are the only environment values here that carry policy, because
 # the lane is machine-scoped and has no configuration key to carry them; each is
@@ -211,7 +214,8 @@
 # `HR_LANE_OWNER_AT` and `HR_LANE_BROKEN_OWNER`, and the remote state bundle's
 # names, which `hr_remote_names_var` assigns, with `HR_REMOTE_PLANNING_PATHS`
 # (`hr_remote_planning_paths`) and `HR_REMOTE_PLANNING_PLACED` /
-# `HR_REMOTE_PLANNING_KEPT` (`hr_remote_bundle_restore`). Every one of them is assigned
+# `HR_REMOTE_PLANNING_KEPT` (`hr_remote_bundle_restore`) and `HR_REMOTE_ASIDE`
+# (`hr_remote_move_aside`). Every one of them is assigned
 # before it is read by the function that owns it, so an inherited value from a
 # parent process is overwritten rather than believed.
 #
@@ -2179,6 +2183,45 @@ EOF
   return 0
 }
 
+# hr_remote_move_aside <root> <rel_path>
+#
+# Moves `<root>/<state_dir>/<rel_path>`, a file or a directory, with one `mv`
+# into `autonomous_logs/remote_superseded/<epoch>/<rel_path>` (`<epoch>-<n>`,
+# the first `n` = 1, 2, … where that path is free, when an earlier move took
+# that second), creating the parents and removing nothing. On success
+# `HR_REMOTE_ASIDE` holds the absolute destination; it is empty at entry.
+#
+# 0 moved; 1 a missing argument, a <rel_path> that is absolute or has a `..`
+# segment, or a failed `mkdir` / `mv`; 2 — touching nothing — <root>'s
+# configuration is unresolvable; 3 — touching nothing — no source exists.
+hr_remote_move_aside() {
+  local root="${1-}" rel="${2-}" state base epoch aside n
+  HR_REMOTE_ASIDE=''
+  [ -n "$root" ] && [ -n "$rel" ] || return 1
+  case "$rel" in
+    /*) return 1 ;;
+  esac
+  case "/$rel/" in
+    */../*) return 1 ;;
+  esac
+  state=$(hr_state_dir "$root") || return 2
+  hr_remote_names_var
+  base="${root%/}/$state"
+  [ -e "$base/$rel" ] || [ -L "$base/$rel" ] || return 3
+  epoch=$(date +%s)
+  aside="$base/$HR_REMOTE_SUPERSEDED_DIR/$epoch"
+  n=0
+  while [ -e "$aside/$rel" ] || [ -L "$aside/$rel" ]; do
+    n=$((n + 1))
+    aside="$base/$HR_REMOTE_SUPERSEDED_DIR/$epoch-$n"
+  done
+  aside="$aside/$rel"
+  mkdir -p "${aside%/*}" 2>/dev/null || return 1
+  mv "$base/$rel" "$aside" 2>/dev/null || return 1
+  HR_REMOTE_ASIDE=$aside
+  return 0
+}
+
 # hr_remote_bundle_restore <bundle_dir> <root> <branch> <mode>
 #
 # <mode> `job` places the clarification directory, `PAUSE_PROGRESS.md`, the
@@ -2195,20 +2238,18 @@ EOF
 # stay `0` in `mirror` mode.
 #
 # THE CLARIFICATION DIRECTORY IS REPLACED WHOLESALE, AND NOTHING IS DELETED. An
-# existing target is moved aside with one `mv` into
-# `autonomous_logs/remote_superseded/<epoch>/clarifications/<branch>` (`<epoch>-<n>`
-# when an earlier restore took that second) before the
-# bundle's copy goes in, so a stale local pair cannot survive and no recursive
-# removal is ever shelled out. A bundle carrying no clarification directory
-# leaves the target alone: in a mirror it may hold an answer not yet relayed.
+# existing target is moved aside by `hr_remote_move_aside` before the bundle's
+# copy goes in, so a stale local pair cannot survive and no recursive removal is
+# ever shelled out. A bundle carrying no clarification directory leaves the
+# target alone: in a mirror it may hold an answer not yet relayed.
 #
-# 0 restored; 1 a missing argument, an unknown <mode> or a failed copy; 2 —
-# touching nothing — when the bundle is unrecognised (no readable `status.json`,
-# a schema other than `HR_REMOTE_STATE_SCHEMA`, or a `branch` other than
-# <branch>) or <root>'s configuration is unresolvable.
+# 0 restored; 1 a missing argument, an unknown <mode>, a failed move aside or a
+# failed copy; 2 — touching nothing — when the bundle is unrecognised (no
+# readable `status.json`, a schema other than `HR_REMOTE_STATE_SCHEMA`, or a
+# `branch` other than <branch>) or <root>'s configuration is unresolvable.
 hr_remote_bundle_restore() {
   local bundle="${1-}" root="${2-}" branch="${3-}" mode="${4-}"
-  local state base named target epoch aside n tmp pdir file rel p inset
+  local state base named target tmp pdir file rel p inset
   HR_REMOTE_PLANNING_PLACED=0
   HR_REMOTE_PLANNING_KEPT=0
   [ -n "$bundle" ] && [ -n "$root" ] && [ -n "$branch" ] || return 1
@@ -2226,16 +2267,7 @@ hr_remote_bundle_restore() {
   if [ -d "$bundle/$HR_REMOTE_CLARIFY_DIR/$branch" ]; then
     target="$base/$HR_REMOTE_CLARIFY_DIR/$branch"
     if [ -e "$target" ]; then
-      epoch=$(date +%s)
-      aside="$base/$HR_REMOTE_SUPERSEDED_DIR/$epoch"
-      n=0
-      while [ -e "$aside/$HR_REMOTE_CLARIFY_DIR/$branch" ]; do
-        n=$((n + 1))
-        aside="$base/$HR_REMOTE_SUPERSEDED_DIR/$epoch-$n"
-      done
-      aside="$aside/$HR_REMOTE_CLARIFY_DIR/$branch"
-      mkdir -p "${aside%/*}" 2>/dev/null || return 1
-      mv "$target" "$aside" 2>/dev/null || return 1
+      hr_remote_move_aside "$root" "$HR_REMOTE_CLARIFY_DIR/$branch" || return 1
     fi
     mkdir -p "${target%/*}" 2>/dev/null || return 1
     cp -R "$bundle/$HR_REMOTE_CLARIFY_DIR/$branch" "$target" 2>/dev/null || return 1

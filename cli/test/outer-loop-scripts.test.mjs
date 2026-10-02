@@ -669,6 +669,33 @@ test('the remote state bundle carries a run through a job restore and a mirror r
   assert.deepEqual(mirrorTree.filter((key) => key.endsWith('.log')), [], 'the mirror restore placed the run log');
 });
 
+test('hr_remote_move_aside moves PAUSE_PROGRESS.md under remote_superseded/ into a free directory each time, and exits 3 with nothing to move', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  const moveAside = () => libCall(dir, 'hr_remote_move_aside "$@" || exit $?; printf %s "$HR_REMOTE_ASIDE"', [dir, 'PAUSE_PROGRESS.md']);
+
+  const destinations = [];
+  for (const note of ['first note\n', 'second note\n']) {
+    plant(dir, REMOTE.pause, note);
+    const moved = await moveAside();
+    assert.equal(moved.status, 0, `hr_remote_move_aside exited ${moved.status}: ${moved.stderr}`);
+    const tree = Object.keys(await snapshotTree(dir));
+    assert.ok(!tree.includes(REMOTE.pause), 'PAUSE_PROGRESS.md is still at the top level after the move');
+    assert.ok(moved.stdout.startsWith(join(dir, REMOTE.superseded)), `HR_REMOTE_ASIDE is not under remote_superseded/: ${moved.stdout}`);
+    assert.equal(readFileSync(moved.stdout, 'utf8'), note, 'HR_REMOTE_ASIDE does not hold the moved note');
+    destinations.push(moved.stdout);
+  }
+  const tree = Object.keys(await snapshotTree(dir));
+  const moved = tree.filter((key) => key.startsWith(REMOTE.superseded) && key.endsWith('/PAUSE_PROGRESS.md'));
+  assert.equal(moved.length, 2, `both notes were not kept under remote_superseded/: ${moved.join(', ')}`);
+  assert.notEqual(moved[0].split('/').slice(0, -1).join('/'), moved[1].split('/').slice(0, -1).join('/'), 'the two notes share one directory');
+  assert.notEqual(destinations[0], destinations[1], 'the second move reported the first one\'s destination');
+
+  const nothing = await moveAside();
+  assert.equal(nothing.status, 3, `a move with nothing planted exited ${nothing.status}: ${nothing.stderr}`);
+  assert.deepEqual(Object.keys(await snapshotTree(dir)), tree, 'a move with nothing planted changed the tree');
+});
+
 test('the remote state bundle carries the planning drafts, and a job restore places them only where nothing exists', async (t) => {
   // A draft never overwrites the checkout's copy, never reaches a mirror, and never lands outside the planning paths.
   const source = await fixtureFor(t, { files: nodeProjectFiles() });
