@@ -49,3 +49,10 @@
 - `grep -n "does not own the issue" docs/github-run-control.md` finds no sentence still claiming a close changes nothing.
 - `grep -n "Development panel" docs/github-run-control.md` finds only the §4 proposal sentence, and none of its hits says the link belongs to, or is owed by, a roadmap item.
 - Each new §8 row has all four cells filled, and none cites a source this repository did not retrieve as if it had.
+
+**Deviations from plan:**
+
+- §2 *A run in flight*: the plan gives a stopped run `@sdlc-harness resume` as its way on. `remote-run.sh` → `control_review_in_flight` names the way on by the state the stop left: `answer <n>` when stopped while parked, `clear` when stopped in a park loop, `resume` once the cancelled job has ended when it still reads `running`, else `resume`. The bullet states the code's rule.
+- §5's paragraph mapped to tests: each statement has a case in `cli/test/remote-control-close.test.mjs` or `cli/test/remote-run.test.mjs` except two, which rest on reading `control_close`: a `failed` run left alone (only the `completed` case is tested; both fall in the same `*)` arm), and a deletion screening only a bot sender (no case drives an unlisted bot's `delete`). No test file was edited; the test files are the `cli` layer's.
+- The plan's §5 note that "a `failed` or `stopped` comment's way on assumes the branch exists" is scoped to a `failed` comment **on a pull request**: a `failed` comment on an issue names re-applying the trigger label, which starts a new run on the next indexed branch and does not need the old one.
+- §8's `delete` row: the "If it is wrong" cell does not offer `@sdlc-harness stop` on the issue as a fallback, because `control` needs the branch's ledger at its tip, which a deleted branch no longer has.
