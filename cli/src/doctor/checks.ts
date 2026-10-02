@@ -25,7 +25,7 @@
  *    remote-execution switch is `config/model.ts`'s {@link remoteExecutionApplies} and the
  *    issue-trigger switch its {@link forgeTriggerApplies}, the workflow paths and the binary run as
  *    `gh` are `remote/githubActions.ts`'s ({@link WORKFLOW_RUN_PATH}, {@link WORKFLOW_RESUME_PATH},
- *    {@link WORKFLOW_TRIGGER_PATH}, {@link GH_CLI_VARIABLE}, {@link ghCli}), whether a ref carries a
+ *    {@link WORKFLOW_TRIGGER_PATH}, {@link WORKFLOW_CONTROL_PATH}, {@link GH_CLI_VARIABLE}, {@link ghCli}), whether a ref carries a
  *    file is `core/git.ts`'s {@link pathAtRef}, and
  *    the writability probe is the write engine's {@link probeWritable}. A
  *    check that wanted a slightly different answer would be a second definition of the thing being
@@ -219,11 +219,16 @@ import {
   API_KEY_SECRET,
   CLI_VERSION_VARIABLE,
   DEFAULT_GH_CLI,
+  COMMAND_HANDLE,
+  COMMAND_VERBS,
   DEFAULT_TRIGGER_LABEL,
   GH_CLI_VARIABLE,
   ghCli,
   GIT_TOKEN_SECRET,
+  LEGACY_TRIGGER_LABEL,
   OAUTH_TOKEN_SECRET,
+  PR_CREATE_SETTING,
+  PR_CREATE_SETTING_PATH,
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
   renderedCliVersions,
@@ -231,6 +236,9 @@ import {
   RUNNER_VARIABLE,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_LABEL_VARIABLE,
+  triggerFallbackLabel,
+  WORKFLOW_CONTROL_FILE,
+  WORKFLOW_CONTROL_PATH,
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RESUME_PATH,
   WORKFLOW_RUN_FILE,
@@ -284,6 +292,14 @@ const REMOTE_RUN_SCRIPT = 'remote-run.sh';
  * YAML file spells this endpoint.
  */
 const ARTIFACT_RETENTION_ENDPOINT = 'repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention';
+
+/**
+ * The `gh api` path {@link REMOTE_GITHUB_CHECK} reads the *Allow GitHub Actions to create and approve
+ * pull requests* setting from — `can_approve_pull_request_reviews`. Local for
+ * {@link ARTIFACT_RETENTION_ENDPOINT}'s reason. A workflow's own token cannot read it; a person's `gh`
+ * usually can.
+ */
+const PR_SETTING_ENDPOINT = 'repos/{owner}/{repo}/actions/permissions/workflow';
 
 /** Below this many days of artifact retention {@link REMOTE_GITHUB_CHECK} warns; argued there. */
 const ARTIFACT_RETENTION_WARN_DAYS = 30;
@@ -2541,6 +2557,19 @@ function retentionDaysOf(stdout: string): number | undefined {
   return typeof days === 'number' && Number.isInteger(days) && days > 0 ? days : undefined;
 }
 
+/** The boolean `can_approve_pull_request_reviews` of a workflow-permissions answer, or `undefined` for any other shape. */
+function prApprovalSettingOf(stdout: string): boolean | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isJsonObject(parsed as JsonValue)) return undefined;
+  const allowed = (parsed as { readonly can_approve_pull_request_reviews?: unknown }).can_approve_pull_request_reviews;
+  return typeof allowed === 'boolean' ? allowed : undefined;
+}
+
 /**
  * What GitHub says about the remote setup — asked only under {@link CheckContext.probeGithub}.
  *
@@ -2553,19 +2582,29 @@ function retentionDaysOf(stdout: string): number | undefined {
  *   not know `harness-run.yml`; neither credential secret is set.
  * - `warn` — `HARNESS_PUSH_URL` absent; `harness-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
  *   set; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
- *   {@link forgeTriggerApplies}, `harness-trigger.yml` unknown to GitHub, or no label named by
- *   `HARNESS_TRIGGER_LABEL` (default {@link DEFAULT_TRIGGER_LABEL}); and any call that timed
- *   out, could not reach GitHub, or answered in a shape not understood — *cannot tell* is not
- *   *missing*, so it never fails.
+ *   {@link forgeTriggerApplies}, `harness-trigger.yml` or `harness-control.yml` unknown to GitHub, no
+ *   label by the effective trigger name, or the pull-request setting off with no `HARNESS_GIT_TOKEN`
+ *   secret; and any call that timed out, could not reach GitHub, or answered in a shape not
+ *   understood — *cannot tell* is not *missing*, so it never fails.
+ * - the pull-request setting off while the secret list was unreadable is a *cannot tell* warning,
+ *   never the missing-`HARNESS_GIT_TOKEN` one.
+ * - the effective trigger label is `HARNESS_TRIGGER_LABEL`, else the fallback the committed
+ *   `harness-trigger.yml` carries ({@link triggerFallbackLabel}), else {@link DEFAULT_TRIGGER_LABEL};
+ *   a fallback of {@link LEGACY_TRIGGER_LABEL} is a note, since it still starts runs.
  * - both credential secrets present is a note, not a finding: billing follows `ANTHROPIC_API_KEY`.
  * - a non-empty `HARNESS_TRIGGER_ALLOWED_BOTS` is a note naming the bots, which start runs without a
- *   permission check. When the trigger does not apply, neither trigger read is made.
+ *   permission check. When the trigger does not apply, no trigger, control or pull-request-setting
+ *   read is made.
  * - the retention read refused (typically HTTP 403: the endpoint needs admin access) is a note too —
- *   the read is best-effort, and a collaborator without admin can still run remotely.
- * - both trigger answers positive is confirmed on every outcome that reaches the trigger reads, `fail`
- *   and `warn` included, so an unrelated finding never hides it; either answer not positive is already
- *   among the warnings. An outcome returned before those reads — `gh` not runnable, no usable login,
- *   or no readable answer to the login probe — asks GitHub nothing about the trigger.
+ *   the read is best-effort, and a collaborator without admin can still run remotely. A refused
+ *   pull-request-setting read is a note on the same terms.
+ * - the pull-request setting off with `HARNESS_GIT_TOKEN` set is a note: `deliver` opens the pull
+ *   request with that token instead.
+ * - all three trigger answers positive — both workflows known and the label present — is confirmed on
+ *   every outcome that reaches the trigger reads, `fail` and `warn` included, so an unrelated finding
+ *   never hides it; any answer not positive is already among the warnings. An outcome returned before
+ *   those reads — `gh` not runnable, no usable login, or no readable answer to the login probe — asks
+ *   GitHub nothing about the trigger.
  *
  * **Why 30 days.** A parked run waits on a human answer and a usage-paused one on a reset, and the
  * `harness-state` bundle is the only remote copy of either; once the repository's retention expires
@@ -2675,10 +2714,29 @@ const REMOTE_GITHUB_CHECK: Check = {
       if (trigger.answer.kind === 'refused') {
         warnings.push(`GitHub does not know ${WORKFLOW_TRIGGER_FILE} (${trigger.call}: ${trigger.answer.why}), so labelling an issue starts nothing: push ${WORKFLOW_TRIGGER_PATH} to the repository's default branch`);
       }
+      const control = ask(['workflow', 'view', WORKFLOW_CONTROL_FILE]);
+      if (control.answer === undefined) return fail(noSpawn);
+      if (control.answer.kind === 'unknown') warnings.push(cannotTell(control.call, control.answer.why, `whether GitHub knows ${WORKFLOW_CONTROL_FILE}`));
+      if (control.answer.kind === 'refused') {
+        warnings.push(`GitHub does not know ${WORKFLOW_CONTROL_FILE} (${control.call}: ${control.answer.why}), so comments and reviews start nothing: push ${WORKFLOW_CONTROL_PATH} to the repository's default branch`);
+      }
 
       // The label's name is a repository variable, so an unread variable listing leaves nothing to compare.
       const configured = variableValues?.get(TRIGGER_LABEL_VARIABLE)?.trim() ?? '';
-      const labelName = configured === '' ? DEFAULT_TRIGGER_LABEL : configured;
+      let labelName = configured;
+      if (configured === '') {
+        // Unset, the committed workflow's own fallback starts a run; it is never re-rendered by an upgrade.
+        let committed: string | undefined;
+        try {
+          committed = triggerFallbackLabel(readFileSync(join(root, ...WORKFLOW_TRIGGER_PATH.split('/')), 'utf8'));
+        } catch {
+          committed = undefined;
+        }
+        labelName = committed ?? DEFAULT_TRIGGER_LABEL;
+        if (variableValues !== undefined && labelName === LEGACY_TRIGGER_LABEL) {
+          notes.push(`${WORKFLOW_TRIGGER_PATH} was written by an earlier release and falls back to \`${LEGACY_TRIGGER_LABEL}\`, which keeps starting runs; \`${CLI} init --force\` re-renders it and the scripts to \`${DEFAULT_TRIGGER_LABEL}\`, and setting ${TRIGGER_LABEL_VARIABLE} keeps a name of your choosing under either`);
+        }
+      }
       let labelFound = false;
       if (variableValues === undefined) {
         warnings.push(`cannot tell whether the trigger label exists: its name is the ${TRIGGER_LABEL_VARIABLE} variable, and ${variables.call} gave no readable answer`);
@@ -2700,7 +2758,28 @@ const REMOTE_GITHUB_CHECK: Check = {
           notes.push(`${TRIGGER_ALLOWED_BOTS_VARIABLE} admits ${nameList(bots)}, each of which can start a run without a permission check`);
         }
       }
-      if (trigger.answer.kind === 'answered' && labelFound) triggerKnown = `; GitHub knows ${WORKFLOW_TRIGGER_FILE} and the label \`${labelName}\` exists`;
+      if (trigger.answer.kind === 'answered' && control.answer.kind === 'answered' && labelFound) {
+        triggerKnown = `; GitHub knows ${WORKFLOW_TRIGGER_FILE} and ${WORKFLOW_CONTROL_FILE}, and the label \`${labelName}\` exists`;
+      }
+
+      const prSetting = ask(['api', PR_SETTING_ENDPOINT]);
+      if (prSetting.answer === undefined) return fail(noSpawn);
+      if (prSetting.answer.kind === 'unknown') {
+        warnings.push(cannotTell(prSetting.call, prSetting.answer.why, `whether a run's own token may open its pull request (${PR_CREATE_SETTING})`));
+      } else if (prSetting.answer.kind === 'refused') {
+        notes.push(`the pull-request setting was not checked: ${prSetting.call} may need more access than this login has (${prSetting.answer.why})`);
+      } else {
+        const allowed = prApprovalSettingOf(prSetting.answer.stdout);
+        if (allowed === undefined) {
+          warnings.push(`cannot tell whether a run's own token may open its pull request: ${prSetting.call} answered in a shape this check does not read`);
+        } else if (!allowed && secretNames === undefined) {
+          warnings.push(`${PR_CREATE_SETTING} is off, and whether ${GIT_TOKEN_SECRET} is set could not be read, so a completed run may not be able to open its draft pull request: turn the setting on under ${PR_CREATE_SETTING_PATH}, or confirm ${GIT_TOKEN_SECRET} is a repository secret`);
+        } else if (!allowed && secretNames?.has(GIT_TOKEN_SECRET) === true) {
+          notes.push(`${PR_CREATE_SETTING} is off, so a completed run opens its draft pull request with ${GIT_TOKEN_SECRET}`);
+        } else if (!allowed) {
+          warnings.push(`${PR_CREATE_SETTING} is off and ${GIT_TOKEN_SECRET} is not a repository secret, so a completed run cannot open its draft pull request with the job's token: turn it on under ${PR_CREATE_SETTING_PATH}, or set ${GIT_TOKEN_SECRET} with \`gh secret set ${GIT_TOKEN_SECRET}\``);
+        }
+      }
     }
 
     const noted = notes.length > 0 ? `; ${notes.join('; ')}` : '';
@@ -2719,21 +2798,21 @@ const REMOTE_GITHUB_CHECK: Check = {
  * check speaks only about a value outside {@link FORGE_KINDS}. An absent key is a decision not yet
  * made, and this line is where an operator learns the decision exists.
  *
- * **Graded from local evidence only** (the module header's choice 3): the trigger workflow, one git
- * ref and the configuration. Whether the label exists and whether GitHub knows the workflow are left
- * to `--check-github`: the `github` pass names that flag when it is absent, and under it names
- * {@link REMOTE_GITHUB_CHECK}, which {@link CHECKS} runs first and which carries GitHub's answer.
+ * **Graded from local evidence only** (the module header's choice 3): the two forge workflows —
+ * {@link WORKFLOW_TRIGGER_FILE} and {@link WORKFLOW_CONTROL_FILE}, graded the same way — one git ref
+ * and the configuration. What GitHub says — whether the label exists, which workflows it knows, and
+ * the pull-request setting — is left to {@link REMOTE_GITHUB_CHECK}: the `github` pass names
+ * `--check-github` when it is absent, and under it names that check, which {@link CHECKS} runs first.
  *
  * **Its worst grade is `warn`**: no `forge` state stops a run, because the inbox path works whatever
  * the key says. The three `warn`s are all `github`: remote execution off, because a run started from
- * GitHub always executes through {@link WORKFLOW_RUN_FILE}; the trigger workflow absent; and the
- * trigger workflow not carried by `origin/<defaultBranch>`, because GitHub runs an `issues` workflow
- * only from its default branch — that last with {@link REMOTE_EXECUTION_CHECK}'s push remedy and its
- * two *not graded* notes, on the same reasoning.
+ * GitHub always executes through {@link WORKFLOW_RUN_FILE}; a forge workflow absent; and a forge
+ * workflow not carried by `origin/<defaultBranch>`, because GitHub runs an `issues` or
+ * `issue_comment` workflow only from its default branch — that last with
+ * {@link REMOTE_EXECUTION_CHECK}'s push remedy and its two *not graded* notes, on the same reasoning.
+ * Each warn names every file it is about, so two absent files are one line naming both.
  *
- * Draft-pull-request output and comment park-and-ask are not graded, because nothing implements them
- * yet; the `github` pass names them as still to come, so the line never implies the whole coupling
- * exists. A value outside {@link FORGE_KINDS} is the config check's `fail`, and is not graded here.
+ * A value outside {@link FORGE_KINDS} is the config check's `fail`, and is not graded here.
  */
 const FORGE_CHECK: Check = {
   id: 'forge',
@@ -2744,7 +2823,9 @@ const FORGE_CHECK: Check = {
 
     const root = ctx.repoRoot;
     const forge = ctx.config.forge;
-    const triggerPresent = existsSync(join(root, ...WORKFLOW_TRIGGER_PATH.split('/')));
+    const forgeWorkflows = [WORKFLOW_TRIGGER_PATH, WORKFLOW_CONTROL_PATH];
+    const presentWorkflows = forgeWorkflows.filter((path) => existsSync(join(root, ...path.split('/'))));
+    const isAre = (paths: readonly string[]) => (paths.length === 1 ? 'is' : 'are');
 
     if (forge === undefined) {
       return pass(
@@ -2755,8 +2836,8 @@ const FORGE_CHECK: Check = {
       return pass('not graded, because forge holds a value this CLI does not know (see the config check)');
     }
     if (forge === 'none') {
-      const left = triggerPresent
-        ? `. ${WORKFLOW_TRIGGER_PATH} is present and unused: the job it starts refuses every event while forge is not github`
+      const left = presentWorkflows.length > 0
+        ? `. ${nameList(presentWorkflows)} ${isAre(presentWorkflows)} present and unused: the job each starts refuses every event while forge is not github`
         : '';
       return pass(`forge is none: this repository has no forge integration, and nothing starts a run from an issue${left}`);
     }
@@ -2773,29 +2854,39 @@ const FORGE_CHECK: Check = {
     }
 
     const on = 'forge is github and remote execution is on';
-    if (!triggerPresent) {
-      return warn(`${on}, but ${WORKFLOW_TRIGGER_PATH} is absent, so labelling an issue starts nothing: re-run \`${CLI} init\`, which writes it create-if-absent`);
+    const startsNothing: Readonly<Record<string, string>> = {
+      [WORKFLOW_TRIGGER_PATH]: 'labelling an issue starts nothing',
+      [WORKFLOW_CONTROL_PATH]: 'comments and reviews start nothing',
+    };
+    const consequence = (paths: readonly string[]) => paths.map((path) => startsNothing[path]).join(', and ');
+    const absent = forgeWorkflows.filter((path) => !presentWorkflows.includes(path));
+    if (absent.length > 0) {
+      return warn(
+        `${on}, but ${nameList(absent)} ${isAre(absent)} absent, so ${consequence(absent)}: re-run \`${CLI} init\`, which writes ${absent.length === 1 ? 'it' : 'them'} create-if-absent`,
+      );
     }
 
     const branch = ctx.config.defaultBranch;
     let carried: string;
     if (typeof branch !== 'string' || branch.trim() === '') {
-      carried = `; whether GitHub's default branch carries it is not graded, because defaultBranch is not a branch name (see the config check)`;
+      carried = `; whether GitHub's default branch carries them is not graded, because defaultBranch is not a branch name (see the config check)`;
     } else if (!remoteTrackingBranchResolves(root, branch)) {
-      carried = `; whether origin/${branch} carries it is not graded, because there is no origin/${branch} (see the remote check)`;
-    } else if (!pathAtRef(root, `origin/${branch}`, WORKFLOW_TRIGGER_PATH)) {
-      return warn(
-        `${on}, but origin/${branch} does not carry ${WORKFLOW_TRIGGER_PATH}, as this checkout last fetched it, and GitHub runs an issues workflow only from its default branch, so labelling an issue starts nothing yet: commit it, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`,
-      );
+      carried = `; whether origin/${branch} carries them is not graded, because there is no origin/${branch} (see the remote check)`;
     } else {
-      carried = ` and origin/${branch} carries it`;
+      const uncarried = forgeWorkflows.filter((path) => !pathAtRef(root, `origin/${branch}`, path));
+      if (uncarried.length > 0) {
+        return warn(
+          `${on}, but origin/${branch} does not carry ${nameList(uncarried)}, as this checkout last fetched it, and GitHub runs an issues or issue_comment workflow only from its default branch, so ${consequence(uncarried)} yet: commit ${uncarried.length === 1 ? 'it' : 'them'}, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`,
+        );
+      }
+      carried = ` and origin/${branch} carries them`;
     }
 
     const asked = ctx.probeGithub
       ? `the ${REMOTE_GITHUB_CHECK.id} check above reports what GitHub says`
       : `\`${CLI} doctor --check-github\` asks GitHub`;
     return pass(
-      `${on}: ${WORKFLOW_TRIGGER_PATH} is present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; draft-pull-request output and comment park-and-ask are still to come. What this cannot see lives on GitHub — whether that label exists and whether GitHub knows ${WORKFLOW_TRIGGER_FILE}; ${asked}`,
+      `${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; a \`${COMMAND_HANDLE} <verb>\` comment (${nameList([...COMMAND_VERBS])}) steers it; a review requesting changes on the run's pull request starts a user-review round; and a completed run opens a draft pull request. What this cannot see lives on GitHub — the label, the workflows GitHub knows (${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE}) and the pull-request setting; ${asked}`,
     );
   },
 };

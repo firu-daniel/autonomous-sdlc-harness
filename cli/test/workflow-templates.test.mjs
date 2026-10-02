@@ -3,8 +3,15 @@
  *
  * **The contract these tests enforce.** The seven `workflow_dispatch` inputs `remote-run.sh`
  * sends, with `action`'s options exactly `run`, `pause`, `warm` and `stop`; a job only for `run`
- * and for `warm`, so `pause` and `stop` start none; the `run-name` title the pause poll and
- * `continue` / `poll` match runs by; the `runs-on` line and the two permissions; every GitHub
+ * and for `warm`, so `pause` and `stop` start none; the `collect` job after `run`, under `!cancelled()`,
+ * in the `harness-review-<branch>` group with `cancel-in-progress: false`, checking out the default
+ * branch rather than `inputs.branch`, reading no secret and running
+ * `remote-run.sh collect` alone; the `run-name` title the pause poll and
+ * `continue` / `poll` match runs by; the `runs-on` line and the permissions exactly `contents`,
+ * `actions`, `issues` and `pull-requests`, each `write`; the `Open the pull request and report`
+ * step running `remote-run.sh deliver` after `Upload the state bundle` and before `Continue, wait
+ * or stop`, `continue-on-error: true`, with `HARNESS_PR_TOKEN` drawn from `secrets.HARNESS_GIT_TOKEN`
+ * through `env:`; the cancelled-job step calling `remote-run.sh report failed`; every GitHub
  * expression spaced after its braces and `{{cliVersion}}` the only template token, so the CLI's
  * renderer (`cli/src/core/templating.ts`) sees nothing else; no input or secret expression inside a
  * `run:` block (script injection); `continue` under `!cancelled()` and the upload and final push
@@ -15,19 +22,31 @@
  * `cli/src/commands/doctor.ts` → `REMOTE_JOB_FLAG` declares it, which that module does not export.
  *
  * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; the permissions exactly
- * `contents: read` and `actions: write`; `remote-run.sh poll` its only call into the script family;
+ * `contents: read`, `actions: write`, `issues: write` and `pull-requests: write`;`remote-run.sh poll` its only call into the script family;
  * `HARNESS_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block;
  * its state upload under `always()` named `POLL_STATE_ARTIFACT_NAME`, as `remote-run.sh` spells it.
  *
  * For `harness-trigger.yml`: the `issues` and `repository_dispatch` triggers, `labeled` the only
  * `issues` type so `opened` never starts a second run, and `TRIGGER_DISPATCH_EVENT_TYPE` the only
  * dispatch type; the permissions exactly `contents: write`, `actions: write` and `issues: write`; the
- * job's `if:` naming `TRIGGER_LABEL_VARIABLE` with `DEFAULT_TRIGGER_LABEL` as its fallback;
+ * job's `if:` and its `TRIGGER_LABEL_VARIABLE` env line each naming `TRIGGER_LABEL_VARIABLE` with
+ * `DEFAULT_TRIGGER_LABEL` as its fallback;
  * `remote-run.sh trigger` its only call into the script family; no `secrets.` reference, so the
  * credential secrets never reach the job reading issue text; no `concurrency:` key, which would drop a
  * pending trigger; no template token; every expression spaced, and none inside a `run:` block.
  *
- * For all three: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
+ * For `harness-control.yml`: the `issue_comment` and `pull_request_review` triggers, `created` and
+ * `submitted` their only types, and neither `pull_request_target` nor `pull_request_review_comment`
+ * outside a comment line; the permissions exactly `contents`, `actions`, `issues` and `pull-requests`,
+ * each `write`; the job's `if:` carrying `COMMAND_HANDLE`, `COMMENT_MARKER` and `REVIEW_ROUND_STATE`
+ * and comparing the head repository with `github.repository`, so a fork's review is skipped; the
+ * checkout's `ref` the default branch, never the pull request's merge commit; `remote-run.sh control`
+ * its only call into the script family; no `secrets.` reference; one `concurrency:` group on the job,
+ * `harness-review-` plus the head ref for a review and the run's own id for a comment, with
+ * `cancel-in-progress: false`, so review jobs on one branch run one at a time and no comment job is
+ * ever replaced; no template token; every expression spaced, and none inside a `run:` block.
+ *
+ * For all four: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
  * pin the file dropped or a bumped `uses:` the header forgot fails; and every `uses:` value is a major
  * tag of a GitHub `actions/` action, never a sha or a branch — the pinning decision that header states.
  */
@@ -39,11 +58,15 @@ import test from 'node:test';
 
 import { PACKAGE_ROOT } from './helpers/fixture.mjs';
 import {
+  COMMAND_HANDLE,
+  COMMENT_MARKER,
   DEFAULT_TRIGGER_LABEL,
   POLL_STATE_ARTIFACT_NAME,
+  REVIEW_ROUND_STATE,
   STATE_ARTIFACT_NAME,
   TRIGGER_DISPATCH_EVENT_TYPE,
   TRIGGER_LABEL_VARIABLE,
+  WORKFLOW_CONTROL_FILE,
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RUN_FILE,
   WORKFLOW_TEMPLATE_DIR,
@@ -56,6 +79,8 @@ const RESUME_TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLA
 const RESUME_LINES = RESUME_TEXT.split('\n');
 const TRIGGER_TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_TRIGGER_FILE), 'utf8');
 const TRIGGER_LINES = TRIGGER_TEXT.split('\n');
+const CONTROL_TEXT = readFileSync(join(PACKAGE_ROOT, 'templates', WORKFLOW_TEMPLATE_DIR, WORKFLOW_CONTROL_FILE), 'utf8');
+const CONTROL_LINES = CONTROL_TEXT.split('\n');
 
 const indentOf = (line) => line.length - line.trimStart().length;
 
@@ -124,7 +149,34 @@ test('the seven inputs, with their types and options', () => {
 
 test('only run and warm start a job, so pause and stop start none', () => {
   const jobIfs = LINES.filter((l) => /^ {4}if: /.test(l)).map((l) => l.trim());
-  assert.deepEqual(jobIfs, ["if: inputs.action == 'run'", "if: inputs.action == 'warm'"]);
+  assert.deepEqual(jobIfs, [
+    "if: inputs.action == 'run'",
+    "if: ${{ inputs.action == 'run' && !cancelled() }}",
+    "if: inputs.action == 'warm'",
+  ]);
+});
+
+test('the collect job follows run unless cancelled, shares the review group, reads no secret and runs collect', () => {
+  const start = LINES.indexOf('  collect:');
+  assert.notEqual(start, -1, 'harness-run.yml carries a collect job');
+  const block = blockUnder(start);
+  const text = block.join('\n');
+  assert.ok(block.includes('    needs: run'), text);
+  assert.match(text, /^ {4}if: .*!cancelled\(\)/m);
+  const at = block.findIndex((l) => /^ {4}concurrency:$/.test(l));
+  assert.notEqual(at, -1, 'the collect job declares a concurrency group');
+  assert.deepEqual(blockUnder(at, block).map((l) => l.trim()), [
+    'group: harness-review-${{ inputs.branch }}',
+    'cancel-in-progress: false',
+  ]);
+  assert.doesNotMatch(text, /secrets\./);
+  const refs = block.filter((l) => /^\s+ref: /.test(l)).map((l) => l.trim());
+  assert.deepEqual(refs, ['ref: ${{ github.event.repository.default_branch }}'], 'review cannot cut a branch the job checked out');
+  const calls = runBodies(block).flatMap((body) =>
+    [...body.matchAll(/([A-Za-z0-9_-]+\.sh)"?\s+(\S*)/g)].map((m) => `${m[1]} ${m[2]}`),
+  );
+  assert.deepEqual(calls, ['remote-run.sh collect']);
+  assert.match(text, /remote-run\.sh" collect "\$HARNESS_INPUT_BRANCH"/);
 });
 
 test('the run-name title, the runner line and the permissions', () => {
@@ -133,7 +185,36 @@ test('the run-name title, the runner line and the permissions', () => {
     assert.equal(line.trim(), "runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}");
   }
   const i = LINES.indexOf('permissions:');
-  assert.deepEqual(blockUnder(i).filter((l) => l.trim() !== '').map((l) => l.trim()), ['contents: write', 'actions: write']);
+  assert.deepEqual(blockUnder(i).filter((l) => l.trim() !== '').map((l) => l.trim()), [
+    'contents: write',
+    'actions: write',
+    'issues: write',
+    'pull-requests: write',
+  ]);
+});
+
+test('deliver opens the pull request and reports, after the upload and before continue, never failing the job', () => {
+  const names = steps().map((s) => /- name: (.*)$/m.exec(s)[1]);
+  const at = (name) => {
+    const i = names.indexOf(name);
+    assert.notEqual(i, -1, `a step is named ${name}`);
+    return i;
+  };
+  const deliver = at('Open the pull request and report');
+  assert.ok(at('Upload the state bundle') < deliver);
+  assert.ok(deliver < at('Continue, wait or stop'));
+  const step = steps()[deliver];
+  assert.match(ifOf(step), /!cancelled\(\)/);
+  assert.match(step, /^\s*continue-on-error: true$/m);
+  assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.HARNESS_GIT_TOKEN \}\}$/m);
+  const [body] = runBodies(step.split('\n'));
+  assert.equal(body, 'bash "$SCRIPTS_DIR/remote-run.sh" deliver "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"');
+});
+
+test('a cancelled job reports failed through remote-run.sh report', () => {
+  const step = stepCarrying('autonomous-notify.sh" failed');
+  assert.match(ifOf(step), /^cancelled\(\)/);
+  assert.match(runBodies(step.split('\n')).join('\n'), /remote-run\.sh" report failed "\$HARNESS_INPUT_BRANCH" --note /);
 });
 
 test('every expression is spaced, and {{cliVersion}} is the only token', () => {
@@ -198,7 +279,7 @@ test('no configured directory is frozen into the file', () => {
   assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_-])sdlc-harness\//m);
 });
 
-test('the poller: a schedule, a hand trigger, and exactly its two permissions', () => {
+test('the poller: a schedule, a hand trigger, and exactly its four permissions', () => {
   const on = RESUME_LINES.indexOf('on:');
   assert.notEqual(on, -1);
   const under = blockUnder(on, RESUME_LINES);
@@ -208,7 +289,7 @@ test('the poller: a schedule, a hand trigger, and exactly its two permissions', 
   const perms = RESUME_LINES.indexOf('permissions:');
   assert.deepEqual(
     blockUnder(perms, RESUME_LINES).filter((l) => l.trim() !== '').map((l) => l.trim()),
-    ['contents: read', 'actions: write'],
+    ['contents: read', 'actions: write', 'issues: write', 'pull-requests: write'],
   );
 });
 
@@ -243,6 +324,7 @@ for (const [file, lines] of [
   [WORKFLOW_RUN_FILE, LINES],
   [WORKFLOW_RESUME_FILE, RESUME_LINES],
   [WORKFLOW_TRIGGER_FILE, TRIGGER_LINES],
+  [WORKFLOW_CONTROL_FILE, CONTROL_LINES],
 ]) {
   test(`${file}: the ACTION PINS header names exactly the uses: values, each a major tag of an actions/ action`, () => {
     const uses = usesValues(lines);
@@ -291,6 +373,13 @@ test('the trigger job runs for a dispatch or the configured label, defaulting to
   ]);
 });
 
+test('the trigger job passes the label its if: matched, never an empty one', () => {
+  const envLines = TRIGGER_LINES.filter((l) => l.trim().startsWith(`${TRIGGER_LABEL_VARIABLE}:`)).map((l) => l.trim());
+  assert.deepEqual(envLines, [
+    `${TRIGGER_LABEL_VARIABLE}: \${{ vars.${TRIGGER_LABEL_VARIABLE} || '${DEFAULT_TRIGGER_LABEL}' }}`,
+  ]);
+});
+
 test('the trigger runs remote-run.sh trigger and nothing else of the family', () => {
   const calls = runBodies(TRIGGER_LINES).flatMap((body) =>
     [...body.matchAll(/([A-Za-z0-9_-]+\.sh)"?\s+(\S*)/g)].map((m) => `${m[1]} ${m[2]}`),
@@ -307,6 +396,77 @@ test('the trigger carries no template token, and every expression is spaced and 
   assert.doesNotMatch(TRIGGER_TEXT, /\{\{[A-Za-z]/);
   assert.doesNotMatch(TRIGGER_TEXT, /\$\{\{[^ ]/);
   const bodies = runBodies(TRIGGER_LINES);
+  assert.ok(bodies.length > 0);
+  for (const body of bodies) assert.ok(!body.includes('${{'), `expression in run: ${body}`);
+});
+
+test('control: a created comment or a submitted review, never pull_request_target or review comments', () => {
+  const on = CONTROL_LINES.indexOf('on:');
+  assert.notEqual(on, -1);
+  const under = blockUnder(on, CONTROL_LINES);
+  const triggers = under.filter((l) => /^ {2}[a-z_]+:/.test(l)).map((l) => l.trim().replace(/:.*$/, ''));
+  assert.deepEqual(triggers, ['issue_comment', 'pull_request_review']);
+  const typesOf = (event) => {
+    const i = CONTROL_LINES.indexOf(`  ${event}:`);
+    const line = blockUnder(i, CONTROL_LINES).find((l) => /^\s*types:/.test(l));
+    return /types: \[(.*)\]$/.exec(line)[1].split(',').map((t) => t.trim());
+  };
+  assert.deepEqual(typesOf('issue_comment'), ['created']);
+  assert.deepEqual(typesOf('pull_request_review'), ['submitted']);
+  const code = CONTROL_LINES.filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert.ok(!code.includes('pull_request_target'));
+  assert.ok(!code.includes('pull_request_review_comment'));
+});
+
+test('control: exactly its four permissions', () => {
+  const i = CONTROL_LINES.indexOf('permissions:');
+  assert.deepEqual(
+    blockUnder(i, CONTROL_LINES).filter((l) => l.trim() !== '').map((l) => l.trim()),
+    ['contents: write', 'actions: write', 'issues: write', 'pull-requests: write'],
+  );
+});
+
+test("control: the job's if: prefilters on the handle, the marker and the review state, and skips a fork's review", () => {
+  const jobIfs = CONTROL_LINES.filter((l) => /^ {4}if: /.test(l)).map((l) => l.trim());
+  assert.equal(jobIfs.length, 1);
+  const [cond] = jobIfs;
+  assert.ok(cond.includes(`contains(github.event.comment.body, '${COMMAND_HANDLE}')`));
+  assert.ok(cond.includes(`!contains(github.event.comment.body, '${COMMENT_MARKER}')`));
+  assert.ok(cond.includes(`github.event.review.state == '${REVIEW_ROUND_STATE}'`));
+  assert.ok(cond.includes('github.event.pull_request.head.repo.full_name == github.repository'));
+});
+
+test('control: the checkout is the default branch', () => {
+  const at = CONTROL_LINES.findIndex((l) => /^\s*(?:- )?uses:\s*actions\/checkout@/.test(l));
+  assert.notEqual(at, -1);
+  const withAt = CONTROL_LINES.findIndex((l, i) => i > at && /^\s*with:$/.test(l));
+  const refs = blockUnder(withAt, CONTROL_LINES).filter((l) => /^\s*ref:/.test(l)).map((l) => l.trim());
+  assert.deepEqual(refs, ['ref: ${{ github.event.repository.default_branch }}']);
+});
+
+test('control runs remote-run.sh control and nothing else of the family', () => {
+  const calls = runBodies(CONTROL_LINES).flatMap((body) =>
+    [...body.matchAll(/([A-Za-z0-9_-]+\.sh)"?\s+(\S*)/g)].map((m) => `${m[1]} ${m[2]}`),
+  );
+  assert.deepEqual(calls, ['remote-run.sh control']);
+});
+
+test('control references no secret, and serializes review jobs per head branch but never comment jobs', () => {
+  assert.doesNotMatch(CONTROL_TEXT, /secrets\./);
+  const at = CONTROL_LINES.findIndex((l) => /^ {4}concurrency:$/.test(l));
+  assert.notEqual(at, -1, 'the control job declares a concurrency group');
+  assert.equal(CONTROL_LINES.filter((l) => /^\s*concurrency:/.test(l)).length, 1);
+  const block = blockUnder(at, CONTROL_LINES).map((l) => l.trim());
+  assert.deepEqual(block, [
+    "group: ${{ github.event_name == 'pull_request_review' && format('harness-review-{0}', github.event.pull_request.head.ref) || format('harness-control-{0}', github.run_id) }}",
+    'cancel-in-progress: false',
+  ]);
+});
+
+test('control carries no template token, and every expression is spaced and outside run blocks', () => {
+  assert.doesNotMatch(CONTROL_TEXT, /\{\{[A-Za-z]/);
+  assert.doesNotMatch(CONTROL_TEXT, /\$\{\{[^ ]/);
+  const bodies = runBodies(CONTROL_LINES);
   assert.ok(bodies.length > 0);
   for (const body of bodies) assert.ok(!body.includes('${{'), `expression in run: ${body}`);
 });

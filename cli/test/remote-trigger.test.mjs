@@ -8,7 +8,12 @@
  * `ghost`, an unlisted bot, a `read` answer, a failed permission call and a failed run-history listing —
  * is driven here, and a body
  * carrying shell syntax is committed byte for byte with nothing executed. A dispatch event has no issue,
- * so its cases assert feedback in the step summary and no `issue` call at all.
+ * so its cases assert feedback in the step summary and no `issue` call at all. With `HARNESS_TRIGGER_LABEL`
+ * empty — only the previous release's workflow passes it so — the legacy label `harness` starts a run
+ * too, and its removal names it; with the variable set, only the label it names does. Every issue comment
+ * ends with the hidden marker, `event=started branch=<branch>` on a start and `event=refused` otherwise, and
+ * a start alone sets the state label `sdlc-harness: running`, after the trigger label's removal; a failed
+ * label add is a warning, never a failed start.
  *
  * Each case drives `remote-start.test.mjs`'s fixture shape — `init`, `execution.target` set, the
  * adopted tree pushed to the fixture's bare `origin` — plus `forge: "github"` and an event file the
@@ -16,7 +21,7 @@
  * per-login table, answers the name-derivation run-history probe from a per-branch `STUB_HISTORY` table
  * (no history by default), answers every other `run list` from `STUB_RUN_LIST` — one answer per call, the last repeated, its
  * `headSha` `ORIGIN` replaced by `refs/heads/<branch>` of the bare origin at `STUB_ORIGIN` — by default one
- * `harness run <branch>` run carrying a `url` and that `headSha`, and logs each argument vector with any
+ * `harness run <branch>` run carrying a `url` and that `headSha`, answers an issue's label list with `[]`, and logs each argument vector with any
  * `--body-file`'s content; a call starting `STUB_FAIL_ON` exits 4. No case reaches the network.
  */
 
@@ -59,6 +64,8 @@ if (args[0] === 'api' && permission) {
     process.exit(4);
   }
   process.stdout.write(JSON.stringify({ permission: answer }));
+} else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/\\d+\\/labels$/.test(args[1] ?? '')) {
+  process.stdout.write('[]');
 } else if (args[0] === 'run' && args[1] === 'list' && args[args.indexOf('--json') + 1] === 'databaseId') {
   const branch = args[args.indexOf('--branch') + 1];
   process.stdout.write(JSON.stringify(JSON.parse(process.env.STUB_HISTORY ?? '{}')[branch] ?? []));
@@ -132,7 +139,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
     trigger: async (overrides = {}, env = {}, permissions = { alice: 'write' }) => {
       const event = {
         action: 'labeled',
-        label: { name: 'harness' },
+        label: { name: 'sdlc-harness' },
         sender: { login: 'alice', type: 'User' },
         ...overrides,
         issue: {
@@ -219,9 +226,12 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
 
 const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workflow run'));
 const comments = (calls) => calls.filter((call) => call.line.startsWith('issue comment 7'));
-const removals = (calls) =>
-  calls.filter((call) => call.line === `issue edit 7 --repo ${REPOSITORY} --remove-label harness`);
-const permissionCalls = (calls) => calls.filter((call) => call.args[0] === 'api');
+const removals = (calls, label = 'sdlc-harness') =>
+  calls.filter((call) => call.line === `issue edit 7 --repo ${REPOSITORY} --remove-label ${label}`);
+const permissionCalls = (calls) => calls.filter((call) => call.args[0] === 'api' && /\/collaborators\//.test(call.args[1] ?? ''));
+const LABELS_PATH = `repos/${REPOSITORY}/issues/7/labels`;
+/** The state label's add, one `--method POST …/labels` call. */
+const labelAdds = (calls) => calls.filter((call) => call.line.startsWith(`api --method POST ${LABELS_PATH}`));
 /** The name derivation's run-history probe, told apart from the run lookup by its `--json` fields. */
 const isProbe = (call) => call.line.startsWith('run list') && call.line.endsWith('--json databaseId');
 
@@ -234,9 +244,41 @@ function assertRefused(f, result, reason) {
   assert.equal(posted.length, 1);
   assert.match(posted[0].body, /No run started/);
   assert.match(posted[0].body, reason);
+  assert.match(posted[0].body, /<!-- sdlc-harness event=refused branch=[a-z0-9_]* -->\n$/);
   assert.equal(removals(calls).length, 1);
+  assert.deepEqual(labelAdds(calls), []);
   return calls;
 }
+
+test('a start marks its comment started with the derived branch and sets running after the label removal', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.trigger();
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  const posted = comments(calls);
+  assert.equal(posted.length, 1);
+  assert.ok(posted[0].body.endsWith(`\n\n<!-- sdlc-harness event=started branch=${BRANCH} -->\n`), posted[0].body);
+  const adds = labelAdds(calls);
+  assert.deepEqual(adds.map((call) => call.line), [`api --method POST ${LABELS_PATH} -f labels[]=sdlc-harness: running`]);
+  const removal = calls.findIndex((call) => call.line.startsWith('issue edit 7'));
+  assert.ok(removal >= 0 && removal < calls.indexOf(adds[0]), 'running was added before the trigger label was removed');
+});
+
+test('a refusal before a branch is derived marks its comment refused with an empty branch', async (t) => {
+  const f = await triggerFixture(t);
+  const calls = assertRefused(f, await f.trigger({}, { HARNESS_REMOTE_STOP: '1' }), /HARNESS_REMOTE_STOP/);
+  assert.ok(comments(calls)[0].body.endsWith('\n\n<!-- sdlc-harness event=refused branch= -->\n'));
+});
+
+test('a failing state-label add still exits 0, with one warning line', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.trigger({}, { STUB_FAIL_ON: `api --method POST ${LABELS_PATH}` });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(dispatches(f.calls()).length, 1);
+  const warnings = `${result.stdout}\n${result.stderr}`.split('\n').filter((line) => line.startsWith('::warning::'));
+  assert.equal(warnings.length, 1, warnings.join('\n'));
+  assert.match(warnings[0], /sdlc-harness: running/);
+});
 
 test('a write user starts one run on the derived branch, comments it and removes the label', async (t) => {
   const f = await triggerFixture(t);
@@ -262,7 +304,7 @@ test('a write user starts one run on the derived branch, comments it and removes
   assert.match(
     prompt,
     new RegExp(
-      `^# ${TITLE}\\n\\nLet a reader comment on a content item\\.\\n\\n\\n---\\n\\nStarted from https://github\\.com/${REPOSITORY}/issues/7 by @alice, who applied the label \`harness\` at \\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ\\.`,
+      `^# ${TITLE}\\n\\nLet a reader comment on a content item\\.\\n\\n\\n---\\n\\nStarted from https://github\\.com/${REPOSITORY}/issues/7 by @alice, who applied the label \`sdlc-harness\` at \\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ\\.`,
     ),
   );
 });
@@ -337,6 +379,33 @@ test('another action or another label is ignored with no gh call', async (t) => 
   assert.equal(other.status, 0, other.stderr);
   assert.match(other.stdout, /ignored/);
   assert.deepEqual(f.calls(), []);
+});
+
+test('with HARNESS_TRIGGER_LABEL empty, the legacy label starts a run and its removal names it', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.trigger({ label: { name: 'harness' } });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.equal(dispatches(calls).length, 1);
+  assert.equal(removals(calls, 'harness').length, 1);
+  assert.equal(removals(calls).length, 0);
+});
+
+test('with HARNESS_TRIGGER_LABEL set to the default, the legacy label is ignored with no gh call', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.trigger({ label: { name: 'harness' } }, { HARNESS_TRIGGER_LABEL: 'sdlc-harness' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ignored/);
+  assert.deepEqual(f.calls(), []);
+});
+
+test('with HARNESS_TRIGGER_LABEL naming the legacy label, that label starts a run', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.trigger({ label: { name: 'harness' } }, { HARNESS_TRIGGER_LABEL: 'harness' });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.equal(dispatches(calls).length, 1);
+  assert.equal(removals(calls, 'harness').length, 1);
 });
 
 test('a second issue with the same title starts on <slug>_2', async (t) => {

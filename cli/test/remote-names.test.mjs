@@ -16,13 +16,25 @@ import test from 'node:test';
 import { PACKAGE_ROOT } from './helpers/fixture.mjs';
 import { forgeTriggerApplies } from '../dist/config/model.js';
 import {
+  COMMAND_HANDLE,
+  COMMAND_VERBS,
+  COMMENT_MARKER,
   DEFAULT_TRIGGER_LABEL,
   GH_CLI_VARIABLE,
+  LEGACY_TRIGGER_LABEL,
+  PR_CREATE_SETTING,
+  PR_CREATE_SETTING_PATH,
+  REVIEW_ROUND_STATE,
+  RUN_STATES,
   STATE_ARTIFACT_NAME,
+  STATE_LABELS,
+  STATE_LABEL_PREFIX,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_DISPATCH_EVENT_TYPE,
   TRIGGER_LABEL_VARIABLE,
   WORKFLOWS_DIR,
+  WORKFLOW_CONTROL_FILE,
+  WORKFLOW_CONTROL_PATH,
   WORKFLOW_RESUME_FILE,
   WORKFLOW_RESUME_PATH,
   WORKFLOW_RUN_FILE,
@@ -31,6 +43,7 @@ import {
   WORKFLOW_TRIGGER_PATH,
   ghCli,
   runGh,
+  triggerFallbackLabel,
 } from '../dist/remote/githubActions.js';
 
 const scratch = mkdtempSync(join(tmpdir(), 'harness-remote-names-'));
@@ -46,15 +59,64 @@ test('each workflow path joins the workflows directory and its file', () => {
   assert.equal(WORKFLOW_RUN_PATH, `${WORKFLOWS_DIR}/${WORKFLOW_RUN_FILE}`);
   assert.equal(WORKFLOW_RESUME_PATH, `${WORKFLOWS_DIR}/${WORKFLOW_RESUME_FILE}`);
   assert.equal(WORKFLOW_TRIGGER_PATH, `${WORKFLOWS_DIR}/${WORKFLOW_TRIGGER_FILE}`);
+  assert.equal(WORKFLOW_CONTROL_PATH, `${WORKFLOWS_DIR}/${WORKFLOW_CONTROL_FILE}`);
+});
+
+test('the run-control names keep their literal values', () => {
+  assert.equal(WORKFLOW_CONTROL_FILE, 'harness-control.yml');
+  assert.equal(COMMAND_HANDLE, '@sdlc-harness');
+  assert.deepEqual([...COMMAND_VERBS], ['answer', 'pause', 'resume', 'stop', 'clear']);
+  assert.equal(COMMENT_MARKER, '<!-- sdlc-harness');
+  assert.equal(REVIEW_ROUND_STATE, 'changes_requested');
+  assert.equal(STATE_LABEL_PREFIX, 'sdlc-harness: ');
+  assert.deepEqual([...RUN_STATES], ['running', 'parked', 'paused', 'done', 'failed', 'stopped']);
+});
+
+test('STATE_LABELS has exactly one prefixed label per run state', () => {
+  assert.deepEqual(Object.keys(STATE_LABELS).sort(), [...RUN_STATES].sort());
+  for (const state of RUN_STATES) assert.equal(STATE_LABELS[state], STATE_LABEL_PREFIX + state);
+});
+
+test('remote-run.sh mirrors the run-control names byte for byte', () => {
+  const script = readFileSync(join(PACKAGE_ROOT, 'templates', 'scripts', 'remote-run.sh'), 'utf8');
+  const lines = script.split('\n');
+  const mirrors = [
+    `WORKFLOW_CONTROL_FILE='${WORKFLOW_CONTROL_FILE}'`,
+    `COMMAND_HANDLE='${COMMAND_HANDLE}'`,
+    `COMMAND_VERBS='${COMMAND_VERBS.join(' ')}'`,
+    `COMMENT_MARKER='${COMMENT_MARKER}'`,
+    `REVIEW_ROUND_STATE='${REVIEW_ROUND_STATE}'`,
+    `STATE_LABEL_PREFIX='${STATE_LABEL_PREFIX}'`,
+    `RUN_STATES='${RUN_STATES.join(' ')}'`,
+    `PR_CREATE_SETTING='${PR_CREATE_SETTING}'`,
+    `PR_CREATE_SETTING_PATH='${PR_CREATE_SETTING_PATH}'`,
+  ];
+  for (const line of mirrors) assert.ok(lines.includes(line), `remote-run.sh lacks the line ${line}`);
 });
 
 // The YAML and shell mirrors spell these byte for byte, so a rename must fail here first.
 test('the issue-trigger names keep their literal values', () => {
   assert.equal(WORKFLOW_TRIGGER_FILE, 'harness-trigger.yml');
   assert.equal(TRIGGER_LABEL_VARIABLE, 'HARNESS_TRIGGER_LABEL');
-  assert.equal(DEFAULT_TRIGGER_LABEL, 'harness');
+  assert.equal(DEFAULT_TRIGGER_LABEL, 'sdlc-harness');
+  assert.equal(LEGACY_TRIGGER_LABEL, 'harness');
   assert.equal(TRIGGER_ALLOWED_BOTS_VARIABLE, 'HARNESS_TRIGGER_ALLOWED_BOTS');
   assert.equal(TRIGGER_DISPATCH_EVENT_TYPE, 'harness-task');
+});
+
+test('remote-run.sh mirrors the two trigger labels byte for byte', () => {
+  const lines = readFileSync(join(PACKAGE_ROOT, 'templates', 'scripts', 'remote-run.sh'), 'utf8').split('\n');
+  for (const line of [`DEFAULT_TRIGGER_LABEL='${DEFAULT_TRIGGER_LABEL}'`, `LEGACY_TRIGGER_LABEL='${LEGACY_TRIGGER_LABEL}'`]) {
+    assert.ok(lines.includes(line), `remote-run.sh lacks the line ${line}`);
+  }
+});
+
+test('triggerFallbackLabel reads the label a committed trigger workflow falls back to', () => {
+  const template = readFileSync(join(PACKAGE_ROOT, 'templates', 'github', 'workflows', WORKFLOW_TRIGGER_FILE), 'utf8');
+  assert.equal(triggerFallbackLabel(template), DEFAULT_TRIGGER_LABEL);
+  const previousRelease = "    if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.HARNESS_TRIGGER_LABEL || 'harness')\n";
+  assert.equal(triggerFallbackLabel(`jobs:\n  run:\n${previousRelease}`), LEGACY_TRIGGER_LABEL);
+  assert.equal(triggerFallbackLabel('on:\n  issues:\n    types: [labeled]\n'), undefined);
 });
 
 test('harness-run-lib.sh mirrors WORKFLOW_RUN_FILE and STATE_ARTIFACT_NAME byte for byte', () => {

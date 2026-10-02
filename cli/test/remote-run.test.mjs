@@ -45,6 +45,12 @@
  * desktop banner fires; the failed-enable case keeps the real notifier and records through
  * `HARNESS_PUSH_CMD`, with `XDG_CONFIG_HOME` pointed into the fixture so no machine push file is read.
  *
+ * **For the forge coupling, the rule is that `continue`'s notification and a complete `stop` reach the
+ * run's issue as a comment naming no slash command, plus the state label, while a partial stop and a
+ * coupling that is off post nothing**: every pre-existing case runs with `forge` unset and keeps its
+ * exact call list. The stub answers `pr list` and an issue's label read with `[]`, and logs each
+ * `body=@<path>` call with that file's content to `<log>.bodies`.
+ *
  * **For an expired state bundle, the rule is that it is told from an absent one and never read as a
  * first job**: a `STUB_ARTIFACTS` entry is a name (listed unexpired) or a whole `{name, expired,
  * expires_at}` artifact. `restore` stops at an expired bundle rather than falling back to an older
@@ -61,7 +67,9 @@
  * resume dispatch marks an existing remote record `running`, and
  * no other dispatch creates or touches a registry.** **For `review`, the rule is that a round lands
  * on the branch tip only when no run is in flight, named by exact branch equality, committed under
- * its fixed subject and dispatched once — leaving no copy, no local branch and no bootstrap behind**;
+ * its fixed subject and dispatched once — leaving no copy, no local branch and no bootstrap behind —
+ * a branch with no run listed taking one only under `--allow-no-run`, and under `forge` `github` the
+ * round reported on the run's issue after the dispatch**;
  * those cases push to the fixture's bare `origin`, as `remote-start.test.mjs` does. The bootstrap
  * sentinel is a `commands.depInstall` writing a marker outside the copy, because the copy itself is
  * removed before the case can look in it.
@@ -99,6 +107,11 @@ const disabled = (() => {
 const after = (name) => (disabled && process.env[name + '_AFTER_DISABLE'] !== undefined
   ? process.env[name + '_AFTER_DISABLE'] : process.env[name]);
 appendFileSync(process.env.STUB_LOG, JSON.stringify(args) + '\\n');
+const bodyAt = args.findIndex((arg) => arg.startsWith('body=@'));
+if (bodyAt >= 0) {
+  const body = readFileSync(args[bodyAt].slice('body=@'.length), 'utf8');
+  appendFileSync(process.env.STUB_LOG + '.bodies', JSON.stringify({ args, body }) + '\\n');
+}
 const line = args.join(' ');
 const failOn = process.env.STUB_FAIL_ON;
 const failTimes = process.env.STUB_FAIL_TIMES;
@@ -112,7 +125,9 @@ if (line.startsWith('run list --workflow harness-resume.yml')) process.stdout.wr
 else if (line.startsWith('run list')) process.stdout.write(after('STUB_RUN_LIST') || '[]');
 if (line.startsWith('repo view')) process.stdout.write(process.env.STUB_REPO_VIEW || '{}');
 if (line.startsWith('run view')) process.stdout.write(process.env.STUB_RUN_VIEW || '{}');
-if (args[0] === 'api') {
+if (line.startsWith('pr list')) process.stdout.write('[]');
+if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1])) process.stdout.write('[]');
+else if (args[0] === 'api') {
   const parts = args[1].split('/');
   const id = parts[parts.length - 2];
   const names = JSON.parse(after('STUB_ARTIFACTS') || '{}')[id] || [];
@@ -166,7 +181,7 @@ async function remoteFixture(t, target = 'github-actions') {
 
 /** Run the script from the fixture root with the stub as `gh`. */
 function remoteRun(fx, args, env = {}) {
-  return runBash(fx.dir, [SCRIPT, ...args], { HARNESS_GH_CLI: fx.stub, STUB_LOG: fx.log, ...env });
+  return runBash(fx.dir, [SCRIPT, ...args], { HARNESS_GH_CLI: fx.stub, STUB_LOG: fx.log, HARNESS_TRIGGER_LOOKUP_SECS: '0', ...env });
 }
 
 /** Every argument vector the stub recorded, in call order. */
@@ -1318,6 +1333,101 @@ test('continue with a failing run list fails closed: nothing sent, one paused no
   assert.match(notes()[0].detail, /autonomous-sdlc-harness:branch-resume feat_x/);
 });
 
+// ---------------------------------------------------------------------------
+// The forge coupling: continue's notifications and stop, reported on the issue.
+// ---------------------------------------------------------------------------
+
+/** `remoteFixture` with `forge` `github`, its tree on origin, and `feat_x` pushed with a prompt started from issue 7. */
+async function forgeFixture(t) {
+  const fx = await remoteFixture(t);
+  const configPath = join(fx.dir, 'harness.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.forge = 'github';
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  await runGit(fx.dir, ['add', '-A']);
+  await runGit(fx.dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: adopt the harness']);
+  await runGit(fx.dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${config.defaultBranch}`]);
+  await runGit(fx.dir, ['checkout', '--quiet', '-b', 'feat_x']);
+  mkdirSync(join(fx.dir, STATE_DIR, 'task_prompts'), { recursive: true });
+  writeFileSync(join(fx.dir, LINEAGE_PROMPT),
+    '# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/o/r/issues/7 by @alice, who applied the label `sdlc-harness`.\n');
+  await runGit(fx.dir, ['add', '--force', LINEAGE_PROMPT]);
+  await runGit(fx.dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: feat_x']);
+  const push = await runGit(fx.dir, ['push', '--quiet', '--no-verify', 'origin', 'HEAD:refs/heads/feat_x']);
+  assert.equal(push.status, 0, push.stderr);
+  await runGit(fx.dir, ['checkout', '--quiet', config.defaultBranch]);
+  return fx;
+}
+
+/** Every `body=@<path>` call the stub logged, with that file's content. */
+function posted(fx) {
+  const file = `${fx.log}.bodies`;
+  if (!existsSync(file)) return [];
+  return readFileSync(file, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+}
+
+const COMMENT_ON_7 = 'api --method POST repos/o/r/issues/7/comments';
+const LABEL_ON_7 = 'api --method POST repos/o/r/issues/7/labels';
+/** A local `stop`: no runner environment, so the repository comes from `gh repo view`. */
+const LOCAL_STOP = {
+  STUB_RUN_LIST: ACTIVE_RUNS, STUB_REPO_VIEW: '{"nameWithOwner":"o/r"}',
+  GITHUB_REPOSITORY: '', GITHUB_SERVER_URL: '', GITHUB_RUN_ID: '', RUNNER_TEMP: '',
+};
+
+test('continue with HARNESS_REMOTE_STOP under forge github also comments on the issue, naming no slash command', async (t) => {
+  const fx = await forgeFixture(t);
+  const notes = recordNotifications(fx);
+  const b = loopBundle(fx, 'c', { decision: 'continue', chain: '1' });
+  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], { HARNESS_REMOTE_STOP: '1', RUNNER_TEMP: '' }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(workflowRuns(fx), []);
+  assert.equal(notes().length, 1);
+  assert.equal(notes()[0].event, 'paused');
+  assert.match(notes()[0].detail, /\/autonomous-sdlc-harness:branch-resume feat_x/);
+
+  const comments = posted(fx).filter((call) => call.args.join(' ').startsWith(COMMENT_ON_7));
+  assert.equal(comments.length, 1, joined(fx).join('\n'));
+  assert.match(comments[0].body, /`HARNESS_REMOTE_STOP`/);
+  assert.match(comments[0].body, /`@sdlc-harness resume`/);
+  assert.doesNotMatch(comments[0].body, /\/autonomous-sdlc-harness:/);
+  assert.deepEqual(joined(fx).filter((line) => line.startsWith(LABEL_ON_7)), [`${LABEL_ON_7} -f labels[]=sdlc-harness: paused`]);
+});
+
+test('a complete stop --actor under forge github comments naming the actor and labels stopped, after the cancels', async (t) => {
+  const fx = await forgeFixture(t);
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', 'alice'], LOCAL_STOP);
+  assert.equal(result.status, 0, result.stderr);
+  const sent = joined(fx);
+  const lastCancel = sent.findLastIndex((line) => line.startsWith('run cancel'));
+  assert.equal(sent[lastCancel], 'run cancel 14');
+  const comment = sent.findIndex((line) => line.startsWith(COMMENT_ON_7));
+  const label = sent.indexOf(`${LABEL_ON_7} -f labels[]=sdlc-harness: stopped`);
+  assert.ok(comment > lastCancel, sent.join('\n'));
+  assert.ok(label > lastCancel, sent.join('\n'));
+  const [body] = posted(fx).map((call) => call.body);
+  assert.match(body, /Stopped by @alice\./);
+  assert.match(body, /event=stopped branch=feat_x/);
+});
+
+test('a partial stop under forge github exits 3 and comments and labels nothing', async (t) => {
+  const fx = await forgeFixture(t);
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', 'alice'], { ...LOCAL_STOP, STUB_FAIL_ON: 'run cancel 13' });
+  assert.equal(result.status, 3, result.stderr);
+  assert.deepEqual(posted(fx), []);
+  assert.deepEqual(joined(fx).filter((line) => line.includes('/labels')), []);
+});
+
+test('stop --actor that is not a login is a usage error that calls nothing', async (t) => {
+  const fx = await forgeFixture(t);
+  for (const actor of ['a b', '-alice', 'alice[bot]x']) {
+    const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', actor], LOCAL_STOP);
+    assert.equal(result.status, 1, `${actor}: ${result.stderr}`);
+  }
+  const misplaced = await remoteRun(fx, ['pause', 'feat_x', '--actor', 'alice'], LOCAL_STOP);
+  assert.equal(misplaced.status, 1, misplaced.stderr);
+  assert.deepEqual(calls(fx), []);
+});
+
 /** A usage-paused bundle; `due` puts its reset in the past. */
 function usageBundle(fx, name, due, chain = '2') {
   return loopBundle(fx, name, {
@@ -1962,9 +2072,10 @@ const REVIEW_DISPATCH =
 /**
  * A remote fixture adopted on `origin`'s default branch, with `origin/feat_x` one commit ahead
  * carrying `reviews` under the state directory's `user_reviews/`, no local `feat_x`, a review file
- * outside the checkout, and a `commands.depInstall` that would write `bootstrapMarker`.
+ * outside the checkout, and a `commands.depInstall` that would write `bootstrapMarker`. With `forge`,
+ * the configuration says `forge` `github` and `feat_x` carries a task prompt started from issue 7.
  */
-async function reviewFixture(t, reviews = []) {
+async function reviewFixture(t, reviews = [], { forge = false } = {}) {
   const fx = await remoteFixture(t);
   const { dir } = fx;
   const bootstrapMarker = join(dir, STATE_DIR, 'stub', 'bootstrap.marker');
@@ -1972,6 +2083,7 @@ async function reviewFixture(t, reviews = []) {
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.commands.depInstall = `printf x > '${bootstrapMarker}'`;
   delete config.commands.build;
+  if (forge) config.forge = 'github';
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
   const copy = join(dirname(dir), `${config.projectName}-feat_x`);
   t.after(() => rmSync(copy, { recursive: true, force: true }));
@@ -1985,6 +2097,13 @@ async function reviewFixture(t, reviews = []) {
   if (reviews.length > 0) {
     await runGit(dir, ['add', '--', ...reviews.map((name) => `${REVIEW_DIR}/${name}`)]);
     await runGit(dir, ['commit', '--quiet', '-m', 'fixture: earlier rounds']);
+  }
+  if (forge) {
+    mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
+    writeFileSync(join(dir, LINEAGE_PROMPT),
+      '# A task\n\nDo it.\n\n---\n\nStarted from https://github.com/o/r/issues/7 by @alice, who applied the label `sdlc-harness`.\n');
+    await runGit(dir, ['add', '--force', LINEAGE_PROMPT]);
+    await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: feat_x prompt']);
   }
   await runGit(dir, ['push', '--quiet', '--no-verify', 'origin', 'HEAD:refs/heads/feat_x']);
   await runGit(dir, ['checkout', '--quiet', config.defaultBranch]);
@@ -2052,6 +2171,65 @@ test('review of a branch with no earlier round places round 1', async (t) => {
   const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile], finishedEnv(fx, 'failed'));
   assert.equal(result.status, 0, result.stderr);
   assert.equal((await runGit(fx.origin, ['show', `refs/heads/feat_x:${REVIEW_DIR}/feat_x_review.md`])).stdout, REVIEW_BYTES);
+});
+
+test('review --allow-no-run places round 1 on a branch with no harness run on GitHub, and dispatches once', async (t) => {
+  const fx = await reviewFixture(t);
+  const tipBefore = await fx.git(fx.origin, ['rev-parse', 'refs/heads/feat_x']);
+  const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile, '--allow-no-run'], syncEnv({ runs: [] }));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await fx.git(fx.origin, ['log', '-1', '--format=%s', 'refs/heads/feat_x']), 'chore: add user review for feat_x');
+  assert.equal(await fx.git(fx.origin, ['diff', '--name-only', tipBefore, 'refs/heads/feat_x']), `${REVIEW_DIR}/feat_x_review.md`);
+  assert.equal((await runGit(fx.origin, ['show', `refs/heads/feat_x:${REVIEW_DIR}/feat_x_review.md`])).stdout, REVIEW_BYTES);
+  assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow run')), [REVIEW_DISPATCH]);
+  assert.equal(existsSync(fx.copy), false, 'the copy was left behind');
+});
+
+test('review with no harness run on GitHub and no --allow-no-run is refused; origin unchanged', async (t) => {
+  const fx = await reviewFixture(t);
+  const before = await fx.originRefs();
+  const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile], syncEnv({ runs: [] }));
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stderr, /no `harness run feat_x` run on GitHub/);
+  assert.equal(await fx.originRefs(), before);
+  assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow run')), []);
+});
+
+test('review under forge github reports the round on the issue, naming the round, source and actor, and labels running', async (t) => {
+  const fx = await reviewFixture(t, [], { forge: true });
+  const source = 'https://github.com/octo/fixture/pull/12#pullrequestreview-1';
+  const result = await remoteRun(fx,
+    ['review', 'feat_x', '--review-file', fx.reviewFile, '--allow-no-run', '--actor', 'alice', '--source', source],
+    {
+      ...syncEnv({ runs: [] }), STUB_REPO_VIEW: '{"nameWithOwner":"o/r"}',
+      GITHUB_REPOSITORY: '', GITHUB_SERVER_URL: '', GITHUB_RUN_ID: '', RUNNER_TEMP: '',
+    });
+  assert.equal(result.status, 0, result.stderr);
+  const sent = joined(fx);
+  const dispatched = sent.indexOf(REVIEW_DISPATCH);
+  assert.ok(dispatched >= 0, sent.join('\n'));
+  const comments = posted(fx).filter((call) => call.args.join(' ').startsWith(COMMENT_ON_7));
+  assert.equal(comments.length, 1, sent.join('\n'));
+  assert.ok(sent.findIndex((line) => line.startsWith(COMMENT_ON_7)) > dispatched, sent.join('\n'));
+  assert.match(comments[0].body, /A user-review round started on `feat_x`/);
+  assert.ok(comments[0].body.includes(`Round 1 from ${source} by @alice`), comments[0].body);
+  assert.match(comments[0].body, /event=round branch=feat_x/);
+  assert.deepEqual(sent.filter((line) => line.startsWith(LABEL_ON_7)), [`${LABEL_ON_7} -f labels[]=sdlc-harness: running`]);
+});
+
+test('review --actor, --reviewers or --source of the wrong shape is a usage error, and each option off review too; nothing pushed or called', async (t) => {
+  const fx = await reviewFixture(t);
+  const before = await fx.originRefs();
+  for (const extra of [['--actor', 'x y'], ['--reviewers', 'alice,x y'], ['--reviewers', 'alice,'], ['--source', 'http://example.com/r'], ['--source', 'x']]) {
+    const result = await remoteRun(fx, ['review', 'feat_x', '--review-file', fx.reviewFile, '--allow-no-run', ...extra], syncEnv({ runs: [] }));
+    assert.equal(result.status, 1, `${extra.join(' ')}: ${result.stderr}`);
+  }
+  for (const misplaced of [['--allow-no-run'], ['--reviewers', 'alice'], ['--source', 'https://example.com/r']]) {
+    const result = await remoteRun(fx, ['pause', 'feat_x', ...misplaced]);
+    assert.equal(result.status, 1, `${misplaced.join(' ')}: ${result.stderr}`);
+  }
+  assert.equal(await fx.originRefs(), before);
+  assert.deepEqual(calls(fx), []);
 });
 
 // ---------------------------------------------------------------------------

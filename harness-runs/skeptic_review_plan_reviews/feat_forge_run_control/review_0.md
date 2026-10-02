@@ -1,0 +1,18 @@
+# Review plan meta-review — iteration 0
+
+## Must Fix
+1. **The review says nothing about the `plugin` layer, which the diff touched** — refers to "Structure" (missed check). Offending file: the index `harness-runs/skeptic_reviews/feat_forge_run_control_skeptic_review.md`.
+   The diff against `dev` touches three files under the `plugin` layer's path, `plugin`: `plugin/agents/user-review-fix-plan-writer.md`, `plugin/docs/AUTONOMOUS_FLOW.md` and `plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md`. The index's Context names the layer ("41 files across `cli`, `plugin` and `general`"). After that, nothing in the index or in either finding file mentions it. The adversarial-pass list ("The adversarial pass covered:") lists only `cli` surfaces: `remote-run.sh`, `authorise_actor`, the watcher's `notify()`, the workflows and `doctor`. The "What held up" paragraphs check only `cli`. Both findings are tagged `_(layer: cli, general)_`. The "De-duplicated against" paragraph cites the code review, but it does not say that the code review's `plugin` clean-pass covers this review too, so it is no rationale for this review's silence.
+   The general missed-checks rule requires every touched layer to show at least one finding, or an explicit clean-pass rationale drawn from that layer's conventions document (`.claude/context/plugin.md`). This layer has an obvious adversarial target the review did not record checking. The new **Pull-request review comment** reference form in `user-review-fix-plan-writer.md` → `## Process`, step 2, is a consumer of a wire that `cli/templates/scripts/remote-run.sh` produces (the `control` paragraph of its header, and the jq template that emits "## Inline comments", ", original line … (outdated)", "Made on commit" and `(The review carries no summary.)`). `.claude/context/plugin.md` → `## Placeholder vocabulary` ("A run-artifact path shape is a wire") and `## Wires: dispatch in, return out` make that a cross-file contract.
+   **Fix:** In the index, add a `plugin` entry to the adversarial-pass list in Context and a matching clean-pass sentence under "What held up". Both must be drawn from `.claude/context/plugin.md`. At minimum, record that the fix-plan writer's pull-request review comment form matches what `remote-run.sh`'s `control` path writes:
+   - the `## Inline comments` heading;
+   - the three `### \`<file>\`` heading shapes;
+   - the `Made on commit` line;
+   - the `(The review carries no summary.)` sentinel.
+
+   Also record that the `<scripts_dir>` row added to `## Resolved values` uses the three-column `config value` form. Alternatively, state explicitly that the `plugin` layer is covered by the code review's `plugin` clean-pass, and name it. If the check turns up a mismatch, add it as a new `finding_3.md`, with its pointer under the right severity section and a readiness entry tagged `_(layer: plugin)_`. Do not add it as prose in the index.
+
+## Should Fix
+1. **Finding 1's fix leaves `docs/watcher.md` stating the behaviour it removes** — refers to review finding #1. Offending file: `harness-runs/skeptic_reviews/feat_forge_run_control_skeptic_review/finding_1.md`.
+   Step 3 of the fix updates the watcher header's `NOTIFICATIONS` bullet, and step 4 updates `docs/github-run-control.md` → `## 5.`. `docs/watcher.md` → `## 1.`, step "8. **One notification per lifecycle event**", carries the same claim: *"In a job with `forge` `github`, each event is also passed to `remote-run.sh report`"*. After the fix, `failed` is no longer passed as it happens, so this document of record would be left wrong.
+   **Fix:** In `finding_1.md`, add a step that rewords that sentence in `docs/watcher.md` the same way as step 3. Also add `docs/watcher.md` (`## 1.`, step 8) to the finding's **Sites** list.
