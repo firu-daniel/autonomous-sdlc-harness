@@ -42,7 +42,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_docs_retrieval_backend_
 3. [x] **Task 2** — Declare the backend vocabulary in `backends.mjs`, and key, label and transplant per-backend blocks in `results.mjs` _(layer: general)_ _(points: 20)_
 4. [x] **Task 3** — Drive the Python package's `serve-http` as an eval session in `python-backend.mjs` _(layer: general)_ _(points: 20)_
 5. [x] **Task 4** — Wire `--backend` through `args.mjs`, `run.mjs` and `arms.mjs`, leaving the flag-absent path unchanged _(layer: general)_ _(points: 15)_
-6. [ ] **Task 5** — Measure the MCP round trip, cold start and resident memory of either backend's stdio server in `mcp-backend-pass.mjs` _(layer: general)_ _(points: 20)_
+6. [x] **Task 5** — Measure the MCP round trip, cold start and resident memory of either backend's stdio server in `mcp-backend-pass.mjs` _(layer: general)_ _(points: 20)_
 7. [ ] **Task 6** — Measure per-chunk vector agreement between the two embedders in `vector-agreement.mjs` _(layer: general)_ _(points: 15)_
 8. [ ] **Task 7** — Add the optional matched-precision ONNX fp32 leg to `vector-agreement.mjs` _(layer: general)_ _(points: 10)_
 9. [ ] **Task 8** — Compare two backends' blocks side by side, per query and against the floor, in `backend-comparison.mjs` _(layer: general)_ _(points: 20)_

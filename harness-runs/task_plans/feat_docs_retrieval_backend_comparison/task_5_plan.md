@@ -39,3 +39,11 @@ renderMcpBackendSection(result) -> string    // plain Markdown, no machine-local
 - The rendered sections contain no `/Users/`, `/tmp/`, `/private/` path and no `postgresql://` string.
 - The same scratch launcher first calls `runMcpBackendPass({ ...parseArgs(['--corpus', 'fixture-catalog']), backend: 'rust' })` inside a `try`, and prints the thrown message. It is `backendFor`'s refusal, `eval: unknown backend rust; the backends are typescript, python`, and immediately afterwards no `harness-eval-mirror-*` directory exists under the OS temp directory that was not there before the call.
 - After the launcher exits, `ps -A -o pid,command` shows neither `docs serve` nor `serve-mcp` running from a `harness-eval-mirror-*` directory, and no such directory remains.
+
+**Deviations from plan:**
+
+- The TypeScript leg cannot run over `fixture-catalog`: `corpora.mjs` → `corpusConfig` gives that corpus `layers: []`, which the mirror's `harness.config.json` carries, and `docs index` / `docs serve` refuse it (*"layers: must list at least one layer"*). The scratch launcher therefore ran both backends over `self-docs`, the corpus Task 9's hand run names for this pass; the `rust` refusal and the Python leg were also run over `fixture-catalog`, and both completed.
+- The result carries two fields beyond the interface: `postgresMemoryReason` (the reason `postgresMemory` is `null`, which the rendered section prints) and `residentProcesses` (`[{ depth, rssKb }]`, the per-process rows that show the `bash` wrapper's and `uv`'s share). Process names are not read: `ps`'s command column carries machine-local paths.
+- `python-backend.mjs` → `scrub` is now exported and reused for this pass's refusal messages, rather than a second copy.
+- The pass also runs the existing availability checks before spawning — `index-build.mjs` → `assertRealModelsAreAvailable` for TypeScript and `python-backend.mjs` → `assertPythonBackendAvailable` for Python — so a missing model cache or an unprovisioned wrapper is refused by name.
+- The `docker` absent / container stopped paths were not executed (the compose `postgres` service was up); they rest on reading `postgresMemory`.

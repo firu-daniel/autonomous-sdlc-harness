@@ -84,7 +84,7 @@ function refuse(message) {
 }
 
 /** Any connection string in a quoted child line, replaced by the variable's name. */
-function scrub(text) {
+export function scrub(text) {
   return String(text).replace(/postgres(?:ql)?:\/\/\S+/g, `<${PYTHON_DATABASE_URL_VARIABLE}>`);
 }
 
