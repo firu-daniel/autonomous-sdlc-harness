@@ -29,7 +29,9 @@
 #     comments (docs/github-integration-research.md, C1).
 #   issues, type `closed` only: a run's issue was closed, which stops the run.
 #   pull_request, type `closed` only: a run's pull request was closed or
-#     merged, which stops the run.
+#     merged, which stops the run. GitHub starts no workflow for activity on
+#     a pull request with a merge conflict, so closing a conflicting one
+#     stops nothing (docs/github-run-control.md, section 8).
 #   delete: a branch or tag was deleted; a deleted run branch stops the run.
 #   Never pull_request_review_comment: one review raises one such event per
 #   inline comment, so listening to it would start one job per comment for a

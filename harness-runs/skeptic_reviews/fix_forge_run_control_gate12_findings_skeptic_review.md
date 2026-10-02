@@ -33,7 +33,7 @@ No branch-level architecture review exists for this branch. Only the plan-time `
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom, and the committing role flips each one to `[x]` as that fix's commit lands. `[ ]` markers anywhere else (sub-step bullets inside the per-finding files) are informational only.
 
-1. [ ] **Finding 1** — Record that closing a conflicting pull request starts no job and stops nothing, with the way on, in §5, §8 and the control workflow's header _(layer: cli, general)_
+1. [x] **Finding 1** — Record that closing a conflicting pull request starts no job and stops nothing, with the way on, in §5, §8 and the control workflow's header _(layer: cli, general)_
 
 ---
 
