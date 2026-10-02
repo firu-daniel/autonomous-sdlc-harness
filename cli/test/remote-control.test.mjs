@@ -491,7 +491,7 @@ test('a reply that cannot be posted is an ::error:: line and exit 3', async (t) 
 
 test('another event name, or an unreadable event file, exits 1 with no gh call', async (t) => {
   const f = await controlFixture(t);
-  const other = await f.control('@sdlc-harness pause', {}, { GITHUB_EVENT_NAME: 'issues' });
+  const other = await f.control('@sdlc-harness pause', {}, { GITHUB_EVENT_NAME: 'push' });
   assert.equal(other.status, 1);
   const missing = await f.control('@sdlc-harness pause', {}, { GITHUB_EVENT_PATH: join(f.dir, 'nope.json') });
   assert.equal(missing.status, 1);

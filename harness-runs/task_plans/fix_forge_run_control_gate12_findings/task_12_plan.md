@@ -38,3 +38,7 @@
 - `npm test -- test/remote-control-close.test.mjs` from `cli/` passes.
 - Every do-nothing case asserts on the recorded `gh` calls, the bytes the stub saw, not only on stdout. That is the layer's *"A refusal is asserted on the bytes"* rule, applied to GitHub writes.
 - The file's header names what it does not cover — the workflow prefilter (Task 13) and the absent-branch skip (Task 10) — and where each is covered.
+
+**Deviations from plan:**
+- Also edited `cli/test/remote-control.test.mjs` → `another event name, or an unreadable event file, exits 1 with no gh call`: its "another event name" now sends `push`, since Task 11 made `issues` a handled event (Task 11's deviation note assigns that move to this task).
+- The `gh` stub adds `repo view` (`STUB_DEFAULT_BRANCH`, `trunk`, so the deletion's `--ref` is shown to differ from the fixture's default branch) and a `contents/…` read (`STUB_CONTENTS`) to `remote-control.test.mjs`'s stub; the deletion case's run list carries `headSha`.
