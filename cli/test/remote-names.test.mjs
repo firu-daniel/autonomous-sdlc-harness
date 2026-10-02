@@ -65,7 +65,7 @@ test('each workflow path joins the workflows directory and its file', () => {
 test('the run-control names keep their literal values', () => {
   assert.equal(WORKFLOW_CONTROL_FILE, 'harness-control.yml');
   assert.equal(COMMAND_HANDLE, '@sdlc-harness');
-  assert.deepEqual([...COMMAND_VERBS], ['answer', 'pause', 'resume', 'stop', 'clear']);
+  assert.deepEqual([...COMMAND_VERBS], ['answer', 'pause', 'resume', 'stop', 'clear', 'status']);
   assert.equal(COMMENT_MARKER, '<!-- sdlc-harness');
   assert.equal(REVIEW_ROUND_STATE, 'changes_requested');
   assert.equal(STATE_LABEL_PREFIX, 'sdlc-harness: ');

@@ -33,6 +33,10 @@
  * every reply naming the state names it `stopped` — never `paused`, `parked` or `running` — while
  * `resume` on a stopped paused run, `answer` on a stopped parked one and `clear` on a stopped hold
  * still dispatch.
+ *
+ * `status` is asserted to reply once in every state — `running` and `none` included — naming the state
+ * (`stopped` for a stopped run), the ledger's next entry and its section, each open question with its
+ * answer form and the latest run, with no labels write and no `workflow run` in any case.
  */
 
 import assert from 'node:assert/strict';
@@ -103,9 +107,9 @@ if (args[0] === 'pr' && args[1] === 'view') {
  * An adopted fixture on `origin`, with `feat_x` pushed carrying its provenance line and its ledger.
  *
  * @param {import('node:test').TestContext} t
- * @param {{ forge?: string }} [options]
+ * @param {{ forge?: string, ledger?: string }} [options]
  */
-async function controlFixture(t, { forge = 'github' } = {}) {
+async function controlFixture(t, { forge = 'github', ledger: ledgerText = '# Progress\n' } = {}) {
   const fixture = await createFixture({
     files: {
       'package.json': { name: 'fixture-project', private: true, version: '0.0.0', scripts: { test: 'echo test' } },
@@ -134,7 +138,7 @@ async function controlFixture(t, { forge = 'github' } = {}) {
     if (ledger) {
       files.push(`${STATE_DIR}/flow_progress/${branch}_progress.md`);
       mkdirSync(join(dir, STATE_DIR, 'flow_progress'), { recursive: true });
-      writeFileSync(join(dir, files[1]), '# Progress\n');
+      writeFileSync(join(dir, files[1]), ledgerText);
     }
     await runGit(dir, ['add', '--force', ...files]);
     await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', `fixture: ${branch}`]);
@@ -320,12 +324,12 @@ test('forge none is refused before any permission call', async (t) => {
   assert.deepEqual(permissionCalls(f.calls()), []);
 });
 
-test('an unknown verb gets a reply listing the five commands', async (t) => {
+test('an unknown verb gets a reply listing the six commands', async (t) => {
   const f = await controlFixture(t);
   const result = await f.control('@sdlc-harness merge');
   const reply = assertRefused(f, result);
   assert.match(reply.body, /^@alice: `merge` was not run: /);
-  for (const command of ['answer [<n>]', 'pause', 'resume', 'stop', 'clear']) {
+  for (const command of ['answer [<n>]', 'pause', 'resume', 'stop', 'clear', 'status']) {
     assert.ok(reply.body.includes(`\`@sdlc-harness ${command}\``), command);
   }
   assert.match(reply.body, /docs\/github-run-control\.md/);
@@ -746,6 +750,78 @@ test('without a stop run, pause names a paused run paused and resume names a par
   const g = await controlFixture(t);
   const reply = assertRefused(g, await g.control('@sdlc-harness resume', {}, parkedRun('1')), /is `parked`, waiting for an answer/);
   assert.doesNotMatch(reply.body, /`stopped`/);
+});
+
+const STATUS_LEDGER = '# Progress\n\n## Phase A\n\n- [x] Plan the story\n\n## Phase B\n\n- [x] Task 1\n- [ ] Task 2 — write the reply\n- [ ] Task 3\n';
+
+/** Assert one `status` reply: exit 0, one comment, no labels write and no `workflow run`. */
+const assertStatus = (f, result) => {
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(dispatches(calls), []);
+  assert.ok(!calls.some((call) => /\/labels( |$)/.test(call.line) && call.args.includes('--method')), JSON.stringify(calls.map((call) => call.line)));
+  const posted = replies(calls);
+  assert.equal(posted.length, 1);
+  assert.equal(allComments(calls).length, 1);
+  assert.doesNotMatch(posted[0].body, /was not run: /);
+  return posted[0].body;
+};
+
+test('status on a parked run names parked, question 1 with its answer form, the next ledger entry and the run', async (t) => {
+  const f = await controlFixture(t, { ledger: STATUS_LEDGER });
+  const body = assertStatus(f, await f.control('@sdlc-harness status', {}, parkedRun('1')));
+  assert.match(body, /^@alice: `feat_x` is `parked`\./);
+  assert.match(body, /Next in the flow-progress ledger: Task 2 — write the reply \(under `Phase B`\)/);
+  assert.match(body, /Open questions: 1 \(`@sdlc-harness answer 1`\)/);
+  assert.match(body, /Latest run: https:\/\/example\.test\/runs\/601/);
+  assert.deepEqual(readdirNames(f.runnerTemp), []);
+});
+
+test('status on a running run is answered, never refused', async (t) => {
+  const f = await controlFixture(t, { ledger: STATUS_LEDGER });
+  const body = assertStatus(f, await f.control('@sdlc-harness status'));
+  assert.match(body, /^@alice: `feat_x` is `running`\./);
+  assert.match(body, /Latest run: https:\/\/example\.test\/runs\/501/);
+});
+
+test('status with no run listed says so, and a fully ticked ledger says every entry is ticked', async (t) => {
+  const f = await controlFixture(t, { ledger: '# Progress\n\n## Phase A\n\n- [x] Plan\n' });
+  const body = assertStatus(f, await f.control('@sdlc-harness status', {}, { STUB_RUN_LIST: '[]' }));
+  assert.match(body, /^@alice: no harness run is listed for `feat_x`\./);
+  assert.match(body, /Every entry of the flow-progress ledger is ticked\./);
+  assert.doesNotMatch(body, /Latest run: /);
+});
+
+test('status on an expired bundle reports the expiry, never an absent run', async (t) => {
+  const f = await controlFixture(t);
+  const body = assertStatus(f, await f.control('@sdlc-harness status', {}, {
+    ...parkedRun('1'),
+    STUB_ARTIFACTS: JSON.stringify({ artifacts: [{ name: 'harness-state', expired: true, expires_at: '2026-01-02T00:00:00Z' }] }),
+  }));
+  assert.match(body, /`feat_x` is `paused` \(`expired`\): the state bundle of run 601 expired on 2026-01-02T00:00:00Z/);
+});
+
+test('status names a stopped run stopped, whether its bundle says running or parked', async (t) => {
+  const f = await controlFixture(t);
+  const running = assertStatus(f, await f.control('@sdlc-harness status', {}, stopped(finishedRun('running', { engine: 'task' }))));
+  assert.match(running, /`feat_x` is `stopped`/);
+  assert.doesNotMatch(running, /`paused`/);
+
+  const g = await controlFixture(t);
+  const parked = assertStatus(g, await g.control('@sdlc-harness status', {}, stopped(parkedRun('1'))));
+  assert.match(parked, /`feat_x` is `stopped`; it was parked, waiting for an answer\./);
+  assert.match(parked, /Open questions: 1 \(`@sdlc-harness answer 1`\)/);
+  assert.doesNotMatch(parked, /`parked`/);
+});
+
+test('status whose state read fails is refused with exit 3', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness status', {}, { STUB_FAIL_ON: 'run list' });
+  assert.equal(result.status, 3, `${result.stdout}\n${result.stderr}`);
+  const posted = replies(f.calls());
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].body, /^@alice: `status` was not run: the state of the run on `feat_x` could not be read/);
+  assert.deepEqual(dispatches(f.calls()), []);
 });
 
 /** The entries of <dir>, for asserting that control removed what it created there. */

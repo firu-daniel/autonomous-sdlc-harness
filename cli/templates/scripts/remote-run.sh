@@ -442,7 +442,16 @@
 # states each verb accepts are unchanged, except that `pause` refuses a
 # stopped `running` run, whose cancelled job is still finishing: `resume`
 # still resumes a stopped `paused` run, and on a stopped `parked` run the
-# answer, on a stopped `park_loop` run the clear, is its resume.
+# answer, on a stopped `park_loop` run the clear, is its resume. `status` is
+# READ-ONLY and accepted in every state, `none` and a run in flight included:
+# it reads the state (`control_state_var`, `control_state_word_var`) and the
+# first `- [ ] ` entry of the flow-progress ledger on origin's tip with the
+# `## ` heading above it, and replies once — the state by `CS_WORD` with its
+# pause reason, the state underneath a stopped one, an expired bundle's detail,
+# the next ledger entry (or that every entry is ticked, or that the ledger
+# could not be read), each open question with its `answer <n>` form, and the
+# latest run's URL. It sets no label and runs no child verb but `fetch`; a
+# failed state read is a refusal and exit 3.
 # THE REVIEW. A `pull_request_review` event reads `.action`, `.review.state`,
 # `.review.body`, `.review.id`, `.review.html_url`, `.review.submitted_at`,
 # `.pull_request.number`, `.pull_request.head.ref`,
@@ -1119,7 +1128,7 @@ LEGACY_TRIGGER_LABEL='harness'
 TRIGGER_DISPATCH_EVENT_TYPE='harness-task'
 WORKFLOW_CONTROL_FILE='harness-control.yml'
 COMMAND_HANDLE='@sdlc-harness'
-COMMAND_VERBS='answer pause resume stop clear'
+COMMAND_VERBS='answer pause resume stop clear status'
 COMMENT_MARKER='<!-- sdlc-harness'
 REVIEW_ROUND_STATE='changes_requested'
 STATE_LABEL_PREFIX='sdlc-harness: '
@@ -4432,7 +4441,7 @@ control_branch_from_issue() {
 # control_verb_handled <verb> — 0 when an arm below carries out <verb>.
 control_verb_handled() {
   case "$1" in
-    answer|pause|stop|resume|clear) return 0 ;;
+    answer|pause|stop|resume|clear|status) return 0 ;;
   esac
   return 1
 }
@@ -4556,6 +4565,72 @@ control_stop() {
     *)
       control_refuse "$EXIT_GH" "the stop could not be sent ($CHILD_LAST)" "Comment \`$COMMAND_HANDLE stop\` again to retry." ;;
   esac
+}
+
+# control_ledger_next_var — LEDGER_NEXT, the first `- [ ] ` line of
+# CONTROL_BRANCH's flow-progress ledger on origin's tip without that prefix,
+# and LEDGER_SECTION, the last `## ` heading above it; both empty when every
+# entry is ticked. 1 when the ledger cannot be read.
+LEDGER_NEXT=""; LEDGER_SECTION=""
+control_ledger_next_var() {
+  local state_rel text line section=""
+  LEDGER_NEXT=""; LEDGER_SECTION=""
+  state_rel=$(hr_state_dir "$root" 2>/dev/null) || return 1
+  [ -n "$state_rel" ] || return 1
+  text=$(git -C "$root" show "refs/remotes/origin/$CONTROL_BRANCH:${state_rel%/}/flow_progress/${CONTROL_BRANCH}_progress.md" 2>/dev/null) \
+    || return 1
+  while IFS= read -r line; do
+    line=${line%$'\r'}
+    case "$line" in
+      '## '*) section=${line#'## '} ;;
+      '- [ ] '*)
+        LEDGER_NEXT=${line#'- [ ] '}
+        LEDGER_SECTION="$section"
+        return 0 ;;
+    esac
+  done <<<"$text"
+  return 0
+}
+
+# control_status — the read-only reply: the state, the next ledger entry, the
+# open questions and the latest run. Sets no label and dispatches nothing.
+control_status() {
+  local text v questions="" para=$'\n\n'
+  control_state_var "$CONTROL_BRANCH" \
+    || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($CS_ERR)" "Comment again to retry."
+  control_state_word_var
+  if [ "$CS_STATE" = none ]; then
+    text="@$CONTROL_ACTOR: no harness run is listed for \`$CONTROL_BRANCH\`."
+  else
+    text="@$CONTROL_ACTOR: \`$CONTROL_BRANCH\` is \`${CS_WORD:-unknown}\`${CS_REASON:+ (\`$CS_REASON\`)}"
+    if [ "$CS_STOPPED" = 1 ]; then
+      case "$CS_STATE" in
+        parked) text="$text; it was parked, waiting for an answer" ;;
+        park_loop) text="$text; it was held by the park-loop guard" ;;
+        running) text="$text; its cancelled job is still finishing" ;;
+      esac
+    fi
+    # An expired bundle is reported as expired, never as absent.
+    [ "$CS_REASON" != expired ] || text="$text: ${CS_DETAIL:-the state bundle of the run has expired}"
+    text="$text."
+  fi
+  if control_ledger_next_var; then
+    if [ -n "$LEDGER_NEXT" ]; then
+      text="$text${para}Next in the flow-progress ledger: $LEDGER_NEXT${LEDGER_SECTION:+ (under \`$LEDGER_SECTION\`)}"
+    else
+      text="$text${para}Every entry of the flow-progress ledger is ticked."
+    fi
+  else
+    text="$text${para}The flow-progress ledger could not be read, so its next entry is left out."
+  fi
+  if [ -n "$CS_OPEN" ]; then
+    for v in $CS_OPEN; do
+      questions="$questions${questions:+, }$v (\`$COMMAND_HANDLE answer $v\`)"
+    done
+    text="$text${para}Open questions: $questions, each answered by its own comment with the answer on the lines below the command."
+  fi
+  [ -z "$CS_URL" ] || text="$text${para}Latest run: $CS_URL"
+  control_reply "$EXIT_OK" "$text"
 }
 
 # control_answer — one answer, one `resume: answer` dispatch with one entry. A
@@ -5259,6 +5334,7 @@ verb_control() {
     stop) control_stop ;;
     resume) control_resume ;;
     clear) control_clear ;;
+    status) control_status ;;
     review) control_review ;;
   esac
 }
