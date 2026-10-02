@@ -53,3 +53,9 @@ Every dispatch creates a newer `harness run <b>` run, so after an accepted `answ
 - `grep -n "CS_STATE" cli/templates/scripts/remote-run.sh` lists every remaining use. Each is a state *test* (a `case` or `[ … ]`) or the assignment inside `control_state_word_var` / `control_state_var`, and none is a word inside reply text, where `CS_WORD` applies.
 - Re-read each row of the table above against the four `control_*` functions: every refusal that names a state in a run with `CS_STOPPED=1` names `stopped`.
 - `fetch`'s printed `state:` line is unchanged for the same bundle. The local commands parse that wire.
+
+**Deviations from plan:**
+
+- `pause` on a stopped `running` run is refused, following the table's `running` row, even though "Where this task stops" says accepted states are unchanged. The two disagree only on that cell, and the table is the more specific. That refusal is the one acceptance change, and the header says so.
+- The review path runs the stop check inside `control_review_in_flight` (new helper `control_branch_stopped <state>`, which `control_state_word_var` also uses), not beside the `control_settled_var` call in `control_review`. Both callers reach it right after `control_settled_var`, so the one site covers both.
+- A refusal on a stopped run goes through one helper, `control_stopped_refuse`, for `pause`, `resume`, `answer` and `clear`. Each underlying state gets the way on from the table's `resume` column. For `clear` that adds a way on where the table gives none. A stopped `paused` run whose bundle has expired, when `answer` is given, gets the `stopped` refusal instead of the expiry detail.

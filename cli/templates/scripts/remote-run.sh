@@ -433,7 +433,16 @@
 # way on. On 0 with no other question open, a reply that the run resumes and
 # `running` on its issue and pull request; with others open, a reply naming
 # them, and the label stays `parked`. An answer becomes a comment on the item,
-# public on a public repository, as the question already is.
+# public on a public repository, as the question already is. A STOPPED RUN IS
+# NAMED `stopped`: a stop leaves the bundle as it was, so after `pause`,
+# `resume`, `answer` and `clear` read the state, `control_state_word_var` asks
+# `remote_branch_stopped` (one extra run listing) whether a `running`,
+# `parked`, `park_loop` or `paused` run was stopped, and every reply names it
+# `stopped`, with the state underneath where the way on depends on it. The
+# states each verb accepts are unchanged, except that `pause` refuses a
+# stopped `running` run, whose cancelled job is still finishing: `resume`
+# still resumes a stopped `paused` run, and on a stopped `parked` run the
+# answer, on a stopped `park_loop` run the clear, is its resume.
 # THE REVIEW. A `pull_request_review` event reads `.action`, `.review.state`,
 # `.review.body`, `.review.id`, `.review.html_url`, `.review.submitted_at`,
 # `.pull_request.number`, `.pull_request.head.ref`,
@@ -455,7 +464,10 @@
 # `your review was collected`, naming the state and saying the next round
 # starts by itself when that run finishes, plus the state's way on: `answer
 # <n>` for `parked`, `clear` for `park_loop`, `resume` for any `paused` but
-# `usage`, and for `usage` that it resumes after the reset. The review stays on
+# `usage`, and for `usage` that it resumes after the reset. A run of those
+# states that `remote_branch_stopped` finds stopped is named `stopped`, and its
+# way on is the one `resume` names for it: `answer <n>`, `clear`, `resume`, or
+# for `running` `resume` once the cancelled job has ended. The review stays on
 # the pull request, and a later round collects it. Settled: a round is CUMULATIVE,
 # built by `round_collect` in a fresh file under `RUNNER_TEMP` from ONE
 # paginated `pulls/<n>/reviews` and ONE paginated `pulls/<n>/comments` listing
@@ -4272,6 +4284,62 @@ control_state_var() {
   return 0
 }
 
+# control_branch_stopped <state> — 0 when <state> is unfinished (`running`,
+# `parked`, `park_loop`, `paused`) and `remote_branch_stopped` finds
+# CONTROL_BRANCH stopped; else 1, after one stderr line when the check failed.
+# The run list, not the bundle, records a stop.
+control_branch_stopped() {
+  local status=0
+  case "$1" in
+    running|parked|park_loop|paused) ;;
+    *) return 1 ;;
+  esac
+  remote_branch_stopped "$CONTROL_BRANCH" || status=$?
+  case "$status" in
+    0) return 0 ;;
+    1) ;;
+    *) echo "remote-run.sh: control: whether \`$CONTROL_BRANCH\` is stopped could not be read ($GH_ERR); the reply names the state as read" >&2 ;;
+  esac
+  return 1
+}
+
+# control_state_word_var — called right after a successful control_state_var:
+# CS_STOPPED 1 when control_branch_stopped answers 0 for CS_STATE, else 0;
+# CS_WORD `stopped` then, else CS_STATE. Every reply names the state by
+# CS_WORD; every test of which states a verb accepts reads CS_STATE.
+CS_STOPPED=0; CS_WORD=""
+control_state_word_var() {
+  CS_STOPPED=0
+  CS_WORD="$CS_STATE"
+  if control_branch_stopped "$CS_STATE"; then
+    CS_STOPPED=1
+    CS_WORD=stopped
+  fi
+  return 0
+}
+
+# control_stopped_refuse — the refusal of a verb on a stopped run (CS_STOPPED
+# 1): names it `stopped`, the state underneath where the way on depends on it,
+# and the way on that state takes.
+control_stopped_refuse() {
+  local open=""
+  case "$CS_STATE" in
+    parked)
+      [ -z "$CS_OPEN" ] || open=", open: $CS_OPEN"
+      control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` is \`$CS_WORD\` (it was parked, waiting for an answer$open)" \
+        "Comment \`$COMMAND_HANDLE answer <n>\` with the answer to question <n> on the lines below it; the answer resumes it." ;;
+    park_loop)
+      control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` is \`$CS_WORD\` (it was held by the park-loop guard)" \
+        "Comment \`$COMMAND_HANDLE clear\` to release the hold and resume it." ;;
+    running)
+      control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` is \`$CS_WORD\`; its cancelled job is still finishing" \
+        "Comment \`$COMMAND_HANDLE resume\` once it has ended." ;;
+    *)
+      control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` is \`$CS_WORD\`" \
+        "Comment \`$COMMAND_HANDLE resume\` to continue it from its committed ledger." ;;
+  esac
+}
+
 # control_check_branch <branch> — the refusals both paths share, in order: a
 # branch not answered 1 by hr_branch_is_protected, then (after a fetch) one
 # whose origin tip carries no flow-progress ledger. Each is a reply and exit 2.
@@ -4381,7 +4449,7 @@ control_resume_dispatch() {
     route=$(hr_github_resume_route "$CONTROL_BRANCH" "<task, user_review or docs: the one the run was started with>")
     route=${route#or from GitHub: }
     [ "$#" -eq 0 ] || clear=", with park_loop_clear true as well"
-    control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` (\`$CS_STATE\`${CS_REASON:+, \`$CS_REASON\`}) records no engine, and the harness does not guess one" \
+    control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` (\`$CS_WORD\`${CS_REASON:+, \`$CS_REASON\`}) records no engine, and the harness does not guess one" \
       "Resume it with the **Run workflow** form instead: $route$clear."
   fi
   out=$(mktemp "$control_tmp/harness-control-out.XXXXXX") || out=/dev/null
@@ -4406,11 +4474,15 @@ control_resume() {
   local open
   control_state_var "$CONTROL_BRANCH" \
     || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($CS_ERR)" "Comment again to retry."
+  control_state_word_var
   case "$CS_STATE" in
     paused)
       # Every pause reason, `expired` and `killed` included, resumes from the
       # committed ledger, as the local route does.
       control_resume_dispatch "Resume requested by @$CONTROL_ACTOR: \`$CONTROL_BRANCH\` continues from its committed ledger." ;;
+  esac
+  [ "$CS_STOPPED" != 1 ] || control_stopped_refuse
+  case "$CS_STATE" in
     park_loop)
       control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` is held by the park-loop guard" \
         "Comment \`$COMMAND_HANDLE clear\` to release the hold and resume it." ;;
@@ -4422,20 +4494,24 @@ control_resume() {
     running)
       control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` is already \`running\`" "Nothing needs resuming." ;;
     *)
-      control_refuse "$EXIT_REFUSED" "only a paused run can be resumed, and the run on \`$CONTROL_BRANCH\` is \`${CS_STATE:-unknown}\`" \
+      control_refuse "$EXIT_REFUSED" "only a paused run can be resumed, and the run on \`$CONTROL_BRANCH\` is \`${CS_WORD:-unknown}\`" \
         "A finished run continues by a review requesting changes on its pull request, or by applying the trigger label to its issue again." ;;
   esac
 }
 
 control_clear() {
+  local subject="the run"
   control_state_var "$CONTROL_BRANCH" \
     || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($CS_ERR)" "Comment again to retry."
+  control_state_word_var
   if [ "$CS_STATE" != park_loop ]; then
-    control_refuse "$EXIT_REFUSED" "there is no park-loop hold to clear: the run on \`$CONTROL_BRANCH\` is \`${CS_STATE:-unknown}\`" \
+    [ "$CS_STOPPED" != 1 ] || control_stopped_refuse
+    control_refuse "$EXIT_REFUSED" "there is no park-loop hold to clear: the run on \`$CONTROL_BRANCH\` is \`${CS_WORD:-unknown}\`" \
       "Only a run held by the park-loop guard is cleared."
   fi
+  [ "$CS_STOPPED" != 1 ] || subject="the stopped run"
   # On GitHub, typing `clear` is the confirmation `branch-resume` asks for.
-  control_resume_dispatch "Park-loop hold on \`$CONTROL_BRANCH\` cleared by @$CONTROL_ACTOR; the run resumes from its committed ledger." \
+  control_resume_dispatch "Park-loop hold on \`$CONTROL_BRANCH\` cleared by @$CONTROL_ACTOR; $subject resumes from its committed ledger." \
     --park-loop-clear
 }
 
@@ -4443,8 +4519,11 @@ control_pause() {
   local out
   control_state_var "$CONTROL_BRANCH" \
     || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($CS_ERR)" "Comment again to retry."
+  control_state_word_var
+  # A stopped `running` run is a cancel still finishing: nothing to pause.
+  [ "$CS_STOPPED" != 1 ] || control_stopped_refuse
   if [ "$CS_STATE" != running ]; then
-    control_refuse "$EXIT_REFUSED" "only a running run can be paused, and the run on \`$CONTROL_BRANCH\` is \`$CS_STATE\`" \
+    control_refuse "$EXIT_REFUSED" "only a running run can be paused, and the run on \`$CONTROL_BRANCH\` is \`$CS_WORD\`" \
       "Nothing needs pausing."
   fi
   out=$(mktemp "$control_tmp/harness-control-out.XXXXXX") || out=/dev/null
@@ -4484,7 +4563,7 @@ control_stop() {
 # is not fully answered before any session, and its bundle then carries the
 # `answer_<n>.md` restore wrote, so the next answer's job finds the set complete.
 control_answer() {
-  local first short="" below="" text n="" v open_list="" rest="" cmds="" route form dir out status="$EXIT_OK"
+  local first short="" below="" text n="" v open_list="" rest="" cmds="" route form dir out status="$EXIT_OK" named
   first=${CONTROL_ARGS%%[$' \t']*}
   if [[ "$first" =~ ^[1-9][0-9]*$ ]]; then
     n="$first"
@@ -4510,6 +4589,14 @@ control_answer() {
 
   control_state_var "$CONTROL_BRANCH" \
     || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($CS_ERR)" "Comment again to retry."
+  control_state_word_var
+  # On a stopped parked run the answer dispatch is its resume; any other
+  # stopped state is refused naming `stopped`.
+  if [ "$CS_STOPPED" = 1 ] && [ "$CS_STATE" != parked ]; then
+    control_stopped_refuse
+  fi
+  named="\`$CS_WORD\`"
+  [ "$CS_STOPPED" != 1 ] || named="$named (it was parked)"
   case "$CS_STATE:$CS_REASON" in
     park_loop:*)
       control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` is held by the park-loop guard, not waiting for an answer" \
@@ -4526,11 +4613,11 @@ control_answer() {
       ;;
     parked:*) ;;
     *)
-      control_refuse "$EXIT_REFUSED" "only a parked run can be answered, and the run on \`$CONTROL_BRANCH\` is \`${CS_STATE:-unknown}\`" \
+      control_refuse "$EXIT_REFUSED" "only a parked run can be answered, and the run on \`$CONTROL_BRANCH\` is \`${CS_WORD:-unknown}\`" \
         "Nothing is waiting for an answer." ;;
   esac
   if [ -z "$CS_OPEN" ]; then
-    control_refuse "$EXIT_REFUSED" "only a parked run with an open question can be answered, and the run on \`$CONTROL_BRANCH\` is \`parked\` with none open" \
+    control_refuse "$EXIT_REFUSED" "only a parked run with an open question can be answered, and the run on \`$CONTROL_BRANCH\` is $named with none open" \
       "Nothing is waiting for an answer."
   fi
   for v in $CS_OPEN; do
@@ -4556,7 +4643,7 @@ control_answer() {
     route=${route#or from GitHub: }
     form="resume answer and answers \`{\"$n\": \"<the answer>\"}\`"
     route=${route/and resume pause/$form}
-    control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` (\`parked\`) records no engine, and the harness does not guess one" \
+    control_refuse "$EXIT_REFUSED" "the run on \`$CONTROL_BRANCH\` ($named) records no engine, and the harness does not guess one" \
       "Answer it with the **Run workflow** form instead: $route."
   fi
 
@@ -4595,10 +4682,18 @@ control_answer() {
   done
   if [ -n "$rest" ]; then
     # The label stays `parked` until the last answer: only that job resumes.
+    if [ "$CS_STOPPED" = 1 ]; then
+      control_reply "$EXIT_OK" "Answer to question $n received from @$CONTROL_ACTOR and sent; the stopped run on \`$CONTROL_BRANCH\` resumes once question(s) $rest are answered: $cmds."
+    fi
     control_reply "$EXIT_OK" "Answer to question $n received from @$CONTROL_ACTOR and sent; question(s) $rest still need an answer: $cmds."
   fi
-  control_post "Answer to question $n received from @$CONTROL_ACTOR; every open question is answered, so \`$CONTROL_BRANCH\` resumes." \
-    || status="$EXIT_GH"
+  if [ "$CS_STOPPED" = 1 ]; then
+    control_post "Answer to question $n received from @$CONTROL_ACTOR; every open question is answered, so the stopped run on \`$CONTROL_BRANCH\` resumes." \
+      || status="$EXIT_GH"
+  else
+    control_post "Answer to question $n received from @$CONTROL_ACTOR; every open question is answered, so \`$CONTROL_BRANCH\` resumes." \
+      || status="$EXIT_GH"
+  fi
   forge_issue_var "$CONTROL_BRANCH" || FORGE_ISSUE=""
   forge_pr_var "$CONTROL_BRANCH" || FORGE_PR=""
   [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" running || :
@@ -4900,18 +4995,33 @@ control_review_in_flight() {
     state="\`$BS_STATE\`"
     [ -z "$BS_REASON" ] || state="$state (\`$BS_REASON\`)"
   fi
-  case "$BS_STATE" in
-    parked)
-      way=" The run waits for an answer: comment \`$COMMAND_HANDLE answer <n>\` with the answer to its open question <n> on the lines below it." ;;
-    park_loop)
-      way=" The run is held by the park-loop guard: comment \`$COMMAND_HANDLE clear\` to release the hold." ;;
-    paused)
-      if [ "$BS_REASON" = usage ]; then
-        way=" The run resumes by itself once the usage limit resets."
-      else
-        way=" Comment \`$COMMAND_HANDLE resume\` to resume the run from its committed ledger."
-      fi ;;
-  esac
+  if control_branch_stopped "$BS_STATE"; then
+    # A stopped run continues only by the command its underlying state takes.
+    state="\`stopped\`"
+    case "$BS_STATE" in
+      parked)
+        way=" The run was stopped while waiting for an answer: comment \`$COMMAND_HANDLE answer <n>\` with the answer to its open question <n> on the lines below it; the answer resumes it." ;;
+      park_loop)
+        way=" The run was stopped while held by the park-loop guard: comment \`$COMMAND_HANDLE clear\` to release the hold and resume it." ;;
+      running)
+        way=" Its cancelled job is still finishing: comment \`$COMMAND_HANDLE resume\` once it has ended." ;;
+      *)
+        way=" Comment \`$COMMAND_HANDLE resume\` to resume the run from its committed ledger." ;;
+    esac
+  else
+    case "$BS_STATE" in
+      parked)
+        way=" The run waits for an answer: comment \`$COMMAND_HANDLE answer <n>\` with the answer to its open question <n> on the lines below it." ;;
+      park_loop)
+        way=" The run is held by the park-loop guard: comment \`$COMMAND_HANDLE clear\` to release the hold." ;;
+      paused)
+        if [ "$BS_REASON" = usage ]; then
+          way=" The run resumes by itself once the usage limit resets."
+        else
+          way=" Comment \`$COMMAND_HANDLE resume\` to resume the run from its committed ledger."
+        fi ;;
+    esac
+  fi
   branch="$CONTROL_BRANCH"
   if round_markers_read "$REVIEW_ID" && [ -n "$RC_EVENT_ROUND" ]; then
     control_reply "$EXIT_OK" "@$CONTROL_ACTOR: your review is part of round $RC_EVENT_ROUND, which is $state on \`$CONTROL_BRANCH\`."

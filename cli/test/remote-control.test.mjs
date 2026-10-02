@@ -28,6 +28,11 @@
  * `answer` is asserted to send one `resume=answer` dispatch carrying one entry, its text byte for byte
  * and never evaluated, to label the run `running` only when no other question stays open, and to refuse
  * a hold, an expired bundle, a job in progress, an unnamed or unknown index and an oversized payload.
+ *
+ * With a `harness stop feat_x` run newer than the newest `harness run feat_x` run in `STUB_RUN_LIST`,
+ * every reply naming the state names it `stopped` — never `paused`, `parked` or `running` — while
+ * `resume` on a stopped paused run, `answer` on a stopped parked one and `clear` on a stopped hold
+ * still dispatch.
  */
 
 import assert from 'node:assert/strict';
@@ -670,6 +675,77 @@ test('an answer carrying a command substitution and a backtick is sent byte for 
   const result = await f.control(`@sdlc-harness answer\n${answer}`, {}, parkedRun('1'));
   assertResumed(f, result, ANSWER_DISPATCH({ 1: answer }), /^Answer to question 1 received from @alice/);
   assert.ok(!existsSync(join(f.dir, 'pwned')));
+});
+
+/** A `harness stop feat_x` run newer than every `harness run feat_x` run the cases below list. */
+const STOP_RUN = { databaseId: 700, displayTitle: 'harness stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' };
+
+/** <env> with STOP_RUN added to its run list. */
+const stopped = (env) => ({ ...env, STUB_RUN_LIST: JSON.stringify([STOP_RUN, ...JSON.parse(env.STUB_RUN_LIST)]) });
+
+/** A newest `harness run feat_x` run still `in_progress`, created before STOP_RUN. */
+const CANCELLING = {
+  STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+};
+
+test('a stopped run whose bundle reads running (paused, killed) is named stopped by pause and answer; resume still dispatches', async (t) => {
+  const env = stopped(finishedRun('running', { engine: 'task' }));
+  const f = await controlFixture(t);
+  const pause = assertRefused(f, await f.control('@sdlc-harness pause', {}, env), /the run on `feat_x` is `stopped`\. /);
+  assert.match(pause.body, /Comment `@sdlc-harness resume` to continue it from its committed ledger\./);
+  assert.doesNotMatch(pause.body, /`paused`/);
+
+  const g = await controlFixture(t);
+  const answer = assertRefused(g, await g.control('@sdlc-harness answer 1\nUse B.', {}, env), /the run on `feat_x` is `stopped`\. /);
+  assert.match(answer.body, /`@sdlc-harness resume`/);
+  assert.doesNotMatch(answer.body, /`paused`/);
+
+  const h = await controlFixture(t);
+  assertResumed(h, await h.control('@sdlc-harness resume', {}, env), RESUME_DISPATCH, /^Resume requested by @alice/);
+});
+
+test('a stopped parked run is named stopped by pause and resume, and an answer resumes it', async (t) => {
+  const env = stopped(parkedRun('1'));
+  for (const verb of ['pause', 'resume']) {
+    const f = await controlFixture(t);
+    const reply = assertRefused(f, await f.control(`@sdlc-harness ${verb}`, {}, env),
+      /the run on `feat_x` is `stopped` \(it was parked, waiting for an answer, open: 1\)/);
+    assert.match(reply.body, /`@sdlc-harness answer <n>`.*; the answer resumes it\./);
+    assert.doesNotMatch(reply.body, /`parked`/);
+  }
+  const f = await controlFixture(t);
+  assertResumed(f, await f.control('@sdlc-harness answer 1\nUse A.', {}, env), ANSWER_DISPATCH({ 1: 'Use A.' }),
+    /^Answer to question 1 received from @alice; every open question is answered, so the stopped run on `feat_x` resumes\.\n/);
+});
+
+test('a stopped park-loop hold is named stopped by resume, and clear resumes it', async (t) => {
+  const env = stopped(finishedRun('park_loop', { engine: 'task' }));
+  const f = await controlFixture(t);
+  const reply = assertRefused(f, await f.control('@sdlc-harness resume', {}, env),
+    /the run on `feat_x` is `stopped` \(it was held by the park-loop guard\)/);
+  assert.match(reply.body, /`@sdlc-harness clear`/);
+  const g = await controlFixture(t);
+  assertResumed(g, await g.control('@sdlc-harness clear', {}, env), CLEAR_DISPATCH,
+    /^Park-loop hold on `feat_x` cleared by @alice; the stopped run resumes from its committed ledger\.\n/);
+});
+
+test('a stopped run whose cancelled job is still in progress is named stopped by pause and resume, never running', async (t) => {
+  const env = stopped(CANCELLING);
+  for (const verb of ['pause', 'resume']) {
+    const f = await controlFixture(t);
+    const reply = assertRefused(f, await f.control(`@sdlc-harness ${verb}`, {}, env),
+      /the run on `feat_x` is `stopped`; its cancelled job is still finishing\. Comment `@sdlc-harness resume` once it has ended\./);
+    assert.doesNotMatch(reply.body, /`running`/);
+  }
+});
+
+test('without a stop run, pause names a paused run paused and resume names a parked run parked', async (t) => {
+  const f = await controlFixture(t);
+  assertRefused(f, await f.control('@sdlc-harness pause', {}, finishedRun('paused', { pause_reason: 'user', engine: 'task' })),
+    /only a running run can be paused, and the run on `feat_x` is `paused`/);
+  const g = await controlFixture(t);
+  const reply = assertRefused(g, await g.control('@sdlc-harness resume', {}, parkedRun('1')), /is `parked`, waiting for an answer/);
+  assert.doesNotMatch(reply.body, /`stopped`/);
 });
 
 /** The entries of <dir>, for asserting that control removed what it created there. */

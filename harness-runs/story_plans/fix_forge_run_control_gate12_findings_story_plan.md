@@ -36,7 +36,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 5. [x] **Task 20** — Give the bundle library one move-aside function, so the watcher's pause-note move uses the same body _(layer: cli)_ _(points: 10)_
 6. [x] **Task 5** — Scope the pause note to the run it belongs to in job mode _(layer: cli)_ _(points: 20)_
 7. [x] **Task 6** — Refuse a `harness-run.yml` run or pause dispatched from a ref other than its branch _(layer: cli)_ _(points: 10)_
-8. [ ] **Task 7** — Name a stopped run `stopped` in every `control` reply _(layer: cli)_ _(points: 20)_
+8. [x] **Task 7** — Name a stopped run `stopped` in every `control` reply _(layer: cli)_ _(points: 20)_
 9. [ ] **Task 8** — Add the read-only `@sdlc-harness status` command _(layer: cli)_ _(points: 20)_
 10. [ ] **Task 9** — Teach `stop` a reason, an explicit pull request and a deleted branch _(layer: cli)_ _(points: 15)_
 11. [ ] **Task 10** — Never re-dispatch a branch that is absent on `origin` _(layer: cli)_ _(points: 10)_
