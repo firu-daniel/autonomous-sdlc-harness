@@ -25,6 +25,11 @@
 - R6 states the credential precedence (`ANTHROPIC_API_KEY` above `CLAUDE_CODE_OAUTH_TOKEN` above federation) in the words of W10, and the `actor`-bound rule as **Inference**.
 - No sentence in §2 recommends a route or describes a harness change.
 - `grep -nE '/Users/|/home/|/private/|/tmp/' docs/team-accounts-research.md` finds nothing. Then `bash scripts/test.sh`, run without a pipe, fails no gate that does not also fail on the branch's base commit: gate 6a (*no machine paths*) is red in this self-adopted checkout by design (`scripts/run-gates.sh` → the comment above gate 6e), so compare its hits, and no hit may name a file this branch wrote.
+- **Deviations from plan:**
+  - The `bash scripts/test.sh` step is deferred to the Run gates phase (`unit_loop_core.md` → `## The test-run rule`); the machine-path grep was run and found nothing.
+  - R2, R3 and R4 are written as three separate entries rather than one bullet's worth, so each can be cited by ID.
+  - R1 records, without resolving, that the workspaces page ("Claude Code mints a per-user API key in this workspace at sign-in") and the authentication page ("It creates no API key", for the recommended Console sign-in) differ.
+  - The quote check grepped every quoted string in §2 against `### Evidence` by script; the only strings not found verbatim are P4's carve-out (Task 1's evidence, cited as P4), the key-type table rows joined across the evidence's line break, and two splits on embedded quote marks inside code spans.
 
 ### Evidence
 
