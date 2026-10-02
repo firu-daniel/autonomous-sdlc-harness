@@ -51,7 +51,7 @@ The one Must Fix is cross-event. Deleting a run's branch while its pull request 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom, and the committing role flips each one to `[x]` as that fix's commit lands. `[ ]` markers anywhere else (sub-step bullets inside the per-finding files) are informational only.
 
 1. [x] **Finding 5** — Restore the column alignment of the `actions: write` permissions comment line in `harness-control.yml` _(layer: cli)_
-2. [ ] **Finding 4** — State in `harness-control.yml`'s prefilter paragraph that every closed same-repository pull request also starts a job _(layer: cli)_
+2. [x] **Finding 4** — State in `harness-control.yml`'s prefilter paragraph that every closed same-repository pull request also starts a job _(layer: cli)_
 3. [ ] **Finding 6** — Make the consume-then-archive bullet's consumption claims true for the user-review-fix flow's Phase A/QA/D pairs _(layer: plugin)_
 4. [ ] **Finding 2** — Fail a close whose permission check failed with `::error::` and exit 3, instead of ignoring it as unauthorised _(layer: cli)_
 5. [ ] **Finding 3** — Give a closed pull request's `stopped` comment a way on that works there (reopen first, or use the issue) _(layer: cli, general)_

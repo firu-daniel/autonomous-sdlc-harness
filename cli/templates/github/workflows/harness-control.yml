@@ -44,9 +44,10 @@
 # this repository; or for a deleted ref whose type is `branch`. Every other
 # event yields a skipped job, which runs no runner and bills nothing
 # (docs/remote-execution.md, `### Verified in Gate 12 round 2`). No label or
-# name marks a run branch at deletion, so every branch deletion in the
-# repository starts a job, which `control` ends in one line when the branch
-# had no run.
+# name marks a run branch at deletion, and none reliably marks a run's pull
+# request before its first lifecycle event, so every branch deletion and
+# every closed same-repository pull request in the repository starts a job,
+# which `control` ends in one line when the branch had no run.
 # It is a saving, not the authority: `control` re-checks every rule, so an
 # edited copy of this filter cannot bypass one. That `contains()` compares
 # case-insensitively is GitHub's documented behaviour, not verified here; a
