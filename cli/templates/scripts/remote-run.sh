@@ -287,12 +287,16 @@
 # `<!-- sdlc-harness event=<event> branch=<branch> -->`. The pause reason and
 # reset come from the registry record, read only when the registry file exists.
 # `parked` instead posts one comment per open question — `open_questions_in`
-# over `$root`'s state directory, ascending — carrying `question_<n>.md` whole,
-# cut at its last whole line within `QUESTION_COMMENT_MAX_BYTES` and then naming
-# the file in the `STATE_ARTIFACT_NAME` artifact; then the answer form, a
-# comment whose first line is `COMMAND_HANDLE answer <n>` (`<n>` optional when
-# one question is open) and whose following lines are the answer; the marker
-# adds `question=<n>`. With no question open it posts the one notice. The label
+# over `$root`'s state directory, ascending — carrying `question_<n>.md` less
+# every line naming its own `answer_<n>.md` (another index's line stays), cut
+# at its last whole line within `QUESTION_COMMENT_MAX_BYTES` and then naming
+# the file in the `STATE_ARTIFACT_NAME` artifact; then the answer form, the
+# comment's one answer instruction: a comment whose first line is
+# `COMMAND_HANDLE answer <n>` (`<n>` optional when one question is open) and
+# whose following lines are the answer; then a fenced copy block of that form,
+# `COMMAND_HANDLE answer <n>` over `<your answer>`; the marker adds
+# `question=<n>`. With no question open it posts nothing, sets no label and
+# prints one `::error::` line naming the branch. The label
 # is set once per target, not per question. On a public repository a question
 # comment and its answer are public, as the artifact already is
 # (`docs/remote-execution.md` -> `## 11. Security`, *What a reader of the
@@ -3801,10 +3805,20 @@ forge_utc() {
 
 # forge_question_body <out_file> <branch> <n> <open_count> <clar_dir> [<note>] —
 # write question <n>'s park comment, without its marker, into <out_file>: the
-# file's bytes, cut at the last whole line within QUESTION_COMMENT_MAX_BYTES
-# when it is over it (measured in bytes; `${#…}` counts characters).
+# file's bytes less every line naming `answer_<n>.md` (the file channel's own
+# answer line; another index's stays), cut at the last whole line within
+# QUESTION_COMMENT_MAX_BYTES when it is over it (measured in bytes; `${#…}`
+# counts characters), then the answer form and its copy block. Leaves
+# <out_file>.q and, when cut, <out_file>.cut for the caller to remove.
 forge_question_body() {
-  local out="$1" br="$2" n="$3" count="$4" qfile="$5/question_$3.md" note="${6-}" size cut=0 last
+  local out="$1" br="$2" n="$3" count="$4" qfile="$5/question_$3.md" note="${6-}" size cut=0 last rc
+  [ -r "$qfile" ] || return 1
+  # -a and LC_ALL=C: a question is text whatever bytes it holds. Status 1 is
+  # every line dropped, not a failure.
+  rc=0
+  LC_ALL=C grep -avF "answer_$n.md" "$qfile" >"$out.q" || rc=$?
+  [ "$rc" -le 1 ] || return 1
+  qfile="$out.q"
   size=$(wc -c <"$qfile") || return 1
   size=$((size))
   {
@@ -3826,7 +3840,7 @@ forge_question_body() {
       "$HR_REMOTE_CLARIFY_DIR" "$br" "$n" "$STATE_ARTIFACT_NAME"
     printf '\nAnswer with a comment whose first line is `%s answer %s` and whose following lines are your answer.' "$COMMAND_HANDLE" "$n"
     [ "$count" -ne 1 ] || printf ' This is the only open question, so `%s` may be left out: `%s answer`.' "$n" "$COMMAND_HANDLE"
-    printf '\n'
+    printf '\n\n```\n%s answer %s\n<your answer>\n```\n' "$COMMAND_HANDLE" "$n"
     [ -z "$note" ] || printf '\n%s\n' "$note"
     [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
   } >>"$out"
@@ -3905,8 +3919,6 @@ forge_report() {
       fi ;;
     park_loop)
       text="The harness run on \`$br\` is on hold: it parked on its questions again and again without progress. Comment \`${COMMAND_HANDLE} clear\` to clear the hold and let it continue." ;;
-    parked)
-      text="The harness run on \`$br\` is waiting for an answer. Its questions are in the run's \`$STATE_ARTIFACT_NAME\` artifact." ;;
     resumed)
       text="The harness run on \`$br\` resumed." ;;
     failed)
@@ -3926,6 +3938,10 @@ forge_report() {
   if [ "$event" = parked ]; then
     state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
     [ -z "$state_rel" ] || open_questions_in "$root/${state_rel%/}"
+    if [ -z "$OPEN_QUESTIONS" ]; then
+      echo "::error::remote-run.sh: report: $br was classified parked with no open question; nothing posted"
+      return 0
+    fi
   fi
 
   tmp="${RUNNER_TEMP-}"
@@ -3943,7 +3959,7 @@ forge_report() {
         else
           echo "remote-run.sh: report: cannot write question $n's comment for #$target; not posted" >&2
         fi
-        rm -f "$file" "$file.cut"
+        rm -f "$file" "$file.cut" "$file.q"
       else
         echo "remote-run.sh: report: cannot create question $n's comment file for #$target; not posted" >&2
       fi

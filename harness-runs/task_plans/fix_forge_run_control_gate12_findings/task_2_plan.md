@@ -34,3 +34,7 @@
 - In the posted body the stub records for the second case, `answer_1.md` does not occur, and the fenced block's first line is exactly `@sdlc-harness answer 1`.
 - The cut case already in the file still names the artifact path, and its comment stays within the byte bound with the copy block added.
 - The header's `report` paragraph and the code agree, line for line, on what a `parked` report posts.
+
+**Deviations from plan:**
+- The existing case `parked with no open question posts the one notice` asserted the behaviour item 7 removes; it is replaced by the first new case (answered pair only, no comment, no label, `::error::` line) rather than kept beside it.
+- The cut case gained one assertion that the copy block `@sdlc-harness answer 3` / `<your answer>` is present, so the byte-bound assertion covers the comment with the block added.
