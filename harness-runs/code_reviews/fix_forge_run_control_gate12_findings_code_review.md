@@ -52,7 +52,7 @@ The one Must Fix is cross-event. Deleting a run's branch while its pull request 
 
 1. [x] **Finding 5** — Restore the column alignment of the `actions: write` permissions comment line in `harness-control.yml` _(layer: cli)_
 2. [x] **Finding 4** — State in `harness-control.yml`'s prefilter paragraph that every closed same-repository pull request also starts a job _(layer: cli)_
-3. [ ] **Finding 6** — Make the consume-then-archive bullet's consumption claims true for the user-review-fix flow's Phase A/QA/D pairs _(layer: plugin)_
+3. [x] **Finding 6** — Make the consume-then-archive bullet's consumption claims true for the user-review-fix flow's Phase A/QA/D pairs _(layer: plugin)_
 4. [ ] **Finding 2** — Fail a close whose permission check failed with `::error::` and exit 3, instead of ignoring it as unauthorised _(layer: cli)_
 5. [ ] **Finding 3** — Give a closed pull request's `stopped` comment a way on that works there (reopen first, or use the issue) _(layer: cli, general)_
 6. [ ] **Finding 1** — Ignore a pull-request close whose head branch is already gone from `origin`, leaving the `delete` job to stop the run _(layer: cli, general)_
