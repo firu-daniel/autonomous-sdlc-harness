@@ -56,3 +56,26 @@
 - **category:** optimization
 - **evidence:** `8e6375c` — `Finding 1` (test fix plan `review_1_round_1`) — `Mark Finding 1 done — test fix plan index flip only`; the unit's work was deleting gitignored files, so no tracked work file existed to stage.
 - **cost this run:** one commit whose subject records only the readiness flip.
+
+# User-review fix round 2 — keep every review's summary in the round; one-account Gate 12 review step; evidence for four §8 rows
+
+## Round 2's per-unit reviewer overwrote round 1's tracked findings file in the shared per-item folder
+- **category:** shared-state
+- **evidence:** `user_review_fixes_instructions_core.md` → `## Setup` binds `<per_item_findings_root>` to `harness-runs/user_review_fix_plan_point_reviews/feat_forge_run_control_fix_plan/` with no round suffix, and row `UR-A` keys it `item_<K>/` by finding number. Round 1 had already committed `item_1/review_0.md` … `item_4/review_0.md` there. After the round-2 Finding 1 `cli` `layer-reviewer` (iteration 0, `verdict: PASS`), `git status --short` showed ` M harness-runs/user_review_fix_plan_point_reviews/feat_forge_run_control_fix_plan/item_1/review_0.md`; it was committed in `12f47af`. The round-2 `plugin` reviewer of the same item said in its return that a FAIL from it would overwrite that file too, since both layers share one folder and one iteration number.
+- **cost this run:** round 1's Finding 1 reviewer record was replaced in the tree (still in history). D.2's Nice-to-Have scan of this folder also lists round 1's files as this round's.
+- **hypothesis:** a fix iteration's "most recent `review_*.md`" lookup could also pick up the earlier round's file.
+
+## The fix-plan writer's lessons-ledger append is staged by no commit point of the autonomous fix flow (second round running)
+- **category:** silent-failure
+- **evidence:** after the round-2 `user-review-fix-plan-writer` dispatch, `git status --short` showed ` M harness-runs/lessons.md`. `## Override 3`'s explicit path list does not include it. A grep of `plugin/instructions/*.md` and `plugin/agents/user-review-fix-plan-writer.md` for a lessons commit returned nothing. As in round 1, the orchestrator committed it separately (`13246ce`).
+- **cost this run:** one out-of-contract commit.
+
+## Committers disagreed on row UR-A's severity `commit_prefix` within one round
+- **category:** agent-contract
+- **evidence:** following `#### Row UR-A`, the orchestrator passed `commit_prefix: chore` for Should Fix Finding 2 and `commit_prefix: fix` for Must Fix Findings 3 and 1. The Finding 2 committer refused `chore` under `.claude/context/conventions.md` → `## Commit-message policy` and committed with no prefix (`6090b27 Finding 2: record evidence …`). The Finding 3 and Finding 1 committers accepted `fix` (`ec4ebde`, `12f47af`).
+- **cost this run:** three fix commits in one round, with two subject forms.
+
+## Zero-yield phase: per-unit layer reviewer
+- **category:** optimization
+- **evidence:** `layer-reviewer` ran on all 3 Phase A units, 5 dispatches across the `cli`, `plugin` and `general` layers. All 5 returned `verdict: PASS` at iteration 0, and no fix iteration was dispatched.
+- **cost this run:** 5 of 14 dispatches this session.
