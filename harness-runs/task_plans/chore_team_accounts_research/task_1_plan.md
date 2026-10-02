@@ -30,6 +30,12 @@
 - The document opens with its reader statement (`conventions.md` → the `docs/` row of the accompaniment table), and the seven placeholders stand in the order **Where this task stops** gives.
 - `grep -nE '/Users/|/home/|/private/|/tmp/' docs/team-accounts-research.md` finds nothing. Then `bash scripts/test.sh`, run without a pipe, fails no gate that does not also fail on the branch's base commit: gate 6a (*no machine paths*) is red in this self-adopted checkout by design (`scripts/run-gates.sh` → the comment above gate 6e), so compare its hits, and no hit may name a file this branch wrote.
 
+**Deviations from plan:**
+- The `bash scripts/test.sh` verification bullet is deferred to the Run gates phase (`unit_loop_core.md` → `## The test-run rule`); the unit ran `bash scripts/typecheck.sh` (PASS) and the machine-path grep (no hits).
+- The quote check ran as a scratch probe extracting every double-quoted string in §1, splitting on `…`, and testing each fragment against this file. All matched except the two `remote-execution.md` paragraph openings, which are cited by their bold text as the last Work bullet asks and are not evidence quotes.
+- `remote-execution.md`'s "**The terms.**" paragraph quotes a hosted-platform phrase from the legal-and-compliance page that this file's evidence does not carry. P4 says that phrase was neither confirmed nor contradicted, and does not quote it.
+- The 2.6 INFERENCE (a `setup-token` token draws on the same limits as interactive use) and its SILENT are placed in P5, not P2, because they concern limits. 2.6's third SILENT (no page forbids giving a seat token to another person) is placed in P2 and points to P4.
+
 ### Evidence
 
 The planning session's research for this task, as recorded on 2026-10-02 from the sources named in each entry. Headings are demoted so they nest under this file; the text is otherwise unchanged. **INFERENCE** and **SILENT** lines are the researcher's labels and carry over to the document as **Inference** and **Not documented**.
