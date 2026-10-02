@@ -22,8 +22,8 @@
  * {@link navigationVariant}.
  *
  * **`session` in {@link runArm} is the object `evals/docs-retrieval/index-build.mjs` → `buildIndex`
- * returned**, never `cli/src/retrieval/session.ts` → `openRetrieval`'s, which this eval deliberately
- * never calls (`evals/docs-retrieval/corpora.mjs` → the gate paragraph).
+ * returned, or `evals/docs-retrieval/python-backend.mjs` → `openPythonSession`'s**, never
+ * `cli/src/retrieval/session.ts` → `openRetrieval`'s, which this eval deliberately never calls (`evals/docs-retrieval/corpora.mjs` → the gate paragraph).
  */
 
 import { SEARCH_MODES, searchDocs } from '../../cli/dist/retrieval/search.js';
@@ -148,6 +148,55 @@ function refsOf(result) {
   return result.hits.map((hit) => hit.ref);
 }
 
+/** A fresh record for `query` under `arm`, before any repetition has run. */
+function emptyRecord(query, arm) {
+  return {
+    id: query.id,
+    arm: arm.letter,
+    hits: [],
+    abstained: false,
+    bestRerankScore: null,
+    durationMs: [],
+    warnings: [],
+  };
+}
+
+/** Folds one repetition's `result` into `record`: the first is scored, a later one only compared. */
+function recordRepetition(record, result, repetition) {
+  const refs = refsOf(result);
+  if (repetition === 0) {
+    record.hits = result.hits.map((hit) => ({ ref: hit.ref, score: hit.score }));
+    record.abstained = result.abstained;
+    record.bestRerankScore = result.bestRerankScore ?? null;
+  } else if (refs.join('\u0000') !== record.hits.map((hit) => hit.ref).join('\u0000')) {
+    record.warnings.push(
+      `repetition ${repetition + 1} returned [${refs.join(', ')}], ` +
+        `which differs from repetition 1's [${record.hits.map((hit) => hit.ref).join(', ')}]`,
+    );
+  }
+}
+
+/** {@link runArm} over a Python session: `session.search` in place of `searchDocs`, timed by its `searchMs`. */
+async function runPythonArm({ session, arm, queries, k, repeat }) {
+  const records = new Map(queries.map((query) => [query.id, emptyRecord(query, arm)]));
+  for (let repetition = 0; repetition < repeat; repetition += 1) {
+    for (const query of queries) {
+      const record = records.get(query.id);
+      const result = await session.search({ query: query.query, k, mode: arm.mode });
+      record.durationMs.push(result.searchMs);
+      recordRepetition(record, result, repetition);
+    }
+  }
+  return {
+    letter: arm.letter,
+    mode: arm.mode,
+    embedCalls: null,
+    rerankCalls: null,
+    cost: 'local — no billed tokens (Python backend; embed and rerank call counts are not exposed over HTTP)',
+    records: queries.map((query) => records.get(query.id)),
+  };
+}
+
 /**
  * Runs one arm over `queries` and returns `{ letter, mode, embedCalls, rerankCalls, records }`.
  *
@@ -163,9 +212,13 @@ function refsOf(result) {
  * non-determinism warning on that record: an averaged-away difference would move recall and MRR
  * without saying so, and `evals/docs-retrieval/floor.json`'s numbers are taken from these records.
  *
- * `performance.now()` brackets the `searchDocs` call alone, so the timing excludes this loop.
+ * `performance.now()` brackets the `searchDocs` call alone, so the timing excludes this loop. A Python
+ * session (`session.backend === 'python'`) records the server's own `searchMs` instead, because the
+ * HTTP hop is not the library call; its embed and rerank calls are not exposed over HTTP, so both
+ * counts are `null` and the arm carries a `cost` sentence saying so.
  */
 export async function runArm({ session, arm, queries, k, repeat = 1 }) {
+  if (session.backend === 'python') return runPythonArm({ session, arm, queries, k, repeat });
   const counter = { embedCalls: 0, rerankCalls: 0 };
   const embedder = countingEmbedder(session.embedder, counter);
   const reranker = countingReranker(session.reranker, counter);

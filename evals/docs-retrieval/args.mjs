@@ -8,7 +8,10 @@
  * that table, and the two would drift. The boundary is drawn here rather than inferred: the
  * `--arms` line of the refusal below says so too. `--transcript`'s variant label is carried through
  * raw on the same terms, its legality deferred to `evals/docs-retrieval/arms.mjs` →
- * `navigationVariant`; only the refusals that need no variant vocabulary are made here.
+ * `navigationVariant`; only the refusals that need no variant vocabulary are made here. No backend
+ * name is spelled here either: `--backend`'s help line reads the names off
+ * `evals/docs-retrieval/backends.mjs` → `BACKENDS`, its label is carried through raw, and its
+ * legality is that module's `backendFor`'s.
  *
  * `--repo <path>` is what lets the eval be pointed at any adopter's checkout; it defaults to the
  * checkout this file sits in, from a bare `git rev-parse --show-toplevel`
@@ -24,6 +27,7 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { DEFAULT_RESULTS } from '../../cli/dist/retrieval/search.js';
+import { BACKENDS } from './backends.mjs';
 import { AD_HOC_CORPUS, BUILT_IN_CORPORA } from './corpora.mjs';
 
 /** One run of each query, unless the operator asks for more. */
@@ -53,6 +57,7 @@ const FLAGS = Object.freeze([
   ['--data-dir <path>', 'where the index is stored; absent means in memory, and nothing is written'],
   ['--floor <path>', 'the recorded regression floor; read by check-floor.mjs alone, not by a run'],
   ['--transcript <path>', 'an arm A hand-run transcript, bare or as <variant>=<path>; repeatable, once per variant, and scored by run.mjs'],
+  ['--backend <name>', `which backend to drive: ${BACKENDS.join(' or ')}; absent runs this checkout's cli/dist in process and writes the unlabelled block`],
 ]);
 
 /** A `--transcript` value's `<variant>=` prefix: a bare lower-case word before the first `=`. */
@@ -106,8 +111,8 @@ function ownCheckout() {
  *
  * `corpus` is `undefined` for an ad-hoc corpus, which `--docs-root` selects, and `corpusId` is that
  * corpus's `--corpus-id`, or `undefined`; `arms` is the raw letters as given, or `undefined`;
- * `transcripts` is `[{ variant, path }]` in the order given, `variant` the raw label or `null`; every
- * path is absolute by the time it is returned.
+ * `transcripts` is `[{ variant, path }]` in the order given, `variant` the raw label or `null`;
+ * `backend` is the raw label, or `undefined`; every path is absolute by the time it is returned.
  */
 export function parseArgs(argv) {
   const raw = { conventions: [], transcripts: [] };
@@ -159,6 +164,9 @@ export function parseArgs(argv) {
       case '--transcript':
         raw.transcripts.push(transcriptEntry(value));
         break;
+      case '--backend':
+        raw.backend = value;
+        break;
       // Every flag in FLAGS needs its own case: VALUE_FLAGS above accepts a flag the moment it is
       // declared, so a declared flag with no case here would take some other flag's slot silently.
       default:
@@ -166,6 +174,9 @@ export function parseArgs(argv) {
     }
   }
   checkTranscripts(raw.transcripts);
+  if (raw.backend !== undefined && raw.transcripts.length > 0) {
+    refuse(`--backend ${raw.backend} was given with --transcript; arm A is agent navigation and has no backend`);
+  }
 
   const checkout = ownCheckout();
   const repo = raw.repo === undefined ? checkout : resolve(checkout, raw.repo);
@@ -216,5 +227,6 @@ export function parseArgs(argv) {
     dataDir: against(raw.dataDir),
     floor: against(raw.floor),
     transcripts: raw.transcripts.map(({ variant, path }) => ({ variant, path: against(path) })),
+    backend: raw.backend,
   };
 }

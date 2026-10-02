@@ -2,13 +2,13 @@
 
 **Read this when** you are adding a module, a corpus or an arm to the docs-retrieval relevance eval, or you have found a file here and need to know what owns what. The **procedure** for running the eval, the **metric definitions** and the **decision rule** are not here: they are `docs/retrieval-eval.md`, and the figures every run produced are `docs/retrieval-eval-results.md`. How the eval is run is that document's `## How to run it`, and this file states no route of its own.
 
-This directory holds the runner for the relevance eval of the shipped docs-retrieval tool: a set of ES modules that import the compiled retrieval code under `cli/dist/retrieval/` and drive it over labelled query sets. It is not a case for the native eval runner and answers to no runner — `evals/README.md` says what separates the directory's two tenants.
+This directory holds the runner for the relevance eval of the shipped docs-retrieval tool: a set of ES modules that drive the shipped retrieval code over labelled query sets — the compiled `cli/dist/retrieval/` in process, or, with `--backend python`, the Python package's HTTP app (`python-backend.mjs`). It is not a case for the native eval runner and answers to no runner — `evals/README.md` says what separates the directory's two tenants.
 
 ## The modules
 
 | Path | What it owns |
 |---|---|
-| `run.mjs` | The entry module: one pass over one corpus, and the result object every other reader takes its figures from. Orchestration only. |
+| `run.mjs` | The entry module: one pass over one corpus, through one backend, and the result object every other reader takes its figures from. Orchestration only. |
 | `args.mjs` | The argument surface — the one place a flag is spelled, defaulted and refused. |
 | `corpora.mjs` | Resolving a corpus id to the `HarnessConfig` that corpus is read through. |
 | `queries.mjs` | Loading a labelled query set, and refusing a label that no longer resolves to a heading in the corpus. |
