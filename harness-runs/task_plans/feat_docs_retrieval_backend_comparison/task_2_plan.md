@@ -26,3 +26,9 @@
 - `transplantCorpusBlock` moves that block from the scratch copy into a second copy byte for byte. It refuses with its named message for a missing block id and for a target with a duplicated `<!-- eval:generated:start -->`.
 - `grep -n -E "^## Two single sources|^Both exist" evals/docs-retrieval/README.md` finds nothing, and `grep -n "^## The single sources this directory reads and never copies" evals/docs-retrieval/README.md` finds the retitled heading, followed by three bullets.
 - `backendFor('rust')` throws the named refusal, and `corpusBlockId('self-docs', undefined) === 'self-docs'`.
+
+**Deviations from plan:**
+
+- The per-backend provenance bullets live in `results.mjs` → `BACKEND_ROUTES`, which is checked against `BACKENDS` at load and refuses by name a backend with no route, as `arms.mjs` refuses a mode with no letter. The plan named the bullet texts but not where they are keyed.
+- `renderCorpusTable` (the stdout view a run with no `--out` prints) uses the same backend-aware heading as the block, so the two views of a labelled run do not disagree. With no backend named it prints today's heading.
+- The README's third single-sources bullet says `args.mjs` reads `backends.mjs`, as the plan asks. That holds once Task 4 lands; in this task only `results.mjs` imports it.

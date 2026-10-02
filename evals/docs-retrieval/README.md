@@ -14,8 +14,9 @@ This directory holds the runner for the relevance eval of the shipped docs-retri
 | `queries.mjs` | Loading a labelled query set, and refusing a label that no longer resolves to a heading in the corpus. |
 | `index-build.mjs` | Building the index a run measures against, and the `{ files, chunks }` snapshot every figure from that run is stamped with. |
 | `arms.mjs` | The arm table, and the runner that drives one arm over one query set. |
+| `backends.mjs` | The backend vocabulary, and the block id each backend's figures are written under. |
 | `metrics.mjs` | The figures: graded recall@k, MRR, latency percentiles, and the two score distributions the abstention threshold was calibrated on. |
-| `results.mjs` | Rendering one run into the generated region of `docs/retrieval-eval-results.md` — the only writer of the bytes between that file's markers. |
+| `results.mjs` | Rendering one run into the generated region of `docs/retrieval-eval-results.md` — the only writer of the bytes between that file's markers — one block per corpus and backend, `<id>` or `<id>@<backend>`, and moving a finished block between results files (`transplantCorpusBlock`). |
 | `calibrate.mjs` | The fixed re-calibration method of `ABSTAIN_SCORE_THRESHOLD`, over the uncensored scores the generated region publishes. |
 | `check-floor.mjs` | The regression gate: this run's figures against the recorded floor, with an exit status per outcome. |
 | `floor.json` | The recorded floor the gate reads — a machine artifact, not prose. What the numbers mean and when one is re-recorded is `docs/retrieval-eval.md` → `## The regression floor`, which the file's own `see` key names. |
@@ -37,9 +38,10 @@ This directory holds the runner for the relevance eval of the shipped docs-retri
 - **`fixture-catalog`** — the invented catalog under `corpora/fixture-catalog/docs/`, committed here in full. It carries its own `INDEX.md` because the index-first arm navigates from one and this repository's `docs/` has none. It changes only when the eval changes, which is why it is the corpus the regression gate grades.
 - **`self-docs`** — this repository's own `docs/` plus every conventions document `layers[]` names. It **moves**: a document added under `docs/` joins the corpus, so every recorded figure over it is stamped with that run's file and chunk counts, and two figures carrying different stamps are not a before/after pair.
 
-## Two single sources this directory reads and never copies
+## The single sources this directory reads and never copies
 
-Both exist so that a change made in one place fails loudly here rather than going missing.
+Each exists so that a change made in one place fails loudly here rather than going missing.
 
 - **The arm table is `arms.mjs`**, built by pairing letters onto `SEARCH_MODES` imported from `cli/dist/retrieval/search.js`. Every other module's default arm set, arm column, floor key and by-name refusal reads that table, so no arm letter and no mode string is retyped anywhere else here. A fifth `SearchMode` therefore gains an arm, a metric row, a results row and a floor key from one letter added in that module — and until it is added, the table refuses at load by name.
 - **The layer list is `harness.config.json`'s**, at the resolved `--repo` root. `corpora.mjs`'s `self-docs` reads `layers[]` and `stateDir` out of that file verbatim and overrides `docs.root` alone, because `cli/src/retrieval/corpus.ts`'s header forbids a copy of the conventions list anywhere. A layer added to that file is covered by the next run with no edit here; a configuration that is absent or carries no `layers` is refused by name rather than substituted for.
+- **The backend vocabulary is `backends.mjs`'s**, and `args.mjs` and `results.mjs` read it. A run naming no backend writes its corpus's unlabelled block; one naming a backend — `typescript` included — writes `<id>@<backend>` beside it, so a re-run never overwrites the recorded unlabelled figures the floor and the calibration stand on.
