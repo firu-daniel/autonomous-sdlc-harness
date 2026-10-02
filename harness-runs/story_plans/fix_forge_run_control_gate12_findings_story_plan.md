@@ -31,7 +31,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 
 1. [x] **Task 1** — Archive every answered pair a session launched with, so a park answered then paused never ends `parked` _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — Report a park as one GitHub answer instruction with a copy block, and never as a question-less comment _(layer: cli)_ _(points: 15)_
-3. [ ] **Task 3** — Multi-job park suite: answer, then a user or budget pause, then a pause resume, completes and delivers _(layer: cli)_ _(points: 20)_
+3. [x] **Task 3** — Multi-job park suite: answer, then a user or budget pause, then a pause resume, completes and delivers _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Multi-job park suite: the usage-pause and stop-then-resume sequences complete too _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 20** — Give the bundle library one move-aside function, so the watcher's pause-note move uses the same body _(layer: cli)_ _(points: 10)_
 6. [ ] **Task 5** — Scope the pause note to the run it belongs to in job mode _(layer: cli)_ _(points: 20)_

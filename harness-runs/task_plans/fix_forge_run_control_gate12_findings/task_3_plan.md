@@ -23,3 +23,10 @@
 - `npm test -- test/watcher-remote-park-sequence.test.mjs` from `cli/` passes.
 - Read each case against Task 1's change: before it, job 3 ended `parked`, which is round 6's finding 1. The case's first assertion after job 3 is on `status` `completed`, so it would fail on exactly that outcome rather than on a later, incidental one.
 - Every `runBash` call carries a timeout below the per-test timeout, as `watcher-remote-job.test.mjs`'s header requires, and every fixture is torn down in process.
+
+**Deviations from plan:**
+
+- Between jobs the helper also removes the `PAUSE`, `RESUME` and `PAUSE_ACK` sentinels, beyond the four paths the Work list names: a paused job leaves `PAUSE` and `PAUSE_ACK` in the checkout, and a fresh runner has neither.
+- Forge is wired (`forge` `github`, `execution.target` `github-actions`, the branch pushed with its provenance line) before job 1 rather than only for `deliver`, so each job's own `report` calls run as on a runner; the `deliver` assertions read only the `gh` calls made after job 3, from a stub that logs comment bodies, so the `completed` comment is matched on its marker.
+- The budget case runs job 3 with `HARNESS_INPUT_CHAIN` `1`, the chained continuation a `continue` decision dispatches.
+- Evidence downgrade on the second Verification bullet: a mutation run of the suite against the pre-Task-1 watcher (`git show 7002111:cli/templates/scripts/autonomous-watcher.sh`) was refused by the tool layer, so "before Task 1, job 3 ended `parked`" rests on reading Task 1's diff (`classify_run_exit` archiving `resumed_for_index` plus `launch_answered_set`), not on execution. The first assertion after job 3 is on `status` `completed`.
