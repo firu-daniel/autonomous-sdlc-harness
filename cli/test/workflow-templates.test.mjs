@@ -3,7 +3,10 @@
  *
  * **The contract these tests enforce.** The seven `workflow_dispatch` inputs `remote-run.sh`
  * sends, with `action`'s options exactly `run`, `pause`, `warm` and `stop`; a job only for `run`
- * and for `warm`, so `pause` and `stop` start none; the `collect` job after `run`, under `!cancelled()`,
+ * and for `warm`, so `pause` and `stop` start none, except the `wrong-ref` job, which fails a `run`
+ * or `pause` whose `github.ref_name` is not its `branch` input, reading both only through its step's
+ * `env:`, while the `run` and `collect` jobs' `if:` require that ref and that input to agree;
+ * the `collect` job after `run`, under `!cancelled()`,
  * in the `harness-review-<branch>` group with `cancel-in-progress: false`, checking out the default
  * branch rather than `inputs.branch`, reading no secret and running
  * `remote-run.sh collect` alone; the `run-name` title the pause poll and
@@ -147,13 +150,30 @@ test('the seven inputs, with their types and options', () => {
   assert.match(input('chain'), /type: number/);
 });
 
-test('only run and warm start a job, so pause and stop start none', () => {
+test('only run and warm start a job, and pause only a failing one from the wrong ref; stop starts none', () => {
   const jobIfs = LINES.filter((l) => /^ {4}if: /.test(l)).map((l) => l.trim());
   assert.deepEqual(jobIfs, [
-    "if: inputs.action == 'run'",
-    "if: ${{ inputs.action == 'run' && !cancelled() }}",
+    "if: (inputs.action == 'run' || inputs.action == 'pause') && github.ref_name != inputs.branch",
+    "if: inputs.action == 'run' && github.ref_name == inputs.branch",
+    "if: ${{ inputs.action == 'run' && !cancelled() && github.ref_name == inputs.branch }}",
     "if: inputs.action == 'warm'",
   ]);
+});
+
+test('the wrong-ref job reads the ref and the branch through env and fails, naming the ref to use', () => {
+  const start = LINES.indexOf('  wrong-ref:');
+  assert.notEqual(start, -1, 'harness-run.yml carries a wrong-ref job');
+  const block = blockUnder(start);
+  const text = block.join('\n');
+  assert.match(text, /^ {10}IN_REF: \$\{\{ github\.ref_name \}\}$/m);
+  assert.match(text, /^ {10}IN_BRANCH: \$\{\{ inputs\.branch \}\}$/m);
+  const bodies = runBodies(block);
+  assert.equal(bodies.length, 1);
+  const [body] = bodies;
+  assert.ok(!body.includes('${{'), `expression in run: ${body}`);
+  assert.match(body, /::error::this run was dispatched from '\$IN_REF', but its branch input is '\$IN_BRANCH'/);
+  assert.match(body, /Use workflow from set to '\$IN_BRANCH'/);
+  assert.match(body, /^\s*exit 1$/m);
 });
 
 test('the collect job follows run unless cancelled, shares the review group, reads no secret and runs collect', () => {
