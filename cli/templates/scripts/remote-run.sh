@@ -12,7 +12,8 @@
 #                 [--park-loop-clear] [--chain <n>] [--repo <root>]
 #   remote-run.sh pause <branch> [--repo <root>]
 #   remote-run.sh warm [--repo <root>]
-#   remote-run.sh stop <branch> [--actor <login>] [--repo <root>]
+#   remote-run.sh stop <branch> [--actor <login>] [--note <text>] [--pr <n>]
+#                 [--branch-gone] [--repo <root>]
 #   remote-run.sh status <branch> [--repo <root>]
 #   remote-run.sh sync <branch> [--repo <root>]
 #   remote-run.sh fetch <branch> <out_dir> [--repo <root>]
@@ -273,7 +274,8 @@
 # whose head is <branch> when origin's <branch> carries
 # `<state_dir>/flow_progress/<branch>_progress.md`, else to the issue named by
 # the last `Started from <server>/<repo>/issues/<n> by @` line of its committed
-# task prompt, else nowhere. The label `STATE_LABEL_PREFIX<state>` replaces any
+# task prompt, else nowhere (`stop`'s `--pr` and `--branch-gone` change this
+# for its own report: its paragraph). The label `STATE_LABEL_PREFIX<state>` replaces any
 # other state label on that issue and that pull request, each when known; the
 # label is a view, and the run list stays the authority. The state map:
 # `parked` and `park_loop` -> parked, `paused` -> paused, `resumed` -> running,
@@ -802,11 +804,24 @@
 # local registry record exists, it writes `remote_stopped_at` and sets `status`
 # to `failed` in one `hr_registry_set` call; a partial stop leaves the record alone
 # and exits 3, so running `stop` again is the remedy. (4) A complete stop is then
-# reported as `report stopped` with the note `Stopped by @<actor>.` under
-# `--actor` (a login, the trigger's shape plus an optional `[bot]`; anything else
-# is a usage error), else one naming a local stop; a partial stop reports
-# nothing. The cancelled job's own `failed` is then posted nowhere, because
-# `report` finds the branch stopped.
+# reported as `report stopped` with the note `--note <text>` when given, else
+# `Stopped by @<actor>.` under `--actor` (a login, the trigger's shape plus an
+# optional `[bot]`; anything else is a usage error), else one naming a local
+# stop; a partial stop reports nothing. Under `--pr <n>` that report's comment
+# and label go to pull request <n> whatever its state — the open-PR lookup
+# cannot find a closed one — and the issue is still labelled. The cancelled
+# job's own `failed` is then posted nowhere, because `report` finds the branch
+# stopped. `--branch-gone` is for a branch GitHub no longer has: (1)'s marker
+# is dispatched with `--ref` set to GitHub's own default branch (read as `warm`
+# reads it; a failed read exits 3 before anything is sent) and still carries
+# `-f branch=<branch>`, so its `harness stop <branch>` title is unchanged;
+# (2)'s listing also reads `headSha,createdAt`; (4) reads the issue from the
+# task prompt at the newest `harness run <branch>` run's `headSha` through the
+# contents API rather than from `origin/<branch>` (a failed read is one line
+# and no issue), and its text says the branch was deleted, so the run cannot
+# be resumed, and that its workflow runs and artifacts are kept. That read
+# rests on GitHub serving a commit no branch points at, which is unverified
+# (`docs/github-run-control.md` -> `## 8. What is not verified here`).
 #
 # `warm` dispatches action=warm on GitHub's OWN default branch (`gh repo view
 # --json defaultBranchRef`), which may differ from the configured
@@ -1190,7 +1205,7 @@ usage() {
   echo "usage: remote-run.sh dispatch <branch> --engine <task|user_review|docs> [--resume none|answer|pause] [--answers-from <clar_dir> --indexes \"<n> ...\"] [--park-loop-clear] [--chain <n>] [--repo <root>]" >&2
   echo "       remote-run.sh pause <branch> [--repo <root>]" >&2
   echo "       remote-run.sh warm [--repo <root>]" >&2
-  echo "       remote-run.sh stop <branch> [--actor <login>] [--repo <root>]" >&2
+  echo "       remote-run.sh stop <branch> [--actor <login>] [--note <text>] [--pr <n>] [--branch-gone] [--repo <root>]" >&2
   echo "       remote-run.sh status <branch> [--repo <root>]" >&2
   echo "       remote-run.sh sync <branch> [--repo <root>]" >&2
   echo "       remote-run.sh fetch <branch> <out_dir> [--repo <root>]" >&2
@@ -1307,6 +1322,7 @@ source_arg=""
 reviewers_arg=""
 allow_no_run=0
 pr_arg=""
+branch_gone=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -1339,7 +1355,7 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] && [ -n "$2" ] || usage "$1 needs a value"
       review_file="$2"; shift 2 ;;
     --note)
-      [ "$verb" = report ] || usage "$1 is a report option"
+      [ "$verb" = report ] || [ "$verb" = stop ] || usage "$1 is a report or stop option"
       [ "$#" -ge 2 ] || usage "$1 needs a value"
       report_note="$2"; shift 2 ;;
     --actor)
@@ -1358,12 +1374,15 @@ while [ "$#" -gt 0 ]; do
       [ "$verb" = review ] || usage "$1 is a review option"
       allow_no_run=1; shift ;;
     --pr)
-      [ "$verb" = collect ] || usage "$1 is a collect option"
+      [ "$verb" = collect ] || [ "$verb" = stop ] || usage "$1 is a collect or stop option"
       [ "$#" -ge 2 ] || usage "$1 needs a value"
       case "$2" in
         ''|*[!0-9]*|0*) usage "--pr needs a positive pull request number" ;;
       esac
       pr_arg="$2"; shift 2 ;;
+    --branch-gone)
+      [ "$verb" = stop ] || usage "$1 is a stop option"
+      branch_gone=1; shift ;;
     -*)
       usage "unknown option '$1'" ;;
     *)
@@ -1659,29 +1678,48 @@ verb_pause() {
   echo "remote-run.sh: dispatched action=pause for $branch"
 }
 
-verb_warm() {
-  local default_branch
+# github_default_branch_var — GITHUB_DEFAULT_BRANCH, GitHub's own default
+# branch; exits 3 when it cannot be read.
+GITHUB_DEFAULT_BRANCH=""
+github_default_branch_var() {
   gh_call repo view --json defaultBranchRef || gh_fail "reading GitHub's default branch failed"
-  default_branch=$(printf '%s' "$GH_OUT" | jq -r '.defaultBranchRef.name // empty' 2>/dev/null)
-  if ! valid_branch "$default_branch"; then
+  GITHUB_DEFAULT_BRANCH=$(printf '%s' "$GH_OUT" | jq -r '.defaultBranchRef.name // empty' 2>/dev/null)
+  if ! valid_branch "$GITHUB_DEFAULT_BRANCH"; then
     GH_ERR="no defaultBranchRef.name in its output"
     gh_fail "reading GitHub's default branch failed"
   fi
+}
+
+verb_warm() {
+  local default_branch
+  github_default_branch_var
+  default_branch="$GITHUB_DEFAULT_BRANCH"
   gh_call workflow run "$WORKFLOW_RUN_FILE" --ref "$default_branch" -f "action=warm" -f "branch=$default_branch" || gh_fail "warm-up on '$default_branch' failed"
   echo "remote-run.sh: dispatched action=warm on $default_branch"
 }
 
 verb_stop() {
-  local ids id failed=0 first_err="" registry stopped_at
+  local ids id failed=0 first_err="" registry stopped_at marker_ref="$branch" fields=databaseId,displayTitle,status
+  local gone="" gone_sha="" note
   stopped_at=$(date +%s)
-  gh_call workflow run "$WORKFLOW_RUN_FILE" --ref "$branch" -f "action=stop" -f "branch=$branch" || gh_fail "stop marker for '$branch' failed, nothing cancelled"
+  if [ "$branch_gone" -eq 1 ]; then
+    github_default_branch_var
+    marker_ref="$GITHUB_DEFAULT_BRANCH"
+    gone=gone
+    fields="$fields,headSha,createdAt"
+  fi
+  gh_call workflow run "$WORKFLOW_RUN_FILE" --ref "$marker_ref" -f "action=stop" -f "branch=$branch" || gh_fail "stop marker for '$branch' failed, nothing cancelled"
   echo "remote-run.sh: dispatched the action=stop marker for $branch"
 
-  gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json databaseId,displayTitle,status --limit 100 || gh_fail "listing the runs of '$branch' failed"
+  gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$branch" --json "$fields" --limit 100 || gh_fail "listing the runs of '$branch' failed"
   ids=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" '.[] | select(.displayTitle == $t and (.status == "queued" or .status == "in_progress" or .status == "waiting")) | .databaseId' 2>/dev/null) || {
     GH_ERR="its run list is not the expected JSON"
     gh_fail "listing the runs of '$branch' failed"
   }
+  if [ -n "$gone" ]; then
+    gone_sha=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $branch" \
+      '[.[] | select(.displayTitle == $t)] | max_by(.createdAt // "") | .headSha // empty' 2>/dev/null) || gone_sha=""
+  fi
   for id in $ids; do
     if gh_call run cancel "$id"; then
       echo "remote-run.sh: asked GitHub to cancel run $id of $branch"
@@ -1702,11 +1740,14 @@ verb_stop() {
       || echo "remote-run.sh: stopped on GitHub, but the local record of $branch could not be updated" >&2
   fi
   echo "remote-run.sh: stopped $branch"
-  if [ -n "$actor_arg" ]; then
-    forge_report stopped "$branch" "Stopped by @$actor_arg."
+  if [ -n "$report_note" ]; then
+    note="$report_note"
+  elif [ -n "$actor_arg" ]; then
+    note="Stopped by @$actor_arg."
   else
-    forge_report stopped "$branch" "Stopped from a local \`remote-run.sh stop\`."
+    note="Stopped from a local \`remote-run.sh stop\`."
   fi
+  forge_report stopped "$branch" "$note" "$pr_arg" "$gone" "$gone_sha"
 }
 
 # list_runs — the branch's runs of the workflow into GH_OUT; exits 3 on failure.
@@ -3692,7 +3733,7 @@ forge_marker() {
 FORGE_ISSUE=""
 FORGE_TRIGGER_LABEL=""
 forge_issue_var() {
-  local state_rel rel prompt line rest num prefix label
+  local state_rel rel prompt
   FORGE_ISSUE=""
   FORGE_TRIGGER_LABEL=""
   state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
@@ -3702,6 +3743,41 @@ forge_issue_var() {
   fi
   rel=$(hr_task_prompt_rel "$state_rel" "$1")
   prompt=$(git -C "$root" show "refs/remotes/origin/$1:$rel" 2>/dev/null) || return 0
+  forge_provenance_parse "$prompt"
+}
+
+# forge_issue_at_commit_var <branch> <sha> — forge_issue_var for a branch
+# GitHub no longer has: the task prompt is read through the contents API at
+# <sha>. A failed read is one line and leaves both empty.
+forge_issue_at_commit_var() {
+  local state_rel path
+  FORGE_ISSUE=""
+  FORGE_TRIGGER_LABEL=""
+  if ! [[ "${2-}" =~ ^[0-9a-f]{7,40}$ ]]; then
+    echo "remote-run.sh: report: no \`harness run $1\` run names a commit; the issue of $1 is unknown" >&2
+    return 1
+  fi
+  state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
+  if [ -z "$state_rel" ]; then
+    echo "remote-run.sh: cannot resolve the state directory under '$root'" >&2
+    return 1
+  fi
+  GH_ERR="its path could not be encoded"
+  path=$(jq -rn --arg p "$(hr_task_prompt_rel "$state_rel" "$1")" '$p | split("/") | map(@uri) | join("/")') || path=""
+  if [ -z "$path" ] || ! gh_call api "repos/$FORGE_REPO/contents/$path?ref=$2" -H "Accept: application/vnd.github.raw"; then
+    echo "remote-run.sh: report: reading the task prompt of $1 at $2 failed: $GH_ERR" >&2
+    return 1
+  fi
+  forge_provenance_parse "$GH_OUT"
+}
+
+# forge_provenance_parse <prompt> — FORGE_ISSUE and FORGE_TRIGGER_LABEL from
+# the last provenance line of <prompt>, matched against this repository's own
+# issue URL only.
+forge_provenance_parse() {
+  local prompt="$1" line rest num prefix label
+  FORGE_ISSUE=""
+  FORGE_TRIGGER_LABEL=""
   prefix="Started from $FORGE_SERVER/$FORGE_REPO/issues/"
   while IFS= read -r line; do
     case "$line" in
@@ -3867,11 +3943,13 @@ forge_question_body() {
   } >>"$out"
 }
 
-# forge_report <event> <branch> [<note>] — one lifecycle comment (on `parked`,
-# one per open question) and the state label, by the target rule above.
-# Always 0.
+# forge_report <event> <branch> [<note> [<pr> [gone [<sha>]]]] — one lifecycle
+# comment (on `parked`, one per open question) and the state label, by the
+# target rule above. Read on `stopped` only: <pr>, an explicit pull request
+# that is the target whatever its state; `gone`, the branch deleted on GitHub,
+# its issue read from the task prompt at <sha>. Always 0.
 forge_report() {
-  local event="$1" br="$2" note="${3-}" state reason="" resume_at="" when registry_file
+  local event="$1" br="$2" note="${3-}" pr="${4-}" gone="${5-}" gone_sha="${6-}" state reason="" resume_at="" when registry_file
   local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n
   case "$event" in
     parked|park_loop) state=parked ;;
@@ -3907,10 +3985,22 @@ forge_report() {
       || echo "remote-run.sh: report: whether $br was stopped is unknown ($GH_ERR); reporting the failure" >&2
   fi
 
-  forge_fetch_branch "$br"
-  forge_issue_var "$br" || FORGE_ISSUE=""
-  forge_pr_var "$br" || FORGE_PR=""
-  if [ -n "$FORGE_PR" ] && ! forge_recognised "$br"; then
+  [ "$event" = stopped ] || { pr=""; gone=""; }
+  if [ -n "$gone" ]; then
+    forge_issue_at_commit_var "$br" "$gone_sha" || FORGE_ISSUE=""
+  else
+    forge_fetch_branch "$br"
+    forge_issue_var "$br" || FORGE_ISSUE=""
+  fi
+  if [ -n "$pr" ]; then
+    FORGE_PR="$pr"
+  elif [ -n "$gone" ]; then
+    # GitHub closes a pull request whose head is deleted, so none is open.
+    FORGE_PR=""
+  else
+    forge_pr_var "$br" || FORGE_PR=""
+  fi
+  if [ -z "$pr" ] && [ -n "$FORGE_PR" ] && ! forge_recognised "$br"; then
     echo "remote-run.sh: report: pull request #$FORGE_PR's head carries no flow-progress ledger; it is not a target"
     FORGE_PR=""
   fi
@@ -3950,7 +4040,11 @@ forge_report() {
         text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, re-apply the label \`$trigger_label\` to this issue; that starts a new run, on the next indexed branch."
       fi ;;
     stopped)
-      text="The harness run on \`$br\` was stopped. Comment \`${COMMAND_HANDLE} resume\` to continue it from its committed ledger. A review that requests changes is collected now, and its round starts once the resumed run finishes." ;;
+      if [ -n "$gone" ]; then
+        text="The harness run on \`$br\` was stopped: its branch was deleted, so the run cannot be resumed. Its workflow runs and their artifacts are kept."
+      else
+        text="The harness run on \`$br\` was stopped. Comment \`${COMMAND_HANDLE} resume\` to continue it from its committed ledger. A review that requests changes is collected now, and its round starts once the resumed run finishes."
+      fi ;;
     round)
       text="A user-review round started on \`$br\`; a \`completed\` comment follows when the branch is ready for review again." ;;
   esac

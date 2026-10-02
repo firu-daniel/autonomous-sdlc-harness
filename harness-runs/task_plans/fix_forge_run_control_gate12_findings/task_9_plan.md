@@ -55,3 +55,10 @@ remote-run.sh stop <branch> [--actor <login>] [--note <text>] [--pr <n>] [--bran
 - `npm test -- test/remote-run.test.mjs` from `cli/` passes, the existing `stop` cases unchanged.
 - A bare `stop <b> --actor <login>` records the same `gh` calls, in the same order, as before this task. The existing case asserting that sequence still passes untouched.
 - `grep -n "Started from" cli/templates/scripts/remote-run.sh` shows one provenance-line parser, shared by `forge_issue_var` and the commit variant.
+
+**Deviations from plan:**
+- The newest `harness run <branch>` run's `headSha` comes from `verb_stop`'s own run listing, whose `--json` fields gain `headSha,createdAt` under `--branch-gone` only, so a bare `stop` records the same calls; no second listing is made.
+- `forge_report` takes the explicit pull request and the deleted-branch choice as positional arguments 4–6 (`<pr>`, `gone`, `<sha>`), read on `stopped` only; under `--branch-gone` without `--pr` no open-PR lookup is made, since GitHub closes a pull request whose head is deleted.
+- GitHub's default-branch read is extracted from `verb_warm` into `github_default_branch_var`, shared by `warm` and `stop --branch-gone`.
+- The contents read sends `Accept: application/vnd.github.raw`, so the prompt arrives as text rather than base64.
+- The header's unverified-fact pointer cites `docs/github-run-control.md` -> `## 8. What is not verified here`, the §8 Task 17 edits.

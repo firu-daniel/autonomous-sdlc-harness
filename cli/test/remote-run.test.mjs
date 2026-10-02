@@ -48,8 +48,11 @@
  * **For the forge coupling, the rule is that `continue`'s notification and a complete `stop` reach the
  * run's issue as a comment naming no slash command, plus the state label, while a partial stop and a
  * coupling that is off post nothing**: every pre-existing case runs with `forge` unset and keeps its
- * exact call list. The stub answers `pr list` and an issue's label read with `[]`, and logs each
- * `body=@<path>` call with that file's content to `<log>.bodies`.
+ * exact call list. The stub answers `pr list` and an issue's label read with `[]`, a `contents/` read
+ * with `STUB_CONTENTS` (a 404 when unset), and logs each `body=@<path>` call with that file's content
+ * to `<log>.bodies`. A `stop --pr <n>` reports on #<n> though no open pull request is listed, and a
+ * `stop --branch-gone` on a branch origin no longer has marks on GitHub's default branch, reads its
+ * issue at the newest run's `headSha` and never offers `resume`.
  *
  * **For an expired state bundle, the rule is that it is told from an absent one and never read as a
  * first job**: a `STUB_ARTIFACTS` entry is a name (listed unexpired) or a whole `{name, expired,
@@ -127,6 +130,10 @@ if (line.startsWith('repo view')) process.stdout.write(process.env.STUB_REPO_VIE
 if (line.startsWith('run view')) process.stdout.write(process.env.STUB_RUN_VIEW || '{}');
 if (line.startsWith('pr list')) process.stdout.write('[]');
 if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1])) process.stdout.write('[]');
+else if (args[0] === 'api' && args[1].includes('/contents/')) {
+  if (process.env.STUB_CONTENTS === undefined) { process.stderr.write('HTTP 404: Not Found\\n'); process.exit(1); }
+  process.stdout.write(process.env.STUB_CONTENTS);
+}
 else if (args[0] === 'api') {
   const parts = args[1].split('/');
   const id = parts[parts.length - 2];
@@ -1425,6 +1432,67 @@ test('stop --actor that is not a login is a usage error that calls nothing', asy
   }
   const misplaced = await remoteRun(fx, ['pause', 'feat_x', '--actor', 'alice'], LOCAL_STOP);
   assert.equal(misplaced.status, 1, misplaced.stderr);
+  assert.deepEqual(calls(fx), []);
+});
+
+test('stop --note posts that note in place of the actor sentence', async (t) => {
+  const fx = await forgeFixture(t);
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', 'x', '--note', 'Stopped because @x closed issue #7.'], LOCAL_STOP);
+  assert.equal(result.status, 0, result.stderr);
+  const [comment] = posted(fx);
+  assert.match(comment.args.join(' '), new RegExp(`^${COMMENT_ON_7}`));
+  assert.match(comment.body, /\n\nStopped because @x closed issue #7\.\n/);
+  assert.doesNotMatch(comment.body, /Stopped by @x\./);
+});
+
+test('stop --pr posts on that pull request although no open one is listed, and labels it and the issue stopped', async (t) => {
+  const fx = await forgeFixture(t);
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--pr', '9'], LOCAL_STOP);
+  assert.equal(result.status, 0, result.stderr);
+  const sent = joined(fx);
+  assert.ok(!sent.some((line) => line.startsWith('pr list')), sent.join('\n'));
+  assert.deepEqual(posted(fx).map((call) => call.args.join(' ').split(' -F ')[0]), ['api --method POST repos/o/r/issues/9/comments']);
+  assert.ok(sent.includes('api --method POST repos/o/r/issues/9/labels -f labels[]=sdlc-harness: stopped'), sent.join('\n'));
+  assert.ok(sent.includes(`${LABEL_ON_7} -f labels[]=sdlc-harness: stopped`), sent.join('\n'));
+});
+
+test('stop --branch-gone marks on the default branch, reads the issue at the newest run\'s commit, and never offers resume', async (t) => {
+  const fx = await forgeFixture(t);
+  await runGit(fx.dir, ['push', '--quiet', '--no-verify', 'origin', '--delete', 'feat_x']);
+  await runGit(fx.dir, ['branch', '--quiet', '-D', 'feat_x']);
+  await runGit(fx.dir, ['update-ref', '-d', 'refs/remotes/origin/feat_x']);
+  const remote = await runGit(fx.dir, ['ls-remote', '--heads', 'origin', 'feat_x']);
+  assert.equal(remote.stdout.trim(), '', 'the fixture origin still carries feat_x');
+
+  const prompt = '# A task\n\nStarted from https://github.com/o/r/issues/7 by @alice, who applied the label `sdlc-harness`.\n';
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', 'alice', '--branch-gone'], {
+    ...LOCAL_STOP,
+    STUB_REPO_VIEW: '{"nameWithOwner":"o/r","defaultBranchRef":{"name":"trunk"}}',
+    STUB_RUN_LIST: JSON.stringify([
+      { databaseId: 21, displayTitle: 'harness run feat_x', status: 'completed', headSha: 'aaaaaaa', createdAt: '2026-01-01T00:00:00Z' },
+      { databaseId: 22, displayTitle: 'harness run feat_x', status: 'completed', headSha: 'bbbbbbb', createdAt: '2026-01-02T00:00:00Z' },
+    ]),
+    STUB_CONTENTS: prompt,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const sent = joined(fx);
+  assert.equal(sent.filter((line) => line.startsWith('workflow run'))[0],
+    'workflow run harness-run.yml --ref trunk -f action=stop -f branch=feat_x');
+  assert.ok(sent.some((line) => line.startsWith(`api repos/o/r/contents/${LINEAGE_PROMPT}?ref=bbbbbbb`)), sent.join('\n'));
+  const [comment] = posted(fx);
+  assert.match(comment.args.join(' '), new RegExp(`^${COMMENT_ON_7}`));
+  assert.match(comment.body, /its branch was deleted, so the run cannot be resumed/);
+  assert.match(comment.body, /workflow runs and their artifacts are kept/);
+  assert.doesNotMatch(comment.body, /resume`/);
+  assert.ok(sent.includes(`${LABEL_ON_7} -f labels[]=sdlc-harness: stopped`), sent.join('\n'));
+});
+
+test('--branch-gone and --pr on another verb are usage errors that call nothing', async (t) => {
+  const fx = await forgeFixture(t);
+  for (const args of [['pause', 'feat_x', '--branch-gone'], ['pause', 'feat_x', '--pr', '9'], ['dispatch', 'feat_x', '--engine', 'task', '--note', 'x']]) {
+    const result = await remoteRun(fx, args, LOCAL_STOP);
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}`);
+  }
   assert.deepEqual(calls(fx), []);
 });
 
