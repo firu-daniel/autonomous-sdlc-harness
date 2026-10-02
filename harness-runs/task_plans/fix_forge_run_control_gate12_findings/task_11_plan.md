@@ -59,3 +59,8 @@ remote-run.sh stop <branch> --actor <login> --note <text> [--pr <n>] [--branch-g
 - Read `verb_control` against the header's `THE CLOSE` paragraph: every gate it names is present, in that order, and none of them calls `control_reply` or `control_refuse`.
 - `grep -n "control_refuse\|control_reply" cli/templates/scripts/remote-run.sh` shows no new call reachable when `CONTROL_VERB` is `close`.
 - `bash -n cli/templates/scripts/remote-run.sh` passes. The behavioural cases are Task 12's suite, which this task's own edits must satisfy.
+
+**Deviations from plan:**
+- Evidence downgrade: `bash -n cli/templates/scripts/remote-run.sh` was refused by the permission profile ("This command requires approval"), so the syntax claim rests on reading the edit and on the configured type check, which compiles `cli/src` only. The full suite is deferred to the Run gates phase.
+- The plan names no route for a close whose *read* fails (the repository name, the issue's comments, or the state by `control_state_var`). These are not refusals, so they take the child-failure route: an `::error::` line, exit 3, no reply. The header's exit map says so.
+- Existing case `cli/test/remote-control.test.mjs` → `another event name, or an unreadable event file, exits 1 with no gh call` sends a comment payload as `GITHUB_EVENT_NAME: 'issues'` and expects exit 1. After this task an `issues` event is handled: action `created` is ignored with exit 0 and no `gh` call. Task 12, which owns the cases, must move that assertion to an event name `control` still rejects.

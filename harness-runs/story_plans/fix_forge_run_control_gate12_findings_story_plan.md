@@ -40,7 +40,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 9. [x] **Task 8** — Add the read-only `@sdlc-harness status` command _(layer: cli)_ _(points: 20)_
 10. [x] **Task 9** — Teach `stop` a reason, an explicit pull request and a deleted branch _(layer: cli)_ _(points: 15)_
 11. [x] **Task 10** — Never re-dispatch a branch that is absent on `origin` _(layer: cli)_ _(points: 10)_
-12. [ ] **Task 11** — Stop the run when its issue or pull request is closed or its branch deleted _(layer: cli)_ _(points: 20)_
+12. [x] **Task 11** — Stop the run when its issue or pull request is closed or its branch deleted _(layer: cli)_ _(points: 20)_
 13. [ ] **Task 12** — Close-and-delete suite for `control` _(layer: cli)_ _(points: 20)_
 14. [ ] **Task 13** — `harness-control.yml` listens to closes and deletions, and a replied refusal ends `success` _(layer: cli)_ _(points: 15)_
 15. [ ] **Task 14** — Clarification channel: a question file names no answer channel, the archive takes every pair answered at launch, and a remote job scopes its pause note _(layer: plugin)_ _(points: 15)_

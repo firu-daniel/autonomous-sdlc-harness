@@ -362,8 +362,9 @@
 # and outside the sending-verb gate: it gates itself after reading the event,
 # so a refusal can still be replied to. The workflow's `if:` only saves a
 # runner; every rule below holds without it. It handles `GITHUB_EVENT_NAME`
-# `issue_comment` and `pull_request_review` (THE REVIEW, below); any other
-# name, or an event file it cannot read, exits 1.
+# `issue_comment`, `pull_request_review` (THE REVIEW, below), and `issues`,
+# `pull_request` and `delete` (THE CLOSE, below); any other name, or an event
+# file it cannot read, exits 1.
 # It reads `.action`, `.comment.body`, `.issue.number`,
 # `.issue.pull_request.url`, `.sender.login` and `.sender.type`, each by `jq`
 # into a variable (data, never shell source), plus `trigger`'s environment.
@@ -532,11 +533,53 @@
 # naming its last stderr line, and exit 3. Every reply goes to the item the comment was
 # typed on, opens `@<login>`, and carries the `reply` marker; a refusal reads
 # `@<login>: `<verb>` was not run: <reason>. <way on>`.
-#     0  handled (replied), or ignored
-#     1  neither an `issue_comment` nor a `pull_request_review` event, or the event could not be read
+# THE CLOSE. Whatever the run's phase, it is stopped when its issue is closed,
+# its pull request closed or merged, or its branch deleted; the routing is by
+# event name, never by verb, so a comment naming `close` is not one. `issues`
+# reads `.action`, `.issue.number`, `.sender.login`, `.sender.type`;
+# `pull_request` reads `.action`, `.pull_request.number`,
+# `.pull_request.merged`, `.pull_request.head.ref`,
+# `.pull_request.head.repo.full_name` and the sender; `delete` reads `.ref`,
+# `.ref_type` and the sender — each by `event_field`. Ignored, with one line
+# and no `gh` call: an action other than `closed`; a pull request whose head
+# repository is not `GITHUB_REPOSITORY`; a `ref_type` other than `branch`, or
+# a ref `valid_branch` rejects. A CLOSE IS NEVER REPLIED TO: each gate below,
+# in order, is one line and exit 0, with no comment, label or dispatch —
+#   1. `HARNESS_REMOTE_STOP` is set
+#   2. `forge_on` fails
+#   3. the actor: on `issues` and `pull_request`, `authorise_actor` refused,
+#      the line naming the login and `AUTH_WHY`; on `delete`, only a `Bot`
+#      sender `trigger_bot_listed` does not list, since deleting a branch
+#      already needs write access
+#   4. no branch: an issue's from `control_issue_branch_var` (no genuine start
+#      comment), a pull request's head ref, a deletion's `.ref`; then not a
+#      valid branch name
+#   5. `hr_branch_is_protected` does not answer 1
+# There is no ledger-at-tip check (`forge_recognised`): a merged or deleted
+# branch may no longer carry one, and a listed `harness run <b>` run is the
+# proof. The state is read by `control_state_var`: only `running`, `parked`,
+# `park_loop` and `paused` are acted on; `completed`, `failed` and `none` are
+# `left alone: the run on <b> is <state>`, and one `remote_branch_stopped`
+# already finds stopped is `already stopped` — each one line and exit 0. Then
+# `stop <b> --actor <login> --note <note>` runs as a child (`control_child`),
+# the note `Stopped because @<login> closed issue #<n>.`, `… closed pull
+# request #<n>.` or `… merged pull request #<n>.` (both with `--pr <n>`), or
+# `… deleted the branch `<b>`.` (with `--branch-gone`). Every note but the
+# deletion's adds that the workflow runs and their `harness-state` artifacts
+# are kept and that `@sdlc-harness resume` continues the run while the branch
+# exists. The runs and artifacts are kept. Reopening the issue or the pull
+# request does nothing. A `pull_request` close job runs the pull request's
+# merge-commit copy of the workflow, as a review job does
+# (docs/github-integration-research.md -> C2); the script stays the default
+# branch's.
+#     0  handled (replied), or ignored; a close stopped, or ignored (one line)
+#     1  not an event named above, or the event could not be read
 #     2  refused (replied)
 #     3  a `gh` step failed: the reply could not be posted (an `::error::`
-#        line), or the action failed and was replied to
+#        line), or the action failed and was replied to; for a close, an
+#        `::error::` line and no reply, because the item is closed: the stop
+#        child failed (naming `CHILD_LAST`), or the repository name, the
+#        issue's comments or the run's state could not be read
 #     4  a review's round could not be placed; nothing was dispatched (replied)
 #
 # `restore` AND `save` ARE THE JOB-SIDE VERBS: the run workflow calls them in
@@ -4532,20 +4575,28 @@ control_branch_from_pr() {
   control_check_branch "$head"
 }
 
-# control_branch_from_issue <number> — the branch of the issue's last genuine
-# start comment: by `github-actions[bot]`, its first line opening with the
-# trigger's start sentence and a backticked <b>, and its last non-empty line
-# exactly `forge_marker started <b>`. A marker anywhere else is never trusted.
-control_branch_from_issue() {
-  local count i login body first last b found="" lead='Started a harness run on the branch `'
+# control_issue_branch_var <number> — ISSUE_BRANCH, the branch of the issue's
+# last genuine start comment: by `github-actions[bot]`, its first line opening
+# with the trigger's start sentence and a backticked <b>, and its last non-empty
+# line exactly `forge_marker started <b>`. A marker anywhere else is never
+# trusted. 1 when there is none, ISSUE_BRANCH_ERR then non-empty when the
+# comments could not be read. Posts nothing.
+ISSUE_BRANCH=""
+ISSUE_BRANCH_ERR=""
+control_issue_branch_var() {
+  local count i login body last b found="" lead='Started a harness run on the branch `'
+  ISSUE_BRANCH=""
+  ISSUE_BRANCH_ERR=""
   if ! gh_call api --paginate "repos/$FORGE_REPO/issues/$1/comments" --jq '.[] | {login: .user.login, body: .body}'; then
-    control_refuse "$EXIT_GH" "the comments of issue #$1 could not be read ($GH_ERR)" "Comment again to retry."
+    ISSUE_BRANCH_ERR="$GH_ERR"
+    return 1
   fi
   count=$(printf '%s' "$GH_OUT" | jq -s 'length' 2>/dev/null) || count=""
   case "$count" in
     ''|*[!0-9]*)
       GH_ERR="its comment list is not the expected JSON"
-      control_refuse "$EXIT_GH" "the comments of issue #$1 could not be read ($GH_ERR)" "Comment again to retry." ;;
+      ISSUE_BRANCH_ERR="$GH_ERR"
+      return 1 ;;
   esac
   for ((i = 0; i < count; i++)); do
     login=$(printf '%s' "$GH_OUT" | jq -s -r --argjson i "$i" '.[$i].login // ""' 2>/dev/null) || continue
@@ -4568,11 +4619,21 @@ control_branch_from_issue() {
     [ "$last" = "$(forge_marker started "$b")" ] || continue
     found="$b"
   done
-  if [ -z "$found" ]; then
+  [ -n "$found" ] || return 1
+  ISSUE_BRANCH="$found"
+}
+
+# control_branch_from_issue <number> — control_issue_branch_var, its failures
+# refused, then control_check_branch's refusals.
+control_branch_from_issue() {
+  if ! control_issue_branch_var "$1"; then
+    if [ -n "$ISSUE_BRANCH_ERR" ]; then
+      control_refuse "$EXIT_GH" "the comments of issue #$1 could not be read ($ISSUE_BRANCH_ERR)" "Comment again to retry."
+    fi
     control_refuse "$EXIT_REFUSED" "no harness run was started from this issue" \
       "Comment on the pull request of the run's branch instead."
   fi
-  control_check_branch "$found"
+  control_check_branch "$ISSUE_BRANCH"
 }
 
 # control_verb_handled <verb> — 0 when an arm below carries out <verb>.
@@ -5392,14 +5453,178 @@ control_comment_intake() {
   return 0
 }
 
+# The close: CLOSE_KIND (`issue`, `pr_closed`, `pr_merged`, `deleted`) and
+# CLOSE_REF, the event's own branch (a pull request's head, a deleted ref;
+# empty for an issue). CONTROL_NUMBER is the item, empty for a deletion.
+CLOSE_KIND=""
+CLOSE_REF=""
+
+control_event_unreadable() {
+  echo "remote-run.sh: control: '$GITHUB_EVENT_PATH' is not a readable event" >&2
+  exit "$EXIT_USAGE"
+}
+
+# control_issues_intake — read an `issues` event; 1 when ignored, after one line.
+control_issues_intake() {
+  local action
+  { event_field '.action // ""' && action="$EVENT_VALUE" \
+    && event_field '.issue.number // ""' && CONTROL_NUMBER="$EVENT_VALUE" \
+    && event_field '.sender.login // ""' && CONTROL_ACTOR="$EVENT_VALUE" \
+    && event_field '.sender.type // ""' && CONTROL_SENDER_TYPE="$EVENT_VALUE"; } || control_event_unreadable
+  if [ "$action" != closed ]; then
+    echo "remote-run.sh: control: ignored, an issue $action, not closed"
+    return 1
+  fi
+  CLOSE_KIND=issue
+  CONTROL_VERB=close
+  return 0
+}
+
+# control_pull_request_intake — read a `pull_request` event; 1 when ignored,
+# after one line.
+control_pull_request_intake() {
+  local action merged head_repo
+  { event_field '.action // ""' && action="$EVENT_VALUE" \
+    && event_field '.pull_request.number // ""' && CONTROL_NUMBER="$EVENT_VALUE" \
+    && event_field '.pull_request.merged // false' && merged="$EVENT_VALUE" \
+    && event_field '.pull_request.head.ref // ""' && CLOSE_REF="$EVENT_VALUE" \
+    && event_field '.pull_request.head.repo.full_name // ""' && head_repo="$EVENT_VALUE" \
+    && event_field '.sender.login // ""' && CONTROL_ACTOR="$EVENT_VALUE" \
+    && event_field '.sender.type // ""' && CONTROL_SENDER_TYPE="$EVENT_VALUE"; } || control_event_unreadable
+  if [ "$action" != closed ]; then
+    echo "remote-run.sh: control: ignored, a pull request $action, not closed"
+    return 1
+  fi
+  if [ -z "$head_repo" ] || [ "$head_repo" != "${GITHUB_REPOSITORY-}" ]; then
+    echo "remote-run.sh: control: ignored, a pull request from ${head_repo:-an unnamed repository}, not ${GITHUB_REPOSITORY:-this repository}"
+    return 1
+  fi
+  CLOSE_KIND=pr_closed
+  [ "$merged" != true ] || CLOSE_KIND=pr_merged
+  CONTROL_VERB=close
+  return 0
+}
+
+# control_delete_intake — read a `delete` event; 1 when ignored, after one line.
+control_delete_intake() {
+  local ref_type
+  { event_field '.ref // ""' && CLOSE_REF="$EVENT_VALUE" \
+    && event_field '.ref_type // ""' && ref_type="$EVENT_VALUE" \
+    && event_field '.sender.login // ""' && CONTROL_ACTOR="$EVENT_VALUE" \
+    && event_field '.sender.type // ""' && CONTROL_SENDER_TYPE="$EVENT_VALUE"; } || control_event_unreadable
+  if [ "$ref_type" != branch ]; then
+    echo "remote-run.sh: control: ignored, a deleted ${ref_type:-ref}, not a branch"
+    return 1
+  fi
+  if ! valid_branch "$CLOSE_REF"; then
+    echo "remote-run.sh: control: ignored, a deleted branch with no valid name"
+    return 1
+  fi
+  CLOSE_KIND=deleted
+  CONTROL_VERB=close
+  return 0
+}
+
+# control_close_ignore <reason> — the one line every close refusal is, and exit
+# 0: a close is never replied to, labelled or dispatched for.
+control_close_ignore() {
+  echo "remote-run.sh: control: close ignored: $1"
+  exit "$EXIT_OK"
+}
+
+# control_close — THE CLOSE (the header): the quiet gates in order, the state
+# rule, then the `stop` child with the event's note.
+control_close() {
+  local status=0 protected=0 b="" what note out
+  local stop_flags=()
+  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
+    control_close_ignore "the repository variable HARNESS_REMOTE_STOP is set"
+  fi
+  forge_on || control_close_ignore "the default branch's harness.config.json does not turn run control on"
+  if [ "$CLOSE_KIND" = deleted ]; then
+    # Deleting a branch already needs write access; only a bot is screened.
+    if [ "$CONTROL_SENDER_TYPE" = Bot ] && ! trigger_bot_listed "$CONTROL_ACTOR"; then
+      control_close_ignore "@$CONTROL_ACTOR is a bot not listed in HARNESS_TRIGGER_ALLOWED_BOTS"
+    fi
+  else
+    case "$CONTROL_NUMBER" in
+      ''|*[!0-9]*|0*)
+        echo "remote-run.sh: control: the event carries no issue number" >&2
+        exit "$EXIT_USAGE" ;;
+    esac
+    authorise_actor "$CONTROL_ACTOR" "$CONTROL_SENDER_TYPE" || status=$?
+    [ "$status" -eq 0 ] || control_close_ignore "@$CONTROL_ACTOR is not authorised: ${AUTH_WHY%.}"
+  fi
+
+  case "$CLOSE_KIND" in
+    issue)
+      if ! forge_repo_var; then
+        echo "::error::remote-run.sh: control: the repository's name could not be read ($GH_ERR)"
+        exit "$EXIT_GH"
+      fi
+      if ! control_issue_branch_var "$CONTROL_NUMBER"; then
+        if [ -n "$ISSUE_BRANCH_ERR" ]; then
+          echo "::error::remote-run.sh: control: the comments of issue #$CONTROL_NUMBER could not be read ($ISSUE_BRANCH_ERR)"
+          exit "$EXIT_GH"
+        fi
+        control_close_ignore "no harness run was started from issue #$CONTROL_NUMBER"
+      fi
+      b="$ISSUE_BRANCH" ;;
+    *) b="$CLOSE_REF" ;;
+  esac
+  if ! valid_branch "$b" || ! git check-ref-format --branch "$b" >/dev/null 2>&1; then
+    control_close_ignore "\`$b\` is not a valid branch name"
+  fi
+  hr_branch_is_protected "$root" "$b" || protected=$?
+  case "$protected" in
+    1) ;;
+    0) control_close_ignore "\`$b\` is a protected branch" ;;
+    *) control_close_ignore "whether \`$b\` is protected could not be judged from harness.config.json" ;;
+  esac
+  CONTROL_BRANCH="$b"
+
+  # No forge_recognised check: a merged or deleted branch may no longer carry
+  # its ledger, and a listed `harness run <b>` run is what proves a harness run.
+  if ! control_state_var "$b"; then
+    echo "::error::remote-run.sh: control: the state of the run on \`$b\` could not be read ($CS_ERR)"
+    exit "$EXIT_GH"
+  fi
+  case "$CS_STATE" in
+    running|parked|park_loop|paused) ;;
+    *) control_close_ignore "left alone: the run on \`$b\` is \`${CS_STATE:-unknown}\`" ;;
+  esac
+  control_branch_stopped "$CS_STATE" && control_close_ignore "the run on \`$b\` is already stopped"
+
+  case "$CLOSE_KIND" in
+    issue) what="closed issue #$CONTROL_NUMBER" ;;
+    pr_closed) what="closed pull request #$CONTROL_NUMBER"; stop_flags=(--pr "$CONTROL_NUMBER") ;;
+    pr_merged) what="merged pull request #$CONTROL_NUMBER"; stop_flags=(--pr "$CONTROL_NUMBER") ;;
+    deleted) what="deleted the branch \`$b\`"; stop_flags=(--branch-gone) ;;
+  esac
+  note="Stopped because @$CONTROL_ACTOR $what."
+  if [ "$CLOSE_KIND" != deleted ]; then
+    note="$note Its workflow runs and their \`$STATE_ARTIFACT_NAME\` artifacts are kept; comment \`$COMMAND_HANDLE resume\` while the branch exists to continue it."
+  fi
+  echo "remote-run.sh: control: close of $b: @$CONTROL_ACTOR $what"
+  out=$(mktemp "$control_tmp/harness-control-out.XXXXXX") || out=/dev/null
+  control_child "$out" stop "$b" --actor "$CONTROL_ACTOR" --note "$note" ${stop_flags[@]+"${stop_flags[@]}"} --repo "$root"
+  [ "$out" = /dev/null ] || { cat "$out"; rm -f "$out"; }
+  if [ "$CHILD_STATUS" -ne 0 ]; then
+    echo "::error::remote-run.sh: control: the stop of \`$b\` after @$CONTROL_ACTOR $what failed: $CHILD_LAST"
+    exit "$EXIT_GH"
+  fi
+  exit "$EXIT_OK"
+}
+
 verb_control() {
   local LC_ALL=C
-  local review=0 forge="" target="" status verbs="" v
+  local review=0 close=0 forge="" target="" status verbs="" v
   case "${GITHUB_EVENT_NAME-}" in
     issue_comment) ;;
     pull_request_review) review=1 ;;
+    issues|pull_request|delete) close=1 ;;
     *)
-      echo "remote-run.sh: control handles GITHUB_EVENT_NAME issue_comment or pull_request_review, not '${GITHUB_EVENT_NAME-}'" >&2
+      echo "remote-run.sh: control handles GITHUB_EVENT_NAME issue_comment, pull_request_review, issues, pull_request or delete, not '${GITHUB_EVENT_NAME-}'" >&2
       exit "$EXIT_USAGE" ;;
   esac
   if [ -z "${GITHUB_EVENT_PATH-}" ] || [ ! -f "$GITHUB_EVENT_PATH" ] || [ ! -r "$GITHUB_EVENT_PATH" ]; then
@@ -5408,17 +5633,21 @@ verb_control() {
   fi
   hr_have_jq || { echo "remote-run.sh: control needs jq" >&2; exit "$EXIT_USAGE"; }
 
-  if [ "$review" -eq 1 ]; then
-    control_review_intake || return 0
-  else
-    control_comment_intake || return 0
-  fi
-
-  case "$CONTROL_NUMBER" in
-    ''|*[!0-9]*|0*)
-      echo "remote-run.sh: control: the event carries no issue number" >&2
-      exit "$EXIT_USAGE" ;;
+  case "$GITHUB_EVENT_NAME" in
+    pull_request_review) control_review_intake || return 0 ;;
+    issue_comment) control_comment_intake || return 0 ;;
+    issues) control_issues_intake || return 0 ;;
+    pull_request) control_pull_request_intake || return 0 ;;
+    delete) control_delete_intake || return 0 ;;
   esac
+
+  if [ "$close" -eq 0 ]; then
+    case "$CONTROL_NUMBER" in
+      ''|*[!0-9]*|0*)
+        echo "remote-run.sh: control: the event carries no issue number" >&2
+        exit "$EXIT_USAGE" ;;
+    esac
+  fi
 
   control_tmp="${RUNNER_TEMP-}"
   if [ -z "$control_tmp" ] || [ ! -d "$control_tmp" ]; then
@@ -5426,6 +5655,9 @@ verb_control() {
     control_dirs="$control_tmp"
   fi
   trap control_cleanup EXIT
+
+  # Decided by the event name, never CONTROL_VERB: a comment can name `close`.
+  [ "$close" -eq 0 ] || control_close
 
   if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
     control_refuse "$EXIT_REFUSED" "the repository variable \`HARNESS_REMOTE_STOP\` is set, which stops every command" \
