@@ -58,4 +58,6 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **A collector fired by one event gathers every pending item from every authorised author since the last consumed point, and deduplicates by the ids earlier rounds recorded. It never takes only the item or the actor that fired it.** _(taught by: feat_forge_run_control)_
 
+- **Let an input's type or state decide only whether it triggers an action, never whether its text is kept: collect what every authorised person wrote, under any state, and let the non-triggering kinds ride along with the next triggered action.** _(taught by: feat_forge_run_control)_
+
 _Written by `autonomous-sdlc-harness init`, and yours from there on: a re-run never touches a ledger that already exists._
