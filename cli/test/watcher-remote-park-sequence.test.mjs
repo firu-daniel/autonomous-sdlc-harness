@@ -6,9 +6,11 @@
  * `completed`, archives the answered pair, and is delivered — whatever pause came between, because
  * classification reads what was on disk at launch rather than a registry the job boundary discarded.**
  * Each case plays job 1 `none` (parks), job 2 `answer` (pauses), job 3 `pause` (completes), then
- * `remote-run.sh deliver` against job 3's saved bundle. The cases cover the user pause and the budget
- * pause; the usage pause and a stop followed by a resume are not covered here yet. The same outcome
- * inside one local process is the local resume suites' (`watcher-park-resume.test.mjs`, `watcher-usage-resume.test.mjs`).
+ * `remote-run.sh deliver` against job 3's saved bundle. The cases cover four sequences: the user pause,
+ * the budget pause, the usage pause — reaching `wait-poller` through `HARNESS_JOB_DEADLINE_EPOCH`, never
+ * the gate's fallback hour — and a stop, where job 2 is killed mid-session and its bundle, saved as
+ * the workflow's `always()` step saves it on a cancel, still says `running`. The same outcome inside
+ * one local process is the local resume suites' (`watcher-park-resume.test.mjs`, `watcher-usage-resume.test.mjs`).
  *
  * **Between jobs only the bundle crosses.** `remote-run.sh save` writes it; everything a fresh runner
  * would not have — the registry, the branch's clarification directory, `PAUSE_PROGRESS.md`,
@@ -20,13 +22,17 @@
  * carries `timeoutMs: RUN_TIMEOUT_MS` and `t.signal`; the value sits below the per-test timeout
  * (`--test-timeout=1800000`) for the reason `watcher-remote-job.test.mjs`'s header gives. Every fixture
  * is torn down in process by `createWatcherFixture`'s `t.after`. No case reaches the network: `gh` is a
- * stub reached through `HARNESS_GH_CLI`.
+ * stub reached through `HARNESS_GH_CLI`. The stop case's killed job is the exception to `runBash`: it is
+ * spawned as its own detached group, which the case waits on for at most `KILL_WAIT_TENTHS` and then
+ * kills and reaps whether or not the session was seen to start.
  */
 
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
 import { runBash, runGit } from './helpers/fixture.mjs';
@@ -39,6 +45,9 @@ const PR_URL = `https://github.com/${REPOSITORY}/pull/12`;
 
 /** The bound on one script run — the header argues the value. */
 const RUN_TIMEOUT_MS = 120_000;
+
+/** How long, in tenths of a second, the stop case waits for its job's session to start before killing it. */
+const KILL_WAIT_TENTHS = 100;
 
 function shellQuote(value) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
@@ -84,6 +93,10 @@ const pauseRunList = (branch, secs) =>
 /** Stub body: acknowledge PAUSE and exit 0 once it appears. `STATE` is the state directory. */
 const HONOUR_PAUSE = (tenths) =>
   `for i in $(seq 1 ${tenths}); do if [ -f "$STATE/PAUSE" ]; then : > "$STATE/PAUSE_ACK"; exit 0; fi; sleep 0.1; done`;
+
+/** Stub body: a usage rejection whose reset is <aheadSecs> ahead. */
+const rateLimitRejected = (aheadSecs) =>
+  `printf '{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"five_hour","resetsAt":%s,"isUsingOverage":false}}\\n' "$(( $(date +%s) + ${aheadSecs} ))"`;
 
 const lastLine = (text) => text.trimEnd().split('\n').at(-1);
 
@@ -135,6 +148,7 @@ async function createSequenceFixture(t) {
   const scratch = join(w.dir, 'sequence-test');
   const stubPath = join(scratch, 'agent-stub.sh');
   const bodyPath = join(scratch, 'agent-stub-body.sh');
+  const launched = join(scratch, 'agent-launched');
   const ghStub = join(scratch, 'gh');
   const ghLog = join(scratch, 'gh.log');
   const runnerTemp = join(scratch, 'runner-temp');
@@ -150,7 +164,7 @@ async function createSequenceFixture(t) {
   await mkdir(xdgState, { recursive: true });
   await writeFile(
     stubPath,
-    ['#!/usr/bin/env bash', 'sleep 0.3', `. ${shellQuote(bodyPath)}`, 'exit 0', ''].join('\n'),
+    ['#!/usr/bin/env bash', `: > ${shellQuote(launched)}`, 'sleep 0.3', `. ${shellQuote(bodyPath)}`, 'exit 0', ''].join('\n'),
     'utf8',
   );
   await chmod(stubPath, 0o755);
@@ -183,6 +197,17 @@ async function createSequenceFixture(t) {
     ...env,
   });
   const bounded = { timeoutMs: RUN_TIMEOUT_MS, signal: t.signal };
+  const jobEnv = (env) =>
+    runnerEnv({
+      HARNESS_JOB_MODE: '1',
+      REMOTE_CONTROL_POLL_SECS: '1',
+      REMOTE_AUTO_RESUME_DELAY_SECS: '0',
+      STATE: state,
+      HARNESS_AGENT_CLI: stubPath,
+      CLAR: w.clarDir,
+      POLL_INTERVAL_SECS: '1',
+      ...env,
+    });
   let saved = 0;
 
   return {
@@ -201,22 +226,36 @@ async function createSequenceFixture(t) {
             })
         : [],
     /** One job: `autonomous-watcher.sh job <branch> task <resume>`. */
-    job: (resume, env = {}) =>
-      runBash(
-        w.dir,
-        [watcher, 'job', w.branch, 'task', resume],
-        runnerEnv({
-          HARNESS_JOB_MODE: '1',
-          REMOTE_CONTROL_POLL_SECS: '1',
-          REMOTE_AUTO_RESUME_DELAY_SECS: '0',
-          STATE: state,
-          HARNESS_AGENT_CLI: stubPath,
-          CLAR: w.clarDir,
-          POLL_INTERVAL_SECS: '1',
-          ...env,
-        }),
-        bounded,
-      ),
+    job: (resume, env = {}) => runBash(w.dir, [watcher, 'job', w.branch, 'task', resume], jobEnv(env), bounded),
+    /**
+     * One job, killed with its whole group once it has written its start record and launched the
+     * agent — a cancelled runner. Bounded by {@link KILL_WAIT_TENTHS}; the group is reaped either way.
+     */
+    async jobKilledAfterStart(resume, env = {}) {
+      await rm(launched, { force: true });
+      const child = spawn('bash', [watcher, 'job', w.branch, 'task', resume], {
+        cwd: w.dir,
+        env: { ...process.env, ...jobEnv(env) },
+        detached: true,
+        stdio: 'ignore',
+      });
+      const exited = new Promise((resolve) => child.once('exit', resolve));
+      let seen = false;
+      try {
+        for (let i = 0; i < KILL_WAIT_TENTHS && !seen; i += 1) {
+          await delay(100);
+          seen = existsSync(remoteStatus) && existsSync(launched);
+        }
+      } finally {
+        try {
+          process.kill(-child.pid, 'SIGKILL');
+        } catch (error) {
+          if (error.code !== 'ESRCH') throw error;
+        }
+        await exited;
+      }
+      assert.ok(seen, 'the job never wrote its start record and launched the agent');
+    },
     /** End the job: save its bundle, then leave the checkout as a fresh runner would find it. Returns the bundle. */
     async endJob() {
       saved += 1;
@@ -253,10 +292,11 @@ async function createSequenceFixture(t) {
 }
 
 /**
- * Plays job 1 (`none`, parks) and job 2 (`answer`, under `job2Env`, pauses as `job2Expect` says), then
- * job 3 (`pause`, completes) and `deliver`, asserting the rule in the header after job 3 and after deliver.
+ * Plays job 1 (`none`, parks) and job 2 (`answer`, under `job2Env` and `job2Stub`, pauses as
+ * `job2Expect` says — or, with `killJob2`, is killed once its session has started), then job 3
+ * (`pause`, completes) and `deliver`, asserting the rule in the header after job 3 and after deliver.
  */
-async function playSequence(t, { job2Env, job2Expect, job3Env = {} }) {
+async function playSequence(t, { job2Env = () => ({}), job2Stub = HONOUR_PAUSE(100), job2Expect, killJob2 = false, job3Env = {} }) {
   const s = await createSequenceFixture(t);
   if (s === null) return;
 
@@ -268,14 +308,22 @@ async function playSequence(t, { job2Env, job2Expect, job3Env = {} }) {
   let bundle = await s.endJob();
 
   await s.startJob(bundle, 'a1\n');
-  await s.setStub(HONOUR_PAUSE(100));
-  const job2 = await s.job('answer', job2Env());
-  assert.equal(job2.status, 0, `job 2: ${job2.stdout}\n${job2.stderr}`);
-  assert.equal(lastLine(job2.stdout), `job: paused ${job2Expect.decision}`, s.watcherLog());
-  assert.equal(s.status().pause_reason, job2Expect.reason);
+  await s.setStub(job2Stub);
+  if (killJob2) {
+    await s.jobKilledAfterStart('answer', job2Env());
+    await delay(500);
+    assert.equal(s.status().status, 'running', 'job 2 was not killed mid-session');
+  } else {
+    const job2 = await s.job('answer', job2Env());
+    assert.equal(job2.status, 0, `job 2: ${job2.stdout}\n${job2.stderr}`);
+    assert.equal(lastLine(job2.stdout), `job: paused ${job2Expect.decision}`, s.watcherLog());
+    assert.equal(s.status().pause_reason, job2Expect.reason);
+  }
   bundle = await s.endJob();
 
   await s.startJob(bundle);
+  // Before job 3 runs, so the stop case cannot pass on a bundle that is not a stopped one.
+  if (killJob2) assert.equal(s.status().status, 'running', 'the restored status is not a stopped run');
   await s.setStub(':');
   const job3 = await s.job('pause', job3Env);
   assert.equal(job3.status, 0, `job 3: ${job3.stdout}\n${job3.stderr}`);
@@ -322,4 +370,20 @@ test('budget pause: park, answer, a hosted self-pause, then a chained pause resu
     job2Expect: { decision: 'continue', reason: 'budget' },
     job3Env: { HARNESS_INPUT_CHAIN: '1' },
   });
+});
+
+test('usage pause: park, answer, a reset past the deadline, then the poller\'s pause resume completes and delivers', async (t) => {
+  await playSequence(t, {
+    job2Env: () => ({
+      USAGE_CHECK_INTERVAL_SECS: '1',
+      USAGE_RESUME_MARGIN_SECS: '0',
+      HARNESS_JOB_DEADLINE_EPOCH: String(nowSecs() + 50),
+    }),
+    job2Stub: `${rateLimitRejected(100)}; ${HONOUR_PAUSE(100)}`,
+    job2Expect: { decision: 'wait-poller', reason: 'usage' },
+  });
+});
+
+test('stop, then resume: park, answer, a job killed mid-session, then a pause resume completes and delivers', async (t) => {
+  await playSequence(t, { job2Stub: 'sleep 30', killJob2: true });
 });
