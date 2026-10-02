@@ -44,7 +44,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 13. [x] **Task 12** — Close-and-delete suite for `control` _(layer: cli)_ _(points: 20)_
 14. [x] **Task 13** — `harness-control.yml` listens to closes and deletions, and a replied refusal ends `success` _(layer: cli)_ _(points: 15)_
 15. [x] **Task 14** — Clarification channel: a question file names no answer channel, the archive takes every pair answered at launch, and a remote job scopes its pause note _(layer: plugin)_ _(points: 15)_
-16. [ ] **Task 15** — Add roadmap item 19 for the split-off design changes, cite it from the round 6 record, and restate the archive set in `ARCHITECTURE.md` §5 _(layer: general)_ _(points: 10)_
+16. [x] **Task 15** — Add roadmap item 19 for the split-off design changes, cite it from the round 6 record, and restate the archive set in `ARCHITECTURE.md` §5 _(layer: general)_ _(points: 10)_
 17. [ ] **Task 16** — `github-run-control.md` §1 and §3: the `status` command, refusals that end `success`, one answer instruction, and the item 10 decision _(layer: general)_ _(points: 15)_
 18. [ ] **Task 17** — `github-run-control.md` §2, §4, §5, §6 and §8: stopped wording, the pull request's link, closes and deletions, and the new §8 rows _(layer: general)_ _(points: 20)_
 19. [ ] **Task 18** — `remote-execution.md` and `watcher.md` state the new archive rule, the scoped pause note, the wrong-ref refusal and the close-and-delete stop _(layer: general)_ _(points: 20)_
