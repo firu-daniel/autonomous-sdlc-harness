@@ -48,3 +48,11 @@
 - Every command the new and changed legs hand a reader sits alone in a fenced block (`harness-runs/lessons.md` → *"Every command an adopter is meant to run sits in a fenced block"*). Scan the (xiv) section for an inline `gh` or `git` command.
 - Each *Passes when* sentence names something observable on GitHub: a reply's first line, a label, a run's conclusion or an event. None is a figure measured by a run inside its own session (`harness-runs/lessons.md` → the wall-clock rule).
 - The §8 row names cited in *What it settles* match Task 17's row text exactly.
+
+**Deviations from plan:**
+
+- The *"What still owes a first recording"* sentence also names the parts of legs (a), (c), (f) and (g) this branch added, and the triage close beside the triage refusal: the plan's replacement named only (d), (h) and (i), which would have left those added checks unlisted as owed.
+- Leg (g)'s resume check reads the job log for the watcher's launch line ending `— no pause note` (`autonomous-watcher.sh` → `run_job`'s `pause_note_stale` log line), because the job log carries that line and not the launch prompt text itself.
+- Leg (h)'s issue-close `stopped` comment is placed on the pull request, the run's target per `docs/github-run-control.md` → `## 5.` (the issue is closed, the pull request still open), and the note is checked as a line the comment carries, since `forge_report` posts the event text first and the note after it.
+- Leg (h)'s and (i)'s run listings, and the close jobs' `gh run view … --json event,headBranch,headSha`, were added so the §8 rows named in *What it settles* have a recorded observation.
+- Verification: the inline-command scan over the (xiv) section (lines outside fences carrying `` `gh ``, `` `git `` or `` `npx ``) returned nothing after the edit; each of the five §8 row names matched one row of `docs/github-run-control.md` with `grep -cF`. These were run, not read.

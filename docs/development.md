@@ -768,7 +768,7 @@ The findings:
 
 The round also settled four design changes for the follow-up: open the draft pull request when the run starts and mark it ready on `completed`, turning it back to draft while a round runs; post `completed` on the pull request always and on the source issue too; post one short comment per main phase (planning, implementation, branch review, done); and resolve the threads finding 9 names. Two are open questions for its plan: a read-only `status` command, and answering a park by replying to its comment rather than with `@sdlc-harness answer <n>`. All are carried to a follow-up fix; none is fixed here. The defects (findings 1–8) and the two open questions were then addressed by `fix_forge_run_control_gate12_findings`, and the four design changes, finding 9 among them, are roadmap item 19.
 
-What still owes a first recording: (v)'s enable and its in-progress artifact listing; (vii), (ix) and (x); (xii)'s last leg on a real release after the one under test; (xiii)'s machine-off condition and its leg (b) refusal; (xiv)'s leg (d) without a workaround, which waits on finding 1, and its triage refusal, not runnable on a repository owned by a personal account; and the rest of `docs/github-run-control.md` → `## 8.`.
+What still owes a first recording: (v)'s enable and its in-progress artifact listing; (vii), (ix) and (x); (xii)'s last leg on a real release after the one under test; (xiii)'s machine-off condition and its leg (b) refusal; (xiv)'s re-run of leg (d) without a workaround, its new legs (h) and (i), the parts of legs (a), (c), (f) and (g) that `fix_forge_run_control_gate12_findings` added, and its triage refusal and triage close, not runnable on a repository owned by a personal account; and the rest of `docs/github-run-control.md` → `## 8.`.
 
 **Setup.**
 
@@ -1198,7 +1198,7 @@ gh issue create --repo <owner>/<scratch-repo> --title "<title>" --body "<body>"
 gh issue edit <number> --repo <owner>/<scratch-repo> --add-label sdlc-harness
 ```
 
-Passes when the issue carries the trigger's comment naming `<slug>` and the label `sdlc-harness: running`, and, once the run parks, one comment per open question carrying that question whole, with the label `sdlc-harness: parked`.
+Passes when the issue carries the trigger's comment naming `<slug>` and the label `sdlc-harness: running`, and, once the run parks, one comment per open question with the label `sdlc-harness: parked`. Each question comment carries that question whole, one answer instruction — the `@sdlc-harness answer <n>` form — and ends with the ready-to-copy block of that command. Record that `answer_<n>.md` appears nowhere in the comment.
 
 **(b) An answer in a comment.**
 
@@ -1220,9 +1220,9 @@ Passes when a reply names the actor, a `paused` comment follows, and the label m
 gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness resume"
 ```
 
-Passes when a reply names the actor, a `resumed` comment follows, and the label moves to `sdlc-harness: running`.
+Passes when a reply names the actor, a `resumed` comment follows, and the label moves to `sdlc-harness: running`. Let this paused-then-resumed run go on to leg (d) with no *Run workflow* recovery.
 
-**(d) Completion and the draft pull request.** Let the run complete, then find and read its pull request:
+**(d) Completion and the draft pull request.** Let the run leg (c) resumed complete, then find and read its pull request:
 
 ```
 gh pr list --repo <owner>/<scratch-repo> --head <slug>
@@ -1236,7 +1236,7 @@ gh pr view <number> --repo <owner>/<scratch-repo> --json isDraft,body,headRefNam
 gh api repos/<owner>/<scratch-repo>/issues/<issue number>/timeline
 ```
 
-Passes when `isDraft` is `true`, `headRefName` is `<slug>`, the body reads `Started from #<issue number>.`, the issue's timeline shows the pull request, the issue carries a `completed` comment naming the pull request, and the issue and the pull request both carry `sdlc-harness: done`. Record the three outputs.
+Passes when the run leg (c) resumed completed and opened the pull request with no workaround, `isDraft` is `true`, `headRefName` is `<slug>`, the body reads `Started from #<issue number>.`, the issue's `completed` comment names the pull request's URL, and the issue and the pull request both carry `sdlc-harness: done`. Record the three outputs. Where `HARNESS_GIT_TOKEN` is set, record whether the timeline shows a `cross-referenced` event for the pull request (`docs/github-run-control.md` → `## 8. What is not verified here`); with the job's token none is expected.
 
 **(e) A review that requests changes.** Record which token opened the pull request, from its author — `app/github-actions` for the job's token, otherwise the owner of `HARNESS_GIT_TOKEN`:
 
@@ -1266,7 +1266,29 @@ Passes when `<slug>` carries one commit `chore: add user review for <slug>`; the
 gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness approve"
 ```
 
-Passes when the reply lists the five commands.
+Passes when the reply lists the six commands and the `harness-control.yml` run that replied concludes `success`, not `failure`:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+```
+
+Then ask the run's state, on the issue and on the pull request:
+
+```
+gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harness status"
+```
+
+```
+gh pr comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness status"
+```
+
+Passes when each reply names the run's state, the next ledger entry (`Next in the flow-progress ledger:`, or that every entry is ticked) and the latest run (`Latest run:`); when neither item's labels change, read with the two label commands above before and after; and when no `harness run <slug>` run follows. Record both replies verbatim. Read the runs with:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+```
+
+Then a comment with no handle:
 
 ```
 gh issue comment <number> --repo <owner>/<scratch-repo> --body "pause"
@@ -1341,9 +1363,105 @@ Passes when a `harness-control.yml` run for it gets past its `if:` and a reply f
 gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness stop"
 ```
 
-Passes when a reply names the actor, a `stopped` comment names the actor, and the label moves to `sdlc-harness: stopped`.
+Passes when a reply names the actor, a `stopped` comment names the actor, and the label moves to `sdlc-harness: stopped`. Then, on the stopped run:
 
-**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); and *The whole chain on GitHub*, by the legs together.
+```
+gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness pause"
+```
+
+Passes when the reply is a refusal naming the run `` `stopped` ``, and never `paused`. Then:
+
+```
+gh issue comment <number> --repo <owner>/<scratch-repo> --body "@sdlc-harness resume"
+```
+
+Passes when a reply names the actor, a `resumed` comment follows, the label moves to `sdlc-harness: running`, and the resumed job's log carries the stop/kill launch line, ending `— no pause note`, and no line naming `PAUSE_PROGRESS.md` as a note to read. Find the job and read its log:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+```
+
+```
+gh run view <run id> --repo <owner>/<scratch-repo> --log
+```
+
+Record the reply to `pause` verbatim and the job's lines naming the pause note.
+
+**(h) Close and delete.** While the run (g) resumed is running, close its issue:
+
+```
+gh issue close <issue number> --repo <owner>/<scratch-repo>
+```
+
+Passes when a `stopped` comment on the run's target (`docs/github-run-control.md` → `## 5.`, *The target rule*), the pull request, carries `Stopped because @<login> closed issue #<issue number>.`, the issue and the pull request both carry `sdlc-harness: stopped`, and the run's `harness run <slug>` run is `cancelled` with its `harness-state` artifact still listed:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+```
+
+```
+gh api repos/<owner>/<scratch-repo>/actions/runs/<run id>/artifacts
+```
+
+Resume it, and once the label reads `sdlc-harness: running` again, close the pull request:
+
+```
+gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harness resume"
+```
+
+```
+gh pr close <number> --repo <owner>/<scratch-repo>
+```
+
+Passes when the closed pull request carries a `stopped` comment with the line `Stopped because @<login> closed pull request #<number>.`, both items carry `sdlc-harness: stopped`, and the run is `cancelled`, read with the same two commands. Record the close's `harness-control.yml` run, which shows which copy of the workflow ran:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+```
+
+```
+gh run view <run id> --repo <owner>/<scratch-repo> --json event,headBranch,headSha
+```
+
+Resume it again, and once it is running, delete its branch on `origin`:
+
+```
+gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harness resume"
+```
+
+```
+gh api -X DELETE repos/<owner>/<scratch-repo>/git/refs/heads/<slug>
+```
+
+Passes when the issue carries a `stopped` comment saying the branch was deleted and the run cannot be resumed, the issue carries `sdlc-harness: stopped`, a `harness stop <slug>` run is listed under the default branch, and no `harness-resume.yml` run dispatches `<slug>` again: no `harness run <slug>` run follows the stop. Read the runs with:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-resume.yml
+```
+
+Record the deletion's `harness-control.yml` run with the two `harness-control.yml` commands above. A close by a triage-role user is not runnable on a scratch repository owned by a personal account, where every collaborator holds `write`, as (f) records for the triage refusal; record it as not run.
+
+**(i) A dispatch from the wrong ref.** Dispatch `harness-run.yml` from the default branch with the run's branch as its input:
+
+```
+gh workflow run harness-run.yml --repo <owner>/<scratch-repo> --ref <default branch> -f action=run -f branch=<slug>
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <default branch>
+```
+
+```
+gh run view <run id> --repo <owner>/<scratch-repo> --log-failed
+```
+
+Passes when the run's `wrong-ref` job fails with an `::error::` line naming `<slug>` as the ref to use, and its `run` job is skipped. Record the error line.
+
+**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); and *The whole chain on GitHub*, by the legs together. Leg (h) settles *A `delete` event's workflow runs from the default branch*, *A `pull_request` `closed` job runs the merge-commit copy of the workflow*, *The contents API serves a file at a commit no branch points at any more* and *A workflow can be dispatched from the default branch while its `branch` input names a deleted branch*; leg (d) settles *A pull request opened with `HARNESS_GIT_TOKEN` puts a cross-reference on the issue its body mentions* where that secret is set.
 
 **Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set. Where (xiv) ran, close the round's pull request first, before any branch is deleted:
 
