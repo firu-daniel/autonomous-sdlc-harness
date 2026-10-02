@@ -10,7 +10,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — State the direct-dispatch and re-run routes in §5, and add Option C's run-job gate _(layer: general)_
+1. [x] **Finding 1** — State the direct-dispatch and re-run routes in §5, and add Option C's run-job gate _(layer: general)_
 
 ---
 
