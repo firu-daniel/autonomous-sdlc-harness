@@ -359,6 +359,25 @@ test('answer: a seeded park_loop_cycles and a no-progress re-park become park_lo
   j.assertLaneUntouched();
 });
 
+test('a pause resume launched with an answered pair at the top level ends completed and archives the pair', async (t) => {
+  const j = await createJobFixture(t);
+  if (j === null) return;
+
+  await j.writeQuestion(1, '## Q1\n');
+  await j.writeAnswer(1, 'a1\n');
+  const result = await j.job([j.branch, 'task', 'pause']);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(j.status().status, 'completed');
+  assert.ok(existsSync(join(j.clarDir, 'answered', 'question_1.md')), 'question_1.md was not archived');
+  assert.ok(existsSync(join(j.clarDir, 'answered', 'answer_1.md')), 'answer_1.md was not archived');
+  assert.deepEqual(
+    readdirSync(j.clarDir).filter((name) => /^question_.*\.md$/.test(name)),
+    [],
+    'a question file is still at the top level',
+  );
+  j.assertLaneUntouched();
+});
+
 test('chain and auto_resumes: chain is this job input, auto_resumes resets on a user dispatch', async (t) => {
   const j = await createJobFixture(t);
   if (j === null) return;

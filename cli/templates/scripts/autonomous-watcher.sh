@@ -1205,17 +1205,27 @@ job_report() {
 #   resumed_at          when the most recent resume happened — stamped by BOTH
 #                       resume paths, so it does not say which one
 #   resumed_for_index   a space-separated list of the clarification indexes one
-#                       park-resume consumed (`1 2 3`). Set by resume_parked_run
-#                       and archived then cleared by classify_run_exit, which is
-#                       the whole of its lifetime — so A NON-EMPTY VALUE ON A
-#                       `completed` RECORD IS A DEFECT: it means the pairs it
-#                       names are still sitting unarchived at the top level,
-#                       where they trigger a resume of a run that already read
-#                       them. It is NOT a defect on a `paused` record: the pause
-#                       branch returns before the archival and leaves it set on
-#                       purpose, because a pause mid park-resume left those
-#                       answers unconsumed. The pause resume never writes this
-#                       field — a pause is not an answer.
+#                       park-resume consumed (`1 2 3`). Set by begin_park_resume
+#                       and archived then cleared by classify_run_exit together
+#                       with `launch_answered_set`, which is the whole of its
+#                       lifetime — so A NON-EMPTY VALUE ON A `completed` RECORD
+#                       IS A DEFECT: it means the pairs it names are still
+#                       sitting unarchived at the top level, where they trigger
+#                       a resume of a run that already read them. It is NOT a
+#                       defect on a `paused` record: the pause branch returns
+#                       before the archival and leaves it set on purpose,
+#                       because a pause mid park-resume left those answers
+#                       unconsumed. The pause resume never writes this field —
+#                       a pause is not an answer. It is not the only record of
+#                       the consumed set: `launch_answered_set` re-derives it
+#   launch_answered_set every top-level answered pair's index when the current
+#                       session launched (`1 2`), which is the set a re-entering
+#                       engine consumes. Written by spawn_engine at every launch,
+#                       local and job mode alike, from the clarification channel
+#                       on disk; archived then cleared by classify_run_exit on a
+#                       non-pause exit, and left set by a pause exit. The remote
+#                       bundle does not carry it: the next job's launch
+#                       re-derives it from the restored channel
 #   resume_kind         `answer` when the park resume launched the current
 #                       session, `pause` when the pause resume did, and empty
 #                       otherwise. Read and cleared by classify_run_exit on every
@@ -1929,6 +1939,11 @@ EOF
     formatter="cat"
   fi
 
+  # The answered pairs this session will consume, re-derived from disk at every
+  # launch so no job boundary can lose them; classify_run_exit archives them.
+  registry_set "$branch" launch_answered_set \
+    "$(top_level_answered_pairs "$worktree/$state_rel/clarifications/$branch")"
+
   # Spawn ONE detached subshell that runs the agent IN THE FOREGROUND and then
   # classifies the exit from its REAL exit code. The agent must be a CHILD of
   # this subshell — not a sibling of a separate monitor — or that code is
@@ -2168,11 +2183,13 @@ max_question_index() {
 #
 # Consume-then-archive contract: on a resume the watcher LEAVES the whole
 # answered set at the TOP LEVEL so the re-launched engine can self-detect and
-# consume it. Exactly that set is archived only AFTER that resumed engine exits —
-# here, keyed off the `resumed_for_index` list the resume recorded. That is what
-# stops a pair the engine already read from triggering another resume, without
-# emptying the paths the re-entering engine reads; a pair written mid-session is
-# not in the list and stays.
+# consume it, and a re-entering engine consumes EVERY top-level answered pair.
+# So the archived set is every pair answered when the session launched — the
+# union of `resumed_for_index` and `launch_answered_set` — archived only AFTER
+# that session exits, and never on a pause exit. That is what stops a pair the
+# engine already read from triggering another resume, without emptying the
+# paths the re-entering engine reads; a pair written mid-session is in neither
+# set and stays.
 classify_run_exit() {
   local branch="$1" worktree="$2" log_path="$3" rc="$4"
 
@@ -2239,23 +2256,25 @@ classify_run_exit() {
     return 0
   fi
 
-  # If this exit followed a resume — and was NOT a pause, handled above — every
-  # answer in `resumed_for_index` has now been consumed by the re-launched
-  # engine. Archive exactly that set before classifying, so none of it is ever
+  # This exit was NOT a pause, handled above, so the session consumed every pair
+  # it launched with: the union of `resumed_for_index` and `launch_answered_set`.
+  # Archive exactly that union before classifying, so none of it is ever
   # reprocessed; nothing else is archived. A legacy single-index value is a
   # one-element list.
-  local consumed_set consumed_n
-  consumed_set="$(registry_get "$branch" resumed_for_index)"
-  if [ -n "$consumed_set" ]; then
+  local consumed_set consumed_n archived=" "
+  consumed_set="$(registry_get "$branch" resumed_for_index) $(registry_get "$branch" launch_answered_set)"
+  if [ -n "${consumed_set// /}" ]; then
     # An empty clar_dir means the state directory was unresolvable above; the
-    # field is still cleared, because leaving it set would make the next exit
+    # fields are still cleared, because leaving them set would make the next exit
     # try to archive pairs whose location is no better known than it is now.
     if [ -n "$clar_dir" ]; then
       for consumed_n in $consumed_set; do
+        case "$archived" in *" $consumed_n "*) continue ;; esac
+        archived="${archived}${consumed_n} "
         archive_answered_pair "$clar_dir" "$consumed_n"
       done
     fi
-    registry_set "$branch" resumed_for_index ""
+    registry_set "$branch" resumed_for_index "" launch_answered_set ""
   fi
 
   local parked=0
@@ -2395,6 +2414,32 @@ park_answered_set() {
 "
   done
   [ -n "$answered_list" ] || return 1
+  answered_set="$(printf '%s' "$answered_list" | sort -n | tr '\n' ' ')"
+  printf '%s\n' "${answered_set% }"
+}
+
+# top_level_answered_pairs <clar_dir>
+#
+# Every top-level index with both files, space-separated and numerically sorted,
+# whether or not another top-level question is still unanswered; prints nothing
+# when there is none. spawn_engine records it at every launch. Each
+# index is printed as its file name spells it, because archive_answered_pair
+# rebuilds the file names from it; `sort -n` orders a zero-padded one in base 10.
+top_level_answered_pairs() {
+  local clar_dir="$1" q n answered_list="" answered_set
+  for q in "$clar_dir"/question_*.md; do
+    [ -e "$q" ] || continue
+    n="${q##*/}"
+    n="${n#question_}"
+    n="${n%.md}"
+    case "$n" in
+      '' | *[!0-9]*) continue ;;
+    esac
+    [ -f "$clar_dir/answer_${n}.md" ] || continue
+    answered_list="${answered_list}${n}
+"
+  done
+  [ -n "$answered_list" ] || return 0
   answered_set="$(printf '%s' "$answered_list" | sort -n | tr '\n' ' ')"
   printf '%s\n' "${answered_set% }"
 }

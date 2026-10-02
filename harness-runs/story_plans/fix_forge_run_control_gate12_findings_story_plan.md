@@ -29,7 +29,7 @@ This branch fixes the defects Gate 12 round 6 (2026-10-02, CLI 0.6.0, `firu-dani
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12_findings/task_<K>_plan.md`. The entries run bottom-up in the configured layer order, `cli`, then `plugin`, then the catch-all `general` last. **Task 20 ships fifth**, between Task 4 and Task 5. It was split out of Task 5 in plan review, and the other task numbers were kept stable, so list order and task number differ from that entry on.
 
-1. [ ] **Task 1** — Archive every answered pair a session launched with, so a park answered then paused never ends `parked` _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — Archive every answered pair a session launched with, so a park answered then paused never ends `parked` _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 2** — Report a park as one GitHub answer instruction with a copy block, and never as a question-less comment _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Multi-job park suite: answer, then a user or budget pause, then a pause resume, completes and delivers _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Multi-job park suite: the usage-pause and stop-then-resume sequences complete too _(layer: cli)_ _(points: 15)_

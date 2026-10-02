@@ -29,3 +29,8 @@
 - Read `classify_run_exit` top to bottom: the pause arm still precedes every archival, and the park-loop guard still reads `resume_kind` and `resume_max_question_index` exactly as before.
 - `grep -n "launch_answered_set" cli/templates/scripts/autonomous-watcher.sh` shows the write in `spawn_engine`, the union and clear in `classify_run_exit`, and the header paragraph, and nothing else.
 - The header's `resumed_for_index` paragraph no longer claims it is the only record of the consumed set.
+
+**Deviations from plan:**
+- "Base 10 forced" in `top_level_answered_pairs` is applied to the ordering only (`sort -n`), as `park_answered_set` does; each index is printed as its file name spells it. Normalising `01` to `1` would make `archive_answered_pair` look for `question_1.md` and leave a zero-padded pair unarchived.
+- The header's `resumed_for_index` paragraph now names `begin_park_resume` as its writer: that function holds the `registry_set` and is shared by `resume_parked_run` and job mode's `answer` start.
+- `bash -n` on the watcher template was refused by the permission layer after a final comment-only edit to the helper's doc comment; the passing `npm test -- test/watcher-remote-job.test.mjs` run preceded that edit and exercised the code, which the edit did not change.
