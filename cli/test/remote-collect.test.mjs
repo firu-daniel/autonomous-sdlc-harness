@@ -241,6 +241,13 @@ test('settled, with an inline comment but no review requesting changes: nothing 
   await assertNothing(f, result, before, /no review requesting changes is pending on #12/);
 });
 
+test('settled, with only a COMMENTED review carrying a body: nothing pushed or dispatched', async (t) => {
+  const f = await collectFixture(t);
+  const before = await f.originRefs();
+  const result = await f.collect({ STUB_PR_REVIEWS: JSON.stringify([review(5, 'bob', { state: 'COMMENTED', body: 'Just a note.' })]) });
+  await assertNothing(f, result, before, /no review requesting changes is pending on #12/);
+});
+
 test('a newer run listed: nothing, since its own end collects', async (t) => {
   const f = await collectFixture(t);
   const before = await f.originRefs();

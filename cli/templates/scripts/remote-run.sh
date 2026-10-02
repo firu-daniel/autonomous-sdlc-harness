@@ -461,18 +461,25 @@
 # origin's tip; the time boundary is the highest-numbered marked round's
 # `collected_at` less `ROUND_OVERLAP_SECS`, or, when no round is marked, the
 # committer time of the branch's newest `user_reviews/<head>_review[_<n>].md`
-# (none when there is no round). Pending: a review whose state is
-# `REVIEW_ROUND_STATE`, whose body carries no `COMMENT_MARKER`, whose id is
-# unrecorded and whose `submitted_at` is at or after the boundary; and an
+# (none when there is no round). Pending: a submitted review (never
+# `PENDING`) whose id is unrecorded, whose body carries no `COMMENT_MARKER`,
+# whose `submitted_at` is at or after the boundary, and which either has state
+# `REVIEW_ROUND_STATE` or a non-blank body; and an
 # inline comment, by any author and whatever its review's state, whose id is
 # unrecorded, whose body carries no `COMMENT_MARKER`, and whose `created_at` is
 # at or after the boundary or whose review is pending. Every distinct author
 # of a pending item passes `authorise_actor`; a refused author's items are
 # dropped with one line naming the login, `AUTH_WHY` and the count, and a
-# failed permission call fails the collection. The file: one `## Review by
-# @<login>` section per pending review, oldest `submitted_at` first, holding
-# the body verbatim (or `(The review carries no summary.)`) and `Requested
-# changes on pull request #<n> (<url>) at <submitted_at>.`; then, when any is
+# failed permission call fails the collection. A round is placed only when at
+# least one kept review has state `REVIEW_ROUND_STATE`; a *Comment* or
+# *Approve* review rides along in the next round one requesting changes starts.
+# The file: one `## Review by @<login>` section per pending review, oldest
+# `submitted_at` first, holding the body verbatim (or `(The review carries no
+# summary.)`) and a provenance line naming its state — `Requested changes on
+# pull request #<n> (<url>) at <submitted_at>.`, `Commented on pull request
+# …`, `Approved pull request …`, `Reviewed pull request … at <submitted_at>;
+# the review has since been dismissed.`, or for any other state `Reviewed
+# pull request … at <submitted_at> (state <state>).`; then, when any is
 # kept, `## Inline comments`, oldest `created_at` first; then the marker line
 # `<!-- sdlc-harness round collected_at=<utc> reviews=<id,…> comments=<id,…> -->`
 # listing exactly the ids written. Each comment is a `### `<path>`, line
@@ -4604,17 +4611,20 @@ control_review_story() {
 
 # round_collect <pr_number> <out_file> — the cumulative round of the global
 # `branch`'s pull request <pr_number>, shared by `control` and `collect`: every
-# review requesting changes and every inline comment no earlier round consumed,
-# by every author `authorise_actor` accepts. What earlier rounds consumed is
+# submitted review (never `PENDING`) that requests changes or carries a
+# non-blank body, and every inline comment, no earlier round consumed, by
+# every author `authorise_actor` accepts. What earlier rounds consumed is
 # read from the marker lines of their files on origin's tip; with none marked,
 # the boundary is the committer time of the newest round file. A comment
 # belonging to a pending review is pending whatever its `created_at`: a draft
 # comment is created before its review is submitted. RC_EVENT, set by the
 # caller, is the event's own review as a JSON object, merged when the listing
-# lacks it. Sets RC_REVIEWS, RC_REVIEWERS (distinct logins, comma-joined, in
+# lacks it. Sets RC_REVIEWS (the kept reviews requesting changes only),
+# RC_REVIEWERS (distinct logins of every review written, comma-joined, in
 # order) and RC_EVENT_ROUND (the round whose marker records RC_EVENT's id).
 # Returns 0 with <out_file> written; 1 when no review requesting changes is
-# pending, writing nothing; 3 a listing or a permission call failed; 4 the
+# pending, writing nothing and recording nothing, so a *Comment* or *Approve*
+# review rides along in the next round one requesting changes starts; 3 a listing or a permission call failed; 4 the
 # previous rounds or <out_file> could not be read or written. RC_ERR holds why.
 RC_EVENT=""
 RC_REVIEWS=0
@@ -4733,7 +4743,9 @@ round_collect() {
       or ((($t // "") | try fromdateiso8601 catch 0) >= ($since | tonumber));
     ($R | flat) as $listed
     | (if $event == null or any($listed[]; .id == $event.id) then $listed else $listed + [$event] end)
-    | [ .[] | select(((.state // "") | ascii_downcase) == $state)
+    | [ .[] | ((.state // "") | ascii_downcase) as $s
+        | select($s != "" and $s != "pending")
+        | select($s == $state or ((.body // "") | test("\\S")))
         | select(((.body // "") | contains($marker)) | not)
         | select(.id | unseen($seen_r))
         | select(since_ok(.submitted_at)) ]
@@ -4777,7 +4789,8 @@ AUTHORS
     def ok: ("," + (.user.login // "") + ",") as $k | ($allowed | contains($k)) and (.user.login // "") != "";
     {reviews: [ .reviews[] | select(ok) ], comments: [ .comments[] | select(ok) ]}')
 
-  RC_REVIEWS=$(printf '%s' "$kept" | jq -r '.reviews | length')
+  RC_REVIEWS=$(printf '%s' "$kept" | jq -r --arg s "$REVIEW_ROUND_STATE" \
+    '[ .reviews[] | select(((.state // "") | ascii_downcase) == $s) ] | length')
   [ "$RC_REVIEWS" -gt 0 ] || return 1
   RC_REVIEWERS=$(printf '%s' "$kept" | jq -r '
     reduce (.reviews[] | .user.login) as $l ([]; if any(.[]; . == $l) then . else . + [$l] end) | join(",")')
@@ -4785,13 +4798,20 @@ AUTHORS
   # A hunk's fence is one backtick longer than its longest backtick run, at
   # least three. The trailing `x` keeps the text's final newline through the
   # substitution.
-  if ! text=$(printf '%s' "$kept" | jq -j --arg pr "$pr" --arg at "$collected_at" --arg marker "$COMMENT_MARKER" '
+  if ! text=$(printf '%s' "$kept" | jq -j --arg pr "$pr" --arg at "$collected_at" --arg marker "$COMMENT_MARKER" --arg state "$REVIEW_ROUND_STATE" '
     def nl: if endswith("\n") then . else . + "\n" end;
     .reviews as $rv | .comments as $cm
     | ($rv | map(
-        "## Review by @" + .user.login + "\n\n"
+        ((.state // "") | ascii_downcase) as $s
+        | (" pull request #" + $pr + " (" + (.html_url // "") + ") at " + (.submitted_at // "")) as $on
+        | "## Review by @" + .user.login + "\n\n"
         + (if (.body // "") == "" then "(The review carries no summary.)\n" else (.body | nl) end)
-        + "\nRequested changes on pull request #" + $pr + " (" + (.html_url // "") + ") at " + (.submitted_at // "") + ".\n"
+        + "\n"
+        + (if $s == $state then "Requested changes on" + $on + ".\n"
+           elif $s == "commented" then "Commented on" + $on + ".\n"
+           elif $s == "approved" then "Approved" + $on + ".\n"
+           elif $s == "dismissed" then "Reviewed" + $on + "; the review has since been dismissed.\n"
+           else "Reviewed" + $on + " (state " + $s + ").\n" end)
       ) | join("\n"))
     + (if ($cm | length) == 0 then "" else
         "\n## Inline comments\n" + ($cm | map(

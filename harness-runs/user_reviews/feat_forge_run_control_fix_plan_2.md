@@ -22,7 +22,7 @@ Each entry resolves to a self-contained `harness-runs/user_reviews/feat_forge_ru
 
 1. [x] **Finding 2** — Record the evidence for the four §8 rows of `docs/github-run-control.md` and the decision not to use `queue: max`, with its one consequence. Drop those rows from Gate 12's **What it settles.** _(layer: general)_
 2. [x] **Finding 3** — Replace Gate 12 (xiv)'s two-account review step with a one-account pending-reviews step. State that the reviewing account must not be the pull request's author. _(layer: general)_
-3. [ ] **Finding 1** — Keep the summary body of every review from an authorised reviewer, whatever its state. Record its id, and name its state in the provenance line. A *Comment* or *Approve* review still starts no round. Update the fix-plan writer and §2 of `docs/github-run-control.md` to match. _(layer: cli, plugin, general)_
+3. [x] **Finding 1** — Keep the summary body of every review from an authorised reviewer, whatever its state. Record its id, and name its state in the provenance line. A *Comment* or *Approve* review still starts no round. Update the fix-plan writer and §2 of `docs/github-run-control.md` to match. _(layer: cli, plugin, general)_
 
 ---
 

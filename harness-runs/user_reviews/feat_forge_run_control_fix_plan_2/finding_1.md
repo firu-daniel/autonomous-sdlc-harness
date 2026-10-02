@@ -54,3 +54,7 @@ Also touched by this finding:
      - A `COMMENTED` review whose id an earlier marker records: absent.
      - A `PENDING` review: absent.
    - In `cli/test/remote-collect.test.mjs`, add a case beside `settled, with an inline comment but no review requesting changes`: a settled branch with only a `COMMENTED` review carrying a body places nothing and dispatches nothing, with the same `no review requesting changes is pending on #12` line.
+
+**Deviations from plan:**
+- `cli` layer: the existing case `a comment on a review that only comments is collected, and that review is no section` in `cli/test/remote-control-review.test.mjs` asserted the old behaviour; it is replaced by the step-6 `COMMENTED` / `APPROVED` ride-along cases (which keep its inline-comment assertion) rather than kept beside them. A whitespace-only-body `COMMENTED` case was added beside the empty-body one, covering step 1's "empty or only whitespace".
+- `cli` layer: `cli/templates/github/workflows/harness-control.yml`'s concurrency note ("every review requesting changes and every inline comment no earlier round recorded") quotes the collected shape and was updated to name the ride-along reviews; the finding did not list it.

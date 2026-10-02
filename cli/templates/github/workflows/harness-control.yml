@@ -76,8 +76,9 @@
 #     at a time, so two reviews submitted together give one round, not two
 #     pushes racing for the same round number.
 #   * A pending review job replaced by a newer one loses nothing: every job in
-#     the group collects cumulatively, every review requesting changes and every
-#     inline comment no earlier round recorded, and the round's comment names
+#     the group collects cumulatively, every review requesting changes, every
+#     other review carrying a summary and every inline comment no earlier round
+#     recorded, and the round's comment names
 #     every reviewer it took.
 #   * The name `harness-review-<branch>` is reserved for every job that places a
 #     review round on that branch; any other workflow's job that does so joins

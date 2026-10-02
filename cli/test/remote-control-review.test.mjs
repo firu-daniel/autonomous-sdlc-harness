@@ -4,7 +4,8 @@
  *
  * **The rule these tests exist to enforce: only a review requesting changes, by a write-or-admin
  * reviewer, on a recognised same-repository harness branch carrying a story index, starts a round; the
- * round collects every review requesting changes and every inline comment since the previous round, by
+ * round collects every review requesting changes, every other submitted review carrying a summary, and
+ * every inline comment since the previous round, by
  * every authorised author, each review's body under its own `## Review by @<login>` section and each
  * comment with file, line, commit, author and hunk, closed by a marker recording the ids it consumed, and
  * nothing a marker records is collected again; a review arriving while a run is in flight is never
@@ -361,17 +362,52 @@ test("an unauthorised commenter's review and inline comment are absent, with one
   assert.match(result.stdout, /dropped 2 item\(s\) by @mallory: GitHub reports the permission of @mallory as read/);
 });
 
-test('a comment on a review that only comments is collected, and that review is no section', async (t) => {
+for (const [state, provenance] of [['COMMENTED', 'Commented on pull request #12'], ['APPROVED', 'Approved pull request #12']]) {
+  test(`a review in state ${state} with a body rides along beside the review requesting changes, with its own provenance line`, async (t) => {
+    const f = await reviewFixture(t);
+    const result = await f.control({}, {
+      STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
+      STUB_PR_REVIEWS: JSON.stringify([review(5, 'bob', { state, body: 'Only a summary.' })]),
+      STUB_PR_COMMENTS: JSON.stringify([inline(2, { pull_request_review_id: 5, user: { login: 'bob', type: 'User' }, body: 'Bob notes.' })]),
+    });
+    const round = await assertRound(f, result);
+    assert.equal(round.match(/^## Review by @/gm)?.length, 2, round);
+    assert.ok(round.startsWith('## Review by @bob\n\nOnly a summary.\n\n'
+      + `${provenance} (https://github.com/${REPOSITORY}/pull/12#pullrequestreview-5) at 2026-01-02T00:00:05Z.\n`), round);
+    assert.ok(round.includes(`Requested changes on pull request #12 (${REVIEW_URL}) at 2026-01-02T03:04:05Z.\n`), round);
+    assert.ok(round.includes('Bob notes.'), round);
+    assert.match(round, markerOf([5, REVIEW_ID], [2]));
+    const note = allComments(f.calls()).find((call) => /event=round /.test(call.body));
+    assert.ok(note?.body.includes('by @bob, @alice'), note?.body);
+  });
+}
+
+for (const [name, fields] of [['with an empty body', { state: 'COMMENTED', body: '' }], ['with a whitespace-only body', { state: 'COMMENTED', body: ' \n\t' }], ['still a draft (PENDING)', { state: 'PENDING', body: 'A draft.' }]]) {
+  test(`a review ${name} is no section and is not recorded`, async (t) => {
+    const f = await reviewFixture(t);
+    const result = await f.control({}, {
+      STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
+      STUB_PR_REVIEWS: JSON.stringify([review(5, 'bob', fields)]),
+    });
+    const round = await assertRound(f, result);
+    assert.equal(round.match(/^## Review by @/gm)?.length, 1, round);
+    assert.ok(!round.includes('@bob'), round);
+    assert.match(round, markerOf([REVIEW_ID], []));
+  });
+}
+
+test("a COMMENTED review an earlier round's marker records is absent", async (t) => {
   const f = await reviewFixture(t);
+  await f.commitOn('feat_x', {
+    [`${REVIEW_DIR}/feat_x_review.md`]: 'Round one.\n\n<!-- sdlc-harness round collected_at=2000-01-01T00:00:00Z reviews=5 comments= -->\n',
+  }, 'chore: add user review for feat_x');
   const result = await f.control({}, {
     STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
-    STUB_PR_REVIEWS: JSON.stringify([review(5, 'bob', { state: 'COMMENTED', body: 'Only a comment.' })]),
-    STUB_PR_COMMENTS: JSON.stringify([inline(2, { pull_request_review_id: 5, user: { login: 'bob', type: 'User' }, body: 'Bob notes.' })]),
+    STUB_PR_REVIEWS: JSON.stringify([review(5, 'bob', { state: 'COMMENTED', body: 'Already taken.', submitted_at: '2100-01-01T00:00:00Z' })]),
   });
-  const round = await assertRound(f, result);
-  assert.ok(!round.includes('Only a comment.'), round);
-  assert.ok(round.includes('Bob notes.'), round);
-  assert.match(round, markerOf([REVIEW_ID], [2]));
+  const round = await assertRound(f, result, 'feat_x_review_2.md');
+  assert.ok(!round.includes('Already taken.'), round);
+  assert.match(round, markerOf([REVIEW_ID], []));
 });
 
 test('two reviews requesting changes become one round with two sections and one marker listing both', async (t) => {
