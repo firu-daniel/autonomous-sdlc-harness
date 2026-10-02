@@ -51,7 +51,7 @@ The triage role is refused ([§6](#6-who-can-act-and-pull-requests-from-forks)).
 
 ## 1. Commands in a comment
 
-**A command is a new comment whose first line opens with `@sdlc-harness`, followed by a verb.** The handle must be the first word of the first line; leading spaces and tabs are skipped, and the handle and the verb are matched case-insensitively. Text after `pause`, `resume`, `stop` or `clear` on the same line is ignored. A comment is read once, when it is created: an edited comment is never re-read, so a correction is a new comment.
+**A command is a new comment whose first line opens with `@sdlc-harness`, followed by a verb.** The handle must be the first word of the first line; leading spaces and tabs are skipped, and the handle and the verb are matched case-insensitively. Text after `pause`, `resume`, `stop`, `clear` or `status` on the same line is ignored. A comment is read once, when it is created: an edited comment is never re-read, so a correction is a new comment.
 
 ```
 @sdlc-harness pause
@@ -67,6 +67,10 @@ The triage role is refused ([§6](#6-who-can-act-and-pull-requests-from-forks)).
 
 ```
 @sdlc-harness clear
+```
+
+```
+@sdlc-harness status
 ```
 
 `answer` takes the question's index on the first line and the answer on the lines below it:
@@ -85,8 +89,11 @@ The index may be left out only when exactly one question is open, because issue 
 | `resume` | Sends the `resume: pause` dispatch for the run's engine | The run is paused, whatever its pause reason, `expired` and `killed` included | `/autonomous-sdlc-harness:branch-resume` |
 | `stop` | Sends `remote-run.sh stop`: the stop marker, then cancelling every queued or running job of the branch | Any run of the branch is known | `remote-run.sh stop <branch>` |
 | `clear` | Sends the `resume: pause` dispatch with `park_loop_clear` set, releasing the park-loop hold | The run is held in a park loop | `/autonomous-sdlc-harness:branch-resume` on a park loop |
+| `status` | Replies with the run's state, the next ledger entry, the open questions and the latest run; changes nothing | Any state | `/autonomous-sdlc-harness:branch-status` |
 
-A command whose state does not match is refused with a reply naming the state and the command that does apply: `resume` on a park loop points at `clear`, and on a parked run at `answer` with the open indexes. `answer`, `resume` and `clear` on a run that is still running are refused rather than queued, so nothing waits behind a job and is lost when a newer pending run cancels it.
+A command whose state does not match is refused with a reply naming the state and the command that does apply: `resume` on a park loop points at `clear`, and on a parked run at `answer` with the open indexes. `answer`, `resume` and `clear` on a run that is still running are refused rather than queued, so nothing waits behind a job and is lost when a newer pending run cancels it. `status` is never refused for the run's state, a run in flight included, because it sets no label and dispatches nothing.
+
+**Why `status` exists.** A run worked from GitHub alone had no way to ask its state: the only answer was a local `/autonomous-sdlc-harness:branch-status`, which needs the setup this entry point exists to spare. The command reads only what is already there — the branch's run list, the run's state bundle and the flow-progress ledger on the branch tip — so it adds no state of its own to keep true.
 
 **Never a command:**
 
@@ -110,13 +117,15 @@ Every refused command gets a reply in one form, `` @<login>: `<verb>` was not ru
 1. the repository variable `HARNESS_REMOTE_STOP` is set;
 2. the default branch's `harness.config.json` does not set `forge` to `github` and `execution.target` to `github-actions`. This is checked before the actor, so a disabled coupling asks GitHub nothing about the commenter;
 3. the commenter is not authorised;
-4. the verb is not one of the five.
+4. the verb is not one of the six.
 
-An unknown verb's reply lists all five:
+An unknown verb's reply lists all six:
 
 ```
-The commands are `@sdlc-harness answer [<n>]`, `@sdlc-harness pause`, `@sdlc-harness resume`, `@sdlc-harness stop`, `@sdlc-harness clear`; `docs/github-run-control.md` in the harness documentation states each.
+The commands are `@sdlc-harness answer [<n>]`, `@sdlc-harness pause`, `@sdlc-harness resume`, `@sdlc-harness stop`, `@sdlc-harness clear`, `@sdlc-harness status`; `docs/github-run-control.md` in the harness documentation states each.
 ```
+
+**A refusal is a success.** The `harness control` run that replied with a refusal concludes `success`, because the refusal was answered: nobody gets a failure e-mail for a command that was correctly turned down. Only a failure to act or to reply fails the run.
 
 **The handle.** Type `@sdlc-harness` in full: GitHub does not autocomplete it. It renders as a link to [github.com/sdlc-harness](https://github.com/sdlc-harness), a placeholder organisation created only so that nobody else can take the name. It is not a user, not an app and not a member of any repository, so nothing is notified. The command is matched as **text** in the comment by `control`, never delivered through the mention. A comment that contains `@claude` as a word also triggers `anthropics/claude-code-action` where that action is installed (C4), and a harness command needs no such word. The shorter `@harness` was not used because it belongs to another organisation (`gh api users/harness`, observed by the maintainer on 2026-10-01).
 
@@ -176,7 +185,7 @@ So `review` exits 4 and nothing is dispatched. The reviews stay on the pull requ
 
 ## 3. Answering a park in a comment
 
-**Each open question is posted whole, as one comment.** When a run parks, `report` posts one comment per open `question_<n>.md`, in ascending order, on the run's target (§5, *The target rule*). The comment opens with which run is waiting and on which question, then carries the file unchanged, then states the answer form. One question per comment keeps the answer to it unambiguous, since issue comments have no threads.
+**Each open question is posted whole, as one comment.** When a run parks, `report` posts one comment per open `question_<n>.md`, in ascending order, on the run's target (§5, *The target rule*). The comment opens with which run is waiting and on which question, then carries the file less any line naming its own `answer_<n>.md` — the local channel's instruction, which does not apply on GitHub — and ends with the answer form and a ready-to-copy block of `@sdlc-harness answer <n>`, so the comment carries one answer instruction. The canonical format already says a question file names no answer channel (`plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Clarification channel — file format (canonical, single source of truth)`); the removal covers a file written against it. One question per comment keeps the answer to it unambiguous, since issue comments have no threads.
 
 **The size bound.** GitHub refuses a comment body over 262,144 bytes of UTF-8, with a refusal text that says `65536 characters` and so misstates the unit (S6). A question file larger than 250,000 bytes is cut at its last whole line within that bound, which leaves room for the comment's own lines. The comment then names the file, `question_<n>.md`, in the run's `harness-state` artifact, where the whole question is. S6 measured the bound on an issue comment; on a pull request's conversation it is unverified.
 
@@ -208,7 +217,14 @@ The new timeout applies only to the upload call.
 
 A refused answer is refused rather than queued for the reason §1 gives: a newer pending run in the branch's concurrency group could cancel the job it waited behind.
 
-**The comment is a transport, not a second format.** The question and answer files stay the ones `plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Clarification channel — file format (canonical, single source of truth)` defines: the question comment carries `question_<n>.md` unchanged, and `control` writes the answer to `answer_<n>.md` before it dispatches. A park answered by `/autonomous-sdlc-harness:branch-answer` and one answered in a comment reach the run in the same shape.
+**Why an answer is not a reply to the question.** An answer is the `@sdlc-harness answer <n>` command and nothing else. The other channels considered:
+
+- **A quote reply** is rejected. A partial or ambiguous quote, a quote of a question already archived, and a quote made in ordinary discussion would each send text to the run as an answer. A quoted line opens `>`, so it is never a command anyway (§1, *Never a command*).
+- **Any plain comment** is rejected, for the same reason at a larger scale: every remark on the item would become an answer.
+- **A threaded pull-request review comment** is not taken now. Issues have no threads; the questions are posted on the issue until a pull request exists; and §2 deliberately does not listen to `pull_request_review_comment`. A proposal to the maintainer, not owed work: once the pull request opens with the run ([`development.md`](development.md) → `## 6.` item 19), the first two reasons no longer hold, and whether a thread reply is then worth listening to that event is the maintainer's to decide.
+- **No short alias** is added. A second grammar for one command doubles what can be mistyped and refused.
+
+**The comment is a transport, not a second format.** The question and answer files stay the ones `plugin/instructions/task_plan_writing_instructions_autonomous.md` → `## Clarification channel — file format (canonical, single source of truth)` defines: the question comment carries `question_<n>.md` less only a line naming its own `answer_<n>.md`, and `control` writes the answer to `answer_<n>.md` before it dispatches. A park answered by `/autonomous-sdlc-harness:branch-answer` and one answered in a comment reach the run in the same shape.
 
 On a public repository a question comment and its answer are public, as the `harness-state` artifact already is ([`remote-execution.md`](remote-execution.md) → `## 11. Security`, *What a reader of the repository's Actions runs can see*).
 
