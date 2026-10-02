@@ -9,8 +9,6 @@ too, and models load with remote loading disabled; nothing here passes `allow_re
 
 Departures from `server.ts` and `session.ts`:
 
-- The refresh-failure remedy names `harness-docs-retrieval self-check` where `server.ts` names the
-  CLI's `doctor`, which knows nothing of this backend.
 - `queryLog.ts` is not ported: `answer()` writes no log record and reads no query-log variable.
 - The service owns its config: it reads `harness.config.json` read-only, takes `docs.root` and
   `layers[]` alone, and applies no `phases.docs` / `docs.retrieval` gate.
@@ -242,13 +240,9 @@ async def answer(
         try:
             refreshed = await session.refresh()
         except Exception as error:
-            # TODO: @claude add a follow up task for this: once
-            # feat_docs_retrieval_backend_selection makes doctor check this backend, restore
-            # server.ts's remedy text byte for byte:
-            # run `npx autonomous-sdlc-harness doctor` in this repository
             return _failure(
                 f"{SEARCH_TOOL_NAME}: refreshing the docs index failed: {driver_message(error)}; "
-                "run harness-docs-retrieval self-check in this repository"
+                "run `npx autonomous-sdlc-harness doctor` in this repository"
             )
         for warning in refreshed.warnings:
             print(f"{DOCS_SERVER_NAME}: warning: {warning}", file=sys.stderr)

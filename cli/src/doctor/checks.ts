@@ -70,13 +70,17 @@
  *    nothing. `retrieval-index` spawns a child of this CLI running `docs index --in-memory`: a child
  *    because {@link Check.run} is synchronous and the store is not, and because the child is the
  *    installation whose optional peers resolve beside it. It builds in memory and exits, so it starts
- *    no server and writes nothing.
+ *    no server and writes nothing. The three `retrieval-python-*` checks share one child running the
+ *    Python package's own `self-check` and grade its three lines; that child starts no server either.
  *
  * ## What this module deliberately does not do
  *
  * - **It writes nothing** beyond {@link probeWritable}'s temp file, which that function removes with
  *   an in-process `fs.rm` on a single file — never a shelled-out recursive removal, which a
- *   user-level `permissions.deny` can silently block (`cli.ts`'s header).
+ *   user-level `permissions.deny` can silently block (`cli.ts`'s header). One exception:
+ *   `retrieval-python-index` refreshes the Python backend's index **in its database**, because
+ *   `self-check`'s `index` question builds it there — the same write the server's first query makes.
+ *   It writes nothing in the repository or the machine cache.
  * - **It repairs nothing.** Every failure names what to run — `init`, `init --force`, an edit to one
  *   config key — and `doctor` stays a command that is safe to run against a repository at any time.
  */
@@ -98,6 +102,7 @@ import {
   forgeTriggerApplies,
   isPlaceholder,
   LAYER_CATCH_ALL_PATH,
+  pythonRetrievalApplies,
   remoteExecutionApplies,
   retrievalApplies,
   STATE_DIR_DOT_PATTERN,
@@ -125,6 +130,7 @@ import {
   WORKFLOW_SCOPE_COMMAND,
   WORKFLOW_SCOPE_REASON,
 } from '../core/defaultBranchPush.js';
+import { internal } from '../core/errors.js';
 import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
@@ -249,11 +255,24 @@ import {
 } from '../remote/githubActions.js';
 import { modelFilesPresent } from '../retrieval/models.js';
 import {
+  launcherSearchPath,
+  parseSelfCheck,
+  PYTHON_DATABASE_URL_VARIABLE,
+  PYTHON_FETCH_MODELS_SUB_COMMAND,
+  PYTHON_RETRIEVAL_COMMAND,
+  PYTHON_SELF_CHECK_SUB_COMMAND,
+  pythonDatabaseUrl,
+  SELF_CHECK_INDEX_NOT_ATTEMPTED,
+  type SelfCheckLine,
+  type SelfCheckQuestion,
+} from '../retrieval/pythonBackend.js';
+import {
   retrievalCliEntry,
   retrievalModelCacheDir,
   retrievalRuntimeDir,
   retrievalRuntimeState,
 } from '../retrieval/runtime.js';
+import { DOCS_SERVER_NAME } from '../retrieval/server.js';
 
 /**
  * How the CLI is typed, for every remedy that tells an operator what to run next. The `npx` prefix
@@ -4849,6 +4868,14 @@ const BROWSER_WIRING_CHECK: Check = {
 const RETRIEVAL_OFF =
   'docs.retrieval is off (it needs phases.docs and docs.retrieval both true), so no RAG library is expected and none was resolved';
 
+/** The pass every `retrieval-python-*` check gives when retrieval is on under another backend. */
+const PYTHON_NOT_SELECTED =
+  'docs.retrieval is on with docs.retrievalBackend not python, so the launcher starts the TypeScript runtime and nothing of the Python backend is expected or checked';
+
+/** The pass the three TypeScript retrieval checks give when {@link pythonRetrievalApplies} is true. */
+const TYPESCRIPT_NOT_SELECTED =
+  'docs.retrievalBackend is python, so the launcher starts the Python backend rather than this runtime and it is not graded; init still installs it, so switching back costs nothing';
+
 /** How many missing model files {@link RETRIEVAL_MODEL_CACHE_CHECK} names before it counts the rest. */
 const MISSING_MODEL_FILES_NAMED = 5;
 
@@ -4875,6 +4902,7 @@ const RETRIEVAL_DEPENDENCIES_CHECK: Check = {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
     if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (pythonRetrievalApplies(ctx.config)) return pass(TYPESCRIPT_NOT_SELECTED);
 
     const runtime = retrievalRuntimeDir();
     const state = retrievalRuntimeState();
@@ -4897,6 +4925,7 @@ const RETRIEVAL_MODEL_CACHE_CHECK: Check = {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
     if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (pythonRetrievalApplies(ctx.config)) return pass(TYPESCRIPT_NOT_SELECTED);
 
     const dir = retrievalModelCacheDir();
     const { present, missing } = modelFilesPresent(dir);
@@ -4942,6 +4971,7 @@ const RETRIEVAL_INDEX_CHECK: Check = {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
     if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (pythonRetrievalApplies(ctx.config)) return pass(TYPESCRIPT_NOT_SELECTED);
 
     const resolved = retrievalCliEntry();
     if (resolved === undefined) return fail('cannot build without the RAG libraries (see retrieval-dependencies)');
@@ -4968,6 +4998,183 @@ const RETRIEVAL_INDEX_CHECK: Check = {
         `the RAG index did not build in memory: ${messageOf(error)} — run \`${CLI} init\` to set retrieval up`,
       );
     }
+  },
+};
+
+/** What the one `self-check` run answered, shared by the three `retrieval-python-*` checks. */
+type PythonSelfCheck =
+  | { readonly kind: 'unresolved'; readonly searched: string }
+  | { readonly kind: 'unreadable'; readonly text: string }
+  | {
+      readonly kind: 'answered';
+      readonly lines: ReadonlyMap<SelfCheckQuestion, SelfCheckLine>;
+      readonly databaseUrl: string;
+    };
+
+const pythonSelfCheckCache = new WeakMap<CheckContext, PythonSelfCheck>();
+
+/** The `self-check` question each `retrieval-python-*` check id grades, for the index's cross-reference. */
+const PYTHON_CHECK_ID: Readonly<Record<SelfCheckQuestion, string>> = Object.freeze({
+  packages: 'retrieval-python-dependencies',
+  weights: 'retrieval-python-model-cache',
+  index: 'retrieval-python-index',
+});
+
+/**
+ * Run the Python backend's own `self-check` once per {@link CheckContext}; the three
+ * `retrieval-python-*` checks grade its lines and never re-derive them (choice 1).
+ *
+ * The command is resolved on {@link launcherSearchPath} — the `PATH` the launcher resolves it on —
+ * not on this process's own, so a pass here is a pass on the server the launcher starts.
+ *
+ * **`spawnSync` rather than `execFileSync`:** `self-check` exits 1 whenever a line is `FAIL`, with its
+ * whole answer on stdout, and `execFileSync` would turn that answer into a thrown error.
+ *
+ * **The env is the server's, not the shell's.** `process.env` is overlaid by the string entries of the
+ * `.mcp.json` server's `env` object, which the agent runner passes to the server, and then
+ * {@link PYTHON_DATABASE_URL_VARIABLE} is set to {@link pythonDatabaseUrl}'s answer from that object
+ * alone: the runner never passes a shell export, so honouring one here would grade a database the
+ * server does not use.
+ */
+function pythonSelfCheck(ctx: CheckContext, repoRoot: string): PythonSelfCheck {
+  const cached = pythonSelfCheckCache.get(ctx);
+  if (cached !== undefined) return cached;
+
+  const answer = runPythonSelfCheck(repoRoot);
+  pythonSelfCheckCache.set(ctx, answer);
+  return answer;
+}
+
+function runPythonSelfCheck(repoRoot: string): PythonSelfCheck {
+  const searched = launcherSearchPath(process.env['PATH'] ?? '', process.env['HOME']);
+  const directory = locateOnPath(PYTHON_RETRIEVAL_COMMAND, searched);
+  if (directory === undefined) return { kind: 'unresolved', searched };
+
+  const mcp = readJsonFile(join(repoRoot, MCP_PATH));
+  const servers = isJsonObject(mcp) ? mcp[SERVERS_KEY] : undefined;
+  const server = isJsonObject(servers) ? servers[DOCS_SERVER_NAME] : undefined;
+  const serverEnv = isJsonObject(server) ? server['env'] : undefined;
+  const overlay: Record<string, string> = {};
+  if (isJsonObject(serverEnv)) {
+    for (const [key, value] of Object.entries(serverEnv)) {
+      if (typeof value === 'string') overlay[key] = value;
+    }
+  }
+  const databaseUrl = pythonDatabaseUrl(serverEnv);
+
+  const child = spawnSync(join(directory, PYTHON_RETRIEVAL_COMMAND), [PYTHON_SELF_CHECK_SUB_COMMAND, '--repo', repoRoot], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: RETRIEVAL_INDEX_TIMEOUT_MS,
+    env: { ...process.env, ...overlay, [PYTHON_DATABASE_URL_VARIABLE]: databaseUrl },
+  });
+  if (child.error !== undefined) return { kind: 'unreadable', text: messageOf(child.error) };
+
+  const lines = child.status === 0 || child.status === 1 ? parseSelfCheck(child.stdout ?? '') : undefined;
+  if (lines !== undefined) return { kind: 'answered', lines, databaseUrl };
+
+  const how = child.status === null ? `stopped by ${child.signal}` : `exit status ${child.status}`;
+  const said = firstLine(child.stderr ?? '') || firstLine(child.stdout ?? '');
+  return { kind: 'unreadable', text: said === '' ? how : `${how}: ${said}` };
+}
+
+/** One line of an answered `self-check`; `parseSelfCheck` guarantees all three are present. */
+function selfCheckLine(answer: { readonly lines: ReadonlyMap<SelfCheckQuestion, SelfCheckLine> }, question: SelfCheckQuestion): SelfCheckLine {
+  const line = answer.lines.get(question);
+  if (line === undefined) throw internal(`self-check answered without its ${question} line, which parseSelfCheck guarantees`);
+  return line;
+}
+
+/**
+ * Host, port and database of a connection string, with the credentials dropped — a check's text is
+ * printed and may be pasted, so the password never reaches it.
+ */
+function databaseLocation(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const port = parsed.port === '' ? '' : `:${parsed.port}`;
+    return `${parsed.hostname}${port}${parsed.pathname}`;
+  } catch {
+    return 'a connection string this check cannot parse (not printed, as it may carry a password)';
+  }
+}
+
+/** The install remedy every `retrieval-python-dependencies` failure names. */
+const PYTHON_INSTALL_REMEDY =
+  "install the package with its `models` extra (docs/retrieval.md → `## Turning on the Python backend`)";
+
+/** Do the Python backend's console script, interpreter and packages resolve? */
+const RETRIEVAL_PYTHON_DEPENDENCIES_CHECK: Check = {
+  id: 'retrieval-python-dependencies',
+  title: "RAG's Python backend resolves",
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (!pythonRetrievalApplies(ctx.config)) return pass(PYTHON_NOT_SELECTED);
+
+    const answer = pythonSelfCheck(ctx, ctx.repoRoot);
+    if (answer.kind === 'unresolved') {
+      return fail(
+        `${PYTHON_RETRIEVAL_COMMAND} does not resolve on the launcher's PATH (${answer.searched}), so the search server never starts — ${PYTHON_INSTALL_REMEDY}`,
+      );
+    }
+    if (answer.kind === 'unreadable') {
+      return fail(
+        `${PYTHON_RETRIEVAL_COMMAND} ${PYTHON_SELF_CHECK_SUB_COMMAND} answered in a shape this CLI cannot grade (${answer.text}) — ${PYTHON_INSTALL_REMEDY}, from a clone at the release tag matching this CLI's version, then run doctor again`,
+      );
+    }
+    const line = selfCheckLine(answer, 'packages');
+    return line.ok ? pass(line.detail) : fail(`${line.detail} — ${PYTHON_INSTALL_REMEDY}`);
+  },
+};
+
+/** Are the Python backend's model weights in its cache? */
+const RETRIEVAL_PYTHON_MODEL_CACHE_CHECK: Check = {
+  id: 'retrieval-python-model-cache',
+  title: "RAG's Python backend weights are cached",
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (!pythonRetrievalApplies(ctx.config)) return pass(PYTHON_NOT_SELECTED);
+
+    const answer = pythonSelfCheck(ctx, ctx.repoRoot);
+    if (answer.kind !== 'answered') {
+      return fail(`cannot be checked without the Python backend (see ${PYTHON_CHECK_ID.packages})`);
+    }
+    const line = selfCheckLine(answer, 'weights');
+    if (line.ok) return pass(line.detail);
+    return fail(
+      `${line.detail} — run \`${PYTHON_RETRIEVAL_COMMAND} ${PYTHON_FETCH_MODELS_SUB_COMMAND}\` where an operator is present. An unattended run has no web access, so a weight missing now is never fetched later`,
+    );
+  },
+};
+
+/** Does the Python backend build its index in its database? */
+const RETRIEVAL_PYTHON_INDEX_CHECK: Check = {
+  id: 'retrieval-python-index',
+  title: "the RAG Python backend's index builds",
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (!retrievalApplies(ctx.config)) return pass(RETRIEVAL_OFF);
+    if (!pythonRetrievalApplies(ctx.config)) return pass(PYTHON_NOT_SELECTED);
+
+    const answer = pythonSelfCheck(ctx, ctx.repoRoot);
+    if (answer.kind !== 'answered') {
+      return fail(`cannot be checked without the Python backend (see ${PYTHON_CHECK_ID.packages})`);
+    }
+    const line = selfCheckLine(answer, 'index');
+    if (line.ok) return pass(line.detail);
+
+    const stoppedBy = SELF_CHECK_INDEX_NOT_ATTEMPTED.exec(line.detail)?.[1] as SelfCheckQuestion | undefined;
+    if (stoppedBy !== undefined) {
+      return fail(`cannot build without the Python backend's ${stoppedBy} (see ${PYTHON_CHECK_ID[stoppedBy]})`);
+    }
+    return fail(
+      `${line.detail} — the backend's database is ${databaseLocation(answer.databaseUrl)} (${MCP_PATH}'s ${DOCS_SERVER_NAME} \`env\` ${PYTHON_DATABASE_URL_VARIABLE}, else the compose default): start the bundled one by running \`docker compose up -d --wait postgres\` in docs-retrieval-service/ of a clone of this CLI's repository at its release tag (docs/retrieval.md → \`## Turning on the Python backend\`, step 2), or point ${PYTHON_DATABASE_URL_VARIABLE} in that \`env\` object at yours`,
+    );
   },
 };
 
@@ -5061,7 +5268,9 @@ const RETRIEVAL_INDEX_CHECK: Check = {
  * profile lines all passed reads it as the last thing that can still be missing from that file.
  *
  * The three `retrieval-*` checks come last, under `browser-wiring`: the runtime, the models, then
- * whether an index builds, which needs libraries and models both and so reads after them.
+ * whether an index builds, which needs libraries and models both and so reads after them. The three
+ * `retrieval-python-*` checks follow them in the same runtime → models → index order; whichever
+ * backend `docs.retrievalBackend` does not select passes its three as not applicable.
  */
 export const CHECKS: readonly Check[] = Object.freeze([
   GIT_CHECK,
@@ -5104,6 +5313,9 @@ export const CHECKS: readonly Check[] = Object.freeze([
   RETRIEVAL_DEPENDENCIES_CHECK,
   RETRIEVAL_MODEL_CACHE_CHECK,
   RETRIEVAL_INDEX_CHECK,
+  RETRIEVAL_PYTHON_DEPENDENCIES_CHECK,
+  RETRIEVAL_PYTHON_MODEL_CACHE_CHECK,
+  RETRIEVAL_PYTHON_INDEX_CHECK,
 ]);
 
 /**

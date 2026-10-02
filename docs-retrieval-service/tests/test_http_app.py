@@ -168,7 +168,7 @@ def test_a_refresh_failure_is_a_500() -> None:
     assert response.json() == {
         "error": (
             "search_docs: refreshing the docs index failed: the database went away; "
-            "run harness-docs-retrieval self-check in this repository"
+            "run `npx autonomous-sdlc-harness doctor` in this repository"
         )
     }
 
