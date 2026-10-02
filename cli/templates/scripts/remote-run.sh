@@ -566,8 +566,9 @@
 # request #<n>.` or `… merged pull request #<n>.` (both with `--pr <n>`), or
 # `… deleted the branch `<b>`.` (with `--branch-gone`). Every note but the
 # deletion's adds that the workflow runs and their `harness-state` artifacts
-# are kept and that `@sdlc-harness resume` continues the run while the branch
-# exists. The runs and artifacts are kept. Reopening the issue or the pull
+# are kept; a closed pull request's `stopped` comment says to reopen it, or to
+# use the issue, before commenting `@sdlc-harness resume`. The runs and
+# artifacts are kept. Reopening the issue or the pull
 # request does nothing. A `pull_request` close job runs the pull request's
 # merge-commit copy of the workflow, as a review job does
 # (docs/github-integration-research.md -> C2); the script stays the default
@@ -4129,6 +4130,9 @@ forge_report() {
     stopped)
       if [ -n "$gone" ]; then
         text="The harness run on \`$br\` was stopped: its branch was deleted, so the run cannot be resumed. Its workflow runs and their artifacts are kept."
+      elif [ -n "$pr" ]; then
+        # Only a close passes <pr>, and every command on a closed pull request is refused.
+        text="The harness run on \`$br\` was stopped. While the branch exists, reopen this pull request and comment \`${COMMAND_HANDLE} resume\` here, or comment it on the run's issue, to continue it from its committed ledger. A merged pull request cannot be reopened; after a merge, use the issue."
       else
         text="The harness run on \`$br\` was stopped. Comment \`${COMMAND_HANDLE} resume\` to continue it from its committed ledger. A review that requests changes is collected now, and its round starts once the resumed run finishes."
       fi ;;
@@ -5610,7 +5614,7 @@ control_close() {
   esac
   note="Stopped because @$CONTROL_ACTOR $what."
   if [ "$CLOSE_KIND" != deleted ]; then
-    note="$note Its workflow runs and their \`$STATE_ARTIFACT_NAME\` artifacts are kept; comment \`$COMMAND_HANDLE resume\` while the branch exists to continue it."
+    note="$note Its workflow runs and their \`$STATE_ARTIFACT_NAME\` artifacts are kept."
   fi
   echo "remote-run.sh: control: close of $b: @$CONTROL_ACTOR $what"
   out=$(mktemp "$control_tmp/harness-control-out.XXXXXX") || out=/dev/null

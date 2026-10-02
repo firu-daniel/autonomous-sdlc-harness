@@ -258,6 +258,7 @@ test('pull request #9 closed unmerged: the comment and the label go to #9', asyn
   const f = await closeFixture(t);
   const body = assertStopped(f, await f.control('pull_request', prClosed()), { on: 9 });
   assert.match(body, /Stopped because @alice closed pull request #9\./);
+  assert.match(body, /reopen this pull request and comment `@sdlc-harness resume` here/);
 });
 
 test('pull request #9 merged: the note says merged', async (t) => {
@@ -265,6 +266,7 @@ test('pull request #9 merged: the note says merged', async (t) => {
   const body = assertStopped(f, await f.control('pull_request', prClosed({ merged: true })), { on: 9 });
   assert.match(body, /Stopped because @alice merged pull request #9\./);
   assert.doesNotMatch(body, /closed pull request/);
+  assert.match(body, /after a merge, use the issue/);
 });
 
 test('branch deleted: the marker rides GitHub\'s default branch and the issue is read at the run\'s commit', async (t) => {
