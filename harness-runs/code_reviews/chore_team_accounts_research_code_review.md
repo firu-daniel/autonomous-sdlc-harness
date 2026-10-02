@@ -13,7 +13,7 @@ The branch changes no code, workflow, template or configuration, so it owes no t
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 2** — Make P5's "Not documented" stop listing six pages as checked for a point the evidence names no page for _(layer: general)_
-2. [ ] **Finding 1** — Correct §5's account of where `authorise_actor` runs, and Option C's change list that follows from it _(layer: general)_
+2. [x] **Finding 1** — Correct §5's account of where `authorise_actor` runs, and Option C's change list that follows from it _(layer: general)_
 
 ---
 
