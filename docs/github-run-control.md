@@ -315,13 +315,10 @@ git pull --ff-only
 
 ## 8. What is not verified here
 
-Every automated case drives a `gh` stub. Gate 12 observation (xiv) in [`development.md`](development.md) → `## 5. Verifying a change` records the cases observed against a real repository.
+Every automated case drives a `gh` stub. Gate 12 observation (xiv) in [`development.md`](development.md) → `## 5. Verifying a change` records the cases observed against a real repository; round 6 (2026-10-02, CLI 0.6.0) observed the rows moved to *Verified in Gate 12 round 6* below, and none of the others has been.
 
 | Behaviour | What rests on it | Source | If it is wrong |
 |---|---|---|---|
-| The prefilter's `contains()` compares case-insensitively | Running the control job for a handle typed in mixed case ([§1](#1-commands-in-a-comment)) | GitHub's documented behaviour, not retrieved here | A mixed-case handle goes unanswered, and it is never obeyed |
-| The job token's `issues: write` can add a missing label to an issue or pull request, and create one | The state labels ([§5](#5-lifecycle-comments-and-state-labels)) | Not retrieved here | One warning line in the job log, and no label; the comment is still posted |
-| A pull request's conversation comment and its labels go through the issues endpoints | Every comment and label on a pull request ([§5](#5-lifecycle-comments-and-state-labels)) | Not retrieved here | Comments and labels on a pull request fail; the issue's are unaffected |
 | A pull request's conversation comment has the same size limit as an issue comment | Cutting a question file at 250,000 bytes ([§3](#3-answering-a-park-in-a-comment)) | S6 measured issue comments only | A long question comment on a pull request is refused |
 | A draft is refused for an account whose plan has no drafts, and a ready pull request is then accepted | The one ready retry ([§4](#4-the-draft-pull-request)) | C3; the fallback case is unmeasured | The retry fails too, and the `completed` comment names the compare link |
 | A pull request's author cannot request changes on their own pull request | The advice that a solo maintainer uses a machine account's token for `HARNESS_GIT_TOKEN` or starts the round locally ([§4](#4-the-draft-pull-request)) | GitHub's documented rule, not retrieved here; C1 measured only a pull request opened by `app/github-actions` | The token's owner can start a round from GitHub after all, and the advice is merely unneeded |
@@ -331,3 +328,11 @@ Every automated case drives a `gh` stub. Gate 12 observation (xiv) in [`developm
 | The jobs API names a job with no `name:` key by its key, `run` | The settledness test finding the `run` job of the newest run ([§2](#2-a-review-that-requests-changes-starts-a-round)) | GitHub's documentation is silent. Observed on `firu-daniel/harness-gate12`: the jobs API for run 36833810996 of `harness-run.yml` answers `run` and `warm`, and neither job carries a `name:` key. | No run ever reads settled before it completes, and reviews are collected rather than placed until then |
 | `concurrency: queue: max` | Nothing ([§2](#2-a-review-that-requests-changes-starts-a-round)). It is deliberately not used: 100 pending jobs is still a hard limit, and the end-of-run `collect` job needs no queue. Keeping the default `single` queue on `harness-review-<branch>` has one consequence. When three or more reviews land while a review job is running, a pending review job can be replaced. That reviewer's review is still collected, but gets no reply. | Verified in GitHub's workflow syntax reference (`concurrency.queue`: `single` is the default, keeping at most one pending run, which a newer one cancels and replaces; `max` keeps up to 100 pending runs, cancelling any beyond that, and cannot be combined with `cancel-in-progress: true`) and in GitHub's changelog of 2026-05-07. | Nothing changes |
 | The whole chain on GitHub: commands, a round from a review, a park answered in comments, the draft pull request, lifecycle comments and labels | All of this document | Gate 12 observation (xiv) ([`development.md`](development.md)) | The failing step is visible in the control or run job's log and in the comment it posted, or did not post |
+
+### Verified in Gate 12 round 6
+
+| Behaviour | Observed |
+|---|---|
+| The prefilter's `contains()` compares case-insensitively | `@SDLC-HARNESS pause` on issue #8 gave a `harness-control.yml` run that got past its `if:` and replied ([`development.md`](development.md) → Gate 12 → Round 6, leg (f)) |
+| The job token's `issues: write` can add a missing label to an issue or pull request, and create one | The setup created only `sdlc-harness`. The jobs created `sdlc-harness: running`, `parked`, `paused`, `done` and `stopped` on first use, and set and removed them on issue #8 and pull request #9 at every transition |
+| A pull request's conversation comment and its labels go through the issues endpoints | Every lifecycle comment and reply on pull request #9 was posted, among them question 2, `resumed`, `stopped`, the started-round comments and `completed`, and its state label followed each transition |
