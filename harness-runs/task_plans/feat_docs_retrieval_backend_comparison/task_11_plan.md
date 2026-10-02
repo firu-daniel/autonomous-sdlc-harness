@@ -1,0 +1,32 @@
+### Task 11 — Write the cost, latency, cold-start, footprint and agent-session half of the comparison
+
+**Goal:** Finish `## The Python backend against the TypeScript one` with the cost half, honestly scoped (task prompt item 5). Report the library-level call and the MCP round trip separately. Report cold start as process and model load plus the container in the path. Report the Python service's resident memory and the Postgres container's separately, next to the TypeScript figures. Add the footprint, the one real agent session per backend through `.mcp.json` (item 6), and the trade-off the two halves together state. This covers Acceptance 4 and 5.
+
+**Depends on:** Task 10, which wrote the section's opening subsections and recorded the four blocks whose arm tables carry each backend's library-level p50/p95. Also Tasks 5 and 9 and the operator's hand run and agent sessions (story index → **Manual setup required**). It consumes these files under `harness-runs/scratch/backend-comparison/`:
+
+- `mcp-typescript.txt` and `mcp-python.txt`, each a `renderMcpBackendSection` output from `mcp-backend-pass.mjs` → `runMcpBackendPass` (Task 5). Each carries `coldStart: { connectMs, firstCallMs }`, client and server p50 / p95 (server `null` for TypeScript), `residentKb`, and `postgresMemory` for Python.
+- `footprint.txt`: the `du -sh` sizes, image and volume sizes, the index size in its database, the timed cold container start, and the timed cold Python `index` with its `index:` line, plus the same-sitting TypeScript cold build (Task 9's protocol).
+- `agent-session-python.jsonl`, `agent-session-typescript.jsonl` and `agent-session.md`.
+- `host.txt`.
+
+**First step, and the stop.** Check that every file above exists and is non-empty. If any is missing, **return a blocker** naming it and pointing at `docs/retrieval-eval.md` → `### Measuring the Python backend against the TypeScript one`. Never take the figure in this session instead: `harness-runs/lessons.md` → *Evidence and measurement* says *"A wall-clock figure in a document of record is never one a run measured inside its own session."*
+
+**Where this task stops.** `docs/retrieval.md` → `## What it costs` cites these subsections, and that edit is **Task 12's**. This task does not restate the TypeScript cold build or query-log figures already recorded. It cites their sections and puts the same-sitting re-run beside the Python figure.
+
+### Targets
+
+- `docs/retrieval-eval-results.md` → `## The Python backend against the TypeScript one`, the subsections after Task 10's (scope register row 13).
+
+**Work:**
+
+- [ ] **`### Latency: the library call and the MCP round trip`.** For each backend, give the library-level arm E p50/p95 per corpus, cited to the recorded `@typescript` / `@python` blocks (TypeScript is `searchDocs` in process; Python is the server's `search_ms`). Then give the MCP round trip over `self-docs`, client p50 / p95 for both and Python's server-side p50 / p95, from `mcp-*.txt`. State what each excludes: the library figures exclude the per-call refresh, and the MCP figure includes it and the stdio hop. State that every figure was taken by hand in one sitting on the host in `host.txt`, so the TypeScript side was re-run rather than cited from another day.
+- [ ] **`### Cold start`.** For each backend: `connectMs` and `firstCallMs` over a warm index (process and model load), from `mcp-*.txt`. For Python add the timed cold start of the Postgres container, the only container in the adopter's path, since the service itself runs on the host (`docs/retrieval.md` → `## Turning on the Python backend`, step 3). Put the cold index build on each side next to these: Python's timed `index`, and TypeScript's same-sitting cold build with its phases. State which sense of *cold* each figure is, as `cold-build.mjs`'s header does: index cold, model cache warm.
+- [ ] **`### Footprint`.** Give the Python service's resident memory and the Postgres container's memory **separately**, and the TypeScript server's resident memory, all from `mcp-*.txt`. Give the disk figures from `footprint.txt`: both weight caches, the Python environment, the two images, the volume and the index in its database. Put them next to the roughly 300 MB the TypeScript runtime costs per machine, cited to `docs/retrieval.md` → `## What it costs`, which is a disk figure. Say so, so a reader does not compare it with a resident-memory one. Quote each command with its exact output line, per `docs/development.md`'s opening rule for a measured fact.
+- [ ] **`### One agent session through .mcp.json`.** From `agent-session.md` and the two streams, record the commands run: the CLI version, `docs.retrievalBackend`, and the session command line. Record what came back on each side: `system/init`'s `harness-docs` status, the `mcp__harness-docs__search_docs` call, any permission denial, and the tool result's text. State whether the Python result's **shape** matches the TypeScript one (`note: ` lines, ranked `path#heading` lines with snippets, or `no confident match`), quoting the first lines of each. If the session did not reach the tool, say so and say what the stream shows. That is a finding, not a gap to paper over.
+- [ ] **`### The trade-off, stated`.** In a few sentences, using the relevance case Task 10 named and the figures above, say what the Python backend buys and what it costs. If it is better on relevance or warm latency and much worse on footprint or cold start, state that as the trade-off it is. Close with two statements: *the TypeScript implementation stays the default whatever these numbers say*, and anything this section suggests is input to a later decision by the maintainer, not a change made or queued here (`harness-runs/lessons.md` → *"A decision rule's outcome is a proposal to the maintainer"*).
+
+**Verification:**
+
+- Every figure in this task's subsections traces to one of the capture files or to a recorded block, and quoting is verbatim where a command's output is cited. A reader can find each source by the file or marker named beside it.
+- `grep -n -E "postgresql://|/Users/|/private/|/tmp/|session_id" docs/retrieval-eval-results.md` finds no line this task added. Agent-stream excerpts are quoted with any session or account identifier removed.
+- The section's subsections appear in the order Tasks 10 and 11 add them, all below `<!-- eval:generated:end -->`, and `### The trade-off, stated` carries both closing statements.

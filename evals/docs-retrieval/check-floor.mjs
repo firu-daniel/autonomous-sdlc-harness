@@ -58,7 +58,7 @@ const FETCH_MODELS_COMMAND = 'npx autonomous-sdlc-harness docs fetch-models';
  * that takes it off `evals/docs-retrieval/metrics.mjs` → `scoreArm`'s return. A key outside this
  * table is refused by name.
  */
-const METRICS = Object.freeze({
+export const METRICS = Object.freeze({
   recallAt5: { label: 'recall@5', read: (metrics) => metrics.recall[5] },
   mrr: { label: 'MRR', read: (metrics) => metrics.mrr },
 });
@@ -69,7 +69,7 @@ function gradedArms() {
 }
 
 /** `floor.json`'s entries, refused by name when the file, its shape or an entry is not usable. */
-function loadFloor(path) {
+export function loadFloor(path) {
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(path, 'utf8'));

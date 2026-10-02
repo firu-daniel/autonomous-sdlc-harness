@@ -2,25 +2,31 @@
 
 **Read this when** you are adding a module, a corpus or an arm to the docs-retrieval relevance eval, or you have found a file here and need to know what owns what. The **procedure** for running the eval, the **metric definitions** and the **decision rule** are not here: they are `docs/retrieval-eval.md`, and the figures every run produced are `docs/retrieval-eval-results.md`. How the eval is run is that document's `## How to run it`, and this file states no route of its own.
 
-This directory holds the runner for the relevance eval of the shipped docs-retrieval tool: a set of ES modules that import the compiled retrieval code under `cli/dist/retrieval/` and drive it over labelled query sets. It is not a case for the native eval runner and answers to no runner — `evals/README.md` says what separates the directory's two tenants.
+This directory holds the runner for the relevance eval of the shipped docs-retrieval tool: a set of ES modules that drive the shipped retrieval code over labelled query sets — the compiled `cli/dist/retrieval/` in process, or, with `--backend python`, the Python package's HTTP app (`python-backend.mjs`). It is not a case for the native eval runner and answers to no runner — `evals/README.md` says what separates the directory's two tenants.
 
 ## The modules
 
 | Path | What it owns |
 |---|---|
-| `run.mjs` | The entry module: one pass over one corpus, and the result object every other reader takes its figures from. Orchestration only. |
+| `run.mjs` | The entry module: one pass over one corpus, through one backend, and the result object every other reader takes its figures from. Orchestration only. |
 | `args.mjs` | The argument surface — the one place a flag is spelled, defaulted and refused. |
 | `corpora.mjs` | Resolving a corpus id to the `HarnessConfig` that corpus is read through. |
 | `queries.mjs` | Loading a labelled query set, and refusing a label that no longer resolves to a heading in the corpus. |
 | `index-build.mjs` | Building the index a run measures against, and the `{ files, chunks }` snapshot every figure from that run is stamped with. |
 | `arms.mjs` | The arm table, and the runner that drives one arm over one query set. |
+| `backends.mjs` | The backend vocabulary, and the block id each backend's figures are written under. |
+| `python-backend.mjs` | The Python backend as an eval session — the package's `index` and `serve-http` run through `scripts/python-service.sh` over a mirror of the corpus, queried per arm with `POST /search`; latency is the server's own `search_ms`. |
 | `metrics.mjs` | The figures: graded recall@k, MRR, latency percentiles, and the two score distributions the abstention threshold was calibrated on. |
-| `results.mjs` | Rendering one run into the generated region of `docs/retrieval-eval-results.md` — the only writer of the bytes between that file's markers. |
+| `results.mjs` | Rendering one run into the generated region of `docs/retrieval-eval-results.md` — the only writer of the bytes between that file's markers — one block per corpus and backend, `<id>` or `<id>@<backend>`, and moving a finished block between results files (`transplantCorpusBlock`). |
 | `calibrate.mjs` | The fixed re-calibration method of `ABSTAIN_SCORE_THRESHOLD`, over the uncensored scores the generated region publishes. |
 | `check-floor.mjs` | The regression gate: this run's figures against the recorded floor, with an exit status per outcome. |
 | `floor.json` | The recorded floor the gate reads — a machine artifact, not prose. What the numbers mean and when one is re-recorded is `docs/retrieval-eval.md` → `## The regression floor`, which the file's own `see` key names. |
 | `cold-build.mjs` | The cold build of a persisted index: its wall time in three phases, and the size on disk of what it leaves behind. |
-| `query-log-pass.mjs` | The shipped `search_docs` query log exercised over MCP against the real models — the only pass whose latency includes the per-call refresh and the MCP round trip. |
+| `query-log-pass.mjs` | The shipped `search_docs` query log exercised over the TypeScript server's MCP against the real models; the cross-backend MCP pass is `mcp-backend-pass.mjs`. |
+| `mcp-backend-pass.mjs` | Either backend's stdio MCP server over a mirror of the corpus with a warm index — cold start (process and model load), per-call round trip, server-side `search_ms` where the server prints it, and resident memory. |
+| `vector-agreement.mjs` | The cosine between the two backends' stored document vectors for every chunk key of a corpus, and, when an fp32 ONNX export is supplied, quantization and export measured apart. |
+| `backend-comparison.mjs` | Two backends' blocks for one corpus compared side by side — metrics, floor, every per-query difference, arm B on its own, and the abstention sets at the recorded threshold. |
+| `mirror-fixture.mjs` | The throwaway mirror repository a server reads a corpus through — every corpus file at its own repo-relative path plus the resolved configuration, under the system temp directory, removed by its caller on every exit path. |
 | `corpora/fixture-catalog/docs/` | The `fixture-catalog` corpus itself: one invented document per topic, plus the `INDEX.md` the index-first arm navigates from. The topic documents are deliberately not enumerated here — a corpus gains and loses documents, and the list that must stay exhaustive is `INDEX.md`'s, which the index-first arm reads. |
 | `queries/` | One labelled query set per corpus, named `<corpus-id>.jsonl` — so `fixture-catalog.jsonl` and `self-docs.jsonl` today; a corpus held outside this tree takes its id from `--corpus-id`. Its own contract is `queries/README.md`. |
 | `transcripts/` | Arm A hand-run transcripts: one directory per corpus id, one file per variant and repetition (`<variant>-rep<N>.jsonl`), committed only after being read and redacted per the publication clearance recorded in `docs/retrieval-eval-results.md` → `## The real-catalog query set`, and scanned by gate 6e (`scripts/check-eval-artifacts.sh`). |
@@ -36,9 +42,10 @@ This directory holds the runner for the relevance eval of the shipped docs-retri
 - **`fixture-catalog`** — the invented catalog under `corpora/fixture-catalog/docs/`, committed here in full. It carries its own `INDEX.md` because the index-first arm navigates from one and this repository's `docs/` has none. It changes only when the eval changes, which is why it is the corpus the regression gate grades.
 - **`self-docs`** — this repository's own `docs/` plus every conventions document `layers[]` names. It **moves**: a document added under `docs/` joins the corpus, so every recorded figure over it is stamped with that run's file and chunk counts, and two figures carrying different stamps are not a before/after pair.
 
-## Two single sources this directory reads and never copies
+## The single sources this directory reads and never copies
 
-Both exist so that a change made in one place fails loudly here rather than going missing.
+Each exists so that a change made in one place fails loudly here rather than going missing.
 
 - **The arm table is `arms.mjs`**, built by pairing letters onto `SEARCH_MODES` imported from `cli/dist/retrieval/search.js`. Every other module's default arm set, arm column, floor key and by-name refusal reads that table, so no arm letter and no mode string is retyped anywhere else here. A fifth `SearchMode` therefore gains an arm, a metric row, a results row and a floor key from one letter added in that module — and until it is added, the table refuses at load by name.
 - **The layer list is `harness.config.json`'s**, at the resolved `--repo` root. `corpora.mjs`'s `self-docs` reads `layers[]` and `stateDir` out of that file verbatim and overrides `docs.root` alone, because `cli/src/retrieval/corpus.ts`'s header forbids a copy of the conventions list anywhere. A layer added to that file is covered by the next run with no edit here; a configuration that is absent or carries no `layers` is refused by name rather than substituted for.
+- **The backend vocabulary is `backends.mjs`'s**, and `args.mjs` and `results.mjs` read it. A run naming no backend writes its corpus's unlabelled block; one naming a backend — `typescript` included — writes `<id>@<backend>` beside it, so a re-run never overwrites the recorded unlabelled figures the floor and the calibration stand on.

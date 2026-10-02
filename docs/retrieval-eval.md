@@ -15,7 +15,9 @@ The eval is not CLI surface. `cli/src/retrieval/session.ts` refuses to open a re
 `retrievalApplies(config)` — `phases.docs` **and** `docs.retrieval` both true — and this repository's
 `harness.config.json` has `phases.docs: false` and no `docs` key at all. That file is deliberately
 **unchanged** by the eval: the runner under `evals/docs-retrieval/` supplies `phases` and `docs`
-itself and drives `corpusFiles` → `refreshIndex` → `searchDocs` directly, which
+itself and, on the TypeScript path, drives `corpusFiles` → `refreshIndex` → `searchDocs` directly
+— with `--backend python` it drives the package's `serve-http` instead (see `### The Python
+backend`) — which
 `cli/src/retrieval/corpus.ts`'s header licenses (the gate "is its callers' to check, not this
 module's"). So **`phases.docs` and `docs.retrieval` are never read by the eval**, and turning
 retrieval on in a checkout is not a precondition for measuring it.
@@ -31,8 +33,10 @@ corpus from paths you name; that corpus reports itself as `ad-hoc` and reads no 
 
 ## Preconditions
 
-Three, each a state rather than a step, and each checked by `evals/docs-retrieval/index-build.mjs`
-before anything is loaded — a run that fails one refuses by name rather than producing a number.
+Three on the TypeScript path, each a state rather than a step, and each checked by
+`evals/docs-retrieval/index-build.mjs` before anything is loaded — a run that fails one refuses by
+name rather than producing a number. The Python backend's are checked before anything is spawned, and
+are listed in `### The Python backend`.
 
 - **The real models are present**: `modelFilesPresent(retrievalModelCacheDir()).present` is true. The
   cache is machine-shared, so it is provisioned once and every worktree sees it. The command that
@@ -45,8 +49,10 @@ before anything is loaded — a run that fails one refuses by name rather than p
   that is the workspace's own `npm ci`, because the optional peers are repeated under
   `devDependencies`; the refusal names every missing package and that command. The machine-wide
   runtime `init` installs (`docs/retrieval.md` → the **Setup** paragraph) is not a precondition:
-  every pass — `run.mjs`, the cold build, and the query-log pass, whose server is `docs serve`
-  spawned from this checkout's `cli/dist/cli.js` — loads this checkout's build.
+  every pass — `run.mjs`, the cold build, the query-log pass, whose server is `docs serve`
+  spawned from this checkout's `cli/dist/cli.js`, `mcp-backend-pass.mjs` and `vector-agreement.mjs`
+  — loads this checkout's build, and the Python server those passes start runs from
+  `docs-retrieval-service/` (see `### The Python backend`).
 
 And one step, because the runner imports the **compiled** retrieval modules under
 `cli/dist/retrieval/` — the real interfaces, never a copy of them — so the build has to have run:
@@ -107,11 +113,13 @@ against:
 | `--floor <path>` | The recorded floor `evals/docs-retrieval/check-floor.mjs` grades against — read by that module alone and not by a launcher run; see `## The regression floor`. |
 | `--out <path>` | Where the results are written. Absent, nothing is written and the table goes to stdout. |
 | `--transcript <path>` | An arm A hand-run transcript, given bare or as `<variant>=<path>`; repeatable, once per variant — see below. |
+| `--backend <typescript\|python>` | Which backend the arms run through; absent, the in-process run this document describes. See `### The Python backend`. |
 
 ### Writing the results, and the corpus that grows when you do
 
 `--out` rewrites **only** the region between `<!-- eval:generated:start -->` and
-`<!-- eval:generated:end -->` in the file it names, one block per corpus, and leaves every byte
+`<!-- eval:generated:end -->` in the file it names, one block per corpus — per backend, keyed
+`<id>@<backend>`, when `--backend` is given (see `### The Python backend`) — and leaves every byte
 outside those markers alone:
 
 ```
@@ -131,7 +139,9 @@ stamps are not a before/after pair** — part of the difference is the corpus, n
 Two passes are not entered through `run.mjs` and carry no flag of their own: each is an exported
 function a launcher calls directly, filling one hand-written section of
 `docs/retrieval-eval-results.md` — `## Cold build and index size` and `## The query-log pass`. Both
-launchers live under `harness-runs/scratch/` and are run exactly like `eval.mjs` above.
+launchers live under `harness-runs/scratch/` and are run exactly like `eval.mjs` above. The
+comparison's own launcher-entered passes are in `### Measuring the Python backend against the
+TypeScript one` and `### Writing the comparison up`.
 
 **The cold build.** `measureColdBuild` takes `{ repoRoot, corpus, dataDir, docsRoot, conventions }`
 and returns an object rather than printing one, so the launcher resolves the repo root through the
@@ -219,6 +229,65 @@ Never by typing numbers between the markers: the generated region has exactly on
 `--out` run destroys anything hand-edited there. `## Running arm A by hand` below is the procedure that
 produces the transcript this flag takes.
 
+### The Python backend
+
+`--backend` names the backend the arms run through, `typescript` or `python` — the set
+`evals/docs-retrieval/backends.mjs` → `BACKENDS` declares. **With the flag absent the run is
+byte-for-byte the TypeScript run this document always described**, and writes the unlabelled block
+`<id>` that gate 11 and every recorded figure stand on. With it given, the block is keyed
+`<id>@<backend>` — `fixture-catalog@python`, `self-docs@typescript` — by `backends.mjs` →
+`corpusBlockId`, so an explicit `--backend typescript` run sits beside the recorded unlabelled block
+rather than overwriting it.
+
+**The Python route.** The runner copies the corpus into a throwaway mirror repository under the system
+temp directory (`evals/docs-retrieval/mirror-fixture.mjs`), indexes it, and starts the package's
+`serve-http` over it on a free loopback port, through `bash scripts/python-service.sh run`. Each arm
+sends `POST /search` with its own `mode`. Its latency is the server's own `search_ms`, timed around the
+search alone; the HTTP hop is not timed. The hits are scored by the same `scoreArm` as the TypeScript
+arms. The mirror and the server's whole process group are removed on every exit path.
+
+**Its preconditions.** The stub variable unset and the build run, as above, and then three more,
+checked before the server is spawned (`evals/docs-retrieval/python-backend.mjs` →
+`assertPythonBackendAvailable`, which refuses on an unprovisioned wrapper or any `FAIL` line of the
+package's `self-check`). The environment synced with the `models` extra, from the repository root:
+
+```
+bash scripts/python-service.sh sync --with-models
+```
+
+The weights fetched, which is the one command here that downloads:
+
+```
+bash scripts/python-service.sh run fetch-models
+```
+
+And the compose `postgres` service up, from `docs-retrieval-service/`:
+
+```
+docker compose up -d --wait postgres
+```
+
+**The database URL.** The eval's own modules — the runner's Python path, the MCP pass and the
+vector-agreement pass — read `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` when it is set, and otherwise default
+to the compose database, through `cli/src/retrieval/pythonBackend.ts` → `pythonDatabaseUrl`, as the
+launcher does. That default reaches only those modules' child processes. A
+`bash scripts/python-service.sh run …` typed directly into a shell gets no default, and refuses with
+the variable unset (`docs-retrieval-service/src/harness_docs_retrieval/service.py` →
+`load_service_config`; `docs-retrieval-service/README.md` → `## Standing it up`, *"It is required"*).
+
+**The four runs**, from the repository root. Each prints the arm table and writes nothing:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --backend typescript
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --backend python
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --backend typescript
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --backend python
+```
+
+**Refused by name:** `--transcript` with `--backend`, because arm A is agent navigation and has no
+backend; and `--data-dir` with `--backend python`, because the Python index lives in its Postgres
+database, not in a directory.
+
 ### The two execution routes, and the one that stalls
 
 The route above — `bash scripts/scratch-run.sh <file under harness-runs/scratch/>` — is the first of
@@ -231,6 +300,242 @@ entry in the unattended permission profile, and an unmatched tool call in print 
 than failing: the run hangs instead of reporting a refusal. That is why the launcher exists and why
 nothing in this document asks for a bare `node`. At a terminal outside a harness run the launcher route
 works identically, so there is one set of commands to keep true rather than two.
+
+### Measuring the Python backend against the TypeScript one
+
+**Who runs this, and when.** An operator, by hand, at a terminal, **outside any headless session, on an
+otherwise idle machine**: every wall-clock, memory and footprint figure of the comparison comes from
+this one sitting. Every capture goes under `harness-runs/scratch/backend-comparison/`, which is
+gitignored, and the write-up (`### Writing the comparison up`) is taken from these files alone:
+`host.txt`, `results.md`, `mcp-typescript.txt`, `mcp-python.txt`, `footprint.txt`,
+`agent-session-python.jsonl`, `agent-session-typescript.jsonl` and `agent-session.md`. Every command
+runs from the repository root unless its paragraph names another directory. `### The Python backend`'s
+preconditions hold first.
+
+**1. The host.** Create the capture directory, then stamp the host:
+
+```
+mkdir -p harness-runs/scratch/backend-comparison
+```
+
+```
+uname -sr >> harness-runs/scratch/backend-comparison/host.txt
+node --version >> harness-runs/scratch/backend-comparison/host.txt
+uv --version >> harness-runs/scratch/backend-comparison/host.txt
+docker version --format '{{.Server.Version}}' >> harness-runs/scratch/backend-comparison/host.txt
+uptime >> harness-runs/scratch/backend-comparison/host.txt
+```
+
+**2. The scratch results copy.** `docs/retrieval-eval-results.md` is itself a `self-docs` member
+(`### Writing the results, and the corpus that grows when you do`), so a block written into it between
+the paired runs would hand the second run a different corpus. The runs write into a copy outside
+`docs/` instead:
+
+```
+cp docs/retrieval-eval-results.md harness-runs/scratch/backend-comparison/results.md
+```
+
+**3. The four `--out` runs**, into that copy, all with the same `--repeat`: the eval's recorded `1`,
+unless you record another value in `host.txt`. `backend-comparison.mjs` refuses a pair whose `--repeat`
+or snapshots differ.
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --backend typescript --repeat 1 --out harness-runs/scratch/backend-comparison/results.md
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus fixture-catalog --backend python --repeat 1 --out harness-runs/scratch/backend-comparison/results.md
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --backend typescript --repeat 1 --out harness-runs/scratch/backend-comparison/results.md
+bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --backend python --repeat 1 --out harness-runs/scratch/backend-comparison/results.md
+```
+
+**4. The MCP pass**, for each backend over `self-docs`: cold start, each `search_docs` round trip and
+resident memory of the shipped stdio server. Create `harness-runs/scratch/mcp-backend-pass.mjs`:
+
+```
+import { parseArgs } from '../../evals/docs-retrieval/args.mjs';
+import { renderMcpBackendSection, runMcpBackendPass } from '../../evals/docs-retrieval/mcp-backend-pass.mjs';
+console.log(renderMcpBackendSection(await runMcpBackendPass({ ...parseArgs(['--corpus', 'self-docs']), backend: process.argv[2] })));
+```
+
+The Python pass runs second, so the database holds the `self-docs` index step 5 sizes:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/mcp-backend-pass.mjs typescript > harness-runs/scratch/backend-comparison/mcp-typescript.txt
+bash scripts/scratch-run.sh harness-runs/scratch/mcp-backend-pass.mjs python > harness-runs/scratch/backend-comparison/mcp-python.txt
+```
+
+**5. The footprint**, each output appended to `footprint.txt`. The Python weight cache, the Xenova
+cache, and this checkout's synced Python environment, whose directory is keyed by the `cksum` of the
+checkout root (`scripts/python-service.sh` → `checkout_key`):
+
+```
+du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/models" >> harness-runs/scratch/backend-comparison/footprint.txt
+du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models/Xenova" >> harness-runs/scratch/backend-comparison/footprint.txt
+du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/venvs/$(printf '%s' "$(git rev-parse --show-toplevel)" | cksum | awk '{print $1}')" >> harness-runs/scratch/backend-comparison/footprint.txt
+```
+
+Then, from `docs-retrieval-service/`, the two compose images — `service` lists nothing unless
+`docker compose up --build` has built it, and it is not in an adopter's path — the volume, and the
+index's size in its database:
+
+```
+docker image ls harness-docs-retrieval-postgres >> ../harness-runs/scratch/backend-comparison/footprint.txt
+docker image ls harness-docs-retrieval-service >> ../harness-runs/scratch/backend-comparison/footprint.txt
+docker system df -v >> ../harness-runs/scratch/backend-comparison/footprint.txt
+docker compose exec -T postgres psql -U harness -d docs_retrieval -c "SELECT pg_size_pretty(pg_total_relation_size('chunks'))" >> ../harness-runs/scratch/backend-comparison/footprint.txt
+```
+
+**6. The cold container and the cold Python index.** The Python service runs on the host in an
+adopter's path (`docs/retrieval.md` → `## Turning on the Python backend`, step 3), so the only container
+in that path is Postgres, and its start is the cold container figure. Still in `docs-retrieval-service/`,
+stop it and time its start; `/usr/bin/time -p` prints its `real` line on stderr, which the redirect
+captures:
+
+```
+docker compose stop postgres
+/usr/bin/time -p docker compose up -d --wait postgres 2>> ../harness-runs/scratch/backend-comparison/footprint.txt
+```
+
+The cold index starts from an empty database, so remove the volume and start the service again:
+
+```
+docker compose down -v
+docker compose up -d --wait postgres
+```
+
+Back at the repository root. The timed command goes straight to the wrapper, and nothing on that path
+supplies the compose default — only the eval's own modules get it, from `pythonDatabaseUrl` — so set
+the variable for this shell first, taking the value from `docs-retrieval-service/README.md` →
+`## Standing it up`:
+
+```
+export HARNESS_DOCS_RETRIEVAL_DATABASE_URL=<the compose connection string>
+```
+
+Then index `self-docs` through this checkout's own `harness.config.json`, timed, with its `index:`
+line captured beside the timing:
+
+```
+/usr/bin/time -p bash scripts/python-service.sh run index --repo .. --docs-root docs >> harness-runs/scratch/backend-comparison/footprint.txt 2>&1
+```
+
+And the TypeScript cold build beside it, in the same sitting, through the launcher
+`### The cold-build and query-log launchers` gives:
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/cold-build.mjs >> harness-runs/scratch/backend-comparison/footprint.txt
+```
+
+**7. One real agent session per backend, through `.mcp.json`.** In a throwaway git repository
+**outside this checkout**, holding a small `docs/` and one commit, as `docs/development.md` §5 →
+gate 10 requires of its own repository. `<repo>` is that repository and `<checkout>` this one, both
+typed at your terminal and written into no file. Initialise it with this checkout's build:
+
+```
+node <checkout>/cli/dist/cli.js init --docs --docs-retrieval --non-interactive --cwd <repo>
+```
+
+Install the package with `docs/retrieval.md`'s own form, because `harness-docs-retrieval` must resolve
+on the launcher's `PATH` (`docs/retrieval.md` → `## Turning on the Python backend`, step 3). From this
+checkout's `docs-retrieval-service/`:
+
+```
+uv tool install ".[models]"
+```
+
+Select the Python backend and check readiness, re-running `doctor` until the six retrieval checks pass.
+The weight cache is machine-shared, so the one `### The Python backend` filled serves it:
+
+```
+node <checkout>/cli/dist/cli.js config set docs.retrievalBackend python --cwd <repo>
+node <checkout>/cli/dist/cli.js doctor --cwd <repo>
+```
+
+Then, at `<repo>`'s root, start the session with gate 10's leg (v) command line (`docs/retrieval.md` →
+`## Measured, and how`, item (d), leg (v)), asking a question one known section of its `docs/`
+answers:
+
+```
+claude -p "<a question one known section of docs/ answers; call search_docs>" --settings .claude/settings.autonomous.json --permission-mode acceptEdits --output-format stream-json --verbose > <checkout>/harness-runs/scratch/backend-comparison/agent-session-python.jsonl
+```
+
+Then the same for the TypeScript backend, with the same question:
+
+```
+node <checkout>/cli/dist/cli.js config set docs.retrievalBackend typescript --cwd <repo>
+node <checkout>/cli/dist/cli.js doctor --cwd <repo>
+claude -p "<the same question>" --settings .claude/settings.autonomous.json --permission-mode acceptEdits --output-format stream-json --verbose > <checkout>/harness-runs/scratch/backend-comparison/agent-session-typescript.jsonl
+```
+
+Write the exact commands you ran into `agent-session.md`, with the placeholders left as placeholders,
+and append both versions:
+
+```
+claude --version >> <checkout>/harness-runs/scratch/backend-comparison/agent-session.md
+node <checkout>/cli/dist/cli.js --version >> <checkout>/harness-runs/scratch/backend-comparison/agent-session.md
+```
+
+What to read in each stream: `system/init` lists `harness-docs` as `connected`; exactly one
+`mcp__harness-docs__search_docs` call is made; no permission denial appears anywhere; and the tool
+result's text shape — the `note: ` lines, the ranked `path#heading` lines with their snippets, or
+`no confident match` — compared between the two streams.
+
+### Writing the comparison up
+
+The four blocks move from the scratch copy into `docs/retrieval-eval-results.md` through
+`results.mjs` → `transplantCorpusBlock`, never by hand: the generated region has exactly one writer.
+Create `harness-runs/scratch/transplant-backend-blocks.mjs`:
+
+```
+import { readFileSync, writeFileSync } from 'node:fs';
+import { parseArgs } from '../../evals/docs-retrieval/args.mjs';
+import { BACKENDS, corpusBlockId } from '../../evals/docs-retrieval/backends.mjs';
+import { transplantCorpusBlock } from '../../evals/docs-retrieval/results.mjs';
+const { checkout } = parseArgs([]);
+const target = `${checkout}/docs/retrieval-eval-results.md`;
+const source = readFileSync(`${checkout}/harness-runs/scratch/backend-comparison/results.md`, 'utf8');
+let text = readFileSync(target, 'utf8');
+for (const corpus of ['fixture-catalog', 'self-docs']) for (const backend of BACKENDS) text = transplantCorpusBlock(text, source, corpusBlockId(corpus, backend));
+writeFileSync(target, text);
+```
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/transplant-backend-blocks.mjs
+```
+
+Then the side-by-side comparison of each pair, per query and against the floor, and the per-chunk
+vector agreement, over both corpora. Both are deterministic, so unlike every figure above they may be
+taken in a session. Create `harness-runs/scratch/compare-backends.mjs`:
+
+```
+import { readFileSync } from 'node:fs';
+import { parseArgs } from '../../evals/docs-retrieval/args.mjs';
+import { compareBackends, renderBackendComparison } from '../../evals/docs-retrieval/backend-comparison.mjs';
+const { checkout } = parseArgs([]);
+const resultsText = readFileSync(`${checkout}/docs/retrieval-eval-results.md`, 'utf8');
+console.log(renderBackendComparison(compareBackends({ resultsText, corpusId: process.argv[2] })));
+```
+
+and `harness-runs/scratch/vector-agreement.mjs`, whose matched-precision leg is arranged only when the
+fp32 ONNX export has been placed under `harness-runs/scratch/backend-comparison/onnx-fp32/` and reports
+itself unarranged otherwise:
+
+```
+import { parseArgs } from '../../evals/docs-retrieval/args.mjs';
+import { measureVectorAgreement, renderVectorAgreement } from '../../evals/docs-retrieval/vector-agreement.mjs';
+const options = parseArgs(['--corpus', process.argv[2]]);
+console.log(renderVectorAgreement(await measureVectorAgreement({ ...options, onnxFp32CacheDir: `${options.checkout}/harness-runs/scratch/backend-comparison/onnx-fp32` })));
+```
+
+```
+bash scripts/scratch-run.sh harness-runs/scratch/compare-backends.mjs fixture-catalog
+bash scripts/scratch-run.sh harness-runs/scratch/compare-backends.mjs self-docs
+bash scripts/scratch-run.sh harness-runs/scratch/vector-agreement.mjs fixture-catalog
+bash scripts/scratch-run.sh harness-runs/scratch/vector-agreement.mjs self-docs
+```
+
+The comparison pass reads the floor at `evals/docs-retrieval/floor.json` relative to the directory it
+runs from, which is why it runs from the repository root. The write-up lives in
+`docs/retrieval-eval-results.md` → `## The Python backend against the TypeScript one`, and is not
+restated here.
 
 ## The query-set format
 
