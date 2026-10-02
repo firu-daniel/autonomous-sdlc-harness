@@ -23,3 +23,11 @@
 - If the operator has supplied the export, the leg runs and both new summaries print. Every `quantizationCosine` and `exportCosine` lies in `[-1, 1]`, and the arranged id carries `fp32`. If the export is absent, this check is recorded as not run, with that reason, in the unit's return.
 - `grep -n -E "pooling: *.cls.|normalize: *true" evals/docs-retrieval/vector-agreement.mjs` finds no hit; the leg's extraction options come only from the imported `EMBEDDING_EXTRACT_OPTIONS`.
 - `grep -n "allowRemoteModels" evals/docs-retrieval/vector-agreement.mjs` shows it set to `false` before the pipeline is built, and `grep -n "retrievalModelCacheDir" evals/docs-retrieval/vector-agreement.mjs` finds no use on the fp32 leg's cache path.
+
+**Deviations from plan:**
+
+- The gate checks every file the fp32 pipeline loads — `MODEL_FILES[EMBEDDING_MODEL]`'s non-graph entries (`config.json`, `tokenizer.json`, `tokenizer_config.json`) plus `onnx/model.onnx` — not `onnx/model.onnx` alone, so a partial export reports not-arranged naming every missing file rather than failing inside `pipeline()` under `allowRemoteModels = false`. The reason names files relative to the model id, never the absolute cache path, because `renderVectorAgreement` prints no machine-local path.
+- The arranged id is built as `${EMBEDDING_MODEL}:fp32:${EMBEDDING_EXTRACT_OPTIONS.pooling}:<width>`, where `<width>` is the measured vector width: `models.js` does not export `EMBEDDING_DIMENSIONS`, and spelling `cls` or `384` would retype owned values.
+- The fp32 leg restores `env.cacheDir` and `env.allowRemoteModels` after embedding: `@huggingface/transformers` resolves to the one root `node_modules` copy for both this module and `cli/dist/retrieval/models.js`, so its `env` is shared.
+- The launcher `harness-runs/scratch/vector-probe.mjs` is gitignored scratch; it was edited to pass `onnxFp32CacheDir` as `<checkout>/harness-runs/scratch/backend-comparison/onnx-fp32`, from `parseArgs`' `checkout`.
+- Verification bullet 2 (arranged leg runs): **not run** — no fp32 export is present under `harness-runs/scratch/backend-comparison/onnx-fp32/`. The arranged render path was exercised only on a synthetic result through a scratch probe; the fp32 embedding and the `[-1, 1]` bound on `quantizationCosine` / `exportCosine` rest on reading, not execution.

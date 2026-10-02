@@ -14,8 +14,13 @@
  * **The summary covers document vectors only** — never query vectors, which bge embeds with its
  * instruction prefix — and the write-up quoting it must say so.
  *
- * This task's leg is q8 ONNX (TypeScript) against fp32 PyTorch (Python), so quantization and export
- * are measured together; `legs.quantizationAndExport` records that, and the rendered output says it.
+ * The main leg is q8 ONNX (TypeScript) against fp32 PyTorch (Python), so quantization and export are
+ * measured together; `legs.quantizationAndExport` records that, and the rendered output says it. The
+ * optional matched-precision leg separates them: given `onnxFp32CacheDir`, an operator-supplied cache
+ * holding the fp32 ONNX export, every chunk is embedded again at fp32, and each pair gains
+ * `quantizationCosine` (q8 against fp32 ONNX) and `exportCosine` (fp32 ONNX against fp32 PyTorch). That
+ * leg extracts with the imported `EMBEDDING_EXTRACT_OPTIONS` alone, never loads remotely, never reads
+ * the shared model cache, and restores the transformers `env` it changed.
  *
  * The Python index is read through `docker compose exec -T postgres psql`, run in
  * `docs-retrieval-service/`, whose `compose.yaml` → `services.postgres` owns the service name kept
@@ -26,12 +31,17 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { chunkMarkdown } from '../../cli/dist/retrieval/chunk.js';
 import { corpusFiles } from '../../cli/dist/retrieval/corpus.js';
-import { resolveModels } from '../../cli/dist/retrieval/models.js';
+import {
+  EMBEDDING_EXTRACT_OPTIONS,
+  EMBEDDING_MODEL,
+  MODEL_FILES,
+  resolveModels,
+} from '../../cli/dist/retrieval/models.js';
 import {
   PYTHON_DATABASE_URL_VARIABLE,
   PYTHON_DEFAULT_DATABASE_URL,
@@ -54,6 +64,12 @@ const EMBED_BATCH_SIZE = 32;
 
 /** `docs-retrieval-service/src/harness_docs_retrieval/store.py` → `EMBEDDER_META_KEY`. */
 const EMBEDDER_META_KEY = 'embedder';
+
+/** The fp32 export's graph; `MODEL_FILES` lists only the q8 one. */
+const FP32_ONNX_FILE = 'onnx/model.onnx';
+
+/** The precision the matched-precision leg loads, matching the Python side's. */
+const FP32_DTYPE = 'fp32';
 
 /** How many of the lowest-cosine keys are listed. */
 const LOWEST_COUNT = 10;
@@ -119,16 +135,56 @@ function corpusChunks(resolved) {
   );
 }
 
-async function typescriptVectors(resolved) {
-  const { embedder } = await resolveModels({ allowRemote: false });
-  const chunks = corpusChunks(resolved);
+/** `{ key, text, vector }` per chunk, embedded by `embed` in corpus order and in refresh-sized batches. */
+async function embedChunks(chunks, embed) {
   const byKey = new Map();
   for (let start = 0; start < chunks.length; start += EMBED_BATCH_SIZE) {
     const batch = chunks.slice(start, start + EMBED_BATCH_SIZE);
-    const vectors = await embedder.embedDocuments(batch.map((chunk) => chunk.text));
+    const vectors = await embed(batch.map((chunk) => chunk.text));
     batch.forEach((chunk, index) => byKey.set(chunk.key, { text: chunk.text, vector: vectors[index] }));
   }
-  return { id: embedder.id, byKey };
+  return byKey;
+}
+
+async function typescriptVectors(chunks) {
+  const { embedder } = await resolveModels({ allowRemote: false });
+  return { id: embedder.id, byKey: await embedChunks(chunks, (texts) => embedder.embedDocuments(texts)) };
+}
+
+/** Every file the fp32 leg loads: `MODEL_FILES`' non-graph entries plus {@link FP32_ONNX_FILE}. */
+function fp32ModelFiles() {
+  return [...MODEL_FILES[EMBEDDING_MODEL].filter((file) => !file.endsWith('.onnx')), FP32_ONNX_FILE];
+}
+
+/** `undefined` when the fp32 export is in place; otherwise the not-arranged reason, free of local paths. */
+function matchedPrecisionGap(onnxFp32CacheDir) {
+  if (onnxFp32CacheDir === undefined) return `no fp32 ONNX cache directory was supplied, so ${FP32_ONNX_FILE} is absent`;
+  const missing = fp32ModelFiles().filter((file) => !existsSync(join(onnxFp32CacheDir, EMBEDDING_MODEL, file)));
+  if (missing.length === 0) return undefined;
+  return `the fp32 ONNX cache lacks ${missing.map((file) => `${EMBEDDING_MODEL}/${file}`).join(', ')}`;
+}
+
+/**
+ * The same chunks embedded through the fp32 ONNX export in `onnxFp32CacheDir`. The transformers `env`
+ * is module-global and shared with `models.js`, so the two settings changed here are put back after.
+ */
+async function fp32Vectors(chunks, onnxFp32CacheDir) {
+  const { env, pipeline } = await import('@huggingface/transformers');
+  const saved = { cacheDir: env.cacheDir, allowRemoteModels: env.allowRemoteModels };
+  env.cacheDir = onnxFp32CacheDir;
+  env.allowRemoteModels = false;
+  try {
+    const extractor = await pipeline('feature-extraction', EMBEDDING_MODEL, { dtype: FP32_DTYPE });
+    const byKey = await embedChunks(chunks, async (texts) =>
+      (await extractor(texts, { ...EMBEDDING_EXTRACT_OPTIONS })).tolist(),
+    );
+    const [first] = byKey.values();
+    const width = first === undefined ? 0 : first.vector.length;
+    return { id: `${EMBEDDING_MODEL}:${FP32_DTYPE}:${EMBEDDING_EXTRACT_OPTIONS.pooling}:${width}`, byKey };
+  } finally {
+    env.cacheDir = saved.cacheDir;
+    env.allowRemoteModels = saved.allowRemoteModels;
+  }
 }
 
 function pythonVectors(checkout) {
@@ -157,7 +213,7 @@ export function cosine(a, b) {
   return dot / Math.sqrt(normA * normB);
 }
 
-function pair(typescript, python) {
+function pair(typescript, python, fp32) {
   const onlyTypescript = [...typescript.byKey.keys()].filter((key) => !python.byKey.has(key));
   const onlyPython = [...python.byKey.keys()].filter((key) => !typescript.byKey.has(key));
   if (onlyTypescript.length > 0 || onlyPython.length > 0) {
@@ -170,12 +226,20 @@ function pair(typescript, python) {
   return [...typescript.byKey.keys()].sort().map((key) => {
     const ts = typescript.byKey.get(key);
     const py = python.byKey.get(key);
-    return { key, cosine: cosine(ts.vector, py.vector), textMatches: ts.text === py.text };
+    const f32 = fp32?.byKey.get(key);
+    return {
+      key,
+      cosine: cosine(ts.vector, py.vector),
+      textMatches: ts.text === py.text,
+      quantizationCosine: f32 === undefined ? null : cosine(ts.vector, f32.vector),
+      exportCosine: f32 === undefined ? null : cosine(f32.vector, py.vector),
+    };
   });
 }
 
-function summarise(pairs) {
-  const matching = pairs.filter((entry) => entry.textMatches);
+/** `summary` and `lowest` over `pairs[field]`, text mismatches excluded. */
+function summarise(pairs, field = 'cosine') {
+  const matching = pairs.filter((entry) => entry.textMatches).map((entry) => ({ key: entry.key, cosine: entry[field] }));
   const cosines = matching.map((entry) => entry.cosine);
   const summary = {
     count: cosines.length,
@@ -195,15 +259,19 @@ function summarise(pairs) {
 /**
  * The cosine between the TypeScript and Python stored document vectors for every chunk key of the
  * corpus `options` names. `options` is the eval's parsed argument surface
- * (`evals/docs-retrieval/args.mjs` → `parseArgs`); it reads `repo`, `checkout` and `corpus`.
+ * (`evals/docs-retrieval/args.mjs` → `parseArgs`); it reads `repo`, `checkout` and `corpus`, plus the
+ * optional absolute `onnxFp32CacheDir` that arranges the matched-precision leg.
  */
-export async function measureVectorAgreement({ repo, checkout, corpus }) {
+export async function measureVectorAgreement({ repo, checkout, corpus, onnxFp32CacheDir }) {
   assertComposeDatabase();
   assertRealModelsAreAvailable();
   const resolved = corpusConfig({ repoRoot: repo ?? checkout, corpus });
   psql(checkout, 'SELECT 1');
 
-  const typescript = await typescriptVectors(resolved);
+  const chunks = corpusChunks(resolved);
+  const typescript = await typescriptVectors(chunks);
+  const gap = matchedPrecisionGap(onnxFp32CacheDir);
+  const fp32 = gap === undefined ? await fp32Vectors(chunks, onnxFp32CacheDir) : undefined;
 
   const fixture = buildMirrorFixture(checkout, resolved);
   let python;
@@ -217,8 +285,17 @@ export async function measureVectorAgreement({ repo, checkout, corpus }) {
     removeMirrorFixture(fixture.dir);
   }
 
-  const pairs = pair(typescript, python);
+  const pairs = pair(typescript, python, fp32);
   const { summary, lowest } = summarise(pairs);
+  const matchedPrecision =
+    fp32 === undefined
+      ? { arranged: false, reason: gap }
+      : {
+          arranged: true,
+          id: fp32.id,
+          quantization: summarise(pairs, 'quantizationCosine'),
+          export: summarise(pairs, 'exportCosine'),
+        };
   return {
     corpus: resolved.id,
     snapshot,
@@ -227,12 +304,51 @@ export async function measureVectorAgreement({ repo, checkout, corpus }) {
     summary,
     lowest,
     textMismatches: pairs.filter((entry) => !entry.textMatches).map((entry) => entry.key),
-    legs: { quantizationAndExport: true },
+    legs: { quantizationAndExport: true, matchedPrecision },
   };
 }
 
 function six(value) {
   return value === null ? '—' : value.toFixed(6);
+}
+
+function summaryTable(label, summary) {
+  return [
+    `| ${label} | min | p5 | p50 | mean | max |`,
+    '| --- | --- | --- | --- | --- | --- |',
+    `| ${summary.count} | ${six(summary.min)} | ${six(summary.p5)} | ${six(summary.p50)} | ${six(summary.mean)} | ${six(summary.max)} |`,
+  ];
+}
+
+function lowestTable(heading, lowest) {
+  return [
+    heading.replace('<n>', String(lowest.length)),
+    '',
+    '| Chunk key | Cosine |',
+    '| --- | --- |',
+    ...lowest.map(({ key, cosine: value }) => `| \`${key}\` | ${six(value)} |`),
+  ];
+}
+
+function renderMatchedPrecision(leg) {
+  if (!leg.arranged) return [`Leg: matched precision — not arranged: ${leg.reason}.`];
+  return [
+    'Leg: matched precision (fp32 ONNX against fp32 PyTorch)',
+    '',
+    `- TypeScript fp32 embedder \`${leg.id}\``,
+    '',
+    'Quantization alone — TypeScript q8 against TypeScript fp32, one ONNX graph:',
+    '',
+    ...summaryTable('Pairs', leg.quantization.summary),
+    '',
+    ...lowestTable('The <n> lowest quantization cosines:', leg.quantization.lowest),
+    '',
+    'Export and runtime alone — TypeScript fp32 ONNX against Python fp32 PyTorch:',
+    '',
+    ...summaryTable('Pairs', leg.export.summary),
+    '',
+    ...lowestTable('The <n> lowest export cosines:', leg.export.lowest),
+  ];
 }
 
 /** One Markdown block for {@link measureVectorAgreement}'s result; no machine-local path, no connection string. */
@@ -259,5 +375,7 @@ export function renderVectorAgreement(result) {
     result.textMismatches.length === 0
       ? 'Text mismatches: none.'
       : `Text mismatches, kept out of the summary: ${result.textMismatches.map((key) => `\`${key}\``).join(', ')}.`,
+    '',
+    ...renderMatchedPrecision(result.legs.matchedPrecision),
   ].join('\n');
 }
