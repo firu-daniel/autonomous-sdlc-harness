@@ -20,7 +20,7 @@ All three observations are valid, and each becomes one fix.
 
 Each entry resolves to a self-contained `harness-runs/user_reviews/feat_forge_run_control_fix_plan_2/finding_<K>.md` through its `**Finding K**` reference, one-to-one with the `### K. <title>` pointers below. The list is sorted from lowest blast radius to the widest change. Findings 2 and 3 both edit Gate 12 (xiv)'s **What it settles.** paragraph in `docs/development.md`, so Finding 2 comes first.
 
-1. [ ] **Finding 2** — Record the evidence for the four §8 rows of `docs/github-run-control.md` and the decision not to use `queue: max`, with its one consequence. Drop those rows from Gate 12's **What it settles.** _(layer: general)_
+1. [x] **Finding 2** — Record the evidence for the four §8 rows of `docs/github-run-control.md` and the decision not to use `queue: max`, with its one consequence. Drop those rows from Gate 12's **What it settles.** _(layer: general)_
 2. [ ] **Finding 3** — Replace Gate 12 (xiv)'s two-account review step with a one-account pending-reviews step. State that the reviewing account must not be the pull request's author. _(layer: general)_
 3. [ ] **Finding 1** — Keep the summary body of every review from an authorised reviewer, whatever its state. Record its id, and name its state in the provenance line. A *Comment* or *Approve* review still starts no round. Update the fix-plan writer and §2 of `docs/github-run-control.md` to match. _(layer: cli, plugin, general)_
 
