@@ -60,4 +60,10 @@ _[Add headings of your own as themes emerge — one per recurring theme — and 
 
 - **Let an input's type or state decide only whether it triggers an action, never whether its text is kept: collect what every authorised person wrote, under any state, and let the non-triggering kinds ride along with the next triggered action.** _(taught by: feat_forge_run_control)_
 
+## Ports and parallel implementations
+
+- **A client-visible divergence from the implementation being ported is justified only by a task-prompt exclusion or an entry-point deferred-work marker naming what reverts it; a test-file comment or a code comment is never an exclusion basis.** _(taught by: feat_docs_retrieval_python_backend)_
+
+- **When code deliberately produces an edge value (a lone surrogate, NaN, an oversize integer), add a case that carries it through every transport's serializer to the client, not only through the producing function.** _(taught by: feat_docs_retrieval_python_backend)_
+
 _Written by `autonomous-sdlc-harness init`, and yours from there on: a re-run never touches a ledger that already exists._
