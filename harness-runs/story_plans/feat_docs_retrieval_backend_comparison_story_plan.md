@@ -46,7 +46,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_docs_retrieval_backend_
 7. [x] **Task 6** — Measure per-chunk vector agreement between the two embedders in `vector-agreement.mjs` _(layer: general)_ _(points: 15)_
 8. [x] **Task 7** — Add the optional matched-precision ONNX fp32 leg to `vector-agreement.mjs` _(layer: general)_ _(points: 10)_
 9. [x] **Task 8** — Compare two backends' blocks side by side, per query and against the floor, in `backend-comparison.mjs` _(layer: general)_ _(points: 20)_
-10. [ ] **Task 9** — Document how to run the Python backend through the eval, and the hand-run measurement protocol, in `docs/retrieval-eval.md` _(layer: general)_ _(points: 18)_
+10. [x] **Task 9** — Document how to run the Python backend through the eval, and the hand-run measurement protocol, in `docs/retrieval-eval.md` _(layer: general)_ _(points: 18)_
 11. [ ] **Task 10** — Record the comparison's blocks and write the relevance half of `## The Python backend against the TypeScript one` _(layer: general)_ _(points: 15)_
 12. [ ] **Task 11** — Write the cost, latency, cold-start, footprint and agent-session half of the comparison _(layer: general)_ _(points: 15)_
 13. [ ] **Task 12** — Fill the Python figures in `docs/retrieval.md`, settle the sites that deferred to this branch, and update `llms.txt` _(layer: general)_ _(points: 10)_
