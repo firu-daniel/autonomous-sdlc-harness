@@ -54,6 +54,11 @@
 # edited copy of this filter cannot bypass one. That `contains()` compares
 # case-insensitively is GitHub's documented behaviour, not verified here; a
 # mixed-case handle the filter missed would only go unanswered, never obeyed.
+# The `if:` is a folded block scalar (`>-`) because its expression carries
+# `: ` (the state-label prefix `'sdlc-harness: '`), which a plain scalar reads
+# as a mapping indicator. 0.6.1 shipped it plain, so GitHub could not parse
+# the file and ran it for no event (docs/development.md, Gate 12, Round 7,
+# finding 1).
 #
 # THE PERMISSIONS, declared because the default token may be read-only
 # (docs/github-integration-research.md, T2):
@@ -112,7 +117,7 @@
 # of `||` does not exit the shell, and `$?` is the script's status.
 #
 
-# TWO RULES EVERY EDIT KEEPS.
+# THREE RULES EVERY EDIT KEEPS.
 #   * Event text and variables reach a shell line only through `env:` and the
 #     event file, never through a GitHub expression inside `run:` — a comment
 #     body is written by whoever posted it (script injection).
@@ -120,6 +125,10 @@
 #     renders its workflows with the CLI's double-brace token renderer, which
 #     reads a letter straight after the braces as a token; this file carries
 #     no token.
+#   * A value carrying `: ` or ` #` is never a plain scalar: write it as a
+#     block scalar (`>-`) or quote it. A plain scalar reads `: ` as a mapping
+#     indicator, which leaves the file unparseable, and ` #` as a comment,
+#     which silently truncates the value (THE PREFILTER above).
 #
 # DECLARED MIRRORS — a rename on either side is an edit to both:
 #   cli/src/remote/githubActions.ts   WORKFLOW_CONTROL_FILE, COMMAND_HANDLE
@@ -171,7 +180,8 @@ defaults:
 
 jobs:
   control:
-    if: (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@sdlc-harness') && !contains(github.event.comment.body, '<!-- sdlc-harness')) || (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'sdlc-harness: ')) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'delete' && github.event.ref_type == 'branch')
+    if: >-
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@sdlc-harness') && !contains(github.event.comment.body, '<!-- sdlc-harness')) || (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'sdlc-harness: ')) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'delete' && github.event.ref_type == 'branch')
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
     concurrency:
       group: ${{ github.event_name == 'pull_request_review' && format('harness-review-{0}', github.event.pull_request.head.ref) || format('harness-control-{0}', github.run_id) }}
