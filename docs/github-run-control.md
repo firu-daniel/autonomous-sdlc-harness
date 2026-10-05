@@ -8,7 +8,7 @@ It cites rather than restates. Every GitHub fact below is cited from [`github-in
 
 ## The GitHub entry point
 
-GitHub is a second entry point **beside** the local one, never instead of it. One maintainer does the setup below once, on a machine of their own. After that, the people the allow-list `HARNESS_RUN_ACTORS` admits — the repository owner alone until it is set — can start and work runs from GitHub with nothing installed ([§6](#6-who-can-act-and-pull-requests-from-forks)). Anyone with a local setup keeps every local command too, and can mix the two on the same run ([§7](#7-working-a-run-from-both-sides)).
+GitHub is a second entry point **beside** the local one, never instead of it. One maintainer does the setup below once, on a machine of their own. After that, the people the allow-list `HARNESS_RUN_ACTORS` admits — until it is set, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one — can start and work runs from GitHub with nothing installed ([§6](#6-who-can-act-and-pull-requests-from-forks)). Anyone with a local setup keeps every local command too, and can mix the two on the same run ([§7](#7-working-a-run-from-both-sides)).
 
 **1. The one-time setup, by one maintainer, locally**, in order. Each step links to where its command is written:
 
