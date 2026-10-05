@@ -125,7 +125,7 @@ export const UNPARSEABLE_CONTROL_RELEASES: Readonly<Record<string, string>> = {
 };
 
 /** The job-level `if:` line, trimmed, that made 0.6.1's `harness-control.yml` unparseable. */
-export const UNPARSEABLE_CONTROL_IF_LINE =
+const UNPARSEABLE_CONTROL_IF_LINE =
   "if: (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@sdlc-harness') && !contains(github.event.comment.body, '<!-- sdlc-harness')) || (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'sdlc-harness: ')) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'delete' && github.event.ref_type == 'branch')";
 
 /**
