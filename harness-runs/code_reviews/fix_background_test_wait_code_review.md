@@ -35,7 +35,7 @@
 
 1. [x] **Finding 3** — Add "never piped" to the single-file command shape sentence in both adopter conventions templates _(layer: cli)_
 2. [x] **Finding 1** — Point test-run rule point 6's refusal clause at the existing `<typecheck_cmd>` fallback instead of forbidding every reshape _(layer: plugin)_
-3. [ ] **Finding 2** — Bind a backgrounded `scratch-run.sh` probe to point 6's no-wait prohibitions in `layer-implementer` _(layer: plugin)_
+3. [x] **Finding 2** — Bind a backgrounded `scratch-run.sh` probe to point 6's no-wait prohibitions in `layer-implementer` _(layer: plugin)_
 
 ---
 
