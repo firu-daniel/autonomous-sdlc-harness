@@ -6441,6 +6441,23 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(!`${stdout}\n${stderr}`.includes(writersWarning), `${stdout}\n${stderr}`);
   });
 
+  await t.test('a full page of collaborators with no writer beyond the list is a cannot-tell warning', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    const readers = Array.from({ length: 99 }, (_, i) => [`reader${i}`, false]);
+    answerGh(stub, { collaborators: { out: collaborators(...readers) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-github');
+    assert.ok(
+      line?.includes('cannot tell whether any writer is beyond HARNESS_RUN_ACTORS') && line.includes('a full page of 100 collaborators'),
+      `${stdout}\n${stderr}`,
+    );
+    assert.ok(!line.includes(writersWarning), line);
+  });
+
   await t.test('a listed writer is matched case-insensitively and draws no warning', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
     const stub = await answeringGhStub(subtest);

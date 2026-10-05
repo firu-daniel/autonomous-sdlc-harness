@@ -56,7 +56,7 @@ Each entry resolves to a self-contained `harness-runs/code_reviews/feat_remote_r
 1. [x] **Finding 1** — Set `HARNESS_RUN_ACTORS='*'` in `remote-run.sh`'s REPRO setup and add REPRO lines for the allow-list refusal and the unset default _(layer: cli)_
 2. [x] **Finding 3** — State both unset cases in `verb_control`'s command-refusal reply, and update its test _(layer: cli)_
 3. [x] **Finding 4** — Print `reportWorkflowUpgrade`'s forge-workflow `init --force` sentence only where the forge workflows apply _(layer: cli)_
-4. [ ] **Finding 5** — Add a `doctor` case for the full-page collaborators *cannot tell* warning _(layer: cli)_
+4. [x] **Finding 5** — Add a `doctor` case for the full-page collaborators *cannot tell* warning _(layer: cli)_
 5. [ ] **Finding 2** — State the organisation-owned unset default in `README.md` and `docs/github-run-control.md`'s entry point _(layer: general)_
 
 ---
