@@ -50,7 +50,7 @@ Top risks: The likeliest failure is a repair that writes the fixed `harness-cont
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12_round7_findings/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence, `cli` first, with the catch-all `general` layer last. Within `cli`, item 1 comes first, then item 3, then item 2, as the prompt asks.
 
 1. [x] **Task 1** — Write `harness-control.yml`'s job `if:` as a folded block scalar _(layer: cli)_ _(points: 8)_
-2. [ ] **Task 2** — `init` repairs an unedited 0.6.1 `harness-control.yml` after a `.bak`, and owns the repair route's text _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — `init` repairs an unedited 0.6.1 `harness-control.yml` after a `.bak`, and owns the repair route's text _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — `init` reports the control-workflow repair, and warns on an edited unparseable copy _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — `doctor --check-github` fails on a harness workflow GitHub lists by its path _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — `forge_report` posts nothing for any job event a stop has overtaken _(layer: cli)_ _(points: 15)_
