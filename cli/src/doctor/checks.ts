@@ -166,7 +166,7 @@ import {
   pushEnvCandidates,
   type PushEnvCandidate,
 } from '../generators/notifications.js';
-import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
+import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, unparseableControlRoute, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
 import { DOCS_SEARCH_SERVER_SCRIPT_NAME, outerLoopScriptsDir } from '../generators/outerLoopScripts.js';
 import {
   bashScriptRule,
@@ -311,6 +311,12 @@ const REMOTE_RUN_SCRIPT = 'remote-run.sh';
  * YAML file spells this endpoint.
  */
 const ARTIFACT_RETENTION_ENDPOINT = 'repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention';
+
+/**
+ * The `gh api` path {@link REMOTE_GITHUB_CHECK} reads the repository's workflow listing from, to find
+ * a harness workflow GitHub lists by its path. Local for {@link ARTIFACT_RETENTION_ENDPOINT}'s reason.
+ */
+const WORKFLOWS_ENDPOINT = 'repos/{owner}/{repo}/actions/workflows?per_page=100';
 
 /**
  * The `gh api` path {@link REMOTE_GITHUB_CHECK} reads the *Allow GitHub Actions to create and approve
@@ -2576,6 +2582,27 @@ function retentionDaysOf(stdout: string): number | undefined {
   return typeof days === 'number' && Number.isInteger(days) && days > 0 ? days : undefined;
 }
 
+/**
+ * Each `workflows[]` entry's `name`, keyed by its `path`, of an Actions workflow listing — entries
+ * lacking a string `name` or `path` are skipped — or `undefined` when there is no `workflows` array.
+ */
+function workflowNamesByPathOf(stdout: string): ReadonlyMap<string, string> | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isJsonObject(parsed as JsonValue)) return undefined;
+  const workflows = (parsed as { readonly workflows?: unknown }).workflows;
+  if (!Array.isArray(workflows)) return undefined;
+  const names = new Map<string, string>();
+  for (const item of workflows as JsonValue[]) {
+    if (isJsonObject(item) && typeof item.name === 'string' && typeof item.path === 'string') names.set(item.path, item.name);
+  }
+  return names;
+}
+
 /** The boolean `can_approve_pull_request_reviews` of a workflow-permissions answer, or `undefined` for any other shape. */
 function prApprovalSettingOf(stdout: string): boolean | undefined {
   let parsed: unknown;
@@ -2598,9 +2625,14 @@ function prApprovalSettingOf(stdout: string): boolean | undefined {
  *
  * Grades, worst wins and every finding is reported:
  * - `fail` — `gh` does not spawn or `gh auth status` refuses (nothing further is asked); GitHub does
- *   not know `harness-run.yml`; neither credential secret is set.
+ *   not know `harness-run.yml`; neither credential secret is set; a harness workflow GitHub lists by
+ *   its path, which is how it lists a file it could not parse — judged from the workflow listing
+ *   ({@link WORKFLOWS_ENDPOINT}) because `gh workflow view` answers for an unparsed file too, as Gate 12
+ *   round 7 observed. `harness-trigger.yml` and `harness-control.yml` are judged only when
+ *   {@link forgeTriggerApplies}.
  * - `warn` — `HARNESS_PUSH_URL` absent; `harness-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
- *   set; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
+ *   set; the workflow listing unread, so whether GitHub could parse the harness workflows cannot be
+ *   told; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
  *   {@link forgeTriggerApplies}, `harness-trigger.yml` or `harness-control.yml` unknown to GitHub, no
  *   label by the effective trigger name, or the pull-request setting off with no `HARNESS_GIT_TOKEN`
  *   secret; and any call that timed out, could not reach GitHub, or answered in a shape not
@@ -2621,7 +2653,8 @@ function prApprovalSettingOf(stdout: string): boolean | undefined {
  *   request with that token instead.
  * - all three trigger answers positive — both workflows known and the label present — is confirmed on
  *   every outcome that reaches the trigger reads, `fail` and `warn` included, so an unrelated finding
- *   never hides it; any answer not positive is already among the warnings. An outcome returned before
+ *   never hides it; any answer not positive is already among the warnings, and a forge workflow
+ *   GitHub lists by its path withholds it, being among the failures. An outcome returned before
  *   those reads — `gh` not runnable, no usable login, or no readable answer to the login probe — asks
  *   GitHub nothing about the trigger.
  *
@@ -2691,6 +2724,33 @@ const REMOTE_GITHUB_CHECK: Check = {
     if (resume.answer.kind === 'unknown') warnings.push(cannotTell(resume.call, resume.answer.why, `whether GitHub knows ${WORKFLOW_RESUME_FILE}`));
     if (resume.answer.kind === 'refused') {
       warnings.push(`GitHub does not know ${WORKFLOW_RESUME_FILE} (${resume.call}: ${resume.answer.why}), so usage auto-resume is unavailable: push ${WORKFLOW_RESUME_PATH} to the repository's default branch`);
+    }
+
+    const listing = ask(['api', WORKFLOWS_ENDPOINT]);
+    if (listing.answer === undefined) return fail(noSpawn);
+    const unparsed = new Set<string>();
+    const parsable = 'whether GitHub could parse the harness workflows';
+    if (listing.answer.kind !== 'answered') {
+      warnings.push(cannotTell(listing.call, listing.answer.why, parsable));
+    } else {
+      const namesByPath = workflowNamesByPathOf(listing.answer.stdout);
+      if (namesByPath === undefined) {
+        warnings.push(`cannot tell ${parsable}: ${listing.call} answered in a shape this check does not read`);
+      } else {
+        const version = ownManifestString('version');
+        const judged = forgeTriggerApplies(ctx.config)
+          ? [WORKFLOW_RUN_PATH, WORKFLOW_RESUME_PATH, WORKFLOW_TRIGGER_PATH, WORKFLOW_CONTROL_PATH]
+          : [WORKFLOW_RUN_PATH, WORKFLOW_RESUME_PATH];
+        for (const path of judged) {
+          if (namesByPath.get(path) !== path) continue;
+          unparsed.add(path);
+          const route =
+            path === WORKFLOW_CONTROL_PATH
+              ? unparseableControlRoute(version)
+              : `Check ${path} with actionlint, or re-render it with \`${pinnedCliCommand(version)} init --force\`, which keeps a .bak; then commit it and push it to the repository's default branch.`;
+          failures.push(`GitHub lists ${path} by its path rather than its name, which it does for a workflow file it cannot parse, so that workflow runs for no event: ${route}`);
+        }
+      }
     }
 
     const variables = ask(['variable', 'list', '--json', 'name,value']);
@@ -2777,7 +2837,8 @@ const REMOTE_GITHUB_CHECK: Check = {
           notes.push(`${TRIGGER_ALLOWED_BOTS_VARIABLE} admits ${nameList(bots)}, each of which can start a run without a permission check`);
         }
       }
-      if (trigger.answer.kind === 'answered' && control.answer.kind === 'answered' && labelFound) {
+      const forgeParsed = !unparsed.has(WORKFLOW_TRIGGER_PATH) && !unparsed.has(WORKFLOW_CONTROL_PATH);
+      if (trigger.answer.kind === 'answered' && control.answer.kind === 'answered' && labelFound && forgeParsed) {
         triggerKnown = `; GitHub knows ${WORKFLOW_TRIGGER_FILE} and ${WORKFLOW_CONTROL_FILE}, and the label \`${labelName}\` exists`;
       }
 
