@@ -68,3 +68,9 @@ It also adds the not-verified row that Task 13's Gate 12 observation settles.
 - Re-run the scope register's derivation entry 1, the widened command with the `Run workflow` and `team member` patterns. Every `docs/remote-execution.md` hit is a row this task changed (rows 13, 16 and 33) or a `no-change` row with its reason (rows 11, 17 and 34–37). No hit in that file falls outside the register.
 - Each new command stands alone in its own fenced block. Grep the new prose for an inline `gh variable set`; none exists outside a fence.
 - Every anchor added resolves, by `grep -n '^## \|^### '` on the target file: `team-accounts-research.md` → `## 5. Options for the harness`, and `development.md`'s Gate 12. The (xv) label itself lands with Task 13, and this file names it by that label.
+
+**Deviations from plan:**
+- §11's *Who can spend the credential* is a bold-lead paragraph, not a bullet: every other §11 item outside the issue-trigger list is one, and §1 and §6 cite it by that name.
+- The §6 row's *If it is wrong* cell also states the consequence of a wrong owner type (the owner of a user-owned repository with an unset list is refused; setting the list to that login avoids it), since the row's behaviour names the owner type and the plan's cell covered only the bot identity.
+- The derivation-entry-1 re-run on `docs/remote-execution.md` also hits the new text in rows 12 (§7 step 4), 14 (`### Upgrading`) and 15 (§9), all rows this task owns, beside rows 13, 16 and 33 and the `no-change` rows 11, 17 and 34–37. No hit falls outside the register.
+- The §6 row's source cites `team-accounts-research.md` → `### The repository facts the options rest on`, *Who a run names*, where that measurement lives, and Gate 12 under `development.md` → `## 5. Verifying a change`, the heading Gate 12 sits under.
