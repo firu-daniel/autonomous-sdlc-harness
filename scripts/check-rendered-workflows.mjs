@@ -53,7 +53,11 @@ function onPath(binary) {
     .some((dir) => dir !== '' && existsSync(join(dir, binary)));
 }
 
-/** The 0.6.1 fixture, repo-relative, exactly as committed by Task 2. */
+/**
+ * The 0.6.1 fixture, repo-relative: byte for byte the `harness-control.yml` 0.6.1 shipped (git blob
+ * `1b4f0fc33200d876e4089ebe4013120e48a45335`, `cli/src/generators/githubWorkflows.ts` →
+ * `UNPARSEABLE_CONTROL_RELEASES`).
+ */
 function negativePath() {
   const path = join(repoRoot, NEGATIVE);
   if (!existsSync(path)) finding(NEGATIVE, 'the negative fixture is missing');
