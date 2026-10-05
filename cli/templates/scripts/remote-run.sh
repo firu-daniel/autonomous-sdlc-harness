@@ -1144,13 +1144,18 @@
 #   "html_url":"https://github.com/o/r/issues/7","state":"open"}}, and a stub
 #   answering `api repos/o/r/collaborators/alice/permission` with
 #   {"permission":"write"}; export GITHUB_EVENT_NAME=issues GITHUB_EVENT_PATH=e.json
-#   GITHUB_REPOSITORY=o/r HARNESS_TRIGGER_LOOKUP_SECS=0:
+#   GITHUB_REPOSITORY=o/r HARNESS_TRIGGER_LOOKUP_SECS=0 HARNESS_RUN_ACTORS='*':
 #   trigger    bash scripts/remote-run.sh trigger -> 0; origin/add_comments gains
 #              the prompt commit, "$s.log" gains `workflow run harness-run.yml
 #              --ref add_comments ...`, `issue comment 7 ...` naming the branch,
 #              then `issue edit 7 ... --remove-label sdlc-harness`
 #   read       the permission answer {"permission":"read"} -> 2, no `workflow
 #              run`, one comment naming write access, the label removed
+#   not listed HARNESS_RUN_ACTORS=bob -> 2, no `workflow run`, one comment
+#              naming HARNESS_RUN_ACTORS, the label removed
+#   unset      HARNESS_RUN_ACTORS= and e.json gaining
+#              "repository":{"owner":{"login":"alice","type":"User"}} -> 0, as
+#              `trigger`; the owner `bob` instead -> 2, the comment naming @bob
 #   ignored    e.json's label name `bug` -> 0, one line, "$s.log" unchanged
 #   dispatch   GITHUB_EVENT_NAME=repository_dispatch GITHUB_RUN_ID=9
 #              GITHUB_STEP_SUMMARY=/tmp/s, e.json {"action":<TRIGGER_DISPATCH_EVENT_TYPE>,
