@@ -26,8 +26,10 @@ The parent test (`not ok 117`) and the `init` suite (`not ok 140`) fail only bec
 
 **Fix** (test-only; do not change `reportWorkflowUpgrade`):
 
-- [ ] In the subtest's forbidden-strings array, replace `'gh variable set'` with `'gh variable set HARNESS_RUNNER '` (trailing space, so it cannot match `HARNESS_RUN_ACTORS`), and add `'gh variable set HARNESS_TRIGGER_LABEL'` and `'gh variable set HARNESS_TRIGGER_ALLOWED_BOTS'` beside it, so the assertion still proves the first-setup block's variable steps are absent.
-- [ ] In the same subtest's `present` array, add `'gh variable set HARNESS_RUN_ACTORS --body <login,...>'`, so the upgrade's own allow-list step is pinned where the old blanket check used to forbid it.
-- [ ] Leave `'Add the harness workflows'`, `'gh secret set'` and `'Do not commit the .bak files'` in the forbidden list unchanged.
+- [x] In the subtest's forbidden-strings array, replace `'gh variable set'` with `'gh variable set HARNESS_RUNNER '` (trailing space, so it cannot match `HARNESS_RUN_ACTORS`), and add `'gh variable set HARNESS_TRIGGER_LABEL'` and `'gh variable set HARNESS_TRIGGER_ALLOWED_BOTS'` beside it, so the assertion still proves the first-setup block's variable steps are absent.
+- [x] In the same subtest's `present` array, add `'gh variable set HARNESS_RUN_ACTORS --body <login,...>'`, so the upgrade's own allow-list step is pinned where the old blanket check used to forbid it.
+- [x] Leave `'Add the harness workflows'`, `'gh secret set'` and `'Do not commit the .bak files'` in the forbidden list unchanged.
 
 The edited file is `cli/test/init.test.mjs`; under `## The test-run rule` (3) the implementer may run that one file only.
+
+**Deviations from plan:** The row-`G.4` pre-edit run of the named test was not executed; its before-result rests on the gate 4 log quoted above (`not ok 3`) and on reading the subtest and `reportWorkflowUpgrade`, not on a fresh run. After the fix, `npm test -- test/init.test.mjs` from `cli/` ran: the named subtest `ok 3`, file `# pass 309`, `# fail 0`.

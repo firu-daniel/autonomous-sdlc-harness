@@ -12,7 +12,7 @@
 
 **This section is the single source of truth for the fix loop.** The loop walks the `[ ]` entries below top-to-bottom, and only the committing role flips a marker to `[x]`. `[ ]` markers anywhere else (such as sub-step bullets inside a per-finding file) are informational only.
 
-1. [ ] **Finding 1** — Narrow the upgrade-report test's forbidden `gh variable set` to the first-setup variables and pin the `HARNESS_RUN_ACTORS` step. _(layer: cli)_
+1. [x] **Finding 1** — Narrow the upgrade-report test's forbidden `gh variable set` to the first-setup variables and pin the `HARNESS_RUN_ACTORS` step. _(layer: cli)_
 
 ---
 
