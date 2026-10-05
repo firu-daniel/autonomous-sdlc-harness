@@ -8716,9 +8716,18 @@ test('init --upgrade-workflows re-pins an older workflow after a .bak, and nothi
       'gh auth refresh -s workflow',
       `git push --no-verify origin ${defaultBranch}`,
       'finishes on the version it started with',
+      'gh variable set HARNESS_RUN_ACTORS --body <login,...>',
     ];
     for (const name of present) assert.ok(stdout.includes(name), `the upgrade report does not name ${name}:\n${stdout}`);
-    for (const name of ['Add the harness workflows', 'gh secret set', 'gh variable set', 'Do not commit the .bak files']) {
+    const absent = [
+      'Add the harness workflows',
+      'gh secret set',
+      'gh variable set HARNESS_RUNNER ',
+      'gh variable set HARNESS_TRIGGER_LABEL',
+      'gh variable set HARNESS_TRIGGER_ALLOWED_BOTS',
+      'Do not commit the .bak files',
+    ];
+    for (const name of absent) {
       assert.ok(!stdout.includes(name), `the upgrade report prints ${name}:\n${stdout}`);
     }
   });

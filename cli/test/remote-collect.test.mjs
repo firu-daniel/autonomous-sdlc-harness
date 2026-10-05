@@ -3,7 +3,9 @@
  * round starts from the reviews `control` collected while that run was in flight.
  *
  * **The rule these tests exist to enforce: a round starts only when the branch is settled, not stopped,
- * has an open pull request and has a review requesting changes no earlier round recorded; every other
+ * has an open pull request and has a review requesting changes no earlier round recorded, by an author
+ * not refused — a refused author including a writer `HARNESS_RUN_ACTORS` does not admit, whose items
+ * are dropped with one line while the rest of the round still starts; every other
  * outcome starts nothing and exits 0; and a `review` child that fails is told to the pull request in
  * exactly one comment, never retried.** A started round is asserted on origin's bytes — the `chore: add
  * user review for feat_x` commit and the round file — and on exactly one `engine=user_review` dispatch;
@@ -177,6 +179,7 @@ async function collectFixture(t) {
         RUNNER_TEMP: runnerTemp,
         HARNESS_REMOTE_STOP: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
+        HARNESS_RUN_ACTORS: '*',
         HARNESS_TRIGGER_LOOKUP_SECS: '0',
         STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
         STUB_RUN_LIST: JSON.stringify([THIS_RUN]),
@@ -228,6 +231,23 @@ test('settled, with one pending review: one round commit and one user_review dis
   assert.ok(!allComments(calls).some((call) => /event=reply /.test(call.body)), 'no failure comment');
   const note = allComments(calls).find((call) => /event=round /.test(call.body));
   assert.ok(note?.body.includes(`Round 1 from pull request #12 (https://github.com/${REPOSITORY}/pull/12) by @bob`), note?.body);
+});
+
+test('a writer HARNESS_RUN_ACTORS does not admit has their items dropped with one line, and the admitted round is still dispatched', async (t) => {
+  const f = await collectFixture(t);
+  const result = await f.collect({
+    HARNESS_RUN_ACTORS: 'alice',
+    STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
+    STUB_PR_REVIEWS: JSON.stringify([review(5, 'alice'), review(6, 'bob')]),
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /dropped 1 item\(s\) by @bob: @bob is not on the repository variable HARNESS_RUN_ACTORS/);
+  assert.equal(await f.originSubject(), 'chore: add user review for feat_x');
+  const round = await f.originFile(`${REVIEW_DIR}/feat_x_review.md`);
+  assert.ok(round.startsWith('## Review by @alice\n\nReview 5 by alice.\n'), round);
+  assert.ok(!round.includes('@bob') && !round.includes('Review 6'), round);
+  assert.match(round, /\n<!-- sdlc-harness round collected_at=\S+ reviews=5 comments= -->\n$/);
+  assert.deepEqual(dispatches(f.calls()).map((call) => call.line), [REVIEW_DISPATCH]);
 });
 
 test('settled, with an inline comment but no review requesting changes: nothing pushed or dispatched', async (t) => {

@@ -3,10 +3,11 @@
  * exactly one branch, through this script's own verbs run as children.
  *
  * **The rule these tests exist to enforce: only the handle as the first word of the first line is a
- * command, only a write-or-admin human or a listed bot is obeyed, the harness's own comments and every
- * pull request from a fork are never acted on, and a refusal always replies.** Each ignored shape is
- * driven and asserted to call no `gh` at all; each refusal arm — `HARNESS_REMOTE_STOP`, the coupling off,
- * a `read` answer, a failed permission call, `ghost`, an unlisted bot, an unknown verb, a fork, a head
+ * command, only a write-or-admin human `HARNESS_RUN_ACTORS` admits or a listed bot is obeyed, the
+ * harness's own comments and every pull request from a fork are never acted on, and a refusal always
+ * replies.** Each ignored shape is driven and asserted to call no `gh` at all; each refusal arm —
+ * `HARNESS_REMOTE_STOP`, the coupling off, a `read` answer, a failed permission call, a writer the list
+ * does not admit, `ghost`, an unlisted bot, an unknown verb, a fork, a head
  * without the ledger, a protected branch, an issue with no genuine start — is asserted to send no
  * `workflow run` and to post exactly one reply. On an issue, only a `github-actions[bot]` comment that
  * opens with the trigger's start sentence and ends with the `started` marker names the branch.
@@ -187,6 +188,9 @@ async function controlFixture(t, { forge = 'github', ledger: ledgerText = '# Pro
         RUNNER_TEMP: runnerTemp,
         HARNESS_REMOTE_STOP: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
+        HARNESS_RUN_ACTORS: '*',
+        GITHUB_RUN_ATTEMPT: '',
+        GITHUB_TRIGGERING_ACTOR: '',
         HARNESS_TRIGGER_LABEL: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write' }),
         STUB_PR: '',
@@ -296,6 +300,38 @@ test('a failed permission call is refused, never a pass', async (t) => {
   const f = await controlFixture(t);
   const result = await f.control('@sdlc-harness pause', {}, { STUB_PERMISSIONS: JSON.stringify({ alice: 'FAIL' }) });
   assertRefused(f, result, /permission check for @alice failed/);
+});
+
+test('a write commenter HARNESS_RUN_ACTORS does not admit is refused naming the list', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness pause', { login: 'bob' }, {
+    HARNESS_RUN_ACTORS: 'alice',
+    STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'write' }),
+  });
+  const reply = assertRefused(f, result, /@bob is not on the repository variable HARNESS_RUN_ACTORS/);
+  assert.match(reply.body, /^@bob: `pause` was not run: /);
+  assert.match(reply.body, /whom the repository variable `HARNESS_RUN_ACTORS` admits \(when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one\)/);
+});
+
+test('HARNESS_RUN_ACTORS entries are trimmed and matched case-insensitively', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness pause', {}, { HARNESS_RUN_ACTORS: ' ALICE ' });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.deepEqual(dispatches(f.calls()).map((call) => call.line), [PAUSE_DISPATCH]);
+});
+
+test('a re-run of a command by a person HARNESS_RUN_ACTORS does not admit is refused', async (t) => {
+  const rerun = { HARNESS_RUN_ACTORS: 'alice', GITHUB_RUN_ATTEMPT: '2' };
+
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness pause', {}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'bob' });
+  assertRefused(f, result, /re-run by @bob/);
+  assert.deepEqual(permissionCalls(f.calls()), []);
+
+  const g = await controlFixture(t);
+  const listed = await g.control('@sdlc-harness pause', {}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'alice' });
+  assert.equal(listed.status, 0, `${listed.stdout}\n${listed.stderr}`);
+  assert.deepEqual(dispatches(g.calls()).map((call) => call.line), [PAUSE_DISPATCH]);
 });
 
 test('ghost is refused', async (t) => {

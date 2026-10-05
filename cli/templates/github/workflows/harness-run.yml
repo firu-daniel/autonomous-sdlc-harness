@@ -34,7 +34,8 @@
 #                                     HARNESS_REMOTE_STOP, CLAUDE_CODE_OAUTH_TOKEN,
 #                                     ANTHROPIC_API_KEY, HARNESS_PUSH_URL,
 #                                     HARNESS_GIT_TOKEN, the artifact harness-state,
-#                                     HARNESS_CLI_VERSION
+#                                     HARNESS_CLI_VERSION, HARNESS_RUN_ACTORS,
+#                                     HARNESS_TRIGGER_ALLOWED_BOTS
 #   cli/src/generators/githubWorkflows.ts   --upgrade-workflows
 #   cli/src/generators/projectSettings.ts   the marketplace and plugin key
 #                                     autonomous-sdlc-harness@autonomous-sdlc-harness
@@ -82,6 +83,26 @@
 # default branch, its own ref being gone, and the stop check matches the
 # `harness stop <branch>` title across every branch's runs, under any ref.
 #
+# THE RUN-ACTOR GATE. The first step of `run` and of `collect`, byte-identical
+# in both, refuses a `github.triggering_actor` the repository variable
+# HARNESS_RUN_ACTORS does not admit, so the Run workflow form, `gh workflow run`
+# and a re-run by someone not on the list launch nothing; a refused `run` sets
+# no SCRIPTS_DIR, so its `always()` and `!cancelled()` steps skip too. The list:
+# split on `,`, each entry trimmed, empty entries dropped, matched
+# case-insensitively, `*` admitting every writer; an empty list admits the owner
+# of a user-owned repository alone, and nobody otherwise.
+#   * A step, not a job: Re-run failed jobs and Re-run job do not re-run an
+#     upstream job that succeeded, so a gate job would never see the re-runner's
+#     triggering_actor (docs/team-accounts-research.md, G2).
+#   * `github-actions[bot]` passes: every harness dispatch is made with
+#     GITHUB_TOKEN and names it. Measured 2026-10-05 for the trigger, the comment
+#     commands and `collect`; inferred for the `remote-run.sh continue` chain and
+#     the harness-resume.yml poller, which Gate 12 observation (xv) confirms.
+#   * Not closed: a writer who edits this file on a branch can remove the gate
+#     or dispatch as the bot. That writer can already read the secret (G7).
+#   * Resolved before it: the job-level HARNESS_PUSH_URL secret, at job start.
+#     The credential secrets and HARNESS_GIT_TOKEN are read only by later steps.
+#
 # ACTION PINS.
 #   actions/checkout@v5
 #   actions/setup-node@v5
@@ -106,7 +127,8 @@
 #     so your CI runs on it without an approval click), HARNESS_PUSH_URL
 #     (optional notifications).
 #   Variables: HARNESS_RUNNER, HARNESS_REMOTE_STOP (any value stops every job
-#     before it launches anything), HARNESS_STEP_TIMEOUT_MINUTES,
+#     before it launches anything), HARNESS_RUN_ACTORS (THE RUN-ACTOR GATE),
+#     HARNESS_STEP_TIMEOUT_MINUTES,
 #     HARNESS_SELF_PAUSE_AFTER_MINUTES, HARNESS_MAX_CHAIN, and the watcher
 #     tunables listed in the `run` job's `env:` under their own names. An unset
 #     variable arrives empty and the script reading it applies its own default.
@@ -278,6 +300,7 @@ jobs:
       HARNESS_INPUT_PARK_LOOP_CLEAR: ${{ inputs.park_loop_clear }}
       HARNESS_INPUT_CHAIN: ${{ inputs.chain }}
       HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
+      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
       HARNESS_MAX_CHAIN: ${{ vars.HARNESS_MAX_CHAIN }}
       STALL_WARN_SECS: ${{ vars.STALL_WARN_SECS }}
       STALL_KILL_SECS: ${{ vars.STALL_KILL_SECS }}
@@ -299,6 +322,51 @@ jobs:
       HARNESS_STEP_ALLOWANCE_MINUTES: '30'
       HARNESS_SELF_PAUSE_MARGIN_MINUTES: '90'
     steps:
+      - name: Refuse an actor not on HARNESS_RUN_ACTORS
+        env:
+          IN_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          IN_OWNER: ${{ github.repository_owner }}
+          IN_OWNER_TYPE: ${{ github.event.repository.owner.type }}
+        run: |
+          actor="$IN_TRIGGERING_ACTOR"
+          if [ "$actor" = 'github-actions[bot]' ]; then
+            echo "@$actor passes: every harness dispatch is made with GITHUB_TOKEN and names it."
+            exit 0
+          fi
+          lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+          want=$(lower "$actor")
+          rest="${HARNESS_RUN_ACTORS-},"
+          listed=""
+          while [ -n "$rest" ]; do
+            entry="${rest%%,*}"
+            rest="${rest#*,}"
+            entry="${entry#"${entry%%[![:space:]]*}"}"
+            entry="${entry%"${entry##*[![:space:]]}"}"
+            [ -n "$entry" ] || continue
+            listed=1
+            if [ "$entry" = '*' ]; then
+              echo "@$actor passes: HARNESS_RUN_ACTORS carries *, which admits every writer."
+              exit 0
+            fi
+            if [ -n "$want" ] && [ "$(lower "$entry")" = "$want" ]; then
+              echo "@$actor passes: listed in HARNESS_RUN_ACTORS."
+              exit 0
+            fi
+          done
+          if [ -n "$listed" ]; then
+            why="@${actor:-(no actor)} is not listed in it."
+          elif [ "$IN_OWNER_TYPE" = User ] && [ -n "$IN_OWNER" ]; then
+            if [ -n "$want" ] && [ "$(lower "$IN_OWNER")" = "$want" ]; then
+              echo "@$actor passes: HARNESS_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
+              exit 0
+            fi
+            why="it is unset, which admits the owner of this user-owned repository, @$IN_OWNER, alone, and @${actor:-(no actor)} is not that owner."
+          else
+            why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
+          fi
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 9)."
+          exit 1
+
       - name: Compute the time budget
         env:
           IN_RUNNER_ENVIRONMENT: ${{ runner.environment }}
@@ -522,7 +590,53 @@ jobs:
       HARNESS_INPUT_BRANCH: ${{ inputs.branch }}
       HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
       HARNESS_TRIGGER_ALLOWED_BOTS: ${{ vars.HARNESS_TRIGGER_ALLOWED_BOTS }}
+      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
     steps:
+      - name: Refuse an actor not on HARNESS_RUN_ACTORS before collecting
+        env:
+          IN_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          IN_OWNER: ${{ github.repository_owner }}
+          IN_OWNER_TYPE: ${{ github.event.repository.owner.type }}
+        run: |
+          actor="$IN_TRIGGERING_ACTOR"
+          if [ "$actor" = 'github-actions[bot]' ]; then
+            echo "@$actor passes: every harness dispatch is made with GITHUB_TOKEN and names it."
+            exit 0
+          fi
+          lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+          want=$(lower "$actor")
+          rest="${HARNESS_RUN_ACTORS-},"
+          listed=""
+          while [ -n "$rest" ]; do
+            entry="${rest%%,*}"
+            rest="${rest#*,}"
+            entry="${entry#"${entry%%[![:space:]]*}"}"
+            entry="${entry%"${entry##*[![:space:]]}"}"
+            [ -n "$entry" ] || continue
+            listed=1
+            if [ "$entry" = '*' ]; then
+              echo "@$actor passes: HARNESS_RUN_ACTORS carries *, which admits every writer."
+              exit 0
+            fi
+            if [ -n "$want" ] && [ "$(lower "$entry")" = "$want" ]; then
+              echo "@$actor passes: listed in HARNESS_RUN_ACTORS."
+              exit 0
+            fi
+          done
+          if [ -n "$listed" ]; then
+            why="@${actor:-(no actor)} is not listed in it."
+          elif [ "$IN_OWNER_TYPE" = User ] && [ -n "$IN_OWNER" ]; then
+            if [ -n "$want" ] && [ "$(lower "$IN_OWNER")" = "$want" ]; then
+              echo "@$actor passes: HARNESS_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone."
+              exit 0
+            fi
+            why="it is unset, which admits the owner of this user-owned repository, @$IN_OWNER, alone, and @${actor:-(no actor)} is not that owner."
+          else
+            why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
+          fi
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 9)."
+          exit 1
+
       - name: Check out the default branch for collecting
         uses: actions/checkout@v5
         with:

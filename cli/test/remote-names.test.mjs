@@ -25,6 +25,8 @@ import {
   PR_CREATE_SETTING,
   PR_CREATE_SETTING_PATH,
   REVIEW_ROUND_STATE,
+  RUN_ACTORS_EVERY_WRITER,
+  RUN_ACTORS_VARIABLE,
   RUN_STATES,
   STATE_ARTIFACT_NAME,
   STATE_LABELS,
@@ -41,7 +43,10 @@ import {
   WORKFLOW_RUN_PATH,
   WORKFLOW_TRIGGER_FILE,
   WORKFLOW_TRIGGER_PATH,
+  carriesRunActors,
+  effectiveRunActors,
   ghCli,
+  runActorAdmitted,
   runGh,
   triggerFallbackLabel,
 } from '../dist/remote/githubActions.js';
@@ -102,6 +107,37 @@ test('the issue-trigger names keep their literal values', () => {
   assert.equal(LEGACY_TRIGGER_LABEL, 'harness');
   assert.equal(TRIGGER_ALLOWED_BOTS_VARIABLE, 'HARNESS_TRIGGER_ALLOWED_BOTS');
   assert.equal(TRIGGER_DISPATCH_EVENT_TYPE, 'harness-task');
+  assert.equal(RUN_ACTORS_VARIABLE, 'HARNESS_RUN_ACTORS');
+  assert.equal(RUN_ACTORS_EVERY_WRITER, '*');
+});
+
+test('effectiveRunActors and runActorAdmitted apply the allow-list grammar', () => {
+  const user = { login: 'Owner', type: 'User' };
+  const org = { login: 'acme', type: 'Organization' };
+  const cases = [
+    { value: ' Alice , bob,,', owner: user, kind: 'listed', admits: ['alice', 'BOB'], refuses: ['carol', 'owner'] },
+    { value: 'alice, * ', owner: org, kind: 'every-writer', admits: ['carol', 'ALICE'], refuses: [] },
+    { value: undefined, owner: user, kind: 'owner', admits: ['owner', 'OWNER'], refuses: ['bob'] },
+    { value: '', owner: org, kind: 'nobody', admits: [], refuses: ['acme', 'bob'] },
+    { value: ' , ', owner: undefined, kind: 'nobody', admits: [], refuses: ['bob'] },
+    { value: '  ', owner: { login: 'x', type: 'Bot' }, kind: 'nobody', admits: [], refuses: ['x'] },
+    { value: undefined, owner: { login: '', type: 'User' }, kind: 'nobody', admits: [], refuses: ['bob'] },
+  ];
+  for (const { value, owner, kind, admits, refuses } of cases) {
+    const actors = effectiveRunActors(value, owner);
+    const label = `${JSON.stringify(value)} with ${JSON.stringify(owner)}`;
+    assert.equal(actors.kind, kind, label);
+    for (const login of admits) assert.equal(runActorAdmitted(actors, login), true, `${label} admits ${login}`);
+    for (const login of [...refuses, '']) assert.equal(runActorAdmitted(actors, login), false, `${label} refuses ${JSON.stringify(login)}`);
+  }
+  assert.deepEqual(effectiveRunActors(' Alice , bob,,', undefined), { kind: 'listed', logins: ['Alice', 'bob'] });
+  assert.deepEqual(effectiveRunActors(undefined, user), { kind: 'owner', login: 'Owner' });
+  assert.deepEqual(effectiveRunActors('', org), { kind: 'nobody', owner: org });
+});
+
+test('carriesRunActors tells a workflow that reads the allow-list from one that does not', () => {
+  assert.equal(carriesRunActors('        env:\n          RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}\n'), true);
+  assert.equal(carriesRunActors('        env:\n          RUNNER: ${{ vars.HARNESS_RUNNER }}\n'), false);
 });
 
 test('remote-run.sh mirrors the two trigger labels byte for byte', () => {

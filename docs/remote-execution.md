@@ -96,9 +96,9 @@ bash scripts/remote-run.sh stop <branch>
 
 ### Working a run from GitHub alone
 
-With `forge` set to `github`, a maintainer with no local setup — no checkout, no watcher — works a run by `@sdlc-harness` comments on its issue or pull request and by reviews that request changes ([`github-run-control.md`](github-run-control.md) → `## The GitHub entry point`).
+With `forge` set to `github`, a person the allow-list `HARNESS_RUN_ACTORS` admits (§7, *Every secret and variable*) who has no local setup — no checkout, no watcher — works a run by `@sdlc-harness` comments on its issue or pull request and by reviews that request changes ([`github-run-control.md`](github-run-control.md) → `## The GitHub entry point`).
 
-The fallback, which works with or without `forge`, is the **Run workflow** form of `harness-run.yml` on the repository's Actions page — for example when a park's bundle must be read in full, or when the control workflow is not installed. The form's inputs are `## 5.`'s table. Every action below picks the run's branch under *Use workflow from*, as `remote-run.sh` does with `--ref` (§7, *Upgrading*), and sets the `branch` input to it. A `run` or `pause` dispatched from any other ref fails at once in a `wrong-ref` job naming the ref to use, and starts nothing: GitHub lists a run under the ref it was dispatched from, so no lookup of the branch would find it (Gate 12 round 6, finding 6, in [`development.md`](development.md) → Gate 12 → Round 6; `harness-run.yml` → the header's `THE REF CHECK`). `stop` and `warm` are exempt. A `stop` is accepted from the default branch, because that is how a deleted branch, whose own ref is gone, is stopped.
+The fallback, which works with or without `forge`, is the **Run workflow** form of `harness-run.yml` on the repository's Actions page — for example when a park's bundle must be read in full, or when the control workflow is not installed. The form's inputs are `## 5.`'s table. A `run` dispatched from the form, or re-run, by a person the allow-list does not admit launches nothing: the job's first step refuses it (§11, *Who can spend the credential*). Every action below picks the run's branch under *Use workflow from*, as `remote-run.sh` does with `--ref` (§7, *Upgrading*), and sets the `branch` input to it. A `run` or `pause` dispatched from any other ref fails at once in a `wrong-ref` job naming the ref to use, and starts nothing: GitHub lists a run under the ref it was dispatched from, so no lookup of the branch would find it (Gate 12 round 6, finding 6, in [`development.md`](development.md) → Gate 12 → Round 6; `harness-run.yml` → the header's `THE REF CHECK`). `stop` and `warm` are exempt. A `stop` is accepted from the default branch, because that is how a deleted branch, whose own ref is gone, is stopped.
 
 - **Answering a park.** Take the question from the run's `harness-state` artifact, under `clarifications/<branch>/question_<n>.md`: download it from the run page's *Artifacts*, or with the GitHub CLI:
 
@@ -309,6 +309,7 @@ The design rests on these GitHub behaviours, each exposed as a tunable or a degr
 | An environment wait timer is fixed per environment and may need a paid plan on a private repository | The decision not to build one (§3) | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment, retrieved 2026-09-24 (carried) | Nothing built depends on it |
 | A `permissions.allow` or `permissions.additionalDirectories` entry in the committed `.claude/settings.json` applies to the job's session | Nothing: the job's grants come from the profile it generates and the watcher's launch flags (§4) | Measured negative, not retrieved: in Gate 12 round 1 Run 3 (run `36428382006`, 2026-09-28) entries there naming a path outside the checkout did not apply in the job. Not measured for an entry that names no path | Nothing changes: the job's grants already come from its own profile and launch flags. Why the Run 3 entries did not apply was not established |
 | A `workflow_dispatch` run's `headSha` in `gh run list` is the commit the dispatched ref pointed at when it was dispatched | `restore`'s lineage bound (§4, **Central state.**), and the trigger comment's run lookup | Not retrieved in this branch, because unattended runs have no web access; Gate 12 (xiii) leg (d) in [`development.md`](development.md) records it | An own-lineage run is excluded, so `restore` logs a first job, or `--resume answer` refuses naming the lineage, and the trigger comments the filtered run list. Neither outcome restores another lineage's state |
+| A `remote-run.sh continue` chain and a `harness-resume.yml` poller dispatch name `github-actions[bot]` as `actor` and `triggering_actor`, and `github.event.repository.owner.type` reads `User` on a user-owned repository's `workflow_dispatch` run | The run job's gate admitting the harness's own dispatches, and its owner-only default (§11, *Who can spend the credential*) | The 2026-10-05 measurement of the other routes, [`team-accounts-research.md`](team-accounts-research.md) → `### The repository facts the options rest on`, *Who a run names*: the trigger, the comment commands and `collect`'s next round each named `github-actions[bot]`. These two routes were not observed, and the owner type was not read. Gate 12 observation (xv) in [`development.md`](development.md) → `## 5. Verifying a change` settles both | A continuation or a poller dispatch is refused with the gate's `::error::` line, and the run waits for its owner's manual dispatch; the gate's bot exemption must then widen. A wrong owner type refuses the owner of a user-owned repository whose list is unset, which setting `HARNESS_RUN_ACTORS` to that login avoids |
 
 ### The plugin-install probe
 
@@ -468,6 +469,20 @@ For API billing instead:
 gh secret set ANTHROPIC_API_KEY
 ```
 
+Then name who may spend it: the allow-list, the repository variable `HARNESS_RUN_ACTORS`, a comma-separated list of GitHub logins. It decides who may start, command, answer and review a run, from GitHub and through the **Run workflow** form alike (§11, *Who can spend the credential*). Unset, it admits the repository owner alone in a repository a personal account owns, and **nobody** in one an organisation owns, so an organisation-owned repository must set it. Name the people:
+
+```
+gh variable set HARNESS_RUN_ACTORS --body <login>,<login>
+```
+
+Or, for a credential that is not one person's, such as a Claude API organisation's key, admit every collaborator with write access:
+
+```
+gh variable set HARNESS_RUN_ACTORS --body '*'
+```
+
+§9, *Two set-ups*, says which value fits which credential.
+
 **5. Optionally, the notification endpoint and the runner.** Without `HARNESS_PUSH_URL` a remote run's `parked`, `paused`, `failed` and `completed` events reach no one, because the desktop banner is on no machine you are at. The runner is §8.
 
 ```
@@ -526,8 +541,9 @@ All are set on the GitHub repository (Settings → Secrets and variables → Act
 | `REMOTE_CONTROL_POLL_SECS` | variable | job mode: how often the job looks for a `harness pause` run | 60 | no |
 | `HARNESS_TRIGGER_LABEL` | variable | `harness-trigger.yml`'s job filter and `remote-run.sh trigger` | `sdlc-harness`; `harness` in a workflow written by an earlier release | no |
 | `HARNESS_TRIGGER_ALLOWED_BOTS` | variable | `remote-run.sh trigger`, and `remote-run.sh control` in `harness-control.yml`: a listed bot's commands and reviews are obeyed too | empty: no bot may start a run | no |
+| `HARNESS_RUN_ACTORS` | variable | `harness-run.yml`'s gate step, the first step of the `run` and `collect` jobs; `remote-run.sh trigger`, `control` and `collect`: the allow-list of people who may start, command, answer and review a run. Comma-separated logins, matched case-insensitively; `*` admits every writer (§7 step 4) | unset: the repository owner alone in a user-owned repository, nobody in an organisation-owned one | yes in an organisation-owned repository; otherwise no |
 
-The list of record is the `env:` block of the `run` job in `harness-run.yml`, for the poller's own variables that of the `poll` job in `harness-resume.yml`, for the trigger's that of the `trigger` job in `harness-trigger.yml`, and for the control workflow's that of the `control` job in `harness-control.yml`; a tunable the watcher reads and that block does not map is not reachable from a repository variable.
+The list of record is the `env:` block of the `run` job in `harness-run.yml`, for a review round's collection that of its `collect` job, for the poller's own variables that of the `poll` job in `harness-resume.yml`, for the trigger's that of the `trigger` job in `harness-trigger.yml`, and for the control workflow's that of the `control` job in `harness-control.yml`; a tunable the watcher reads and that block does not map is not reachable from a repository variable.
 
 ### Your own allow entries
 
@@ -598,6 +614,17 @@ The last two are needed for the reason step 3 above gives: the `workflow` scope,
 
   `doctor --check-github` fails on any harness workflow GitHub lists by its path rather than its name, which is how GitHub lists a file it could not parse.
 - **It does not re-render the outer-loop scripts** under `<scriptsDir>`. They stay create-if-absent ([`cli.md`](cli.md) → `## 3. The re-run contract`), so `init --force` remains their route. It also regenerates every other generated file after a `.bak`, including `.claude/CLAUDE.md` and the conventions documents the analyze command filled.
+- **The allow-list reaches each file only by that file's route.** What a copy written before `HARNESS_RUN_ACTORS` does until it is re-rendered:
+  - **An old `harness-run.yml`**, re-rendered by `--upgrade-workflows`: its `run` job checks no one's dispatch or re-run, so any writer's **Run workflow**, `gh workflow run` or re-run launches. Its `collect` job passes the scripts no list: with old scripts every writer's review still starts a round, and with re-rendered scripts a round's authors are held to the unset default.
+  - **An old `harness-trigger.yml` or `harness-control.yml`**, re-rendered by `init --force` with the scripts: it passes the scripts no list. With old scripts every writer still starts and commands a run. With re-rendered scripts every start and command is held to the unset default: the repository owner alone, or nobody in an organisation-owned repository.
+  - **A run already in flight** keeps its branch's copy of `harness-run.yml`, and with it no gate, as *Runs already in flight* above explains, until it is moved on purpose (below).
+  - **An organisation-owned repository** is refused for every person after either upgrade until it sets the list, because unset there admits nobody. Set it before you push the upgrade:
+
+    ```
+    gh variable set HARNESS_RUN_ACTORS --body <login>,<login>
+    ```
+
+  `doctor` warns about an old copy and names its route: the `remote-execution` check about `harness-run.yml`, with `--upgrade-workflows`, and the `forge` check about the two forge workflows, with `init --force`.
 
 **Moving a run in flight to the new version, on purpose.** Do it only after the upgrade is pushed to the default branch, and only while no job of that run is executing: the run is paused, parked or stopped. A job pushes the branch after every commit and at its end (`cli/templates/scripts/push-branch.sh`), and a push that fails because the remote moved is non-fatal by that script's own header (*"EVERY FAILURE PATH IS NON-FATAL"*). So a commit pushed beside a running job leaves the job's later commits off the remote without stopping it.
 
@@ -723,6 +750,15 @@ gh variable set HARNESS_RUNNER --body <label>
 
 **The terms.** Anthropic's legal and compliance page permits an end user to sign the **unmodified** Claude Code in with their own subscription, *"including where a platform hosts Claude Code"* — which covers a GitHub Actions job running the stock `claude` CLI under the adopter's own token. The same page says products must not route other people's usage through subscription credentials, and that Pro and Max limits assume *"ordinary, individual usage"*. So a subscription token in a repository secret is for the subscriber's own runs; a repository whose runs are started on behalf of other people belongs on an API key. Source: https://code.claude.com/docs/en/legal-and-compliance, retrieved 2026-09-24 (carried from the task prompt's research, not re-fetched). A team whose members each have their own Claude account will find whose credential a teammate's run may use, and the options weighed for it, in [`team-accounts-research.md`](team-accounts-research.md#5-options-for-the-harness).
 
+**Two set-ups.** The allow-list `HARNESS_RUN_ACTORS` (§7 step 4) is what keeps a credential to the people it may serve. Both set-ups are weighed in [`team-accounts-research.md`](team-accounts-research.md) → `## 5. Options for the harness`, options B and C.
+
+- **One driver.** The owner's subscription token in `CLAUDE_CODE_OAUTH_TOKEN`, with the list left unset, which in a user-owned repository admits the owner alone. Other writers work locally, each signed in with their own Claude account (option C).
+- **Several drivers.** A Claude API organisation, with a workspace that has spend and rate limits, and a service account whose key goes in `ANTHROPIC_API_KEY`. The list is `*`, or the team's logins. The organisation sets this up itself, the harness provisions none of it, and each member signs in locally with their own account (option B).
+
+**The residual risk, in both set-ups.** The list screens every route the harness offers, but any writer can still read the credential secret by dispatching an edited workflow from a branch ([`team-accounts-research.md`](team-accounts-research.md) → G7). On a private repository, a push ruleset restricting the workflow paths and the scripts they run closes that route, by the research's inference (G8). GitHub documents push rulesets for private and internal repositories only (G8), so on a public repository only withholding `write` closes it. A writer who edits a workflow can also dispatch as `github-actions[bot]`, which the gate admits; that is the same exposure, not a new one, because that writer can already read the secret.
+
+**`doctor --check-github` reports the set-up.** It names the effective list as a note, and warns when it is unset in an organisation-owned repository, when it is `*` while `CLAUDE_CODE_OAUTH_TOKEN` is set, and, while that token is set, when a collaborator with write access is beyond the list ([`cli.md`](cli.md)).
+
 **The harness is never in the money path.** The GitHub account, the runner, the Claude account and every payment are the adopter's. The harness generates the workflows, documents the setup and checks it; it never holds a credential outside the adopter's own repository secrets, and never pays for or intermediates anyone's compute or Claude usage.
 
 **A paused billing change — a known risk.** Anthropic announced that from 2026-06-15, usage through `claude -p`, the Agent SDK and GitHub Actions would draw on a separate monthly credit — $20 on Pro, $100 on Max 5x, $200 on Max 20x — instead of the plan's own limits. The page now says the change is **paused**. Every unattended run, local or remote, is a headless `claude -p` session, so if it resumes it affects remote **and** local headless runs alike: a subscription would then cover unattended runs only up to that credit. Source: https://support.claude.com/en/articles/15036540, retrieved 2026-09-24 (carried from the task prompt's research, not re-fetched).
@@ -785,10 +821,12 @@ Light use fits inside a private repository's included minutes: the Free plan's 2
 
 **Workflow inputs never become shell source.** Every input, variable and secret reaches a shell line through `env:`, never through a GitHub expression interpolated into `run:`, so an input shaped like a command is data (`harness-run.yml` → the header's `TWO RULES EVERY EDIT KEEPS`). Keep that rule in any edit you make to your copy.
 
+**Who can spend the credential.** Only the people the allow-list `HARNESS_RUN_ACTORS` admits (§7 step 4). The comment commands, the issue trigger and a review round's collection check it in `remote-run.sh`, but the **Run workflow** form, `gh workflow run` and a re-run reach none of those checks, so the first step of `harness-run.yml`'s `run` job holds `github.triggering_actor` to the list and refuses anyone else before any credential step; `github-actions[bot]`, which every harness dispatch names, passes. A re-run of a trigger or control job replays the original event, whose sender the list already admitted, so `remote-run.sh` also holds that job's `GITHUB_TRIGGERING_ACTOR` to the list on any attempt after the first. The `collect` job opens with the same step. The gate is a step in each job rather than a job of its own because a partial re-run does not repeat an upstream job that succeeded, so a gate job would never see the re-runner ([`team-accounts-research.md`](team-accounts-research.md) → G2; `harness-run.yml` → the header's `THE RUN-ACTOR GATE`). The job-level `HARNESS_PUSH_URL` secret is resolved when the job starts, before the gate; it spends no credential. What the list cannot close is §9, *The residual risk, in both set-ups*.
+
 **The issue trigger** ([`github-issue-trigger.md`](github-issue-trigger.md)):
 
 - The `trigger` job reads untrusted issue text only through its event file and the environment, and references no secret.
-- A labelled issue's text becomes the task of a run job that holds the credential secrets, which is why only a person with `write` or `admin` permission, or a listed bot, may start one ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run` and `## 4. What the labeller vouches for`).
+- A labelled issue's text becomes the task of a run job that holds the credential secrets, which is why only a person with `write` or `admin` permission whom the allow-list `HARNESS_RUN_ACTORS` admits, or a listed bot, may start one ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run` and `## 4. What the labeller vouches for`).
 - A run whose task edits `.github/workflows/*` cannot push that edit without a workflow-capable `HARNESS_GIT_TOKEN`: `GITHUB_TOKEN` cannot write a workflow file under any `permissions:` setting, and the push is refused with ``refusing to allow a GitHub App to create or update workflow … without `workflows` permission`` ([`github-integration-research.md`](github-integration-research.md) → S1).
 
 **On every option, the code the agents read goes to the Anthropic API**, exactly as it does when the run executes on your own machine. Choosing a remote runner changes where the session runs, not what it sends.

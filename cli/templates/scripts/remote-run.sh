@@ -191,13 +191,18 @@
 # a refusal can still be commented. It reads, only from the environment:
 #   GITHUB_EVENT_NAME, GITHUB_EVENT_PATH   the event; each field is read by `jq`
 #                        into a variable and is only ever an argument or file
-#                        bytes, never shell source
+#                        bytes, never shell source; `.repository.owner.login`
+#                        and `.repository.owner.type` only when
+#                        `HARNESS_RUN_ACTORS` is unset
 #   GITHUB_REPOSITORY, GITHUB_SERVER_URL, GITHUB_RUN_ID   the `gh` target and
 #                        the URLs its comments name
 #   HARNESS_REMOTE_STOP  non-empty: every start is refused
 #   HARNESS_TRIGGER_LABEL   the trigger label; when empty, `DEFAULT_TRIGGER_LABEL`
 #                        or `LEGACY_TRIGGER_LABEL`, per the paragraph below
 #   HARNESS_TRIGGER_ALLOWED_BOTS   comma-separated bot logins allowed to start
+#   HARNESS_RUN_ACTORS   comma-separated people allowed to act on a run, `*`
+#                        for every writer; unset admits a `User` owner alone
+#                        (`run_actor_listed`)
 #   HARNESS_TRIGGER_LOOKUP_SECS    seconds between run lookups; `5` when empty.
 #                        A test seam
 #   RUNNER_TEMP          where the prompt snapshot is written; a `mktemp -d`
@@ -226,7 +231,13 @@
 #   6. a `User` whose `collaborators/<login>/permission` is not `admin` or
 #      `write` — `maintain` reads as `write` and `triage` as `read` there; a
 #      failed call is "could not confirm write access", never a pass
-# Refusals 4 to 6 are `authorise_actor`, the one actor check `control` reuses.
+#   7. a writer `HARNESS_RUN_ACTORS` does not admit — after refusal 6, so a
+#      non-writer is still told about write access
+# Refusals 4 to 7 are `authorise_actor`, the one actor check `control` reuses.
+# Before them, after refusal 2, a re-run (GITHUB_RUN_ATTEMPT above 1) whose
+# GITHUB_TRIGGERING_ACTOR is not `github-actions[bot]` and is not admitted by
+# `HARNESS_RUN_ACTORS` is refused (`rerun_actor_listed`), on both event kinds:
+# a re-run replays the event, so its sender is whoever first acted.
 # Then it fetches `origin <defaultBranch>` (a failure tolerated), derives the
 # branch with `hr_derive_branch <title> issue_<number>`, passing `gh` so a name
 # with run-workflow history counts as taken (2 or 3 refused), writes
@@ -252,7 +263,10 @@
 # and exit 0 with no `gh` call; an empty or missing `title` is refused. It has
 # no labeller: GitHub sends one only for a fine-grained token with Contents
 # write or a classic token with `repo`, so the token holder is the authority,
-# and refusals 3 to 6 do not apply. The fallback name is `task_<GITHUB_RUN_ID>`
+# and refusals 3 to 6 do not apply. After refusal 2 a `User` sender
+# (`.sender.login`, `.sender.type`) that `HARNESS_RUN_ACTORS` does not admit is
+# refused with no permission call, and so is a sender with no type unless the
+# list is `*`, failing closed; any other sender type passes. The fallback name is `task_<GITHUB_RUN_ID>`
 # and the snapshot's provenance sentence names the event type, `source` when
 # set, and the time. There is no issue, so no comment and no label: every
 # outcome is printed to stdout and appended as a Markdown block to
@@ -381,7 +395,10 @@
 #   1. `HARNESS_REMOTE_STOP` is set
 #   2. `forge_on` fails — before any authorisation, so a disabled coupling asks
 #      GitHub nothing about the commenter
-#   3. `authorise_actor` fails: `AUTH_WHY`, and who may command a run
+#      then a re-run whose GITHUB_TRIGGERING_ACTOR `rerun_actor_listed`
+#      refuses, before the event's own actor is checked
+#   3. `authorise_actor` fails: `AUTH_WHY`, and who may command a run — a
+#      writer the `HARNESS_RUN_ACTORS` allow-list admits, or a listed bot
 #   4. the verb is empty, not a `COMMAND_VERBS` word, or one no arm carries out
 #      yet: the reply lists every command and names `docs/github-run-control.md`
 # THE BRANCH. On a pull request (`.issue.pull_request.url` set), its head, by
@@ -502,9 +519,10 @@
 # inline comment, by any author and whatever its review's state, whose id is
 # unrecorded, whose body carries no `COMMENT_MARKER`, and whose `created_at` is
 # at or after the boundary or whose review is pending. Every distinct author
-# of a pending item passes `authorise_actor`; a refused author's items are
-# dropped with one line naming the login, `AUTH_WHY` and the count, and a
-# failed permission call fails the collection. A round is placed only when at
+# of a pending item passes `authorise_actor`, the `HARNESS_RUN_ACTORS`
+# allow-list included; a refused author's items — a writer the list refuses
+# among them — are dropped with one line naming the login, `AUTH_WHY` and the
+# count, and a failed permission call (status 4) fails the collection. A round is placed only when at
 # least one kept review has state `REVIEW_ROUND_STATE`; a *Comment* or
 # *Approve* review rides along in the next round one requesting changes starts.
 # The file: one `## Review by @<login>` section per pending review, oldest
@@ -554,9 +572,11 @@
 #   1. `HARNESS_REMOTE_STOP` is set
 #   2. `forge_on` fails
 #   3. the actor: on `issues` and `pull_request`, `authorise_actor` refused
-#      (statuses 1–3), the line naming the login and `AUTH_WHY`; on `delete`, only a `Bot`
-#      sender `trigger_bot_listed` does not list, since deleting a branch
-#      already needs write access
+#      (statuses 1–3 and 5, so a writer the `HARNESS_RUN_ACTORS` allow-list
+#      refuses is ignored too), the line naming the login and `AUTH_WHY`; on
+#      `delete`, only a `Bot` sender `trigger_bot_listed` does not list, and
+#      never the allow-list: deleting a branch already needs write access, the
+#      run's branch is gone, and a stop spends no credential
 #   4. no branch: an issue's from `control_issue_branch_var` (no genuine start
 #      comment), a pull request's head ref, a deletion's `.ref`; then not a
 #      valid branch name
@@ -942,6 +962,7 @@
 #   DEFAULT_TRIGGER_LABEL        mirrors  DEFAULT_TRIGGER_LABEL
 #   LEGACY_TRIGGER_LABEL         mirrors  LEGACY_TRIGGER_LABEL
 #   HARNESS_TRIGGER_ALLOWED_BOTS mirrors  TRIGGER_ALLOWED_BOTS_VARIABLE
+#   HARNESS_RUN_ACTORS           mirrors  RUN_ACTORS_VARIABLE
 #   TRIGGER_DISPATCH_EVENT_TYPE  mirrors  TRIGGER_DISPATCH_EVENT_TYPE ('harness-task')
 #   WORKFLOW_CONTROL_FILE        mirrors  WORKFLOW_CONTROL_FILE
 #   COMMAND_HANDLE               mirrors  COMMAND_HANDLE
@@ -1129,13 +1150,18 @@
 #   "html_url":"https://github.com/o/r/issues/7","state":"open"}}, and a stub
 #   answering `api repos/o/r/collaborators/alice/permission` with
 #   {"permission":"write"}; export GITHUB_EVENT_NAME=issues GITHUB_EVENT_PATH=e.json
-#   GITHUB_REPOSITORY=o/r HARNESS_TRIGGER_LOOKUP_SECS=0:
+#   GITHUB_REPOSITORY=o/r HARNESS_TRIGGER_LOOKUP_SECS=0 HARNESS_RUN_ACTORS='*':
 #   trigger    bash scripts/remote-run.sh trigger -> 0; origin/add_comments gains
 #              the prompt commit, "$s.log" gains `workflow run harness-run.yml
 #              --ref add_comments ...`, `issue comment 7 ...` naming the branch,
 #              then `issue edit 7 ... --remove-label sdlc-harness`
 #   read       the permission answer {"permission":"read"} -> 2, no `workflow
 #              run`, one comment naming write access, the label removed
+#   not listed HARNESS_RUN_ACTORS=bob -> 2, no `workflow run`, one comment
+#              naming HARNESS_RUN_ACTORS, the label removed
+#   unset      HARNESS_RUN_ACTORS= and e.json gaining
+#              "repository":{"owner":{"login":"alice","type":"User"}} -> 0, as
+#              `trigger`; the owner `bob` instead -> 2, the comment naming @bob
 #   ignored    e.json's label name `bug` -> 0, one line, "$s.log" unchanged
 #   dispatch   GITHUB_EVENT_NAME=repository_dispatch GITHUB_RUN_ID=9
 #              GITHUB_STEP_SUMMARY=/tmp/s, e.json {"action":<TRIGGER_DISPATCH_EVENT_TYPE>,
@@ -3478,13 +3504,73 @@ trigger_bot_listed() {
   return 1
 }
 
+# run_actor_listed <login> — 0 when HARNESS_RUN_ACTORS admits <login>: split on
+# `,`, each entry trimmed, empty entries dropped, matched case-insensitively,
+# `*` admitting everyone, an empty <login> admitted by `*` alone. A list with no
+# entries is unset, and admits only `.repository.owner.login` of the event file
+# when `.repository.owner.type` is `User`; any other owner, or an event file or
+# field that cannot be read, admits nobody. Otherwise 1, with RUN_ACTORS_WHY
+# holding one sentence. Lowercased with `tr`, never a parameter expansion:
+# bash 3.2 has no case-changing one.
+RUN_ACTORS_WHY=""
+run_actor_listed() {
+  local login="$1" want rest="${HARNESS_RUN_ACTORS-}," entry listed="" owner="" owner_type=""
+  RUN_ACTORS_WHY=""
+  want=$(printf '%s' "$login" | tr '[:upper:]' '[:lower:]')
+  while [ -n "$rest" ]; do
+    entry=${rest%%,*}
+    rest=${rest#*,}
+    entry=${entry#"${entry%%[![:space:]]*}"}
+    entry=${entry%"${entry##*[![:space:]]}"}
+    [ -n "$entry" ] || continue
+    listed=1
+    [ "$entry" = '*' ] && return 0
+    [ -n "$want" ] && [ "$(printf '%s' "$entry" | tr '[:upper:]' '[:lower:]')" = "$want" ] && return 0
+  done
+  if [ -n "$listed" ]; then
+    RUN_ACTORS_WHY="@$login is not on the repository variable HARNESS_RUN_ACTORS, the allow-list of who may start, command, answer or review a run."
+    return 1
+  fi
+  if [ -n "${GITHUB_EVENT_PATH-}" ] && [ -r "$GITHUB_EVENT_PATH" ]; then
+    event_field '.repository.owner.type // ""' && owner_type="$EVENT_VALUE"
+    event_field '.repository.owner.login // ""' && owner="$EVENT_VALUE"
+  fi
+  if [ "$owner_type" = User ] && [ -n "$owner" ]; then
+    [ -n "$want" ] && [ "$(printf '%s' "$owner" | tr '[:upper:]' '[:lower:]')" = "$want" ] && return 0
+    RUN_ACTORS_WHY="@$login is not the repository owner, and the repository variable HARNESS_RUN_ACTORS is unset, which admits the owner, @$owner, alone."
+    return 1
+  fi
+  RUN_ACTORS_WHY="the repository variable HARNESS_RUN_ACTORS is unset, and this repository has no single owner to admit (its owner is ${owner_type:-unreadable}), so it admits nobody until it names the logins allowed, or * for every writer."
+  return 1
+}
+
+# rerun_actor_listed — 0 unless this job is a re-run (GITHUB_RUN_ATTEMPT above
+# 1) whose GITHUB_TRIGGERING_ACTOR is neither `github-actions[bot]` nor
+# admitted by run_actor_listed; then 1, with RUN_ACTORS_WHY naming the
+# re-runner. A re-run replays the original event, whose sender is the person
+# who first acted, so authorise_actor alone would check the wrong account.
+rerun_actor_listed() {
+  local attempt="${GITHUB_RUN_ATTEMPT-}" who="${GITHUB_TRIGGERING_ACTOR-}"
+  RUN_ACTORS_WHY=""
+  case "$attempt" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$attempt" -gt 1 ] || return 0
+  [ "$who" != 'github-actions[bot]' ] || return 0
+  run_actor_listed "$who" && return 0
+  RUN_ACTORS_WHY="this job is a re-run by @${who:-(no actor)}, and the re-runner is checked rather than the event's sender: $RUN_ACTORS_WHY"
+  return 1
+}
+
 # authorise_actor <login> <type> — the one actor check, shared by `trigger` and
 # `control`: 0 when authorised. Otherwise AUTH_WHY holds one sentence and the
 # status names the arm: 1 `ghost`, empty or not a login shape; 2 a non-`User`
 # not listed in HARNESS_TRIGGER_ALLOWED_BOTS, decided with no permission call,
-# because the permission API answers `none` or 404 for a bot; 3 a `User` whose
-# permission is not `admin` or `write` (AUTH_PERMISSION holds it); 4 that
-# permission call failed (GH_ERR holds why). Prints nothing and never posts.
+# because the permission API answers `none` or 404 for a bot, and never
+# consulting the run-actor list; 3 a `User` whose permission is not `admin` or
+# `write` (AUTH_PERMISSION holds it); 4 that permission call failed (GH_ERR
+# holds why); 5 a writer `run_actor_listed` refuses. The list is checked after
+# the permission call so a non-writer's refusal keeps naming write access, and
+# 5 is kept for a writer the maintainer has not named. Prints nothing and
+# never posts.
 AUTH_WHY=""
 AUTH_PERMISSION=""
 authorise_actor() {
@@ -3508,7 +3594,10 @@ authorise_actor() {
   fi
   AUTH_PERMISSION=$(printf '%s' "$GH_OUT" | jq -r '.permission // empty' 2>/dev/null) || AUTH_PERMISSION=""
   case "$AUTH_PERMISSION" in
-    admin|write) return 0 ;;
+    admin|write)
+      run_actor_listed "$login" && return 0
+      AUTH_WHY="$RUN_ACTORS_WHY"
+      return 5 ;;
   esac
   AUTH_WHY="GitHub reports the permission of @$login as ${AUTH_PERMISSION:-nothing}, not write or admin."
   return 3
@@ -3608,7 +3697,9 @@ verb_trigger() {
     { event_field '.action // ""' && action="$EVENT_VALUE" \
       && event_field '.client_payload.title // ""' && title="$EVENT_VALUE" \
       && event_field '.client_payload.body // ""' && body="$EVENT_VALUE" \
-      && event_field '.client_payload.source // ""' && source="$EVENT_VALUE"; } || {
+      && event_field '.client_payload.source // ""' && source="$EVENT_VALUE" \
+      && event_field '.sender.login // ""' && login="$EVENT_VALUE" \
+      && event_field '.sender.type // ""' && sender_type="$EVENT_VALUE"; } || {
       echo "remote-run.sh: trigger: '$GITHUB_EVENT_PATH' is not a readable event" >&2
       exit "$EXIT_USAGE"
     }
@@ -3644,6 +3735,26 @@ verb_trigger() {
       "Set both keys on the default branch, then $retry_then."
   fi
 
+  # A re-run replays the event's sender; the re-runner is held to the list.
+  if ! rerun_actor_listed; then
+    trigger_refuse "$RUN_ACTORS_WHY" \
+      "Only a person the repository variable \`HARNESS_RUN_ACTORS\` admits may re-run this job; one of them can $retry_then."
+  fi
+
+  # A dispatch's `User` sender is held to the allow-list with no permission
+  # call; a sender with no type fails closed, since an empty login is admitted
+  # by `*` alone; any other sender type is the token's, and passes.
+  if [ "$trigger_source" = dispatch ]; then
+    if [ -z "$sender_type" ] && ! run_actor_listed ""; then
+      trigger_refuse "the dispatch's sender carries no account type, so it cannot be checked against the allow-list." \
+        "Set the repository variable \`HARNESS_RUN_ACTORS\` to \`*\` to admit every token holder, then $retry_then."
+    fi
+    if [ "$sender_type" = User ] && ! run_actor_listed "$login"; then
+      trigger_refuse "$RUN_ACTORS_WHY" \
+        "Add \`$login\` to the comma-separated repository variable \`HARNESS_RUN_ACTORS\`, or set it to \`*\` to admit every writer, then $retry_then."
+    fi
+  fi
+
   if [ "$trigger_source" = issue ]; then
     if [ "$state" != open ]; then
       trigger_refuse "this issue is not open." "Reopen it, then re-apply the label \`$trigger_label\`."
@@ -3659,6 +3770,8 @@ verb_trigger() {
            "Add \`$login\` to that comma-separated list to let it start runs, or have a collaborator with write access apply the label \`$trigger_label\`." ;;
       3) trigger_refuse "could not confirm write access for @$login: GitHub reports their permission as \`${AUTH_PERMISSION:-nothing}\`." \
            "Only a collaborator with write, maintain or admin access starts a run by labelling an issue; one of them can re-apply the label \`$trigger_label\`." ;;
+      5) trigger_refuse "$AUTH_WHY" \
+           "Add \`$login\` to the comma-separated repository variable \`HARNESS_RUN_ACTORS\`, or set it to \`*\` to admit every writer, then re-apply the label \`$trigger_label\`." ;;
       *) trigger_refuse "could not confirm write access for @$login: the permission check failed ($GH_ERR)." \
            "Re-apply the label \`$trigger_label\` to try again." ;;
     esac
@@ -5040,7 +5153,9 @@ control_review_story() {
 # `branch`'s pull request <pr_number>, shared by `control` and `collect`: every
 # submitted review (never `PENDING`) that requests changes or carries a
 # non-blank body, and every inline comment, no earlier round consumed, by
-# every author `authorise_actor` accepts. What earlier rounds consumed is
+# every author `authorise_actor` accepts, the `HARNESS_RUN_ACTORS` allow-list
+# included; a refused author's items are dropped with one line, while a
+# failed permission call (status 4) fails the collection. What earlier rounds consumed is
 # read from the marker lines of their files on origin's tip; with none marked,
 # the boundary is the committer time of the newest round file. A comment
 # belonging to a pending review is pending whatever its `created_at`: a draft
@@ -5585,7 +5700,8 @@ control_close() {
   fi
   forge_on || control_close_ignore "the default branch's harness.config.json does not turn run control on"
   if [ "$CLOSE_KIND" = deleted ]; then
-    # Deleting a branch already needs write access; only a bot is screened.
+    # Deleting a branch already needs write access; only a bot is screened,
+    # never HARNESS_RUN_ACTORS (the header, THE CLOSE gate 3).
     if [ "$CONTROL_SENDER_TYPE" = Bot ] && ! trigger_bot_listed "$CONTROL_ACTOR"; then
       control_close_ignore "@$CONTROL_ACTOR is a bot not listed in HARNESS_TRIGGER_ALLOWED_BOTS"
     fi
@@ -5729,11 +5845,16 @@ verb_control() {
       "Set both keys on the default branch, then comment again."
   fi
 
+  if ! rerun_actor_listed; then
+    control_refuse "$EXIT_REFUSED" "${RUN_ACTORS_WHY%.}" \
+      "Only a person the repository variable \`HARNESS_RUN_ACTORS\` admits may re-run this job; one of them can comment again."
+  fi
+
   status=0
   authorise_actor "$CONTROL_ACTOR" "$CONTROL_SENDER_TYPE" || status=$?
   if [ "$status" -ne 0 ]; then
     control_refuse "$EXIT_REFUSED" "${AUTH_WHY%.}" \
-      "Only a collaborator with write, maintain or admin access, or a bot listed in the repository variable \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
+      "Only a collaborator with write, maintain or admin access whom the repository variable \`HARNESS_RUN_ACTORS\` admits (when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one), or a bot listed in \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
   fi
 
   if [ "$review" -eq 0 ] && { [ -z "$CONTROL_VERB" ] || ! control_verb_handled "$CONTROL_VERB"; }; then
