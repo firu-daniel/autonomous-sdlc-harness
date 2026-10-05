@@ -18,7 +18,7 @@ It cites rather than restates [`remote-execution.md`](remote-execution.md) → `
 2. **Inference** — this document's conclusion, which no single source states. It sits in its own **Inference** paragraph.
 3. **Not documented** — no page checked states it. The entry names the pages that were checked.
 
-No measurement was run for this document, so nothing here is `verified` in the sense [`github-integration-research.md`](github-integration-research.md) uses.
+One measurement was run, on 2026-10-05, after the rest of this document was written: who a dispatched or re-run `harness-run.yml` run names as its actor. It is recorded in [§5](#5-options-for-the-harness) → *The repository facts the options rest on*, under *Who a run names*. Nothing else here is `verified` in the sense [`github-integration-research.md`](github-integration-research.md) uses.
 
 **Geo caveat on the Consumer Terms.** `https://www.anthropic.com/legal/consumer-terms` served only the EEA/Switzerland version (contracting party Anthropic Ireland, Limited; "Effective October 8, 2025"). Every Consumer Terms quote in this document is from that version. The text that applies to the rest of the world (Anthropic, PBC) could not be retrieved, and is an open question for §7.
 
@@ -770,6 +770,18 @@ Read from the tree, not from an external source.
 - **Only the run job holds a Claude credential.** `harness-run.yml` → the steps `Check the credentials` and `Run the harness` read `secrets.CLAUDE_CODE_OAUTH_TOKEN` and `secrets.ANTHROPIC_API_KEY` into `IN_OAUTH` / `IN_API`; the first fails before launch when both are empty, and the second exports each only when non-empty. `harness-trigger.yml` and `harness-control.yml` each say *"The job reads no repository secret"*, and `harness-control.yml` references no `secrets.` at all. The secret names are `OAUTH_TOKEN_SECRET` and `API_KEY_SECRET` in `cli/src/remote/githubActions.ts`, mirrored by `harness-run.yml`'s `DECLARED MIRRORS` header.
 - **The run job's permissions carry no `id-token`.** `harness-run.yml`'s workflow-level `permissions:` block grants `contents`, `actions`, `issues` and `pull-requests` write; its header's `THE PERMISSIONS` paragraph says every permission it does not list is `none`.
 - **Every automated dispatch is made by a token that is not the person who asked for it.** `harness-trigger.yml` and `harness-control.yml` run with `GH_TOKEN: ${{ github.token }}`; `remote-run.sh` is, by its header comment, *"the one place a `gh workflow run` of the run workflow is composed"*; a chained continuation is dispatched from the run job itself (`harness-run.yml`'s header: *"`remote-run.sh continue` chains a new job"*); and `harness-resume.yml`'s scheduled poller dispatches `resume: pause` with `GH_TOKEN: ${{ github.token }}`. A run the local watcher dispatches uses the `gh` login of the machine it runs on ([`remote-execution.md`](remote-execution.md) → `## 7. Turning it on`, opening paragraph). A writer can also start a run directly, and the run job then checks nobody: [`remote-execution.md`](remote-execution.md) → `## 1. The lifecycle of a remote run` documents the **Run workflow** form of `harness-run.yml` as the fallback route, `gh workflow run` reaches the same `workflow_dispatch` (G7), and a re-run reuses the original run's privileges (G2). `harness-run.yml`'s `run` job is gated only by `if: inputs.action == 'run'` and reads neither `github.actor` nor `github.triggering_actor`, so none of these routes reaches `authorise_actor`.
+- **Who a run names (measured 2026-10-05).** The measurement was made in the standing test repository `firu-daniel/harness-gate12`, mostly from the run history of earlier test rounds, which included a second writer, `expause-admin`, plus one re-run made for it. Each value is the run's `actor` and `triggering_actor` from `GET /repos/{owner}/{repo}/actions/runs/{id}`, the same values as `github.actor` and `github.triggering_actor` (G2).
+
+  | Route | `actor` | `triggering_actor` | Run |
+  |---|---|---|---|
+  | `harness-trigger.yml`, issue labelled by `firu-daniel` | `github-actions[bot]` | `github-actions[bot]` | 36833810996 |
+  | `harness-trigger.yml`, issue labelled by `expause-admin` | `github-actions[bot]` | `github-actions[bot]` | 36835744979 |
+  | `harness-control.yml` → `run`, `pause`, `stop` | `github-actions[bot]` | `github-actions[bot]` | 36998575175, 36998258279, 37003637949 |
+  | `harness-run.yml`'s `collect` job → the next round | `github-actions[bot]` | `github-actions[bot]` | 37004284664 |
+  | A person's `gh workflow run` | that login | that login | 37001319740 |
+  | Re-run by `expause-admin` of a run first started as `firu-daniel` | `firu-daniel` | `expause-admin` | 37034702794, attempt 2 |
+
+  So a `GITHUB_TOKEN` dispatch names `github-actions[bot]`, never the person whose label or comment caused it, and a re-run's `triggering_actor` is whoever re-ran it, as G2 documents. Two routes were not observed: `remote-run.sh continue`'s chained dispatch and `harness-resume.yml`'s poller dispatch. Both use `GITHUB_TOKEN`, so **Inference:** they name `github-actions[bot]` too.
 - **The run's inputs name no person.** `harness-run.yml` → `THE INPUT CONTRACT` lists `action`, `branch`, `engine`, `resume`, `answers`, `park_loop_clear` and `chain`; none records who started the run, and any writer can dispatch the workflow with any inputs (G7).
 - **The run job runs on the run's own branch**, not the default branch: `remote-run.sh`'s worked examples dispatch `workflow run harness-run.yml --ref feat_x`. An environment rule that admits only the default branch would refuse the run job itself (G3, G7).
 - **One actor check gates the trigger, the commands and a review round's authors.** `remote-run.sh` → `authorise_actor` is called by the trigger, by the comment-command path and by `round_collect` (`remote-run.sh collect`, which `harness-run.yml`'s `collect` job runs). A person passes with `admin` or `write` from `repos/<repo>/collaborators/<login>/permission`. A bot passes only when listed in `HARNESS_TRIGGER_ALLOWED_BOTS`, and `ghost` or a non-login never passes ([`github-run-control.md`](github-run-control.md) → `## 6. Who can act, and pull requests from forks`). The repository variable that check reads reaches it only through an explicit `env:` line in each of those three jobs: `harness-trigger.yml`'s, `harness-control.yml`'s and `harness-run.yml`'s `collect` job. `harness-trigger.yml` and `harness-control.yml` also list it under `DECLARED MIRRORS`; `harness-run.yml` does not.
@@ -803,7 +815,7 @@ Read from the tree, not from an external source.
 - Docs: [`remote-execution.md`](remote-execution.md) → `## 7. Turning it on` step 4, `### Every secret and variable` and `## 9. Credentials and billing`; [`github-run-control.md`](github-run-control.md) → `## 6. Who can act, and pull requests from forks`; [`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run`.
 - A policy for a review round or an answer from someone other than the starter ([§7](#7-open-questions)).
 
-It rests on an open measurement: who `github.actor` is on a `workflow_dispatch` made with `GITHUB_TOKEN` ([§7](#7-open-questions)).
+It cannot read the starter from the run itself. Every harness dispatch names `github-actions[bot]` (repository facts, *Who a run names*), so it needs the trustworthy record of the starter that [§6](#6-recommendation) describes.
 
 ### Option B — a team organisation on the Claude API
 
@@ -842,7 +854,7 @@ It rests on an open measurement: who `github.actor` is on a `workflow_dispatch` 
 
 - `authorise_actor`: accept a person only when their login is on an allow-list in a repository variable, as well as holding `write`. What an unset list means — today's behaviour, or the repository owner only — is the maintainer's decision ([§7](#7-open-questions)). Because the check also screens a review round's authors, writers not on the list can no longer steer a run through a review either.
 - `harness-trigger.yml`, `harness-control.yml` and `harness-run.yml`'s `collect` job: pass the new variable into the job's `env:` beside `HARNESS_TRIGGER_ALLOWED_BOTS`, and add a `DECLARED MIRRORS` entry for the new variable in each of the three files — in `harness-run.yml` as a new entry, since its header does not list `HARNESS_TRIGGER_ALLOWED_BOTS` today.
-- `harness-run.yml`'s run job: refuse to launch when `github.triggering_actor` is a person not on the allow-list, so a direct dispatch or a re-run by another writer spends nothing (G2). Dispatches made with `GITHUB_TOKEN` — the trigger, the commands, a chained continuation and the poller — must still pass; which identity they carry is the open measurement [§7](#7-open-questions) lists, so this gate rests on it as option A does.
+- `harness-run.yml`'s run job: refuse to launch when `github.triggering_actor` is a person not on the allow-list, so a direct dispatch or a re-run by another writer spends nothing (G2). Dispatches made with `GITHUB_TOKEN` — the trigger, the commands, a chained continuation and the poller — must still pass. They name `github-actions[bot]` (repository facts, *Who a run names*), so the gate admits `github-actions[bot]` and every person on the list. A writer who edits a workflow can also dispatch as `github-actions[bot]`, but that writer can already read the secret (G7), so the gate opens no new route.
 - `harness-resume.yml`: no change.
 - `doctor`: warn when a subscription token is set, the allow-list is unset and the repository has more than one writer.
 - `cli/src/remote/githubActions.ts`: carry the allow-list variable's name, as it carries `TRIGGER_ALLOWED_BOTS_VARIABLE`.
@@ -852,7 +864,7 @@ It rests on an open measurement: who `github.actor` is on a `workflow_dispatch` 
 
 ## 6. Recommendation
 
-This is a recommendation from documented sources and inference. Nothing in it was measured, and the change it implies is a later branch's to make.
+This is a recommendation from documented sources and inference. Only *Who a run names* was measured, and the change it implies is a later branch's to make.
 
 - **Option B with workload identity federation, for any repository more than one person can trigger or steer.** It is the route the terms permit for shared use (P4), the one Anthropic recommends for CI (R2, and R7's organisation setup), and it leaves no long-lived secret for a writer to copy (R6, G7). Where federation cannot be set up, option B with a service-account key, accepting that any writer can read and keep that key (G7).
 - **Option C, for a repository one person drives.** It is what the shipped templates already assume.
@@ -872,7 +884,7 @@ This is a recommendation from documented sources and inference. Nothing in it wa
 
 **For a live measurement**, in the standing test repository [`github-integration-research.md`](github-integration-research.md) measured in.
 
-- Who are `github.actor` and `github.triggering_actor` on a `harness-run.yml` run dispatched with `GITHUB_TOKEN`? ([§5](#5-options-for-the-harness) → *The repository facts the options rest on*, G2)
+- ~~Who are `github.actor` and `github.triggering_actor` on a `harness-run.yml` run dispatched with `GITHUB_TOKEN`?~~ **Answered 2026-10-05:** `github-actions[bot]` for both. A person's dispatch names that person, and a re-run's `triggering_actor` is the re-runner ([§5](#5-options-for-the-harness) → *The repository facts the options rest on*, *Who a run names*). Still to confirm: the `continue` chain and the poller dispatch, which were not observed.
 - Does `secrets[format(…)]` resolve? (G4)
 - Does GitHub refuse **Request changes** from a pull request's own author? (G9)
 - Does an `actor`-bound federation rule authenticate the `claude` CLI in a run job end to end, including a refresh past the token's lifetime? (R6)
