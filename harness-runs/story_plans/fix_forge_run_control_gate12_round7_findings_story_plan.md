@@ -57,7 +57,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 6. [x] **Task 6** — `status` never calls a running run's ledger fully ticked, and names a round whose ledger is not written yet _(layer: cli)_ _(points: 12)_
 7. [x] **Task 7** — Gate 14: parse every rendered workflow with a YAML parser, refuse 0.6.1's file, and run `actionlint` where installed _(layer: general)_ _(points: 15)_
 8. [x] **Task 8** — `docs/development.md`: gate 14, the (xiv) by-name check, and the Gate 12 round 7 record _(layer: general)_ _(points: 15)_
-9. [ ] **Task 9** — `docs/github-run-control.md`: `status`, the stopped-job rule, the repair route, and §8's round 7 table _(layer: general)_ _(points: 15)_
+9. [x] **Task 9** — `docs/github-run-control.md`: `status`, the stopped-job rule, the repair route, and §8's round 7 table _(layer: general)_ _(points: 15)_
 10. [ ] **Task 10** — `docs/remote-execution.md`, `docs/github-issue-trigger.md` and `docs/cli.md` state the repair route and the new `doctor` failure _(layer: general)_ _(points: 12)_
 
 ## Scope register
