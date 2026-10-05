@@ -25,7 +25,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Hold a trigger or control job's re-runner (`GITHUB_TRIGGERING_ACTOR`) to `HARNESS_RUN_ACTORS` in `remote-run.sh`, with tests and the two doc sentences _(layer: cli, general)_
+1. [x] **Finding 1** — Hold a trigger or control job's re-runner (`GITHUB_TRIGGERING_ACTOR`) to `HARNESS_RUN_ACTORS` in `remote-run.sh`, with tests and the two doc sentences _(layer: cli, general)_
 
 ---
 

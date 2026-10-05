@@ -138,3 +138,7 @@ Either way the run is spent on the owner's subscription, which is exactly what t
 - [ ] In `docs/remote-execution.md` → `## 11. Security`, in the **Who can spend the credential.** paragraph, directly after the sentence ending "`github-actions[bot]`, which every harness dispatch names, passes.", add: "A re-run of a trigger or control job replays the original event, whose sender the list already admitted, so `remote-run.sh` also holds that job's `GITHUB_TRIGGERING_ACTOR` to the list on any attempt after the first."
 
 The test files this fix edits are `cli/test/remote-trigger.test.mjs` and `cli/test/remote-control.test.mjs`, so those are the only suites it runs.
+
+**Deviations from plan:**
+- The `cli` layer dispatch landed the script and the two test-file items. The two `docs/` items (`docs/github-run-control.md` §6 and `docs/remote-execution.md` §11) are outside the `cli` path scope and were not edited here; they need the `general` layer's dispatch.
+- The `general` layer dispatch landed both `docs/` items as written. It edited no test file, so the two suites named above were not run by it — deferred to the Run gates phase.

@@ -189,6 +189,8 @@ async function controlFixture(t, { forge = 'github', ledger: ledgerText = '# Pro
         HARNESS_REMOTE_STOP: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
         HARNESS_RUN_ACTORS: '*',
+        GITHUB_RUN_ATTEMPT: '',
+        GITHUB_TRIGGERING_ACTOR: '',
         HARNESS_TRIGGER_LABEL: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write' }),
         STUB_PR: '',
@@ -316,6 +318,20 @@ test('HARNESS_RUN_ACTORS entries are trimmed and matched case-insensitively', as
   const result = await f.control('@sdlc-harness pause', {}, { HARNESS_RUN_ACTORS: ' ALICE ' });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.deepEqual(dispatches(f.calls()).map((call) => call.line), [PAUSE_DISPATCH]);
+});
+
+test('a re-run of a command by a person HARNESS_RUN_ACTORS does not admit is refused', async (t) => {
+  const rerun = { HARNESS_RUN_ACTORS: 'alice', GITHUB_RUN_ATTEMPT: '2' };
+
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness pause', {}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'bob' });
+  assertRefused(f, result, /re-run by @bob/);
+  assert.deepEqual(permissionCalls(f.calls()), []);
+
+  const g = await controlFixture(t);
+  const listed = await g.control('@sdlc-harness pause', {}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'alice' });
+  assert.equal(listed.status, 0, `${listed.stdout}\n${listed.stderr}`);
+  assert.deepEqual(dispatches(g.calls()).map((call) => call.line), [PAUSE_DISPATCH]);
 });
 
 test('ghost is refused', async (t) => {

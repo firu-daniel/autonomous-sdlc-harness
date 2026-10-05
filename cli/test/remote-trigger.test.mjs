@@ -175,6 +175,8 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
         HARNESS_TRIGGER_LABEL: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
         HARNESS_RUN_ACTORS: '*',
+        GITHUB_RUN_ATTEMPT: '',
+        GITHUB_TRIGGERING_ACTOR: '',
         HARNESS_TRIGGER_LOOKUP_SECS: '0',
         ...env,
       });
@@ -208,6 +210,8 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
         HARNESS_TRIGGER_LABEL: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
         HARNESS_RUN_ACTORS: '*',
+        GITHUB_RUN_ATTEMPT: '',
+        GITHUB_TRIGGERING_ACTOR: '',
         HARNESS_TRIGGER_LOOKUP_SECS: '0',
         ...env,
       });
@@ -650,4 +654,31 @@ test('a dispatch whose sender carries no type fails closed unless the list is *'
   assert.equal(result.status, 2, `${result.stdout}\n${result.stderr}`);
   assert.deepEqual(dispatches(f.calls()), []);
   assert.match(f.summary(), /HARNESS_RUN_ACTORS/);
+});
+
+test('a re-run by a person HARNESS_RUN_ACTORS does not admit is refused, whoever the event names', async (t) => {
+  const rerun = { HARNESS_RUN_ACTORS: 'alice', GITHUB_RUN_ATTEMPT: '2' };
+
+  const f = await triggerFixture(t);
+  const calls = assertRefused(f, await f.trigger({}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'bob' }), /re-run by @bob/);
+  assert.deepEqual(permissionCalls(calls), []);
+
+  const g = await triggerFixture(t);
+  const listed = await g.trigger({}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'Alice' });
+  assert.equal(listed.status, 0, `${listed.stdout}\n${listed.stderr}`);
+  assert.equal(dispatches(g.calls()).length, 1);
+
+  const h = await triggerFixture(t);
+  const bot = await h.trigger({}, { ...rerun, GITHUB_TRIGGERING_ACTOR: 'github-actions[bot]' });
+  assert.equal(bot.status, 0, `${bot.stdout}\n${bot.stderr}`);
+  assert.equal(dispatches(h.calls()).length, 1);
+
+  const d = await triggerFixture(t);
+  const dispatched = await d.dispatch(
+    { action: 'harness-task', client_payload: { title: TITLE, body: 'x' }, sender: { login: 'helper[bot]', type: 'Bot' } },
+    { ...rerun, GITHUB_TRIGGERING_ACTOR: 'bob' },
+  );
+  assert.equal(dispatched.status, 2, `${dispatched.stdout}\n${dispatched.stderr}`);
+  assert.deepEqual(dispatches(d.calls()), []);
+  assert.match(d.summary(), /re-run by @bob/);
 });

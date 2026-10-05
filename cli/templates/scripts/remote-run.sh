@@ -234,6 +234,10 @@
 #   7. a writer `HARNESS_RUN_ACTORS` does not admit — after refusal 6, so a
 #      non-writer is still told about write access
 # Refusals 4 to 7 are `authorise_actor`, the one actor check `control` reuses.
+# Before them, after refusal 2, a re-run (GITHUB_RUN_ATTEMPT above 1) whose
+# GITHUB_TRIGGERING_ACTOR is not `github-actions[bot]` and is not admitted by
+# `HARNESS_RUN_ACTORS` is refused (`rerun_actor_listed`), on both event kinds:
+# a re-run replays the event, so its sender is whoever first acted.
 # Then it fetches `origin <defaultBranch>` (a failure tolerated), derives the
 # branch with `hr_derive_branch <title> issue_<number>`, passing `gh` so a name
 # with run-workflow history counts as taken (2 or 3 refused), writes
@@ -391,6 +395,8 @@
 #   1. `HARNESS_REMOTE_STOP` is set
 #   2. `forge_on` fails — before any authorisation, so a disabled coupling asks
 #      GitHub nothing about the commenter
+#      then a re-run whose GITHUB_TRIGGERING_ACTOR `rerun_actor_listed`
+#      refuses, before the event's own actor is checked
 #   3. `authorise_actor` fails: `AUTH_WHY`, and who may command a run — a
 #      writer the `HARNESS_RUN_ACTORS` allow-list admits, or a listed bot
 #   4. the verb is empty, not a `COMMAND_VERBS` word, or one no arm carries out
@@ -3538,6 +3544,22 @@ run_actor_listed() {
   return 1
 }
 
+# rerun_actor_listed — 0 unless this job is a re-run (GITHUB_RUN_ATTEMPT above
+# 1) whose GITHUB_TRIGGERING_ACTOR is neither `github-actions[bot]` nor
+# admitted by run_actor_listed; then 1, with RUN_ACTORS_WHY naming the
+# re-runner. A re-run replays the original event, whose sender is the person
+# who first acted, so authorise_actor alone would check the wrong account.
+rerun_actor_listed() {
+  local attempt="${GITHUB_RUN_ATTEMPT-}" who="${GITHUB_TRIGGERING_ACTOR-}"
+  RUN_ACTORS_WHY=""
+  case "$attempt" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$attempt" -gt 1 ] || return 0
+  [ "$who" != 'github-actions[bot]' ] || return 0
+  run_actor_listed "$who" && return 0
+  RUN_ACTORS_WHY="this job is a re-run by @${who:-(no actor)}, and the re-runner is checked rather than the event's sender: $RUN_ACTORS_WHY"
+  return 1
+}
+
 # authorise_actor <login> <type> — the one actor check, shared by `trigger` and
 # `control`: 0 when authorised. Otherwise AUTH_WHY holds one sentence and the
 # status names the arm: 1 `ghost`, empty or not a login shape; 2 a non-`User`
@@ -3711,6 +3733,12 @@ verb_trigger() {
   if [ "$forge" != github ] || [ "$target" != github-actions ]; then
     trigger_refuse "the default branch's \`harness.config.json\` does not turn the $trigger_source trigger on: it needs \`forge\` set to \`github\` (it is ${forge:-not set or unreadable}) and \`execution.target\` set to \`github-actions\` (it is ${target:-unreadable})." \
       "Set both keys on the default branch, then $retry_then."
+  fi
+
+  # A re-run replays the event's sender; the re-runner is held to the list.
+  if ! rerun_actor_listed; then
+    trigger_refuse "$RUN_ACTORS_WHY" \
+      "Only a person the repository variable \`HARNESS_RUN_ACTORS\` admits may re-run this job; one of them can $retry_then."
   fi
 
   # A dispatch's `User` sender is held to the allow-list with no permission
@@ -5815,6 +5843,11 @@ verb_control() {
   if [ "$forge" != github ] || [ "$target" != github-actions ]; then
     control_refuse "$EXIT_REFUSED" "the default branch's \`harness.config.json\` does not turn run control on: it needs \`forge\` set to \`github\` (it is ${forge:-not set or unreadable}) and \`execution.target\` set to \`github-actions\` (it is ${target:-unreadable})" \
       "Set both keys on the default branch, then comment again."
+  fi
+
+  if ! rerun_actor_listed; then
+    control_refuse "$EXIT_REFUSED" "${RUN_ACTORS_WHY%.}" \
+      "Only a person the repository variable \`HARNESS_RUN_ACTORS\` admits may re-run this job; one of them can comment again."
   fi
 
   status=0

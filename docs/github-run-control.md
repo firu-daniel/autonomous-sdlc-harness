@@ -323,7 +323,7 @@ The labels let a team filter runs by state from the issue and pull-request lists
 
 Triage is refused because commenting and labelling need only the triage role, so neither proves that the actor may run code with the repository's secrets. The API reports triage as `read` (T3).
 
-The **Run workflow** form, `gh workflow run` and a re-run reach no comment check, so `harness-run.yml`'s `run` and `collect` jobs each open with a step that holds `github.triggering_actor` to the same list, and refuse anyone else before any credential is read; `github-actions[bot]`, which every harness dispatch names, passes. The list does not close one route: a writer can still edit a workflow to read the credential secret itself ([`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`).
+The **Run workflow** form and `gh workflow run` reach no comment check, and a re-run replays its event's original sender, so `harness-run.yml`'s `run` and `collect` jobs each open with a step that holds `github.triggering_actor` to the same list, and refuse anyone else before any credential is read; `github-actions[bot]`, which every harness dispatch names, passes. A re-run of a trigger or control job is held to the list by its re-runner too: `remote-run.sh` refuses one whose `GITHUB_TRIGGERING_ACTOR` the list does not admit, before it checks the event's own actor. The list does not close one route: a writer can still edit a workflow to read the credential secret itself ([`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`).
 
 **Pull requests from forks.** The fork rule is three sentences:
 
