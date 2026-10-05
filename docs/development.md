@@ -1018,7 +1018,7 @@ The setup passes when `forge` answers `PASS` and `remote-github` names the trigg
 npx --yes autonomous-sdlc-harness@<version> daemon stop
 ```
 
-Switch the machine off or disconnect it. From another device, as a person with write access, open an issue and apply the trigger label:
+Switch the machine off or disconnect it. From another device, as a person the allow-list admits — by default the repository owner, open an issue and apply the trigger label:
 
 ```
 gh issue create --repo <owner>/<scratch-repo> --title "<title>" --body "<body>"
@@ -1192,7 +1192,13 @@ The setup passes when `remote-github` names both `harness-trigger.yml` and `harn
 npx --yes autonomous-sdlc-harness@<version> daemon stop
 ```
 
-Switch the machine off or disconnect it. Run every leg below from another device, as a person with write access, in order. `<number>` is the issue's number until leg (d) names the pull request's. After each leg, record each new reply's first line exactly and the labels each item carries:
+Admit the owner and leg (e)'s reviewing account, a second writer whose reviews the allow-list must admit:
+
+```
+gh variable set HARNESS_RUN_ACTORS --repo <owner>/<scratch-repo> --body <owner login>,<reviewing account login>
+```
+
+Switch the machine off or disconnect it. Run every leg below from another device, as a person the allow-list admits — by default the repository owner, in order. `<number>` is the issue's number until leg (d) names the pull request's. After each leg, record each new reply's first line exactly and the labels each item carries:
 
 ```
 gh issue view <number> --repo <owner>/<scratch-repo> --json labels
@@ -1264,7 +1270,7 @@ Passes when the run leg (c) resumed completed and opened the pull request with n
 gh pr view <number> --repo <owner>/<scratch-repo> --json author
 ```
 
-The reviewing account, which submits every review in legs (e) and (f), must have write access and must not be the pull request's author: GitHub never lets a pull request's author approve it or request changes on it, and the draft pull request is authored by the owner of `HARNESS_GIT_TOKEN` when that secret is set and otherwise by `github-actions[bot]` (`app/github-actions`), so the account that owns that token cannot run any review leg. From the reviewing account, submit a review requesting changes with two inline comments on different lines, from the pull request's *Files changed* tab. Then read the branch:
+The reviewing account, which submits every review in legs (e) and (f), must have write access, must be admitted by the allow-list and must not be the pull request's author: GitHub never lets a pull request's author approve it or request changes on it, and the draft pull request is authored by the owner of `HARNESS_GIT_TOKEN` when that secret is set and otherwise by `github-actions[bot]` (`app/github-actions`), so the account that owns that token cannot run any review leg. From the reviewing account, submit a review requesting changes with two inline comments on different lines, from the pull request's *Files changed* tab. Then read the branch:
 
 ```
 gh api "repos/<owner>/<scratch-repo>/commits?sha=<slug>"
@@ -1483,7 +1489,145 @@ Passes when the run's `wrong-ref` job fails with an `::error::` line naming `<sl
 
 **What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); and *The whole chain on GitHub*, by the legs together. Leg (h) settles *A `delete` event's workflow runs from the default branch*, *A `pull_request` `closed` job runs the merge-commit copy of the workflow*, *The contents API serves a file at a commit no branch points at any more* and *A workflow can be dispatched from the default branch while its `branch` input names a deleted branch*; leg (d) settles *A pull request opened with `HARNESS_GIT_TOKEN` puts a cross-reference on the issue its body mentions* where that secret is set.
 
-**Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set. Where (xiv) ran, close the round's pull request first, before any branch is deleted:
+**(xv) The allow-list refuses a writer it does not name, on every route.** It observes the run-actor allow-list `HARNESS_RUN_ACTORS` on GitHub (`docs/remote-execution.md` → `## 11. Security`, *Who can spend the credential*): the refusal on each route a writer can take, and the admission of the harness's own dispatches and of the owner under the unset default. On the scratch repository, with (xiv)'s setup done, give a second account the `write` role — `expause-admin`'s role in the 2026-10-05 measurement (`docs/team-accounts-research.md` → `### The repository facts the options rest on`) — and run that account's commands with `gh` authenticated as it. Delete the variable, so the owner-only default applies, and make the self-pause small for leg (e):
+
+```
+gh variable delete HARNESS_RUN_ACTORS --repo <owner>/<scratch-repo>
+```
+
+```
+gh variable list --repo <owner>/<scratch-repo>
+```
+
+```
+gh variable set HARNESS_SELF_PAUSE_AFTER_MINUTES --repo <owner>/<scratch-repo> --body 5
+```
+
+The setup passes when the list does not name `HARNESS_RUN_ACTORS`. Then, as the owner, open an issue whose task outlasts the self-pause and apply the trigger label, as (xiii) does; the run it starts is `<slug>`, and its issue is `<issue number>`.
+
+Run legs (e) and (f) first, while `<slug>` runs. Legs (b) and (c) need no job of `<slug>` running: the `run` job holds the concurrency group `harness-run-<slug>` with `cancel-in-progress: false`, so a job dispatched while another runs waits rather than reaching its gate. Once (f) is recorded, stop the run as the owner:
+
+```
+gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harness stop"
+```
+
+For every run a leg names, record its `actor.login` and `triggering_actor.login` from:
+
+```
+gh api repos/<owner>/<scratch-repo>/actions/runs/<id>
+```
+
+**(a) A label.** As the second account:
+
+```
+gh issue create --repo <owner>/<scratch-repo> --title "<title>" --body "<body>"
+```
+
+```
+gh issue edit <number> --repo <owner>/<scratch-repo> --add-label sdlc-harness
+```
+
+```
+gh issue view <number> --repo <owner>/<scratch-repo> --comments
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml
+```
+
+Passes when the issue's refusal comment names `HARNESS_RUN_ACTORS` and no `harness run` run follows. Record the comment verbatim and the `harness-trigger.yml` run's two actors.
+
+**(b) A dispatch.** As the second account:
+
+```
+gh workflow run harness-run.yml --repo <owner>/<scratch-repo> --ref <slug> -f action=run -f branch=<slug>
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+```
+
+```
+gh run view <id> --repo <owner>/<scratch-repo> --log
+```
+
+Passes when the `run` job fails at its first step, `Refuse an actor not on HARNESS_RUN_ACTORS`, with the `::error::` line naming `HARNESS_RUN_ACTORS`, and no later step ran. Record the `::error::` line verbatim.
+
+**(c) A re-run.** As the second account, re-run a `harness run <slug>` run the owner's chain started, once with **Re-run all jobs** and once with **Re-run failed jobs**, the second on the run the owner's `stop` ended, whose `run` job did not succeed:
+
+```
+gh run rerun <id> --repo <owner>/<scratch-repo>
+```
+
+```
+gh run rerun <id> --repo <owner>/<scratch-repo> --failed
+```
+
+```
+gh run view <id> --repo <owner>/<scratch-repo> --log
+```
+
+Passes when the gate refuses both: each re-run's `run` job fails at its first step with the `::error::` line, and its `triggering_actor.login` is the second account. Where GitHub offers no failed-jobs re-run for that run, record its refusal exactly.
+
+**(d) A comment command.** As the second account, on the run's issue:
+
+```
+gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harness status"
+```
+
+```
+gh issue view <issue number> --repo <owner>/<scratch-repo> --comments
+```
+
+Passes when the reply names `HARNESS_RUN_ACTORS`. Record the reply verbatim and the `harness-control.yml` run's two actors.
+
+**(e) The `continue` chain.** Let `<slug>`'s first job self-pause and its `remote-run.sh continue` step chain a new job:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+```
+
+```
+gh run view <id> --repo <owner>/<scratch-repo> --log
+```
+
+Passes when the run the `continue` step dispatched — not the first — names `github-actions[bot]` as both `actor.login` and `triggering_actor.login`, and its gate passed with `@github-actions[bot] passes: every harness dispatch is made with GITHUB_TOKEN and names it.` Record both run ids, the `continue` step's output and the gate's line.
+
+**(f) The poller's dispatch.** Let a job of `<slug>` end on a usage pause, as (v) sets up, or, while a paused run's reset has passed, start the poller by hand:
+
+```
+gh workflow run harness-resume.yml --repo <owner>/<scratch-repo>
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug>
+```
+
+Passes when the `harness run <slug>` run the poller dispatched names `github-actions[bot]` as both `actor.login` and `triggering_actor.login`, and its gate passed with the same line as leg (e). A round that meets no usage pause records this leg as **not observed**, never inferred from leg (e).
+
+**(g) The owner, with the variable unset.** As the owner:
+
+```
+gh workflow run harness-run.yml --repo <owner>/<scratch-repo> --ref <slug> -f action=run -f branch=<slug>
+```
+
+```
+gh run view <id> --repo <owner>/<scratch-repo> --log
+```
+
+Passes when the gate's pass line names the owner rule: `@<owner login> passes: HARNESS_RUN_ACTORS is unset, which admits the owner of this user-owned repository alone.` That line shows `github.event.repository.owner.type` read `User`. Record it verbatim, then stop the run as the setup does.
+
+**(h) The `*` entry.** As the owner, admit every writer:
+
+```
+gh variable set HARNESS_RUN_ACTORS --repo <owner>/<scratch-repo> --body "*"
+```
+
+Then repeat leg (a) as the second account, on a new issue. Passes when the second account's label starts a run: the trigger's comment names a branch and its run, and a `harness run` run for that branch follows. Record the comment and the run's two actors, then stop the run.
+
+**What it settles.** The row of `docs/remote-execution.md` → `## 6. What is not verified here` on *A `remote-run.sh continue` chain and a `harness-resume.yml` poller dispatch name `github-actions[bot]`*, and on `github.event.repository.owner.type` reading `User`, by legs (e) to (g); and `docs/team-accounts-research.md` → `## 7. Open questions`'s still-to-confirm sentence on the `continue` chain and the poller dispatch, by legs (e) and (f). The result is recorded under this gate, not by editing that research.
+
+**Teardown.** Deregister the self-hosted runner, stop any run still going with `bash <scriptsDir>/remote-run.sh stop <branch>`, and delete the repository variables the round set, `HARNESS_RUN_ACTORS` among them. Where (xiv) ran, close the round's pull request first, before any branch is deleted:
 
 ```
 gh pr close <number> --delete-branch

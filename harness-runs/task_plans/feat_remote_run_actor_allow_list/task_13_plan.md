@@ -53,3 +53,8 @@ The step also observes every refusal route on GitHub itself. The lessons ledger 
 - Every command in the new legs sits in its own fenced block, one per line. No leg's pass condition carries a count it expects, other than the gate's own exit.
 - `git diff` of `docs/development.md` shows (xiv)'s `**What it settles.**` paragraph unchanged, and (xv)'s legs and its own `**What it settles.**` paragraph sitting after it and before `**Teardown.**`.
 - The new observation's label (xv) is the one Task 11's `## 6.` row cites. Grep `docs/remote-execution.md` for `(xv)` and find that citation.
+
+**Deviations from plan:**
+- (xv) runs legs (e) and (f) first, then stops `<slug>` as the owner, because `harness-run.yml`'s `run` job holds `concurrency: harness-run-<branch>` with `cancel-in-progress: false`: a dispatch or re-run made while a job of that branch runs waits rather than reaching its gate. Leg letters are as planned.
+- Leg (c)'s **Re-run failed jobs** targets the run the owner's `@sdlc-harness stop` ended, so that a job that did not succeed exists; the leg records GitHub's refusal exactly if no failed-jobs re-run is offered.
+- Leg (f) records itself as **not observed** when the round meets no usage pause, following (v)'s rule, so that a missing pause is not read as a pass.
