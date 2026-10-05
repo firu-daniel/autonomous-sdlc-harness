@@ -71,3 +71,10 @@
 - `bash -n scripts/run-gates.sh` exits 0.
 - Grep `scripts/run-gates.sh` and find all three of `14a`, `14b` and `14c`, the header's `fourteen` and its new gate list.
 - Read `check-rendered-workflows.mjs` for its temp-root lifecycle. The one `mkdtemp` and the one `rmSync` are paired in a `try`/`finally` that encloses every child process. No path outside that root is removed.
+
+**Deviations from plan:**
+- Isolation widened: besides `CLAUDE_CONFIG_DIR`, the children's `XDG_STATE_HOME`, `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` also point under the temp root, because `cli/src/machine/paths.ts` → `machineStateDir` resolves the machine registry from `XDG_STATE_HOME`, not `CLAUDE_CONFIG_DIR`; the plan's "no machine-local state is written" needs them.
+- "Every child process" inside the `try`/`finally` holds for every child that touches the temp root (`git init`, the four CLI calls, actionlint over the rendered files). Two children run outside it and touch no temp path: the startup `git rev-parse --show-toplevel` that locates the workspace root, and `--actionlint`'s run over the committed 0.6.1 fixture.
+- Evidence downgrade, `npm ls js-yaml`: the command was refused by the permission profile in this session. The claim rests on reading instead: `node_modules/js-yaml/package.json` at the workspace root carries `"version": "3.15.1"`, `package-lock.json` → `node_modules/js-yaml` already carries 3.15.1 with `"dev": true`, and `packages[""].devDependencies` now carries `"js-yaml": "^3.14.0"` matching `package.json`. Not executed.
+- Evidence downgrade, `bash -n scripts/run-gates.sh`: refused by the permission profile (twice, absolute and relative path). The syntax claim rests on reading the four edited regions, not on execution; Phase G's full run executes the script.
+- `node --check scripts/check-rendered-workflows.mjs` exited 0. The gate itself was not run: deferred to the Run gates phase per `unit_loop_core.md` → `## The test-run rule`. `actionlint` is not on this machine's PATH, so 14c will report SKIPPED here.

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # The harness's own verification, as one command.
 #
-# `docs/development.md` §5 defines thirteen gates. This script runs the seven a process can run
-# unattended — gates 1, 2, 3, 4, 6, 11 and 13 — and reports the six it cannot, so that a reviewer —
-# human or agent — reading a green result has read the whole automatable half rather than one suite
-# of it. Two of the seven are conditional. Gate 11 runs where the retrieval model cache is
+# `docs/development.md` §5 defines fourteen gates. This script runs the eight a process can run
+# unattended — gates 1, 2, 3, 4, 6, 11, 13 and 14 — and reports the six it cannot, so that a
+# reviewer — human or agent — reading a green result has read the whole automatable half rather than
+# one suite of it. Gate 14 depends on gate 2a's build, and its `actionlint` leg 14c is SKIPPED where
+# `actionlint` is not on PATH. Two of the eight are conditional. Gate 11 runs where the retrieval model cache is
 # provisioned and the workspace's retrieval packages are installed, and is reported BLOCKED with the
 # hand-run gates where they are not. Gate 13 (the Python docs-retrieval service) reports a leg
 # BLOCKED where `uv` or its synced environment is missing, and its container leg 13d SKIPPED unless
@@ -228,6 +229,27 @@ if [ ${#python_blocked[@]} -gt 0 ]; then
   done
 fi
 
+echo "== gate 14 — rendered workflows parse"
+# 14a and 14c render through `cli/dist`, so they depend on gate 2a. 14c is hand-written as
+# `python_gate` is: status 4 is `check-rendered-workflows.mjs --actionlint`'s no-actionlint skip,
+# pushed onto neither array.
+actionlint_skip_reason=""
+gate "14a rendered workflows parse as YAML" node scripts/check-rendered-workflows.mjs
+gate "14b 0.6.1's harness-control.yml is refused" node scripts/check-rendered-workflows.mjs --negatives
+node scripts/check-rendered-workflows.mjs --actionlint >"$log" 2>&1
+actionlint_status=$?
+if [ "$actionlint_status" -eq 0 ]; then
+  passed+=("14c actionlint over the rendered workflows")
+  echo "  ok    14c actionlint over the rendered workflows"
+elif [ "$actionlint_status" -eq 4 ]; then
+  actionlint_skip_reason="actionlint is not on PATH"
+  echo "  SKIPPED 14c actionlint over the rendered workflows — actionlint is not on PATH"
+else
+  failed+=("14c actionlint over the rendered workflows")
+  echo "  FAIL  14c actionlint over the rendered workflows (exit $actionlint_status)"
+  sed 's/^/        /' "$log" | tail -25
+fi
+
 echo
 echo "== gates this script cannot run"
 echo "  5  doctor's exit contract, by hand against gate 4's scratch repository"
@@ -249,6 +271,9 @@ fi
 if [ -n "$python_skip_reason" ]; then
   echo "  13d the Python service's container tests, reported SKIPPED above: ${python_skip_reason}"
 fi
+if [ -n "$actionlint_skip_reason" ]; then
+  echo "  14c actionlint over the rendered workflows, reported SKIPPED above: ${actionlint_skip_reason}"
+fi
 echo "     -> docs/development.md §5"
 
 # The same conditionals the block above states, in the line a caller reads off a green run.
@@ -261,6 +286,9 @@ if [ -n "$python_blocked_list" ]; then
 fi
 if [ -n "$python_skip_reason" ]; then
   hand_run="$hand_run; 13d was SKIPPED — ${python_skip_reason}"
+fi
+if [ -n "$actionlint_skip_reason" ]; then
+  hand_run="$hand_run; 14c was SKIPPED — ${actionlint_skip_reason}"
 fi
 
 echo
