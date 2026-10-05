@@ -149,6 +149,7 @@ A row-`G.4` layer whose return carries `already passing — ` — full form `blo
 **Who may cite this.** These documents point at this heading:
 
 - `${CLAUDE_PLUGIN_ROOT}/agents/layer-implementer.md`
+- `${CLAUDE_PLUGIN_ROOT}/agents/layer-reviewer.md`
 - `${CLAUDE_PLUGIN_ROOT}/agents/test-fix-plan-writer.md`
 - `${CLAUDE_PLUGIN_ROOT}/agents/architecture-reviewer.md`
 - `${CLAUDE_PLUGIN_ROOT}/agents/business-parity-reviewer.md`

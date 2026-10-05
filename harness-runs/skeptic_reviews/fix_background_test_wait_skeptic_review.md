@@ -26,7 +26,7 @@ There is also one decision for a human, in the return's `## Questions` section: 
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 2** — Make the reason clause in both adopter templates fit the three forbidden shapes _(layer: cli)_
-2. [ ] **Finding 1** — Bind a backgrounded `layer-reviewer` probe to test-run rule point 6's no-wait prohibitions _(layer: plugin)_
+2. [x] **Finding 1** — Bind a backgrounded `layer-reviewer` probe to test-run rule point 6's no-wait prohibitions _(layer: plugin)_
 
 ---
 
