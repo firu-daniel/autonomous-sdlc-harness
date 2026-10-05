@@ -37,7 +37,7 @@ The six findings below remain:
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 5** — Put the `failing` table's closing `];` in `cli/test/doctor.test.mjs` on its own line _(layer: cli)_
+1. [x] **Finding 5** — Put the `failing` table's closing `];` in `cli/test/doctor.test.mjs` on its own line _(layer: cli)_
 2. [ ] **Finding 4** — Drop the `export` from `UNPARSEABLE_CONTROL_IF_LINE` _(layer: cli)_
 3. [ ] **Finding 6** — Replace "committed by Task 2" in `scripts/check-rendered-workflows.mjs` with the fixture's blob provenance _(layer: general)_
 4. [ ] **Finding 1** — Fence the edited-copy `init --force` route in `docs/remote-execution.md` → `### Upgrading` _(layer: general)_
