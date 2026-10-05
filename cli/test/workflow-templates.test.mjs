@@ -23,6 +23,12 @@
  * into the file; and the `Preflight with doctor` step runs `doctor --remote-job` after the step
  * generating the job's permission profile and before the harness runs — the option spelled as
  * `cli/src/commands/doctor.ts` → `REMOTE_JOB_FLAG` declares it, which that module does not export.
+ * The run-actor gate: the first step of `run` and of `collect`, its `run:` body identical in both and
+ * no `secrets.` step of `run` before it, both jobs' `env:` passing `RUN_ACTORS_VARIABLE` from
+ * `vars.`, each gate step's `env:` exactly `IN_TRIGGERING_ACTOR`, `IN_OWNER` and `IN_OWNER_TYPE`; and
+ * the body, run under `bash -e -o pipefail`, passing `github-actions[bot]`, a listed login, `*` and the
+ * owner of a user-owned repository under an empty list, and refusing every other actor with an
+ * `::error::` line naming `RUN_ACTORS_VARIABLE`.
  *
  * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; the permissions exactly
  * `contents: read`, `actions: write`, `issues: write` and `pull-requests: write`;`remote-run.sh poll` its only call into the script family;
@@ -36,14 +42,19 @@
  * `DEFAULT_TRIGGER_LABEL` as its fallback;
  * `remote-run.sh trigger` its only call into the script family; no `secrets.` reference, so the
  * credential secrets never reach the job reading issue text; no `concurrency:` key, which would drop a
- * pending trigger; no template token; every expression spaced, and none inside a `run:` block.
+ * pending trigger; no template token; every expression spaced, and none inside a `run:` block; the
+ * job's `env:` passing `RUN_ACTORS_VARIABLE` from `vars.` on the line after
+ * `HARNESS_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
  *
  * For `harness-control.yml`: the `issue_comment`, `pull_request_review`, `issues`, `pull_request` and
  * `delete` triggers, `created`, `submitted`, `closed` and `closed` their only types, and neither
  * `pull_request_target` nor `pull_request_review_comment` outside a comment line; the `run-name`
  * falling back to the deleted ref; the permissions exactly `contents`, `actions`, `issues` and
- * `pull-requests`, each `write`; the job's `if:` carrying `COMMAND_HANDLE`, `COMMENT_MARKER`,
- * `REVIEW_ROUND_STATE` and `STATE_LABEL_PREFIX`, comparing the head repository with
+ * `pull-requests`, each `write`; the job's `if:` exactly `if: >-`, its condition on the one
+ * continuation line beneath, because the condition carries `: ` and a plain scalar would read that
+ * as a mapping indicator and leave the file unparseable; no plain-scalar mapping value carrying `: `
+ * or ` #` (the header's third rule, checked in all four files below); the condition carrying
+ * `COMMAND_HANDLE`, `COMMENT_MARKER`, `REVIEW_ROUND_STATE` and `STATE_LABEL_PREFIX`, comparing the head repository with
  * `github.repository` for a review and a closed pull request, so a fork's is skipped, and admitting a
  * deleted ref only when it is a branch; the checkout's `ref` the default branch, never the pull
  * request's merge commit; `remote-run.sh control` its only call into the script family, its step
@@ -51,11 +62,16 @@
  * passes and 1, 3 and 4 fail; no `secrets.` reference; one `concurrency:` group on the job,
  * `harness-review-` plus the head ref for a review and the run's own id for a comment, with
  * `cancel-in-progress: false`, so review jobs on one branch run one at a time and no comment job is
- * ever replaced; no template token; every expression spaced, and none inside a `run:` block.
+ * ever replaced; no template token; every expression spaced, and none inside a `run:` block; the
+ * job's `env:` passing `RUN_ACTORS_VARIABLE` from `vars.` on the line after
+ * `HARNESS_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
  *
  * For all four: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
  * pin the file dropped or a bumped `uses:` the header forgot fails; and every `uses:` value is a major
  * tag of a GitHub `actions/` action, never a sha or a branch — the pinning decision that header states.
+ * And outside a `|` / `>` block body, no mapping value that opens as a plain scalar carries `: ` or
+ * ` #`: the first breaks the parse, the second silently truncates the value as a comment. These are
+ * text-level readings; no YAML parser is loaded.
  */
 
 import assert from 'node:assert/strict';
@@ -72,6 +88,7 @@ import {
   DEFAULT_TRIGGER_LABEL,
   POLL_STATE_ARTIFACT_NAME,
   REVIEW_ROUND_STATE,
+  RUN_ACTORS_VARIABLE,
   STATE_ARTIFACT_NAME,
   STATE_LABEL_PREFIX,
   TRIGGER_DISPATCH_EVENT_TYPE,
@@ -204,6 +221,131 @@ test('the collect job follows run unless cancelled, shares the review group, rea
   );
   assert.deepEqual(calls, ['remote-run.sh collect']);
   assert.match(text, /remote-run\.sh" collect "\$HARNESS_INPUT_BRANCH"/);
+});
+
+/** The line of one job's key under `jobs:`; `defaults:` carries a `  run:` key of its own above it. */
+function jobStart(job) {
+  const start = LINES.indexOf(`  ${job}:`, LINES.indexOf('jobs:'));
+  assert.notEqual(start, -1, `harness-run.yml carries a ${job} job`);
+  return start;
+}
+
+/** The `- name:` steps of one job, as line blocks, in order. */
+function jobSteps(job) {
+  const block = blockUnder(jobStart(job));
+  return block.flatMap((line, i) => (/^\s*- name: /.test(line) ? [[line, ...blockUnder(i, block)]] : []));
+}
+
+/** The job-level `env:` lines of one job, trimmed. */
+function jobEnv(job) {
+  const block = blockUnder(jobStart(job));
+  const at = block.findIndex((l) => /^ {4}env:$/.test(l));
+  assert.notEqual(at, -1, `the ${job} job declares env:`);
+  return blockUnder(at, block).map((l) => l.trim());
+}
+
+const GATE_STEPS = {
+  run: `Refuse an actor not on ${RUN_ACTORS_VARIABLE}`,
+  collect: `Refuse an actor not on ${RUN_ACTORS_VARIABLE} before collecting`,
+};
+
+function gateBody(job) {
+  const [first] = jobSteps(job);
+  assert.equal(first[0].trim(), `- name: ${GATE_STEPS[job]}`, `the gate is the ${job} job's first step`);
+  const bodies = runBodies(first);
+  assert.equal(bodies.length, 1);
+  return bodies[0];
+}
+
+test('the run-actor gate is the first step of run and collect, identical in both, before any secret', () => {
+  assert.equal(gateBody('run'), gateBody('collect'));
+  assert.ok(!gateBody('run').includes('${{'), 'no expression inside the gate body');
+  const runSteps = jobSteps('run');
+  const firstSecret = runSteps.findIndex((s) => s.join('\n').includes('secrets.'));
+  assert.ok(firstSecret > 0, 'no step of run reading a secret comes before the gate');
+});
+
+test('the run-actor gate reads the list from vars and the actor and owner through its own env', () => {
+  for (const job of ['run', 'collect']) {
+    assert.ok(
+      jobEnv(job).includes(`${RUN_ACTORS_VARIABLE}: \${{ vars.${RUN_ACTORS_VARIABLE} }}`),
+      `the ${job} job passes ${RUN_ACTORS_VARIABLE}`,
+    );
+    const [first] = jobSteps(job);
+    const at = first.findIndex((l) => /^\s*env:$/.test(l));
+    assert.notEqual(at, -1);
+    assert.deepEqual(
+      blockUnder(at, first).filter((l) => l.trim() !== '').map((l) => l.trim()),
+      [
+        'IN_TRIGGERING_ACTOR: ${{ github.triggering_actor }}',
+        'IN_OWNER: ${{ github.repository_owner }}',
+        'IN_OWNER_TYPE: ${{ github.event.repository.owner.type }}',
+      ],
+    );
+  }
+});
+
+test('the run-actor gate, under bash -e -o pipefail, passes the bot and admitted actors and refuses the rest', () => {
+  const body = gateBody('run');
+  // [actor, list, owner, owner type, passes]
+  const cases = [
+    ['github-actions[bot]', '', 'org', 'Organization', true],
+    ['Alice', ' alice , bob,', 'owner', 'User', true],
+    ['carol', 'alice, *', 'org', 'Organization', true],
+    ['OWNER', '', 'owner', 'User', true],
+    ['carol', 'alice,bob', 'owner', 'User', false],
+    ['carol', '', 'owner', 'User', false],
+    ['carol', '', 'org', 'Organization', false],
+    ['owner', '', 'owner', '', false],
+    ['', 'alice', 'owner', 'User', false],
+  ];
+  for (const [actor, list, owner, type, passes] of cases) {
+    const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', body], {
+      env: {
+        ...process.env,
+        [RUN_ACTORS_VARIABLE]: list,
+        IN_TRIGGERING_ACTOR: actor,
+        IN_OWNER: owner,
+        IN_OWNER_TYPE: type,
+      },
+      encoding: 'utf8',
+    });
+    assert.equal(r.error, undefined);
+    const label = `actor '${actor}', list '${list}', owner '${owner}' (${type || 'no type'})`;
+    if (passes) {
+      assert.equal(r.status, 0, `${label} passes: ${r.stdout}${r.stderr}`);
+      assert.doesNotMatch(r.stdout, /::error::/);
+    } else {
+      assert.notEqual(r.status, 0, `${label} is refused`);
+      assert.match(r.stdout, new RegExp(`^::error::.*${RUN_ACTORS_VARIABLE}`, 'm'), label);
+    }
+  }
+});
+
+/**
+ * Asserts a workflow's job passes `RUN_ACTORS_VARIABLE` from `vars.` on the line right after its
+ * `HARNESS_TRIGGER_ALLOWED_BOTS` env line, and that its `# DECLARED MIRRORS` block names it.
+ */
+function assertPassesRunActors(file, lines) {
+  const bots = lines.findIndex((l) => /^ {6}HARNESS_TRIGGER_ALLOWED_BOTS: /.test(l));
+  assert.notEqual(bots, -1, `${file} passes HARNESS_TRIGGER_ALLOWED_BOTS`);
+  assert.equal(lines[bots + 1], `      ${RUN_ACTORS_VARIABLE}: \${{ vars.${RUN_ACTORS_VARIABLE} }}`, file);
+  const start = lines.findIndex((l) => l.startsWith('# DECLARED MIRRORS'));
+  assert.notEqual(start, -1, `${file} carries a DECLARED MIRRORS block`);
+  const end = lines.findIndex((l, i) => i > start && l.trim() === '#');
+  assert.ok(end > start, `${file}'s DECLARED MIRRORS block ends`);
+  assert.ok(
+    lines.slice(start, end).some((l) => new RegExp(`\\b${RUN_ACTORS_VARIABLE}\\b`).test(l)),
+    `${file}'s DECLARED MIRRORS block names ${RUN_ACTORS_VARIABLE}`,
+  );
+}
+
+test('the trigger job passes the run-actor allow-list from vars, and declares it a mirror', () => {
+  assertPassesRunActors(WORKFLOW_TRIGGER_FILE, TRIGGER_LINES);
+});
+
+test('the control job passes the run-actor allow-list from vars, and declares it a mirror', () => {
+  assertPassesRunActors(WORKFLOW_CONTROL_FILE, CONTROL_LINES);
 });
 
 test('the run-name title, the runner line and the permissions', () => {
@@ -361,6 +503,48 @@ for (const [file, lines] of [
   });
 }
 
+/**
+ * Every mapping value that opens as a plain scalar, outside a `|` / `>` block body, as
+ * `{ line, value }`. A block body is every later line indented deeper than the key that opened it.
+ */
+function plainScalarValues(lines) {
+  const out = [];
+  let blockIndent = -1;
+  lines.forEach((line, i) => {
+    if (line.trim() === '') return;
+    if (blockIndent >= 0) {
+      if (indentOf(line) > blockIndent) return;
+      blockIndent = -1;
+    }
+    if (/^\s*#/.test(line)) return;
+    const m = /^\s*(?:- )*[A-Za-z0-9_.-]+:(?: +(.*))?$/.exec(line);
+    if (m === null || m[1] === undefined || m[1] === '') return;
+    const value = m[1];
+    if (/^[|>][0-9+-]*$/.test(value)) {
+      blockIndent = indentOf(line);
+      return;
+    }
+    if (/^['"[{]/.test(value)) return;
+    out.push({ line: i + 1, value });
+  });
+  return out;
+}
+
+for (const [file, lines] of [
+  [WORKFLOW_RUN_FILE, LINES],
+  [WORKFLOW_RESUME_FILE, RESUME_LINES],
+  [WORKFLOW_TRIGGER_FILE, TRIGGER_LINES],
+  [WORKFLOW_CONTROL_FILE, CONTROL_LINES],
+]) {
+  test(`${file}: no plain-scalar mapping value carries ': ' or ' #'`, () => {
+    const values = plainScalarValues(lines);
+    assert.ok(values.length > 0, 'the reader found plain-scalar values');
+    for (const { line, value } of values) {
+      assert.ok(!value.includes(': ') && !value.includes(' #'), `line ${line} is a plain scalar carrying ': ' or ' #': ${value}`);
+    }
+  });
+}
+
 test('the poller carries no template token, and every expression is spaced and outside run blocks', () => {
   assert.doesNotMatch(RESUME_TEXT, /\{\{[A-Za-z]/);
   assert.doesNotMatch(RESUME_TEXT, /\$\{\{[^ ]/);
@@ -457,9 +641,12 @@ test('control: exactly its four permissions', () => {
 });
 
 test("control: the job's if: prefilters on the handle, the marker and the review state, and skips a fork's review", () => {
-  const jobIfs = CONTROL_LINES.filter((l) => /^ {4}if: /.test(l)).map((l) => l.trim());
-  assert.equal(jobIfs.length, 1);
-  const [cond] = jobIfs;
+  const at = CONTROL_LINES.flatMap((l, i) => (/^ {4}if: /.test(l) ? [i] : []));
+  assert.equal(at.length, 1);
+  assert.equal(CONTROL_LINES[at[0]], '    if: >-');
+  assert.equal(blockUnder(at[0], CONTROL_LINES).filter((l) => l.trim() !== '').length, 1, 'one continuation line');
+  const cond = CONTROL_LINES[at[0] + 1];
+  assert.match(cond, /^ {6}\(/);
   assert.ok(cond.includes(`contains(github.event.comment.body, '${COMMAND_HANDLE}')`));
   assert.ok(cond.includes(`!contains(github.event.comment.body, '${COMMENT_MARKER}')`));
   assert.ok(cond.includes(`github.event.review.state == '${REVIEW_ROUND_STATE}'`));

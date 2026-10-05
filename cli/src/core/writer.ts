@@ -49,7 +49,7 @@
  * | `.github/workflows/harness-run.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the timeouts and the runner. `init --upgrade-workflows` is the upgrade path: it replaces the file after a `.bak`, only when its rendered CLI-version pin differs from this CLI's, and re-pins it. `--force` after a `.bak` is the blunt alternative. |
  * | `.github/workflows/harness-resume.yml` | `create-if-absent` | Written only when `execution.target` is `github-actions`; the adopter tunes the cron. `init --upgrade-workflows` is the upgrade path: after a `.bak`, only when `harness-run.yml`'s rendered pin differs, carrying the file's `- cron:` lines into the re-render. `--force` after a `.bak` is the blunt alternative. |
  * | `.github/workflows/harness-trigger.yml` | `create-if-absent` | Written only when `forge` is `github` and `execution.target` is `github-actions`; no pin, so `init --upgrade-workflows` leaves it; `--force` after a `.bak` is its upgrade path, as for the scripts it calls. |
- * | `.github/workflows/harness-control.yml` | `create-if-absent` | Written only when `forge` is `github` and `execution.target` is `github-actions`; no pin, so `init --upgrade-workflows` leaves it; `--force` after a `.bak` is its upgrade path, as for the scripts it calls. |
+ * | `.github/workflows/harness-control.yml` | `create-if-absent` | Written only when `forge` is `github` and `execution.target` is `github-actions`; no pin, so `init --upgrade-workflows` does not re-render it. Any `init` replaces, after a `.bak`, a copy byte-identical to a release's copy GitHub could not parse (today 0.6.1), and keeps every other copy; `--force` after a `.bak` remains the route for an edited one, as for the scripts it calls. |
  * | Git hook `pre-push`, wrapper scripts | `create-if-absent` | Adopter may have edited the guard. The hook alone is also replaced, after a `.bak`, by the one run that rebuilt the config it is rendered from (`init --reset-config`) — and only where its rendered `case` label no longer matches the set that config resolves, never where the label cannot be read. |
  *
  * `--force` upgrades **`create-if-absent` only** to overwrite-after-backup, and only where the
@@ -72,7 +72,8 @@
  * matches the set that config resolves, so the run that made the guard wrong is the run that
  * re-renders it; and `generators/githubWorkflows.ts` sets `'always'` on both workflows under
  * `init --upgrade-workflows` when `harness-run.yml`'s rendered CLI-version pin differs from this CLI's
- * (on `harness-resume.yml` only when its bytes differ from the re-render). None of them is a further
+ * (on `harness-resume.yml` only when its bytes differ from the re-render), and on
+ * `harness-control.yml` on any `init` when its bytes are a release's unparseable copy. None of them is a further
  * row above — all keep `create-if-absent`, and every other forced run over them still replaces after
  * a `.bak`.
  *

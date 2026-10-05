@@ -182,7 +182,7 @@ Which keys are written is [`docs/cli.md`](docs/cli.md) §2. `harness.config.json
 
 ### Working from GitHub
 
-Once the setup is done, labelling an issue `sdlc-harness` starts a run, and a review that requests changes on a pull request from the run's branch starts a user-review round. With `forge` set to `github` and `execution.target` to `github-actions`, a team member who uses only this route needs nothing local: no clone, no plugin and no `init`. Anyone may use both routes at once.
+Once the setup is done, labelling an issue `sdlc-harness` starts a run, and a review that requests changes on a pull request from the run's branch starts a user-review round. Who may start or work a run from GitHub is an allow-list: by default only the owner of a repository a personal account owns, and nobody in an organisation-owned one, and the maintainer names anyone else in the repository variable `HARNESS_RUN_ACTORS` ([`docs/github-issue-trigger.md`](docs/github-issue-trigger.md#3-who-can-start-a-run)). With `forge` set to `github` and `execution.target` to `github-actions`, a team member the list admits who uses only this route needs nothing local: no clone, no plugin and no `init`. Anyone may use both routes at once.
 
 The setup, the comment commands, what still needs a local machine and the caveats are in [`docs/github-run-control.md`](docs/github-run-control.md#the-github-entry-point).
 

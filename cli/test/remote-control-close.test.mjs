@@ -7,7 +7,8 @@
  * log line with no write to GitHub.** Each stopping case is asserted on the `action=stop` marker, the
  * `run cancel`, the `stopped` comment naming the actor and the reason, the `sdlc-harness: stopped`
  * label, and the absence of any `run delete`, artifact `DELETE` or `--method DELETE` on anything but a
- * state label. Each ignored case — an unauthorised closer, an issue with no start comment, a fork's pull
+ * state label. A close by a writer `HARNESS_RUN_ACTORS` does not admit is unauthorised; a branch
+ * deletion is never screened by that list, only a bot sender is. Each ignored case — an unauthorised closer, an issue with no start comment, a fork's pull
  * request, a pull request whose head branch is already gone from `origin`, a `reopened` action, a
  * deleted tag, a completed run, a branch already stopped — is asserted on stdout's one line and on the
  * recorded `gh` calls: no `workflow run`, no `run cancel`, no comment POST and no label write. A failing `stop` child or a failing permission check is exit 3, an `::error::` line
@@ -160,6 +161,7 @@ async function closeFixture(t) {
         RUNNER_TEMP: runnerTemp,
         HARNESS_REMOTE_STOP: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
+        HARNESS_RUN_ACTORS: '*',
         HARNESS_TRIGGER_LABEL: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'read' }),
         STUB_PRS: '',
@@ -287,6 +289,31 @@ test('a close by a read user is one line naming the login and the reason, with n
   const f = await closeFixture(t);
   const result = await f.control('issues', issueClosed('closed', 'bob'));
   assertIgnored(f, result, /close ignored: @bob is not authorised: .*permission of @bob as read/);
+});
+
+test('a close by a write user HARNESS_RUN_ACTORS does not admit is one line naming the list, with no stop', async (t) => {
+  const f = await closeFixture(t);
+  const result = await f.control('issues', issueClosed('closed', 'carol'), {
+    HARNESS_RUN_ACTORS: 'alice',
+    STUB_PERMISSIONS: JSON.stringify({ alice: 'write', carol: 'write' }),
+  });
+  assertIgnored(f, result, /close ignored: @carol is not authorised: @carol is not on the repository variable HARNESS_RUN_ACTORS/);
+});
+
+test('the same close by a user HARNESS_RUN_ACTORS admits stops the run', async (t) => {
+  const f = await closeFixture(t);
+  const result = await f.control('issues', issueClosed(), { HARNESS_RUN_ACTORS: 'alice' });
+  assertStopped(f, result, { on: 7 });
+});
+
+test('a branch deletion by a user HARNESS_RUN_ACTORS does not admit still stops the run: a deletion screens bots only', async (t) => {
+  const f = await closeFixture(t);
+  const result = await f.control('delete', deleted(), {
+    HARNESS_RUN_ACTORS: 'carol',
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+  });
+  const body = assertStopped(f, result, { ref: GITHUB_DEFAULT, on: 7 });
+  assert.match(body, /Stopped because @alice deleted the branch `feat_x`\./);
 });
 
 test('a close of an issue with no start comment does nothing', async (t) => {

@@ -13,7 +13,7 @@
  * existed. Every name — the directory, the file names, the template directory — is imported from
  * `remote/githubActions.ts`, which owns them.
  *
- * ## Five non-obvious choices, and where each comes from
+ * ## Six non-obvious choices, and where each comes from
  *
  * 1. **No configured value is rendered into either file; only this CLI's own version is.** The job
  *    reads `harness.config.json` at run time, so a workflow frozen with a configured value would go
@@ -38,7 +38,25 @@
  * 5. **The two forge workflows — the trigger and the control workflow — are gated on
  *    `forgeTriggerApplies`, carry no pin and are not upgraded,** because each calls the scripts on the
  *    default branch and shares their re-run contract. Both are copied verbatim like
- *    `harness-resume.yml` (choice 3) and never carry a `forceOverride`, upgrade mode included.
+ *    `harness-resume.yml` (choice 3), and the trigger never carries a `forceOverride`, upgrade mode
+ *    included. Neither is ever upgraded by pin; the control workflow's one exception is the
+ *    byte-identical repair of choice 6.
+ * 6. **Any `init` replaces a `harness-control.yml` byte-identical to a release's copy GitHub could
+ *    not parse ({@link UNPARSEABLE_CONTROL_RELEASES}), after a `.bak`.** The match is an exact
+ *    SHA-256 over the LF-normalised bytes, not a parse: the package carries no YAML parser at run
+ *    time (`.claude/context/conventions.md` → `## The stack…`, the no-runtime-dependency rule), and an
+ *    exact match is the only copy known to be unedited, so it is the only one replacing loses nothing
+ *    for. A copy still carrying {@link UNPARSEABLE_CONTROL_IF_LINE} but otherwise edited is kept and
+ *    reported as `controlRepair: { kind: 'edited' }`. It runs on every `init`, not only under
+ *    {@link UPGRADE_WORKFLOWS_FLAG}, because the file carries no pin for that mode to key on and an
+ *    unparseable copy disables comment control whichever command the adopter reaches for. It is a
+ *    per-request `forceOverride: 'always'`, not a new `WritePolicy`, on choice 4's precedent: the
+ *    engine's `.bak`-then-replace is the operation, and the re-run contract stays `create-if-absent`.
+ *    The repair's `.bak` is deliberately not in the managed `.gitignore` block: the repair happens
+ *    once, and its `.bak` is meant to be seen and deleted.
+ *
+ * **This module owns {@link unparseableControlRoute}.** `init`'s warning and `doctor`'s failure both
+ * print it, and neither re-spells it.
  *
  * **Declared mirror.** `cli/templates/github/workflows/harness-run.yml`'s `Install the pinned plugin`
  * step spells the route {@link upgradeWorkflowsCommand} produces,
@@ -53,6 +71,7 @@
  * re-run keeps that edit; `--force` replaces each after a `.bak` (`core/writer.ts`'s re-run table).
  */
 
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -95,6 +114,53 @@ export function upgradeWorkflowsCommand(version: string): string {
 export const IN_FLIGHT_RUNS_NOTE =
   "An upgrade reaches only the runs dropped after it is pushed: each run's branch carries the workflows it was cut with, so a run already in flight finishes on the version it started with, and moving one on purpose is a separate step (docs/remote-execution.md, section 7, Upgrading).";
 
+/**
+ * Each release whose shipped `harness-control.yml` GitHub could not parse, to the SHA-256 hex of
+ * that file's LF-normalised bytes (choice 6). The 0.6.1 digest is of git blob
+ * `1b4f0fc33200d876e4089ebe4013120e48a45335`, `cli/templates/github/workflows/harness-control.yml`
+ * from `a4ae3c8` through `31a2d55`.
+ */
+export const UNPARSEABLE_CONTROL_RELEASES: Readonly<Record<string, string>> = {
+  '0.6.1': 'dd014dc14bf19947182f4c95fa0bf011aba04fda354d9a6fa94242e86082bfa5',
+};
+
+/** The job-level `if:` line, trimmed, that made 0.6.1's `harness-control.yml` unparseable. */
+const UNPARSEABLE_CONTROL_IF_LINE =
+  "if: (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@sdlc-harness') && !contains(github.event.comment.body, '<!-- sdlc-harness')) || (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'sdlc-harness: ')) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'delete' && github.event.ref_type == 'branch')";
+
+/**
+ * The one producer of the route from an unparseable `harness-control.yml` to the fixed one. Complete
+ * sentences ending in one `.`, ASCII only, no line break.
+ */
+export function unparseableControlRoute(version: string): string {
+  const pinned = pinnedCliCommand(version);
+  const releases = Object.keys(UNPARSEABLE_CONTROL_RELEASES).join(' or ');
+  return (
+    `Run \`${pinned} init\`, which replaces a harness-control.yml that ${releases} wrote and nobody edited, keeping the previous copy as a .bak; ` +
+    `for an edited copy, write the control job's if: as a folded block scalar (if: >- with the expression on the next line, indented), ` +
+    `or run \`${pinned} init --force\`, which regenerates every generated file after a .bak; ` +
+    `then commit the file and push it to the repository's default branch.`
+  );
+}
+
+/** What `init` decided about an existing `harness-control.yml` a release wrote unparseable (choice 6). */
+export type ControlRepair =
+  | { readonly kind: 'replaced'; readonly release: string }
+  | { readonly kind: 'edited' }
+  | undefined;
+
+/** Classify an existing control workflow's text against {@link UNPARSEABLE_CONTROL_RELEASES}. */
+function classifyControl(existing: string): ControlRepair {
+  const normalised = existing.replace(/\r\n/g, '\n');
+  const digest = createHash('sha256').update(normalised, 'utf8').digest('hex');
+  const release = Object.keys(UNPARSEABLE_CONTROL_RELEASES).find(
+    (name) => UNPARSEABLE_CONTROL_RELEASES[name] === digest,
+  );
+  if (release !== undefined) return { kind: 'replaced', release };
+  if (normalised.split('\n').some((line) => line.trim() === UNPARSEABLE_CONTROL_IF_LINE)) return { kind: 'edited' };
+  return undefined;
+}
+
 const CRON_LINE = /^\s*- cron: /;
 
 /** Everything {@link writeGithubWorkflows} needs. */
@@ -134,6 +200,12 @@ export interface GithubWorkflowsResult {
   readonly trigger: boolean;
   /** Present exactly when `upgrade` was set, remote execution applied and `harness-run.yml` existed. */
   readonly upgrade?: WorkflowUpgrade;
+  /**
+   * `'replaced'` when the plan replaces a byte-identical copy of `release`'s unparseable control
+   * workflow; `'edited'` when the copy carries {@link UNPARSEABLE_CONTROL_IF_LINE} and is kept; absent
+   * otherwise and whenever the forge workflows are not enqueued (choice 6).
+   */
+  readonly controlRepair?: ControlRepair;
 }
 
 /** The schedule a `- cron:` line carries, quotes stripped. */
@@ -218,6 +290,7 @@ export function writeGithubWorkflows({
   ];
 
   const trigger = forgeTriggerApplies(config);
+  let controlRepair: ControlRepair;
   if (trigger) {
     const triggerPath = join(repoRoot, ...WORKFLOW_TRIGGER_PATH.split('/'));
     plan.add({
@@ -229,11 +302,13 @@ export function writeGithubWorkflows({
     workflows.push({ absolute: triggerPath, repoPath: WORKFLOW_TRIGGER_PATH });
 
     const controlPath = join(repoRoot, ...WORKFLOW_CONTROL_PATH.split('/'));
+    if (existsSync(controlPath)) controlRepair = classifyControl(readFileSync(controlPath, 'utf8'));
     plan.add({
       path: controlPath,
       policy: 'create-if-absent',
       content: readTemplate(`${WORKFLOW_TEMPLATE_DIR}/${WORKFLOW_CONTROL_FILE}`),
       label: `workflow ${WORKFLOW_CONTROL_FILE}`,
+      ...(controlRepair?.kind === 'replaced' ? { forceOverride: 'always' as const } : {}),
     });
     workflows.push({ absolute: controlPath, repoPath: WORKFLOW_CONTROL_PATH });
   }
@@ -243,5 +318,6 @@ export function writeGithubWorkflows({
     workflows,
     trigger,
     ...(upgradeResult === undefined ? {} : { upgrade: upgradeResult }),
+    ...(controlRepair === undefined ? {} : { controlRepair }),
   };
 }

@@ -5957,6 +5957,39 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(reportLine(after.stdout, 'pass', 'remote-execution')?.includes("rendered for this CLI's own version"), `${after.stdout}\n${after.stderr}`);
   });
 
+  const RUN_ACTORS_LINE = /^[ \t]*HARNESS_RUN_ACTORS:.*\r?\n/gm;
+  const BEFORE_RUN_ACTORS = 'was written before `HARNESS_RUN_ACTORS`';
+
+  await t.test('on, with harness-run.yml written before HARNESS_RUN_ACTORS, warns with the upgrade route', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    const path = join(dir, REMOTE_RUN_WORKFLOW);
+    const before = readFileSync(path, 'utf8');
+    const after = before.replace(RUN_ACTORS_LINE, '');
+    assert.notEqual(after, before, 'harness-run.yml carries no HARNESS_RUN_ACTORS line to remove');
+    writeFileSync(path, after, 'utf8');
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-execution');
+    assert.ok(line?.includes(`\`${REMOTE_RUN_WORKFLOW}\` ${BEFORE_RUN_ACTORS}`), `${stdout}\n${stderr}`);
+    assert.ok(line.includes(UPGRADE_ROUTE), line);
+    assert.ok(line.includes('docs/remote-execution.md, section 7, Upgrading'), line);
+  });
+
+  await t.test('on, with harness-run.yml as init writes it, says nothing about HARNESS_RUN_ACTORS', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    const stub = await ghStub(subtest);
+
+    const { stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.ok(reportLine(stdout, 'pass', 'remote-execution') !== undefined, `${stdout}\n${stderr}`);
+    assert.ok(!`${stdout}\n${stderr}`.includes(BEFORE_RUN_ACTORS), `${stdout}\n${stderr}`);
+  });
+
   const QA_SKIP = 'a remote run skips the interactive-test phase';
   const setQa = async (dir, value) => {
     const edit = await runCli(dir, ['config', 'set', 'phases.qa', value]);
@@ -6037,14 +6070,21 @@ test('daemon-path names gh when remote execution is on, and not when it is off',
  * subcommand from files each case writes, so each row of the grading table is one answer changed from
  * a healthy set. A timed-out call is simulated by the stub signalling itself, which hands the check
  * exactly what `runGh`'s bound does — a `null` status — without spending that 30 s bound per case.
+ *
+ * **A harness workflow GitHub lists by its path fails**, because that is how GitHub lists a file it
+ * could not parse, while `gh workflow view` still answers for it (Gate 12 round 7); the forge
+ * workflows are judged only when the trigger applies.
  */
 const GH_CALLS = Object.freeze({
   auth: ['auth', 'status'],
   run: ['workflow', 'view', 'harness-run.yml'],
   secrets: ['secret', 'list', '--json', 'name'],
   resume: ['workflow', 'view', 'harness-resume.yml'],
+  workflows: ['api', 'repos/{owner}/{repo}/actions/workflows?per_page=100'],
   variables: ['variable', 'list', '--json', 'name,value'],
   retention: ['api', 'repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention'],
+  owner: ['api', 'repos/{owner}/{repo}'],
+  collaborators: ['api', 'repos/{owner}/{repo}/collaborators?per_page=100'],
 });
 
 /** The answer-file stem the stub derives from its argv: spaces and commas become underscores. */
@@ -6078,6 +6118,18 @@ async function answeringGhStub(t) {
   return { dir, path, log, answers };
 }
 
+/**
+ * An Actions workflow listing naming each harness workflow by its template's own `name:`, except the
+ * files in `byPath`, listed with `name` equal to `path` as GitHub lists a file it could not parse.
+ */
+function workflowListing(byPath = []) {
+  const workflows = ['harness-run', 'harness-resume', 'harness-trigger', 'harness-control'].map((name, id) => {
+    const path = `.github/workflows/${name}.yml`;
+    return { id, name: byPath.includes(path) ? path : name, path, state: 'active' };
+  });
+  return JSON.stringify({ total_count: workflows.length, workflows });
+}
+
 /** Write a healthy answer set, then apply per-call overrides: `{ out?, err?, status?, kill? }`. */
 function answerGh(stub, overrides = {}) {
   const healthy = {
@@ -6085,8 +6137,11 @@ function answerGh(stub, overrides = {}) {
     run: { out: 'Harness run - harness-run.yml\n' },
     secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }, { name: 'HARNESS_PUSH_URL' }]) },
     resume: { out: 'Harness resume - harness-resume.yml\n' },
+    workflows: { out: workflowListing() },
     variables: { out: '[]' },
     retention: { out: JSON.stringify({ days: 90, maximum_allowed_days: 400 }) },
+    owner: { out: JSON.stringify({ owner: { login: 'fixture-owner', type: 'User' } }) },
+    collaborators: { out: JSON.stringify([{ login: 'fixture-owner', permissions: { admin: true, maintain: true, push: true, triage: true, pull: true } }]) },
   };
   for (const [call, args] of Object.entries(GH_CALLS)) {
     const answer = { ...healthy[call], ...(overrides[call] ?? {}) };
@@ -6225,8 +6280,8 @@ test('the remote-github check asks GitHub only under --check-github and grades e
   const failing = [
     ['gh does not spawn', {}, `${FIXTURE_GH_CLI}-absent`, 'install the GitHub CLI', 0],
     ['gh auth status exits non-zero', { auth: { err: 'You are not logged into any GitHub hosts.\n', status: 1 } }, undefined, 'gh auth login', 1],
-    ['GitHub does not know harness-run.yml', { run: { err: 'could not find any workflows named harness-run.yml\n', status: 1 } }, undefined, "push .github/workflows/harness-run.yml to the repository's default branch", 6],
-    ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 6],
+    ['GitHub does not know harness-run.yml', { run: { err: 'could not find any workflows named harness-run.yml\n', status: 1 } }, undefined, "push .github/workflows/harness-run.yml to the repository's default branch", 9],
+    ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 8],
   ];
   for (const [name, overrides, ghName, expected, calls] of failing) {
     await t.test(`fails when ${name}`, async (subtest) => {
@@ -6251,6 +6306,9 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     ['gh cannot reach GitHub', { auth: { err: 'error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n', status: 1 } }, 'cannot tell whether gh is authenticated'],
     ['the repository keeps artifacts for fewer than 30 days', { retention: { out: JSON.stringify({ days: 7 }) } }, 'the repository keeps artifacts for 7 days, so a remote run parked or paused longer than that loses its state bundle: raise it under Settings → Actions → General → Artifact and log retention'],
     ['the retention answer is in a shape it does not read', { retention: { out: JSON.stringify({ days: 'ninety' }) } }, 'cannot tell how long the repository keeps artifacts: `gh api repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention` answered in a shape this check does not read'],
+    ['the workflow listing exits non-zero', { workflows: { err: 'HTTP 404: Not Found\n', status: 1 } }, 'cannot tell whether GitHub could parse the harness workflows: `gh api repos/{owner}/{repo}/actions/workflows?per_page=100` gave no answer, because it exited 1: HTTP 404: Not Found'],
+    ['the workflow listing answers non-JSON', { workflows: { out: 'not json\n' } }, 'cannot tell whether GitHub could parse the harness workflows: `gh api repos/{owner}/{repo}/actions/workflows?per_page=100` answered in a shape this check does not read'],
+    ['the workflow listing stops before the harness workflows', { workflows: { out: JSON.stringify({ total_count: 150, workflows: [] }) } }, 'listed 0 of the repository\'s 150 workflows'],
   ];
   for (const [name, overrides, expected] of warning) {
     await t.test(`warns when ${name}`, async (subtest) => {
@@ -6264,6 +6322,222 @@ test('the remote-github check asks GitHub only under --check-github and grades e
       assert.ok(reportLine(stderr, 'warn', 'remote-github')?.includes(expected), `${stdout}\n${stderr}`);
     });
   }
+
+  await t.test('an unset HARNESS_RUN_ACTORS in a user-owned repository names the owner as the only actor', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub);
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'remote-github');
+    assert.ok(line?.includes('HARNESS_RUN_ACTORS is unset, so only the repository owner, fixture-owner, may start, steer, answer and review a run'), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('an unset HARNESS_RUN_ACTORS in an organisation-owned repository warns with gh variable set', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { owner: { out: JSON.stringify({ owner: { login: 'fixture-org', type: 'Organization' } }) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-github');
+    assert.ok(line?.includes('HARNESS_RUN_ACTORS is unset and fixture-org is an Organization, not a user, so no person may start, steer, answer or review a run'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('`gh variable set HARNESS_RUN_ACTORS --body <login,login>`'), line);
+  });
+
+  await t.test('a refused owner read is a cannot-tell warning and no second one', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { owner: { err: 'HTTP 404: Not Found\n', status: 1 } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-github');
+    assert.ok(line?.includes('cannot tell who owns the repository, so who may act on a run: `gh api repos/{owner}/{repo}` gave no answer, because it exited 1: HTTP 404: Not Found'), `${stdout}\n${stderr}`);
+    assert.ok(!line.includes('no person may'), line);
+  });
+
+  await t.test('HARNESS_RUN_ACTORS of * with the subscription token warns and reads no owner', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: '*' }]) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-github');
+    assert.ok(line?.includes("HARNESS_RUN_ACTORS is `*` while CLAUDE_CODE_OAUTH_TOKEN is set, so every writer's runs spend one person's subscription"), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('every collaborator with write access may start, steer, answer and review a run'), line);
+    assert.ok(!ghInvocations(stub).includes(GH_CALLS.owner.join(' ')), ghInvocations(stub).join('\n'));
+  });
+
+  await t.test('HARNESS_RUN_ACTORS of * with only ANTHROPIC_API_KEY carries no subscription warning', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, {
+      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: '*' }]) },
+      secrets: { out: JSON.stringify([{ name: 'ANTHROPIC_API_KEY' }, { name: 'HARNESS_PUSH_URL' }]) },
+    });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(reportLine(stdout, 'pass', 'remote-github')?.includes('every collaborator with write access'), `${stdout}\n${stderr}`);
+    assert.ok(!`${stdout}\n${stderr}`.includes('subscription'), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('a listed HARNESS_RUN_ACTORS is a note naming each login, and reads no owner', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, {
+      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: 'alice, bob' }]) },
+      // Writers all on the list, so the beyond-the-list warning does not turn this pass into a warn.
+      collaborators: { out: JSON.stringify([{ login: 'alice', permissions: { push: true } }, { login: 'bob', permissions: { push: true } }]) },
+    });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'remote-github');
+    assert.ok(line?.includes('HARNESS_RUN_ACTORS admits alice, bob, so only those logins may'), `${stdout}\n${stderr}`);
+    assert.ok(!ghInvocations(stub).includes(GH_CALLS.owner.join(' ')), ghInvocations(stub).join('\n'));
+  });
+
+  /** A collaborators answer: the healthy owner, then each `[login, push]` pair. */
+  const collaborators = (...more) =>
+    JSON.stringify([
+      { login: 'fixture-owner', permissions: { admin: true, maintain: true, push: true, triage: true, pull: true } },
+      ...more.map(([login, push]) => ({ login, permissions: { admin: false, maintain: false, push, triage: true, pull: true } })),
+    ]);
+  const writersWarning = 'can write to the repository without being on HARNESS_RUN_ACTORS';
+
+  await t.test('a writer beyond the list while the subscription token is set warns, naming them and the edited-workflow risk', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { collaborators: { out: collaborators(['Bob', true]) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-github');
+    assert.ok(line?.includes(`CLAUDE_CODE_OAUTH_TOKEN is set and Bob ${writersWarning}`), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('any writer can still read the secret by running an edited workflow from a branch'), line);
+    assert.ok(!line.includes('fixture-owner can write'), line);
+  });
+
+  await t.test('a collaborator without push is not a writer and draws no warning', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { collaborators: { out: collaborators(['Bob', false]) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(reportLine(stdout, 'pass', 'remote-github'), `${stdout}\n${stderr}`);
+    assert.ok(!`${stdout}\n${stderr}`.includes(writersWarning), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('a full page of collaborators with no writer beyond the list is a cannot-tell warning', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    const readers = Array.from({ length: 99 }, (_, i) => [`reader${i}`, false]);
+    answerGh(stub, { collaborators: { out: collaborators(...readers) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-github');
+    assert.ok(
+      line?.includes('cannot tell whether any writer is beyond HARNESS_RUN_ACTORS') && line.includes('a full page of 100 collaborators'),
+      `${stdout}\n${stderr}`,
+    );
+    assert.ok(!line.includes(writersWarning), line);
+  });
+
+  await t.test('a listed writer is matched case-insensitively and draws no warning', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, {
+      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: 'bob, fixture-owner' }]) },
+      collaborators: { out: collaborators(['Bob', true]) },
+    });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(reportLine(stdout, 'pass', 'remote-github'), `${stdout}\n${stderr}`);
+    assert.ok(!`${stdout}\n${stderr}`.includes(writersWarning), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('a refused collaborators read is a note, not a warning', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { collaborators: { err: 'HTTP 403: Must have push access to view repository collaborators.\n', status: 1 } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stdout, 'pass', 'remote-github');
+    assert.ok(line?.includes('writers beyond HARNESS_RUN_ACTORS not checked: `gh api repos/{owner}/{repo}/collaborators?per_page=100` needs push access (it exited 1: HTTP 403'), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('only ANTHROPIC_API_KEY makes no collaborators read', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, {
+      secrets: { out: JSON.stringify([{ name: 'ANTHROPIC_API_KEY' }, { name: 'HARNESS_PUSH_URL' }]) },
+      collaborators: { out: collaborators(['Bob', true]) },
+    });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(!ghInvocations(stub).includes(GH_CALLS.collaborators.join(' ')), ghInvocations(stub).join('\n'));
+    assert.ok(!`${stdout}\n${stderr}`.includes(writersWarning), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('HARNESS_RUN_ACTORS of * makes no collaborators read', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, {
+      variables: { out: JSON.stringify([{ name: 'HARNESS_RUN_ACTORS', value: '*' }]) },
+      collaborators: { out: collaborators(['Bob', true]) },
+    });
+
+    const { stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.ok(!ghInvocations(stub).includes(GH_CALLS.collaborators.join(' ')), ghInvocations(stub).join('\n'));
+    assert.ok(!`${stdout}\n${stderr}`.includes(writersWarning), `${stdout}\n${stderr}`);
+  });
+
+  await t.test('fails naming the file and init --force when harness-run.yml is listed by its path', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-run.yml']) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 1, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'fail', 'remote-github');
+    assert.ok(line?.includes('GitHub lists .github/workflows/harness-run.yml by its path'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('init --force'), line);
+  });
+
+  await t.test('with forge absent, a harness-control.yml listed by its path is not judged', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-control.yml']) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(reportLine(stdout, 'pass', 'remote-github') !== undefined, `${stdout}\n${stderr}`);
+    assert.ok(!`${stdout}\n${stderr}`.includes('by its path'), `${stdout}\n${stderr}`);
+  });
 
   await t.test('a 90-day artifact retention passes and names it', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
@@ -6402,6 +6676,23 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(!line.includes('GitHub knows harness-trigger.yml'), line);
   });
 
+  await t.test('with the trigger on, harness-control.yml listed by its path fails with the control route', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    // Gate 12 round 7's observation: GitHub listed the unparsed file with its name equal to its path.
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-control.yml']) } });
+    answerTriggerGh(stub);
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.notEqual(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'fail', 'remote-github');
+    assert.ok(line?.includes('GitHub lists .github/workflows/harness-control.yml by its path rather than its name'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('if: >-'), line);
+    assert.ok(line.includes('init --force'), line);
+    assert.ok(!line.includes('GitHub knows harness-trigger.yml and harness-control.yml'), line);
+  });
+
   const prSettingOff = { prSetting: { out: JSON.stringify({ default_workflow_permissions: 'read', can_approve_pull_request_reviews: false }) } };
 
   await t.test('with the trigger on, the pull-request setting off and no HARNESS_GIT_TOKEN warns naming the setting', async (subtest) => {
@@ -6479,6 +6770,8 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(line.includes('was written by an earlier release and falls back to `harness`, which keeps starting runs'), line);
     assert.ok(line.includes('init --force` re-renders it and the scripts to `sdlc-harness`'), line);
     assert.ok(line.includes('setting HARNESS_TRIGGER_LABEL keeps a name of your choosing under either'), line);
+    // The edit leaves the HARNESS_RUN_ACTORS line in place, so the forge grade stays pass.
+    assert.ok(reportLine(stdout, 'pass', 'forge') !== undefined, `${stdout}\n${stderr}`);
   });
 
   await t.test('with the trigger on, HARNESS_TRIGGER_LABEL names the label and allowed bots are a note', async (subtest) => {
@@ -6678,6 +6971,43 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line.includes('carries them'), line);
     assert.ok(!line.includes('still to come'), line);
     assert.ok(line.includes('doctor --check-github'), line);
+  });
+
+  const BEFORE_RUN_ACTORS = 'written before `HARNESS_RUN_ACTORS`';
+
+  await t.test('github with harness-control.yml written before HARNESS_RUN_ACTORS warns naming it alone and init --force', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await configure(dir, [['forge', 'github']], { init: true });
+    const path = join(dir, REMOTE_CONTROL_WORKFLOW);
+    const before = readFileSync(path, 'utf8');
+    const after = before.replace(/^[ \t]*HARNESS_RUN_ACTORS:.*\r?\n/gm, '');
+    assert.notEqual(after, before, 'harness-control.yml carries no HARNESS_RUN_ACTORS line to remove');
+    writeFileSync(path, after, 'utf8');
+    await pushWorkflows(dir);
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'forge');
+    assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} was ${BEFORE_RUN_ACTORS} and passes the scripts no list`), `${stdout}\n${stderr}`);
+    assert.ok(!line.includes(`${REMOTE_TRIGGER_WORKFLOW} was`), line);
+    assert.ok(!line.includes(`${REMOTE_TRIGGER_WORKFLOW}, ${REMOTE_CONTROL_WORKFLOW} were`), line);
+    assert.ok(line.includes('`npx autonomous-sdlc-harness init --force`'), line);
+  });
+
+  await t.test('github with both forge workflows as init writes them says nothing about HARNESS_RUN_ACTORS', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await configure(dir, [['forge', 'github']], { init: true });
+    await pushWorkflows(dir);
+    const stub = await ghStub(subtest);
+
+    const { stdout, stderr } = await doctorWithStub(dir, stub);
+
+    const line = reportLine(stdout, 'pass', 'forge');
+    assert.ok(line !== undefined, `${stdout}\n${stderr}`);
+    assert.ok(!line.includes(BEFORE_RUN_ACTORS), line);
+    assert.ok(!line.includes('init --force'), line);
   });
 
   await t.test('github under --check-github names remote-github instead of the flag', async (subtest) => {

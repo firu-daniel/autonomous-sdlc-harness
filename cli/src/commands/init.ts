@@ -121,11 +121,11 @@ import { readJsonFile } from '../core/json.js';
 import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
 import { nameList } from '../core/nameList.js';
-import { insideRepo, packageRoot } from '../core/paths.js';
+import { insideRepo, ownManifestString, packageRoot } from '../core/paths.js';
 import { ANALYZE_COMMAND, USER_REVIEW_COMMAND } from '../core/pluginIdentity.js';
 import { askLine, askYesNo, canPrompt, REPROMPT_LIMIT, type PromptContext } from '../core/prompt.js';
 import { normalizeRepoDir, normalizeRepoPathStrict } from '../core/repoPaths.js';
-import { WritePlan } from '../core/writer.js';
+import { WritePlan, type WriteEffect } from '../core/writer.js';
 import { findNestedApplicationDir } from '../detect/nestedApplication.js';
 import {
   buildPreset,
@@ -152,8 +152,11 @@ import {
 import { pointHooksPath, writeGitHooks } from '../generators/githooks.js';
 import {
   IN_FLIGHT_RUNS_NOTE,
+  UNPARSEABLE_CONTROL_RELEASES,
   UPGRADE_WORKFLOWS_FLAG,
+  unparseableControlRoute,
   writeGithubWorkflows,
+  type ControlRepair,
   type WorkflowUpgrade,
 } from '../generators/githubWorkflows.js';
 import { writeHarnessConfig, type AppDirSource, type HarnessConfigFlags } from '../generators/harnessConfig.js';
@@ -207,10 +210,16 @@ import {
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
   RUNNER_VARIABLE,
+  RUN_ACTORS_EVERY_WRITER,
+  RUN_ACTORS_VARIABLE,
   RUN_STATES,
   STATE_LABEL_PREFIX,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_LABEL_VARIABLE,
+  WORKFLOW_CONTROL_FILE,
+  WORKFLOW_CONTROL_PATH,
+  WORKFLOW_RUN_FILE,
+  WORKFLOW_TRIGGER_FILE,
 } from '../remote/githubActions.js';
 import { setUpRetrieval } from '../retrieval/setup.js';
 import type { CommandContext, Subcommand } from './registry.js';
@@ -2480,7 +2489,9 @@ async function run(ctx: CommandContext): Promise<number> {
   if (workflows.upgrade !== undefined) {
     const replacedWorkflows = workflows.workflows
       .filter(({ absolute }) => applied.find((r) => r.path === absolute)?.effect === 'backed-up-and-replaced')
-      .map(({ repoPath }) => repoPath);
+      .map(({ repoPath }) => repoPath)
+      // A repaired control workflow's diff line and its un-ignored .bak are reportControlRepair's to print.
+      .filter((path) => !(workflows.controlRepair?.kind === 'replaced' && path === WORKFLOW_CONTROL_PATH));
     // Every tracked file this run merged into, so the upgrade's commit leaves no tracked change behind.
     const mergedPaths = applied
       .filter(
@@ -2497,10 +2508,26 @@ async function run(ctx: CommandContext): Promise<number> {
       defaultBranch: effective.defaultBranch,
       workflowPaths: freshWorkflows,
       mergedPaths,
+      trigger: workflows.trigger,
     });
   }
-  if (freshWorkflows.length > 0 && workflows.upgrade?.replaced !== true) {
-    reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun, freshWorkflows, workflows.trigger);
+  const controlEffect = applied.find(
+    (r) => r.path === join(repoRoot, ...WORKFLOW_CONTROL_PATH.split('/')),
+  )?.effect;
+  reportControlRepair(ctx, {
+    repair: workflows.controlRepair,
+    controlEffect,
+    dryRun: ctx.flags.dryRun,
+    defaultBranch: effective.defaultBranch,
+    upgradeOwnsCommit: workflows.upgrade?.replaced === true,
+  });
+  // A repair alone is not a first setup: the repaired file's commit steps are the repair block's.
+  const setupWorkflows =
+    workflows.controlRepair?.kind === 'replaced'
+      ? freshWorkflows.filter((path) => path !== WORKFLOW_CONTROL_PATH)
+      : freshWorkflows;
+  if (setupWorkflows.length > 0 && workflows.upgrade?.replaced !== true) {
+    reportGithubSteps(ctx, effective.defaultBranch, ctx.flags.dryRun, setupWorkflows, workflows.trigger);
   }
 
   return EXIT.OK;
@@ -2508,7 +2535,8 @@ async function run(ctx: CommandContext): Promise<number> {
 
 /**
  * What {@link UPGRADE_WORKFLOWS_FLAG} did, printed when the generator returned an upgrade result;
- * `replacedWorkflows` names, repo-relative, the workflows the plan replaced after a `.bak`. What was
+ * `replacedWorkflows` names, repo-relative, the workflows the plan replaced after a `.bak`, less a
+ * repaired control workflow, whose `.bak` is not ignored and is {@link reportControlRepair}'s. What was
  * replaced, and when, is the generator's decision (`generators/githubWorkflows.ts`, choice 4); this
  * only reports it.
  *
@@ -2528,9 +2556,11 @@ function reportWorkflowUpgrade(
     readonly workflowPaths: readonly string[];
     /** Every in-repository file a merge policy created or merged into, repo-relative. */
     readonly mergedPaths: readonly string[];
+    /** Whether the forge workflows apply, so the trigger and the comment commands exist. */
+    readonly trigger: boolean;
   },
 ): void {
-  const { upgrade, replacedWorkflows, dryRun, defaultBranch, workflowPaths, mergedPaths } = options;
+  const { upgrade, replacedWorkflows, dryRun, defaultBranch, workflowPaths, mergedPaths, trigger } = options;
   if (!upgrade.replaced) {
     ctx.report.info(
       `${UPGRADE_WORKFLOWS_FLAG}: the workflows are already rendered for ${upgrade.to}, so nothing was upgraded.`,
@@ -2568,7 +2598,70 @@ function reportWorkflowUpgrade(
   command(WORKFLOW_SCOPE_COMMAND);
   command(defaultBranchPushCommand(defaultBranch));
   ctx.report.info('');
+  ctx.report.info(
+    `The re-rendered ${WORKFLOW_RUN_FILE} refuses to launch for a person the repository variable ${RUN_ACTORS_VARIABLE} does not admit, and an unset list admits the repository owner alone, or nobody in an organisation-owned repository. Set it before the next run:`,
+  );
+  command(`gh variable set ${RUN_ACTORS_VARIABLE} --body <login,...>`);
+  if (trigger) {
+    ctx.report.info(
+      `${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE} and the scripts carry the list into the trigger and the comment commands only once init --force has replaced them.`,
+    );
+  }
+  ctx.report.info('');
   ctx.report.info(IN_FLIGHT_RUNS_NOTE);
+}
+
+/**
+ * What `init` did about a `harness-control.yml` a release wrote unparseable; which copy is replaced,
+ * and when, is the generator's decision (`generators/githubWorkflows.ts`, choice 6), and this only
+ * reports it.
+ *
+ * A replaced copy prints its own commit-and-push steps unless `upgradeOwnsCommit`, when
+ * {@link reportWorkflowUpgrade}'s `git add` already names the file: the remote job's own `init` fails
+ * its setup step on a changed tracked file, so a repair left uncommitted breaks the next run. The
+ * `.bak` is named for deletion because the managed `.gitignore` block does not cover it.
+ *
+ * An edited copy warns only when the plan kept it: under `--force` it was replaced and there is
+ * nothing left to warn about. The route is {@link unparseableControlRoute}'s, spelled nowhere here.
+ */
+function reportControlRepair(
+  ctx: CommandContext,
+  options: {
+    readonly repair: ControlRepair;
+    readonly controlEffect: WriteEffect | undefined;
+    readonly dryRun: boolean;
+    readonly defaultBranch: string;
+    readonly upgradeOwnsCommit: boolean;
+  },
+): void {
+  const { repair, controlEffect, dryRun, defaultBranch, upgradeOwnsCommit } = options;
+  if (repair === undefined) return;
+  if (repair.kind === 'edited') {
+    if (controlEffect !== 'kept') return;
+    const releases = Object.keys(UNPARSEABLE_CONTROL_RELEASES).join(' or ');
+    ctx.report.warn(
+      `${WORKFLOW_CONTROL_PATH} carries the job if: that ${releases} wrote, which GitHub cannot parse, so the workflow runs for no event; this run kept the edited copy. ${unparseableControlRoute(ownManifestString('version'))}`,
+    );
+    return;
+  }
+  const command = (line: string): void => ctx.report.info(`   ${line}`);
+  const path = WORKFLOW_CONTROL_PATH;
+
+  ctx.report.step('workflow repair');
+  ctx.report.info(
+    `${path} was the copy ${repair.release} wrote, which GitHub cannot parse, so no comment, review, close or deletion reached the harness. This run ${dryRun ? 'would re-render' : 're-rendered'} it, and the previous copy ${dryRun ? 'would be' : 'is'} kept beside it as a .bak; compare it with:`,
+  );
+  command(`git diff --no-index ${path}.bak ${path}`);
+  ctx.report.info('The .bak is not ignored by the managed .gitignore block, so delete it once compared.');
+  if (upgradeOwnsCommit) return;
+  ctx.report.info('');
+  ctx.report.info(
+    `Commit the repaired file and push it to GitHub's default branch (assumed \`${defaultBranch}\` below); left uncommitted, it fails the next run job's init step. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(defaultBranch)}`,
+  );
+  command(`git add ${path}`);
+  command('git commit -m "Repair the harness control workflow"');
+  command(WORKFLOW_SCOPE_COMMAND);
+  command(defaultBranchPushCommand(defaultBranch));
 }
 
 /**
@@ -2616,6 +2709,10 @@ function reportGithubSteps(
   );
   command(`gh secret set ${OAUTH_TOKEN_SECRET}`);
   command(`gh secret set ${API_KEY_SECRET}`);
+  ctx.report.info(
+    `   Then name who may start, steer, answer and review a run, and so spend that credential: the repository variable ${RUN_ACTORS_VARIABLE}, a comma-separated list of GitHub logins. Unset, it admits the repository owner alone in a user-owned repository, and nobody in an organisation-owned one; ${RUN_ACTORS_EVERY_WRITER} admits every collaborator with write access, for a repository whose credential is a Claude API organisation's key. init sets no repository variable:`,
+  );
+  command(`gh variable set ${RUN_ACTORS_VARIABLE} --body <login,...>`);
   ctx.report.info('');
   ctx.report.info(
     `3. Optionally set ${PUSH_URL_SECRET} to receive push notifications from the job, and ${GIT_TOKEN_SECRET} — a personal or App token — so the job's pushes trigger your own CI, which pushes made with the job's built-in token never do:`,
@@ -2629,7 +2726,7 @@ function reportGithubSteps(
   if (trigger) {
     step += 1;
     ctx.report.info(
-      `${step}. Create the issue label the trigger workflow listens to; labelling an issue with it starts a run. Only a person with write or admin access, or a listed bot, starts one. The label \`${DEFAULT_TRIGGER_LABEL}\` is distinct from the ${RUN_STATES.length} \`${STATE_LABEL_PREFIX}<state>\` labels a run's pull request carries: those are created on first use and must not be applied by hand:`,
+      `${step}. Create the issue label the trigger workflow listens to; labelling an issue with it starts a run. Only a listed bot, or a person with write or admin access whom ${RUN_ACTORS_VARIABLE} admits (step 2), starts one. The label \`${DEFAULT_TRIGGER_LABEL}\` is distinct from the ${RUN_STATES.length} \`${STATE_LABEL_PREFIX}<state>\` labels a run's pull request carries: those are created on first use and must not be applied by hand:`,
     );
     command(`gh label create ${DEFAULT_TRIGGER_LABEL} --description "Start a harness run from this issue"`);
     ctx.report.info(
