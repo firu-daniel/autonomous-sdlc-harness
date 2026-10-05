@@ -41,3 +41,5 @@
 - `bash scripts/typecheck.sh` exits 0.
 - Run the edited `cli/test/doctor.test.mjs` from `cli/` with `npm test -- test/doctor.test.mjs`, under the conditions in `unit_loop_core.md` → `## The test-run rule` (3). The new cases pass, and every existing `remote-execution` and `forge` case still passes.
 - Grep `checks.ts` for `--upgrade-workflows` and `init --force` as string literals in the new text. The first comes from `upgradeWorkflowsCommand`, never a literal. `--force` follows the file's existing spelling for that route; reuse whatever constant or helper the module already uses for `init --force`, if one exists.
+
+**Deviations from plan:** The forge warning agrees its verb with the file count (`was ... and passes` for one file, `were ... and pass` for two); the plan text gave only the plural `pass`. The one existing case that rewrites a forge workflow (the `harness` trigger-label fallback case in the remote-github suite) keeps its text and now asserts the forge pass, since the edit leaves the `HARNESS_RUN_ACTORS` line in place.

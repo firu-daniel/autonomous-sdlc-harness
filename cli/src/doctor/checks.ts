@@ -223,6 +223,7 @@ import {
 import { inspect, readRegistry, registryPath, type EntryState, type InspectedEntry } from '../machine/registry.js';
 import {
   API_KEY_SECRET,
+  carriesRunActors,
   CLI_VERSION_VARIABLE,
   DEFAULT_GH_CLI,
   COMMAND_HANDLE,
@@ -2425,7 +2426,11 @@ const DAEMON_PATH_CHECK: Check = {
  *
  * **Every finding is reported, and the grade is the worst of them.** Two `fail`s: no
  * `harness-run.yml`, because no remote run can be dispatched; and no `gh`, because the watcher
- * dispatches through it. Four `warn`s: a `harness-run.yml` pinned (`remote/githubActions.ts` →
+ * dispatches through it. Five `warn`s: a `harness-run.yml` whose text does not read
+ * {@link RUN_ACTORS_VARIABLE} ({@link carriesRunActors}), remedied by {@link upgradeWorkflowsCommand} —
+ * local evidence, because the workflow is what GitHub runs and only its text says whether the list
+ * reaches the gate and the scripts; listed beside the pin warning when both fire, and an unreadable
+ * file adds nothing to the pin note. A `harness-run.yml` pinned (`remote/githubActions.ts` →
  * {@link renderedCliVersions}) to a version other than this CLI's — never a `fail`, because the job
  * installs its pin and the adopter may stay on it deliberately; the remedy is
  * `generators/githubWorkflows.ts` → {@link upgradeWorkflowsCommand}, the alternative `doctor` at the
@@ -2526,6 +2531,11 @@ const REMOTE_EXECUTION_CHECK: Check = {
         );
       } else if (pins !== undefined) {
         pinnedHere = true;
+      }
+      if (text !== undefined && !carriesRunActors(text)) {
+        warnings.push(
+          `\`${WORKFLOW_RUN_PATH}\` was written before \`${RUN_ACTORS_VARIABLE}\`: its run job launches for any writer's dispatch or re-run, and its collect job passes the scripts no list, so a review round's authors are held to an unset list (the repository owner alone, or nobody in an organisation-owned repository) once the scripts are re-rendered; \`${upgradeWorkflowsCommand(version)}\` re-renders it after a .bak (docs/remote-execution.md, section 7, Upgrading)`,
+        );
       }
 
       if (!branchUsable) {
@@ -3034,7 +3044,12 @@ const REMOTE_GITHUB_CHECK: Check = {
  * workflow not carried by `origin/<defaultBranch>`, because GitHub runs an `issues` or
  * `issue_comment` workflow only from its default branch — that last with
  * {@link REMOTE_EXECUTION_CHECK}'s push remedy and its two *not graded* notes, on the same reasoning.
- * Each warn names every file it is about, so two absent files are one line naming both.
+ * Each warn names every file it is about, so two absent files are one line naming both. A fourth,
+ * joined to whichever of those fires or standing alone: a present forge workflow whose text does not
+ * read {@link RUN_ACTORS_VARIABLE} ({@link carriesRunActors}), named in one warning with `init --force`
+ * — these two carry no pin and move with the scripts, not with {@link upgradeWorkflowsCommand}. It is
+ * local evidence because the workflows are what GitHub runs and only their text says whether the list
+ * reaches the scripts; a read that throws is skipped.
  *
  * A value outside {@link FORGE_KINDS} is the config check's `fail`, and is not graded here.
  */
@@ -3083,10 +3098,22 @@ const FORGE_CHECK: Check = {
       [WORKFLOW_CONTROL_PATH]: 'comments and reviews start nothing',
     };
     const consequence = (paths: readonly string[]) => paths.map((path) => startsNothing[path]).join(', and ');
+    const listless = forgeTriggerApplies(ctx.config)
+      ? presentWorkflows.filter((path) => {
+          try {
+            return !carriesRunActors(readFileSync(join(root, ...path.split('/')), 'utf8'));
+          } catch {
+            return false;
+          }
+        })
+      : [];
+    const listlessWarning = listless.length === 0
+      ? ''
+      : `${nameList(listless)} ${listless.length === 1 ? 'was' : 'were'} written before \`${RUN_ACTORS_VARIABLE}\` and ${listless.length === 1 ? 'passes' : 'pass'} the scripts no list: with scripts written at the same time every writer may still start and command a run, and with the scripts re-rendered every start and command is held to an unset list — the repository owner alone, or nobody in an organisation-owned repository; \`${CLI} init --force\` replaces both workflows and the scripts after a .bak (docs/remote-execution.md, section 7, Upgrading)`;
     const absent = forgeWorkflows.filter((path) => !presentWorkflows.includes(path));
     if (absent.length > 0) {
       return warn(
-        `${on}, but ${nameList(absent)} ${isAre(absent)} absent, so ${consequence(absent)}: re-run \`${CLI} init\`, which writes ${absent.length === 1 ? 'it' : 'them'} create-if-absent`,
+        `${on}, but ${nameList(absent)} ${isAre(absent)} absent, so ${consequence(absent)}: re-run \`${CLI} init\`, which writes ${absent.length === 1 ? 'it' : 'them'} create-if-absent${listless.length > 0 ? `; ${listlessWarning}` : ''}`,
       );
     }
 
@@ -3100,10 +3127,13 @@ const FORGE_CHECK: Check = {
       const uncarried = forgeWorkflows.filter((path) => !pathAtRef(root, `origin/${branch}`, path));
       if (uncarried.length > 0) {
         return warn(
-          `${on}, but origin/${branch} does not carry ${nameList(uncarried)}, as this checkout last fetched it, and GitHub runs an issues or issue_comment workflow only from its default branch, so ${consequence(uncarried)} yet: commit ${uncarried.length === 1 ? 'it' : 'them'}, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`,
+          `${on}, but origin/${branch} does not carry ${nameList(uncarried)}, as this checkout last fetched it, and GitHub runs an issues or issue_comment workflow only from its default branch, so ${consequence(uncarried)} yet: commit ${uncarried.length === 1 ? 'it' : 'them'}, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}${listless.length > 0 ? ` ${listlessWarning}` : ''}`,
         );
       }
       carried = ` and origin/${branch} carries them`;
+    }
+    if (listless.length > 0) {
+      return warn(`${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}; ${listlessWarning}`);
     }
 
     const asked = ctx.probeGithub

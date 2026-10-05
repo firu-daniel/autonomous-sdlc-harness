@@ -5957,6 +5957,39 @@ test('the remote-execution check grades local evidence and fails only what stops
     assert.ok(reportLine(after.stdout, 'pass', 'remote-execution')?.includes("rendered for this CLI's own version"), `${after.stdout}\n${after.stderr}`);
   });
 
+  const RUN_ACTORS_LINE = /^[ \t]*HARNESS_RUN_ACTORS:.*\r?\n/gm;
+  const BEFORE_RUN_ACTORS = 'was written before `HARNESS_RUN_ACTORS`';
+
+  await t.test('on, with harness-run.yml written before HARNESS_RUN_ACTORS, warns with the upgrade route', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    const path = join(dir, REMOTE_RUN_WORKFLOW);
+    const before = readFileSync(path, 'utf8');
+    const after = before.replace(RUN_ACTORS_LINE, '');
+    assert.notEqual(after, before, 'harness-run.yml carries no HARNESS_RUN_ACTORS line to remove');
+    writeFileSync(path, after, 'utf8');
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'remote-execution');
+    assert.ok(line?.includes(`\`${REMOTE_RUN_WORKFLOW}\` ${BEFORE_RUN_ACTORS}`), `${stdout}\n${stderr}`);
+    assert.ok(line.includes(UPGRADE_ROUTE), line);
+    assert.ok(line.includes('docs/remote-execution.md, section 7, Upgrading'), line);
+  });
+
+  await t.test('on, with harness-run.yml as init writes it, says nothing about HARNESS_RUN_ACTORS', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await pushWorkflows(dir);
+    const stub = await ghStub(subtest);
+
+    const { stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.ok(reportLine(stdout, 'pass', 'remote-execution') !== undefined, `${stdout}\n${stderr}`);
+    assert.ok(!`${stdout}\n${stderr}`.includes(BEFORE_RUN_ACTORS), `${stdout}\n${stderr}`);
+  });
+
   const QA_SKIP = 'a remote run skips the interactive-test phase';
   const setQa = async (dir, value) => {
     const edit = await runCli(dir, ['config', 'set', 'phases.qa', value]);
@@ -6720,6 +6753,8 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(line.includes('was written by an earlier release and falls back to `harness`, which keeps starting runs'), line);
     assert.ok(line.includes('init --force` re-renders it and the scripts to `sdlc-harness`'), line);
     assert.ok(line.includes('setting HARNESS_TRIGGER_LABEL keeps a name of your choosing under either'), line);
+    // The edit leaves the HARNESS_RUN_ACTORS line in place, so the forge grade stays pass.
+    assert.ok(reportLine(stdout, 'pass', 'forge') !== undefined, `${stdout}\n${stderr}`);
   });
 
   await t.test('with the trigger on, HARNESS_TRIGGER_LABEL names the label and allowed bots are a note', async (subtest) => {
@@ -6919,6 +6954,43 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line.includes('carries them'), line);
     assert.ok(!line.includes('still to come'), line);
     assert.ok(line.includes('doctor --check-github'), line);
+  });
+
+  const BEFORE_RUN_ACTORS = 'written before `HARNESS_RUN_ACTORS`';
+
+  await t.test('github with harness-control.yml written before HARNESS_RUN_ACTORS warns naming it alone and init --force', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await configure(dir, [['forge', 'github']], { init: true });
+    const path = join(dir, REMOTE_CONTROL_WORKFLOW);
+    const before = readFileSync(path, 'utf8');
+    const after = before.replace(/^[ \t]*HARNESS_RUN_ACTORS:.*\r?\n/gm, '');
+    assert.notEqual(after, before, 'harness-control.yml carries no HARNESS_RUN_ACTORS line to remove');
+    writeFileSync(path, after, 'utf8');
+    await pushWorkflows(dir);
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'forge');
+    assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} was ${BEFORE_RUN_ACTORS} and passes the scripts no list`), `${stdout}\n${stderr}`);
+    assert.ok(!line.includes(`${REMOTE_TRIGGER_WORKFLOW} was`), line);
+    assert.ok(!line.includes(`${REMOTE_TRIGGER_WORKFLOW}, ${REMOTE_CONTROL_WORKFLOW} were`), line);
+    assert.ok(line.includes('`npx autonomous-sdlc-harness init --force`'), line);
+  });
+
+  await t.test('github with both forge workflows as init writes them says nothing about HARNESS_RUN_ACTORS', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await configure(dir, [['forge', 'github']], { init: true });
+    await pushWorkflows(dir);
+    const stub = await ghStub(subtest);
+
+    const { stdout, stderr } = await doctorWithStub(dir, stub);
+
+    const line = reportLine(stdout, 'pass', 'forge');
+    assert.ok(line !== undefined, `${stdout}\n${stderr}`);
+    assert.ok(!line.includes(BEFORE_RUN_ACTORS), line);
+    assert.ok(!line.includes('init --force'), line);
   });
 
   await t.test('github under --check-github names remote-github instead of the flag', async (subtest) => {
