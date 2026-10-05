@@ -2584,9 +2584,12 @@ function retentionDaysOf(stdout: string): number | undefined {
 
 /**
  * Each `workflows[]` entry's `name`, keyed by its `path`, of an Actions workflow listing — entries
- * lacking a string `name` or `path` are skipped — or `undefined` when there is no `workflows` array.
+ * lacking a string `name` or `path` are skipped — with the listing's `total_count` (the entry count when
+ * absent) and the number of entries listed, or `undefined` when there is no `workflows` array.
  */
-function workflowNamesByPathOf(stdout: string): ReadonlyMap<string, string> | undefined {
+function workflowNamesByPathOf(
+  stdout: string,
+): { readonly names: ReadonlyMap<string, string>; readonly total: number; readonly listed: number } | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
@@ -2594,13 +2597,14 @@ function workflowNamesByPathOf(stdout: string): ReadonlyMap<string, string> | un
     return undefined;
   }
   if (!isJsonObject(parsed as JsonValue)) return undefined;
-  const workflows = (parsed as { readonly workflows?: unknown }).workflows;
+  const { workflows, total_count: totalCount } = parsed as { readonly workflows?: unknown; readonly total_count?: unknown };
   if (!Array.isArray(workflows)) return undefined;
   const names = new Map<string, string>();
   for (const item of workflows as JsonValue[]) {
     if (isJsonObject(item) && typeof item.name === 'string' && typeof item.path === 'string') names.set(item.path, item.name);
   }
-  return names;
+  const total = typeof totalCount === 'number' && Number.isInteger(totalCount) ? totalCount : workflows.length;
+  return { names, total, listed: workflows.length };
 }
 
 /** The boolean `can_approve_pull_request_reviews` of a workflow-permissions answer, or `undefined` for any other shape. */
@@ -2631,8 +2635,8 @@ function prApprovalSettingOf(stdout: string): boolean | undefined {
  *   round 7 observed. `harness-trigger.yml` and `harness-control.yml` are judged only when
  *   {@link forgeTriggerApplies}.
  * - `warn` — `HARNESS_PUSH_URL` absent; `harness-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
- *   set; the workflow listing unread, so whether GitHub could parse the harness workflows cannot be
- *   told; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
+ *   set; the workflow listing unread, or not reaching a judged harness workflow because the repository
+ *   has more workflows than one page lists, so whether GitHub could parse it cannot be told; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
  *   {@link forgeTriggerApplies}, `harness-trigger.yml` or `harness-control.yml` unknown to GitHub, no
  *   label by the effective trigger name, or the pull-request setting off with no `HARNESS_GIT_TOKEN`
  *   secret; and any call that timed out, could not reach GitHub, or answered in a shape not
@@ -2733,22 +2737,31 @@ const REMOTE_GITHUB_CHECK: Check = {
     if (listing.answer.kind !== 'answered') {
       warnings.push(cannotTell(listing.call, listing.answer.why, parsable));
     } else {
-      const namesByPath = workflowNamesByPathOf(listing.answer.stdout);
-      if (namesByPath === undefined) {
+      const listingRead = workflowNamesByPathOf(listing.answer.stdout);
+      if (listingRead === undefined) {
         warnings.push(`cannot tell ${parsable}: ${listing.call} answered in a shape this check does not read`);
       } else {
         const version = ownManifestString('version');
         const judged = forgeTriggerApplies(ctx.config)
           ? [WORKFLOW_RUN_PATH, WORKFLOW_RESUME_PATH, WORKFLOW_TRIGGER_PATH, WORKFLOW_CONTROL_PATH]
           : [WORKFLOW_RUN_PATH, WORKFLOW_RESUME_PATH];
+        const unseen: string[] = [];
         for (const path of judged) {
-          if (namesByPath.get(path) !== path) continue;
+          const name = listingRead.names.get(path);
+          if (name === undefined) {
+            if (listingRead.total > listingRead.listed) unseen.push(path);
+            continue;
+          }
+          if (name !== path) continue;
           unparsed.add(path);
           const route =
             path === WORKFLOW_CONTROL_PATH
               ? unparseableControlRoute(version)
               : `Check ${path} with actionlint, or re-render it with \`${pinnedCliCommand(version)} init --force\`, which keeps a .bak; then commit it and push it to the repository's default branch.`;
           failures.push(`GitHub lists ${path} by its path rather than its name, which it does for a workflow file it cannot parse, so that workflow runs for no event: ${route}`);
+        }
+        if (unseen.length > 0) {
+          warnings.push(`cannot tell whether GitHub could parse ${nameList(unseen)}: ${listing.call} listed ${listingRead.listed} of the repository's ${listingRead.total} workflows, and not ${unseen.length === 1 ? 'that one' : 'those'}`);
         }
       }
     }

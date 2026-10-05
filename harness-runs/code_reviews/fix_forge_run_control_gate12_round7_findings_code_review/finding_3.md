@@ -77,3 +77,8 @@ That breaks the grading contract `REMOTE_GITHUB_CHECK`'s own doc comment states:
   ```
 
 Verify with `npm test -- test/doctor.test.mjs` from `cli/`. It is the one test file this fix edits; the full suite runs later, in the gates phase.
+
+**Deviations from plan:**
+
+- The `docs/cli.md` sub-step was not done in the `cli` dispatch. `docs/` falls under the `general` layer (path `.`), not under `cli`. A dispatch for that layer has to make the edit. The `general` dispatch made it, word for word as the sub-step specifies.
+- In the first `npm test -- test/doctor.test.mjs` run, the unrelated subtest `an ordinary wired repository passes jj-repository, and no other report line mentions jj` failed once. The next two runs passed in full (265/265), so it is intermittent and not caused by this change.

@@ -6271,6 +6271,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     ['the retention answer is in a shape it does not read', { retention: { out: JSON.stringify({ days: 'ninety' }) } }, 'cannot tell how long the repository keeps artifacts: `gh api repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention` answered in a shape this check does not read'],
     ['the workflow listing exits non-zero', { workflows: { err: 'HTTP 404: Not Found\n', status: 1 } }, 'cannot tell whether GitHub could parse the harness workflows: `gh api repos/{owner}/{repo}/actions/workflows?per_page=100` gave no answer, because it exited 1: HTTP 404: Not Found'],
     ['the workflow listing answers non-JSON', { workflows: { out: 'not json\n' } }, 'cannot tell whether GitHub could parse the harness workflows: `gh api repos/{owner}/{repo}/actions/workflows?per_page=100` answered in a shape this check does not read'],
+    ['the workflow listing stops before the harness workflows', { workflows: { out: JSON.stringify({ total_count: 150, workflows: [] }) } }, 'listed 0 of the repository\'s 150 workflows'],
   ];
   for (const [name, overrides, expected] of warning) {
     await t.test(`warns when ${name}`, async (subtest) => {
