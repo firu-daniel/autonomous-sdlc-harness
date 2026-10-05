@@ -6,7 +6,10 @@
  * the repository secret and variable names, the two artifact names and the `gh` test-seam variable
  * and the rendered CLI-version pin are declared here once; the generator that writes the workflows and the `doctor` checks that grade
  * them read these constants rather than retyping a literal, and so does `generators/repoRoot.ts`,
- * which spells the two workflow `.bak` ignore rules whatever `execution.target` says.
+ * which spells the two workflow `.bak` ignore rules whatever `execution.target` says. It owns the
+ * {@link RUN_ACTORS_VARIABLE} allow-list's semantics as well as its name — {@link effectiveRunActors}
+ * and {@link runActorAdmitted} — and `remote-run.sh` and `harness-run.yml`'s gate step each restate
+ * that rule in shell.
  *
  * Except in `generators/repoRoot.ts`, nothing here is consulted unless `config/model.ts` →
  * `remoteExecutionApplies(config)` is true: every other consumer tests that switch first. That one
@@ -145,6 +148,72 @@ export function triggerFallbackLabel(text: string): string | undefined {
 
 /** Repository variable: comma-separated bot logins that may start a run; unset or empty admits none. */
 export const TRIGGER_ALLOWED_BOTS_VARIABLE = 'HARNESS_TRIGGER_ALLOWED_BOTS';
+
+/** Repository variable: comma-separated GitHub logins allowed to start, command, answer and review a run; `*` admits every writer; unset admits the owner of a user-owned repository alone, and nobody in an organisation-owned one. */
+export const RUN_ACTORS_VARIABLE = 'HARNESS_RUN_ACTORS';
+
+/** The {@link RUN_ACTORS_VARIABLE} entry that admits every collaborator with write access. */
+export const RUN_ACTORS_EVERY_WRITER = '*';
+
+/** The repository's owner as GitHub reports it; `type` is `User` or `Organization`. */
+export interface RepositoryOwner {
+  readonly login: string;
+  readonly type: string;
+}
+
+/** Who {@link RUN_ACTORS_VARIABLE} admits, once read against the owner. */
+export type RunActors =
+  | { readonly kind: 'every-writer' }
+  | { readonly kind: 'listed'; readonly logins: readonly string[] }
+  | { readonly kind: 'owner'; readonly login: string }
+  | { readonly kind: 'nobody'; readonly owner: RepositoryOwner | undefined };
+
+/**
+ * Who a {@link RUN_ACTORS_VARIABLE} value admits. The value is split on `,`, each entry trimmed and
+ * empty entries dropped. An entry {@link RUN_ACTORS_EVERY_WRITER} anywhere gives `every-writer`;
+ * otherwise any entries give `listed`, as written and in order. No entries — `undefined`, `''`, only
+ * whitespace or only commas — counts as unset: an owner whose `type` is exactly `User` with a
+ * non-empty login gives `owner`, and anything else (an `Organization`, an unknown type, no owner)
+ * gives `nobody`. Pure — the caller reads the variable and the owner.
+ */
+export function effectiveRunActors(value: string | undefined, owner: RepositoryOwner | undefined): RunActors {
+  const entries = (value ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '');
+  if (entries.includes(RUN_ACTORS_EVERY_WRITER)) return { kind: 'every-writer' };
+  if (entries.length > 0) return { kind: 'listed', logins: entries };
+  if (owner !== undefined && owner.type === 'User' && owner.login !== '') return { kind: 'owner', login: owner.login };
+  return { kind: 'nobody', owner };
+}
+
+/**
+ * Whether `login` is admitted by `actors`, compared case-insensitively. An empty login is never
+ * admitted, `nobody` admits no one, and `every-writer` admits any non-empty login — whether that login
+ * has write access is GitHub's to decide, not this function's.
+ */
+export function runActorAdmitted(actors: RunActors, login: string): boolean {
+  if (login === '') return false;
+  const wanted = login.toLowerCase();
+  switch (actors.kind) {
+    case 'every-writer':
+      return true;
+    case 'listed':
+      return actors.logins.some((entry) => entry.toLowerCase() === wanted);
+    case 'owner':
+      return actors.login.toLowerCase() === wanted;
+    case 'nobody':
+      return false;
+  }
+}
+
+/**
+ * Whether a workflow's text reads `vars.HARNESS_RUN_ACTORS`; `false` marks a copy written before the
+ * allow-list existed. Pure — the caller reads the file.
+ */
+export function carriesRunActors(workflowText: string): boolean {
+  return workflowText.includes(`vars.${RUN_ACTORS_VARIABLE}`);
+}
 
 /** The `repository_dispatch` `event_type` the trigger workflow listens to. */
 export const TRIGGER_DISPATCH_EVENT_TYPE = 'harness-task';

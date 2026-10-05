@@ -3,7 +3,7 @@
  * branch's next user-review round through the `review` verb the local relay uses.
  *
  * **The rule these tests exist to enforce: only a review requesting changes, by a write-or-admin
- * reviewer, on a recognised same-repository harness branch carrying a story index, starts a round; the
+ * reviewer `HARNESS_RUN_ACTORS` admits, on a recognised same-repository harness branch carrying a story index, starts a round; the
  * round collects every review requesting changes, every other submitted review carrying a summary, and
  * every inline comment since the previous round, by
  * every authorised author, each review's body under its own `## Review by @<login>` section and each
@@ -192,6 +192,7 @@ async function reviewFixture(t) {
         RUNNER_TEMP: runnerTemp,
         HARNESS_REMOTE_STOP: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
+        HARNESS_RUN_ACTORS: '*',
         HARNESS_TRIGGER_LABEL: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write' }),
         STUB_PRS: '',
@@ -507,6 +508,14 @@ test('a read reviewer is refused with a reply, and nothing is pushed', async (t)
   const before = await f.originRefs();
   const result = await f.control({}, { STUB_PERMISSIONS: JSON.stringify({ alice: 'read' }) });
   await assertRefused(f, result, before, /permission of @alice as read/);
+});
+
+test('a review by a writer HARNESS_RUN_ACTORS does not admit places no round and is refused naming the list', async (t) => {
+  const f = await reviewFixture(t);
+  const before = await f.originRefs();
+  const result = await f.control({}, { HARNESS_RUN_ACTORS: 'carol' });
+  const reply = await assertRefused(f, result, before, /@alice is not on the repository variable HARNESS_RUN_ACTORS/);
+  assert.match(reply.body, /whom the repository variable `HARNESS_RUN_ACTORS` admits/);
 });
 
 test('a head without the ledger is refused as not a harness branch', async (t) => {

@@ -33,7 +33,8 @@
 #     the authority.
 #
 # WHO CAN START A RUN. `remote-run.sh`'s `trigger` paragraph owns the check —
-# the labeller, bots and HARNESS_TRIGGER_ALLOWED_BOTS, the permission call —
+# the labeller, bots and HARNESS_TRIGGER_ALLOWED_BOTS, the permission call, the
+# allow-list HARNESS_RUN_ACTORS, and the `repository_dispatch` sender check —
 # and the order its refusals are made in. Nothing here pre-filters on it.
 #
 # THE PERMISSIONS, declared because the default token may be read-only
@@ -69,6 +70,7 @@
 #                                     HARNESS_REMOTE_STOP, HARNESS_TRIGGER_LABEL,
 #                                     DEFAULT_TRIGGER_LABEL (`sdlc-harness`),
 #                                     HARNESS_TRIGGER_ALLOWED_BOTS,
+#                                     HARNESS_RUN_ACTORS,
 #                                     TRIGGER_DISPATCH_EVENT_TYPE (`harness-task`)
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir
 #
@@ -112,6 +114,7 @@ jobs:
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
       HARNESS_TRIGGER_LABEL: ${{ vars.HARNESS_TRIGGER_LABEL || 'sdlc-harness' }}
       HARNESS_TRIGGER_ALLOWED_BOTS: ${{ vars.HARNESS_TRIGGER_ALLOWED_BOTS }}
+      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
     steps:
       - name: Check out the default branch
         uses: actions/checkout@v5

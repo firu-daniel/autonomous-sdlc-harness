@@ -166,7 +166,7 @@ import {
   pushEnvCandidates,
   type PushEnvCandidate,
 } from '../generators/notifications.js';
-import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
+import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, unparseableControlRoute, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
 import { DOCS_SEARCH_SERVER_SCRIPT_NAME, outerLoopScriptsDir } from '../generators/outerLoopScripts.js';
 import {
   bashScriptRule,
@@ -223,11 +223,13 @@ import {
 import { inspect, readRegistry, registryPath, type EntryState, type InspectedEntry } from '../machine/registry.js';
 import {
   API_KEY_SECRET,
+  carriesRunActors,
   CLI_VERSION_VARIABLE,
   DEFAULT_GH_CLI,
   COMMAND_HANDLE,
   COMMAND_VERBS,
   DEFAULT_TRIGGER_LABEL,
+  effectiveRunActors,
   GH_CLI_VARIABLE,
   ghCli,
   GIT_TOKEN_SECRET,
@@ -238,7 +240,10 @@ import {
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
   renderedCliVersions,
+  runActorAdmitted,
   runGh,
+  RUN_ACTORS_EVERY_WRITER,
+  RUN_ACTORS_VARIABLE,
   RUNNER_VARIABLE,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_LABEL_VARIABLE,
@@ -252,6 +257,8 @@ import {
   WORKFLOW_TRIGGER_FILE,
   WORKFLOW_TRIGGER_PATH,
   type GhResult,
+  type RepositoryOwner,
+  type RunActors,
 } from '../remote/githubActions.js';
 import { modelFilesPresent } from '../retrieval/models.js';
 import {
@@ -313,12 +320,34 @@ const REMOTE_RUN_SCRIPT = 'remote-run.sh';
 const ARTIFACT_RETENTION_ENDPOINT = 'repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention';
 
 /**
+ * The `gh api` path {@link REMOTE_GITHUB_CHECK} reads the repository's workflow listing from, to find
+ * a harness workflow GitHub lists by its path. Local for {@link ARTIFACT_RETENTION_ENDPOINT}'s reason.
+ */
+const WORKFLOWS_ENDPOINT = 'repos/{owner}/{repo}/actions/workflows?per_page=100';
+
+/**
  * The `gh api` path {@link REMOTE_GITHUB_CHECK} reads the *Allow GitHub Actions to create and approve
  * pull requests* setting from — `can_approve_pull_request_reviews`. Local for
  * {@link ARTIFACT_RETENTION_ENDPOINT}'s reason. A workflow's own token cannot read it; a person's `gh`
  * usually can.
  */
 const PR_SETTING_ENDPOINT = 'repos/{owner}/{repo}/actions/permissions/workflow';
+
+/**
+ * The `gh api` path {@link REMOTE_GITHUB_CHECK} reads the repository's owner from, to grade an unset
+ * {@link RUN_ACTORS_VARIABLE}. Local for {@link ARTIFACT_RETENTION_ENDPOINT}'s reason.
+ */
+const REPOSITORY_ENDPOINT = 'repos/{owner}/{repo}';
+
+/**
+ * The `gh api` path {@link REMOTE_GITHUB_CHECK} reads the repository's collaborators from, to name
+ * writers {@link RUN_ACTORS_VARIABLE} does not admit. Local for {@link ARTIFACT_RETENTION_ENDPOINT}'s
+ * reason. Listing collaborators needs push access.
+ */
+const COLLABORATORS_ENDPOINT = 'repos/{owner}/{repo}/collaborators?per_page=100';
+
+/** A full {@link COLLABORATORS_ENDPOINT} page: at this many entries more collaborators may exist. */
+const COLLABORATORS_PAGE_SIZE = 100;
 
 /** Below this many days of artifact retention {@link REMOTE_GITHUB_CHECK} warns; argued there. */
 const ARTIFACT_RETENTION_WARN_DAYS = 30;
@@ -2397,7 +2426,11 @@ const DAEMON_PATH_CHECK: Check = {
  *
  * **Every finding is reported, and the grade is the worst of them.** Two `fail`s: no
  * `harness-run.yml`, because no remote run can be dispatched; and no `gh`, because the watcher
- * dispatches through it. Four `warn`s: a `harness-run.yml` pinned (`remote/githubActions.ts` →
+ * dispatches through it. Five `warn`s: a `harness-run.yml` whose text does not read
+ * {@link RUN_ACTORS_VARIABLE} ({@link carriesRunActors}), remedied by {@link upgradeWorkflowsCommand} —
+ * local evidence, because the workflow is what GitHub runs and only its text says whether the list
+ * reaches the gate and the scripts; listed beside the pin warning when both fire, and an unreadable
+ * file adds nothing to the pin note. A `harness-run.yml` pinned (`remote/githubActions.ts` →
  * {@link renderedCliVersions}) to a version other than this CLI's — never a `fail`, because the job
  * installs its pin and the adopter may stay on it deliberately; the remedy is
  * `generators/githubWorkflows.ts` → {@link upgradeWorkflowsCommand}, the alternative `doctor` at the
@@ -2499,6 +2532,11 @@ const REMOTE_EXECUTION_CHECK: Check = {
       } else if (pins !== undefined) {
         pinnedHere = true;
       }
+      if (text !== undefined && !carriesRunActors(text)) {
+        warnings.push(
+          `\`${WORKFLOW_RUN_PATH}\` was written before \`${RUN_ACTORS_VARIABLE}\`: its run job launches for any writer's dispatch or re-run, and its collect job passes the scripts no list, so a review round's authors are held to an unset list (the repository owner alone, or nobody in an organisation-owned repository) once the scripts are re-rendered; \`${upgradeWorkflowsCommand(version)}\` re-renders it after a .bak (docs/remote-execution.md, section 7, Upgrading)`,
+        );
+      }
 
       if (!branchUsable) {
         notes.push(`whether GitHub's default branch carries ${WORKFLOW_RUN_PATH} is not graded, because defaultBranch is not a branch name (see the config check)`);
@@ -2576,6 +2614,31 @@ function retentionDaysOf(stdout: string): number | undefined {
   return typeof days === 'number' && Number.isInteger(days) && days > 0 ? days : undefined;
 }
 
+/**
+ * Each `workflows[]` entry's `name`, keyed by its `path`, of an Actions workflow listing — entries
+ * lacking a string `name` or `path` are skipped — with the listing's `total_count` (the entry count when
+ * absent) and the number of entries listed, or `undefined` when there is no `workflows` array.
+ */
+function workflowNamesByPathOf(
+  stdout: string,
+): { readonly names: ReadonlyMap<string, string>; readonly total: number; readonly listed: number } | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isJsonObject(parsed as JsonValue)) return undefined;
+  const { workflows, total_count: totalCount } = parsed as { readonly workflows?: unknown; readonly total_count?: unknown };
+  if (!Array.isArray(workflows)) return undefined;
+  const names = new Map<string, string>();
+  for (const item of workflows as JsonValue[]) {
+    if (isJsonObject(item) && typeof item.name === 'string' && typeof item.path === 'string') names.set(item.path, item.name);
+  }
+  const total = typeof totalCount === 'number' && Number.isInteger(totalCount) ? totalCount : workflows.length;
+  return { names, total, listed: workflows.length };
+}
+
 /** The boolean `can_approve_pull_request_reviews` of a workflow-permissions answer, or `undefined` for any other shape. */
 function prApprovalSettingOf(stdout: string): boolean | undefined {
   let parsed: unknown;
@@ -2589,6 +2652,43 @@ function prApprovalSettingOf(stdout: string): boolean | undefined {
   return typeof allowed === 'boolean' ? allowed : undefined;
 }
 
+/** The string `.owner.login` and `.owner.type` of a repository answer, or `undefined` for any other shape. */
+function repositoryOwnerOf(stdout: string): RepositoryOwner | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isJsonObject(parsed as JsonValue)) return undefined;
+  const owner = (parsed as { readonly owner?: unknown }).owner;
+  if (!isJsonObject(owner as JsonValue)) return undefined;
+  const { login, type } = owner as { readonly login?: unknown; readonly type?: unknown };
+  return typeof login === 'string' && typeof type === 'string' ? { login, type } : undefined;
+}
+
+/**
+ * Each `login` whose `permissions.push` is `true` — write, maintain and admin all carry it — of a
+ * collaborators answer, with the array's length, or `undefined` for any other shape.
+ */
+function writersOf(stdout: string): { readonly logins: readonly string[]; readonly count: number } | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(parsed)) return undefined;
+  const logins: string[] = [];
+  for (const item of parsed as JsonValue[]) {
+    if (!isJsonObject(item) || typeof item.login !== 'string') return undefined;
+    const permissions = item.permissions;
+    if (!isJsonObject(permissions as JsonValue)) return undefined;
+    if ((permissions as { readonly push?: unknown }).push === true) logins.push(item.login);
+  }
+  return { logins, count: parsed.length };
+}
+
 /**
  * What GitHub says about the remote setup — asked only under {@link CheckContext.probeGithub}.
  *
@@ -2598,9 +2698,14 @@ function prApprovalSettingOf(stdout: string): boolean | undefined {
  *
  * Grades, worst wins and every finding is reported:
  * - `fail` — `gh` does not spawn or `gh auth status` refuses (nothing further is asked); GitHub does
- *   not know `harness-run.yml`; neither credential secret is set.
+ *   not know `harness-run.yml`; neither credential secret is set; a harness workflow GitHub lists by
+ *   its path, which is how it lists a file it could not parse — judged from the workflow listing
+ *   ({@link WORKFLOWS_ENDPOINT}) because `gh workflow view` answers for an unparsed file too, as Gate 12
+ *   round 7 observed. `harness-trigger.yml` and `harness-control.yml` are judged only when
+ *   {@link forgeTriggerApplies}.
  * - `warn` — `HARNESS_PUSH_URL` absent; `harness-resume.yml` unknown to GitHub; `HARNESS_REMOTE_STOP`
- *   set; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
+ *   set; the workflow listing unread, or not reaching a judged harness workflow because the repository
+ *   has more workflows than one page lists, so whether GitHub could parse it cannot be told; artifact retention below {@link ARTIFACT_RETENTION_WARN_DAYS} days; when
  *   {@link forgeTriggerApplies}, `harness-trigger.yml` or `harness-control.yml` unknown to GitHub, no
  *   label by the effective trigger name, or the pull-request setting off with no `HARNESS_GIT_TOKEN`
  *   secret; and any call that timed out, could not reach GitHub, or answered in a shape not
@@ -2621,9 +2726,25 @@ function prApprovalSettingOf(stdout: string): boolean | undefined {
  *   request with that token instead.
  * - all three trigger answers positive — both workflows known and the label present — is confirmed on
  *   every outcome that reaches the trigger reads, `fail` and `warn` included, so an unrelated finding
- *   never hides it; any answer not positive is already among the warnings. An outcome returned before
+ *   never hides it; any answer not positive is already among the warnings, and a forge workflow
+ *   GitHub lists by its path withholds it, being among the failures. An outcome returned before
  *   those reads — `gh` not runnable, no usable login, or no readable answer to the login probe — asks
  *   GitHub nothing about the trigger.
+ * - who may start, steer, answer and review a run is {@link effectiveRunActors} of
+ *   `HARNESS_RUN_ACTORS`, read only when the variable listing was. An unset list adds a read of the
+ *   repository's owner ({@link REPOSITORY_ENDPOINT}); any answer but a readable owner — refused, timed
+ *   out, unreachable or an unread shape — is a *cannot tell* warning, and the list then grades as
+ *   admitting nobody with no second warning. `*`, a list of logins, and an unset list in a user-owned
+ *   repository are each a note naming who acts; an unset list whose owner is not a user is a `warn`
+ *   with the `gh variable set` remedy. `*` while `CLAUDE_CODE_OAUTH_TOKEN` is set is a `warn` whether
+ *   or not `ANTHROPIC_API_KEY` is also set: the token is one person's subscription, readable by every
+ *   writer.
+ * - a list of logins or an owner-only list while `CLAUDE_CODE_OAUTH_TOKEN` is set adds a read of the
+ *   collaborators ({@link COLLABORATORS_ENDPOINT}). A writer the list does not admit is a `warn` naming
+ *   them: the list stops their spending through the harness, but a writer can still read the secret
+ *   through an edited workflow run from a branch. A full first page with no such writer is a *cannot
+ *   tell* warning, as are a timed-out, unreachable or unread answer; a refused read is a note on the
+ *   retention read's terms, since listing collaborators needs push access.
  *
  * **Why 30 days.** A parked run waits on a human answer and a usage-paused one on a reset, and the
  * `harness-state` bundle is the only remote copy of either; once the repository's retention expires
@@ -2693,14 +2814,50 @@ const REMOTE_GITHUB_CHECK: Check = {
       warnings.push(`GitHub does not know ${WORKFLOW_RESUME_FILE} (${resume.call}: ${resume.answer.why}), so usage auto-resume is unavailable: push ${WORKFLOW_RESUME_PATH} to the repository's default branch`);
     }
 
+    const listing = ask(['api', WORKFLOWS_ENDPOINT]);
+    if (listing.answer === undefined) return fail(noSpawn);
+    const unparsed = new Set<string>();
+    const parsable = 'whether GitHub could parse the harness workflows';
+    if (listing.answer.kind !== 'answered') {
+      warnings.push(cannotTell(listing.call, listing.answer.why, parsable));
+    } else {
+      const listingRead = workflowNamesByPathOf(listing.answer.stdout);
+      if (listingRead === undefined) {
+        warnings.push(`cannot tell ${parsable}: ${listing.call} answered in a shape this check does not read`);
+      } else {
+        const version = ownManifestString('version');
+        const judged = forgeTriggerApplies(ctx.config)
+          ? [WORKFLOW_RUN_PATH, WORKFLOW_RESUME_PATH, WORKFLOW_TRIGGER_PATH, WORKFLOW_CONTROL_PATH]
+          : [WORKFLOW_RUN_PATH, WORKFLOW_RESUME_PATH];
+        const unseen: string[] = [];
+        for (const path of judged) {
+          const name = listingRead.names.get(path);
+          if (name === undefined) {
+            if (listingRead.total > listingRead.listed) unseen.push(path);
+            continue;
+          }
+          if (name !== path) continue;
+          unparsed.add(path);
+          const route =
+            path === WORKFLOW_CONTROL_PATH
+              ? unparseableControlRoute(version)
+              : `Check ${path} with actionlint, or re-render it with \`${pinnedCliCommand(version)} init --force\`, which keeps a .bak; then commit it and push it to the repository's default branch.`;
+          failures.push(`GitHub lists ${path} by its path rather than its name, which it does for a workflow file it cannot parse, so that workflow runs for no event: ${route}`);
+        }
+        if (unseen.length > 0) {
+          warnings.push(`cannot tell whether GitHub could parse ${nameList(unseen)}: ${listing.call} listed ${listingRead.listed} of the repository's ${listingRead.total} workflows, and not ${unseen.length === 1 ? 'that one' : 'those'}`);
+        }
+      }
+    }
+
     const variables = ask(['variable', 'list', '--json', 'name,value']);
     if (variables.answer === undefined) return fail(noSpawn);
     const variableValues = variables.answer.kind === 'answered' ? ghJsonEntries(variables.answer.stdout) : undefined;
     let runner: string | undefined;
     if (variables.answer.kind !== 'answered') {
-      warnings.push(cannotTell(variables.call, variables.answer.why, `the ${RUNNER_VARIABLE} and ${REMOTE_STOP_VARIABLE} variables`));
+      warnings.push(cannotTell(variables.call, variables.answer.why, `the ${RUNNER_VARIABLE}, ${REMOTE_STOP_VARIABLE} and ${RUN_ACTORS_VARIABLE} variables`));
     } else if (variableValues === undefined) {
-      warnings.push(`cannot tell the ${RUNNER_VARIABLE} and ${REMOTE_STOP_VARIABLE} variables: ${variables.call} answered in a shape this check does not read`);
+      warnings.push(`cannot tell the ${RUNNER_VARIABLE}, ${REMOTE_STOP_VARIABLE} and ${RUN_ACTORS_VARIABLE} variables: ${variables.call} answered in a shape this check does not read`);
     } else {
       const label = variableValues.get(RUNNER_VARIABLE)?.trim() ?? '';
       runner = label === '' ? 'GitHub-hosted (`ubuntu-latest`)' : `runner label \`${label}\``;
@@ -2722,6 +2879,63 @@ const REMOTE_GITHUB_CHECK: Check = {
         warnings.push(`cannot tell how long the repository keeps artifacts: ${retention.call} answered in a shape this check does not read`);
       } else if (retentionDays < ARTIFACT_RETENTION_WARN_DAYS) {
         warnings.push(`the repository keeps artifacts for ${retentionDays} days, so a remote run parked or paused longer than that loses its state bundle: raise it under Settings → Actions → General → Artifact and log retention`);
+      }
+    }
+
+    // Undefined only when the variables listing was unread, whose warning above already names the list.
+    let runActors: RunActors | undefined;
+    if (variableValues !== undefined) {
+      const listed = variableValues.get(RUN_ACTORS_VARIABLE);
+      const unset = effectiveRunActors(listed, undefined).kind === 'nobody';
+      let owner: RepositoryOwner | undefined;
+      if (unset) {
+        const repository = ask(['api', REPOSITORY_ENDPOINT]);
+        if (repository.answer === undefined) return fail(noSpawn);
+        const whoOwns = 'who owns the repository, so who may act on a run';
+        if (repository.answer.kind !== 'answered') {
+          warnings.push(cannotTell(repository.call, repository.answer.why, whoOwns));
+        } else {
+          owner = repositoryOwnerOf(repository.answer.stdout);
+          if (owner === undefined) warnings.push(`cannot tell ${whoOwns}: ${repository.call} answered in a shape this check does not read`);
+        }
+      }
+      runActors = effectiveRunActors(listed, owner);
+      const acts = 'start, steer, answer and review a run';
+      if (runActors.kind === 'every-writer') {
+        notes.push(`${RUN_ACTORS_VARIABLE} is \`${RUN_ACTORS_EVERY_WRITER}\`, so every collaborator with write access may ${acts}`);
+      } else if (runActors.kind === 'listed') {
+        notes.push(`${RUN_ACTORS_VARIABLE} admits ${nameList(runActors.logins)}, so only ${runActors.logins.length === 1 ? 'that login' : 'those logins'} may ${acts}`);
+      } else if (runActors.kind === 'owner') {
+        notes.push(`${RUN_ACTORS_VARIABLE} is unset, so only the repository owner, ${runActors.login}, may ${acts}`);
+      } else if (runActors.owner !== undefined) {
+        const { login, type } = runActors.owner;
+        warnings.push(`${RUN_ACTORS_VARIABLE} is unset and ${login} is ${/^[aeiou]/i.test(type) ? 'an' : 'a'} ${type}, not a user, so no person may start, steer, answer or review a run: set it with \`gh variable set ${RUN_ACTORS_VARIABLE} --body <login,login>\`, or \`--body '${RUN_ACTORS_EVERY_WRITER}'\` for every writer`);
+      }
+      if (runActors.kind === 'every-writer' && secretNames?.has(OAUTH_TOKEN_SECRET) === true) {
+        warnings.push(`${RUN_ACTORS_VARIABLE} is \`${RUN_ACTORS_EVERY_WRITER}\` while ${OAUTH_TOKEN_SECRET} is set, so every writer's runs spend one person's subscription, which its terms do not let them share: name the people in ${RUN_ACTORS_VARIABLE}, or use a Claude API organisation's key in ${API_KEY_SECRET} (docs/remote-execution.md, section 9)`);
+      }
+      if ((runActors.kind === 'listed' || runActors.kind === 'owner') && secretNames?.has(OAUTH_TOKEN_SECRET) === true) {
+        const admitted = runActors;
+        const collaborators = ask(['api', COLLABORATORS_ENDPOINT]);
+        if (collaborators.answer === undefined) return fail(noSpawn);
+        const beyond = `whether any writer is beyond ${RUN_ACTORS_VARIABLE}`;
+        if (collaborators.answer.kind === 'unknown') {
+          warnings.push(cannotTell(collaborators.call, collaborators.answer.why, beyond));
+        } else if (collaborators.answer.kind === 'refused') {
+          notes.push(`writers beyond ${RUN_ACTORS_VARIABLE} not checked: ${collaborators.call} needs push access (${collaborators.answer.why})`);
+        } else {
+          const writers = writersOf(collaborators.answer.stdout);
+          if (writers === undefined) {
+            warnings.push(`cannot tell ${beyond}: ${collaborators.call} answered in a shape this check does not read`);
+          } else {
+            const extra = writers.logins.filter((login) => !runActorAdmitted(admitted, login));
+            if (extra.length > 0) {
+              warnings.push(`${OAUTH_TOKEN_SECRET} is set and ${nameList(extra)} can write to the repository without being on ${RUN_ACTORS_VARIABLE}: the list stops them spending the subscription through the harness, but any writer can still read the secret by running an edited workflow from a branch; on a private repository a push ruleset on the workflow paths and the scripts they run closes that, and on a public one only withholding write access does (docs/remote-execution.md, section 9)`);
+            } else if (writers.count === COLLABORATORS_PAGE_SIZE) {
+              warnings.push(`cannot tell ${beyond}: ${collaborators.call} returned a full page of ${COLLABORATORS_PAGE_SIZE} collaborators with no writer beyond the list, and more may exist`);
+            }
+          }
+        }
       }
     }
 
@@ -2777,7 +2991,8 @@ const REMOTE_GITHUB_CHECK: Check = {
           notes.push(`${TRIGGER_ALLOWED_BOTS_VARIABLE} admits ${nameList(bots)}, each of which can start a run without a permission check`);
         }
       }
-      if (trigger.answer.kind === 'answered' && control.answer.kind === 'answered' && labelFound) {
+      const forgeParsed = !unparsed.has(WORKFLOW_TRIGGER_PATH) && !unparsed.has(WORKFLOW_CONTROL_PATH);
+      if (trigger.answer.kind === 'answered' && control.answer.kind === 'answered' && labelFound && forgeParsed) {
         triggerKnown = `; GitHub knows ${WORKFLOW_TRIGGER_FILE} and ${WORKFLOW_CONTROL_FILE}, and the label \`${labelName}\` exists`;
       }
 
@@ -2829,7 +3044,12 @@ const REMOTE_GITHUB_CHECK: Check = {
  * workflow not carried by `origin/<defaultBranch>`, because GitHub runs an `issues` or
  * `issue_comment` workflow only from its default branch — that last with
  * {@link REMOTE_EXECUTION_CHECK}'s push remedy and its two *not graded* notes, on the same reasoning.
- * Each warn names every file it is about, so two absent files are one line naming both.
+ * Each warn names every file it is about, so two absent files are one line naming both. A fourth,
+ * joined to whichever of those fires or standing alone: a present forge workflow whose text does not
+ * read {@link RUN_ACTORS_VARIABLE} ({@link carriesRunActors}), named in one warning with `init --force`
+ * — these two carry no pin and move with the scripts, not with {@link upgradeWorkflowsCommand}. It is
+ * local evidence because the workflows are what GitHub runs and only their text says whether the list
+ * reaches the scripts; a read that throws is skipped.
  *
  * A value outside {@link FORGE_KINDS} is the config check's `fail`, and is not graded here.
  */
@@ -2878,10 +3098,22 @@ const FORGE_CHECK: Check = {
       [WORKFLOW_CONTROL_PATH]: 'comments and reviews start nothing',
     };
     const consequence = (paths: readonly string[]) => paths.map((path) => startsNothing[path]).join(', and ');
+    const listless = forgeTriggerApplies(ctx.config)
+      ? presentWorkflows.filter((path) => {
+          try {
+            return !carriesRunActors(readFileSync(join(root, ...path.split('/')), 'utf8'));
+          } catch {
+            return false;
+          }
+        })
+      : [];
+    const listlessWarning = listless.length === 0
+      ? ''
+      : `${nameList(listless)} ${listless.length === 1 ? 'was' : 'were'} written before \`${RUN_ACTORS_VARIABLE}\` and ${listless.length === 1 ? 'passes' : 'pass'} the scripts no list: with scripts written at the same time every writer may still start and command a run, and with the scripts re-rendered every start and command is held to an unset list — the repository owner alone, or nobody in an organisation-owned repository; \`${CLI} init --force\` replaces both workflows and the scripts after a .bak (docs/remote-execution.md, section 7, Upgrading)`;
     const absent = forgeWorkflows.filter((path) => !presentWorkflows.includes(path));
     if (absent.length > 0) {
       return warn(
-        `${on}, but ${nameList(absent)} ${isAre(absent)} absent, so ${consequence(absent)}: re-run \`${CLI} init\`, which writes ${absent.length === 1 ? 'it' : 'them'} create-if-absent`,
+        `${on}, but ${nameList(absent)} ${isAre(absent)} absent, so ${consequence(absent)}: re-run \`${CLI} init\`, which writes ${absent.length === 1 ? 'it' : 'them'} create-if-absent${listless.length > 0 ? `; ${listlessWarning}` : ''}`,
       );
     }
 
@@ -2895,10 +3127,13 @@ const FORGE_CHECK: Check = {
       const uncarried = forgeWorkflows.filter((path) => !pathAtRef(root, `origin/${branch}`, path));
       if (uncarried.length > 0) {
         return warn(
-          `${on}, but origin/${branch} does not carry ${nameList(uncarried)}, as this checkout last fetched it, and GitHub runs an issues or issue_comment workflow only from its default branch, so ${consequence(uncarried)} yet: commit ${uncarried.length === 1 ? 'it' : 'them'}, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}`,
+          `${on}, but origin/${branch} does not carry ${nameList(uncarried)}, as this checkout last fetched it, and GitHub runs an issues or issue_comment workflow only from its default branch, so ${consequence(uncarried)} yet: commit ${uncarried.length === 1 ? 'it' : 'them'}, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}${listless.length > 0 ? ` ${listlessWarning}` : ''}`,
         );
       }
       carried = ` and origin/${branch} carries them`;
+    }
+    if (listless.length > 0) {
+      return warn(`${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}; ${listlessWarning}`);
     }
 
     const asked = ctx.probeGithub
