@@ -73,3 +73,8 @@ This task calls `effectiveRunActors` and never re-derives the rule.
 - `bash scripts/typecheck.sh` exits 0.
 - Run the edited `cli/test/doctor.test.mjs` from `cli/` with `npm test -- test/doctor.test.mjs`, under the conditions in `unit_loop_core.md` → `## The test-run rule` (3). Cases (a)–(f) pass. The exact-invocation case passes with the appended `owner` entry, the `failing` table passes with its two edited *calls made* values (`8` for `GitHub does not know harness-run.yml` and for `neither credential secret is set`), and every other existing `remote-github` case passes unedited.
 - Grep `checks.ts` for `'HARNESS_RUN_ACTORS'` and `'*'` used as the list's value. There is none: both come from Task 1's constants.
+
+**Deviations from plan:**
+- `runActors` is a `let` declared before the `variableValues !== undefined` block (`RunActors | undefined`), not a `const`: it is assigned inside that block, and Task 7 needs it after it. It is still computed once, by `effectiveRunActors`.
+- The owner endpoint is a local `REPOSITORY_ENDPOINT` constant beside `PR_SETTING_ENDPOINT`, on `ARTIFACT_RETENTION_ENDPOINT`'s terms, rather than an inline literal.
+- In the report sentences `HARNESS_RUN_ACTORS`, `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` are rendered bare, as every sibling sentence in the check renders a secret or variable name; `*` and the `gh variable set` command keep their backticks. The `listed` note reads `HARNESS_RUN_ACTORS admits <nameList>, so only that login / those logins may start, steer, answer and review a run`.
