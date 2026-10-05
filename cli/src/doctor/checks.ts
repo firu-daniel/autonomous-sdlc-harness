@@ -239,6 +239,7 @@ import {
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
   renderedCliVersions,
+  runActorAdmitted,
   runGh,
   RUN_ACTORS_EVERY_WRITER,
   RUN_ACTORS_VARIABLE,
@@ -336,6 +337,16 @@ const PR_SETTING_ENDPOINT = 'repos/{owner}/{repo}/actions/permissions/workflow';
  * {@link RUN_ACTORS_VARIABLE}. Local for {@link ARTIFACT_RETENTION_ENDPOINT}'s reason.
  */
 const REPOSITORY_ENDPOINT = 'repos/{owner}/{repo}';
+
+/**
+ * The `gh api` path {@link REMOTE_GITHUB_CHECK} reads the repository's collaborators from, to name
+ * writers {@link RUN_ACTORS_VARIABLE} does not admit. Local for {@link ARTIFACT_RETENTION_ENDPOINT}'s
+ * reason. Listing collaborators needs push access.
+ */
+const COLLABORATORS_ENDPOINT = 'repos/{owner}/{repo}/collaborators?per_page=100';
+
+/** A full {@link COLLABORATORS_ENDPOINT} page: at this many entries more collaborators may exist. */
+const COLLABORATORS_PAGE_SIZE = 100;
 
 /** Below this many days of artifact retention {@link REMOTE_GITHUB_CHECK} warns; argued there. */
 const ARTIFACT_RETENTION_WARN_DAYS = 30;
@@ -2647,6 +2658,28 @@ function repositoryOwnerOf(stdout: string): RepositoryOwner | undefined {
 }
 
 /**
+ * Each `login` whose `permissions.push` is `true` — write, maintain and admin all carry it — of a
+ * collaborators answer, with the array's length, or `undefined` for any other shape.
+ */
+function writersOf(stdout: string): { readonly logins: readonly string[]; readonly count: number } | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(parsed)) return undefined;
+  const logins: string[] = [];
+  for (const item of parsed as JsonValue[]) {
+    if (!isJsonObject(item) || typeof item.login !== 'string') return undefined;
+    const permissions = item.permissions;
+    if (!isJsonObject(permissions as JsonValue)) return undefined;
+    if ((permissions as { readonly push?: unknown }).push === true) logins.push(item.login);
+  }
+  return { logins, count: parsed.length };
+}
+
+/**
  * What GitHub says about the remote setup — asked only under {@link CheckContext.probeGithub}.
  *
  * **Off by default** (the module header's choice 3): a default run passes saying it did not ask, and
@@ -2696,6 +2729,12 @@ function repositoryOwnerOf(stdout: string): RepositoryOwner | undefined {
  *   with the `gh variable set` remedy. `*` while `CLAUDE_CODE_OAUTH_TOKEN` is set is a `warn` whether
  *   or not `ANTHROPIC_API_KEY` is also set: the token is one person's subscription, readable by every
  *   writer.
+ * - a list of logins or an owner-only list while `CLAUDE_CODE_OAUTH_TOKEN` is set adds a read of the
+ *   collaborators ({@link COLLABORATORS_ENDPOINT}). A writer the list does not admit is a `warn` naming
+ *   them: the list stops their spending through the harness, but a writer can still read the secret
+ *   through an edited workflow run from a branch. A full first page with no such writer is a *cannot
+ *   tell* warning, as are a timed-out, unreachable or unread answer; a refused read is a note on the
+ *   retention read's terms, since listing collaborators needs push access.
  *
  * **Why 30 days.** A parked run waits on a human answer and a usage-paused one on a reset, and the
  * `harness-state` bundle is the only remote copy of either; once the repository's retention expires
@@ -2864,6 +2903,29 @@ const REMOTE_GITHUB_CHECK: Check = {
       }
       if (runActors.kind === 'every-writer' && secretNames?.has(OAUTH_TOKEN_SECRET) === true) {
         warnings.push(`${RUN_ACTORS_VARIABLE} is \`${RUN_ACTORS_EVERY_WRITER}\` while ${OAUTH_TOKEN_SECRET} is set, so every writer's runs spend one person's subscription, which its terms do not let them share: name the people in ${RUN_ACTORS_VARIABLE}, or use a Claude API organisation's key in ${API_KEY_SECRET} (docs/remote-execution.md, section 9)`);
+      }
+      if ((runActors.kind === 'listed' || runActors.kind === 'owner') && secretNames?.has(OAUTH_TOKEN_SECRET) === true) {
+        const admitted = runActors;
+        const collaborators = ask(['api', COLLABORATORS_ENDPOINT]);
+        if (collaborators.answer === undefined) return fail(noSpawn);
+        const beyond = `whether any writer is beyond ${RUN_ACTORS_VARIABLE}`;
+        if (collaborators.answer.kind === 'unknown') {
+          warnings.push(cannotTell(collaborators.call, collaborators.answer.why, beyond));
+        } else if (collaborators.answer.kind === 'refused') {
+          notes.push(`writers beyond ${RUN_ACTORS_VARIABLE} not checked: ${collaborators.call} needs push access (${collaborators.answer.why})`);
+        } else {
+          const writers = writersOf(collaborators.answer.stdout);
+          if (writers === undefined) {
+            warnings.push(`cannot tell ${beyond}: ${collaborators.call} answered in a shape this check does not read`);
+          } else {
+            const extra = writers.logins.filter((login) => !runActorAdmitted(admitted, login));
+            if (extra.length > 0) {
+              warnings.push(`${OAUTH_TOKEN_SECRET} is set and ${nameList(extra)} can write to the repository without being on ${RUN_ACTORS_VARIABLE}: the list stops them spending the subscription through the harness, but any writer can still read the secret by running an edited workflow from a branch; on a private repository a push ruleset on the workflow paths and the scripts they run closes that, and on a public one only withholding write access does (docs/remote-execution.md, section 9)`);
+            } else if (writers.count === COLLABORATORS_PAGE_SIZE) {
+              warnings.push(`cannot tell ${beyond}: ${collaborators.call} returned a full page of ${COLLABORATORS_PAGE_SIZE} collaborators with no writer beyond the list, and more may exist`);
+            }
+          }
+        }
       }
     }
 

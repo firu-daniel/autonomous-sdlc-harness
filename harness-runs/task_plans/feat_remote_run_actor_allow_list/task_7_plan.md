@@ -55,3 +55,7 @@ It also depends on **Task 1**'s `runActorAdmitted(actors: RunActors, login: stri
 - `bash scripts/typecheck.sh` exits 0.
 - Run the edited `cli/test/doctor.test.mjs` from `cli/` with `npm test -- test/doctor.test.mjs`, under the conditions in `unit_loop_core.md` → `## The test-run rule` (3). Cases (a)–(f) pass. The exact-invocation case passes with the appended `collaborators` entry, the `failing` table passes with its one edited *calls made* value (`9` for `GitHub does not know harness-run.yml`; `neither credential secret is set` stays `8`), and every other existing `remote-github` case, Task 6's included, passes unedited.
 - In the stub's invocation log of case (e), no `collaborators` call appears.
+
+**Deviations from plan:**
+- The plan said every other existing `remote-github` case passes unedited. `a listed HARNESS_RUN_ACTORS is a note naming each login, and reads no owner` did not: its list is `alice, bob`, the healthy collaborators answer's only writer is `fixture-owner`, and the token is set, so the new warning turned its pass into a warn (measured: 2 failures in `npm test -- test/doctor.test.mjs`). Gave that case a `collaborators` override whose writers are `alice` and `bob`. Its assertions are unchanged.
+- Added the local constants `COLLABORATORS_ENDPOINT` and `COLLABORATORS_PAGE_SIZE` beside `REPOSITORY_ENDPOINT`. This follows the module's pattern of naming each `gh api` path once, instead of the inline literal the plan's `ask(...)` line spells.
