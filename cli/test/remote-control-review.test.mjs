@@ -10,7 +10,7 @@
  * comment with file, line, commit, author and hunk, closed by a marker recording the ids it consumed, and
  * nothing a marker records is collected again; a review arriving while a run is in flight is never
  * refused: it is acknowledged with one reply, nothing is pushed or dispatched, and it stays on the pull
- * request for the next round; once settled, `review` holds until its dispatched run is listed by the
+ * request for the next round, naming a run its run list records as stopped `stopped`; once settled, `review` holds until its dispatched run is listed by the
  * pushed commit's `headSha`.** A started round is asserted on origin's bytes — the `chore: add user review for feat_x`
  * commit and the round file — and on exactly one `engine=user_review` dispatch; every ignored shape is
  * asserted to call no `gh` at all; every refusal is asserted to post one reply and push nothing.
@@ -580,6 +580,21 @@ test('a run whose run job has completed parked is in flight, and the reply names
   });
   const reply = await assertAcknowledged(f, result, before, /^@alice: your review was collected\. `feat_x` is `parked`; /);
   assert.match(reply.body, /comment `@sdlc-harness answer <n>`/);
+});
+
+test('a review on a stopped paused run names it stopped, with resume as the way on', async (t) => {
+  const f = await reviewFixture(t);
+  const before = await f.originRefs();
+  const result = await f.control({}, {
+    STUB_RUN_LIST: JSON.stringify([
+      { databaseId: 700, displayTitle: 'harness stop feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T01:00:00Z', url: 'https://example.test/runs/700' },
+      { databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' },
+    ]),
+    STUB_BUNDLES: JSON.stringify({ 601: { status: 'paused', pause_reason: 'user' } }),
+  });
+  const reply = await assertAcknowledged(f, result, before, /^@alice: your review was collected\. `feat_x` is `stopped`; /);
+  assert.match(reply.body, /Comment `@sdlc-harness resume` to resume the run from its committed ledger\./);
+  assert.doesNotMatch(reply.body, /`paused`/);
 });
 
 test("review waits for its dispatch to be listed, finding the run by the pushed commit's headSha", async (t) => {

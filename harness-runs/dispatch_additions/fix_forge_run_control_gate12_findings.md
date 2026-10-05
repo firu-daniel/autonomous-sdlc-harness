@@ -1,0 +1,4 @@
+## [A · Task 12 · cli · iter 0] → layer-implementer  (#25)
+- **added:** `context_notes:`
+- **verbatim:** `context_notes: Task 11 (commit f66e4d2) made `control` accept `issues` events, so the existing case "another event name, or an unreadable event file, exits 1 with no gh call" in cli/test/remote-control.test.mjs now sees exit 0 instead of 1 — source: the **Deviations from plan** note in harness-runs/task_plans/fix_forge_run_control_gate12_findings/task_11_plan.md`
+- **why the agent could not derive it:** `harness-runs/task_plans/fix_forge_run_control_gate12_findings/task_12_plan.md` is Task 12's spec and was written before Task 11 ran; the breakage of the existing case was recorded only in Task 11's per-task file and the Task 11 implementer's return, neither of which is in Task 12's read set

@@ -87,7 +87,7 @@ test('init writes the trigger and control workflows only for forge github with r
     assert.ok(stdout.includes(PR_SETTING), `the report does not name the pull-request setting:\n${stdout}`);
     assert.ok(stdout.includes('HARNESS_GIT_TOKEN, which opens the pull request'), `the report does not offer HARNESS_GIT_TOKEN for the pull request:\n${stdout}`);
     assert.ok(stdout.includes('machine account'), `the report does not carry the machine-account advice:\n${stdout}`);
-    assert.ok(stdout.includes('@sdlc-harness followed by answer, pause, resume, stop, clear'), `the report does not name the comment commands:\n${stdout}`);
+    assert.ok(stdout.includes('@sdlc-harness followed by answer, pause, resume, stop, clear, status steers'), `the report does not name the comment commands:\n${stdout}`);
     assert.ok(stdout.includes('docs/github-run-control.md'), `the report does not point at docs/github-run-control.md:\n${stdout}`);
 
     const before = await snapshotTree(dir);
