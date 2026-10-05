@@ -210,11 +210,16 @@ import {
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
   RUNNER_VARIABLE,
+  RUN_ACTORS_EVERY_WRITER,
+  RUN_ACTORS_VARIABLE,
   RUN_STATES,
   STATE_LABEL_PREFIX,
   TRIGGER_ALLOWED_BOTS_VARIABLE,
   TRIGGER_LABEL_VARIABLE,
+  WORKFLOW_CONTROL_FILE,
   WORKFLOW_CONTROL_PATH,
+  WORKFLOW_RUN_FILE,
+  WORKFLOW_TRIGGER_FILE,
 } from '../remote/githubActions.js';
 import { setUpRetrieval } from '../retrieval/setup.js';
 import type { CommandContext, Subcommand } from './registry.js';
@@ -2590,6 +2595,14 @@ function reportWorkflowUpgrade(
   command(WORKFLOW_SCOPE_COMMAND);
   command(defaultBranchPushCommand(defaultBranch));
   ctx.report.info('');
+  ctx.report.info(
+    `The re-rendered ${WORKFLOW_RUN_FILE} refuses to launch for a person the repository variable ${RUN_ACTORS_VARIABLE} does not admit, and an unset list admits the repository owner alone, or nobody in an organisation-owned repository. Set it before the next run:`,
+  );
+  command(`gh variable set ${RUN_ACTORS_VARIABLE} --body <login,...>`);
+  ctx.report.info(
+    `${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE} and the scripts carry the list into the trigger and the comment commands only once init --force has replaced them.`,
+  );
+  ctx.report.info('');
   ctx.report.info(IN_FLIGHT_RUNS_NOTE);
 }
 
@@ -2691,6 +2704,10 @@ function reportGithubSteps(
   );
   command(`gh secret set ${OAUTH_TOKEN_SECRET}`);
   command(`gh secret set ${API_KEY_SECRET}`);
+  ctx.report.info(
+    `   Then name who may start, steer, answer and review a run, and so spend that credential: the repository variable ${RUN_ACTORS_VARIABLE}, a comma-separated list of GitHub logins. Unset, it admits the repository owner alone in a user-owned repository, and nobody in an organisation-owned one; ${RUN_ACTORS_EVERY_WRITER} admits every collaborator with write access, for a repository whose credential is a Claude API organisation's key. init sets no repository variable:`,
+  );
+  command(`gh variable set ${RUN_ACTORS_VARIABLE} --body <login,...>`);
   ctx.report.info('');
   ctx.report.info(
     `3. Optionally set ${PUSH_URL_SECRET} to receive push notifications from the job, and ${GIT_TOKEN_SECRET} — a personal or App token — so the job's pushes trigger your own CI, which pushes made with the job's built-in token never do:`,
@@ -2704,7 +2721,7 @@ function reportGithubSteps(
   if (trigger) {
     step += 1;
     ctx.report.info(
-      `${step}. Create the issue label the trigger workflow listens to; labelling an issue with it starts a run. Only a person with write or admin access, or a listed bot, starts one. The label \`${DEFAULT_TRIGGER_LABEL}\` is distinct from the ${RUN_STATES.length} \`${STATE_LABEL_PREFIX}<state>\` labels a run's pull request carries: those are created on first use and must not be applied by hand:`,
+      `${step}. Create the issue label the trigger workflow listens to; labelling an issue with it starts a run. Only a listed bot, or a person with write or admin access whom ${RUN_ACTORS_VARIABLE} admits (step 2), starts one. The label \`${DEFAULT_TRIGGER_LABEL}\` is distinct from the ${RUN_STATES.length} \`${STATE_LABEL_PREFIX}<state>\` labels a run's pull request carries: those are created on first use and must not be applied by hand:`,
     );
     command(`gh label create ${DEFAULT_TRIGGER_LABEL} --description "Start a harness run from this issue"`);
     ctx.report.info(
