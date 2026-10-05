@@ -58,3 +58,8 @@
 - Re-run the scope register's derivation entry 1 (story index `## Scope register`), the widened command with the `Run workflow` and `team member` patterns. Every hit in these two files is either a row this task changed (rows 1–4, 6–10, 29 and 32) or a row the register marks `no-change` with its reason (rows 5, 27, 28, 30 and 31). No hit in these two files falls outside the register.
 - Each new `gh variable set` command stands alone in its own fenced block.
 - Every cross-document anchor this task adds resolves to a heading that exists, by `grep -n '^## '` on the target file: `remote-execution.md` → `## 9. Credentials and billing` and `## 7. Turning it on`.
+
+**Deviations from plan:**
+- `docs/github-issue-trigger.md` → `## 6. Other trackers` said a dispatch's token holder is the authority and *"nothing checks who asked"*. Task 2's `User`-sender check makes that false, and §3's new dispatch line points at §6. The sentence now says no permission call is made and only a `User` sender is held to the allow-list. This is the same behaviour §3 describes. The site is not a register row because derivation entry 1's patterns do not reach it.
+- `docs/github-run-control.md` → §6 gained one sentence on the `run`/`collect` gate step (`github.triggering_actor`, with `github-actions[bot]` passing). The plan's §7 edit points at §6 for that refusal, and §6 did not state it.
+- No test file and no gate were run, because this unit is prose only. Derivation entry 1 was re-run over the two files, and every hit maps to rows 1–10 or 27–32, or to the no-change rows 5 and 30. Row 6's opening-paragraph hit is gone because the phrase it matched was replaced.

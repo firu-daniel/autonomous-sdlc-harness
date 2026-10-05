@@ -8,7 +8,7 @@ It cites rather than restates. Every GitHub fact below is cited from [`github-in
 
 ## The GitHub entry point
 
-GitHub is a second entry point **beside** the local one, never instead of it. One maintainer does the setup below once, on a machine of their own. After that, anyone with write access can start and work runs from GitHub with nothing installed. Anyone with a local setup keeps every local command too, and can mix the two on the same run ([§7](#7-working-a-run-from-both-sides)).
+GitHub is a second entry point **beside** the local one, never instead of it. One maintainer does the setup below once, on a machine of their own. After that, the people the allow-list `HARNESS_RUN_ACTORS` admits — the repository owner alone until it is set — can start and work runs from GitHub with nothing installed ([§6](#6-who-can-act-and-pull-requests-from-forks)). Anyone with a local setup keeps every local command too, and can mix the two on the same run ([§7](#7-working-a-run-from-both-sides)).
 
 **1. The one-time setup, by one maintainer, locally**, in order. Each step links to where its command is written:
 
@@ -19,12 +19,12 @@ GitHub is a second entry point **beside** the local one, never instead of it. On
 5. Commit them ([`remote-execution.md`](remote-execution.md) → `## 7.`, step 3).
 6. Give `gh` the `workflow` scope (the same step).
 7. Push to the default branch (the same step).
-8. Set a credential secret ([`remote-execution.md`](remote-execution.md) → `## 7.`, step 4).
+8. Set a credential secret, and name who may spend it in `HARNESS_RUN_ACTORS` ([`remote-execution.md`](remote-execution.md) → `## 7.`, step 4).
 9. Set `HARNESS_GIT_TOKEN` if tasks will edit `.github/workflows/*` ([`remote-execution.md`](remote-execution.md) → `### Every secret and variable`). This token also opens the draft pull request, so CI runs on it. Its owner becomes the pull request's author, and an author cannot request changes on their own pull request. So use a token from a machine account, especially if you maintain the repository alone, or plan to start review rounds locally with `/autonomous-sdlc-harness:branch-user-review` ([§4](#4-the-draft-pull-request)).
 10. Create the trigger label `sdlc-harness` ([`github-issue-trigger.md`](github-issue-trigger.md) → `## Turning it on, in short`, step 4).
 11. Switch on *Allow GitHub Actions to create and approve pull requests* unless `HARNESS_GIT_TOKEN` is set ([§4](#4-the-draft-pull-request)).
 
-**2. What a team member with write access then does from GitHub alone:**
+**2. What a team member the allow-list admits then does from GitHub alone:**
 
 - labels an issue `sdlc-harness` to start a run ([`github-issue-trigger.md`](github-issue-trigger.md));
 - answers, pauses, resumes or stops the run with `@sdlc-harness` comments ([§1](#1-commands-in-a-comment));
@@ -128,7 +128,7 @@ When the flow-progress ledger on the branch tip reads fully ticked, `status` say
 - an edited comment, whatever it now says;
 - any comment carrying the harness's hidden line, which opens `<!-- sdlc-harness`. Every comment the harness posts carries it, so a harness reply that quotes a command never acts on it, and the harness's own comments are ignored without a reply.
 
-**Who and where.** A command is obeyed only from a collaborator whose permission on the repository is `admin` or `write`, or from a bot listed in `HARNESS_TRIGGER_ALLOWED_BOTS`. The permission API reports the maintain role as `write`, so it passes, and triage as `read`, so it is refused (T3). This is the trigger's own check ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run`). A command on a pull request acts on its head branch. A command on an issue acts on the branch the trigger started from that issue, read from the trigger's own `started` comment, posted by `github-actions[bot]`. Either branch must be unprotected and carry the run's flow-progress ledger at its tip.
+**Who and where.** A command is obeyed only from a collaborator whose permission on the repository is `admin` or `write` and whom the allow-list `HARNESS_RUN_ACTORS` admits, or from a bot listed in `HARNESS_TRIGGER_ALLOWED_BOTS`. The permission API reports the maintain role as `write`, so it passes, and triage as `read`, so it is refused (T3). The list is read after the permission, so a writer it does not admit is refused with a reply naming it. This is the trigger's own check ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run`). A command on a pull request acts on its head branch. A command on an issue acts on the branch the trigger started from that issue, read from the trigger's own `started` comment, posted by `github-actions[bot]`. Either branch must be unprotected and carry the run's flow-progress ledger at its tip.
 
 **Replies.** Every accepted command gets a reply naming the actor, the command and what was done, for example:
 
@@ -268,8 +268,8 @@ On a public repository a question comment and its answer are public, as the `har
   /autonomous-sdlc-harness:branch-user-review
   ```
 
-  Another reviewer with write access can still request changes on it.
-- With the job's own token, anyone with write access can request changes, and CI on the pull request waits for a person to select **Approve workflows to run** (S3). The job's token needs Settings → Actions → General → Workflow permissions → *Allow GitHub Actions to create and approve pull requests*, off by default for a new repository on a personal account and for a new organisation (S4, C3). With it off, the `completed` comment names that setting and `HARNESS_GIT_TOKEN`, and the branch's compare link for opening this one by hand.
+  Another reviewer with write access whom the allow-list admits can still request changes on it. So a solo maintainer who keeps their own token there needs a second reviewer, and that reviewer must be on `HARNESS_RUN_ACTORS` too ([§6](#6-who-can-act-and-pull-requests-from-forks)).
+- With the job's own token, anyone with write access whom the allow-list admits can request changes and start a round, and CI on the pull request waits for a person to select **Approve workflows to run** (S3). The job's token needs Settings → Actions → General → Workflow permissions → *Allow GitHub Actions to create and approve pull requests*, off by default for a new repository on a personal account and for a new organisation (S4, C3). With it off, the `completed` comment names that setting and `HARNESS_GIT_TOKEN`, and the branch's compare link for opening this one by hand.
 
 **The plain mention.** The body names the issue the run was started from as `Started from #<n>.`, never a closing keyword such as `Closes #<n>` or `Fixes #<n>`, so merging the pull request never closes the issue. A maintainer who wants that adds the keyword. Closing the issue, closing or merging the pull request, or deleting the branch stops an unfinished run (§5, *Closed or deleted*). The body also states that a review requesting changes starts a round and which `@sdlc-harness` commands act on it.
 
@@ -317,10 +317,13 @@ The labels let a team filter runs by state from the issue and pull-request lists
 **One check, shared with the trigger.** A command and a review are both acted on only when the actor passes the trigger's own check ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run`):
 
 - a person must have `admin` or `write` permission, read from the collaborator-permission API;
+- that person must then be admitted by the allow-list, the repository variable `HARNESS_RUN_ACTORS`: a comma-separated list of logins, matched case-insensitively. Unset, it admits the repository owner alone when a personal account owns the repository, and nobody when an organisation does. `*` admits every writer;
 - a bot must be listed in `HARNESS_TRIGGER_ALLOWED_BOTS`;
 - `ghost` is never accepted.
 
 Triage is refused because commenting and labelling need only the triage role, so neither proves that the actor may run code with the repository's secrets. The API reports triage as `read` (T3).
+
+The **Run workflow** form, `gh workflow run` and a re-run reach no comment check, so `harness-run.yml`'s `run` and `collect` jobs each open with a step that holds `github.triggering_actor` to the same list, and refuse anyone else before any credential is read; `github-actions[bot]`, which every harness dispatch names, passes. The list does not close one route: a writer can still edit a workflow to read the credential secret itself ([`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`).
 
 **Pull requests from forks.** The fork rule is three sentences:
 
@@ -330,7 +333,7 @@ Triage is refused because commenting and labelling need only the triage role, so
 
 A fork can still reach a self-hosted runner through a workflow of its own. [`remote-execution.md`](remote-execution.md) → `## 11. Security` gives that warning and what prevents it.
 
-**Closing and deleting.** A close of the run's issue or pull request is authorised as a command is. Triage can close issues and pull requests ([§8](#8-what-is-not-verified-here)) but fails the check, so a triage user cannot stop a run that way. Deleting a branch already needs write access, so for a deletion only a bot is checked, against `HARNESS_TRIGGER_ALLOWED_BOTS`. The job replies to none of them, because the item is closed or the branch gone; an ignored one is a line in the job log ([§5](#5-lifecycle-comments-and-state-labels), *Closed or deleted*). A fork's closed pull request is skipped by the shipped `if:`, but the job runs the fork's merge-commit copy of the workflow, as a review does (C2).
+**Closing and deleting.** A close of the run's issue or pull request is authorised as a command is. Triage can close issues and pull requests ([§8](#8-what-is-not-verified-here)) but fails the check, so a triage user cannot stop a run that way, and a close by a writer the allow-list does not admit is ignored too. Deleting a branch already needs write access and a stop spends no credential, so for a deletion only a bot is checked, against `HARNESS_TRIGGER_ALLOWED_BOTS`, and never the allow-list. The job replies to none of them, because the item is closed or the branch gone; an ignored one is a line in the job log ([§5](#5-lifecycle-comments-and-state-labels), *Closed or deleted*). A fork's closed pull request is skipped by the shipped `if:`, but the job runs the fork's merge-commit copy of the workflow, as a review does (C2).
 
 **The scripts are always the default branch's.** The control job checks out the default branch and runs that branch's `remote-run.sh`, never the pull request's. For a review event, though, the workflow file itself is the pull request's merge-commit copy (C2), so a head that edits `harness-control.yml` changes what its own review job runs. A round's fixes run later, in `harness-run.yml`, on the run's own branch, as every round does.
 
@@ -351,7 +354,7 @@ A fork can still reach a self-hosted runner through a workflow of its own. [`rem
 - **GitHub's changes** show up locally because local commands read the run's state from GitHub before they act. `/autonomous-sdlc-harness:branch-status` reads it too.
 - **Local changes** show up on GitHub. A dispatch from `/autonomous-sdlc-harness:branch-answer`, `-resume` or `-pause` starts a job, and that job posts the lifecycle comments and sets the labels ([§5](#5-lifecycle-comments-and-state-labels)). A local `remote-run.sh stop` posts `stopped`, and a local `/autonomous-sdlc-harness:branch-user-review` posts the started round, as their GitHub forms do.
 
-**The Run workflow form stays the fallback.** A maintainer with no local setup can still work any remote run from `harness-run.yml`'s **Run workflow** form, for example when the control workflow is disabled ([`remote-execution.md`](remote-execution.md) → `### Working a run from GitHub alone`).
+**The Run workflow form stays the fallback.** A person the allow-list admits can still work any remote run with no local setup from `harness-run.yml`'s **Run workflow** form, for example when the control workflow is disabled ([`remote-execution.md`](remote-execution.md) → `### Working a run from GitHub alone`). The run job refuses a `run` dispatched or re-run by anyone else, before it launches anything ([§6](#6-who-can-act-and-pull-requests-from-forks)).
 
 **A locally executed branch reviewed on GitHub.** A person may open a pull request for a branch that ran on their own machine, and a review requesting changes on it starts a round ([§2](#2-a-review-that-requests-changes-starts-a-round)). That round runs through `harness-run.yml`, because a round started from GitHub always does. The local record keeps `execution: local` and is not touched. As a result, the local working copy falls behind `origin/<branch>` by the round's commits. Before another local round, bring it current by running this in that working copy:
 

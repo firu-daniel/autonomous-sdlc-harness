@@ -82,7 +82,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_remote_run_actor_allow_
 7. [x] **Task 7** — `doctor --check-github` warns when a subscription token is set and writers exist beyond the list _(layer: cli)_ _(points: 15)_
 8. [x] **Task 8** — `doctor` warns about a workflow copy written before the allow-list, naming what it does and the route _(layer: cli)_ _(points: 15)_
 9. [x] **Task 9** — `init` states what an unset `HARNESS_RUN_ACTORS` means, at first setup and on an upgrade _(layer: cli)_ _(points: 10)_
-10. [ ] **Task 10** — Describe the allow-list in `docs/github-issue-trigger.md` and `docs/github-run-control.md` _(layer: general)_ _(points: 20)_
+10. [x] **Task 10** — Describe the allow-list in `docs/github-issue-trigger.md` and `docs/github-run-control.md` _(layer: general)_ _(points: 20)_
 11. [ ] **Task 11** — Document the variable, the two credential set-ups, the residual risk and the upgrade in `docs/remote-execution.md` _(layer: general)_ _(points: 20)_
 12. [ ] **Task 12** — Bring `docs/cli.md`'s `remote-execution`, `remote-github` and `forge` descriptions up to the new findings, and qualify `README.md`'s GitHub route _(layer: general)_ _(points: 12)_
 13. [ ] **Task 13** — Add Gate 12 observation (xv) for the allow-list, and set the list in the run-control setup _(layer: general)_ _(points: 15)_
