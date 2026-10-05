@@ -53,7 +53,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 2. [x] **Task 2** — `init` repairs an unedited 0.6.1 `harness-control.yml` after a `.bak`, and owns the repair route's text _(layer: cli)_ _(points: 20)_
 3. [x] **Task 3** — `init` reports the control-workflow repair, and warns on an edited unparseable copy _(layer: cli)_ _(points: 15)_
 4. [x] **Task 4** — `doctor --check-github` fails on a harness workflow GitHub lists by its path _(layer: cli)_ _(points: 15)_
-5. [ ] **Task 5** — `forge_report` posts nothing for any job event a stop has overtaken _(layer: cli)_ _(points: 15)_
+5. [x] **Task 5** — `forge_report` posts nothing for any job event a stop has overtaken _(layer: cli)_ _(points: 15)_
 6. [ ] **Task 6** — `status` never calls a running run's ledger fully ticked, and names a round whose ledger is not written yet _(layer: cli)_ _(points: 12)_
 7. [ ] **Task 7** — Gate 14: parse every rendered workflow with a YAML parser, refuse 0.6.1's file, and run `actionlint` where installed _(layer: general)_ _(points: 15)_
 8. [ ] **Task 8** — `docs/development.md`: gate 14, the (xiv) by-name check, and the Gate 12 round 7 record _(layer: general)_ _(points: 15)_

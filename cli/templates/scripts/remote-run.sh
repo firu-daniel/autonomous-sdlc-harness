@@ -280,9 +280,11 @@
 # label is a view, and the run list stays the authority. The state map:
 # `parked` and `park_loop` -> parked, `paused` -> paused, `resumed` -> running,
 # `failed` -> failed, `stopped` -> stopped, `round` (review's) -> running.
-# `failed` posts nothing when
-# `remote_branch_stopped` finds the branch stopped, so a cancelled job never
-# overwrites `stopped`. `completed` (deliver's) and `launched` (the trigger's
+# Every job event — `parked`, `park_loop`, `paused`, `resumed`, `round` and
+# `failed` — posts nothing and sets no label when `remote_branch_stopped`,
+# asked afresh, finds the branch stopped, so a job a stop overtook never
+# overwrites `stopped`; a failed listing reports anyway, and `stopped` is never
+# withheld. `completed` (deliver's) and `launched` (the trigger's
 # own comment) are one line each, as is any other event. The comment names the
 # next GitHub action — never a slash command — then <note> byte for byte, then
 # this run's URL when `GITHUB_RUN_ID` is set, then the marker line
@@ -4039,7 +4041,9 @@ forge_question_body() {
 # comment (on `parked`, one per open question) and the state label, by the
 # target rule above. Read on `stopped` only: <pr>, an explicit pull request
 # that is the target whatever its state; `gone`, the branch deleted on GitHub,
-# its issue read from the task prompt at <sha>. Always 0.
+# its issue read from the task prompt at <sha>. Every event but `stopped` is
+# withheld when the branch's newest `harness stop` run is newer than its newest
+# `harness run` run, read from a fresh listing. Always 0.
 forge_report() {
   local event="$1" br="$2" note="${3-}" pr="${4-}" gone="${5-}" gone_sha="${6-}" state reason="" resume_at="" when registry_file
   local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n
@@ -4066,7 +4070,9 @@ forge_report() {
   fi
   forge_repo_var || return 0
 
-  if [ "$event" = failed ]; then
+  if [ "$event" != stopped ]; then
+    # Re-listed: `review` dispatches a run and then reports `round` in one invocation.
+    ALL_RUNS_LISTED=0
     remote_branch_stopped "$br"
     stopped=$?
     if [ "$stopped" -eq 0 ]; then
@@ -4074,7 +4080,7 @@ forge_report() {
       return 0
     fi
     [ "$stopped" -eq 1 ] \
-      || echo "remote-run.sh: report: whether $br was stopped is unknown ($GH_ERR); reporting the failure" >&2
+      || echo "remote-run.sh: report: whether $br was stopped is unknown ($GH_ERR); reporting the $event" >&2
   fi
 
   [ "$event" = stopped ] || { pr=""; gone=""; }
