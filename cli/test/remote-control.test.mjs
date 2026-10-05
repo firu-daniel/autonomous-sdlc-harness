@@ -308,7 +308,7 @@ test('a write commenter HARNESS_RUN_ACTORS does not admit is refused naming the 
   });
   const reply = assertRefused(f, result, /@bob is not on the repository variable HARNESS_RUN_ACTORS/);
   assert.match(reply.body, /^@bob: `pause` was not run: /);
-  assert.match(reply.body, /whom the repository variable `HARNESS_RUN_ACTORS` admits \(when unset, the repository owner alone\)/);
+  assert.match(reply.body, /whom the repository variable `HARNESS_RUN_ACTORS` admits \(when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one\)/);
 });
 
 test('HARNESS_RUN_ACTORS entries are trimmed and matched case-insensitively', async (t) => {

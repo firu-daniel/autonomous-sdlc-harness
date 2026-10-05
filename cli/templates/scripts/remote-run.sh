@@ -5821,7 +5821,7 @@ verb_control() {
   authorise_actor "$CONTROL_ACTOR" "$CONTROL_SENDER_TYPE" || status=$?
   if [ "$status" -ne 0 ]; then
     control_refuse "$EXIT_REFUSED" "${AUTH_WHY%.}" \
-      "Only a collaborator with write, maintain or admin access whom the repository variable \`HARNESS_RUN_ACTORS\` admits (when unset, the repository owner alone), or a bot listed in \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
+      "Only a collaborator with write, maintain or admin access whom the repository variable \`HARNESS_RUN_ACTORS\` admits (when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one), or a bot listed in \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
   fi
 
   if [ "$review" -eq 0 ] && { [ -z "$CONTROL_VERB" ] || ! control_verb_handled "$CONTROL_VERB"; }; then
