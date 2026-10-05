@@ -34,7 +34,7 @@
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below from top to bottom. The committing role flips each entry to `[x]` when that fix's commit lands. `[ ]` markers anywhere else are informational, and the committer does not touch them.
 
 1. [x] **Finding 3** — Add "never piped" to the single-file command shape sentence in both adopter conventions templates _(layer: cli)_
-2. [ ] **Finding 1** — Point test-run rule point 6's refusal clause at the existing `<typecheck_cmd>` fallback instead of forbidding every reshape _(layer: plugin)_
+2. [x] **Finding 1** — Point test-run rule point 6's refusal clause at the existing `<typecheck_cmd>` fallback instead of forbidding every reshape _(layer: plugin)_
 3. [ ] **Finding 2** — Bind a backgrounded `scratch-run.sh` probe to point 6's no-wait prohibitions in `layer-implementer` _(layer: plugin)_
 
 ---
