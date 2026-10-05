@@ -1505,7 +1505,7 @@ gh variable set HARNESS_SELF_PAUSE_AFTER_MINUTES --repo <owner>/<scratch-repo> -
 
 The setup passes when the list does not name `HARNESS_RUN_ACTORS`. Then, as the owner, open an issue whose task outlasts the self-pause and apply the trigger label, as (xiii) does; the run it starts is `<slug>`, and its issue is `<issue number>`.
 
-Run legs (e) and (f) first, while `<slug>` runs. Legs (b) and (c) need no job of `<slug>` running: the `run` job holds the concurrency group `harness-run-<slug>` with `cancel-in-progress: false`, so a job dispatched while another runs waits rather than reaching its gate. Once (f) is recorded, stop the run as the owner:
+Run legs (e) and (f) first, while `<slug>` runs. Legs (b), (c) and (c′) need no job of `<slug>` running: the `run` job holds the concurrency group `harness-run-<slug>` with `cancel-in-progress: false`, so a job dispatched while another runs waits rather than reaching its gate. Once (f) is recorded, stop the run as the owner:
 
 ```
 gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harness stop"
@@ -1568,6 +1568,30 @@ gh run view <id> --repo <owner>/<scratch-repo> --log
 ```
 
 Passes when the gate refuses both: each re-run's `run` job fails at its first step with the `::error::` line, and its `triggering_actor.login` is the second account. Where GitHub offers no failed-jobs re-run for that run, record its refusal exactly.
+
+**(c′) A re-run of the owner's trigger or command.** A re-run replays its event, so its sender is still the owner; only `remote-run.sh`'s re-runner check, which reads `GITHUB_TRIGGERING_ACTOR`, stands between it and a `harness-run.yml` dispatch named `github-actions[bot]`, which the gate in leg (c) passes. As the second account, re-run the `harness-trigger.yml` run of the owner's label on `<issue number>`, then the `harness-control.yml` run of the owner's `@sdlc-harness stop`:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-trigger.yml
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+```
+
+```
+gh run rerun <id> --repo <owner>/<scratch-repo>
+```
+
+```
+gh issue view <issue number> --repo <owner>/<scratch-repo> --comments
+```
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml
+```
+
+Passes when each re-run's `actor.login` is the owner and its `triggering_actor.login` the second account; each posts a refusal on `<issue number>` that names the second account as the re-runner and `HARNESS_RUN_ACTORS`; and no `harness run` run follows either. Record both refusals verbatim and both re-runs' two actors.
 
 **(d) A comment command.** As the second account, on the run's issue:
 
