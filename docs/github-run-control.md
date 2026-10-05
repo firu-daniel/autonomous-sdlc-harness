@@ -43,7 +43,7 @@ The triage role is refused ([§6](#6-who-can-act-and-pull-requests-from-forks)).
 
 **4. The caveats:**
 
-- Every run uses the repository's one credential secret and is billed to its owner ([`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`).
+- Every run uses the repository's one credential secret and is billed to its owner ([`remote-execution.md`](remote-execution.md) → `## 9. Credentials and billing`). In a team, a teammate's run therefore spends that owner's account; why, and the alternatives, are in [`team-accounts-research.md`](team-accounts-research.md).
 - On a public repository, the comments are public ([§6](#6-who-can-act-and-pull-requests-from-forks)).
 - If `HARNESS_GIT_TOKEN` is a person's own token, that person cannot start a round with *Request changes* on the pull request it opened ([§4](#4-the-draft-pull-request), [§8](#8-what-is-not-verified-here)).
 
