@@ -391,7 +391,8 @@
 #   1. `HARNESS_REMOTE_STOP` is set
 #   2. `forge_on` fails — before any authorisation, so a disabled coupling asks
 #      GitHub nothing about the commenter
-#   3. `authorise_actor` fails: `AUTH_WHY`, and who may command a run
+#   3. `authorise_actor` fails: `AUTH_WHY`, and who may command a run — a
+#      writer the `HARNESS_RUN_ACTORS` allow-list admits, or a listed bot
 #   4. the verb is empty, not a `COMMAND_VERBS` word, or one no arm carries out
 #      yet: the reply lists every command and names `docs/github-run-control.md`
 # THE BRANCH. On a pull request (`.issue.pull_request.url` set), its head, by
@@ -512,9 +513,10 @@
 # inline comment, by any author and whatever its review's state, whose id is
 # unrecorded, whose body carries no `COMMENT_MARKER`, and whose `created_at` is
 # at or after the boundary or whose review is pending. Every distinct author
-# of a pending item passes `authorise_actor`; a refused author's items are
-# dropped with one line naming the login, `AUTH_WHY` and the count, and a
-# failed permission call fails the collection. A round is placed only when at
+# of a pending item passes `authorise_actor`, the `HARNESS_RUN_ACTORS`
+# allow-list included; a refused author's items — a writer the list refuses
+# among them — are dropped with one line naming the login, `AUTH_WHY` and the
+# count, and a failed permission call (status 4) fails the collection. A round is placed only when at
 # least one kept review has state `REVIEW_ROUND_STATE`; a *Comment* or
 # *Approve* review rides along in the next round one requesting changes starts.
 # The file: one `## Review by @<login>` section per pending review, oldest
@@ -564,9 +566,11 @@
 #   1. `HARNESS_REMOTE_STOP` is set
 #   2. `forge_on` fails
 #   3. the actor: on `issues` and `pull_request`, `authorise_actor` refused
-#      (statuses 1–3), the line naming the login and `AUTH_WHY`; on `delete`, only a `Bot`
-#      sender `trigger_bot_listed` does not list, since deleting a branch
-#      already needs write access
+#      (statuses 1–3 and 5, so a writer the `HARNESS_RUN_ACTORS` allow-list
+#      refuses is ignored too), the line naming the login and `AUTH_WHY`; on
+#      `delete`, only a `Bot` sender `trigger_bot_listed` does not list, and
+#      never the allow-list: deleting a branch already needs write access, the
+#      run's branch is gone, and a stop spends no credential
 #   4. no branch: an issue's from `control_issue_branch_var` (no genuine start
 #      comment), a pull request's head ref, a deletion's `.ref`; then not a
 #      valid branch name
@@ -5116,7 +5120,9 @@ control_review_story() {
 # `branch`'s pull request <pr_number>, shared by `control` and `collect`: every
 # submitted review (never `PENDING`) that requests changes or carries a
 # non-blank body, and every inline comment, no earlier round consumed, by
-# every author `authorise_actor` accepts. What earlier rounds consumed is
+# every author `authorise_actor` accepts, the `HARNESS_RUN_ACTORS` allow-list
+# included; a refused author's items are dropped with one line, while a
+# failed permission call (status 4) fails the collection. What earlier rounds consumed is
 # read from the marker lines of their files on origin's tip; with none marked,
 # the boundary is the committer time of the newest round file. A comment
 # belonging to a pending review is pending whatever its `created_at`: a draft
@@ -5661,7 +5667,8 @@ control_close() {
   fi
   forge_on || control_close_ignore "the default branch's harness.config.json does not turn run control on"
   if [ "$CLOSE_KIND" = deleted ]; then
-    # Deleting a branch already needs write access; only a bot is screened.
+    # Deleting a branch already needs write access; only a bot is screened,
+    # never HARNESS_RUN_ACTORS (the header, THE CLOSE gate 3).
     if [ "$CONTROL_SENDER_TYPE" = Bot ] && ! trigger_bot_listed "$CONTROL_ACTOR"; then
       control_close_ignore "@$CONTROL_ACTOR is a bot not listed in HARNESS_TRIGGER_ALLOWED_BOTS"
     fi
@@ -5809,7 +5816,7 @@ verb_control() {
   authorise_actor "$CONTROL_ACTOR" "$CONTROL_SENDER_TYPE" || status=$?
   if [ "$status" -ne 0 ]; then
     control_refuse "$EXIT_REFUSED" "${AUTH_WHY%.}" \
-      "Only a collaborator with write, maintain or admin access, or a bot listed in the repository variable \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
+      "Only a collaborator with write, maintain or admin access whom the repository variable \`HARNESS_RUN_ACTORS\` admits (when unset, the repository owner alone), or a bot listed in \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
   fi
 
   if [ "$review" -eq 0 ] && { [ -z "$CONTROL_VERB" ] || ! control_verb_handled "$CONTROL_VERB"; }; then

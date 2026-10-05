@@ -75,7 +75,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_remote_run_actor_allow_
 
 1. [x] **Task 1** — Declare `HARNESS_RUN_ACTORS` and the list's semantics once in `cli/src/remote/githubActions.ts` _(layer: cli)_ _(points: 10)_
 2. [x] **Task 2** — Check the allow-list in `remote-run.sh` → `authorise_actor` and the trigger, a `repository_dispatch` sender included _(layer: cli)_ _(points: 20)_
-3. [ ] **Task 3** — Name the allow-list in the control, close and collect refusals, and test each path against it _(layer: cli)_ _(points: 12)_
+3. [x] **Task 3** — Name the allow-list in the control, close and collect refusals, and test each path against it _(layer: cli)_ _(points: 12)_
 4. [ ] **Task 4** — Gate `harness-run.yml`'s `run` and `collect` jobs on `github.triggering_actor` _(layer: cli)_ _(points: 18)_
 5. [ ] **Task 5** — Pass `HARNESS_RUN_ACTORS` into `harness-trigger.yml` and `harness-control.yml` _(layer: cli)_ _(points: 10)_
 6. [ ] **Task 6** — `doctor --check-github` names the effective list and warns on `*` with a subscription token _(layer: cli)_ _(points: 18)_

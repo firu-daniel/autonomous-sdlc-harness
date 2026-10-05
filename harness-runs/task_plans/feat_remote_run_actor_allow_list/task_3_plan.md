@@ -46,3 +46,8 @@ This task consumes that contract and does not change it.
 - Run the four edited test files from `cli/`, one by one, with `npm test -- test/<name>.test.mjs`, under the conditions in `unit_loop_core.md` → `## The test-run rule` (3). The new cases pass, and every existing case still passes under the `'*'` default Task 2 set.
 - `bash -n cli/templates/scripts/remote-run.sh` parses.
 - Grep the script for the old way-on sentence's fragment `or a bot listed in the repository variable`. Each remaining occurrence also names `HARNESS_RUN_ACTORS`, or is the trigger's bot refusal, which is about bots alone.
+
+**Deviations from plan:**
+- The `' ALICE '` case is read as the list entry: `HARNESS_RUN_ACTORS=' ALICE '` with commenter `alice` is obeyed. A login carrying spaces fails `authorise_actor`'s login-shape check before the list is read, so the other reading could not reach the trim.
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the permission prompt and not run. The claim rests on the four suites executing the script through every edited arm (68, 32, 17 and 11 cases, all passing), not on `bash -n`.
+- The grep for `or a bot listed in the repository variable` returns no match: the only occurrence was the `control` way-on sentence, now reworded.
