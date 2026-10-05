@@ -439,7 +439,7 @@ what fixes classification**, so the run-side rule in §2.5 is required regardles
 | File | Role | Written / removed by |
 |---|---|---|
 | `<state_dir>/PAUSE` | **request** (input): pause this run | user drops it (or `/autonomous-sdlc-harness:branch-pause`); **watcher** removes on resume |
-| `<state_dir>/PAUSE_PROGRESS.md` | append-only pause note (phase, ledger state, next step) | driving fork appends; kept across resumes |
+| `<state_dir>/PAUSE_PROGRESS.md` | append-only pause note (phase, ledger state, next step) | driving fork appends; kept across resumes by the local watcher; a remote job keeps it only on a pause resume of a job that paused for the same engine (§2.3) |
 | `<state_dir>/PAUSE_ACK` | **ack**: "I actually paused" (drives registry `paused`) | driving fork **writes** (never `touch` — §2.2b); also written *unrequested* on a §2.5 self-pause; **watcher** removes on resume |
 | `<state_dir>/RESUME` | **trigger** (input): resume this run | user drops it (or `/autonomous-sdlc-harness:branch-resume`); **watcher** removes on resume |
 
@@ -503,8 +503,12 @@ it for a clean-boundary resume.
 ### 2.3 Resuming
 The **watcher** owns the resume: on a `<state_dir>/RESUME` trigger for a `paused` run (kill-switch off, under
 cap) it deletes `PAUSE` + `RESUME` + `PAUSE_ACK`, **keeps** `PAUSE_PROGRESS.md`, flips the registry to
-`running`, and re-launches the same engine with a pause-resume clause. The re-entered fork reads
-`PAUSE_PROGRESS.md` as a hint and resumes via **§1.7 resume-from-ledger**. For a §2.2 pause no dirty-tree
+`running`, and re-launches the same engine with a pause-resume clause.
+
+In job mode, a carried `PAUSE_PROGRESS.md` is kept only when the job's `resume` is `pause`, the restored `remote_status.json` says `status: paused`, and its `engine` equals the job's engine. In every other case — a fresh launch (`resume none`), an answer resume (`resume answer`), a pause resume whose previous job did not pause (a stop or a kill), or a different engine — it is moved aside, never deleted, to `<state_dir>/autonomous_logs/remote_superseded/<epoch>[-<n>]/PAUSE_PROGRESS.md`.
+A pause resume whose previous job did not pause, or paused for a different engine, is re-launched with a clause saying there is no pause note, whether or not a note was carried. That fork resumes from §1.7 alone.
+
+Otherwise the re-entered fork reads `PAUSE_PROGRESS.md` as a hint and resumes via **§1.7 resume-from-ledger**. For a §2.2 pause no dirty-tree
 reconciliation is needed, because the pause was taken at a clean tracked-tree boundary and every completed
 phase's artifacts are already committed and pushed. A **§2.5 overload self-pause** is the one exception — it
 may land mid-unit — and it needs no reconciliation either, for the different reason given there: the stray

@@ -28,9 +28,11 @@
  * unbounded and says so. The lineage cases commit on a local `feat_x` in the fixture itself.
  *
  * **For `continue` and `poll`, the rule is that a re-dispatch carries the bundle's own `chain` plus
- * one, and nothing is sent for a branch that is stopped, under `HARNESS_REMOTE_STOP`, or at the chain
- * limit**: a `continue` case records at most one `workflow run`, and a branch whose `harness stop` run
- * is newer than its newest `harness run` run gets no `workflow run` and no `workflow enable`. A
+ * one, and nothing is sent for a branch that is stopped, deleted on `origin`, under
+ * `HARNESS_REMOTE_STOP`, or at the chain limit**: a `continue` case records at most one `workflow run`,
+ * and a branch whose `harness stop` run is newer than its newest `harness run` run, or that the
+ * fixture's bare `origin` no longer has, gets no `workflow run` and no `workflow enable`. These cases
+ * run on `loopFixture`, which puts every branch they name on `origin` first. A
  * `poll` never dispatches a run that is not yet `completed`, counts one carrying a usage-paused
  * bundle as waiting, and after its own disable re-lists once and re-enables the poller when such a
  * run appeared meanwhile — never for a running job with no bundle. The stub models "meanwhile": once
@@ -48,8 +50,11 @@
  * **For the forge coupling, the rule is that `continue`'s notification and a complete `stop` reach the
  * run's issue as a comment naming no slash command, plus the state label, while a partial stop and a
  * coupling that is off post nothing**: every pre-existing case runs with `forge` unset and keeps its
- * exact call list. The stub answers `pr list` and an issue's label read with `[]`, and logs each
- * `body=@<path>` call with that file's content to `<log>.bodies`.
+ * exact call list. The stub answers `pr list` and an issue's label read with `[]`, a `contents/` read
+ * with `STUB_CONTENTS` (a 404 when unset), and logs each `body=@<path>` call with that file's content
+ * to `<log>.bodies`. A `stop --pr <n>` reports on #<n> though no open pull request is listed, and a
+ * `stop --branch-gone` on a branch origin no longer has marks on GitHub's default branch, reads its
+ * issue at the newest run's `headSha` and never offers `resume`.
  *
  * **For an expired state bundle, the rule is that it is told from an absent one and never read as a
  * first job**: a `STUB_ARTIFACTS` entry is a name (listed unexpired) or a whole `{name, expired,
@@ -127,6 +132,10 @@ if (line.startsWith('repo view')) process.stdout.write(process.env.STUB_REPO_VIE
 if (line.startsWith('run view')) process.stdout.write(process.env.STUB_RUN_VIEW || '{}');
 if (line.startsWith('pr list')) process.stdout.write('[]');
 if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1])) process.stdout.write('[]');
+else if (args[0] === 'api' && args[1].includes('/contents/')) {
+  if (process.env.STUB_CONTENTS === undefined) { process.stderr.write('HTTP 404: Not Found\\n'); process.exit(1); }
+  process.stdout.write(process.env.STUB_CONTENTS);
+}
 else if (args[0] === 'api') {
   const parts = args[1].split('/');
   const id = parts[parts.length - 2];
@@ -1162,6 +1171,23 @@ function loopBundle(fx, name, fields) {
   return dir;
 }
 
+/** `remoteFixture` with each of `branches` on its bare `origin`, at the default branch's commit. */
+async function loopFixture(t, branches = ['feat_x', 'feat_a', 'feat_b']) {
+  const fx = await remoteFixture(t);
+  const { defaultBranch } = JSON.parse(readFileSync(join(fx.dir, 'harness.config.json'), 'utf8'));
+  for (const b of branches) {
+    const push = await runGit(fx.dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `refs/remotes/origin/${defaultBranch}:refs/heads/${b}`]);
+    assert.equal(push.status, 0, push.stderr);
+  }
+  return fx;
+}
+
+/** Delete `branch` on the fixture's bare `origin`. */
+async function deleteOnOrigin(fx, branch) {
+  const push = await runGit(fx.dir, ['push', '--quiet', '--no-verify', 'origin', '--delete', branch]);
+  assert.equal(push.status, 0, push.stderr);
+}
+
 function continueEnv(runs = [CURRENT_RUN], extra = {}) {
   return { ...THIS_RUN, STUB_RUN_LIST: JSON.stringify(runs), ...extra };
 }
@@ -1175,7 +1201,7 @@ function atMostOneDispatch(fx) {
 }
 
 test('continue with no status.json notifies failed with the run URL and dispatches nothing', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const empty = join(fx.dir, STATE_DIR, 'stub', 'empty');
   mkdirSync(empty, { recursive: true });
@@ -1189,7 +1215,7 @@ test('continue with no status.json notifies failed with the run URL and dispatch
 });
 
 test('continue under the chain limit re-dispatches with the bundle chain plus one, never HARNESS_INPUT_CHAIN', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const b = loopBundle(fx, 'c', { decision: 'continue', status: 'running', chain: '5', engine: 'user_review' });
   const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], { HARNESS_INPUT_CHAIN: '11' }));
@@ -1202,7 +1228,7 @@ test('continue under the chain limit re-dispatches with the bundle chain plus on
 });
 
 test('continue with an unreadable chain notifies failed once and dispatches nothing', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   for (const [name, chain] of [['x', 'x'], ['absent', undefined], ['empty', '']]) {
     const b = loopBundle(fx, name, { decision: 'continue', chain });
@@ -1221,7 +1247,7 @@ test('continue with an unreadable chain notifies failed once and dispatches noth
 });
 
 test('continue at the chain limit notifies failed and dispatches nothing; one below it dispatches', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const atDefault = loopBundle(fx, 'limit', { decision: 'continue', chain: '24' });
   assert.equal((await remoteRun(fx, ['continue', 'feat_x', atDefault], continueEnv())).status, 0);
@@ -1243,7 +1269,7 @@ test('continue at the chain limit notifies failed and dispatches nothing; one be
 });
 
 test('continue with HARNESS_REMOTE_STOP set sends nothing and notifies paused once', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const b = loopBundle(fx, 'c', { decision: 'continue', chain: '1' });
   const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], { HARNESS_REMOTE_STOP: '1' }));
@@ -1257,7 +1283,7 @@ test('continue with HARNESS_REMOTE_STOP set sends nothing and notifies paused on
 });
 
 test('continue on wait-poller enables the resume poller and notifies nothing', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const b = loopBundle(fx, 'w', { decision: 'wait-poller', status: 'paused', pause_reason: 'usage', usage_resume_at: '9999999999' });
   const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv());
@@ -1268,7 +1294,7 @@ test('continue on wait-poller enables the resume poller and notifies nothing', a
 });
 
 test('continue on wait-poller with a failing enable sends a paused notification through HARNESS_PUSH_CMD', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const stubDir = join(fx.dir, STATE_DIR, 'stub');
   const body = join(stubDir, 'push-body');
   const title = join(stubDir, 'push-title');
@@ -1294,7 +1320,7 @@ test('continue on wait-poller with a failing enable sends a paused notification 
 });
 
 test('continue on decision stop sends nothing and notifies nothing', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const b = loopBundle(fx, 's', { decision: 'stop', status: 'completed' });
   const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv());
@@ -1304,7 +1330,7 @@ test('continue on decision stop sends nothing and notifies nothing', async (t) =
 });
 
 test('continue for a stopped branch sends no workflow run and no enable, and notifies nothing, in either arm', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const runs = [ghRun(901, 'completed', 6, 'harness stop feat_x'), CURRENT_RUN];
   for (const [name, decision] of [['c', 'continue'], ['w', 'wait-poller']]) {
@@ -1318,8 +1344,41 @@ test('continue for a stopped branch sends no workflow run and no enable, and not
   assert.deepEqual(notes(), []);
 });
 
+test('continue for a branch deleted on origin sends no workflow run and no enable, and notifies nothing, in either arm', async (t) => {
+  const fx = await loopFixture(t);
+  const notes = recordNotifications(fx);
+  const arms = [['c', 'continue', 'not re-dispatched'], ['w', 'wait-poller', 'the resume poller is not enabled']];
+  const bundles = arms.map(([name, decision]) => loopBundle(fx, name, { decision, chain: '1', status: 'paused', pause_reason: 'usage', usage_resume_at: '9999999999' }));
+  for (const b of bundles) assert.equal((await remoteRun(fx, ['continue', 'feat_x', b], continueEnv())).status, 0);
+  assert.equal(workflowRuns(fx).length, 1, 'the present branch re-dispatches');
+  assert.deepEqual(enables(fx), ['workflow enable harness-resume.yml'], 'the present branch enables the poller');
+
+  await deleteOnOrigin(fx, 'feat_x');
+  for (const [i, [, decision, line]] of arms.entries()) {
+    const result = await remoteRun(fx, ['continue', 'feat_x', bundles[i]], continueEnv());
+    assert.equal(result.status, 0, `${decision}: ${result.stderr}`);
+    assert.ok(result.stdout.includes(`feat_x no longer exists on origin; ${line}`), result.stdout);
+  }
+  assert.equal(workflowRuns(fx).length, 1);
+  assert.deepEqual(enables(fx), ['workflow enable harness-resume.yml']);
+  assert.deepEqual(notes(), []);
+});
+
+test('continue whose origin cannot be read says so in one line and still re-dispatches', async (t) => {
+  const fx = await loopFixture(t);
+  const notes = recordNotifications(fx);
+  const set = await runGit(fx.dir, ['remote', 'set-url', 'origin', join(fx.dir, STATE_DIR, 'stub', 'no-such-origin')]);
+  assert.equal(set.status, 0, set.stderr);
+  const b = loopBundle(fx, 'c', { decision: 'continue', chain: '1' });
+  const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv());
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /whether feat_x exists on origin could not be checked \(git ls-remote exited \d+: .+\); proceeding/);
+  assert.equal(workflowRuns(fx).length, 1);
+  assert.deepEqual(notes(), []);
+});
+
 test('continue with a failing run list fails closed: nothing sent, one paused notification', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const b = loopBundle(fx, 'c', { decision: 'continue', chain: '1' });
   const result = await remoteRun(fx, ['continue', 'feat_x', b], continueEnv([CURRENT_RUN], {
@@ -1428,6 +1487,67 @@ test('stop --actor that is not a login is a usage error that calls nothing', asy
   assert.deepEqual(calls(fx), []);
 });
 
+test('stop --note posts that note in place of the actor sentence', async (t) => {
+  const fx = await forgeFixture(t);
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', 'x', '--note', 'Stopped because @x closed issue #7.'], LOCAL_STOP);
+  assert.equal(result.status, 0, result.stderr);
+  const [comment] = posted(fx);
+  assert.match(comment.args.join(' '), new RegExp(`^${COMMENT_ON_7}`));
+  assert.match(comment.body, /\n\nStopped because @x closed issue #7\.\n/);
+  assert.doesNotMatch(comment.body, /Stopped by @x\./);
+});
+
+test('stop --pr posts on that pull request although no open one is listed, and labels it and the issue stopped', async (t) => {
+  const fx = await forgeFixture(t);
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--pr', '9'], LOCAL_STOP);
+  assert.equal(result.status, 0, result.stderr);
+  const sent = joined(fx);
+  assert.ok(!sent.some((line) => line.startsWith('pr list')), sent.join('\n'));
+  assert.deepEqual(posted(fx).map((call) => call.args.join(' ').split(' -F ')[0]), ['api --method POST repos/o/r/issues/9/comments']);
+  assert.ok(sent.includes('api --method POST repos/o/r/issues/9/labels -f labels[]=sdlc-harness: stopped'), sent.join('\n'));
+  assert.ok(sent.includes(`${LABEL_ON_7} -f labels[]=sdlc-harness: stopped`), sent.join('\n'));
+});
+
+test('stop --branch-gone marks on the default branch, reads the issue at the newest run\'s commit, and never offers resume', async (t) => {
+  const fx = await forgeFixture(t);
+  await runGit(fx.dir, ['push', '--quiet', '--no-verify', 'origin', '--delete', 'feat_x']);
+  await runGit(fx.dir, ['branch', '--quiet', '-D', 'feat_x']);
+  await runGit(fx.dir, ['update-ref', '-d', 'refs/remotes/origin/feat_x']);
+  const remote = await runGit(fx.dir, ['ls-remote', '--heads', 'origin', 'feat_x']);
+  assert.equal(remote.stdout.trim(), '', 'the fixture origin still carries feat_x');
+
+  const prompt = '# A task\n\nStarted from https://github.com/o/r/issues/7 by @alice, who applied the label `sdlc-harness`.\n';
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', 'alice', '--branch-gone'], {
+    ...LOCAL_STOP,
+    STUB_REPO_VIEW: '{"nameWithOwner":"o/r","defaultBranchRef":{"name":"trunk"}}',
+    STUB_RUN_LIST: JSON.stringify([
+      { databaseId: 21, displayTitle: 'harness run feat_x', status: 'completed', headSha: 'aaaaaaa', createdAt: '2026-01-01T00:00:00Z' },
+      { databaseId: 22, displayTitle: 'harness run feat_x', status: 'completed', headSha: 'bbbbbbb', createdAt: '2026-01-02T00:00:00Z' },
+    ]),
+    STUB_CONTENTS: prompt,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const sent = joined(fx);
+  assert.equal(sent.filter((line) => line.startsWith('workflow run'))[0],
+    'workflow run harness-run.yml --ref trunk -f action=stop -f branch=feat_x');
+  assert.ok(sent.some((line) => line.startsWith(`api repos/o/r/contents/${LINEAGE_PROMPT}?ref=bbbbbbb`)), sent.join('\n'));
+  const [comment] = posted(fx);
+  assert.match(comment.args.join(' '), new RegExp(`^${COMMENT_ON_7}`));
+  assert.match(comment.body, /its branch was deleted, so the run cannot be resumed/);
+  assert.match(comment.body, /workflow runs and their artifacts are kept/);
+  assert.doesNotMatch(comment.body, /resume`/);
+  assert.ok(sent.includes(`${LABEL_ON_7} -f labels[]=sdlc-harness: stopped`), sent.join('\n'));
+});
+
+test('--branch-gone and --pr on another verb are usage errors that call nothing', async (t) => {
+  const fx = await forgeFixture(t);
+  for (const args of [['pause', 'feat_x', '--branch-gone'], ['pause', 'feat_x', '--pr', '9'], ['dispatch', 'feat_x', '--engine', 'task', '--note', 'x']]) {
+    const result = await remoteRun(fx, args, LOCAL_STOP);
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stderr}`);
+  }
+  assert.deepEqual(calls(fx), []);
+});
+
 /** A usage-paused bundle; `due` puts its reset in the past. */
 function usageBundle(fx, name, due, chain = '2') {
   return loopBundle(fx, name, {
@@ -1444,7 +1564,7 @@ function pollState(fx) {
 }
 
 test('poll dispatches the due branch and keeps the poller for the one still waiting', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], syncEnv({
     runs: [ghRun(702, 'completed', 2, 'harness run feat_b'), ghRun(701, 'completed', 1, 'harness run feat_a')],
@@ -1461,7 +1581,7 @@ test('poll dispatches the due branch and keeps the poller for the one still wait
 });
 
 test('poll with only a due branch dispatches it, then disables the poller', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], syncEnv({
     runs: [ghRun(701, 'completed', 1, 'harness run feat_a')],
@@ -1477,7 +1597,7 @@ test('poll with only a due branch dispatches it, then disables the poller', asyn
 });
 
 test('poll with HARNESS_REMOTE_STOP set sends nothing, and carries the poller state unchanged', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const carried = { feat_a: { run_id: '701', failures: '2', notified: '' } };
   const previous = join(fx.dir, STATE_DIR, 'stub', 'poll_states', 'stop');
   mkdirSync(previous, { recursive: true });
@@ -1497,7 +1617,7 @@ test('poll with HARNESS_REMOTE_STOP set sends nothing, and carries the poller st
 });
 
 test('poll skips a due branch whose harness stop run is newer, and disables itself when it was the only one waiting', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], syncEnv({
     runs: [ghRun(802, 'completed', 2, 'harness stop feat_x'), ghRun(801, 'completed', 1)],
@@ -1511,7 +1631,7 @@ test('poll skips a due branch whose harness stop run is newer, and disables itse
 });
 
 test('poll dispatches a due branch whose harness stop run is older than its newest harness run', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], syncEnv({
     runs: [ghRun(802, 'completed', 2), ghRun(801, 'completed', 1, 'harness stop feat_x')],
@@ -1522,6 +1642,23 @@ test('poll dispatches a due branch whose harness stop run is older than its newe
   assert.deepEqual(workflowRuns(fx), [
     'workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=task -f resume=pause -f chain=3',
   ]);
+});
+
+test('poll skips a due branch deleted on origin, drops its state, and disables itself when it was the only one waiting', async (t) => {
+  const fx = await loopFixture(t);
+  const notes = recordNotifications(fx);
+  await deleteOnOrigin(fx, 'feat_x');
+  const served = join(fx.dir, STATE_DIR, 'stub', 'poll_states', 'gone');
+  mkdirSync(served, { recursive: true });
+  writeFileSync(join(served, 'poll_state.json'), JSON.stringify({ feat_x: { run_id: '801', failures: '1', notified: '' } }));
+  const result = await pollTick(fx, { tick: 1, runId: 801, bundleDir: usageBundle(fx, 'x', true), served });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /poll: feat_x no longer exists on origin; skipped/);
+  assert.deepEqual(workflowRuns(fx), []);
+  assert.deepEqual(downloads(fx).filter((line) => line.startsWith('run download 801 ')), []);
+  assert.deepEqual(pollState(fx), {});
+  assert.deepEqual(joined(fx).filter((line) => line.startsWith('workflow ')), ['workflow disable harness-resume.yml']);
+  assert.deepEqual(notes(), []);
 });
 
 const workflowCalls = (fx) => joined(fx).filter((line) => line.startsWith('workflow '));
@@ -1546,7 +1683,7 @@ function interleaveEnv(fx, aPaused) {
 }
 
 test('poll re-enables the poller when a finishing job uploaded a usage-paused bundle during the tick', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], interleaveEnv(fx, true));
   assert.equal(result.status, 0, result.stderr);
@@ -1556,7 +1693,7 @@ test('poll re-enables the poller when a finishing job uploaded a usage-paused bu
 });
 
 test('poll keeps the poller disabled for a job that is still running with no bundle', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], interleaveEnv(fx, false));
   assert.equal(result.status, 0, result.stderr);
@@ -1567,7 +1704,7 @@ test('poll keeps the poller disabled for a job that is still running with no bun
 });
 
 test('poll whose re-enable fails sends one paused notification for the branch that became waiting, and exits 0', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], {
     ...interleaveEnv(fx, true), STUB_FAIL_ON: 'workflow enable', STUB_FAIL_STDERR: 'HTTP 403: forbidden',
@@ -1582,7 +1719,7 @@ test('poll whose re-enable fails sends one paused notification for the branch th
 });
 
 test('poll counts an unfinished run already carrying a usage-paused bundle as waiting, and never dispatches it', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const result = await remoteRun(fx, ['poll'], syncEnv({
     runs: [ghRun(711, 'in_progress', 3, 'harness run feat_a')],
@@ -1634,7 +1771,7 @@ const disables = (fx) => joined(fx).filter((line) => line.startsWith('workflow d
 const FAILING_DISPATCH = { STUB_FAIL_ON: 'workflow run', STUB_FAIL_STDERR: 'HTTP 404: harness-run.yml not found' };
 
 test('poll gives up on a dispatch that always fails: one paused notification at the limit, then it disables itself', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const b = recentDueBundle(fx, 'x');
   let served = null;
@@ -1666,7 +1803,7 @@ test('poll gives up on a dispatch that always fails: one paused notification at 
 });
 
 test('poll retries a dispatch that fails once, then drops the branch\'s state when it succeeds', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const b = recentDueBundle(fx, 'x');
   const extra = { ...FAILING_DISPATCH, STUB_FAIL_TIMES: '1' };
@@ -1686,7 +1823,7 @@ test('poll retries a dispatch that fails once, then drops the branch\'s state wh
 });
 
 test('poll gives up on the first failed dispatch past the deadline, with no carried state', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const result = await pollTick(fx, { tick: 1, runId: 801, bundleDir: usageBundle(fx, 'x', true), extra: FAILING_DISPATCH });
   assert.equal(result.status, 0, result.stderr);
@@ -1697,7 +1834,7 @@ test('poll gives up on the first failed dispatch past the deadline, with no carr
 });
 
 test('poll restarts the failure count for a newer run of the branch', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   const notes = recordNotifications(fx);
   const served = join(fx.dir, STATE_DIR, 'stub', 'poll_states', 'old');
   mkdirSync(served, { recursive: true });
@@ -1710,7 +1847,7 @@ test('poll restarts the failure count for a newer run of the branch', async (t) 
 });
 
 test('poll with a give-up bound that is not a non-negative integer exits 1 and dispatches nothing', async (t) => {
-  const fx = await remoteFixture(t);
+  const fx = await loopFixture(t);
   recordNotifications(fx);
   for (const name of ['HARNESS_POLL_MAX_DISPATCH_FAILURES', 'HARNESS_POLL_GIVE_UP_AFTER_MINUTES']) {
     const result = await pollTick(fx, { tick: 1, runId: 801, bundleDir: usageBundle(fx, 'x', true), extra: { [name]: 'x' } });

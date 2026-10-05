@@ -1,0 +1,59 @@
+# Publish the CLI to npm when a release tag is pushed — the last step of a release, after
+# scripts/tag-release.sh has tagged the version bump's publication on main. Authenticates by npm
+# trusted publishing (OIDC): the package's settings on npmjs.com name this repository and this
+# file, `release-npm.yml`, as its trusted publisher, so no npm token exists anywhere — not in this
+# repository's secrets and not on the operator's machine. Renaming this file breaks that link until
+# the npmjs.com setting is changed to match.
+#
+# Unlike publish-main.yml this file travels to main: a tag push runs the workflow file as it stands
+# in the TAGGED commit, and a release tag always names a commit on main.
+name: Release npm
+
+on:
+  push:
+    tags: ['autonomous-sdlc-harness--v*']
+
+# id-token: write is what lets npm exchange the job's OIDC token for a one-shot publish credential
+# (and sign the provenance statement). contents: read is the checkout. Nothing else.
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: release-npm
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned to full commit shas, not tags: a tag is mutable, and this job can publish the
+      # package. fbc6f39 is actions/checkout v5.1.0, the pin publish-main.yml carries; 8207627 is
+      # actions/setup-node v7.0.0. Bump them deliberately, never by moving a tag.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # Node 24 because trusted publishing needs npm >= 11.5.1 and Node >= 22.14.0; the package's
+      # own engines floor (>=20.11.0) is about where it runs, not where it is published from.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      # The tag is the version claim; refuse to publish a tree that disagrees with it, and an npm
+      # too old to speak OIDC (it would fall back to a token that does not exist and fail late).
+      - name: Check tag, manifests and npm
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#autonomous-sdlc-harness--v}"
+          cli_version="$(jq -r .version cli/package.json)"
+          plugin_version="$(jq -r .version plugin/.claude-plugin/plugin.json)"
+          echo "tag ${tag_version} · cli ${cli_version} · plugin ${plugin_version}"
+          [ "$tag_version" = "$cli_version" ] || { echo "::error::tag says ${tag_version}, cli/package.json says ${cli_version}"; exit 1; }
+          [ "$tag_version" = "$plugin_version" ] || { echo "::error::tag says ${tag_version}, plugin.json says ${plugin_version}"; exit 1; }
+          npm_version="$(npm --version)"
+          lowest="$(printf '%s\n' 11.5.1 "$npm_version" | sort -V | head -n 1)"
+          [ "$lowest" = 11.5.1 ] || { echo "::error::npm ${npm_version} predates trusted publishing (needs >= 11.5.1)"; exit 1; }
+
+      # The single lockfile lives at the workspace root (cli/README.md → No lockfile of its own).
+      - run: npm ci
+      # prepublishOnly builds dist/; provenance is attached automatically under trusted publishing.
+      - run: npm publish --workspace cli

@@ -9,7 +9,8 @@
 #
 # THE INPUT CONTRACT. Composed on the shell side by `remote-run.sh` alone:
 #   action           run | pause | warm | stop. Only `run` and `warm` start a
-#                    job; `pause` and `stop` are jobless, titled marker runs
+#                    job; `pause` and `stop` are jobless, titled marker runs,
+#                    except a `pause` from the wrong ref (THE REF CHECK)
 #   branch           the run's branch (for warm: GitHub's default branch)
 #   engine           task | user_review | docs                (action=run)
 #   resume           none | answer | pause                    (action=run)
@@ -68,6 +69,18 @@
 # for a branch already checked out. Its step is `continue-on-error` for the
 # report step's reason below: scripts older than this file carry no `collect`
 # verb.
+#
+# THE REF CHECK. Finding 6 of Gate 12 round 6: GitHub lists a run under the ref
+# it was dispatched from (Use workflow from), so a run or pause dispatched from
+# a ref other than its `branch` input is invisible to every lookup by that
+# branch. When `action` is `run` or `pause` and `github.ref_name` is not
+# `inputs.branch`, the `wrong-ref` job fails, naming the ref to use, and `run`
+# and `collect` are skipped; the jobless `pause` marker gains that failing job
+# only when its ref is wrong. `warm` is exempt because it dispatches on the
+# default branch with that branch as its input, so the two already agree.
+# `stop` is exempt because a deleted branch's stop marker is sent from the
+# default branch, its own ref being gone, and the stop check matches the
+# `harness stop <branch>` title across every branch's runs, under any ref.
 #
 # ACTION PINS.
 #   actions/checkout@v5
@@ -234,8 +247,20 @@ defaults:
     shell: bash
 
 jobs:
+  wrong-ref:
+    if: (inputs.action == 'run' || inputs.action == 'pause') && github.ref_name != inputs.branch
+    runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - name: Refuse a dispatch from another ref
+        env:
+          IN_REF: ${{ github.ref_name }}
+          IN_BRANCH: ${{ inputs.branch }}
+        run: |
+          echo "::error::this run was dispatched from '$IN_REF', but its branch input is '$IN_BRANCH': GitHub lists a run under the ref it was dispatched from, so no lookup of '$IN_BRANCH' would find it. Run the workflow again with Use workflow from set to '$IN_BRANCH'."
+          exit 1
+
   run:
-    if: inputs.action == 'run'
+    if: inputs.action == 'run' && github.ref_name == inputs.branch
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
     # The self-hosted job limit, 5 days; a hosted job stops at its own limit.
     timeout-minutes: 7200
@@ -486,7 +511,7 @@ jobs:
 
   collect:
     needs: run
-    if: ${{ inputs.action == 'run' && !cancelled() }}
+    if: ${{ inputs.action == 'run' && !cancelled() && github.ref_name == inputs.branch }}
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
     concurrency:
       group: harness-review-${{ inputs.branch }}

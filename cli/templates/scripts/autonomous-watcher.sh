@@ -329,6 +329,20 @@
 #     count are seeded from it; the auto-resume count only when
 #     HARNESS_INPUT_CHAIN is above 0, because a chain of 0 is a user's own
 #     dispatch; `chain` never — every write records this job's own input.
+#   * THE PAUSE NOTE belongs to the run that wrote it. Before its own first
+#     write, the job reads the restored `remote_status.json`'s `status` and
+#     `engine`. In job mode, a carried `PAUSE_PROGRESS.md` is kept only when
+#     the job's `resume` is `pause`, the restored `remote_status.json` says
+#     `status: paused`, and its `engine` equals the job's engine. In every other
+#     case — a fresh launch (`resume none`), an answer resume (`resume
+#     answer`), a pause resume whose previous job did not pause (a stop or a
+#     kill), or a different engine — it is moved aside, never deleted, to
+#     `<state_dir>/autonomous_logs/remote_superseded/<epoch>[-<n>]/PAUSE_PROGRESS.md`.
+#     The move is lib/harness-run-lib.sh's `hr_remote_move_aside`; this script
+#     writes nothing under `remote_superseded/` itself. Separately, a pause
+#     resume whose previous job did not pause, or paused for a different
+#     engine, is re-launched with a clause saying there is no pause note,
+#     whether or not a note was carried (`pause_note_stale` in the registry).
 #   * IT WRITES `remote_status.json` with decision `continue` before the spawn,
 #     so a job killed mid-run leaves a bundle that says continue, again after
 #     every successful control poll, and once more when the run leaves
@@ -1205,17 +1219,27 @@ job_report() {
 #   resumed_at          when the most recent resume happened — stamped by BOTH
 #                       resume paths, so it does not say which one
 #   resumed_for_index   a space-separated list of the clarification indexes one
-#                       park-resume consumed (`1 2 3`). Set by resume_parked_run
-#                       and archived then cleared by classify_run_exit, which is
-#                       the whole of its lifetime — so A NON-EMPTY VALUE ON A
-#                       `completed` RECORD IS A DEFECT: it means the pairs it
-#                       names are still sitting unarchived at the top level,
-#                       where they trigger a resume of a run that already read
-#                       them. It is NOT a defect on a `paused` record: the pause
-#                       branch returns before the archival and leaves it set on
-#                       purpose, because a pause mid park-resume left those
-#                       answers unconsumed. The pause resume never writes this
-#                       field — a pause is not an answer.
+#                       park-resume consumed (`1 2 3`). Set by begin_park_resume
+#                       and archived then cleared by classify_run_exit together
+#                       with `launch_answered_set`, which is the whole of its
+#                       lifetime — so A NON-EMPTY VALUE ON A `completed` RECORD
+#                       IS A DEFECT: it means the pairs it names are still
+#                       sitting unarchived at the top level, where they trigger
+#                       a resume of a run that already read them. It is NOT a
+#                       defect on a `paused` record: the pause branch returns
+#                       before the archival and leaves it set on purpose,
+#                       because a pause mid park-resume left those answers
+#                       unconsumed. The pause resume never writes this field —
+#                       a pause is not an answer. It is not the only record of
+#                       the consumed set: `launch_answered_set` re-derives it
+#   launch_answered_set every top-level answered pair's index when the current
+#                       session launched (`1 2`), which is the set a re-entering
+#                       engine consumes. Written by spawn_engine at every launch,
+#                       local and job mode alike, from the clarification channel
+#                       on disk; archived then cleared by classify_run_exit on a
+#                       non-pause exit, and left set by a pause exit. The remote
+#                       bundle does not carry it: the next job's launch
+#                       re-derives it from the restored channel
 #   resume_kind         `answer` when the park resume launched the current
 #                       session, `pause` when the pause resume did, and empty
 #                       otherwise. Read and cleared by classify_run_exit on every
@@ -1311,7 +1335,14 @@ job_report() {
 #                       bound of the next control poll, this job's or the next
 #                       chained one's. Set at start (see JOB MODE) and advanced
 #                       by every successful poll
-#   execution           `github-actions` on a remote record — one
+#   pause_note_stale    job mode only: `1` when a `pause` job's restored
+#                       `status.json` was not `paused` or named another engine,
+#                       so spawn_engine's pause-resume prompt says there is no
+#                       pause note instead of naming PAUSE_PROGRESS.md. Cleared
+#                       with run_job's fresh-launch defaults, and by
+#                       classify_run_exit's job-mode pause arm, whose session
+#                       just wrote its own note for a later relaunch to read
+#   execution          `github-actions` on a remote record — one
 #                       launch_remote_run wrote through
 #                       lib/harness-run-lib.sh's `hr_remote_record_init` — and
 #                       absent on a local one. Fixed for the run's life: a later
@@ -1803,8 +1834,18 @@ files, each paired by index with its question_<i>.md, and resume from the park p
   # committed flow-progress LEDGER (deterministic), with PAUSE_PROGRESS.md as a
   # human-readable hint. Mutually exclusive with the clarification resume above:
   # a run resumes from a park OR from a pause, never both.
+  # JOB MODE ONLY: `pause_note_stale` (see the registry) swaps the note-naming
+  # opening for the stop/kill one; a local record never carries the field.
+  local pause_note_stale=""
+  if [ -n "$pause_resume" ] && [ "$JOB_MODE" = "1" ]; then
+    pause_note_stale="$(registry_get "$branch" pause_note_stale)"
+  fi
   local pause_resume_clause=""
-  if [ -n "$pause_resume" ]; then
+  if [ -n "$pause_resume" ] && [ "$pause_note_stale" = "1" ]; then
+    pause_resume_clause="This is a RESUME after the previous job was stopped or ended without pausing: there is no pause \
+note — resume strictly from the committed flow-progress ledger ${state_rel}/flow_progress/${branch}_progress.md — continue \
+at the first phase entry still marked [ ] and SKIP every phase already marked [x]; do NOT restart completed phases. "
+  elif [ -n "$pause_resume" ]; then
     pause_resume_clause="This is a RESUME from a PAUSE: read ${state_rel}/PAUSE_PROGRESS.md for the pause note, then \
 resume strictly from the committed flow-progress ledger ${state_rel}/flow_progress/${branch}_progress.md — continue at the \
 first phase entry still marked [ ] and SKIP every phase already marked [x]; do NOT restart completed phases. "
@@ -1852,7 +1893,11 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
     # own pause-resume clause pointing at the checklist, and omits the
     # clarification-channel language the other two carry.
     local docs_pause_clause=""
-    if [ -n "$pause_resume" ]; then
+    if [ -n "$pause_resume" ] && [ "$pause_note_stale" = "1" ]; then
+      docs_pause_clause="This is a RESUME after the previous job was stopped or ended without pausing: there is no \
+pause note — resume strictly from the checklist ${state_rel}/docs_catalog/${branch}_docs.md — continue at the first entry \
+still marked [ ] and SKIP every entry already marked [x]; do NOT rewrite completed docs. "
+    elif [ -n "$pause_resume" ]; then
       docs_pause_clause="This is a RESUME from a PAUSE: read ${state_rel}/PAUSE_PROGRESS.md for the pause note, then \
 resume strictly from the checklist ${state_rel}/docs_catalog/${branch}_docs.md — continue at the first entry still marked [ ] \
 and SKIP every entry already marked [x]; do NOT rewrite completed docs. "
@@ -1928,6 +1973,11 @@ EOF
     log "'$FORMAT_STREAM' is not executable — logging '$branch' unformatted"
     formatter="cat"
   fi
+
+  # The answered pairs this session will consume, re-derived from disk at every
+  # launch so no job boundary can lose them; classify_run_exit archives them.
+  registry_set "$branch" launch_answered_set \
+    "$(top_level_answered_pairs "$worktree/$state_rel/clarifications/$branch")"
 
   # Spawn ONE detached subshell that runs the agent IN THE FOREGROUND and then
   # classifies the exit from its REAL exit code. The agent must be a CHILD of
@@ -2168,11 +2218,13 @@ max_question_index() {
 #
 # Consume-then-archive contract: on a resume the watcher LEAVES the whole
 # answered set at the TOP LEVEL so the re-launched engine can self-detect and
-# consume it. Exactly that set is archived only AFTER that resumed engine exits —
-# here, keyed off the `resumed_for_index` list the resume recorded. That is what
-# stops a pair the engine already read from triggering another resume, without
-# emptying the paths the re-entering engine reads; a pair written mid-session is
-# not in the list and stays.
+# consume it, and a re-entering engine consumes EVERY top-level answered pair.
+# So the archived set is every pair answered when the session launched — the
+# union of `resumed_for_index` and `launch_answered_set` — archived only AFTER
+# that session exits, and never on a pause exit. That is what stops a pair the
+# engine already read from triggering another resume, without emptying the
+# paths the re-entering engine reads; a pair written mid-session is in neither
+# set and stays.
 classify_run_exit() {
   local branch="$1" worktree="$2" log_path="$3" rc="$4"
 
@@ -2226,7 +2278,9 @@ classify_run_exit() {
           reason=overload
         fi
       fi
-      registry_set "$branch" pause_reason "$reason" status paused
+      # pause_note_stale is cleared here, not in a shell global: this runs in the
+      # launch subshell, and only a registry write reaches run_job.
+      registry_set "$branch" pause_reason "$reason" status paused pause_note_stale ""
       log "run '$branch' paused (PAUSE honored, reason $reason) — rc=$rc"
       if [ "$reason" = "user" ]; then
         notify paused "$branch" "$log_path" "paused as you asked — run /autonomous-sdlc-harness:branch-resume $branch to continue; $(hr_github_resume_route "$branch" "$(registry_get "$branch" engine)")"
@@ -2239,23 +2293,25 @@ classify_run_exit() {
     return 0
   fi
 
-  # If this exit followed a resume — and was NOT a pause, handled above — every
-  # answer in `resumed_for_index` has now been consumed by the re-launched
-  # engine. Archive exactly that set before classifying, so none of it is ever
+  # This exit was NOT a pause, handled above, so the session consumed every pair
+  # it launched with: the union of `resumed_for_index` and `launch_answered_set`.
+  # Archive exactly that union before classifying, so none of it is ever
   # reprocessed; nothing else is archived. A legacy single-index value is a
   # one-element list.
-  local consumed_set consumed_n
-  consumed_set="$(registry_get "$branch" resumed_for_index)"
-  if [ -n "$consumed_set" ]; then
+  local consumed_set consumed_n archived=" "
+  consumed_set="$(registry_get "$branch" resumed_for_index) $(registry_get "$branch" launch_answered_set)"
+  if [ -n "${consumed_set// /}" ]; then
     # An empty clar_dir means the state directory was unresolvable above; the
-    # field is still cleared, because leaving it set would make the next exit
+    # fields are still cleared, because leaving them set would make the next exit
     # try to archive pairs whose location is no better known than it is now.
     if [ -n "$clar_dir" ]; then
       for consumed_n in $consumed_set; do
+        case "$archived" in *" $consumed_n "*) continue ;; esac
+        archived="${archived}${consumed_n} "
         archive_answered_pair "$clar_dir" "$consumed_n"
       done
     fi
-    registry_set "$branch" resumed_for_index ""
+    registry_set "$branch" resumed_for_index "" launch_answered_set ""
   fi
 
   local parked=0
@@ -2395,6 +2451,32 @@ park_answered_set() {
 "
   done
   [ -n "$answered_list" ] || return 1
+  answered_set="$(printf '%s' "$answered_list" | sort -n | tr '\n' ' ')"
+  printf '%s\n' "${answered_set% }"
+}
+
+# top_level_answered_pairs <clar_dir>
+#
+# Every top-level index with both files, space-separated and numerically sorted,
+# whether or not another top-level question is still unanswered; prints nothing
+# when there is none. spawn_engine records it at every launch. Each
+# index is printed as its file name spells it, because archive_answered_pair
+# rebuilds the file names from it; `sort -n` orders a zero-padded one in base 10.
+top_level_answered_pairs() {
+  local clar_dir="$1" q n answered_list="" answered_set
+  for q in "$clar_dir"/question_*.md; do
+    [ -e "$q" ] || continue
+    n="${q##*/}"
+    n="${n#question_}"
+    n="${n%.md}"
+    case "$n" in
+      '' | *[!0-9]*) continue ;;
+    esac
+    [ -f "$clar_dir/answer_${n}.md" ] || continue
+    answered_list="${answered_list}${n}
+"
+  done
+  [ -n "$answered_list" ] || return 0
   answered_set="$(printf '%s' "$answered_list" | sort -n | tr '\n' ' ')"
   printf '%s\n' "${answered_set% }"
 }
@@ -4060,6 +4142,7 @@ run_job() {
   local branch="$1" engine="$2" resume="$3"
   local worktree="$MAIN_REPO" log_path="$LOGS_DIR/$branch.log"
   local state_rel state_abs clar_dir remote_status key value answered_set="" prev_reason=""
+  local prev_status="" prev_engine="" aside_rc
 
   JOB_START_EPOCH="$(job_int "${HARNESS_JOB_STARTED_EPOCH:-}")" || JOB_START_EPOCH="$(date +%s)"
   state_rel="$(run_state_dir "$worktree")" || fatal "job: the state directory in '$worktree' is unresolvable"
@@ -4083,8 +4166,11 @@ run_job() {
   registry_set "$branch" auto_resumes 0
   registry_set "$branch" pause_reason ""
   registry_set "$branch" control_polled_at ""
+  registry_set "$branch" pause_note_stale ""
   if [ -f "$remote_status" ]; then
     prev_reason="$(hr_remote_status_get "$remote_status" pause_reason)" || prev_reason=""
+    prev_status="$(hr_remote_status_get "$remote_status" status)" || prev_status=""
+    prev_engine="$(hr_remote_status_get "$remote_status" engine)" || prev_engine=""
     for key in park_loop_cycles resume_max_question_index stall_restarts; do
       value="$(hr_remote_status_get "$remote_status" "$key")" && registry_set "$branch" "$key" "$value"
     done
@@ -4093,6 +4179,25 @@ run_job() {
     if [ "$((10#$HARNESS_INPUT_CHAIN))" -gt 0 ]; then
       value="$(hr_remote_status_get "$remote_status" auto_resumes)" && registry_set "$branch" auto_resumes "$value"
     fi
+  fi
+
+  # The pause note belongs to the run that wrote it (the header's JOB MODE
+  # block). Two decisions, deliberately independent: the clause reads the
+  # restored status alone, so a run stopped before it ever paused is never
+  # pointed at a note; the move governs only a note that exists.
+  if [ "$resume" = "pause" ] && { [ "$prev_status" != "paused" ] || [ "$prev_engine" != "$engine" ]; }; then
+    registry_set "$branch" pause_note_stale 1
+    log "job: '$branch' resumes after a job that did not pause for engine $engine (prev_status '${prev_status}', prev_engine '${prev_engine}') — no pause note"
+  fi
+  if ! { [ "$resume" = "pause" ] && [ "$prev_status" = "paused" ] && [ "$prev_engine" = "$engine" ]; } \
+    && [ -f "$state_abs/$HR_REMOTE_PAUSE_FILE" ]; then
+    aside_rc=0
+    hr_remote_move_aside "$worktree" "$HR_REMOTE_PAUSE_FILE" || aside_rc=$?
+    case "$aside_rc" in
+      0) log "job: '$branch' carried a $HR_REMOTE_PAUSE_FILE that is not this run's (resume $resume, prev_status '${prev_status}', prev_engine '${prev_engine}', engine $engine) — moved aside to $HR_REMOTE_ASIDE" ;;
+      3) ;;
+      *) log "job: WARNING — could not move the carried $HR_REMOTE_PAUSE_FILE of '$branch' aside (hr_remote_move_aside exit $aside_rc); continuing" ;;
+    esac
   fi
 
   registry_set "$branch" engine "$engine"
