@@ -20,8 +20,9 @@
 # .claude-plugin/marketplace.json and plugin/ without this repository's own adoption — the tree the
 # workflow's clone adds as a marketplace. A `dev` commit carries the adoption as well.
 #
-# WHO RUNS IT. The operator, at a terminal, after the publication pull request carrying the version
-# bump has landed on `main` and before the npm package is published — so no published CLI renders a
+# WHO RUNS IT. The operator, at a terminal — directly, or as step 3 of scripts/release.sh — after the
+# publication pull request carrying the version bump has landed on `main`. Pushing the tag is what
+# publishes the npm package: it runs .github/workflows/release-npm.yml, so no published CLI renders a
 # workflow pinned to a tag that does not exist yet. It also backfills the tags of past releases.
 #
 # WHY A PUSH NEEDS A TERMINAL. Without --dry-run the script refuses unless stdin is a terminal. A

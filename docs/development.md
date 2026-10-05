@@ -1545,6 +1545,15 @@ Every number that command reports, other than 1 and 2, must have a row above. Ad
 
 A release is four steps, in this order. **The tag comes before the npm publication:** the `Install the pinned plugin` step of a workflow rendered by the new CLI clones the tag `autonomous-sdlc-harness--v<version>`, and refuses the run when that tag is missing (`cli/templates/github/workflows/harness-run.yml`).
 
+**One command runs all four.** From a checkout of `dev`, at a terminal, with `gh` logged in:
+
+```
+bash scripts/release.sh <version> --dry-run
+bash scripts/release.sh <version>
+```
+
+It cuts and squash-merges the bump pull request, waits for `publish-main.yml` to stage the publication, opens and rebase-merges the `publish` → `main` pull request, runs `tag-release.sh`, and waits for `release-npm.yml` and the registry. Every step is skipped when it is already done, so re-running the same command resumes a release that stopped part-way. The script's own header is the full contract; the steps below are what it does, and what to do by hand.
+
 1. **The version bump, as a pull request onto `dev`.** It changes the version in `cli/package.json`, `package.json`, `package-lock.json` and `plugin/.claude-plugin/plugin.json` — the four files the 0.4.2 bump commit, `729af00`, touched.
 2. **The publication, as a pull request onto `main`, merged with Rebase and merge.** `scripts/publish-main.sh` → `MERGE IT WITH "REBASE AND MERGE"` states why no other merge method will do.
 3. **The release tag.** From a checkout of `dev`, at a terminal, check what the script would create first:
@@ -1560,11 +1569,9 @@ A release is four steps, in this order. **The tag comes before the npm publicati
    ```
 
    The script tags the oldest commit on `origin/main`'s first-parent line whose `plugin/.claude-plugin/plugin.json` carries `<version>`. It exits `0` when it tagged or the tag already exists, `1` when it refused or failed, and `2` on bad usage. The script's own header is the full contract.
-4. **The npm publication.** No file in this tree states a release procedure for it. `cli/README.md` → **No lockfile of its own.** states that the package is publishable with this command:
+4. **The npm publication.** Pushing the tag runs `.github/workflows/release-npm.yml`, which publishes `cli/` with `npm publish --workspace cli` by npm **trusted publishing**: npm trades the job's GitHub OIDC token for a one-shot publish credential, so no npm token exists in this repository's secrets or on the operator's machine, and the package gets a provenance statement. The workflow refuses a tag whose version disagrees with `cli/package.json` or the plugin manifest. A local `npm publish` is no longer part of a release.
 
-   ```
-   npm publish --workspace cli
-   ```
+**Trusted publishing is configured once, on npmjs.com.** Under the package's *Settings* → *Trusted Publisher*, choose GitHub Actions with owner `firu-daniel`, repository `autonomous-sdlc-harness` and workflow filename `release-npm.yml`. Renaming the workflow file breaks the link until that setting is changed to match. A release tag pushed before the workflow file reached `main` runs no workflow — the tag names a commit, and the commit is what carries the workflow file.
 
 **The tag's shape.** An annotated tag named `autonomous-sdlc-harness--v<version>`, with the message `autonomous-sdlc-harness <version>`. The maintainer created the first one, `autonomous-sdlc-harness--v0.1.0`, by hand on the initial commit, and the script copies its shape.
 
