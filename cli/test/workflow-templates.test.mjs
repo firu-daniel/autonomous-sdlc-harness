@@ -3,7 +3,10 @@
  *
  * **The contract these tests enforce.** The seven `workflow_dispatch` inputs `remote-run.sh`
  * sends, with `action`'s options exactly `run`, `pause`, `warm` and `stop`; a job only for `run`
- * and for `warm`, so `pause` and `stop` start none; the `collect` job after `run`, under `!cancelled()`,
+ * and for `warm`, so `pause` and `stop` start none, except the `wrong-ref` job, which fails a `run`
+ * or `pause` whose `github.ref_name` is not its `branch` input, reading both only through its step's
+ * `env:`, while the `run` and `collect` jobs' `if:` require that ref and that input to agree;
+ * the `collect` job after `run`, under `!cancelled()`,
  * in the `harness-review-<branch>` group with `cancel-in-progress: false`, checking out the default
  * branch rather than `inputs.branch`, reading no secret and running
  * `remote-run.sh collect` alone; the `run-name` title the pause poll and
@@ -35,13 +38,17 @@
  * credential secrets never reach the job reading issue text; no `concurrency:` key, which would drop a
  * pending trigger; no template token; every expression spaced, and none inside a `run:` block.
  *
- * For `harness-control.yml`: the `issue_comment` and `pull_request_review` triggers, `created` and
- * `submitted` their only types, and neither `pull_request_target` nor `pull_request_review_comment`
- * outside a comment line; the permissions exactly `contents`, `actions`, `issues` and `pull-requests`,
- * each `write`; the job's `if:` carrying `COMMAND_HANDLE`, `COMMENT_MARKER` and `REVIEW_ROUND_STATE`
- * and comparing the head repository with `github.repository`, so a fork's review is skipped; the
- * checkout's `ref` the default branch, never the pull request's merge commit; `remote-run.sh control`
- * its only call into the script family; no `secrets.` reference; one `concurrency:` group on the job,
+ * For `harness-control.yml`: the `issue_comment`, `pull_request_review`, `issues`, `pull_request` and
+ * `delete` triggers, `created`, `submitted`, `closed` and `closed` their only types, and neither
+ * `pull_request_target` nor `pull_request_review_comment` outside a comment line; the `run-name`
+ * falling back to the deleted ref; the permissions exactly `contents`, `actions`, `issues` and
+ * `pull-requests`, each `write`; the job's `if:` carrying `COMMAND_HANDLE`, `COMMENT_MARKER`,
+ * `REVIEW_ROUND_STATE` and `STATE_LABEL_PREFIX`, comparing the head repository with
+ * `github.repository` for a review and a closed pull request, so a fork's is skipped, and admitting a
+ * deleted ref only when it is a branch; the checkout's `ref` the default branch, never the pull
+ * request's merge commit; `remote-run.sh control` its only call into the script family, its step
+ * ending `|| [ $? -eq 2 ]` so that, run under `bash -e -o pipefail`, a replied refusal (exit 2)
+ * passes and 1, 3 and 4 fail; no `secrets.` reference; one `concurrency:` group on the job,
  * `harness-review-` plus the head ref for a review and the run's own id for a comment, with
  * `cancel-in-progress: false`, so review jobs on one branch run one at a time and no comment job is
  * ever replaced; no template token; every expression spaced, and none inside a `run:` block.
@@ -52,7 +59,9 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -64,6 +73,7 @@ import {
   POLL_STATE_ARTIFACT_NAME,
   REVIEW_ROUND_STATE,
   STATE_ARTIFACT_NAME,
+  STATE_LABEL_PREFIX,
   TRIGGER_DISPATCH_EVENT_TYPE,
   TRIGGER_LABEL_VARIABLE,
   WORKFLOW_CONTROL_FILE,
@@ -147,13 +157,30 @@ test('the seven inputs, with their types and options', () => {
   assert.match(input('chain'), /type: number/);
 });
 
-test('only run and warm start a job, so pause and stop start none', () => {
+test('only run and warm start a job, and pause only a failing one from the wrong ref; stop starts none', () => {
   const jobIfs = LINES.filter((l) => /^ {4}if: /.test(l)).map((l) => l.trim());
   assert.deepEqual(jobIfs, [
-    "if: inputs.action == 'run'",
-    "if: ${{ inputs.action == 'run' && !cancelled() }}",
+    "if: (inputs.action == 'run' || inputs.action == 'pause') && github.ref_name != inputs.branch",
+    "if: inputs.action == 'run' && github.ref_name == inputs.branch",
+    "if: ${{ inputs.action == 'run' && !cancelled() && github.ref_name == inputs.branch }}",
     "if: inputs.action == 'warm'",
   ]);
+});
+
+test('the wrong-ref job reads the ref and the branch through env and fails, naming the ref to use', () => {
+  const start = LINES.indexOf('  wrong-ref:');
+  assert.notEqual(start, -1, 'harness-run.yml carries a wrong-ref job');
+  const block = blockUnder(start);
+  const text = block.join('\n');
+  assert.match(text, /^ {10}IN_REF: \$\{\{ github\.ref_name \}\}$/m);
+  assert.match(text, /^ {10}IN_BRANCH: \$\{\{ inputs\.branch \}\}$/m);
+  const bodies = runBodies(block);
+  assert.equal(bodies.length, 1);
+  const [body] = bodies;
+  assert.ok(!body.includes('${{'), `expression in run: ${body}`);
+  assert.match(body, /::error::this run was dispatched from '\$IN_REF', but its branch input is '\$IN_BRANCH'/);
+  assert.match(body, /Use workflow from set to '\$IN_BRANCH'/);
+  assert.match(body, /^\s*exit 1$/m);
 });
 
 test('the collect job follows run unless cancelled, shares the review group, reads no secret and runs collect', () => {
@@ -400,12 +427,13 @@ test('the trigger carries no template token, and every expression is spaced and 
   for (const body of bodies) assert.ok(!body.includes('${{'), `expression in run: ${body}`);
 });
 
-test('control: a created comment or a submitted review, never pull_request_target or review comments', () => {
+test('control: a created comment, a submitted review, a close or a deletion, never pull_request_target or review comments', () => {
   const on = CONTROL_LINES.indexOf('on:');
   assert.notEqual(on, -1);
   const under = blockUnder(on, CONTROL_LINES);
   const triggers = under.filter((l) => /^ {2}[a-z_]+:/.test(l)).map((l) => l.trim().replace(/:.*$/, ''));
-  assert.deepEqual(triggers, ['issue_comment', 'pull_request_review']);
+  assert.deepEqual(triggers, ['issue_comment', 'pull_request_review', 'issues', 'pull_request', 'delete']);
+  assert.deepEqual(blockUnder(CONTROL_LINES.indexOf('  delete:'), CONTROL_LINES).filter((l) => l.trim() !== ''), []);
   const typesOf = (event) => {
     const i = CONTROL_LINES.indexOf(`  ${event}:`);
     const line = blockUnder(i, CONTROL_LINES).find((l) => /^\s*types:/.test(l));
@@ -413,6 +441,8 @@ test('control: a created comment or a submitted review, never pull_request_targe
   };
   assert.deepEqual(typesOf('issue_comment'), ['created']);
   assert.deepEqual(typesOf('pull_request_review'), ['submitted']);
+  assert.deepEqual(typesOf('issues'), ['closed']);
+  assert.deepEqual(typesOf('pull_request'), ['closed']);
   const code = CONTROL_LINES.filter((l) => !/^\s*#/.test(l)).join('\n');
   assert.ok(!code.includes('pull_request_target'));
   assert.ok(!code.includes('pull_request_review_comment'));
@@ -434,6 +464,25 @@ test("control: the job's if: prefilters on the handle, the marker and the review
   assert.ok(cond.includes(`!contains(github.event.comment.body, '${COMMENT_MARKER}')`));
   assert.ok(cond.includes(`github.event.review.state == '${REVIEW_ROUND_STATE}'`));
   assert.ok(cond.includes('github.event.pull_request.head.repo.full_name == github.repository'));
+  assert.ok(
+    cond.includes(
+      `(github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), '${STATE_LABEL_PREFIX}'))`,
+    ),
+  );
+  assert.ok(
+    cond.includes(
+      "(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)",
+    ),
+  );
+  assert.ok(cond.includes("(github.event_name == 'delete' && github.event.ref_type == 'branch')"));
+});
+
+test('control: the run-name never matches a harness <action> <branch> title', () => {
+  assert.ok(
+    CONTROL_LINES.includes(
+      'run-name: harness control ${{ github.event.issue.number || github.event.pull_request.number || github.event.ref }}',
+    ),
+  );
 });
 
 test('control: the checkout is the default branch', () => {
@@ -449,6 +498,38 @@ test('control runs remote-run.sh control and nothing else of the family', () => 
     [...body.matchAll(/([A-Za-z0-9_-]+\.sh)"?\s+(\S*)/g)].map((m) => `${m[1]} ${m[2]}`),
   );
   assert.deepEqual(calls, ['remote-run.sh control']);
+});
+
+/** The control step's inline `run:` value. */
+function controlStepRun() {
+  const bodies = runBodies(CONTROL_LINES).filter((b) => b.includes('remote-run.sh" control'));
+  assert.equal(bodies.length, 1);
+  return bodies[0];
+}
+
+test('control: the step maps a replied refusal to success and nothing else', () => {
+  assert.equal(controlStepRun(), 'bash "$SCRIPTS_DIR/remote-run.sh" control || [ $? -eq 2 ]');
+});
+
+test('control: under bash -e -o pipefail the step passes on exit 0 and 2 and fails on 1, 3 and 4', () => {
+  const line = controlStepRun();
+  const root = mkdtempSync(join(tmpdir(), 'harness-control-step-'));
+  try {
+    for (const [code, passes] of [[0, true], [2, true], [1, false], [3, false], [4, false]]) {
+      const dir = join(root, String(code));
+      mkdirSync(dir);
+      writeFileSync(join(dir, 'remote-run.sh'), `[ "$1" = control ] || exit 99\nexit ${code}\n`);
+      const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', line], {
+        env: { ...process.env, SCRIPTS_DIR: dir },
+        encoding: 'utf8',
+      });
+      assert.equal(r.error, undefined);
+      if (passes) assert.equal(r.status, 0, `exit ${code} passes the step`);
+      else assert.notEqual(r.status, 0, `exit ${code} fails the step`);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('control references no secret, and serializes review jobs per head branch but never comment jobs', () => {

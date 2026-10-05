@@ -62,8 +62,11 @@ export const WORKFLOW_CONTROL_PATH = `${WORKFLOWS_DIR}/${WORKFLOW_CONTROL_FILE}`
 /** The first word of a command comment, matched case-insensitively. */
 export const COMMAND_HANDLE = '@sdlc-harness';
 
-/** The verbs a command comment may carry after {@link COMMAND_HANDLE}. */
-export const COMMAND_VERBS = ['answer', 'pause', 'resume', 'stop', 'clear'] as const;
+/**
+ * The verbs a command comment may carry after {@link COMMAND_HANDLE}. `status` is read-only: it
+ * replies with the run's state and changes no label and dispatches nothing.
+ */
+export const COMMAND_VERBS = ['answer', 'pause', 'resume', 'stop', 'clear', 'status'] as const;
 
 export type CommandVerb = (typeof COMMAND_VERBS)[number];
 

@@ -8,7 +8,9 @@
  * at all — are each driven, as are the state-label replacement, the bounded create-and-retry of a failed
  * add, the stop check on `failed`, and a note carrying shell syntax posted byte for byte. `parked` posts
  * one comment per open question file, written into the fixture checkout's clarification directory:
- * ascending, the file whole or cut at a line within the byte bound, and its marker carrying `question=<n>`.
+ * ascending, the file whole less its own `answer_<n>.md` lines or cut at a line within the byte bound, one
+ * answer instruction and its copy block, and its marker carrying `question=<n>`; with no open question it
+ * posts nothing and prints an `::error::` line.
  *
  * The fixture is `remote-trigger.test.mjs`'s shape — `init`, `execution.target` `github-actions`,
  * `forge` `github`, the adopted tree pushed to the fixture's bare `origin` — plus branches pushed with a
@@ -392,14 +394,46 @@ test('parked skips a question whose answer is beside it, and one open question m
   assert.match(posted[0].body, /`2` may be left out/);
 });
 
-test('parked with no open question posts the one notice', async (t) => {
+test('parked with only an answered pair posts nothing, sets no label and prints the ::error:: line', async (t) => {
   const f = await reportFixture(t);
+  clarify(f.dir, 'feat_x', { 'question_1.md': 'answered\n', 'answer_1.md': 'yes\n' });
   const result = await f.report(['parked', 'feat_x']);
   assert.equal(result.status, 0, result.stderr);
-  const posted = allComments(f.calls());
-  assert.equal(posted.length, 1);
-  assert.match(posted[0].body, /is waiting for an answer\. Its questions are in the run's `harness-state` artifact/);
-  assert.ok(posted[0].body.endsWith(`${MARKER('parked', 'feat_x')}\n`), posted[0].body);
+  const calls = f.calls();
+  assert.deepEqual(allComments(calls), []);
+  assert.deepEqual(calls.filter((call) => /\/labels\b/.test(call.line)), []);
+  assert.match(
+    result.stdout,
+    /^::error::remote-run\.sh: report: feat_x was classified parked with no open question; nothing posted$/m,
+  );
+});
+
+test('a question line naming its own answer_<n>.md is left out; one answer sentence and the copy block remain', async (t) => {
+  const f = await reportFixture(t);
+  const channel = 'Please answer in one `answer_1.md` beside this file, addressing each question by its `Q<k>` label.';
+  clarify(f.dir, 'feat_x', { 'question_1.md': `## Q1\n\nWhich colour?\n\n${channel}\n`, 'question_2.md': 'other\n' });
+  const result = await f.report(['parked', 'feat_x']);
+  assert.equal(result.status, 0, result.stderr);
+  const [posted] = allComments(f.calls()).filter((call) => call.body.includes(QUESTION_MARKER('feat_x', 1)));
+  assert.ok(posted, 'question 1 was posted');
+  assert.ok(!posted.body.includes('answer_1.md'), posted.body);
+  assert.ok(posted.body.includes('## Q1\n\nWhich colour?\n'), posted.body);
+  assert.equal(posted.body.split('Answer with a comment whose first line is `@sdlc-harness answer 1`').length, 2, posted.body);
+  const fence = posted.body.match(/\n```\n([^\n]*)\n([^\n]*)\n```\n/);
+  assert.ok(fence, posted.body);
+  assert.equal(fence[1], '@sdlc-harness answer 1');
+  assert.equal(fence[2], '<your answer>');
+});
+
+test('a question line naming another index\'s answer file is kept', async (t) => {
+  const f = await reportFixture(t);
+  const other = 'See the reply in `answer_2.md` before answering this one.';
+  clarify(f.dir, 'feat_x', { 'question_1.md': `## Q1\n\n${other}\n` });
+  const result = await f.report(['parked', 'feat_x']);
+  assert.equal(result.status, 0, result.stderr);
+  const [posted] = allComments(f.calls());
+  assert.ok(posted.body.includes(`\n${other}\n`), posted.body);
+  assert.match(posted.body, /\n```\n@sdlc-harness answer 1\n<your answer>\n```\n/);
 });
 
 test('a question file over the bound is cut at a line boundary within the bound and names the artifact path', async (t) => {
@@ -420,6 +454,7 @@ test('a question file over the bound is cut at a line boundary within the bound 
   assert.ok(carried.endsWith('\n'));
   assert.ok(content.startsWith(carried));
   assert.match(posted.body, /The whole file is `clarifications\/feat_x\/question_3\.md` in the run's `harness-state` artifact/);
+  assert.match(posted.body, /\n```\n@sdlc-harness answer 3\n<your answer>\n```\n/);
   assert.ok(Buffer.byteLength(posted.body) <= 262144);
 });
 
