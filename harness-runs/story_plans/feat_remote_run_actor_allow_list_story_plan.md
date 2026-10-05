@@ -73,7 +73,7 @@ No task touches `plugin/`. `plugin/docs/AUTONOMOUS_FLOW.md` already defers who m
 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_remote_run_actor_allow_list/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, with the catch-all layer (`general`, path `.`) last.
 
-1. [ ] **Task 1** — Declare `HARNESS_RUN_ACTORS` and the list's semantics once in `cli/src/remote/githubActions.ts` _(layer: cli)_ _(points: 10)_
+1. [x] **Task 1** — Declare `HARNESS_RUN_ACTORS` and the list's semantics once in `cli/src/remote/githubActions.ts` _(layer: cli)_ _(points: 10)_
 2. [ ] **Task 2** — Check the allow-list in `remote-run.sh` → `authorise_actor` and the trigger, a `repository_dispatch` sender included _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Name the allow-list in the control, close and collect refusals, and test each path against it _(layer: cli)_ _(points: 12)_
 4. [ ] **Task 4** — Gate `harness-run.yml`'s `run` and `collect` jobs on `github.triggering_actor` _(layer: cli)_ _(points: 18)_
