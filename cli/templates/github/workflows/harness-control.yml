@@ -17,7 +17,8 @@
 # control alone: disabling a workflow disables every event in it.
 #
 # WHAT IT DOES. One job runs `remote-run.sh control`, which does everything
-# else: it authorises the actor, finds the run's branch, carries out the
+# else: it authorises the actor — their write access, then the allow-list
+# HARNESS_RUN_ACTORS — finds the run's branch, carries out the
 # command or places the review round, and replies. Every decision lives in that
 # script; this file carries only the events, the permissions, a prefilter and
 # the concurrency group.
@@ -139,7 +140,8 @@
 #                                     (`<!-- sdlc-harness`), REVIEW_ROUND_STATE
 #                                     (`changes_requested`), HARNESS_RUNNER,
 #                                     HARNESS_REMOTE_STOP,
-#                                     HARNESS_TRIGGER_ALLOWED_BOTS
+#                                     HARNESS_TRIGGER_ALLOWED_BOTS,
+#                                     HARNESS_RUN_ACTORS
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir
 #   harness-run.yml                   the concurrency group
 #                                     `harness-review-<branch>`, held by its
@@ -194,6 +196,7 @@ jobs:
       HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
       HARNESS_TRIGGER_ALLOWED_BOTS: ${{ vars.HARNESS_TRIGGER_ALLOWED_BOTS }}
+      HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
     steps:
       - name: Check out the default branch
         uses: actions/checkout@v5

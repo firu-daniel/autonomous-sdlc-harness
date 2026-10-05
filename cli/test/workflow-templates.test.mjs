@@ -42,7 +42,9 @@
  * `DEFAULT_TRIGGER_LABEL` as its fallback;
  * `remote-run.sh trigger` its only call into the script family; no `secrets.` reference, so the
  * credential secrets never reach the job reading issue text; no `concurrency:` key, which would drop a
- * pending trigger; no template token; every expression spaced, and none inside a `run:` block.
+ * pending trigger; no template token; every expression spaced, and none inside a `run:` block; the
+ * job's `env:` passing `RUN_ACTORS_VARIABLE` from `vars.` on the line after
+ * `HARNESS_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
  *
  * For `harness-control.yml`: the `issue_comment`, `pull_request_review`, `issues`, `pull_request` and
  * `delete` triggers, `created`, `submitted`, `closed` and `closed` their only types, and neither
@@ -60,7 +62,9 @@
  * passes and 1, 3 and 4 fail; no `secrets.` reference; one `concurrency:` group on the job,
  * `harness-review-` plus the head ref for a review and the run's own id for a comment, with
  * `cancel-in-progress: false`, so review jobs on one branch run one at a time and no comment job is
- * ever replaced; no template token; every expression spaced, and none inside a `run:` block.
+ * ever replaced; no template token; every expression spaced, and none inside a `run:` block; the
+ * job's `env:` passing `RUN_ACTORS_VARIABLE` from `vars.` on the line after
+ * `HARNESS_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
  *
  * For all four: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
  * pin the file dropped or a bumped `uses:` the header forgot fails; and every `uses:` value is a major
@@ -316,6 +320,32 @@ test('the run-actor gate, under bash -e -o pipefail, passes the bot and admitted
       assert.match(r.stdout, new RegExp(`^::error::.*${RUN_ACTORS_VARIABLE}`, 'm'), label);
     }
   }
+});
+
+/**
+ * Asserts a workflow's job passes `RUN_ACTORS_VARIABLE` from `vars.` on the line right after its
+ * `HARNESS_TRIGGER_ALLOWED_BOTS` env line, and that its `# DECLARED MIRRORS` block names it.
+ */
+function assertPassesRunActors(file, lines) {
+  const bots = lines.findIndex((l) => /^ {6}HARNESS_TRIGGER_ALLOWED_BOTS: /.test(l));
+  assert.notEqual(bots, -1, `${file} passes HARNESS_TRIGGER_ALLOWED_BOTS`);
+  assert.equal(lines[bots + 1], `      ${RUN_ACTORS_VARIABLE}: \${{ vars.${RUN_ACTORS_VARIABLE} }}`, file);
+  const start = lines.findIndex((l) => l.startsWith('# DECLARED MIRRORS'));
+  assert.notEqual(start, -1, `${file} carries a DECLARED MIRRORS block`);
+  const end = lines.findIndex((l, i) => i > start && l.trim() === '#');
+  assert.ok(end > start, `${file}'s DECLARED MIRRORS block ends`);
+  assert.ok(
+    lines.slice(start, end).some((l) => new RegExp(`\\b${RUN_ACTORS_VARIABLE}\\b`).test(l)),
+    `${file}'s DECLARED MIRRORS block names ${RUN_ACTORS_VARIABLE}`,
+  );
+}
+
+test('the trigger job passes the run-actor allow-list from vars, and declares it a mirror', () => {
+  assertPassesRunActors(WORKFLOW_TRIGGER_FILE, TRIGGER_LINES);
+});
+
+test('the control job passes the run-actor allow-list from vars, and declares it a mirror', () => {
+  assertPassesRunActors(WORKFLOW_CONTROL_FILE, CONTROL_LINES);
 });
 
 test('the run-name title, the runner line and the permissions', () => {
