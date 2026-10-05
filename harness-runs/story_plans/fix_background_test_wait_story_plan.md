@@ -62,7 +62,7 @@ No `general`-layer task is needed: no root document states the per-unit run.
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_background_test_wait/task_<K>_plan.md`. Entries are ordered bottom-up by ship sequence.
 
 1. [x] **Task 1** — State the single-file test command's runnable shape in the adopter conventions templates _(layer: cli)_ _(points: 8)_
-2. [ ] **Task 2** — Add test-run rule point 6: a unit's run stays in the foreground, and one moved to the background is not waited on _(layer: plugin)_ _(points: 10)_
+2. [x] **Task 2** — Add test-run rule point 6: a unit's run stays in the foreground, and one moved to the background is not waited on _(layer: plugin)_ _(points: 10)_
 3. [ ] **Task 3** — Carry the background case into `layer-implementer`'s return contract, fallback and evidence-downgrade rules _(layer: plugin)_ _(points: 8)_
 
 ## Scope register
