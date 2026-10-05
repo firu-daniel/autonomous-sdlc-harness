@@ -280,9 +280,11 @@
 # label is a view, and the run list stays the authority. The state map:
 # `parked` and `park_loop` -> parked, `paused` -> paused, `resumed` -> running,
 # `failed` -> failed, `stopped` -> stopped, `round` (review's) -> running.
-# `failed` posts nothing when
-# `remote_branch_stopped` finds the branch stopped, so a cancelled job never
-# overwrites `stopped`. `completed` (deliver's) and `launched` (the trigger's
+# Every job event — `parked`, `park_loop`, `paused`, `resumed`, `round` and
+# `failed` — posts nothing and sets no label when `remote_branch_stopped`,
+# asked afresh, finds the branch stopped, so a job a stop overtook never
+# overwrites `stopped`; a failed listing reports anyway, and `stopped` is never
+# withheld. `completed` (deliver's) and `launched` (the trigger's
 # own comment) are one line each, as is any other event. The comment names the
 # next GitHub action — never a slash command — then <note> byte for byte, then
 # this run's URL when `GITHUB_RUN_ID` is set, then the marker line
@@ -451,8 +453,12 @@
 # first `- [ ] ` entry of the flow-progress ledger on origin's tip with the
 # `## ` heading above it, and replies once — the state by `CS_WORD` with its
 # pause reason, the state underneath a stopped one, an expired bundle's detail,
-# the next ledger entry (or that every entry is ticked, or that the ledger
-# could not be read), each open question with its `answer <n>` form, and the
+# the next ledger entry (or, on a fully ticked ledger, that a user-review round
+# has started and its ledger is not written yet, when origin's tip carries the
+# round's `chore: add user review for <branch>` commit after the ledger's last
+# change; else, for a `running` run, that it is still finishing or starting a
+# stage, never that every entry is ticked; else that every entry is ticked; or
+# that the ledger could not be read), each open question with its `answer <n>` form, and the
 # latest run's URL. It sets no label and runs no child verb but `fetch`; a
 # failed state read is a refusal and exit 3.
 # THE REVIEW. A `pull_request_review` event reads `.action`, `.review.state`,
@@ -4039,7 +4045,9 @@ forge_question_body() {
 # comment (on `parked`, one per open question) and the state label, by the
 # target rule above. Read on `stopped` only: <pr>, an explicit pull request
 # that is the target whatever its state; `gone`, the branch deleted on GitHub,
-# its issue read from the task prompt at <sha>. Always 0.
+# its issue read from the task prompt at <sha>. Every event but `stopped` is
+# withheld when the branch's newest `harness stop` run is newer than its newest
+# `harness run` run, read from a fresh listing. Always 0.
 forge_report() {
   local event="$1" br="$2" note="${3-}" pr="${4-}" gone="${5-}" gone_sha="${6-}" state reason="" resume_at="" when registry_file
   local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n
@@ -4066,7 +4074,9 @@ forge_report() {
   fi
   forge_repo_var || return 0
 
-  if [ "$event" = failed ]; then
+  if [ "$event" != stopped ]; then
+    # Re-listed: `review` dispatches a run and then reports `round` in one invocation.
+    ALL_RUNS_LISTED=0
     remote_branch_stopped "$br"
     stopped=$?
     if [ "$stopped" -eq 0 ]; then
@@ -4074,7 +4084,7 @@ forge_report() {
       return 0
     fi
     [ "$stopped" -eq 1 ] \
-      || echo "remote-run.sh: report: whether $br was stopped is unknown ($GH_ERR); reporting the failure" >&2
+      || echo "remote-run.sh: report: whether $br was stopped is unknown ($GH_ERR); reporting the $event" >&2
   fi
 
   [ "$event" = stopped ] || { pr=""; gone=""; }
@@ -4799,6 +4809,26 @@ control_ledger_next_var() {
   return 0
 }
 
+# control_round_newer_than_ledger — whether origin's tip of CONTROL_BRANCH
+# carries a user-review round commit newer than the ledger's last change: the
+# round's job writes its own ledger only after that commit. 0 when it does; 1
+# otherwise, a failed git read included. Subjects are compared as whole lines.
+control_round_newer_than_ledger() {
+  local state_rel ledger_sha subjects subject line
+  state_rel=$(hr_state_dir "$root" 2>/dev/null) || return 1
+  [ -n "$state_rel" ] || return 1
+  ledger_sha=$(git -C "$root" log -1 --format=%H "refs/remotes/origin/$CONTROL_BRANCH" \
+    -- "${state_rel%/}/flow_progress/${CONTROL_BRANCH}_progress.md" 2>/dev/null) || return 1
+  [ -n "$ledger_sha" ] || return 1
+  subjects=$(git -C "$root" log --format=%s "$ledger_sha..refs/remotes/origin/$CONTROL_BRANCH" 2>/dev/null) \
+    || return 1
+  subject=$(hr_user_review_subject "$CONTROL_BRANCH")
+  while IFS= read -r line; do
+    [ "$line" != "$subject" ] || return 0
+  done <<<"$subjects"
+  return 1
+}
+
 # control_status — the read-only reply: the state, the next ledger entry, the
 # open questions and the latest run. Sets no label and dispatches nothing.
 control_status() {
@@ -4824,6 +4854,10 @@ control_status() {
   if control_ledger_next_var; then
     if [ -n "$LEDGER_NEXT" ]; then
       text="$text${para}Next in the flow-progress ledger: $LEDGER_NEXT${LEDGER_SECTION:+ (under \`$LEDGER_SECTION\`)}"
+    elif control_round_newer_than_ledger; then
+      text="$text${para}A user-review round has started on \`$CONTROL_BRANCH\`, and its flow-progress ledger is not written yet."
+    elif [ "$CS_WORD" = running ]; then
+      text="$text${para}The run is still running, and its flow-progress ledger has no open entry: it is finishing its last step, or a new stage has not written its ledger yet."
     else
       text="$text${para}Every entry of the flow-progress ledger is ticked."
     fi

@@ -6037,12 +6037,17 @@ test('daemon-path names gh when remote execution is on, and not when it is off',
  * subcommand from files each case writes, so each row of the grading table is one answer changed from
  * a healthy set. A timed-out call is simulated by the stub signalling itself, which hands the check
  * exactly what `runGh`'s bound does — a `null` status — without spending that 30 s bound per case.
+ *
+ * **A harness workflow GitHub lists by its path fails**, because that is how GitHub lists a file it
+ * could not parse, while `gh workflow view` still answers for it (Gate 12 round 7); the forge
+ * workflows are judged only when the trigger applies.
  */
 const GH_CALLS = Object.freeze({
   auth: ['auth', 'status'],
   run: ['workflow', 'view', 'harness-run.yml'],
   secrets: ['secret', 'list', '--json', 'name'],
   resume: ['workflow', 'view', 'harness-resume.yml'],
+  workflows: ['api', 'repos/{owner}/{repo}/actions/workflows?per_page=100'],
   variables: ['variable', 'list', '--json', 'name,value'],
   retention: ['api', 'repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention'],
 });
@@ -6078,6 +6083,18 @@ async function answeringGhStub(t) {
   return { dir, path, log, answers };
 }
 
+/**
+ * An Actions workflow listing naming each harness workflow by its template's own `name:`, except the
+ * files in `byPath`, listed with `name` equal to `path` as GitHub lists a file it could not parse.
+ */
+function workflowListing(byPath = []) {
+  const workflows = ['harness-run', 'harness-resume', 'harness-trigger', 'harness-control'].map((name, id) => {
+    const path = `.github/workflows/${name}.yml`;
+    return { id, name: byPath.includes(path) ? path : name, path, state: 'active' };
+  });
+  return JSON.stringify({ total_count: workflows.length, workflows });
+}
+
 /** Write a healthy answer set, then apply per-call overrides: `{ out?, err?, status?, kill? }`. */
 function answerGh(stub, overrides = {}) {
   const healthy = {
@@ -6085,6 +6102,7 @@ function answerGh(stub, overrides = {}) {
     run: { out: 'Harness run - harness-run.yml\n' },
     secrets: { out: JSON.stringify([{ name: 'CLAUDE_CODE_OAUTH_TOKEN' }, { name: 'HARNESS_PUSH_URL' }]) },
     resume: { out: 'Harness resume - harness-resume.yml\n' },
+    workflows: { out: workflowListing() },
     variables: { out: '[]' },
     retention: { out: JSON.stringify({ days: 90, maximum_allowed_days: 400 }) },
   };
@@ -6225,8 +6243,8 @@ test('the remote-github check asks GitHub only under --check-github and grades e
   const failing = [
     ['gh does not spawn', {}, `${FIXTURE_GH_CLI}-absent`, 'install the GitHub CLI', 0],
     ['gh auth status exits non-zero', { auth: { err: 'You are not logged into any GitHub hosts.\n', status: 1 } }, undefined, 'gh auth login', 1],
-    ['GitHub does not know harness-run.yml', { run: { err: 'could not find any workflows named harness-run.yml\n', status: 1 } }, undefined, "push .github/workflows/harness-run.yml to the repository's default branch", 6],
-    ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 6],
+    ['GitHub does not know harness-run.yml', { run: { err: 'could not find any workflows named harness-run.yml\n', status: 1 } }, undefined, "push .github/workflows/harness-run.yml to the repository's default branch", 7],
+    ['neither credential secret is set', { secrets: { out: JSON.stringify([{ name: 'HARNESS_PUSH_URL' }]) } }, undefined, 'billing follows ANTHROPIC_API_KEY when both are set', 7],
   ];
   for (const [name, overrides, ghName, expected, calls] of failing) {
     await t.test(`fails when ${name}`, async (subtest) => {
@@ -6251,6 +6269,9 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     ['gh cannot reach GitHub', { auth: { err: 'error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n', status: 1 } }, 'cannot tell whether gh is authenticated'],
     ['the repository keeps artifacts for fewer than 30 days', { retention: { out: JSON.stringify({ days: 7 }) } }, 'the repository keeps artifacts for 7 days, so a remote run parked or paused longer than that loses its state bundle: raise it under Settings → Actions → General → Artifact and log retention'],
     ['the retention answer is in a shape it does not read', { retention: { out: JSON.stringify({ days: 'ninety' }) } }, 'cannot tell how long the repository keeps artifacts: `gh api repos/{owner}/{repo}/actions/permissions/artifact-and-log-retention` answered in a shape this check does not read'],
+    ['the workflow listing exits non-zero', { workflows: { err: 'HTTP 404: Not Found\n', status: 1 } }, 'cannot tell whether GitHub could parse the harness workflows: `gh api repos/{owner}/{repo}/actions/workflows?per_page=100` gave no answer, because it exited 1: HTTP 404: Not Found'],
+    ['the workflow listing answers non-JSON', { workflows: { out: 'not json\n' } }, 'cannot tell whether GitHub could parse the harness workflows: `gh api repos/{owner}/{repo}/actions/workflows?per_page=100` answered in a shape this check does not read'],
+    ['the workflow listing stops before the harness workflows', { workflows: { out: JSON.stringify({ total_count: 150, workflows: [] }) } }, 'listed 0 of the repository\'s 150 workflows'],
   ];
   for (const [name, overrides, expected] of warning) {
     await t.test(`warns when ${name}`, async (subtest) => {
@@ -6264,6 +6285,31 @@ test('the remote-github check asks GitHub only under --check-github and grades e
       assert.ok(reportLine(stderr, 'warn', 'remote-github')?.includes(expected), `${stdout}\n${stderr}`);
     });
   }
+
+  await t.test('fails naming the file and init --force when harness-run.yml is listed by its path', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-run.yml']) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 1, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'fail', 'remote-github');
+    assert.ok(line?.includes('GitHub lists .github/workflows/harness-run.yml by its path'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('init --force'), line);
+  });
+
+  await t.test('with forge absent, a harness-control.yml listed by its path is not judged', async (subtest) => {
+    const dir = await pushedRemoteFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-control.yml']) } });
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    assert.ok(reportLine(stdout, 'pass', 'remote-github') !== undefined, `${stdout}\n${stderr}`);
+    assert.ok(!`${stdout}\n${stderr}`.includes('by its path'), `${stdout}\n${stderr}`);
+  });
 
   await t.test('a 90-day artifact retention passes and names it', async (subtest) => {
     const dir = await pushedRemoteFixture(subtest);
@@ -6400,6 +6446,23 @@ test('the remote-github check asks GitHub only under --check-github and grades e
     assert.ok(line?.includes('GitHub does not know harness-control.yml'), `${stdout}\n${stderr}`);
     assert.ok(line.includes("so comments and reviews start nothing: push .github/workflows/harness-control.yml to the repository's default branch"), line);
     assert.ok(!line.includes('GitHub knows harness-trigger.yml'), line);
+  });
+
+  await t.test('with the trigger on, harness-control.yml listed by its path fails with the control route', async (subtest) => {
+    const dir = await pushedTriggerFixture(subtest);
+    const stub = await answeringGhStub(subtest);
+    // Gate 12 round 7's observation: GitHub listed the unparsed file with its name equal to its path.
+    answerGh(stub, { workflows: { out: workflowListing(['.github/workflows/harness-control.yml']) } });
+    answerTriggerGh(stub);
+
+    const { status, stdout, stderr } = await checkGithub(dir, stub);
+
+    assert.notEqual(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'fail', 'remote-github');
+    assert.ok(line?.includes('GitHub lists .github/workflows/harness-control.yml by its path rather than its name'), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('if: >-'), line);
+    assert.ok(line.includes('init --force'), line);
+    assert.ok(!line.includes('GitHub knows harness-trigger.yml and harness-control.yml'), line);
   });
 
   const prSettingOff = { prSetting: { out: JSON.stringify({ default_workflow_permissions: 'read', can_approve_pull_request_reviews: false }) } };

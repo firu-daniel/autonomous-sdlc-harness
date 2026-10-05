@@ -36,7 +36,9 @@
  *
  * `status` is asserted to reply once in every state — `running` and `none` included — naming the state
  * (`stopped` for a stopped run), the ledger's next entry and its section, each open question with its
- * answer form and the latest run, with no labels write and no `workflow run` in any case.
+ * answer form and the latest run, with no labels write and no `workflow run` in any case. A fully
+ * ticked ledger is reported as ticked only when no user-review round commit (a whole-line subject match)
+ * follows the ledger's last change and the run is not `running`.
  */
 
 import assert from 'node:assert/strict';
@@ -790,6 +792,74 @@ test('status with no run listed says so, and a fully ticked ledger says every en
   assert.match(body, /^@alice: no harness run is listed for `feat_x`\./);
   assert.match(body, /Every entry of the flow-progress ledger is ticked\./);
   assert.doesNotMatch(body, /Latest run: /);
+});
+
+const TICKED_LEDGER = '# Progress\n\n## Phase A\n\n- [x] Plan\n';
+const ROUND_STARTED = /A user-review round has started on `feat_x`, and its flow-progress ledger is not written yet\./;
+const STILL_RUNNING = /The run is still running, and its flow-progress ledger has no open entry: it is finishing its last step, or a new stage has not written its ledger yet\./;
+
+/**
+ * Push commits onto origin's `feat_x`, in order: a string is an empty commit with that subject, and
+ * `{ ledger }` rewrites the flow-progress ledger to that text.
+ *
+ * @param {{ dir: string, defaultBranch: string }} f
+ * @param {(string | { ledger: string })[]} commits
+ */
+async function pushOntoFeatX(f, commits) {
+  await runGit(f.dir, ['checkout', '--quiet', 'feat_x']);
+  for (const commit of commits) {
+    if (typeof commit === 'string') {
+      await runGit(f.dir, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', commit]);
+    } else {
+      const rel = `${STATE_DIR}/flow_progress/feat_x_progress.md`;
+      writeFileSync(join(f.dir, rel), commit.ledger);
+      await runGit(f.dir, ['add', '--force', rel]);
+      await runGit(f.dir, ['commit', '--quiet', '--no-verify', '-m', 'chore: Add flow-progress ledger for feat_x']);
+    }
+  }
+  const push = await runGit(f.dir, ['push', '--quiet', '--no-verify', 'origin', 'HEAD:refs/heads/feat_x']);
+  assert.equal(push.status, 0, push.stderr);
+  await runGit(f.dir, ['checkout', '--quiet', f.defaultBranch]);
+}
+
+test('status on a running run whose round commit follows a ticked ledger names the round, never every entry ticked', async (t) => {
+  const f = await controlFixture(t, { ledger: TICKED_LEDGER });
+  await pushOntoFeatX(f, ['chore: add user review for feat_x']);
+  const body = assertStatus(f, await f.control('@sdlc-harness status'));
+  assert.match(body, /^@alice: `feat_x` is `running`\./);
+  assert.match(body, ROUND_STARTED);
+  assert.doesNotMatch(body, /Every entry of the flow-progress ledger is ticked/);
+});
+
+test('status on a running run with a ticked ledger and no round commit says it is still running', async (t) => {
+  const f = await controlFixture(t, { ledger: TICKED_LEDGER });
+  const body = assertStatus(f, await f.control('@sdlc-harness status'));
+  assert.match(body, STILL_RUNNING);
+  assert.doesNotMatch(body, /every entry .* is ticked/i);
+  assert.doesNotMatch(body, ROUND_STARTED);
+});
+
+test('status reads a ledger written after the round commit as it reads any ledger', async (t) => {
+  const f = await controlFixture(t, { ledger: TICKED_LEDGER });
+  await pushOntoFeatX(f, ['chore: add user review for feat_x', { ledger: STATUS_LEDGER }]);
+  const open = assertStatus(f, await f.control('@sdlc-harness status'));
+  assert.match(open, /Next in the flow-progress ledger: Task 2 — write the reply \(under `Phase B`\)/);
+  assert.doesNotMatch(open, ROUND_STARTED);
+
+  const g = await controlFixture(t, { ledger: STATUS_LEDGER });
+  await pushOntoFeatX(g, ['chore: add user review for feat_x', { ledger: TICKED_LEDGER }]);
+  const ticked = assertStatus(g, await g.control('@sdlc-harness status', {}, finishedRun('paused', { engine: 'task' })));
+  assert.match(ticked, /`feat_x` is `paused`/);
+  assert.match(ticked, /Every entry of the flow-progress ledger is ticked\./);
+  assert.doesNotMatch(ticked, ROUND_STARTED);
+});
+
+test('status does not take a subject that only contains the round text for the round commit', async (t) => {
+  const f = await controlFixture(t, { ledger: TICKED_LEDGER });
+  await pushOntoFeatX(f, ['chore: add user review for feat_x_2', 'see chore: add user review for feat_x']);
+  const body = assertStatus(f, await f.control('@sdlc-harness status'));
+  assert.doesNotMatch(body, ROUND_STARTED);
+  assert.match(body, STILL_RUNNING);
 });
 
 test('status on an expired bundle reports the expiry, never an absent run', async (t) => {

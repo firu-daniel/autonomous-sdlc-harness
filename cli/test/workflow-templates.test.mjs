@@ -42,8 +42,11 @@
  * `delete` triggers, `created`, `submitted`, `closed` and `closed` their only types, and neither
  * `pull_request_target` nor `pull_request_review_comment` outside a comment line; the `run-name`
  * falling back to the deleted ref; the permissions exactly `contents`, `actions`, `issues` and
- * `pull-requests`, each `write`; the job's `if:` carrying `COMMAND_HANDLE`, `COMMENT_MARKER`,
- * `REVIEW_ROUND_STATE` and `STATE_LABEL_PREFIX`, comparing the head repository with
+ * `pull-requests`, each `write`; the job's `if:` exactly `if: >-`, its condition on the one
+ * continuation line beneath, because the condition carries `: ` and a plain scalar would read that
+ * as a mapping indicator and leave the file unparseable; no plain-scalar mapping value carrying `: `
+ * or ` #` (the header's third rule, checked in all four files below); the condition carrying
+ * `COMMAND_HANDLE`, `COMMENT_MARKER`, `REVIEW_ROUND_STATE` and `STATE_LABEL_PREFIX`, comparing the head repository with
  * `github.repository` for a review and a closed pull request, so a fork's is skipped, and admitting a
  * deleted ref only when it is a branch; the checkout's `ref` the default branch, never the pull
  * request's merge commit; `remote-run.sh control` its only call into the script family, its step
@@ -56,6 +59,9 @@
  * For all four: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
  * pin the file dropped or a bumped `uses:` the header forgot fails; and every `uses:` value is a major
  * tag of a GitHub `actions/` action, never a sha or a branch — the pinning decision that header states.
+ * And outside a `|` / `>` block body, no mapping value that opens as a plain scalar carries `: ` or
+ * ` #`: the first breaks the parse, the second silently truncates the value as a comment. These are
+ * text-level readings; no YAML parser is loaded.
  */
 
 import assert from 'node:assert/strict';
@@ -361,6 +367,48 @@ for (const [file, lines] of [
   });
 }
 
+/**
+ * Every mapping value that opens as a plain scalar, outside a `|` / `>` block body, as
+ * `{ line, value }`. A block body is every later line indented deeper than the key that opened it.
+ */
+function plainScalarValues(lines) {
+  const out = [];
+  let blockIndent = -1;
+  lines.forEach((line, i) => {
+    if (line.trim() === '') return;
+    if (blockIndent >= 0) {
+      if (indentOf(line) > blockIndent) return;
+      blockIndent = -1;
+    }
+    if (/^\s*#/.test(line)) return;
+    const m = /^\s*(?:- )*[A-Za-z0-9_.-]+:(?: +(.*))?$/.exec(line);
+    if (m === null || m[1] === undefined || m[1] === '') return;
+    const value = m[1];
+    if (/^[|>][0-9+-]*$/.test(value)) {
+      blockIndent = indentOf(line);
+      return;
+    }
+    if (/^['"[{]/.test(value)) return;
+    out.push({ line: i + 1, value });
+  });
+  return out;
+}
+
+for (const [file, lines] of [
+  [WORKFLOW_RUN_FILE, LINES],
+  [WORKFLOW_RESUME_FILE, RESUME_LINES],
+  [WORKFLOW_TRIGGER_FILE, TRIGGER_LINES],
+  [WORKFLOW_CONTROL_FILE, CONTROL_LINES],
+]) {
+  test(`${file}: no plain-scalar mapping value carries ': ' or ' #'`, () => {
+    const values = plainScalarValues(lines);
+    assert.ok(values.length > 0, 'the reader found plain-scalar values');
+    for (const { line, value } of values) {
+      assert.ok(!value.includes(': ') && !value.includes(' #'), `line ${line} is a plain scalar carrying ': ' or ' #': ${value}`);
+    }
+  });
+}
+
 test('the poller carries no template token, and every expression is spaced and outside run blocks', () => {
   assert.doesNotMatch(RESUME_TEXT, /\{\{[A-Za-z]/);
   assert.doesNotMatch(RESUME_TEXT, /\$\{\{[^ ]/);
@@ -457,9 +505,12 @@ test('control: exactly its four permissions', () => {
 });
 
 test("control: the job's if: prefilters on the handle, the marker and the review state, and skips a fork's review", () => {
-  const jobIfs = CONTROL_LINES.filter((l) => /^ {4}if: /.test(l)).map((l) => l.trim());
-  assert.equal(jobIfs.length, 1);
-  const [cond] = jobIfs;
+  const at = CONTROL_LINES.flatMap((l, i) => (/^ {4}if: /.test(l) ? [i] : []));
+  assert.equal(at.length, 1);
+  assert.equal(CONTROL_LINES[at[0]], '    if: >-');
+  assert.equal(blockUnder(at[0], CONTROL_LINES).filter((l) => l.trim() !== '').length, 1, 'one continuation line');
+  const cond = CONTROL_LINES[at[0] + 1];
+  assert.match(cond, /^ {6}\(/);
   assert.ok(cond.includes(`contains(github.event.comment.body, '${COMMAND_HANDLE}')`));
   assert.ok(cond.includes(`!contains(github.event.comment.body, '${COMMENT_MARKER}')`));
   assert.ok(cond.includes(`github.event.review.state == '${REVIEW_ROUND_STATE}'`));

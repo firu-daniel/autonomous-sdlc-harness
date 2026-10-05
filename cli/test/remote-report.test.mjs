@@ -6,7 +6,7 @@
  * the forge coupling off it calls no `gh` at all.** The target rule's arms — a same-repository pull
  * request whose head carries the flow-progress ledger, one whose head does not, a fork's, and no target
  * at all — are each driven, as are the state-label replacement, the bounded create-and-retry of a failed
- * add, the stop check on `failed`, and a note carrying shell syntax posted byte for byte. `parked` posts
+ * add, the stop check on every job event, and a note carrying shell syntax posted byte for byte. `parked` posts
  * one comment per open question file, written into the fixture checkout's clarification directory:
  * ascending, the file whole less its own `answer_<n>.md` lines or cut at a line within the byte bound, one
  * answer instruction and its copy block, and its marker carrying `question=<n>`; with no open question it
@@ -261,6 +261,65 @@ test('failed on a branch whose stop marker is newer posts nothing', async (t) =>
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(writes(f.calls()), []);
   assert.match(result.stdout, /already reported/);
+});
+
+/** A `harness stop feat_x` newer than the newest `harness run feat_x`: the stop overtook the job. */
+const STOP_NEWER = JSON.stringify([
+  { displayTitle: 'harness stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
+  { displayTitle: 'harness run feat_x', createdAt: '2026-01-01T00:00:00Z' },
+]);
+const STOPPED_LINE = /^remote-run\.sh: report: feat_x was stopped, and the stop already reported the run; nothing posted$/m;
+const labelWrites = (calls) => calls.filter((call) => /^api --method (POST|DELETE) [^ ]*\/labels\b/.test(call.line));
+
+test('resumed after a stop overtook the job posts nothing and sets no label', async (t) => {
+  const f = await reportFixture(t);
+  const result = await f.report(['resumed', 'feat_x'], {
+    STUB_RUN_LIST: STOP_NEWER,
+    STUB_LABELS: JSON.stringify([{ name: 'sdlc-harness: stopped' }]),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  assert.deepEqual(allComments(calls), []);
+  assert.deepEqual(labelWrites(calls), []);
+  assert.match(result.stdout, STOPPED_LINE);
+});
+
+for (const event of ['paused', 'parked', 'park_loop', 'round']) {
+  test(`${event} after a stop overtook the job posts nothing and sets no label`, async (t) => {
+    const f = await reportFixture(t);
+    if (event === 'parked') clarify(f.dir, 'feat_x', { 'question_1.md': 'open\n' });
+    const result = await f.report([event, 'feat_x'], { STUB_RUN_LIST: STOP_NEWER });
+    assert.equal(result.status, 0, result.stderr);
+    const calls = f.calls();
+    assert.deepEqual(allComments(calls), []);
+    assert.deepEqual(labelWrites(calls), []);
+    assert.match(result.stdout, STOPPED_LINE);
+  });
+}
+
+test('resumed after a harness run newer than the stop posts and sets running', async (t) => {
+  const f = await reportFixture(t);
+  const result = await f.report(['resumed', 'feat_x'], {
+    STUB_RUN_LIST: JSON.stringify([
+      { displayTitle: 'harness run feat_x', createdAt: '2026-01-03T00:00:00Z' },
+      { displayTitle: 'harness stop feat_x', createdAt: '2026-01-02T00:00:00Z' },
+    ]),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  assert.equal(commentsOn(calls, 7).length, 1);
+  assert.deepEqual(
+    labelAdds(calls, 7).map((call) => call.args.at(-1)),
+    ['labels[]=sdlc-harness: running'],
+  );
+});
+
+test('resumed with a failing run listing still posts, naming the unknown stop state', async (t) => {
+  const f = await reportFixture(t);
+  const result = await f.report(['resumed', 'feat_x'], { STUB_FAIL_ON: 'run list' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(commentsOn(f.calls(), 7).length, 1);
+  assert.match(result.stderr, /whether feat_x was stopped is unknown/);
 });
 
 test('failed on an issue names the run log and re-applying the trigger label', async (t) => {
