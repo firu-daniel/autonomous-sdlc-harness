@@ -590,7 +590,13 @@ The last two are needed for the reason step 3 above gives: the `workflow` scope,
   git diff --no-index .github/workflows/harness-control.yml.bak .github/workflows/harness-control.yml
   ```
 
-  That `.bak` is not in the managed `.gitignore` block, so delete it once compared. An edited copy that still carries 0.6.1's job `if:` is kept, with a warning naming the hand fix — the `if:` as a folded block scalar, `if: >-` with the expression on the next line — and `init --force`. `doctor --check-github` fails on any harness workflow GitHub lists by its path rather than its name, which is how GitHub lists a file it could not parse.
+  That `.bak` is not in the managed `.gitignore` block, so delete it once compared. An edited copy that still carries 0.6.1's job `if:` is kept, with a warning naming the hand fix — the `if:` as a folded block scalar, `if: >-` with the expression on the next line — and the forced re-run, which regenerates every generated file after a `.bak`:
+
+  ```
+  npx autonomous-sdlc-harness@<version> init --force
+  ```
+
+  `doctor --check-github` fails on any harness workflow GitHub lists by its path rather than its name, which is how GitHub lists a file it could not parse.
 - **It does not re-render the outer-loop scripts** under `<scriptsDir>`. They stay create-if-absent ([`cli.md`](cli.md) → `## 3. The re-run contract`), so `init --force` remains their route. It also regenerates every other generated file after a `.bak`, including `.claude/CLAUDE.md` and the conventions documents the analyze command filled.
 
 **Moving a run in flight to the new version, on purpose.** Do it only after the upgrade is pushed to the default branch, and only while no job of that run is executing: the run is paused, parked or stopped. A job pushes the branch after every commit and at its end (`cli/templates/scripts/push-branch.sh`), and a push that fails because the remote moved is non-fatal by that script's own header (*"EVERY FAILURE PATH IS NON-FATAL"*). So a commit pushed beside a running job leaves the job's later commits off the remote without stopping it.
