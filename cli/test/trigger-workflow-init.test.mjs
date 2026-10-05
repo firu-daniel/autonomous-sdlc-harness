@@ -283,6 +283,11 @@ test('init reports the control-workflow repair, and warns on an edited 0.6.1 cop
     assert.equal(adds.length, 1, `expected one git add line:\n${stdout}`);
     assert.ok(adds[0].split(' ').includes(CONTROL_FILE), `the upgrade's git add does not name ${CONTROL_FILE}: ${adds[0]}`);
     assert.ok(!stdout.includes('Repair the harness control workflow'), `the repair printed its own commit:\n${stdout}`);
+    assert.equal(
+      stdout.split('\n').filter((line) => line.trim() === DIFF_LINE).length,
+      1,
+      `the control workflow's diff line is not printed exactly once:\n${stdout}`,
+    );
   });
 
   await t.test('--upgrade-workflows with the pin current: the repair block prints its own git add', async (subtest) => {

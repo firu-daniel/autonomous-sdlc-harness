@@ -41,7 +41,7 @@ The six findings below remain:
 2. [x] **Finding 4** — Drop the `export` from `UNPARSEABLE_CONTROL_IF_LINE` _(layer: cli)_
 3. [x] **Finding 6** — Replace "committed by Task 2" in `scripts/check-rendered-workflows.mjs` with the fixture's blob provenance _(layer: general)_
 4. [x] **Finding 1** — Fence the edited-copy `init --force` route in `docs/remote-execution.md` → `### Upgrading` _(layer: general)_
-5. [ ] **Finding 2** — Keep the repaired control workflow out of the upgrade block's diff lines and `.bak` claim, and assert its diff line prints once _(layer: cli)_
+5. [x] **Finding 2** — Keep the repaired control workflow out of the upgrade block's diff lines and `.bak` claim, and assert its diff line prints once _(layer: cli)_
 6. [ ] **Finding 3** — Warn *cannot tell* when the workflow listing does not reach a judged harness workflow _(layer: cli, general)_
 
 ---

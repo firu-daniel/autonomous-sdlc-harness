@@ -2484,7 +2484,9 @@ async function run(ctx: CommandContext): Promise<number> {
   if (workflows.upgrade !== undefined) {
     const replacedWorkflows = workflows.workflows
       .filter(({ absolute }) => applied.find((r) => r.path === absolute)?.effect === 'backed-up-and-replaced')
-      .map(({ repoPath }) => repoPath);
+      .map(({ repoPath }) => repoPath)
+      // A repaired control workflow's diff line and its un-ignored .bak are reportControlRepair's to print.
+      .filter((path) => !(workflows.controlRepair?.kind === 'replaced' && path === WORKFLOW_CONTROL_PATH));
     // Every tracked file this run merged into, so the upgrade's commit leaves no tracked change behind.
     const mergedPaths = applied
       .filter(
@@ -2527,7 +2529,8 @@ async function run(ctx: CommandContext): Promise<number> {
 
 /**
  * What {@link UPGRADE_WORKFLOWS_FLAG} did, printed when the generator returned an upgrade result;
- * `replacedWorkflows` names, repo-relative, the workflows the plan replaced after a `.bak`. What was
+ * `replacedWorkflows` names, repo-relative, the workflows the plan replaced after a `.bak`, less a
+ * repaired control workflow, whose `.bak` is not ignored and is {@link reportControlRepair}'s. What was
  * replaced, and when, is the generator's decision (`generators/githubWorkflows.ts`, choice 4); this
  * only reports it.
  *
