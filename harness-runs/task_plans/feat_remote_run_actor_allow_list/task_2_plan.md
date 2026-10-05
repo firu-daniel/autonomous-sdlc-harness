@@ -64,3 +64,9 @@
 - Run the five edited test files from `cli/`, one by one, under the conditions in `unit_loop_core.md` → `## The test-run rule` (3), with `npm test -- test/<name>.test.mjs`. Every existing case still passes under `*`, and cases (a)–(g) pass.
 - `bash -n cli/templates/scripts/remote-run.sh` parses. Grep the script for `,,}` and `^^}`, and find no lowercase or uppercase expansion.
 - Grep the script for `HARNESS_RUN_ACTORS`. Every occurrence is in the header, in `run_actor_listed`, or in a refusal's way-on text. No second parser of the list exists.
+
+**Deviations from plan:**
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the permission layer in this session (twice, absolute and relative path). The parse claim rests on execution instead: the five edited suites run the script under `bash` and passed (trigger 37/37, control 66/66, control-close 14/14, control-review 31/31, collect 10/10).
+- The dispatch path's "list is not `*`" test for an empty sender type is `run_actor_listed ""`, which `run_actor_listed` documents as admitted by `*` alone, so the trigger holds no second parser of the list. Its refusal reason names no variable; the variable is in the way-on text.
+- One case beyond (a)–(g): a dispatch whose sender carries no type is refused under a non-`*` list, covering the fail-closed sub-bullet.
+- `authorise_actor`'s comment says "the run-actor list" rather than the variable name, and `run_actor_listed`'s comment names no `${x,,}` literal, so the two verification greps hold.

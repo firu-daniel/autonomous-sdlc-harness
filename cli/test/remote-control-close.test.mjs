@@ -160,6 +160,7 @@ async function closeFixture(t) {
         RUNNER_TEMP: runnerTemp,
         HARNESS_REMOTE_STOP: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
+        HARNESS_RUN_ACTORS: '*',
         HARNESS_TRIGGER_LABEL: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write', bob: 'read' }),
         STUB_PRS: '',

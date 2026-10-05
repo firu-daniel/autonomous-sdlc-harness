@@ -187,6 +187,7 @@ async function controlFixture(t, { forge = 'github', ledger: ledgerText = '# Pro
         RUNNER_TEMP: runnerTemp,
         HARNESS_REMOTE_STOP: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
+        HARNESS_RUN_ACTORS: '*',
         HARNESS_TRIGGER_LABEL: '',
         STUB_PERMISSIONS: JSON.stringify({ alice: 'write' }),
         STUB_PR: '',

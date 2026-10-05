@@ -2,11 +2,14 @@
  * `remote-run.sh trigger`, the GitHub event adapter: an `issues` `labeled` event, or a `repository_dispatch`
  * of type `harness-task`, becomes a branch and a task text, then `start`.
  *
- * **The rule these tests exist to enforce: only a write-or-admin human or a listed bot starts a run;
- * every refusal sends no `workflow run` and posts one comment naming why; event text is data.** Each
- * refusal arm — `HARNESS_REMOTE_STOP`, a trigger the configuration does not turn on, a closed issue,
- * `ghost`, an unlisted bot, a `read` answer, a failed permission call and a failed run-history listing —
- * is driven here, and a body
+ * **The rule these tests exist to enforce: only a write-or-admin human `HARNESS_RUN_ACTORS` admits, or a
+ * listed bot, starts a run; every refusal sends no `workflow run` and posts one comment naming why; event
+ * text is data.** Each refusal arm — `HARNESS_REMOTE_STOP`, a trigger the configuration does not turn on,
+ * a closed issue, `ghost`, an unlisted bot, a `read` answer, a failed permission call, a writer the
+ * allow-list does not admit and a failed run-history listing — is driven here. The suite's builders set
+ * the list to `*`, today's meaning; the allow-list cases override it, covering trimmed case-insensitive
+ * entries, an unset list admitting a `User` owner alone and nobody otherwise, and a dispatch's `User`
+ * sender held to the list where a `Bot` sender is not. A body
  * carrying shell syntax is committed byte for byte with nothing executed. A dispatch event has no issue,
  * so its cases assert feedback in the step summary and no `issue` call at all. With `HARNESS_TRIGGER_LABEL`
  * empty — only the previous release's workflow passes it so — the legacy label `harness` starts a run
@@ -171,6 +174,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
         HARNESS_REMOTE_STOP: '',
         HARNESS_TRIGGER_LABEL: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
+        HARNESS_RUN_ACTORS: '*',
         HARNESS_TRIGGER_LOOKUP_SECS: '0',
         ...env,
       });
@@ -203,6 +207,7 @@ async function triggerFixture(t, { forge = 'github' } = {}) {
         HARNESS_REMOTE_STOP: '',
         HARNESS_TRIGGER_LABEL: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
+        HARNESS_RUN_ACTORS: '*',
         HARNESS_TRIGGER_LOOKUP_SECS: '0',
         ...env,
       });
@@ -352,6 +357,53 @@ test('a bot listed in HARNESS_TRIGGER_ALLOWED_BOTS starts a run without a permis
 test('a failing permission call is refused, never a pass', async (t) => {
   const f = await triggerFixture(t);
   assertRefused(f, await f.trigger({}, {}, { alice: 'FAIL' }), /could not confirm write access/);
+});
+
+test('a writer not on HARNESS_RUN_ACTORS is refused after the permission call', async (t) => {
+  const f = await triggerFixture(t);
+  const calls = assertRefused(f, await f.trigger({}, { HARNESS_RUN_ACTORS: 'bob, carol' }), /HARNESS_RUN_ACTORS/);
+  assert.equal(permissionCalls(calls).length, 1);
+});
+
+test('HARNESS_RUN_ACTORS entries are trimmed and matched case-insensitively', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.trigger({}, { HARNESS_RUN_ACTORS: ' Alice ,bob' });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(dispatches(f.calls()).length, 1);
+});
+
+test('an unset HARNESS_RUN_ACTORS admits a User owner alone, and names the owner to anyone else', async (t) => {
+  const f = await triggerFixture(t);
+  const repository = { owner: { login: 'alice', type: 'User' } };
+  const owner = await f.trigger({ repository }, { HARNESS_RUN_ACTORS: '' });
+  assert.equal(owner.status, 0, `${owner.stdout}\n${owner.stderr}`);
+  assert.equal(dispatches(f.calls()).length, 1);
+
+  const g = await triggerFixture(t);
+  assertRefused(
+    g,
+    await g.trigger({ repository, sender: { login: 'bob', type: 'User' } }, { HARNESS_RUN_ACTORS: '' }, { bob: 'write' }),
+    /@alice/,
+  );
+});
+
+test('an unset HARNESS_RUN_ACTORS on an organisation repository admits nobody, saying to set it or *', async (t) => {
+  const f = await triggerFixture(t);
+  assertRefused(
+    f,
+    await f.trigger({ repository: { owner: { login: 'octo', type: 'Organization' } } }, { HARNESS_RUN_ACTORS: '' }),
+    /HARNESS_RUN_ACTORS.*`\*`/s,
+  );
+});
+
+test('an unset HARNESS_RUN_ACTORS with no repository in the event fails closed', async (t) => {
+  const f = await triggerFixture(t);
+  assertRefused(f, await f.trigger({}, { HARNESS_RUN_ACTORS: '' }), /HARNESS_RUN_ACTORS/);
+});
+
+test('a read labeller on HARNESS_RUN_ACTORS is still refused, naming write access', async (t) => {
+  const f = await triggerFixture(t);
+  assertRefused(f, await f.trigger({}, { HARNESS_RUN_ACTORS: 'alice' }, { alice: 'read' }), /write access/);
 });
 
 test('HARNESS_REMOTE_STOP refuses every start', async (t) => {
@@ -564,4 +616,38 @@ test('a dispatch whose title has no slug starts on task_<GITHUB_RUN_ID>', async 
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.deepEqual(dispatches(f.calls()).map((call) => call.args[4]), ['task_4242']);
   assert.match(await f.committedPrompt('task_4242'), /^# 🚀🚀\n\nx\n\n---\n\nStarted by a repository_dispatch event of type `harness-task` at /);
+});
+
+test('a dispatch holds a User sender to HARNESS_RUN_ACTORS, and lets a Bot sender through', async (t) => {
+  const payload = { action: 'harness-task', client_payload: { title: TITLE, body: 'x' } };
+  const env = { HARNESS_RUN_ACTORS: 'alice' };
+
+  const refused = await triggerFixture(t);
+  const result = await refused.dispatch({ ...payload, sender: { login: 'mallory', type: 'User' } }, env);
+  assert.equal(result.status, 2, `${result.stdout}\n${result.stderr}`);
+  assert.deepEqual(dispatches(refused.calls()), []);
+  assert.deepEqual(permissionCalls(refused.calls()), []);
+  assert.match(refused.summary(), /No run started/);
+  assert.match(refused.summary(), /HARNESS_RUN_ACTORS/);
+
+  const listed = await triggerFixture(t);
+  const started = await listed.dispatch({ ...payload, sender: { login: 'Alice', type: 'User' } }, env);
+  assert.equal(started.status, 0, `${started.stdout}\n${started.stderr}`);
+  assert.equal(dispatches(listed.calls()).length, 1);
+
+  const bot = await triggerFixture(t);
+  const botStarted = await bot.dispatch({ ...payload, sender: { login: 'helper[bot]', type: 'Bot' } }, env);
+  assert.equal(botStarted.status, 0, `${botStarted.stdout}\n${botStarted.stderr}`);
+  assert.equal(dispatches(bot.calls()).length, 1);
+});
+
+test('a dispatch whose sender carries no type fails closed unless the list is *', async (t) => {
+  const f = await triggerFixture(t);
+  const result = await f.dispatch(
+    { action: 'harness-task', client_payload: { title: TITLE, body: 'x' }, sender: { login: 'alice' } },
+    { HARNESS_RUN_ACTORS: 'alice' },
+  );
+  assert.equal(result.status, 2, `${result.stdout}\n${result.stderr}`);
+  assert.deepEqual(dispatches(f.calls()), []);
+  assert.match(f.summary(), /HARNESS_RUN_ACTORS/);
 });

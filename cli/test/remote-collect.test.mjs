@@ -177,6 +177,7 @@ async function collectFixture(t) {
         RUNNER_TEMP: runnerTemp,
         HARNESS_REMOTE_STOP: '',
         HARNESS_TRIGGER_ALLOWED_BOTS: '',
+        HARNESS_RUN_ACTORS: '*',
         HARNESS_TRIGGER_LOOKUP_SECS: '0',
         STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
         STUB_RUN_LIST: JSON.stringify([THIS_RUN]),
