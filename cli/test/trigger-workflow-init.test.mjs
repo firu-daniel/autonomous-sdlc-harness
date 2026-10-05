@@ -161,6 +161,24 @@ test('init writes the trigger and control workflows only for forge github with r
     assert.equal(text(dir, TRIGGER_FILE), TRIGGER_TEMPLATE, '--force did not restore the template');
   });
 
+  await t.test('forge absent with github-actions: --upgrade-workflows names HARNESS_RUN_ACTORS but neither the trigger nor init --force', async (subtest) => {
+    const dir = await wiredFixture(subtest, { target: 'github-actions' });
+    await initOk(dir);
+    writeFileSync(
+      join(dir, RUN_FILE),
+      text(dir, RUN_FILE).replace(/HARNESS_CLI_VERSION: '[^']*'/g, "HARNESS_CLI_VERSION: '0.0.1'"),
+      'utf8',
+    );
+    const { stdout } = await initOk(dir, ['--upgrade-workflows']);
+    assert.ok(stdout.includes('== workflow upgrade'), `the upgrade did not run:\n${stdout}`);
+    const afterHeading = stdout.slice(stdout.indexOf('== workflow upgrade') + 1);
+    const nextHeading = afterHeading.indexOf('\n== ');
+    const upgradeBlock = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
+    assert.ok(upgradeBlock.includes('HARNESS_RUN_ACTORS'), `the upgrade block does not name HARNESS_RUN_ACTORS:\n${stdout}`);
+    assert.ok(!upgradeBlock.includes('harness-trigger.yml'), `the upgrade block names harness-trigger.yml with no forge workflows:\n${stdout}`);
+    assert.ok(!upgradeBlock.includes('init --force'), `the upgrade block sends an adopter with no forge workflows to init --force:\n${stdout}`);
+  });
+
   await t.test('forge github with execution.target local: neither forge workflow written', async (subtest) => {
     const dir = await wiredFixture(subtest, { forge: 'github', target: 'local' });
     await initOk(dir);

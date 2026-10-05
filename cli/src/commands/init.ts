@@ -2508,6 +2508,7 @@ async function run(ctx: CommandContext): Promise<number> {
       defaultBranch: effective.defaultBranch,
       workflowPaths: freshWorkflows,
       mergedPaths,
+      trigger: workflows.trigger,
     });
   }
   const controlEffect = applied.find(
@@ -2555,9 +2556,11 @@ function reportWorkflowUpgrade(
     readonly workflowPaths: readonly string[];
     /** Every in-repository file a merge policy created or merged into, repo-relative. */
     readonly mergedPaths: readonly string[];
+    /** Whether the forge workflows apply, so the trigger and the comment commands exist. */
+    readonly trigger: boolean;
   },
 ): void {
-  const { upgrade, replacedWorkflows, dryRun, defaultBranch, workflowPaths, mergedPaths } = options;
+  const { upgrade, replacedWorkflows, dryRun, defaultBranch, workflowPaths, mergedPaths, trigger } = options;
   if (!upgrade.replaced) {
     ctx.report.info(
       `${UPGRADE_WORKFLOWS_FLAG}: the workflows are already rendered for ${upgrade.to}, so nothing was upgraded.`,
@@ -2599,9 +2602,11 @@ function reportWorkflowUpgrade(
     `The re-rendered ${WORKFLOW_RUN_FILE} refuses to launch for a person the repository variable ${RUN_ACTORS_VARIABLE} does not admit, and an unset list admits the repository owner alone, or nobody in an organisation-owned repository. Set it before the next run:`,
   );
   command(`gh variable set ${RUN_ACTORS_VARIABLE} --body <login,...>`);
-  ctx.report.info(
-    `${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE} and the scripts carry the list into the trigger and the comment commands only once init --force has replaced them.`,
-  );
+  if (trigger) {
+    ctx.report.info(
+      `${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE} and the scripts carry the list into the trigger and the comment commands only once init --force has replaced them.`,
+    );
+  }
   ctx.report.info('');
   ctx.report.info(IN_FLIGHT_RUNS_NOTE);
 }
