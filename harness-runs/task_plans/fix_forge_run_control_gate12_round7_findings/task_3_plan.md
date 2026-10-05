@@ -58,3 +58,8 @@ This task restates that contract so it never re-derives the decision. Which file
 - `bash scripts/typecheck.sh` exits 0.
 - The story index's first `Top risks:` entry is an uncommitted repair. Cases 1 to 3 together show that every printed route to a commit names `.github/workflows/harness-control.yml`, whichever block prints it. Read their assertions for that, not only for the explanation text.
 - Grep `cli/src/commands/init.ts` for the route sentence's words (`if: >-`, `init --force`), and find them only through `unparseableControlRoute`.
+
+**Deviations from plan:**
+- The repair's commit block carries `WORKFLOW_SCOPE_REASON` and `defaultBranchPushReason` at the end of its lead-in sentence, before the commands, rather than after the last command. That is where `reportWorkflowUpgrade` and `reportGithubSteps` place the same two reasons.
+- The `'edited'` warning prints only when the plan's effect on `harness-control.yml` is `kept`. Under `--force` the edited copy is replaced after a `.bak`, so the warning's "this run kept the edited copy" would be false.
+- The grep for `init --force` in `cli/src/commands/init.ts` finds three hits from before this task: `answeredNoneResidue`'s wording and two comments in the `claudeMdBackupExisted` reasoning. None of them is the route sentence, and this task adds no new hit.

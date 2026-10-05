@@ -237,3 +237,88 @@ test('any init repairs a byte-identical 0.6.1 harness-control.yml and keeps ever
     assert.deepEqual(await snapshotTree(dir), before, '--dry-run changed the tree');
   });
 });
+
+test('init reports the control-workflow repair, and warns on an edited 0.6.1 copy', async (t) => {
+  const REPAIR_TEXT = 'which GitHub cannot parse, so no comment, review, close or deletion reached the harness';
+  const DIFF_LINE = `git diff --no-index ${CONTROL_FILE}.bak ${CONTROL_FILE}`;
+  const CONTROL_ADD = `git add ${CONTROL_FILE}`;
+
+  async function controlFixture(subtest, content) {
+    const dir = await wiredFixture(subtest, { forge: 'github', target: 'github-actions' });
+    await initOk(dir);
+    writeFileSync(join(dir, CONTROL_FILE), content, 'utf8');
+    return dir;
+  }
+
+  /** Every trimmed stdout line that starts `git add `. */
+  function addLines(stdout) {
+    return stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('git add '));
+  }
+
+  await t.test('plain init over the 0.6.1 copy: explanation, diff line and its own git add; no first-setup block', async (subtest) => {
+    const dir = await controlFixture(subtest, CONTROL_0_6_1);
+    const { stdout } = await initOk(dir);
+    assert.ok(stdout.includes(REPAIR_TEXT), `no repair explanation:\n${stdout}`);
+    assert.ok(stdout.includes('re-rendered it'), `the repair is not worded as done:\n${stdout}`);
+    assert.ok(stdout.split('\n').some((line) => line.trim() === DIFF_LINE), `no diff line of its own:\n${stdout}`);
+    assert.deepEqual(addLines(stdout), [CONTROL_ADD], `the commit route does not name the control file alone:\n${stdout}`);
+    assert.ok(stdout.includes('git commit -m "Repair the harness control workflow"'), `no repair commit:\n${stdout}`);
+    assert.ok(!stdout.includes('gh secret set'), `a repair alone printed the first-setup block:\n${stdout}`);
+  });
+
+  await t.test("--upgrade-workflows with an older pin: the upgrade block's git add names the control file, the repair prints none", async (subtest) => {
+    const dir = await controlFixture(subtest, CONTROL_0_6_1);
+    writeFileSync(
+      join(dir, RUN_FILE),
+      text(dir, RUN_FILE).replace(/HARNESS_CLI_VERSION: '[^']*'/g, "HARNESS_CLI_VERSION: '0.0.1'"),
+      'utf8',
+    );
+    const { stdout } = await initOk(dir, ['--upgrade-workflows']);
+    assert.ok(stdout.includes('== workflow upgrade'), `the upgrade did not run:\n${stdout}`);
+    assert.ok(stdout.includes(REPAIR_TEXT), `no repair explanation:\n${stdout}`);
+    const adds = addLines(stdout);
+    assert.equal(adds.length, 1, `expected one git add line:\n${stdout}`);
+    assert.ok(adds[0].split(' ').includes(CONTROL_FILE), `the upgrade's git add does not name ${CONTROL_FILE}: ${adds[0]}`);
+    assert.ok(!stdout.includes('Repair the harness control workflow'), `the repair printed its own commit:\n${stdout}`);
+  });
+
+  await t.test('--upgrade-workflows with the pin current: the repair block prints its own git add', async (subtest) => {
+    const dir = await controlFixture(subtest, CONTROL_0_6_1);
+    const { stdout } = await initOk(dir, ['--upgrade-workflows']);
+    assert.ok(stdout.includes('nothing was upgraded'), `the upgrade was not a no-op:\n${stdout}`);
+    assert.deepEqual(addLines(stdout), [CONTROL_ADD], `the repair's git add is missing:\n${stdout}`);
+  });
+
+  await t.test('--dry-run: worded as would, and the tree is unchanged', async (subtest) => {
+    const dir = await controlFixture(subtest, CONTROL_0_6_1);
+    const before = await snapshotTree(dir);
+    const { stdout } = await initOk(dir, ['--dry-run']);
+    assert.ok(stdout.includes('would re-render it'), `the dry run does not say would:\n${stdout}`);
+    assert.ok(stdout.includes('would be kept beside it as a .bak'), `the dry run does not say would:\n${stdout}`);
+    assert.deepEqual(await snapshotTree(dir), before, '--dry-run changed the tree');
+  });
+
+  await t.test('an edited 0.6.1 copy: exit 0, one warning naming the file and the route, nothing replaced', async (subtest) => {
+    const edited = `${CONTROL_0_6_1}# tuned by hand\n`;
+    const dir = await controlFixture(subtest, edited);
+    const { stdout, stderr } = await initOk(dir);
+    const warnings = stderr.split('\n').filter((line) => line.includes(CONTROL_FILE));
+    assert.equal(warnings.length, 1, `expected one warning naming ${CONTROL_FILE}:\n${stderr}`);
+    assert.ok(warnings[0].includes('if: >-'), `the warning does not name if: >-: ${warnings[0]}`);
+    assert.ok(warnings[0].includes('init --force'), `the warning does not name init --force: ${warnings[0]}`);
+    assert.ok(!stdout.includes(REPAIR_TEXT), `an edited copy printed the repair block:\n${stdout}`);
+    assert.equal(text(dir, CONTROL_FILE), edited, 'the edited copy was rewritten');
+    assert.ok(!existsSync(join(dir, `${CONTROL_FILE}.bak`)), 'an edited copy left a .bak');
+  });
+
+  await t.test('the current template on disk: no repair or warning text', async (subtest) => {
+    const dir = await controlFixture(subtest, CONTROL_TEMPLATE);
+    const { stdout, stderr } = await initOk(dir);
+    assert.ok(!stdout.includes('workflow repair'), `the current template printed a repair:\n${stdout}`);
+    assert.ok(!stdout.includes(DIFF_LINE), `the current template printed a diff line:\n${stdout}`);
+    assert.ok(!stderr.includes(CONTROL_FILE), `the current template printed a warning:\n${stderr}`);
+  });
+});
