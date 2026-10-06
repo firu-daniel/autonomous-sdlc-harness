@@ -15,8 +15,8 @@ Source: harness-runs/task_prompts/fix_forge_run_control_gate12_round8_findings_t
 - [x] A.      Tasks implemented (story-index readiness all [x])
 - [-] A1.5g.  Branch parity review resolved (index committed — or PASS with no findings, no file written)
 - [-] A1.5f.  Parity findings fixed (findings index all [x] — or no index, the review having passed clean)
-- [ ] A2g.    Branch architecture review resolved (index committed — or PASS with no findings, no file written)
-- [ ] A2f.    Architecture findings fixed (findings index all [x] — or no index, the review having passed clean)
+- [x] A2g.    Branch architecture review resolved (index committed — or PASS with no findings, no file written)
+- [x] A2f.    Architecture findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [ ] Bg.     Branch review generated & committed
 - [ ] Bm.     Review-plan meta-review PASS (B.2)
 - [ ] C.      Code-review findings fixed
