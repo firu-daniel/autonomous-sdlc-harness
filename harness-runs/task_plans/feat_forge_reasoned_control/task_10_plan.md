@@ -87,3 +87,8 @@ Cite `docs/remote-execution.md` → `## 11. Security` rather than restating it. 
   - it finds the `github.event_name == 'issue_comment' && secrets.` expression and `Fetch the pinned plugin` in `cli/templates/github/workflows/harness-control.yml`;
   - it finds the data-not-instructions statement in `plugin/instructions/mention_reading.md`, and `plugin/commands/harness-read-mention.md` carries no `tools:` line (`grep -n '^tools:'` finds none), so §6 attributes the closure to the session flags alone.
 - No figure in §6 or §8 is a timing or a cost measured by a run (lessons ledger, *Evidence and measurement*). The budget is named as a bound, not as a measured cost.
+
+**Deviations from plan:**
+
+- The `--add-dir` and `--tools` help lines carry no text in the plan; they are quoted from `claude --help` as run during implementation on 2026-10-07, version not recorded, and the §8 row dates them separately from the planning machine's lines.
+- The plan's §8 refusal quote *"not one the harness carries out"* is not text `remote-run.sh` emits; the row quotes the two refusals `control_mention` actually posts: *"carries no decision object"* and *"is not a valid decision"*.
