@@ -2722,8 +2722,9 @@ function writersOf(stdout: string): { readonly logins: readonly string[]; readon
  * - the retention read refused (typically HTTP 403: the endpoint needs admin access) is a note too —
  *   the read is best-effort, and a collaborator without admin can still run remotely. A refused
  *   pull-request-setting read is a note on the same terms.
- * - the pull-request setting off with `HARNESS_GIT_TOKEN` set is a note: `deliver` opens the pull
- *   request with that token instead.
+ * - the pull-request setting off with `HARNESS_GIT_TOKEN` set is a note: the `open` step at the run's
+ *   start opens the pull request with that token instead, and `deliver` opens one only when none is
+ *   open at completion.
  * - all three trigger answers positive — both workflows known and the label present — is confirmed on
  *   every outcome that reaches the trigger reads, `fail` and `warn` included, so an unrelated finding
  *   never hides it; any answer not positive is already among the warnings, and a forge workflow
@@ -3007,11 +3008,11 @@ const REMOTE_GITHUB_CHECK: Check = {
         if (allowed === undefined) {
           warnings.push(`cannot tell whether a run's own token may open its pull request: ${prSetting.call} answered in a shape this check does not read`);
         } else if (!allowed && secretNames === undefined) {
-          warnings.push(`${PR_CREATE_SETTING} is off, and whether ${GIT_TOKEN_SECRET} is set could not be read, so a completed run may not be able to open its draft pull request: turn the setting on under ${PR_CREATE_SETTING_PATH}, or confirm ${GIT_TOKEN_SECRET} is a repository secret`);
+          warnings.push(`${PR_CREATE_SETTING} is off, and whether ${GIT_TOKEN_SECRET} is set could not be read, so a run may not be able to open its draft pull request when it starts: turn the setting on under ${PR_CREATE_SETTING_PATH}, or confirm ${GIT_TOKEN_SECRET} is a repository secret`);
         } else if (!allowed && secretNames?.has(GIT_TOKEN_SECRET) === true) {
-          notes.push(`${PR_CREATE_SETTING} is off, so a completed run opens its draft pull request with ${GIT_TOKEN_SECRET}`);
+          notes.push(`${PR_CREATE_SETTING} is off, so a run opens its draft pull request with ${GIT_TOKEN_SECRET}`);
         } else if (!allowed) {
-          warnings.push(`${PR_CREATE_SETTING} is off and ${GIT_TOKEN_SECRET} is not a repository secret, so a completed run cannot open its draft pull request with the job's token: turn it on under ${PR_CREATE_SETTING_PATH}, or set ${GIT_TOKEN_SECRET} with \`gh secret set ${GIT_TOKEN_SECRET}\``);
+          warnings.push(`${PR_CREATE_SETTING} is off and ${GIT_TOKEN_SECRET} is not a repository secret, so a run cannot open its draft pull request with the job's token: turn it on under ${PR_CREATE_SETTING_PATH}, or set ${GIT_TOKEN_SECRET} with \`gh secret set ${GIT_TOKEN_SECRET}\``);
         }
       }
     }
@@ -3140,7 +3141,7 @@ const FORGE_CHECK: Check = {
       ? `the ${REMOTE_GITHUB_CHECK.id} check above reports what GitHub says`
       : `\`${CLI} doctor --check-github\` asks GitHub`;
     return pass(
-      `${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; a \`${COMMAND_HANDLE} <verb>\` comment (${nameList([...COMMAND_VERBS])}) steers it; a review requesting changes on the run's pull request starts a user-review round; and a completed run opens a draft pull request. What this cannot see lives on GitHub — the label, the workflows GitHub knows (${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE}) and the pull-request setting; ${asked}`,
+      `${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; a \`${COMMAND_HANDLE} <verb>\` comment (${nameList([...COMMAND_VERBS])}) steers it; a review requesting changes on the run's pull request starts a user-review round; and a run opens a draft pull request when it starts, marked ready for review when it completes. What this cannot see lives on GitHub — the label, the workflows GitHub knows (${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE}) and the pull-request setting; ${asked}`,
     );
   },
 };

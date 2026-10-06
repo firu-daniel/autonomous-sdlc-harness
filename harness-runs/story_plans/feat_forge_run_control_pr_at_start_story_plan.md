@@ -35,7 +35,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control_pr_at
 8. [x] **Task 8** — `deliver`: reply to and resolve the review threads a round implemented _(layer: cli)_ _(points: 20)_
 9. [x] **Task 9** — `report progress`: one phase-progress comment per run or round, edited in place _(layer: cli)_ _(points: 15)_
 10. [x] **Task 10** — The job's supervision loop reports a phase change from the ledger _(layer: cli)_ _(points: 15)_
-11. [ ] **Task 11** — Reword `doctor`'s and `init`'s pull-request-setting messages for a pull request that opens at start _(layer: cli)_ _(points: 10)_
+11. [x] **Task 11** — Reword `doctor`'s and `init`'s pull-request-setting messages for a pull request that opens at start _(layer: cli)_ _(points: 10)_
 12. [ ] **Task 12** — The user-review fix plan records the review-comment ids of each finding _(layer: plugin)_ _(points: 15)_
 13. [ ] **Task 13** — Plugin flow documents: the pull request opens at start, and the ledger's ids have a shell reader _(layer: plugin)_ _(points: 10)_
 14. [ ] **Task 14** — Schema and `docs/config.md`: `execution.progressComments`, and `forge`'s description _(layer: general)_ _(points: 10)_
