@@ -60,8 +60,11 @@
 # the two never place a round at once; and the settledness test reads "the
 # `run` job is completed", which no step inside that job could see. Under
 # `!cancelled()` a failed `run` job still reaches it, and the run's state bundle
-# decides whether the run ended or only paused or parked; a cancelled or
-# stopped run skips it. The group name mirrors harness-control.yml's, and
+# decides whether the run ended or only paused or parked. A `run` job GitHub
+# cancelled before any step ran, for example one no runner acquired, reaches it
+# too, and `collect` reports that run once (remote-run.sh's header, its
+# `collect` paragraph), because the job itself could report nothing; a workflow
+# run cancelled or stopped as a whole skips it. The group name mirrors harness-control.yml's, and
 # RUN_JOB_NAME in remote-run.sh mirrors the `run` job's key (DECLARED MIRRORS
 # above). It reads no secret: its own token pushes the round, dispatches it and
 # comments. It checks out the default branch, as harness-control.yml's review
@@ -364,7 +367,7 @@ jobs:
           else
             why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
           fi
-          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 9)."
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
           exit 1
 
       - name: Compute the time budget
@@ -634,7 +637,7 @@ jobs:
           else
             why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
           fi
-          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 9)."
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
           exit 1
 
       - name: Check out the default branch for collecting

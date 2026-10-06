@@ -66,7 +66,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 9. [x] **Task 9** — The poller waits on a listed bundle it cannot download, bounded, and skips a run that never started _(layer: cli)_ _(points: 18)_
 10. [x] **Task 10** — `control` accepts a branch the issue's `started` marker names, or whose `harness run` is queued or in progress _(layer: cli)_ _(points: 15)_
 11. [x] **Task 11** — The job logs how long it waited for a runner, and notes a long wait on its `resumed` comment _(layer: cli)_ _(points: 10)_
-12. [ ] **Task 12** — `harness-run.yml`: the gate cites §7 step 4 and §11, and the header says `collect` reports a job that never started _(layer: cli)_ _(points: 8)_
+12. [x] **Task 12** — `harness-run.yml`: the gate cites §7 step 4 and §11, and the header says `collect` reports a job that never started _(layer: cli)_ _(points: 8)_
 13. [ ] **Task 16** — `branch-resume`: a `killed` run whose job GitHub never started, a first run included _(layer: plugin)_ _(points: 5)_
 14. [ ] **Task 13** — `docs/remote-execution.md`: the poll bound, push retries, jobs GitHub never starts, what `killed` covers, the runner wait, and round 8's verified rows _(layer: general)_ _(points: 18)_
 15. [ ] **Task 14** — `docs/github-run-control.md`: branch recognition, the recorded engine, the push rule, the `not_started` comment, and §8 _(layer: general)_ _(points: 15)_
