@@ -366,7 +366,9 @@
 #     `job: control poll of '<branch>' since <since> (exit <rc>): <last line>`.
 #   * THE RUNNER WAIT: the job logs HARNESS_JOB_STARTED_EPOCH less this run's
 #     `createdAt` — read once per job, the same read the control poll's
-#     starting bound takes. A wait of at least RUNNER_WAIT_NOTE_SECS is noted on
+#     starting bound takes. On a re-run attempt (`GITHUB_RUN_ATTEMPT` above 1)
+#     that `createdAt` is the first attempt's, so the wait is not measured and
+#     no note is added. A wait of at least RUNNER_WAIT_NOTE_SECS is noted on
 #     the job's `resumed` comment. The budget already starts at
 #     HARNESS_JOB_STARTED_EPOCH, so a wait costs no budget.
 #   * THE DECISION, when the run leaves `running`: `paused` for `budget` ->
@@ -4059,6 +4061,10 @@ job_runner_wait() {
   fi
   if [ -z "$JOB_RUN_CREATED_AT" ]; then
     log "job: this run's createdAt could not be read — the runner wait is unknown"
+    return 0
+  fi
+  if [ "${GITHUB_RUN_ATTEMPT:-1}" != 1 ]; then
+    log "job: run attempt ${GITHUB_RUN_ATTEMPT} — this run's createdAt is its first attempt's, so the runner wait is not measured"
     return 0
   fi
   wait=$((JOB_START_EPOCH - JOB_RUN_CREATED_AT))

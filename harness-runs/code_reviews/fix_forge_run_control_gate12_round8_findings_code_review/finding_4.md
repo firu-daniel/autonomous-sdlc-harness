@@ -20,3 +20,5 @@
   - add a subtest with `GITHUB_RUN_ATTEMPT: '2'` and a `createdAt` well over `RUNNER_WAIT_NOTE_SECS` before the job start. Assert the `run attempt 2` log line, and that the `resumed` report carries no `--note`.
 
   Run `npm test --workspace cli -- test/watcher-remote-job.test.mjs` from the repository root. That is the only test this fix runs.
+
+**Deviations from plan:** The new subtest asserts the posted `resumed` body carries no `GitHub took` text rather than inspecting a `--note` argument, matching how the existing subtests observe the note (`j.ghBodies()`); it also asserts no `job: waited …s for a runner` line. The `docs/remote-execution.md` sub-step is outside the `cli` layer's path and was left for the layer that owns it; the `general` layer applied it as written.

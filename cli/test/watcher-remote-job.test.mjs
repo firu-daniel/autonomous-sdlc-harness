@@ -1019,6 +1019,7 @@ test('runner wait: logged from the run createdAt, and noted on a resumed comment
         HARNESS_INPUT_CHAIN: '0',
         HARNESS_JOB_STARTED_EPOCH: String(start),
         GITHUB_RUN_ID: '77',
+        GITHUB_RUN_ATTEMPT: '1',
         GITHUB_REPOSITORY: FORGE_REPOSITORY,
         STUB_RUN_VIEW: JSON.stringify({ createdAt: iso(start - waitSecs) }),
       });
@@ -1032,10 +1033,32 @@ test('runner wait: logged from the run createdAt, and noted on a resumed comment
     });
   }
 
+  await t.test('a re-run attempt: the wait is not measured and not noted', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    await wireForge(j, 'github');
+    await j.restoreStatus({ pause_reason: 'user' });
+    const start = nowSecs();
+    const result = await j.job([j.branch, 'task', 'pause'], {
+      HARNESS_INPUT_CHAIN: '0',
+      HARNESS_JOB_STARTED_EPOCH: String(start),
+      GITHUB_RUN_ID: '77',
+      GITHUB_RUN_ATTEMPT: '2',
+      GITHUB_REPOSITORY: FORGE_REPOSITORY,
+      STUB_RUN_VIEW: JSON.stringify({ createdAt: iso(start - 18720) }),
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, /job: run attempt 2 — this run's createdAt is its first attempt's, so the runner wait is not measured/);
+    assert.doesNotMatch(result.stdout, /job: waited \d+s for a runner/);
+    const resumed = j.ghBodies().filter((b) => b.includes('resumed.'));
+    assert.equal(resumed.length, 1, j.ghBodies().join('\n---\n'));
+    assert.equal(resumed[0].includes('GitHub took'), false, resumed[0]);
+  });
+
   await t.test('no GITHUB_RUN_ID: the wait is unknown', async (t) => {
     const j = await createJobFixture(t);
     if (j === null) return;
-    const result = await j.job([j.branch, 'task', 'none'], { HARNESS_JOB_STARTED_EPOCH: String(nowSecs()) });
+    const result = await j.job([j.branch, 'task', 'none'], { HARNESS_JOB_STARTED_EPOCH: String(nowSecs()), GITHUB_RUN_ATTEMPT: '1' });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.match(result.stdout, /job: this run's createdAt could not be read — the runner wait is unknown/);
     assert.equal(j.ghCalls().some((c) => c.startsWith('run view')), false, j.ghCalls().join('\n'));
