@@ -19,3 +19,6 @@ review_fail "pushing $branch: the remote refused the push (push-branch.sh's line
 ```
 
 No test asserts on the parenthetical (`cli/test/remote-start.test.mjs` and `cli/test/remote-collect.test.mjs` match only "the remote refused the push"). This fix edits no test file and runs no test; the full suite runs in the Run gates phase.
+
+**Deviations from plan:**
+- A `bash -n` syntax check of `cli/templates/scripts/remote-run.sh` was attempted and refused by the permission layer; that the two edited lines still parse rests on reading them — each apostrophe sits inside a double-quoted string — not on execution.

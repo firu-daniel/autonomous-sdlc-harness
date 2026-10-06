@@ -3342,7 +3342,7 @@ verb_start() {
   [ "$status" -ne 2 ] \
     || placement_fail "pushing $branch: origin/$branch moved to $HR_PUSH_REMOTE_TIP, which this branch does not have (something else pushed)"
   [ "$status" -eq 0 ] \
-    || placement_fail "pushing $branch: the remote refused the push (push-branch.sh names the refusal above)"
+    || placement_fail "pushing $branch: the remote refused the push (push-branch.sh's lines in this job's log name why)"
   start_remove_copy
   trap - EXIT
 
@@ -3500,7 +3500,7 @@ NAMES
   [ "$status" -ne 2 ] \
     || review_fail "pushing $branch: origin/$branch moved to $HR_PUSH_REMOTE_TIP, which this branch does not have (something else pushed)"
   [ "$status" -eq 0 ] \
-    || review_fail "pushing $branch: the remote refused the push (push-branch.sh names the refusal above)"
+    || review_fail "pushing $branch: the remote refused the push (push-branch.sh's lines in this job's log name why)"
   pushed=$(git -C "$worktree" rev-parse HEAD 2>/dev/null) || pushed=""
   if [ "$use_mirror" -eq 0 ]; then
     start_remove_copy
