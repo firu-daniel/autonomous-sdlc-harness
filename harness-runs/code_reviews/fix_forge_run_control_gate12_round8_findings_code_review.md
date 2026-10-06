@@ -32,7 +32,7 @@ Each entry resolves to `harness-runs/code_reviews/fix_forge_run_control_gate12_r
 
 1. [x] **Finding 7** — Remove the claim that `answer` works on a run whose job never started from `github-run-control.md`'s command table and its `## 8.` row _(layer: general)_
 2. [x] **Finding 8** — Repoint the refused-push reason's "names the refusal above" at the job log _(layer: cli)_
-3. [ ] **Finding 6** — Drop "from its committed ledger" from the `not_started` comment's `resume` way on _(layer: cli)_
+3. [x] **Finding 6** — Drop "from its committed ledger" from the `not_started` comment's `resume` way on _(layer: cli)_
 4. [ ] **Finding 5** — Name `branch-resume` in `collect`'s `not_started` push only when the state is `paused` _(layer: cli)_
 5. [ ] **Finding 2** — `hr_push_landed` answers `0` when its fetch shows origin equal to `HEAD` _(layer: cli)_
 6. [ ] **Finding 1** — `sync` writes the recovered engine for a run GitHub never started _(layer: cli)_

@@ -4544,7 +4544,7 @@ forge_report() {
     not_started)
       text="GitHub did not start the job of the harness run on \`$br\`, so nothing ran and the branch is unchanged."
       if [ "$state" = paused ] && [ -n "$REPORT_NOT_STARTED_ENGINE" ]; then
-        text="$text Comment \`${COMMAND_HANDLE} resume\` to start it again from its committed ledger."
+        text="$text Comment \`${COMMAND_HANDLE} resume\` to start it again."
       else
         # A job that never started uploaded no artifact to read an engine from.
         route=$(hr_github_resume_route "$br" "${REPORT_NOT_STARTED_ENGINE:-<task, user_review or docs: the one the run was started with>}")

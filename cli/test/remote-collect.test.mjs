@@ -415,7 +415,7 @@ test('a run whose job never started, with a pull request and a recorded engine: 
   const before = await f.originRefs();
   const result = await f.collect(neverStarted({ olderBundle: true, comments: { 12: [botComment('round')] } }));
   const body = await assertNotStarted(f, result, before, 12);
-  assert.ok(body.includes('Comment `@sdlc-harness resume` to start it again from its committed ledger.'), body);
+  assert.ok(body.includes('Comment `@sdlc-harness resume` to start it again.'), body);
   assert.ok(!body.includes('Run workflow'), body);
   const labels = labelCalls(f.calls());
   assert.ok(labels.includes(labelOn(12, 'paused')), labels.join('\n'));
