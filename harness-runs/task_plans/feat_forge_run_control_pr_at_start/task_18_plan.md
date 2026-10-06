@@ -25,3 +25,8 @@
 - Run `git grep -n -i -e 'completed run opens' -e 'completed run gets' -e 'completed run cannot' -e 'completed run then cannot' -e 'completed run may not' -e 'a completed run.s draft pull request' -- docs/cli.md docs/watcher.md README.md ARCHITECTURE.md` and find no hit.
 - Grep `docs/cli.md` for each Task 11 message fragment quoted above and find it verbatim.
 - Every fenced command block in the four files is unchanged, as `git diff HEAD -- docs/cli.md docs/watcher.md README.md ARCHITECTURE.md` shows before committing: no hunk touches a fenced line.
+
+**Deviations from plan:**
+
+- `docs/cli.md` `remote-github` bullet: also added the third Task 11 case, setting off with the secret listing unreadable, which **warns** *a run may not be able to open its draft pull request when it starts* (`cli/src/doctor/checks.ts` → the `secretNames === undefined` branch). The plan quotes that fragment for verification but named no site for it.
+- `ARCHITECTURE.md` `forge` paragraph: added `open` to its verb list (*`control`, `report`, `open` and `deliver`*) as well, because that sentence now credits these verbs with opening the pull request at the start, and `open` is the verb that does it.
