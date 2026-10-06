@@ -844,7 +844,8 @@
 #      `engine` when the bundle names `task`, `user_review` or `docs`. A
 #      `mirror` restore places no planning draft
 #   4. no artifact, while some bundle exists (`remote_run_id` is set, or an
-#      older finished run carries one): a job that died before its upload.
+#      older finished run carries one): a job that died before its upload,
+#      or that GitHub never started (the detail says so).
 #      `paused` / `killed`, `remote_run_id` / `remote_run_url` re-pointed at
 #      THIS run, nothing restored — so a later sync with no newer run is case 1
 #   5. no bundle in any run and an empty `remote_run_id`: `failed`. Not
@@ -858,7 +859,11 @@
 # never carries either, because `sync` derives them from the run and its
 # artifact list, never from a bundle. Both are `paused` rather than `failed`
 # because a `failed` record has no resume path, while the ledger on the branch
-# is intact and a resume continues from it.
+# is intact and a resume continues from it. A finished run with no bundle
+# whose `run` job GitHub never started (it ended `cancelled` or `failure` with
+# no step run) maps to the same states as any other run with no bundle:
+# `paused` / `killed` when an older run carries a bundle, else `failed`. Its
+# detail names GitHub's reason instead of "killed, cancelled or replaced".
 #
 # THE WORKFLOW INPUT CONTRACT (the workflow template declares the same inputs):
 #
@@ -1928,6 +1933,54 @@ expired_line() {
   printf '%s' "the state bundle of run $1 expired on $BUNDLE_EXPIRES_AT: resume from the committed ledger with $RESUME_HINT $branch, or re-drop the task"
 }
 
+# run_not_started_var <run_id> — whether GitHub never started the run's
+# RUN_JOB_NAME job: 0 when that job's `conclusion` is `cancelled` or `failure`
+# and its `steps` array is absent or empty, with NOT_STARTED_REASON set; 1 when
+# the job started or none of that name is listed; 2 with GH_ERR set when the
+# jobs lookup failed or was not the expected JSON. Never exits. The reason is
+# the first message of the job's check-run annotations (a job's `id` is its
+# check run's id); that lookup is best-effort, and a failed or empty one falls
+# back to a line naming the conclusion. Replaces GH_OUT.
+NOT_STARTED_REASON=""
+run_not_started_var() {
+  local answer job_id conclusion message
+  NOT_STARTED_REASON=""
+  gh_call api "repos/{owner}/{repo}/actions/runs/$1/jobs" || return 2
+  answer=$(printf '%s' "$GH_OUT" | jq -r --arg n "$RUN_JOB_NAME" '
+    if type == "object" and (.jobs | type) == "array" then
+      ([.jobs[] | select(type == "object" and .name == $n)] | first) as $j
+      | if $j == null then "absent"
+        elif ($j.conclusion == "cancelled" or $j.conclusion == "failure")
+          and (($j.steps // []) | if type == "array" then length else 1 end) == 0
+        then "not_started\t" + ($j.id | tostring) + "\t" + $j.conclusion
+        else "started" end
+    else "invalid" end' 2>/dev/null)
+  case "$answer" in
+    absent|started) return 1 ;;
+    not_started$'\t'*) ;;
+    *) GH_ERR="its job list is not the expected JSON"; return 2 ;;
+  esac
+  answer="${answer#*$'\t'}"
+  job_id="${answer%%$'\t'*}"
+  conclusion="${answer#*$'\t'}"
+  message=""
+  case "$job_id" in
+    ''|*[!0-9]*) ;;
+    *)
+      if gh_call api "repos/{owner}/{repo}/check-runs/$job_id/annotations"; then
+        message=$(printf '%s' "$GH_OUT" | jq -r '
+          [.[]? | .message? | select(type == "string" and length > 0) | split("\n")[0]] | first // ""' 2>/dev/null) || message=""
+      fi
+      ;;
+  esac
+  if [ -n "$message" ]; then
+    NOT_STARTED_REASON="$message"
+  else
+    NOT_STARTED_REASON="its \`$RUN_JOB_NAME\` job ended \`$conclusion\` with no step run"
+  fi
+  return 0
+}
+
 set_or_fail() {
   hr_registry_set "$registry" "$branch" "$1" "$2" || {
     echo "remote-run.sh: writing $1 of $branch to '$registry' failed" >&2
@@ -2046,10 +2099,15 @@ sync_expired() {
 # RS_BUNDLE is then 1. <applied_run_id>, when set, also counts as a bundle
 # existing for case 4. <finished> 1 reads the newest run as finished whatever
 # its `status`: `branch_settled_var` passes it once that run's `run` job has
-# completed. Exits 3 when gh fails, 2 for an unrecognised bundle.
+# completed. RS_RUN_CREATED_AT is the newest run's `createdAt` (ISO 8601).
+# RS_NOT_STARTED is 1 only in cases 4 and 5, when `run_not_started_var` finds
+# GitHub never started that run's RUN_JOB_NAME job. Exits 3 when gh fails, 2
+# for an unrecognised bundle.
 RS_RUNS=""
 RS_RUN_ID=""
 RS_RUN_URL=""
+RS_RUN_CREATED_AT=""
+RS_NOT_STARTED=0
 RS_GH_STATUS=""
 RS_STATE=""
 RS_PAUSE_REASON=""
@@ -2063,7 +2121,8 @@ remote_state() {
   local download="${1-}" applied="${2-}" finished="${3-0}" newest status_file older bundle_exists=0
   RS_RUNS=""; RS_RUN_ID=""; RS_RUN_URL=""; RS_GH_STATUS=""; RS_STATE=""
   RS_PAUSE_REASON=""; RS_DETAIL=""; RS_ENGINE=""; RS_USAGE_RESUME_AT=""
-  RS_PARK_LOOP_CYCLES=""; RS_BUNDLE=0; RS_DOWNLOAD=""
+  RS_PARK_LOOP_CYCLES=""; RS_BUNDLE=0; RS_DOWNLOAD=""; RS_RUN_CREATED_AT=""
+  RS_NOT_STARTED=0
   RS_RUNS=$(titled_runs "harness run $branch") || RS_RUNS='[]'
   newest=$(printf '%s' "$RS_RUNS" | jq -c '.[0] // empty')
   if [ -z "$newest" ]; then
@@ -2073,6 +2132,7 @@ remote_state() {
   RS_RUN_ID=$(printf '%s' "$newest" | jq -r '.databaseId | tostring')
   RS_GH_STATUS=$(printf '%s' "$newest" | jq -r '.status // ""')
   RS_RUN_URL=$(printf '%s' "$newest" | jq -r '.url // ""')
+  RS_RUN_CREATED_AT=$(printf '%s' "$newest" | jq -r '.createdAt // ""')
   if [ "$RS_GH_STATUS" != completed ] && [ "$finished" != 1 ]; then
     RS_STATE=running
     return 0
@@ -2140,12 +2200,22 @@ remote_state() {
     RS_STATE=paused
     RS_PAUSE_REASON=killed
     RS_DETAIL="run $RS_RUN_ID ended with no state bundle (killed, cancelled or replaced): $RS_RUN_URL"
-    return 0
+  else
+    # Case 5 — no bundle in any run.
+    RS_STATE=failed
+    RS_DETAIL="no run of $branch ever uploaded a state bundle; newest: $RS_RUN_URL"
   fi
 
-  # Case 5 — no bundle in any run.
-  RS_STATE=failed
-  RS_DETAIL="no run of $branch ever uploaded a state bundle; newest: $RS_RUN_URL"
+  # Cases 4 and 5 — a job GitHub never started keeps its case's state; only
+  # the detail changes. A failed jobs lookup changes nothing but says so.
+  run_not_started_var "$RS_RUN_ID"
+  case $? in
+    0)
+      RS_NOT_STARTED=1
+      RS_DETAIL="GitHub did not start the job of run $RS_RUN_ID ($NOT_STARTED_REASON): $RS_RUN_URL"
+      ;;
+    2) echo "remote-run.sh: could not tell whether GitHub started the job of run $RS_RUN_ID: $GH_ERR" >&2 ;;
+  esac
   return 0
 }
 

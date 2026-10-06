@@ -7,7 +7,9 @@
  * refusal sends nothing at all, and `stop` always sends its `action=stop` marker before any cancel —
  * whether or not a run is in progress.** No case reaches the network: the stub is a Node script that
  * appends its argument vector, as one JSON line, to a log, prints canned JSON for `run list`,
- * `repo view` and a run's artifact list, and materialises a fixture bundle on `run download`.
+ * `repo view`, a run's artifact list, a run's jobs (`STUB_JOBS`) and a check run's annotations
+ * (`STUB_ANNOTATIONS`) — the last two empty when unset — and materialises a fixture bundle on
+ * `run download`.
  *
  * **For `status` and `sync`, the rule is that the newest finished run decides and a bundle already
  * applied is never applied again**: `status` leaves every byte under the state directory as it found
@@ -68,7 +70,9 @@
  *
  * **For the commands' `fetch`, the rule is that it reads a branch's newest state from GitHub alone and
  * writes nothing but its `<out_dir>`**; its `key: value` lines are a wire, so each case asserts the
- * keys it reads. **No verb makes a run started on GitHub local: `adopt` is an unknown verb, so no
+ * keys it reads. A finished run with no bundle whose `run` job GitHub never started keeps its case's
+ * state and gets a detail naming GitHub's reason; a failed jobs lookup changes nothing but stderr.
+ * **No verb makes a run started on GitHub local: `adopt` is an unknown verb, so no
  * command can create a working copy or a record for another branch through it.** **A user's chain-0
  * resume dispatch marks an existing remote record `running`, and
  * no other dispatch creates or touches a registry.** **For `review`, the rule is that a round lands
@@ -136,6 +140,14 @@ if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.te
 else if (args[0] === 'api' && args[1].includes('/contents/')) {
   if (process.env.STUB_CONTENTS === undefined) { process.stderr.write('HTTP 404: Not Found\\n'); process.exit(1); }
   process.stdout.write(process.env.STUB_CONTENTS);
+}
+else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/actions\\/runs\\/[0-9]+\\/jobs$/.test(args[1])) {
+  const id = args[1].split('/')[5];
+  process.stdout.write(JSON.stringify({ jobs: JSON.parse(process.env.STUB_JOBS || '{}')[id] || [] }));
+}
+else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/check-runs\\/[0-9]+\\/annotations$/.test(args[1])) {
+  const id = args[1].split('/')[4];
+  process.stdout.write(JSON.stringify(JSON.parse(process.env.STUB_ANNOTATIONS || '{}')[id] || []));
 }
 else if (args[0] === 'api') {
   const parts = args[1].split('/');
@@ -2000,6 +2012,62 @@ test('fetch of an expired bundle prints paused / expired and downloads nothing',
   assert.deepEqual(downloads(fx), []);
 });
 
+const NOT_ACQUIRED = 'The job was not acquired by Runner of type hosted even after multiple attempts';
+
+/** A newest completed run 202 with no artifact, over an older run 201 that carries a bundle. */
+function case4Env(fx, steps, extra = {}) {
+  return {
+    ...syncEnv({
+      runs: [ghRun(202, 'completed', 2), ghRun(201, 'completed', 1)],
+      artifacts: { 201: ['harness-state'] },
+      bundles: { 201: bundle(fx, 'old') },
+    }),
+    STUB_JOBS: JSON.stringify({ 202: [{ name: 'run', status: 'completed', conclusion: 'cancelled', steps, id: 555 }] }),
+    STUB_ANNOTATIONS: JSON.stringify({ 555: [{ message: NOT_ACQUIRED }] }),
+    ...extra,
+  };
+}
+
+test('fetch of a newest run GitHub never started, over an older bundle, prints paused / killed naming GitHub\'s reason', async (t) => {
+  const fx = await remoteFixture(t);
+  const out = outDir(t);
+  const result = await remoteRun(fx, ['fetch', 'feat_x', out], case4Env(fx, []));
+  assert.equal(result.status, 0, result.stderr);
+  const lines = fetched(result.stdout);
+  assert.equal(lines.state, 'paused');
+  assert.equal(lines.pause_reason, 'killed');
+  assert.equal(lines.detail, `GitHub did not start the job of run 202 (${NOT_ACQUIRED}): ${runUrl(202)}`);
+  assert.ok(joined(fx).includes('api repos/{owner}/{repo}/check-runs/555/annotations'));
+  assert.deepEqual(downloads(fx), []);
+});
+
+test('fetch of a newest run whose job ran a step, over an older bundle, keeps the no-bundle detail', async (t) => {
+  const fx = await remoteFixture(t);
+  const out = outDir(t);
+  const result = await remoteRun(fx, ['fetch', 'feat_x', out], case4Env(fx, [{ name: 'Set up job', status: 'completed' }]));
+  assert.equal(result.status, 0, result.stderr);
+  const lines = fetched(result.stdout);
+  assert.equal(lines.state, 'paused');
+  assert.equal(lines.pause_reason, 'killed');
+  assert.equal(lines.detail, `run 202 ended with no state bundle (killed, cancelled or replaced): ${runUrl(202)}`);
+  assert.ok(!joined(fx).some((line) => line.includes('/annotations')), 'a started job had its annotations read');
+});
+
+test('fetch whose jobs lookup fails keeps today\'s state and detail, and names the failure on stderr', async (t) => {
+  const fx = await remoteFixture(t);
+  const out = outDir(t);
+  const result = await remoteRun(fx, ['fetch', 'feat_x', out], case4Env(fx, [], {
+    STUB_FAIL_ON: 'api repos/{owner}/{repo}/actions/runs/202/jobs',
+    STUB_FAIL_STDERR: 'HTTP 502: jobs unavailable',
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  const lines = fetched(result.stdout);
+  assert.equal(lines.state, 'paused');
+  assert.equal(lines.pause_reason, 'killed');
+  assert.equal(lines.detail, `run 202 ended with no state bundle (killed, cancelled or replaced): ${runUrl(202)}`);
+  assert.match(result.stderr, /could not tell whether GitHub started the job of run 202: .*HTTP 502: jobs unavailable/);
+});
+
 test('fetch is refused under execution.target local, and needs an existing, empty out_dir', async (t) => {
   const local = await remoteFixture(t, 'local');
   const refused = await remoteRun(local, ['fetch', 'feat_x', outDir(t)]);
@@ -2080,6 +2148,20 @@ test('status with no record and an expired newest bundle prints the expired line
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^ {2}pause_reason: expired$/m);
   assert.equal(result.stdout.split('the state bundle of run 102 expired on 2026-01-02T00:00:00Z').length - 1, 1);
+  assert.equal(downloads(fx).length, 0);
+  assert.deepEqual(await stateSnapshot(fx), before);
+});
+
+test('status with no record and a never-started newest run with no annotation prints failed, naming the conclusion', async (t) => {
+  const fx = await remoteFixture(t);
+  const before = await stateSnapshot(fx);
+  const result = await remoteRun(fx, ['status', 'feat_x'], {
+    ...syncEnv({ runs: [ghRun(102, 'completed', 2)] }),
+    STUB_JOBS: JSON.stringify({ 102: [{ name: 'run', status: 'completed', conclusion: 'cancelled', steps: [], id: 556 }] }),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^ {2}state: failed$/m);
+  assert.match(result.stdout, /^ {2}detail: GitHub did not start the job of run 102 \(its `run` job ended `cancelled` with no step run\): /m);
   assert.equal(downloads(fx).length, 0);
   assert.deepEqual(await stateSnapshot(fx), before);
 });

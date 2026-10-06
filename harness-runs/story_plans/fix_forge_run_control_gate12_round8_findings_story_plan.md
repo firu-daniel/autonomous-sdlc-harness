@@ -60,7 +60,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 3. [x] **Task 3** — `push-branch.sh` retries a push the remote refused, at most three attempts in all, and never a `[rejected]` one _(layer: cli)_ _(points: 12)_
 4. [x] **Task 4** — `hr_push_landed` tells a moved remote from a refused push, and `start` and `review` name which _(layer: cli)_ _(points: 15)_
 5. [x] **Task 5** — `control`'s reply after a dispatch records the engine in its marker _(layer: cli)_ _(points: 8)_
-6. [ ] **Task 6** — `remote_state` recognises a run whose `run` job GitHub never started _(layer: cli)_ _(points: 15)_
+6. [x] **Task 6** — `remote_state` recognises a run whose `run` job GitHub never started _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — A never-started run takes its engine from its dispatch's marker _(layer: cli)_ _(points: 18)_
 8. [ ] **Task 8** — `collect` reports a run whose job never started, and offers a re-run of `collect` when a round fails to place _(layer: cli)_ _(points: 20)_
 9. [ ] **Task 9** — The poller waits on a listed bundle it cannot download, bounded, and skips a run that never started _(layer: cli)_ _(points: 18)_
