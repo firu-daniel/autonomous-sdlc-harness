@@ -64,3 +64,9 @@
 - Every link this task writes resolves to an existing heading: `github-run-control.md` → `## 1.` and `## 6.`, and `remote-execution.md` → `### Upgrading`. Check each with `grep -n`.
 - Every command an adopter or an operator is told to run sits in a fenced block, one command per line (lessons ledger, *Adopter-facing documentation*).
 - `docs/cli.md`'s `forge` paragraph and `cli/src/doctor/checks.ts`'s new warning describe the same condition and route. Compare the two by reading them side by side.
+
+**Deviations from plan:**
+
+- `remote-execution.md` → `### Upgrading`: the two mention bullets sit in their own top-level bullet, *"Mentions reach each file only by that file's route too"*, directly after the allow-list bullet, rather than as sub-bullets of it. That bullet's lead scopes its list to *"a copy written before `HARNESS_RUN_ACTORS`"*, which the mention bullets are not.
+- `remote-execution.md` → the `CLAUDE_CODE_OAUTH_TOKEN` row's *Required* cell now reads *"the `harness-run.yml` job fails before launch"*, so it stays true now that the *Read by* cell names two jobs.
+- `development.md` → `(xiv)` leg (j): the legs before it end with the run's branch deleted, so leg (j) starts a second run (`<issue 2>`, `<slug 2>`, `<pr 2>`). Leg 6's *"no agent run"* is checked as *no decision line*, because the `claude --version` step runs on every `issue_comment` job (`cli/templates/github/workflows/harness-control.yml` → `Install the claude CLI when absent`). Leg 3's `resume=answer` dispatch is observed as one `harness run <slug 2>` run plus a `resumed` comment, since `gh run list` does not show inputs. The round 9 owes list gains leg (j), marked as added after that round.

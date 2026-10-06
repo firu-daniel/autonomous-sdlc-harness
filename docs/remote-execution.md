@@ -558,7 +558,7 @@ All are set on the GitHub repository (Settings → Secrets and variables → Act
 
 | Name | Kind | Read by | Default | Required |
 |---|---|---|---|---|
-| `CLAUDE_CODE_OAUTH_TOKEN` | secret | `harness-run.yml`: the credential check and the harness step, which exports it only when non-empty | none | one of this and `ANTHROPIC_API_KEY`; the job fails before launch when neither is set |
+| `CLAUDE_CODE_OAUTH_TOKEN` | secret | `harness-run.yml`: the credential check and the harness step, which exports it only when non-empty; and `harness-control.yml`'s act step, on `issue_comment` events only, for the mention agent ([`github-run-control.md`](github-run-control.md) → `## 6.`) | none | one of this and `ANTHROPIC_API_KEY`; the `harness-run.yml` job fails before launch when neither is set |
 | `ANTHROPIC_API_KEY` | secret | as above | none | as above |
 | `HARNESS_PUSH_URL` | secret | `autonomous-notify.sh` in the run job and in the resume poller: an endpoint that accepts a POST whose body is the message | none: no push notification | no, but `doctor --check-github` warns without it |
 | `HARNESS_GIT_TOKEN` | secret | `harness-run.yml`'s checkout, so the job's pushes use it; its `Open the draft pull request` step (`remote-run.sh open`), which opens the draft pull request with it when the run starts, and its `deliver` step (`remote-run.sh deliver`), which does so only when none is open at completion | `GITHUB_TOKEN` | no. Set it when your own CI must run on the pushed branch: pushes made with `GITHUB_TOKEN` start no workflow (§6). Set it also so your CI runs on the draft pull request without an approval click, from the run's first push onwards. To open the pull request it needs *Pull requests* write beside *Contents* write and, for workflow files, *Workflows* write as a fine-grained token, or `repo` plus `workflow` as a classic token ([`github-integration-research.md`](github-integration-research.md) → S2); a token without *Pull requests* write opens no pull request, and the `completed` comment names `gh`'s error. The pull request's author is then the token's owner, who cannot request changes on it, so use a token of a machine account, or start rounds locally with `/autonomous-sdlc-harness:branch-user-review` ([`github-run-control.md`](github-run-control.md) → `## 4. The draft pull request`) |
@@ -673,6 +673,13 @@ The last two are needed for the reason step 3 above gives: the `workflow` scope,
     ```
 
   `doctor` warns about an old copy and names its route: the `remote-execution` check about `harness-run.yml`, with `--upgrade-workflows`, and the `forge` check about the two forge workflows, with `init --force`.
+- **Mentions reach each file only by that file's route too** ([`github-run-control.md`](github-run-control.md) → `## 1.`, *Mentions read by an agent*). What a copy written before mentions does until it is re-rendered:
+  - **An old `harness-control.yml`** with re-rendered scripts passes the mention agent no credential, so every mention is answered that it was not read, while the `@sdlc-harness <verb>` commands still work ([`github-run-control.md`](github-run-control.md) → `## 6.`). The `forge` check warns about it. Its route is the forced re-run:
+
+    ```
+    npx autonomous-sdlc-harness@<version> init --force
+    ```
+  - **A `harness-run.yml` pinned to a release older than mentions** leaves the control job's plugin without the mention command, so a mention is answered that the plugin carrying it is not available. Its route is the `--upgrade-workflows` re-render under *The commands* above.
 
 **Moving a run in flight to the new version, on purpose.** Do it only after the upgrade is pushed to the default branch, and only while no job of that run is executing: the run is paused, parked or stopped. A job pushes the branch after every commit and at its end (`cli/templates/scripts/push-branch.sh`), and a push that fails because the remote moved is non-fatal by that script's own header (*"EVERY FAILURE PATH IS NON-FATAL"*). So a commit pushed beside a running job leaves the job's later commits off the remote without stopping it.
 

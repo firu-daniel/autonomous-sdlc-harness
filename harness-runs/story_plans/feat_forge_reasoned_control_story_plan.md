@@ -81,7 +81,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_forge_
 8. [x] **Task 8** — Add the mention reader as the plugin slash command `harness-read-mention` _(layer: plugin)_ _(points: 13)_
 9. [x] **Task 9** — Document mentions in `docs/github-run-control.md` §1 and §3 _(layer: general)_ _(points: 15)_
 10. [x] **Task 10** — Record the credential decision, the injection boundary and the unverified behaviours in `docs/github-run-control.md` §6 and §8 _(layer: general)_ _(points: 15)_
-11. [ ] **Task 11** — Bring the other documents of record in line with mentions _(layer: general)_ _(points: 14)_
+11. [x] **Task 11** — Bring the other documents of record in line with mentions _(layer: general)_ _(points: 14)_
 
 ## Scope register
 
