@@ -352,30 +352,39 @@
 # job's own `push-branch.sh`, which opens no pull request. Job-side for its
 # root and self-gated, as `report` is (`forge_on`, one line when off). Anything
 # but `status: completed` in <bundle_dir>/status.json, or no status.json, is
-# one line and nothing sent. Otherwise, by the forge surface: an open
-# same-repository pull request whose head is <branch> is reused and no second
-# one is opened; else a draft is created against `defaultBranch`, titled from
-# the task prompt's `# ` first line (cut to `PR_TITLE_MAX_CHARS`, else
-# <branch>), whose body names the issue as `Started from #<n>.` — a plain
-# mention, never a closing keyword — states what a review requesting changes
-# and the `COMMAND_HANDLE` commands do, and ends with the `pull-request`
-# marker. The create runs with `HARNESS_PR_TOKEN` as `GH_TOKEN` when that is
-# set, so the adopter's CI runs without an approval click; every other call
-# uses the job's token. A pull request so opened is authored by that token's
-# owner, who therefore cannot request changes on it: use a machine account's
-# token, another reviewer, or a local `branch-user-review` round. A create
-# refused with `PR_CREATE_FORBIDDEN` is not retried, and the comment names the
-# Actions setting and `HARNESS_GIT_TOKEN`; any other failure is retried once
-# without `--draft`, and a second failure is named in the comment with the
-# branch's compare URL. A pull-request lookup that fails opens nothing. Then
-# one `completed` comment: on the issue naming the new pull request's URL; on
-# the pull request when there is no issue, or when it existed before this run
-# (saying the round finished); on the issue alone when none could be opened;
-# nowhere when neither is known. It names reviewing and requesting changes as
-# the next action, and with `phases.qa` true the local `branch-qa-test` still
-# owed. Then `sdlc-harness: done` on the issue and the pull request, each when
-# known. It writes at most one pull request, one comment and those labels, and
-# never pushes. It never fails its caller: every problem is one line and exit 0.
+# one line and nothing sent. The bundle's `engine` names what completed:
+# `user_review` is a round, anything else a run. An open same-repository pull
+# request whose head is <branch> is reused and no second one is opened. With
+# none open and a lookup that succeeded, `forge_open_pr` is the fallback — one
+# line says none was open at completion, because the start's attempt failed or
+# the workflow predates `open`. It is created against `defaultBranch`, titled
+# from the task prompt's `# ` first line (cut to `PR_TITLE_MAX_CHARS`, else
+# <branch>), with a body naming the issue as `Started from #<n>.` — a plain
+# mention, never a closing keyword — stating what a review requesting changes
+# and the `COMMAND_HANDLE` commands do, and ending with the `pull-request`
+# marker: a `--draft` create with `HARNESS_PR_TOKEN` as `GH_TOKEN` when set, so
+# the adopter's CI runs without an approval click, no retry on
+# `PR_CREATE_FORBIDDEN`, one retry without `--draft` on any other failure. A
+# pull request so opened is authored by that token's owner, who therefore
+# cannot request changes on it: use a machine account's token, another
+# reviewer, or a local `branch-user-review` round. A lookup that fails opens
+# nothing. Then the ready flip, with the job's token and never
+# `HARNESS_PR_TOKEN`: a draft gets one `gh pr ready` (flipped), and a refusal
+# is one `::warning::` line naming gh's error (refused); a pull request that is
+# not a draft — no drafts on the plan, or a person marked it ready — gets no
+# call (not a draft) and is left alone. A round's review threads are resolved
+# next, after the flip and before the comments. Then one `completed` comment
+# on the pull request, its readiness clause by the flip's outcome, and one on
+# the issue naming the pull request's number and URL, each when known; with no
+# pull request, one comment on the issue alone naming why none could be opened
+# — the Actions setting and `HARNESS_GIT_TOKEN` on `PR_CREATE_FORBIDDEN`, else
+# gh's error — with the branch's compare URL; nowhere when neither is known.
+# Each names reviewing and requesting changes as the next action, and with
+# `phases.qa` true the local `branch-qa-test` still owed. Then
+# `sdlc-harness: done` on the issue and the pull request, each when known. It
+# writes at most one pull request, one flip, two comments and those labels,
+# and never pushes. It never fails its caller: every problem, a refused flip
+# included, is one line and exit 0.
 #
 # `collect` STARTS THE NEXT ROUND FROM THE REVIEWS COLLECTED DURING A RUN: the
 # one step of the run workflow's `collect` job, which follows its `run` job, so
@@ -1283,9 +1292,15 @@
 #   https://github.com/o/r/pull/12, and <b> a bundle directory whose status.json
 #   carries schema "1" and status completed:
 #   deliver    bash scripts/remote-run.sh deliver feat_x <b> -> 0; "$s.log" gains
-#              a `--draft` create with `--base main --head feat_x`, then one
-#              comment on issue 7 naming /pull/12, then `sdlc-harness: done` on
-#              7 and 12
+#              a `--draft` create with `--base main --head feat_x`, then `pr
+#              ready 12` with the job's token, then one comment on 12 saying
+#              it is now marked ready, then one on issue 7 naming #12 and
+#              /pull/12, then `sdlc-harness: done` on 7 and 12
+#   reused     the stub answering `pr list` with [{"number":12,
+#              "isCrossRepository":false,"isDraft":false}] -> 0, no create, no
+#              `pr ready`, the pull request's comment saying it is not a draft
+#   refused    the stub failing `pr ready` -> 0, one `::warning::` line, both
+#              comments posted, the pull request's saying the flip was refused
 #   not done   status parked, or an empty <b> -> 0, one line, "$s.log" unchanged
 #
 #   open needs deliver's setup without the bundle:
@@ -4776,11 +4791,34 @@ forge_open_pr() {
   return 0
 }
 
-# verb_deliver — after a `completed` bundle: find or open the branch's pull
-# request, post the one `completed` comment, and set `done`. Always exit 0.
+# deliver_comment <number> <tmp> <text> — one `completed` comment on <number>:
+# <text>, the `phases.qa` sentence when that phase is on, this run's URL when
+# GITHUB_RUN_ID is set, then the marker. A failure is one line.
+deliver_comment() {
+  local number="$1" tmp="$2" text="$3" file
+  if hr_phase_enabled "$root" qa; then
+    text="$text
+
+The interactive-test phase was skipped on GitHub Actions. Before merging, run \`/autonomous-sdlc-harness:branch-qa-test $branch\` locally."
+  fi
+  if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-deliver-comment.XXXXXX"); then
+    echo "remote-run.sh: deliver: cannot create the comment file for #$number; no comment posted" >&2
+    return 0
+  fi
+  {
+    printf '%s\n' "$text"
+    [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
+  } >"$file"
+  forge_comment "$number" completed "$branch" "$file" || :
+  rm -f "$file"
+}
+
+# verb_deliver — after a `completed` bundle: reuse the branch's pull request or
+# open it, mark it ready, post `completed` on it and on the issue, and set
+# `done`. Always exit 0.
 verb_deliver() {
-  local status base="" pr_url="" opened=0 lookup_failed=0 create_err="" forbidden=0
-  local tmp made_tmp="" file target text compare
+  local status engine noun verb_done pr_url="" lookup_failed=0 create_err="" forbidden=0 base=""
+  local tmp made_tmp="" ready="" text readiness compare posted=""
   if ! forge_on; then
     echo "remote-run.sh: deliver: the forge coupling is off (forge github and execution.target github-actions); nothing posted"
     exit "$EXIT_OK"
@@ -4791,24 +4829,24 @@ verb_deliver() {
     echo "remote-run.sh: deliver: the bundle's status is '${status:-unreadable}', not completed; nothing posted"
     exit "$EXIT_OK"
   fi
+  engine=$(hr_remote_status_get "$bundle_dir/$HR_REMOTE_STATUS_FILE" engine 2>/dev/null) || engine=""
+  if [ "$engine" = user_review ]; then
+    noun=round; verb_done=finished
+  else
+    noun=run; verb_done=completed
+  fi
   forge_repo_var || exit "$EXIT_OK"
 
   forge_fetch_branch "$branch"
   forge_issue_var "$branch" || FORGE_ISSUE=""
-  forge_pr_var "$branch" || { FORGE_PR=""; lookup_failed=1; create_err="whether a pull request is already open could not be read ($GH_ERR)"; }
-
-  tmp="${RUNNER_TEMP-}"
-  if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
-    tmp=$(mktemp -d) || tmp=""
-    made_tmp="$tmp"
-  fi
+  forge_pr_var "$branch" || { FORGE_PR=""; FORGE_PR_DRAFT=""; lookup_failed=1; create_err="whether a pull request is already open could not be read ($GH_ERR)"; }
 
   if [ -n "$FORGE_PR" ]; then
     pr_url="$FORGE_SERVER/$FORGE_REPO/pull/$FORGE_PR"
     echo "remote-run.sh: deliver: $branch already has pull request #$FORGE_PR; none opened"
   elif [ "$lookup_failed" -eq 0 ]; then
+    echo "remote-run.sh: deliver: $branch has no open pull request at completion — the start's attempt failed or the workflow predates the open step; opening it now"
     if forge_open_pr "$branch"; then
-      opened=1
       pr_url="$FORGE_PR_URL"
       echo "remote-run.sh: deliver: opened pull request #$FORGE_PR for $branch"
     else
@@ -4818,48 +4856,71 @@ verb_deliver() {
     base="$OPEN_BASE"
   fi
 
-  compare="$FORGE_SERVER/$FORGE_REPO/compare/${base:-<default branch>}...$branch?expand=1"
-  if [ -z "$pr_url" ]; then
-    target="$FORGE_ISSUE"
-    if [ "$forbidden" -eq 1 ]; then
-      text="The harness run on \`$branch\` completed, but its pull request could not be opened: GitHub Actions is not permitted to create pull requests in this repository. Turn on *$PR_CREATE_SETTING* under $PR_CREATE_SETTING_PATH, or set the \`HARNESS_GIT_TOKEN\` secret, for the next run. For this one, open the pull request from the branch: $compare"
+  # The flip runs with the job's token, never HARNESS_PR_TOKEN.
+  if [ -n "$FORGE_PR" ]; then
+    if [ "$FORGE_PR_DRAFT" = true ]; then
+      if gh_call pr ready "$FORGE_PR" --repo "$FORGE_REPO"; then
+        ready=flipped
+        echo "remote-run.sh: deliver: marked pull request #$FORGE_PR ready for review"
+      else
+        ready=refused
+        echo "::warning::remote-run.sh: deliver: marking pull request #$FORGE_PR ready for review was refused: $GH_ERR"
+      fi
     else
-      text="The harness run on \`$branch\` completed, but its pull request could not be opened: $create_err. Open it by hand from the branch: $compare"
+      ready=not-draft
     fi
-  elif [ "$opened" -eq 0 ]; then
-    target="$FORGE_PR"
-    text="The harness round on \`$branch\` finished. Review this pull request; a review that requests changes starts another round."
-  elif [ -n "$FORGE_ISSUE" ]; then
-    target="$FORGE_ISSUE"
-    text="The harness run on \`$branch\` completed. Its pull request is ready for your review: $pr_url
+  fi
+
+  # A round's review threads are resolved here: after the flip, before the comments.
+
+  tmp="${RUNNER_TEMP-}"
+  if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
+    tmp=$(mktemp -d) || tmp=""
+    made_tmp="$tmp"
+  fi
+
+  if [ -n "$FORGE_PR" ]; then
+    case "$ready" in
+      flipped)
+        if [ "$noun" = round ]; then
+          readiness="The harness round on \`$branch\` finished, and this pull request is marked ready for review again."
+        else
+          readiness="The harness run on \`$branch\` completed, and this pull request is now marked ready for your review."
+        fi ;;
+      not-draft)
+        readiness="The harness $noun on \`$branch\` $verb_done. This pull request is not a draft — drafts may not be available on this repository's plan, or someone marked it ready — so it was left as it is." ;;
+      *)
+        readiness="The harness $noun on \`$branch\` $verb_done. Marking this draft ready for review was refused; mark it ready by hand." ;;
+    esac
+    deliver_comment "$FORGE_PR" "$tmp" "$readiness A review that requests changes starts another round."
+    posted="#$FORGE_PR"
+    if [ -n "$FORGE_ISSUE" ]; then
+      if [ "$noun" = round ]; then
+        text="The harness round on \`$branch\` finished. Pull request #$FORGE_PR is ready for review again: $pr_url"
+      else
+        text="The harness run on \`$branch\` completed. Its pull request #$FORGE_PR is ready for your review: $pr_url"
+      fi
+      deliver_comment "$FORGE_ISSUE" "$tmp" "$text
 Review it there; a review that requests changes starts another round."
+      posted="$posted and #$FORGE_ISSUE"
+    fi
+  elif [ -n "$FORGE_ISSUE" ]; then
+    compare="$FORGE_SERVER/$FORGE_REPO/compare/${base:-<default branch>}...$branch?expand=1"
+    if [ "$forbidden" -eq 1 ]; then
+      text="The harness $noun on \`$branch\` $verb_done, but its pull request could not be opened: GitHub Actions is not permitted to create pull requests in this repository. Turn on *$PR_CREATE_SETTING* under $PR_CREATE_SETTING_PATH, or set the \`HARNESS_GIT_TOKEN\` secret, for the next run. For this one, open the pull request from the branch: $compare"
+    else
+      text="The harness $noun on \`$branch\` $verb_done, but its pull request could not be opened: $create_err. Open it by hand from the branch: $compare"
+    fi
+    deliver_comment "$FORGE_ISSUE" "$tmp" "$text"
+    posted="#$FORGE_ISSUE"
   else
-    target="$FORGE_PR"
-    text="The harness run on \`$branch\` completed and opened this pull request. Review it; a review that requests changes starts another round."
-  fi
-  if hr_phase_enabled "$root" qa; then
-    text="$text
-
-The interactive-test phase was skipped on GitHub Actions. Before merging, run \`/autonomous-sdlc-harness:branch-qa-test $branch\` locally."
-  fi
-
-  if [ -z "$target" ]; then
     echo "remote-run.sh: deliver: $branch has no pull request and no issue it was started from; nothing posted"
-  elif [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-deliver-comment.XXXXXX"); then
-    {
-      printf '%s\n' "$text"
-      [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
-    } >"$file"
-    forge_comment "$target" completed "$branch" "$file" || :
-    rm -f "$file"
-  else
-    echo "remote-run.sh: deliver: cannot create the comment file for #$target; no comment posted" >&2
   fi
   [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
 
   [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" done || :
   [ -z "$FORGE_PR" ] || forge_set_state "$FORGE_PR" done || :
-  echo "remote-run.sh: deliver: completed on $branch reported${target:+ on #$target}"
+  echo "remote-run.sh: deliver: completed on $branch reported${posted:+ on $posted}"
   exit "$EXIT_OK"
 }
 

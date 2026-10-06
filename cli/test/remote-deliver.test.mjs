@@ -1,20 +1,22 @@
 /**
- * `remote-run.sh deliver <branch> <bundle_dir>`, the run workflow's hand-off of a completed run to review.
+ * `remote-run.sh deliver <branch> <bundle_dir>`, the run workflow's hand-off of a completed run or round to review.
  *
- * **The rule these tests exist to enforce: a completed run on GitHub ends with exactly one open pull
- * request from its branch, naming its issue as a plain mention, and one `completed` comment naming that
- * pull request; any other bundle status posts nothing.** Each arm is driven: no pull request (a draft is
- * opened), an existing one (reused), `HARNESS_PR_TOKEN` scoping the create alone, GitHub's Actions
- * refusal (no retry, the setting named), any other create failure (one retry without `--draft`), a
- * bundle that is not `completed` or is missing, the forge coupling off, and `phases.qa` naming the local
+ * **The rule these tests exist to enforce: a completed run or round ends with its pull request marked ready
+ * and one `completed` comment on the pull request and one on its issue; any other bundle status posts
+ * nothing, and a refused flip never fails the step.** Each arm is driven: an open draft (flipped with the
+ * job's token), an open non-draft (no flip), a refused flip (one warning, both comments still posted), no
+ * pull request open (the fallback draft create, then the flip), a round's bundle, no issue, `HARNESS_PR_TOKEN`
+ * scoping the create alone, GitHub's Actions refusal (no retry, the setting named on the issue alone), any
+ * other create failure (one retry without `--draft`, then the compare link on the issue alone), a bundle
+ * that is not `completed` or is missing, the forge coupling off, and `phases.qa` naming the local
  * interactive-test step still owed.
  *
  * The fixture is `remote-report.test.mjs`'s — `feat_x` on origin with its provenance line for issue 7 and
  * its ledger — plus a bundle directory whose `status.json` (schema `1`) the test writes. `gh` is a stub
  * reached through `HARNESS_GH_CLI`: it logs each argument vector with any `body=@` / `--body-file`
  * content and the `GH_TOKEN` it ran with, answers `pr list` from `STUB_PRS`, `pr create` with
- * `https://github.com/octo/fixture/pull/12`, and fails a call starting `STUB_FAIL_ON` with
- * `STUB_FAIL_MESSAGE` up to `STUB_FAIL_TIMES` times. No case reaches the network.
+ * `https://github.com/octo/fixture/pull/12`, `pr ready` with nothing, and fails a call starting
+ * `STUB_FAIL_ON` with `STUB_FAIL_MESSAGE` up to `STUB_FAIL_TIMES` times. No case reaches the network.
  */
 
 import assert from 'node:assert/strict';
@@ -29,6 +31,8 @@ const STATE_DIR = 'sdlc-harness';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const FORBIDDEN = 'GitHub Actions is not permitted to create or approve pull requests';
+const JOB_TOKEN = 'job-token';
+const PR_TOKEN = 'pr-token';
 
 const STUB = `#!/usr/bin/env node
 const { appendFileSync, existsSync, readFileSync, writeFileSync } = require('node:fs');
@@ -51,6 +55,8 @@ if (args[0] === 'pr' && args[1] === 'list') {
   process.stdout.write(process.env.STUB_PRS || '[]');
 } else if (args[0] === 'pr' && args[1] === 'create') {
   process.stdout.write('https://github.com/octo/fixture/pull/12\\n');
+} else if (args[0] === 'pr' && args[1] === 'ready') {
+  process.stdout.write('');
 } else if (args[0] === 'run' && args[1] === 'list') {
   process.stdout.write('[]');
 } else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1] ?? '')) {
@@ -61,13 +67,13 @@ if (args[0] === 'pr' && args[1] === 'list') {
 `;
 
 /**
- * An adopted fixture on `origin` with `feat_x` pushed carrying its provenance line and its ledger, and a
- * bundle directory.
+ * An adopted fixture on `origin` with `feat_x` pushed carrying its task prompt (with its provenance line
+ * unless `issue` is false) and its ledger, and a bundle directory.
  *
  * @param {import('node:test').TestContext} t
- * @param {{ forge?: string | null, qa?: boolean, status?: string | null }} [options]
+ * @param {{ forge?: string | null, qa?: boolean, status?: string | null, engine?: string | null, issue?: boolean }} [options]
  */
-async function deliverFixture(t, { forge = 'github', qa = false, status = 'completed' } = {}) {
+async function deliverFixture(t, { forge = 'github', qa = false, status = 'completed', engine = 'task', issue = true } = {}) {
   const fixture = await createFixture({
     files: {
       'package.json': { name: 'fixture-project', private: true, version: '0.0.0', scripts: { test: 'echo test' } },
@@ -93,10 +99,8 @@ async function deliverFixture(t, { forge = 'github', qa = false, status = 'compl
   const files = [`${STATE_DIR}/task_prompts/feat_x_task_prompt.md`, `${STATE_DIR}/flow_progress/feat_x_progress.md`];
   mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
   mkdirSync(join(dir, STATE_DIR, 'flow_progress'), { recursive: true });
-  writeFileSync(
-    join(dir, files[0]),
-    `# Add comments\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`,
-  );
+  const provenance = issue ? `\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n` : '';
+  writeFileSync(join(dir, files[0]), `# Add comments\n\nDo it.\n${provenance}`);
   writeFileSync(join(dir, files[1]), '# Progress\n');
   await runGit(dir, ['add', '--force', ...files]);
   await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: feat_x']);
@@ -110,7 +114,9 @@ async function deliverFixture(t, { forge = 'github', qa = false, status = 'compl
   mkdirSync(runnerTemp, { recursive: true });
   mkdirSync(bundle, { recursive: true });
   if (status !== null) {
-    writeFileSync(join(bundle, 'status.json'), JSON.stringify({ schema: '1', branch: 'feat_x', status }));
+    const record = { schema: '1', branch: 'feat_x', status };
+    if (engine !== null) record.engine = engine;
+    writeFileSync(join(bundle, 'status.json'), JSON.stringify(record));
   }
   const stub = join(stubDir, 'gh');
   writeFileSync(stub, STUB, { mode: 0o755 });
@@ -126,7 +132,7 @@ async function deliverFixture(t, { forge = 'github', qa = false, status = 'compl
         GITHUB_REPOSITORY: REPOSITORY,
         GITHUB_SERVER_URL: 'https://github.com',
         GITHUB_RUN_ID: '',
-        GH_TOKEN: '',
+        GH_TOKEN: JOB_TOKEN,
         RUNNER_TEMP: runnerTemp,
         HARNESS_PR_TOKEN: '',
         STUB_PRS: '',
@@ -149,7 +155,11 @@ async function deliverFixture(t, { forge = 'github', qa = false, status = 'compl
   };
 }
 
+const openDraft = JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: true }]);
+const openReady = JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: false }]);
+
 const creates = (calls) => calls.filter((call) => call.args[0] === 'pr' && call.args[1] === 'create');
+const readies = (calls) => calls.filter((call) => call.args[0] === 'pr' && call.args[1] === 'ready');
 const commentsOn = (calls, n) =>
   calls.filter((call) => call.line.startsWith(`api --method POST repos/${REPOSITORY}/issues/${n}/comments `));
 const allComments = (calls) => calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/comments /.test(call.line));
@@ -157,57 +167,115 @@ const labelAdds = (calls, n) =>
   calls
     .filter((call) => call.line.startsWith(`api --method POST repos/${REPOSITORY}/issues/${n}/labels `))
     .map((call) => call.args.at(-1));
+const MARKER = '<!-- sdlc-harness event=completed branch=feat_x -->\n';
 
-test('a completed run with no pull request opens one draft naming its issue, comments once and sets done', async (t) => {
+/** Every `pr ready` call carries the job's token, never `HARNESS_PR_TOKEN`. */
+function assertReadyTokens(calls) {
+  for (const call of readies(calls)) assert.equal(call.token, JOB_TOKEN, call.line);
+}
+
+test('an open draft is marked ready with the job token, commented on it and on its issue, and set done', async (t) => {
   const f = await deliverFixture(t);
-  const result = await f.deliver();
+  const result = await f.deliver({ STUB_PRS: openDraft, HARNESS_PR_TOKEN: PR_TOKEN });
   assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  assert.equal(creates(calls).length, 0);
+  const flips = readies(calls);
+  assert.equal(flips.length, 1);
+  assert.deepEqual(flips[0].args, ['pr', 'ready', '12', '--repo', REPOSITORY]);
+  assertReadyTokens(calls);
+  assert.equal(allComments(calls).length, 2);
+  const [onPr] = commentsOn(calls, 12);
+  assert.match(onPr.body, /run on `feat_x` completed, and this pull request is now marked ready for your review/);
+  assert.match(onPr.body, /requests changes starts another round/);
+  assert.ok(onPr.body.endsWith(MARKER), onPr.body);
+  const [onIssue] = commentsOn(calls, 7);
+  assert.match(onIssue.body, /#12/);
+  assert.match(onIssue.body, /https:\/\/github\.com\/octo\/fixture\/pull\/12/);
+  assert.ok(onIssue.body.endsWith(MARKER), onIssue.body);
+  assert.doesNotMatch(onIssue.body, /branch-qa-test/);
+  assert.deepEqual(labelAdds(calls, 7), ['labels[]=sdlc-harness: done']);
+  assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: done']);
+});
+
+test('an open non-draft gets no flip and the not-a-draft sentence', async (t) => {
+  const f = await deliverFixture(t);
+  const result = await f.deliver({ STUB_PRS: openReady });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  assert.equal(creates(calls).length, 0);
+  assert.equal(readies(calls).length, 0);
+  const [onPr] = commentsOn(calls, 12);
+  assert.match(onPr.body, /This pull request is not a draft/);
+  assert.match(onPr.body, /left as it is/);
+  assert.equal(commentsOn(calls, 7).length, 1);
+});
+
+test('a refused flip is one warning line, exit 0, the refused sentence, and both comments still posted', async (t) => {
+  const f = await deliverFixture(t);
+  const result = await f.deliver({ STUB_PRS: openDraft, STUB_FAIL_ON: 'pr ready', STUB_FAIL_MESSAGE: 'nope', STUB_FAIL_TIMES: '5' });
+  assert.equal(result.status, 0, result.stderr);
+  const warnings = `${result.stdout}\n${result.stderr}`.split('\n').filter((line) => line.startsWith('::warning::'));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /nope/);
+  const calls = f.calls();
+  assert.equal(readies(calls).length, 1);
+  assertReadyTokens(calls);
+  const [onPr] = commentsOn(calls, 12);
+  assert.match(onPr.body, /Marking this draft ready for review was refused; mark it ready by hand/);
+  assert.equal(commentsOn(calls, 7).length, 1);
+  assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: done']);
+});
+
+test('with no pull request open, the fallback draft create runs with HARNESS_PR_TOKEN and then the flip', async (t) => {
+  const f = await deliverFixture(t);
+  const result = await f.deliver({ HARNESS_PR_TOKEN: PR_TOKEN });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /no open pull request at completion/);
   const calls = f.calls();
   const made = creates(calls);
   assert.equal(made.length, 1);
   assert.deepEqual(made[0].args.slice(0, 9), [
     'pr', 'create', '--repo', REPOSITORY, '--base', f.defaultBranch, '--head', 'feat_x', '--draft',
   ]);
+  assert.equal(made[0].token, PR_TOKEN);
   assert.equal(made[0].args[made[0].args.indexOf('--title') + 1], 'Add comments');
   assert.match(made[0].body, /\nStarted from #7\.\n/);
   assert.doesNotMatch(made[0].body, /\b(closes|fixes|resolves) #/i);
-  assert.match(made[0].body, /@sdlc-harness pause/);
   for (const cmd of ['@sdlc-harness answer <n>', '@sdlc-harness pause', '@sdlc-harness resume', '@sdlc-harness stop', '@sdlc-harness clear', '@sdlc-harness status']) {
     assert.ok(made[0].body.includes(`\`${cmd}\``), made[0].body);
   }
-  assert.doesNotMatch(made[0].body, /While a round is running/);
   assert.ok(made[0].body.endsWith('<!-- sdlc-harness event=pull-request branch=feat_x -->\n'), made[0].body);
+  const createAt = calls.indexOf(made[0]);
+  const flips = readies(calls);
+  assert.equal(flips.length, 1);
+  assert.ok(calls.indexOf(flips[0]) > createAt);
+  assertReadyTokens(calls);
+  for (const call of calls) if (call !== made[0]) assert.notEqual(call.token, PR_TOKEN, call.line);
+  assert.match(commentsOn(calls, 12)[0].body, /now marked ready/);
+  assert.match(commentsOn(calls, 7)[0].body, /\/pull\/12/);
+});
+
+test('a round\'s bundle posts the round-finished texts', async (t) => {
+  const f = await deliverFixture(t, { engine: 'user_review' });
+  const result = await f.deliver({ STUB_PRS: openDraft });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  assert.equal(readies(calls).length, 1);
+  assert.match(commentsOn(calls, 12)[0].body, /round on `feat_x` finished, and this pull request is marked ready for review again/);
+  const [onIssue] = commentsOn(calls, 7);
+  assert.match(onIssue.body, /round on `feat_x` finished\. Pull request #12 is ready for review again: https:\/\/github\.com\/octo\/fixture\/pull\/12/);
+});
+
+test('with no issue, only the pull request is commented on and labelled', async (t) => {
+  const f = await deliverFixture(t, { issue: false });
+  const result = await f.deliver({ STUB_PRS: openDraft });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
   assert.equal(allComments(calls).length, 1);
-  const [posted] = commentsOn(calls, 7);
-  assert.match(posted.body, /https:\/\/github\.com\/octo\/fixture\/pull\/12/);
-  assert.match(posted.body, /requests changes starts another round/);
-  assert.ok(posted.body.endsWith('<!-- sdlc-harness event=completed branch=feat_x -->\n'), posted.body);
-  assert.doesNotMatch(posted.body, /branch-qa-test/);
-  assert.deepEqual(labelAdds(calls, 7), ['labels[]=sdlc-harness: done']);
+  assert.equal(commentsOn(calls, 12).length, 1);
   assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: done']);
-});
-
-test('HARNESS_PR_TOKEN reaches the create alone', async (t) => {
-  const f = await deliverFixture(t);
-  const result = await f.deliver({ HARNESS_PR_TOKEN: 'tok' });
-  assert.equal(result.status, 0, result.stderr);
-  const calls = f.calls();
-  assert.equal(creates(calls)[0].token, 'tok');
-  const others = calls.filter((call) => !(call.args[0] === 'pr' && call.args[1] === 'create'));
-  assert.ok(others.length > 0);
-  for (const call of others) assert.notEqual(call.token, 'tok', call.line);
-});
-
-test('an existing pull request is reused: no create, and the comment and labels go on it', async (t) => {
-  const f = await deliverFixture(t);
-  const result = await f.deliver({ STUB_PRS: JSON.stringify([{ number: 9, isCrossRepository: false }]) });
-  assert.equal(result.status, 0, result.stderr);
-  const calls = f.calls();
-  assert.equal(creates(calls).length, 0);
-  assert.equal(allComments(calls).length, 1);
-  const [posted] = commentsOn(calls, 9);
-  assert.match(posted.body, /round on `feat_x` finished/);
-  assert.deepEqual(labelAdds(calls, 9), ['labels[]=sdlc-harness: done']);
+  assert.deepEqual(labelAdds(calls, 7), []);
 });
 
 for (const [label, status] of [['a parked bundle', 'parked'], ['no status.json', null]]) {
@@ -219,7 +287,7 @@ for (const [label, status] of [['a parked bundle', 'parked'], ['no status.json',
   });
 }
 
-test('the Actions refusal is not retried, and the comment names the setting and HARNESS_GIT_TOKEN', async (t) => {
+test('the Actions refusal is not retried, and the issue alone names the setting and HARNESS_GIT_TOKEN', async (t) => {
   const f = await deliverFixture(t);
   const result = await f.deliver({
     STUB_FAIL_ON: 'pr create',
@@ -229,6 +297,7 @@ test('the Actions refusal is not retried, and the comment names the setting and 
   assert.equal(result.status, 0, result.stderr);
   const calls = f.calls();
   assert.equal(creates(calls).length, 1);
+  assert.equal(readies(calls).length, 0);
   const [posted] = commentsOn(calls, 7);
   assert.match(posted.body, /Allow GitHub Actions to create and approve pull requests/);
   assert.match(posted.body, /HARNESS_GIT_TOKEN/);
@@ -236,23 +305,27 @@ test('the Actions refusal is not retried, and the comment names the setting and 
   assert.deepEqual(labelAdds(calls, 7), ['labels[]=sdlc-harness: done']);
 });
 
-test('another create failure is retried once without --draft', async (t) => {
+test('another create failure is retried once without --draft, and the not-a-draft result is not flipped', async (t) => {
   const f = await deliverFixture(t);
   const result = await f.deliver({ STUB_FAIL_ON: 'pr create', STUB_FAIL_TIMES: '1' });
   assert.equal(result.status, 0, result.stderr);
-  const made = creates(f.calls());
+  const calls = f.calls();
+  const made = creates(calls);
   assert.equal(made.length, 2);
   assert.ok(made[0].args.includes('--draft'));
   assert.ok(!made[1].args.includes('--draft'));
-  assert.match(commentsOn(f.calls(), 7)[0].body, /\/pull\/12/);
+  assert.equal(readies(calls).length, 0);
+  assert.match(commentsOn(calls, 12)[0].body, /not a draft/);
+  assert.match(commentsOn(calls, 7)[0].body, /\/pull\/12/);
 });
 
-test('a second create failure names gh\'s error and the branch to open it from', async (t) => {
+test('a second create failure names gh\'s error and the branch to open it from, on the issue alone', async (t) => {
   const f = await deliverFixture(t);
   const result = await f.deliver({ STUB_FAIL_ON: 'pr create', STUB_FAIL_TIMES: '5', STUB_FAIL_MESSAGE: 'boom' });
   assert.equal(result.status, 0, result.stderr);
   const calls = f.calls();
   assert.equal(creates(calls).length, 2);
+  assert.equal(allComments(calls).length, 1);
   const [posted] = commentsOn(calls, 7);
   assert.match(posted.body, /boom/);
   assert.match(posted.body, /compare\/[^ ]+\.\.\.feat_x/);
@@ -266,10 +339,11 @@ test('with the forge coupling off, deliver calls no gh at all', async (t) => {
   assert.match(result.stdout, /forge coupling is off/);
 });
 
-test('with phases.qa true the comment names the local branch-qa-test still owed', async (t) => {
+test('with phases.qa true each comment names the local branch-qa-test still owed', async (t) => {
   const f = await deliverFixture(t, { qa: true });
-  const result = await f.deliver();
+  const result = await f.deliver({ STUB_PRS: openDraft });
   assert.equal(result.status, 0, result.stderr);
-  const [posted] = commentsOn(f.calls(), 7);
-  assert.match(posted.body, /\/autonomous-sdlc-harness:branch-qa-test feat_x/);
+  const calls = f.calls();
+  assert.match(commentsOn(calls, 7)[0].body, /\/autonomous-sdlc-harness:branch-qa-test feat_x/);
+  assert.match(commentsOn(calls, 12)[0].body, /\/autonomous-sdlc-harness:branch-qa-test feat_x/);
 });
