@@ -1161,6 +1161,10 @@
 #   WORKFLOW_CONTROL_FILE        mirrors  WORKFLOW_CONTROL_FILE
 #   COMMAND_HANDLE               mirrors  COMMAND_HANDLE
 #   COMMAND_VERBS                mirrors  COMMAND_VERBS, space-separated
+#   MENTION_ACTIONS              mirrors  MENTION_ACTIONS, space-separated, same order
+#   MENTION_ACT_VERBS            mirrors  MENTION_ACT_VERBS, space-separated, same order
+#   MENTION_CONFIRM_VERBS        mirrors  MENTION_CONFIRM_VERBS, space-separated, same order
+#   MENTION_COMMAND              mirrors  MENTION_COMMAND, the plugin-qualified slash command
 #   COMMENT_MARKER               mirrors  COMMENT_MARKER
 #   REVIEW_ROUND_STATE           mirrors  REVIEW_ROUND_STATE
 #   STATE_LABEL_PREFIX           mirrors  STATE_LABEL_PREFIX
@@ -1458,6 +1462,10 @@ TRIGGER_DISPATCH_EVENT_TYPE='harness-task'
 WORKFLOW_CONTROL_FILE='harness-control.yml'
 COMMAND_HANDLE='@sdlc-harness'
 COMMAND_VERBS='answer pause resume stop clear status'
+MENTION_ACTIONS='command reply clarify fixes none'
+MENTION_ACT_VERBS='answer pause resume status'
+MENTION_CONFIRM_VERBS='stop clear'
+MENTION_COMMAND='/autonomous-sdlc-harness:harness-read-mention'
 COMMENT_MARKER='<!-- sdlc-harness'
 REVIEW_ROUND_STATE='changes_requested'
 STATE_LABEL_PREFIX='sdlc-harness: '

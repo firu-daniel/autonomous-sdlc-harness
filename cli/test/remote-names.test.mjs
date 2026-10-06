@@ -22,6 +22,12 @@ import {
   DEFAULT_TRIGGER_LABEL,
   GH_CLI_VARIABLE,
   LEGACY_TRIGGER_LABEL,
+  MENTION_ACTIONS,
+  MENTION_ACT_VERBS,
+  MENTION_COMMAND,
+  MENTION_COMMAND_NAME,
+  MENTION_CONFIRM_VERBS,
+  MENTION_VERB_HANDLING,
   PR_CREATE_SETTING,
   PR_CREATE_SETTING_PATH,
   REVIEW_ROUND_STATE,
@@ -75,6 +81,17 @@ test('the run-control names keep their literal values', () => {
   assert.equal(REVIEW_ROUND_STATE, 'changes_requested');
   assert.equal(STATE_LABEL_PREFIX, 'sdlc-harness: ');
   assert.deepEqual([...RUN_STATES], ['running', 'parked', 'paused', 'done', 'failed', 'stopped']);
+  assert.deepEqual([...MENTION_ACTIONS], ['command', 'reply', 'clarify', 'fixes', 'none']);
+  assert.deepEqual([...MENTION_ACT_VERBS], ['answer', 'pause', 'resume', 'status']);
+  assert.deepEqual([...MENTION_CONFIRM_VERBS], ['stop', 'clear']);
+  assert.equal(MENTION_COMMAND_NAME, 'harness-read-mention');
+  assert.equal(MENTION_COMMAND, '/autonomous-sdlc-harness:harness-read-mention');
+});
+
+test('the mention act and confirm verbs partition COMMAND_VERBS', () => {
+  assert.deepEqual(Object.keys(MENTION_VERB_HANDLING).sort(), [...COMMAND_VERBS].sort());
+  assert.equal(MENTION_ACT_VERBS.filter((verb) => MENTION_CONFIRM_VERBS.includes(verb)).length, 0);
+  assert.deepEqual([...MENTION_ACT_VERBS, ...MENTION_CONFIRM_VERBS].sort(), [...COMMAND_VERBS].sort());
 });
 
 test('STATE_LABELS has exactly one prefixed label per run state', () => {
@@ -89,6 +106,10 @@ test('remote-run.sh mirrors the run-control names byte for byte', () => {
     `WORKFLOW_CONTROL_FILE='${WORKFLOW_CONTROL_FILE}'`,
     `COMMAND_HANDLE='${COMMAND_HANDLE}'`,
     `COMMAND_VERBS='${COMMAND_VERBS.join(' ')}'`,
+    `MENTION_ACTIONS='${MENTION_ACTIONS.join(' ')}'`,
+    `MENTION_ACT_VERBS='${MENTION_ACT_VERBS.join(' ')}'`,
+    `MENTION_CONFIRM_VERBS='${MENTION_CONFIRM_VERBS.join(' ')}'`,
+    `MENTION_COMMAND='${MENTION_COMMAND}'`,
     `COMMENT_MARKER='${COMMENT_MARKER}'`,
     `REVIEW_ROUND_STATE='${REVIEW_ROUND_STATE}'`,
     `STATE_LABEL_PREFIX='${STATE_LABEL_PREFIX}'`,

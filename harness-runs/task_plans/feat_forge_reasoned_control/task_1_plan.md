@@ -41,3 +41,8 @@ Later tasks then read these names rather than retyping a literal.
 - `npm test --workspace cli -- test/remote-names.test.mjs` passes. This is the one test file this task edits; run it as one plain foreground command from the repository root.
 - `grep -n "^MENTION_" cli/templates/scripts/remote-run.sh` prints exactly the four lines above, and `bash -n cli/templates/scripts/remote-run.sh` exits 0.
 - `grep -n "autonomous-sdlc-harness" cli/src/remote/githubActions.ts` finds no new string literal: the name is built from `PLUGIN_NAME`.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/remote-run.sh` was not executed: the command required approval, refused with both an absolute and a repo-relative path. That bullet's claim rests on reading the change instead. The edit adds four single-quoted assignment lines and four `#` comment lines, and `remote-names.test.mjs` → `remote-run.sh mirrors the run-control names byte for byte` passes against the file.
+- The totality probe ran as the scratch edit itself (`extra: 'act'` added, then `status` removed). Each one failed `commands.typecheck` with TS2353 / TS2741, and both were reverted before the final `commands.typecheck` passed.

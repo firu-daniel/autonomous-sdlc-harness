@@ -18,7 +18,7 @@
  * `LEGACY_TRIGGER_LABEL`)
  * and the run-control names (`WORKFLOW_CONTROL_*`, `COMMAND_*`, `COMMENT_MARKER`,
  * `REVIEW_ROUND_STATE`, `STATE_LABEL_PREFIX`, `RUN_STATES`, `STATE_LABELS`, `PR_CREATE_SETTING`,
- * `PR_CREATE_SETTING_PATH`) are gated tighter
+ * `PR_CREATE_SETTING_PATH`, `MENTION_*`) are gated tighter
  * still: they are consulted only where `forgeTriggerApplies(config)` is true.
  *
  * **Shell and YAML mirrors that must agree byte for byte.** The compiler cannot reach them, so each
@@ -43,6 +43,7 @@
 
 import { spawnSync } from 'node:child_process';
 
+import { PLUGIN_NAME } from '../core/pluginIdentity.js';
 import { unquoteYamlScalar } from '../core/yamlScalar.js';
 
 /** The adopter-side directory GitHub reads workflows from. */
@@ -72,6 +73,50 @@ export const COMMAND_HANDLE = '@sdlc-harness';
 export const COMMAND_VERBS = ['answer', 'pause', 'resume', 'stop', 'clear', 'status'] as const;
 
 export type CommandVerb = (typeof COMMAND_VERBS)[number];
+
+/**
+ * The `action` values a mention's decision may carry: `command` names one of {@link COMMAND_VERBS};
+ * `reply` and `clarify` carry the agent's text; `fixes` is a request for fixes, answered with the
+ * script's own text; `none` means the mention was not addressed to the harness.
+ */
+export const MENTION_ACTIONS = ['command', 'reply', 'clarify', 'fixes', 'none'] as const;
+
+export type MentionAction = (typeof MENTION_ACTIONS)[number];
+
+/**
+ * How a mention's `command` decision treats each verb; total, so a new verb fails to compile until it
+ * is classified. `act` is carried out through that verb's own arm. `confirm` is answered with a
+ * request to comment the command itself: `stop` because it is destructive, `clear` because on GitHub
+ * typing it is the confirmation `branch-resume` asks for.
+ */
+export const MENTION_VERB_HANDLING: Readonly<Record<CommandVerb, 'act' | 'confirm'>> = {
+  answer: 'act',
+  pause: 'act',
+  resume: 'act',
+  stop: 'confirm',
+  clear: 'confirm',
+  status: 'act',
+};
+
+/** The verbs {@link MENTION_VERB_HANDLING} marks `act`, in {@link COMMAND_VERBS} order. */
+export const MENTION_ACT_VERBS: readonly CommandVerb[] = COMMAND_VERBS.filter(
+  (verb) => MENTION_VERB_HANDLING[verb] === 'act',
+);
+
+/** The verbs {@link MENTION_VERB_HANDLING} marks `confirm`, in {@link COMMAND_VERBS} order. */
+export const MENTION_CONFIRM_VERBS: readonly CommandVerb[] = COMMAND_VERBS.filter(
+  (verb) => MENTION_VERB_HANDLING[verb] === 'confirm',
+);
+
+/** The basename of the plugin slash command `plugin/commands/harness-read-mention.md`, the slash-command name verbatim. */
+export const MENTION_COMMAND_NAME = 'harness-read-mention';
+
+/**
+ * The plugin-qualified slash command `remote-run.sh control` passes as the session's `-p` prompt, the
+ * way `autonomous-watcher.sh` launches the plugin's commands as a session's first message. Built from
+ * {@link PLUGIN_NAME} rather than spelled; the CLI never prints it.
+ */
+export const MENTION_COMMAND = `/${PLUGIN_NAME}:${MENTION_COMMAND_NAME}`;
 
 /**
  * The prefix of the hidden line every harness comment carries; the whole line is
