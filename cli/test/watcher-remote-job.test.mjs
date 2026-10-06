@@ -84,12 +84,17 @@ function shellQuote(value) {
  * `gh`, recorded: every argument vector appended to `STUB_LOG`, `run list` and `run view` answered
  * from the environment, and any call starting with `STUB_FAIL_ON` failed with exit 4. With
  * `STUB_RUN_LIST_LATER` set, every `run list` after the first answers it instead of `STUB_RUN_LIST`,
- * counted in `<STUB_LOG>.run-list-count` — a listing that shows a run late.
+ * counted in `<STUB_LOG>.run-list-count` — a listing that shows a run late. The content of any
+ * `body=@<path>` is appended to `<STUB_LOG>.bodies`, one JSON string per line.
  */
 const GH_STUB = `#!/usr/bin/env node
 const { appendFileSync, existsSync, readFileSync, writeFileSync } = require('node:fs');
 const args = process.argv.slice(2);
 appendFileSync(process.env.STUB_LOG, JSON.stringify(args) + '\\n');
+const at = args.findIndex((arg) => arg.startsWith('body=@'));
+if (at >= 0) {
+  appendFileSync(process.env.STUB_LOG + '.bodies', JSON.stringify(readFileSync(args[at].slice('body=@'.length), 'utf8')) + '\\n');
+}
 const line = args.join(' ');
 const failOn = process.env.STUB_FAIL_ON;
 if (failOn && line.startsWith(failOn)) {
@@ -214,6 +219,10 @@ async function createJobFixture(t) {
     status: () => JSON.parse(readFileSync(remoteStatus, 'utf8')),
     ghCalls: () =>
       existsSync(ghLog) ? readFileSync(ghLog, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l).join(' ')) : [],
+    ghBodies: () =>
+      existsSync(`${ghLog}.bodies`)
+        ? readFileSync(`${ghLog}.bodies`, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+        : [],
     pauseDropped: () => existsSync(join(w.dir, STATE_DIR, 'PAUSE')),
     async restoreStatus(fields) {
       const record = { schema: '1', branch: w.branch, engine: 'task', status: 'paused', decision: 'continue', ...fields };
@@ -632,7 +641,7 @@ test('control poll: the lower bound is never the job start alone', async (t) => 
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.equal(lastLine(result.stdout), 'job: paused stop');
     assert.equal(j.status().pause_reason, 'user');
-    assert.ok(j.ghCalls().includes('run view 77 --json createdAt'), j.ghCalls().join('\n'));
+    assert.equal(j.ghCalls().filter((c) => c === 'run view 77 --json createdAt').length, 1, j.ghCalls().join('\n'));
   });
 
   await t.test('chain 1: a pause sent across a chained continuation, after the restored bound', async (t) => {
@@ -993,6 +1002,44 @@ test('report: a job whose sessions keep failing reports failed on its issue once
   const calls = j.ghCalls();
   // The fixture has no pull request, so each `failed` report labels the issue once.
   assert.equal(calls.filter((c) => c.includes('labels[]=sdlc-harness: failed')).length, 1, calls.join('\n'));
+});
+
+test('runner wait: logged from the run createdAt, and noted on a resumed comment only when long', async (t) => {
+  for (const [name, waitSecs, expectNote] of [
+    ['a long wait on a user resume', 600, true],
+    ['a short wait', 30, false],
+  ]) {
+    await t.test(name, async (t) => {
+      const j = await createJobFixture(t);
+      if (j === null) return;
+      await wireForge(j, 'github');
+      await j.restoreStatus({ pause_reason: 'user' });
+      const start = nowSecs();
+      const result = await j.job([j.branch, 'task', 'pause'], {
+        HARNESS_INPUT_CHAIN: '0',
+        HARNESS_JOB_STARTED_EPOCH: String(start),
+        GITHUB_RUN_ID: '77',
+        GITHUB_REPOSITORY: FORGE_REPOSITORY,
+        STUB_RUN_VIEW: JSON.stringify({ createdAt: iso(start - waitSecs) }),
+      });
+      assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      assert.match(result.stdout, new RegExp(`job: waited ${waitSecs}s for a runner \\(run created ${start - waitSecs}, job started ${start}\\)`));
+      assert.equal(j.ghCalls().filter((c) => c === 'run view 77 --json createdAt').length, 1, j.ghCalls().join('\n'));
+      const resumed = j.ghBodies().filter((b) => b.includes('resumed.'));
+      assert.equal(resumed.length, 1, j.ghBodies().join('\n---\n'));
+      assert.equal(resumed[0].includes('GitHub took 10 minutes to start this job'), expectNote, resumed[0]);
+      assert.equal(resumed[0].includes('GitHub took'), expectNote, resumed[0]);
+    });
+  }
+
+  await t.test('no GITHUB_RUN_ID: the wait is unknown', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    const result = await j.job([j.branch, 'task', 'none'], { HARNESS_JOB_STARTED_EPOCH: String(nowSecs()) });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, /job: this run's createdAt could not be read — the runner wait is unknown/);
+    assert.equal(j.ghCalls().some((c) => c.startsWith('run view')), false, j.ghCalls().join('\n'));
+  });
 });
 
 test('status prints the four job-mode tunables with their defaults', async (t) => {

@@ -364,6 +364,11 @@
 #     shows late is still read; anything else, `1` included, is a failed poll,
 #     which advances nothing and pauses nothing. Every poll logs one line,
 #     `job: control poll of '<branch>' since <since> (exit <rc>): <last line>`.
+#   * THE RUNNER WAIT: the job logs HARNESS_JOB_STARTED_EPOCH less this run's
+#     `createdAt` — read once per job, the same read the control poll's
+#     starting bound takes. A wait of at least RUNNER_WAIT_NOTE_SECS is noted on
+#     the job's `resumed` comment. The budget already starts at
+#     HARNESS_JOB_STARTED_EPOCH, so a wait costs no budget.
 #   * THE DECISION, when the run leaves `running`: `paused` for `budget` ->
 #     `continue`; for `user` -> `stop`; by the usage gate (`usage`) -> a lost
 #     `usage_resume_at` is first given the gate's fallback and reported as
@@ -1130,6 +1135,9 @@ REMOTE_AUTO_RESUME_MAX="${REMOTE_AUTO_RESUME_MAX:-2}"
 # How long job mode waits before each of those resumes, so a transient outage
 # has time to clear.
 REMOTE_AUTO_RESUME_DELAY_SECS="${REMOTE_AUTO_RESUME_DELAY_SECS:-300}"
+# The runner wait at or above which the job's `resumed` comment says so (see
+# THE RUNNER WAIT in the header).
+RUNNER_WAIT_NOTE_SECS=300
 
 # JOB MODE (see the header). Assigned HERE, after the override channel and every
 # tunable default, so neither the file nor an inherited value can turn a
@@ -1142,6 +1150,10 @@ JOB_MODE=0
 # starting bound, below which no later bound falls.
 JOB_START_EPOCH=0
 JOB_CONTROL_FLOOR=0
+# This run's `createdAt`, read once per job (empty when unread), and the note
+# job_report adds to a `resumed` report when the runner wait was long.
+JOB_RUN_CREATED_AT=""
+JOB_RUNNER_WAIT_NOTE=""
 LAST_CONTROL_POLL=0
 JOB_USER_PAUSE_DROPPED=0
 JOB_BUDGET_PAUSE_DROPPED=0
@@ -1196,16 +1208,21 @@ notify() {
 
 # job_report <event> <branch> [<log>] — the only route to GitHub. The detail is
 # withheld: it names local slash commands, and `report` words its comment from
-# the registry record itself.
+# the registry record itself. A `resumed` report carries JOB_RUNNER_WAIT_NOTE
+# when it is set.
 job_report() {
+  local note=()
   if [ ! -r "$REMOTE_RUN" ]; then
     log "notify: '$REMOTE_RUN' is not readable — '${1:-?}' event for '${2:-?}' not reported on GitHub"
     return 0
   fi
+  if [ "$1" = "resumed" ] && [ -n "$JOB_RUNNER_WAIT_NOTE" ]; then
+    note=(--note "$JOB_RUNNER_WAIT_NOTE")
+  fi
   if [ -n "${3:-}" ]; then
-    bash "$REMOTE_RUN" report "$1" "$2" --repo "$MAIN_REPO" >>"$3" 2>&1 || true
+    bash "$REMOTE_RUN" report "$1" "$2" ${note[@]+"${note[@]}"} --repo "$MAIN_REPO" >>"$3" 2>&1 || true
   else
-    bash "$REMOTE_RUN" report "$1" "$2" --repo "$MAIN_REPO" >/dev/null 2>&1 || true
+    bash "$REMOTE_RUN" report "$1" "$2" ${note[@]+"${note[@]}"} --repo "$MAIN_REPO" >/dev/null 2>&1 || true
   fi
 }
 
@@ -4033,6 +4050,26 @@ job_int() {
   printf '%s\n' "$((10#$1))"
 }
 
+# job_runner_wait — the job's one `run-created-at` read, into JOB_RUN_CREATED_AT,
+# then THE RUNNER WAIT's log line and JOB_RUNNER_WAIT_NOTE (the header).
+job_runner_wait() {
+  local wait mins
+  if [ -n "${GITHUB_RUN_ID:-}" ]; then
+    JOB_RUN_CREATED_AT="$(job_int "$(bash "$REMOTE_RUN" run-created-at "$GITHUB_RUN_ID" --repo "$MAIN_REPO" 2>>"$WATCHER_LOG")")" || JOB_RUN_CREATED_AT=""
+  fi
+  if [ -z "$JOB_RUN_CREATED_AT" ]; then
+    log "job: this run's createdAt could not be read — the runner wait is unknown"
+    return 0
+  fi
+  wait=$((JOB_START_EPOCH - JOB_RUN_CREATED_AT))
+  [ "$wait" -ge 0 ] || wait=0
+  log "job: waited ${wait}s for a runner (run created $JOB_RUN_CREATED_AT, job started $JOB_START_EPOCH)"
+  if [ "$wait" -ge "$RUNNER_WAIT_NOTE_SECS" ]; then
+    mins=$(((wait + 59) / 60))
+    JOB_RUNNER_WAIT_NOTE="GitHub took $mins minutes to start this job, so nothing moved until then."
+  fi
+}
+
 # job_start_control_bound <branch> <remote_status> — the control poll's first
 # lower bound, in the order the header's JOB MODE block states.
 job_start_control_bound() {
@@ -4040,9 +4077,7 @@ job_start_control_bound() {
   if [ "$HARNESS_INPUT_CHAIN" -gt 0 ] && [ -f "$remote_status" ]; then
     bound="$(job_int "$(hr_remote_status_get "$remote_status" control_polled_at)")" || bound=""
   fi
-  if [ -z "$bound" ] && [ -n "${GITHUB_RUN_ID:-}" ]; then
-    bound="$(job_int "$(bash "$REMOTE_RUN" run-created-at "$GITHUB_RUN_ID" --repo "$MAIN_REPO" 2>>"$WATCHER_LOG")")" || bound=""
-  fi
+  [ -n "$bound" ] || bound="$JOB_RUN_CREATED_AT"
   if [ -z "$bound" ]; then
     bound="$JOB_START_EPOCH"
     log "job: could not read this run's createdAt — the control poll starts from the job's start ($bound)"
@@ -4163,6 +4198,7 @@ run_job() {
   local prev_status="" prev_engine="" aside_rc
 
   JOB_START_EPOCH="$(job_int "${HARNESS_JOB_STARTED_EPOCH:-}")" || JOB_START_EPOCH="$(date +%s)"
+  job_runner_wait
   state_rel="$(run_state_dir "$worktree")" || fatal "job: the state directory in '$worktree' is unresolvable"
   state_abs="$worktree/$state_rel"
   clar_dir="$state_abs/clarifications/$branch"
