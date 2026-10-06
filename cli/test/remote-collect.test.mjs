@@ -19,7 +19,9 @@
  * paginated `pulls/<n>/reviews` and `pulls/<n>/comments` listings from `STUB_PR_REVIEWS` and
  * `STUB_PR_COMMENTS`; the permission call per login from `STUB_PERMISSIONS`; and the labels GET with
  * `[]`; the paginated `issues/<n>/comments` listing per item from `STUB_ITEM_COMMENTS`, and a check run's
- * annotations from `STUB_ANNOTATIONS`. `HARNESS_TRIGGER_LOOKUP_SECS` is `0`. No case reaches the network.
+ * annotations from `STUB_ANNOTATIONS`. `HARNESS_TRIGGER_LOOKUP_SECS` is `0`. No case reaches the network:
+ * the fixture's `autonomous-notify.sh` is replaced by a recorder, so a push never reads the machine's
+ * `push.env` or raises a desktop banner, and a case asserts what was sent through `notifications()`.
  *
  * A newest run whose `run` job GitHub never started is reported by this run's own `collect` in one
  * `not_started` comment, on the pull request or else the issue, naming `@sdlc-harness resume` when its
@@ -40,6 +42,7 @@ import test from 'node:test';
 import { createFixture, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = 'scripts/remote-run.sh';
+const NOTIFY = 'scripts/autonomous-notify.sh';
 const STATE_DIR = 'sdlc-harness';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
@@ -141,6 +144,11 @@ async function collectFixture(t, { ledger = true } = {}) {
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  // The notifier is a recorder, so a `not_started` push never reaches the machine's push.env or desktop.
+  const notes = join(dir, STATE_DIR, 'stub', 'notifications.tsv');
+  writeFileSync(join(dir, NOTIFY),
+    `#!/usr/bin/env bash\nprintf '%s\\t%s\\t%s\\n' "$1" "$2" "\${4-}" >> '${notes}'\n`,
+    { mode: 0o755 });
   await runGit(dir, ['add', '-A']);
   await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: adopt the harness']);
   await runGit(dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${config.defaultBranch}`]);
@@ -210,6 +218,17 @@ async function collectFixture(t, { ledger = true } = {}) {
         STUB_ANNOTATIONS: '',
         ...env,
       }),
+    /** @returns {{ event: string, branch: string, detail: string }[]} what the recorder notifier was sent */
+    notifications: () =>
+      existsSync(notes)
+        ? readFileSync(notes, 'utf8')
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => {
+              const [event, branch, detail] = line.split('\t');
+              return { event, branch, detail };
+            })
+        : [],
     /** @returns {{ args: string[], body: string | null, line: string }[]} */
     calls: () =>
       existsSync(log)
@@ -227,13 +246,14 @@ async function collectFixture(t, { ledger = true } = {}) {
 const allComments = (calls) => calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/comments /.test(call.line));
 const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workflow run '));
 
-/** Assert nothing started: exit 0, a line matching <pattern>, no dispatch, no comment, origin unchanged. */
+/** Assert nothing started: exit 0, a line matching <pattern>, no dispatch, no comment, no notification, origin unchanged. */
 const assertNothing = async (f, result, before, pattern) => {
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, pattern);
   const calls = f.calls();
   assert.deepEqual(dispatches(calls), []);
   assert.deepEqual(allComments(calls), []);
+  assert.deepEqual(f.notifications(), []);
   assert.equal(await f.originRefs(), before);
 };
 
@@ -395,14 +415,14 @@ const labelCalls = (calls) =>
   calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/labels /.test(call.line)).map((call) => call.line);
 const labelOn = (n, state) => `api --method POST repos/${REPOSITORY}/issues/${n}/labels -f labels[]=sdlc-harness: ${state}`;
 
-/** The `not_started` push notification's stdout line for feat_x; fails when there is none. */
-const notifiedNotStarted = (result) => {
-  const line = result.stdout.split('\n').find((l) => l.startsWith('remote-run.sh: notified not_started for feat_x: '));
-  assert.ok(line, result.stdout);
-  return line;
+/** The detail of the one `not_started` push the recorder got for feat_x; fails unless there is exactly one. */
+const notifiedNotStarted = (f) => {
+  const notes = f.notifications();
+  assert.deepEqual(notes.map(({ event, branch }) => `${event} ${branch}`), ['not_started feat_x']);
+  return notes[0].detail;
 };
 
-/** Assert one `not_started` comment on #<n> and nothing pushed or dispatched; returns its body. */
+/** Assert one `not_started` comment on #<n>, one `not_started` notification, and nothing pushed to origin or dispatched; returns its body. */
 const assertNotStarted = async (f, result, before, n) => {
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
@@ -414,6 +434,7 @@ const assertNotStarted = async (f, result, before, n) => {
   assert.ok(posted[0].body.includes(`\n\n${NOT_STARTED_WHY}\n`), posted[0].body);
   assert.match(posted[0].body, /<!-- sdlc-harness event=not_started branch=feat_x -->/);
   assert.equal(await f.originRefs(), before);
+  notifiedNotStarted(f);
   return posted[0].body;
 };
 
@@ -435,7 +456,7 @@ test('a first run whose job never started, with its issue\'s started marker: one
   const result = await f.collect(neverStarted({ olderBundle: false, prs: [], comments: { 7: [botComment('started')] } }));
   const body = await assertNotStarted(f, result, before, 7);
   assert.ok(body.includes('Comment `@sdlc-harness resume`'), body);
-  assert.ok(notifiedNotStarted(result).includes('/autonomous-sdlc-harness:branch-resume'), result.stdout);
+  assert.ok(notifiedNotStarted(f).includes('/autonomous-sdlc-harness:branch-resume'));
   assert.deepEqual(labelCalls(f.calls()), [labelOn(7, 'paused')]);
 });
 
@@ -448,7 +469,7 @@ test('a first run whose job never started, with no marker: one issue comment nam
   assert.ok(body.includes(ROUTE_CHOICE), body);
   assert.ok(!body.includes('harness-state'), body);
   assert.ok(!body.includes('@sdlc-harness resume'), body);
-  assert.ok(!notifiedNotStarted(result).includes('/autonomous-sdlc-harness:branch-resume'), result.stdout);
+  assert.ok(!notifiedNotStarted(f).includes('/autonomous-sdlc-harness:branch-resume'));
   assert.deepEqual(labelCalls(f.calls()), [labelOn(7, 'failed')]);
 });
 
