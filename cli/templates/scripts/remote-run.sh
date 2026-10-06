@@ -791,8 +791,8 @@
 # never started (one line; its `collect` job reports it), and anything but
 # `status: paused` / `pause_reason: usage` with an integer `usage_resume_at`,
 # and a run whose state entry says `notified`. A failed artifact lookup on a
-# `completed` run is one line and waiting. A listed bundle that cannot be
-# downloaded is waiting, counted per run in `download_failures` and reset by a
+# `completed` run counts as a failed download of its bundle, below. A listed
+# bundle that cannot be downloaded is waiting, counted per run in `download_failures` and reset by a
 # later successful download; at `HARNESS_POLL_MAX_DISPATCH_FAILURES`
 # consecutive failures it sends exactly one `bundle_unreadable` push
 # notification, with no comment and no label, the entry marked `notified`, and
@@ -3042,7 +3042,7 @@ poll_usage_paused() {
 # With may_dispatch 0 nothing is sent and nothing notified: a due run that
 # would be dispatched counts as waiting, one that would be refused does not.
 poll_branch() {
-  local id="$1" state="$2" may_dispatch="$3" at engine_value now failures downloads
+  local id="$1" state="$2" may_dispatch="$3" at engine_value now failures downloads listed
   if [ "$may_dispatch" -eq 1 ] && [ -n "$(poll_state_get "$branch" run_id)" ] \
     && [ "$(poll_state_get "$branch" run_id)" != "$id" ]; then
     poll_state_drop "$branch"
@@ -3078,20 +3078,19 @@ poll_branch() {
     return 1
   fi
   bundle_listed "$id"
-  case $? in
-    1)
-      if run_not_started_var "$id"; then
-        echo "remote-run.sh: poll: run $id of $branch never started ($NOT_STARTED_REASON); its collect job reports it; not waiting"
-      else
-        echo "remote-run.sh: poll: $branch skipped"
-      fi
-      return 1
-      ;;
-    2) echo "remote-run.sh: poll: reading the artifacts of run $id ($branch) failed ($GH_ERR); counted as waiting"; return 0 ;;
-  esac
+  listed=$?
+  if [ "$listed" -eq 1 ]; then
+    if run_not_started_var "$id"; then
+      echo "remote-run.sh: poll: run $id of $branch never started ($NOT_STARTED_REASON); its collect job reports it; not waiting"
+    else
+      echo "remote-run.sh: poll: $branch skipped"
+    fi
+    return 1
+  fi
+  [ "$listed" -ne 2 ] || echo "remote-run.sh: poll: reading the artifacts of run $id ($branch) failed ($GH_ERR)"
   downloads=""
   [ "$(poll_state_get "$branch" run_id)" != "$id" ] || downloads=$(poll_state_get "$branch" download_failures)
-  if ! poll_fetch "$id"; then
+  if [ "$listed" -eq 2 ] || ! poll_fetch "$id"; then
     case "$downloads" in
       ''|*[!0-9]*) downloads=0 ;;
     esac

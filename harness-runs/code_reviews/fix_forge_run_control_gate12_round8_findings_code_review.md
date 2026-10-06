@@ -37,7 +37,7 @@ Each entry resolves to `harness-runs/code_reviews/fix_forge_run_control_gate12_r
 5. [x] **Finding 2** — `hr_push_landed` answers `0` when its fetch shows origin equal to `HEAD` _(layer: cli)_
 6. [x] **Finding 1** — `sync` writes the recovered engine for a run GitHub never started _(layer: cli)_
 7. [x] **Finding 4** — Do not measure or note a runner wait on a re-run attempt _(layer: cli, general)_
-8. [ ] **Finding 3** — Count a completed run's failed artifact lookup under the poller's download-failure bound _(layer: cli, general)_
+8. [x] **Finding 3** — Count a completed run's failed artifact lookup under the poller's download-failure bound _(layer: cli, general)_
 
 ---
 

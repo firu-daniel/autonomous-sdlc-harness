@@ -1918,6 +1918,36 @@ test('poll at the download bound sends one push-only bundle_unreadable, posts no
   assert.deepEqual(disables(fx), ['workflow disable harness-resume.yml']);
 });
 
+test('poll counts a failed artifact lookup on a completed run as a failed download, up to one bundle_unreadable', async (t) => {
+  const fx = await forgeFixture(t);
+  const notes = recordNotifications(fx);
+  const extra = {
+    STUB_LABELS: '[]',
+    STUB_FAIL_ON: 'api repos/{owner}/{repo}/actions/runs/801/artifacts',
+    STUB_FAIL_STDERR: 'HTTP 502: bad gateway',
+  };
+  let served = servedState(fx, 'lookup', { feat_x: { run_id: '801', failures: '', notified: '' } });
+  for (const tick of [1, 2]) {
+    const result = await pollTick(fx, { tick, runId: 801, bundleDir: bundle(fx, `lookup${tick}`), served, extra });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /reading the artifacts of run 801 \(feat_x\) failed \([^)]*HTTP 502: bad gateway\)/);
+    assert.match(result.stdout, new RegExp(`could not be downloaded, attempt ${tick} of 3; still waiting`));
+    assert.equal(pollState(fx).feat_x.download_failures, String(tick));
+    assert.deepEqual(notes(), []);
+    assert.deepEqual(disables(fx), []);
+    served = uploadState(fx, tick);
+  }
+  const last = await pollTick(fx, { tick: 3, runId: 801, bundleDir: bundle(fx, 'lookup3'), served, extra });
+  assert.equal(last.status, 0, last.stderr);
+  const sent = notes();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].event, 'bundle_unreadable');
+  assert.match(sent[0].detail, /after 3 attempts \([^)]*HTTP 502: bad gateway\)/);
+  assert.equal(pollState(fx).feat_x.notified, '1');
+  assert.deepEqual(issueWrites(fx), []);
+  assert.deepEqual(disables(fx), ['workflow disable harness-resume.yml']);
+});
+
 test('poll at the download bound leaves a delivered run\'s label unchanged', async (t) => {
   const { fx, notes } = await downloadBoundTick(t, '[{"name":"sdlc-harness: done"}]');
   assert.equal(notes().length, 1);
