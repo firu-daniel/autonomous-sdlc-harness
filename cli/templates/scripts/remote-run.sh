@@ -551,9 +551,15 @@
 # `Comment by @<login> on <issue|pull request> #<n>:`, a blank line, the body
 # verbatim), `run.md` (`branch:`, the `fetch` keys, `stopped: yes|no`, the next
 # ledger entry and its section, or that every entry is ticked or the ledger
-# could not be read) and `questions/question_<n>.md` per open question, each
-# capped at `MENTION_FILE_MAX_BYTES` at a whole line with a `(cut at <n>
-# bytes)` line. THE SESSION runs once, never retried, in a subshell `cd` into
+# could not be read), `questions/question_<n>.md` per open question,
+# `item.md` (`kind:`, `number:`, `title:`, `author:`, `url:`, a blank line, the
+# body, from `api repos/<repo>/issues/<n>`), `conversation.md` (the last
+# `MENTION_COMMENTS_MAX` comments before the commenter's own, oldest first,
+# each `### @<login> at <at>`, `(posted by the harness)` when it carries
+# `COMMENT_MARKER`, then its body, from the paginated comment listing) and, on
+# a pull request, `diff.patch` (`pr diff`, text only: nothing is checked out),
+# each capped at `MENTION_FILE_MAX_BYTES` at a whole line with a `(cut at <n>
+# bytes)` line; a failed read is said in the file, never refused. THE SESSION runs once, never retried, in a subshell `cd` into
 # that directory with `GH_TOKEN`, `GITHUB_TOKEN` and `HARNESS_PR_TOKEN` unset
 # and `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY` exported from whichever
 # saved value is set: `-p "$MENTION_COMMAND"` (no argument, so no comment text
@@ -1573,6 +1579,8 @@ QUESTION_COMMENT_MAX_BYTES=250000
 # with room for the prefix, the footer and the marker).
 MENTION_FILE_MAX_BYTES=200000
 MENTION_TEXT_MAX_BYTES=60000
+# How many of the comments before a mention its context's conversation.md keeps.
+MENTION_COMMENTS_MAX=30
 # The mention session's model (a command declares no `model:`), and its spend
 # bound: a bound on one read, not a measured cost.
 MENTION_MODEL='sonnet'
@@ -7167,6 +7175,57 @@ control_mention_context() {
   return 0
 }
 
+# control_mention_context_extra <dir> — item.md, conversation.md and, on a pull
+# request, diff.patch in <dir>, each capped at MENTION_FILE_MAX_BYTES; a failed
+# read is one line in its file, never a refusal. 1 when a file cannot be
+# written. Every forge value reaches a file through `jq` or `printf '%s'` only.
+control_mention_context_extra() {
+  local dir="$1" kind=issue own f
+  [ -z "$CONTROL_IS_PR" ] || kind="pull request"
+  if ! gh_call api "repos/$FORGE_REPO/issues/$CONTROL_NUMBER"; then
+    printf 'The issue or pull request could not be read (%s).\n' "$GH_ERR" >"$dir/item.md" || return 1
+  elif ! printf '%s' "$GH_OUT" | jq -j --arg kind "$kind" --arg n "$CONTROL_NUMBER" '
+      "kind: \($kind)\nnumber: \($n)\ntitle: \(.title // "" | tostring)\nauthor: @\(.user.login // "" | tostring)\nurl: \(.html_url // "" | tostring)\n\n\(.body // "" | tostring)"' \
+      >"$dir/item.md" 2>/dev/null; then
+    printf 'The issue or pull request could not be read (its answer is not the expected JSON).\n' >"$dir/item.md" || return 1
+  fi
+
+  # The commenter's own body goes to jq through a file: a comment can exceed
+  # the kernel's bound on one argument.
+  own="$dir.own"
+  control_dirs="$control_dirs $own"
+  printf '%s' "$CONTROL_BODY" >"$own" || return 1
+  if ! gh_call api --paginate "repos/$FORGE_REPO/issues/$CONTROL_NUMBER/comments" --jq '.[] | {login: .user.login, at: .created_at, body: .body}'; then
+    printf 'The comments of this %s could not be read (%s).\n' "$kind" "$GH_ERR" >"$dir/conversation.md" || return 1
+  elif ! printf '%s' "$GH_OUT" | jq -s -j --arg actor "$CONTROL_ACTOR" --rawfile own "$own" \
+      --arg marker "$COMMENT_MARKER" --arg kind "$kind" --argjson max "$MENTION_COMMENTS_MAX" '
+      [.[] | objects] as $all
+      | ([range(0; $all | length) | select($all[.].login == $actor and $all[.].body == $own)] | last) as $i
+      | (if $i == null then $all else $all[:$i] end) as $before
+      | (if ($before | length) > $max then $before[($before | length) - $max:] else $before end)
+      | if length == 0 then "No comment precedes this one on the \($kind).\n"
+        else map("### @\(.login // "" | tostring) at \(.at // "" | tostring)\n"
+          + (if ((.body // "" | tostring) | contains($marker)) then "(posted by the harness)\n" else "" end)
+          + "\n\(.body // "" | tostring)\n\n") | join("") end' \
+      >"$dir/conversation.md" 2>/dev/null; then
+    printf 'The comments of this %s could not be read (their listing is not the expected JSON).\n' "$kind" >"$dir/conversation.md" || return 1
+  fi
+
+  if [ -n "$CONTROL_IS_PR" ]; then
+    if ! gh_call pr diff "$CONTROL_NUMBER" --repo "$FORGE_REPO"; then
+      printf "The pull request's diff could not be read (%s).\n" "$GH_ERR" >"$dir/diff.patch" || return 1
+    else
+      printf '%s\n' "$GH_OUT" >"$dir/diff.patch" || return 1
+    fi
+  fi
+
+  for f in "$dir/item.md" "$dir/conversation.md" "$dir/diff.patch"; do
+    [ -f "$f" ] || continue
+    mention_cap "$f" "$MENTION_FILE_MAX_BYTES" "(cut at $MENTION_FILE_MAX_BYTES bytes)" || return 1
+  done
+  return 0
+}
+
 # control_mention_session <dir> <out> <err> — the one read-only session, run
 # once in a subshell in <dir>; AGENT_STATUS is its exit.
 AGENT_STATUS=0
@@ -7230,7 +7289,7 @@ control_mention() {
   out="$dir.out"
   err="$dir.err"
   control_dirs="$control_dirs $dir $out $err"
-  control_mention_context "$dir" \
+  { control_mention_context "$dir" && control_mention_context_extra "$dir"; } \
     || control_refuse "$EXIT_GH" "the mention's context could not be written under '$dir'" "Comment again to retry."
 
   control_mention_session "$dir" "$out" "$err"

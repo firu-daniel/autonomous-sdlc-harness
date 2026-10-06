@@ -10,12 +10,15 @@
  * exactly its answer and dispatch nothing, except a `command` naming `answer`, `pause`, `resume` or
  * `status`, which is asserted to be carried out by that verb's own arm — its dispatch, its refusals —
  * with every reply opening on how the mention was read; and a decision outside the closed set, a failed
- * session and a credential value in agent-written text each refuse.
+ * session and a credential value in agent-written text each refuse. The context directory is asserted
+ * to carry the item, the conversation before the mention and, on a pull request, the diff, each capped,
+ * and a failed read of one to be said in its file rather than refused.
  *
  * The fixture is `remote-control.test.mjs`'s shape, carried file-locally as each control suite carries
  * its own: `init`, `execution.target` `github-actions`, `forge` `github`, `feat_x` pushed with its task
  * prompt and ledger, and `gh` a stub through `HARNESS_GH_CLI` that also records, per call, whether
- * `IN_OAUTH`, `IN_API`, `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` is set. The agent is a stub
+ * `IN_OAUTH`, `IN_API`, `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` is set, and answers the item read
+ * with `STUB_ITEM` and `pr diff` with `STUB_PR_DIFF` (`FAIL` fails it). The agent is a stub
  * through `HARNESS_AGENT_CLI` that logs its argv, cwd, the files under its cwd and which of `GH_TOKEN`,
  * `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` it sees, then prints `STUB_AGENT_OUTPUT` and exits
  * `STUB_AGENT_EXIT`. `HARNESS_MENTION_PLUGIN_DIR` is a throwaway directory under the fixture; no case
@@ -41,6 +44,9 @@ const API_KEY = 'api-credential-value-5678';
 const MENTION_COMMAND = '/autonomous-sdlc-harness:harness-read-mention';
 const COMMANDS = ['answer [<n>]', 'pause', 'resume', 'stop', 'clear', 'status'];
 
+const DIFF = 'diff --git a/notes.txt b/notes.txt\n--- a/notes.txt\n+++ b/notes.txt\n@@ -1 +1 @@\n-old\n+new\n';
+const ITEM = { number: 12, title: 'Add the thing', user: { login: 'carol' }, html_url: `https://github.com/${REPOSITORY}/pull/12`, body: 'The item body.' };
+
 const GH_STUB = `#!/usr/bin/env node
 const { appendFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
@@ -63,6 +69,11 @@ if (args[0] === 'pr' && args[1] === 'view') {
   for (const c of JSON.parse(process.env.STUB_COMMENTS || '[]')) {
     process.stdout.write(JSON.stringify(withAt ? { login: c.user.login, at: c.created_at, body: c.body } : { login: c.user.login, body: c.body }) + '\\n');
   }
+} else if (args[0] === 'pr' && args[1] === 'diff') {
+  if (process.env.STUB_PR_DIFF === 'FAIL') fail('stub diff failure');
+  process.stdout.write(process.env.STUB_PR_DIFF || ${JSON.stringify(DIFF)});
+} else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+$/.test(args[1] ?? '')) {
+  process.stdout.write(process.env.STUB_ITEM || ${JSON.stringify(JSON.stringify(ITEM))});
 } else if (args[0] === 'api' && permission) {
   const answer = JSON.parse(process.env.STUB_PERMISSIONS || '{}')[permission[1]];
   if (answer === undefined || answer === 'FAIL') fail('stub permission failure');
@@ -220,6 +231,8 @@ async function controlFixture(t) {
         STUB_BUNDLE_STATUS: '',
         STUB_BUNDLE_FIELDS: '',
         STUB_BUNDLE_QUESTIONS: '',
+        STUB_PR_DIFF: '',
+        STUB_ITEM: '',
         HARNESS_AGENT_CLI: agent,
         STUB_AGENT_LOG: agentLog,
         STUB_AGENT_OUTPUT: result({ action: 'none', reason: 'nothing asked' }),
@@ -389,7 +402,7 @@ test('the context directory holds comment.md opening with the handle, run.md and
   });
   assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
   const { files } = f.agentCalls()[0];
-  assert.deepEqual(Object.keys(files).sort(), ['comment.md', 'questions/question_1.md', 'run.md']);
+  assert.deepEqual(Object.keys(files).sort(), ['comment.md', 'conversation.md', 'diff.patch', 'item.md', 'questions/question_1.md', 'run.md']);
   assert.equal(files['comment.md'], 'handle: @sdlc-harness\nComment by @alice on pull request #12:\n\nThanks!\n@sdlc-harness which question is open?');
   assert.match(files['run.md'], /^branch: feat_x\nstate: parked\n/);
   assert.match(files['run.md'], /\nstopped: no\n/);
@@ -407,6 +420,82 @@ test('a context file over MENTION_FILE_MAX_BYTES is cut at a whole line with a f
   const kept = comment.slice(0, -'(cut at 200000 bytes)\n'.length);
   assert.ok(Buffer.byteLength(kept) <= 200000);
   assert.match(kept, /\nx{99}\n$/);
+});
+
+/** A listed comment by <login> holding <body>. */
+const listed = (login, body, at = '2026-01-01T00:00:00Z') => ({ user: { login }, created_at: at, body });
+
+test('on a pull request the agent sees the item, the earlier comments oldest first without the commenter\'s own, and the diff', async (t) => {
+  const f = await controlFixture(t);
+  const mention = '@sdlc-harness check the question and let me know';
+  const run = await f.control(mention, {}, {
+    STUB_COMMENTS: JSON.stringify([
+      listed('bob', 'First.', '2026-01-01T00:00:01Z'),
+      listed('alice', mention, '2026-01-01T00:00:02Z'),
+      listed('github-actions[bot]', 'Parked.\n\n<!-- sdlc-harness event=parked branch=feat_x question=1 -->', '2026-01-01T00:00:03Z'),
+      listed('carol', 'Second.', '2026-01-01T00:00:04Z'),
+      listed('alice', mention, '2026-01-01T00:00:05Z'),
+    ]),
+  });
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  const [call] = f.agentCalls();
+  assert.equal(f.agentCalls().length, 1);
+  assert.equal(call.files['item.md'],
+    `kind: pull request\nnumber: 12\ntitle: Add the thing\nauthor: @carol\nurl: https://github.com/${REPOSITORY}/pull/12\n\nThe item body.`);
+  assert.equal(call.files['conversation.md'], [
+    '### @bob at 2026-01-01T00:00:01Z\n\nFirst.\n\n',
+    `### @alice at 2026-01-01T00:00:02Z\n\n${mention}\n\n`,
+    '### @github-actions[bot] at 2026-01-01T00:00:03Z\n(posted by the harness)\n\nParked.\n\n<!-- sdlc-harness event=parked branch=feat_x question=1 -->\n\n',
+    '### @carol at 2026-01-01T00:00:04Z\n\nSecond.\n\n',
+  ].join(''));
+  assert.equal(call.files['diff.patch'], DIFF);
+});
+
+test('on an issue there is no diff.patch', async (t) => {
+  const f = await controlFixture(t);
+  const start = listed('github-actions[bot]',
+    `Started a harness run on the branch \`feat_x\`: https://example.test/runs/1\n\nThe task is this issue's title and body.\n\n<!-- sdlc-harness event=started branch=feat_x -->\n`);
+  const run = await f.control('@sdlc-harness explain what the run is doing', { number: 7, pr: false }, {
+    STUB_COMMENTS: JSON.stringify([start]),
+    STUB_ITEM: JSON.stringify({ number: 7, title: 'An issue', user: { login: 'alice' }, html_url: ISSUE_URL, body: 'Do it.' }),
+  });
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  const { files } = f.agentCalls()[0];
+  assert.ok(!('diff.patch' in files), Object.keys(files).join(' '));
+  assert.match(files['item.md'], /^kind: issue\nnumber: 7\ntitle: An issue\n/);
+  assert.match(files['conversation.md'], /^### @github-actions\[bot\] at .*\n\(posted by the harness\)\n\nStarted a harness run/);
+  assert.ok(!f.calls().some((call) => call.line.startsWith('pr diff')));
+});
+
+test('35 earlier comments leave exactly the last 30', async (t) => {
+  const f = await controlFixture(t);
+  const mention = '@sdlc-harness summarise the thread';
+  const earlier = Array.from({ length: 35 }, (_, i) => listed('bob', `Comment ${i + 1}.`));
+  const run = await f.control(mention, {}, { STUB_COMMENTS: JSON.stringify([...earlier, listed('alice', mention)]) });
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  const conversation = f.agentCalls()[0].files['conversation.md'];
+  const bodies = conversation.split('\n').filter((line) => /^Comment \d+\.$/.test(line));
+  assert.deepEqual(bodies, Array.from({ length: 30 }, (_, i) => `Comment ${i + 6}.`));
+  assert.equal(conversation.split('\n').filter((line) => line.startsWith('### ')).length, 30);
+});
+
+test('an oversized diff is cut at a whole line with the cut note', async (t) => {
+  const f = await controlFixture(t);
+  const run = await f.control('@sdlc-harness review the diff', {}, { STUB_PR_DIFF: `+${'x'.repeat(98)}\n`.repeat(2100) });
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  const diff = f.agentCalls()[0].files['diff.patch'];
+  assert.ok(diff.endsWith('\n(cut at 200000 bytes)\n'), diff.slice(-200));
+  const kept = diff.slice(0, -'(cut at 200000 bytes)\n'.length);
+  assert.ok(Buffer.byteLength(kept) <= 200000);
+  assert.match(kept, /\n\+x{98}\n$/);
+});
+
+test('a failed pr diff still runs the agent once, with diff.patch naming the failed read', async (t) => {
+  const f = await controlFixture(t);
+  const run = await f.control('@sdlc-harness review the diff', {}, { STUB_PR_DIFF: 'FAIL' });
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  assert.equal(f.agentCalls().length, 1);
+  assert.equal(f.agentCalls()[0].files['diff.patch'], "The pull request's diff could not be read (gh exited 4: stub diff failure).\n");
 });
 
 test('the agent sees no GH_TOKEN and only the credential that was set', async (t) => {

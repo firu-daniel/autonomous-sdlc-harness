@@ -39,3 +39,9 @@
 - `bash -n cli/templates/scripts/remote-run.sh` exits 0, and `commands.typecheck` exits 0.
 - `npm test --workspace cli -- test/remote-control-mention.test.mjs` passes. This is the one test file this task edits; run it as one plain foreground command from the repository root.
 - Grep the new function: every body, title and diff reaches a file through `printf '%s'` or `jq`, and none is passed to `eval`, an unquoted expansion or an argv the agent receives.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the tool layer (approval required, twice). That bullet rests instead on execution: the edited suite's 43 cases each run the whole script under `bash`, and all passed.
+- The commenter's own body reaches `jq` through `--rawfile` from a sibling file `<dir>.own`, registered in `control_dirs`, rather than through `--arg`: a comment body can exceed the kernel's per-argument bound.
+- An empty conversation writes `No comment precedes this one on the <kind>.`, and a listing or item answer that is not the expected JSON writes a one-line failed-read note, as a failed `gh` call does. The plan did not cover either case.
