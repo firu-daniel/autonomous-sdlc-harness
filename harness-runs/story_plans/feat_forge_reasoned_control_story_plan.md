@@ -77,7 +77,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_forge_
 4. [x] **Task 4** — Give the mention agent the item, its recent conversation and the pull request's diff _(layer: cli)_ _(points: 10)_
 5. [x] **Task 5** — Give `harness-control.yml`'s comment path the credential, the agent CLI and the pinned plugin _(layer: cli)_ _(points: 15)_
 6. [x] **Task 6** — Report mentions in `doctor` and `init`, and warn on a control workflow that passes no credential _(layer: cli)_ _(points: 12)_
-7. [ ] **Task 7** — Write the mention-reading instruction file `plugin/instructions/mention_reading.md` _(layer: plugin)_ _(points: 15)_
+7. [x] **Task 7** — Write the mention-reading instruction file `plugin/instructions/mention_reading.md` _(layer: plugin)_ _(points: 15)_
 8. [ ] **Task 8** — Add the mention reader as the plugin slash command `harness-read-mention` _(layer: plugin)_ _(points: 13)_
 9. [ ] **Task 9** — Document mentions in `docs/github-run-control.md` §1 and §3 _(layer: general)_ _(points: 15)_
 10. [ ] **Task 10** — Record the credential decision, the injection boundary and the unverified behaviours in `docs/github-run-control.md` §6 and §8 _(layer: general)_ _(points: 15)_
