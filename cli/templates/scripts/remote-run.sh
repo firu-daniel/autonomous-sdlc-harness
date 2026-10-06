@@ -427,9 +427,11 @@
 # accepts only `park_loop`, the GitHub form of `branch-resume`'s confirmation;
 # any other state is a refusal naming it. Each sends the local relay's dispatch,
 # `dispatch <branch> --engine <the state's engine> --resume pause --chain 0`,
-# `clear` with `park_loop_clear` set, and no other command sets it. An empty
-# engine is refused, never guessed (the `engine` input defaults to `task`),
-# naming the Run workflow form. On 0 a reply, then `running` on the run's issue
+# `clear` with `park_loop_clear` set, and no other command sets it. A run whose
+# job GitHub never started first takes the engine its dispatch's comment
+# records (`forge_dispatch_engine_var`); an engine still empty after that is
+# refused, never guessed (the `engine` input defaults to `task`), and the
+# refusal names the Run workflow form. On 0 a reply, then `running` on the run's issue
 # and pull request; on 2 a refusal and exit 2. `answer`: the first line is
 # `answer <n>` and the answer every line below it, a trailing CR stripped from
 # each line and its bytes otherwise unchanged; text after <n> on the first line
@@ -850,7 +852,9 @@
 #      THIS run, nothing restored — so a later sync with no newer run is case 1
 #   5. no bundle in any run and an empty `remote_run_id`: `failed`. Not
 #      `paused`: with no bundle anywhere a pause resume has nothing to restore,
-#      and re-dropping the artifact is the recovery
+#      and re-dropping the artifact is the recovery, except a run whose job
+#      GitHub never started and whose engine its dispatch's comment records,
+#      which `sync` records as case 4 does, `paused (killed)`
 #
 # THE `killed` AND `expired` MAPPINGS. A finished run whose bundle still says
 # `running` (a kill, a timeout with no chain left) syncs as `status: paused`,
@@ -864,6 +868,11 @@
 # no step run) maps to the same states as any other run with no bundle:
 # `paused` / `killed` when an older run carries a bundle, else `failed`. Its
 # detail names GitHub's reason instead of "killed, cancelled or replaced".
+# A never-started run with no bundle anywhere whose engine its dispatch's
+# comment records maps to `paused` / `killed` too, so `resume` accepts it.
+# When that run was the branch's first, the branch has no ledger yet:
+# `restore` finds no previous bundle and the resumed job starts as the
+# branch's first. With no such comment it stays `failed`.
 #
 # THE WORKFLOW INPUT CONTRACT (the workflow template declares the same inputs):
 #
@@ -935,7 +944,10 @@
 # copy and a local branch it removes, and, after a push that did not land, the
 # same `hr_push_landed` fetch force-writing `refs/remotes/origin/<branch>` in
 # that mirror or copy, the record's `status` / `engine`, the bundle download
-# directory `sync` uses, and `report`'s writes for the round. A user's chain-0 `dispatch --resume answer|pause`
+# directory `sync` uses, and `report`'s writes for the round. Its settledness
+# read, when the newest run's job GitHub never started, also fetches origin's
+# <branch>, force-writing `refs/remotes/origin/<branch>` in the root checkout:
+# for a local `/autonomous-sdlc-harness:branch-user-review`, the main checkout. A user's chain-0 `dispatch --resume answer|pause`
 # writes the record's `status`, `resumed_at` and `resume_kind` in one write
 # when the main checkout's registry file exists and holds a record with
 # `execution: github-actions`; any other `dispatch` writes nothing. `trigger` writes its snapshot and comment
@@ -946,23 +958,28 @@
 # comment files under `RUNNER_TEMP` (removed), at most one pull request, one
 # comment and the state labels. `control` writes its reply file and its
 # `fetch` directory under `RUNNER_TEMP` (removed) and one reply comment, plus
-# what the child verb it runs writes. `collect` writes its round file and its
+# what the child verb it runs writes, and the fetch of origin's <branch> that
+# force-writes `refs/remotes/origin/<branch>` in its checkout. `collect` writes its round file and its
 # settledness directory under `RUNNER_TEMP` (removed), at most one comment on
 # the pull request, plus what its `review` child writes. `stop`, `continue` and `poll` also make
 # `report`'s writes for each event they report. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
 # `<branch>.remote.log` in the main checkout, plus the mirror restore
-# `hr_remote_bundle_restore` performs in the record's `worktree`; for
+# `hr_remote_bundle_restore` performs in the record's `worktree`, and, when
+# the newest run's job GitHub never started, a fetch force-writing
+# `refs/remotes/origin/<branch>` in the main checkout; for
 # `restore`, that download directory, the job restore (the planning drafts
 # among it), `answer_<n>.md` and the
 # `park_loop_cycles` rewrite of `remote_status.json`, all in the job's
 # checkout; for `save`, <out_dir> and the step summary; for `poll`, its
 # download directories and `<state_dir>/autonomous_logs/poll_state/previous/`
-# and `current/`. For `fetch`, <out_dir> only. For `discard`, the removal of
-# <dir> only. `pause-requested`,
-# `run-created-at`, `list` and `status` write nothing; a no-record `status`
-# downloads into a temporary directory it removes on exit.
+# and `current/`. For `fetch`, <out_dir> and, when the newest run's job GitHub
+# never started, a fetch force-writing `refs/remotes/origin/<branch>` in the
+# root checkout. For `discard`, the removal of <dir> only. `pause-requested`,
+# `run-created-at` and `list` write nothing, and `status` writes nothing but,
+# with no record, that same fetch; a no-record `status` downloads into a
+# temporary directory it removes on exit.
 #
 # MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
 # rename there is an edit here, byte for byte:
@@ -1289,6 +1306,11 @@ RUN_JOB_NAME='run'
 # How far before the previous round's `collected_at` `round_collect` lists
 # from, absorbing runner-clock skew; the id check drops what it re-lists.
 ROUND_OVERLAP_SECS=300
+# How far before a run's `createdAt` `forge_dispatch_engine_var` still trusts
+# a dispatcher's comment: the comment is posted after the dispatch request and
+# GitHub creates the run asynchronously, so either may carry the earlier
+# timestamp. Small enough that an older dispatch's comment falls outside it.
+DISPATCH_MARKER_SLACK_SECS=120
 
 # GitHub's documented limit on a `workflow_dispatch` inputs payload: "The
 # maximum payload for inputs is 65,535 characters."
@@ -2101,7 +2123,9 @@ sync_expired() {
 # its `status`: `branch_settled_var` passes it once that run's `run` job has
 # completed. RS_RUN_CREATED_AT is the newest run's `createdAt` (ISO 8601).
 # RS_NOT_STARTED is 1 only in cases 4 and 5, when `run_not_started_var` finds
-# GitHub never started that run's RUN_JOB_NAME job. Exits 3 when gh fails, 2
+# GitHub never started that run's RUN_JOB_NAME job; RS_ENGINE is then
+# `forge_dispatch_engine_var`'s answer, and case 5 with one is `paused` /
+# `killed`. Replaces GH_OUT in cases 4 and 5. Exits 3 when gh fails, 2
 # for an unrecognised bundle.
 RS_RUNS=""
 RS_RUN_ID=""
@@ -2213,6 +2237,16 @@ remote_state() {
     0)
       RS_NOT_STARTED=1
       RS_DETAIL="GitHub did not start the job of run $RS_RUN_ID ($NOT_STARTED_REASON): $RS_RUN_URL"
+      # No bundle names the engine, so the dispatch's own comment does; with
+      # one, case 5 becomes resumable from the ledger as case 4 is.
+      if [ -z "$RS_ENGINE" ]; then
+        forge_dispatch_engine_var "$branch" "$RS_RUN_CREATED_AT" || :
+        RS_ENGINE="$FORGE_DISPATCH_ENGINE"
+        if [ "$RS_STATE" = failed ] && [ -n "$RS_ENGINE" ]; then
+          RS_STATE=paused
+          RS_PAUSE_REASON=killed
+        fi
+      fi
       ;;
     2) echo "remote-run.sh: could not tell whether GitHub started the job of run $RS_RUN_ID: $GH_ERR" >&2 ;;
   esac
@@ -4125,6 +4159,63 @@ forge_pr_var() {
     echo "remote-run.sh: listing the open pull requests of $1 failed: $GH_ERR" >&2
     return 1
   fi
+  return 0
+}
+
+# forge_dispatch_engine_var <branch> <created_at_iso> — FORGE_DISPATCH_ENGINE,
+# the engine the dispatch that created the run at <created_at_iso> recorded in
+# its comment on the branch's issue or open pull request, or empty. Only a
+# `github-actions[bot]` comment counts, whose last non-empty line is exactly a
+# `started` or `round` marker for <branch>, either with or without an engine,
+# or a `reply` marker for <branch> carrying an engine, and whose `created_at`
+# is no earlier than <created_at_iso> less DISPATCH_MARKER_SLACK_SECS. The
+# newest one answers: `started` is `task`, `round` is `user_review`, `reply`
+# its own engine. 1 when the forge is off or the repository is unknown. Fetches
+# origin's <branch> into the root checkout; replaces GH_OUT.
+FORGE_DISPATCH_ENGINE=""
+forge_dispatch_engine_var() {
+  local b="$1" created="${2-}" since markers listed="" n engine answer
+  FORGE_DISPATCH_ENGINE=""
+  forge_on || return 1
+  forge_repo_var || return 1
+  if ! since=$(jq -n -r --arg t "$created" --argjson o "$DISPATCH_MARKER_SLACK_SECS" '($t | fromdateiso8601) - $o' 2>/dev/null) \
+    || [ -z "$since" ]; then
+    echo "remote-run.sh: the newest run of $b has no readable createdAt ('$created'); its dispatch's engine is not read" >&2
+    return 0
+  fi
+  # Every marker line that qualifies, each with the engine it answers.
+  markers=""
+  for engine in task user_review docs; do
+    markers="$markers$(forge_marker started "$b" "" "$engine")"$'\t'task$'\n'
+    markers="$markers$(forge_marker round "$b" "" "$engine")"$'\t'user_review$'\n'
+    markers="$markers$(forge_marker reply "$b" "" "$engine")"$'\t'"$engine"$'\n'
+  done
+  markers="$markers$(forge_marker started "$b")"$'\t'task$'\n'
+  markers="$markers$(forge_marker round "$b")"$'\t'user_review$'\n'
+  markers=$(printf '%s' "$markers" | jq -R -s -c \
+    '[split("\n")[] | select(length > 0) | split("\t") | {(.[0]): .[1]}] | add')
+  forge_fetch_branch "$b"
+  forge_issue_var "$b" || FORGE_ISSUE=""
+  forge_pr_var "$b" || FORGE_PR=""
+  for n in $FORGE_ISSUE $FORGE_PR; do
+    if ! gh_call api --paginate "repos/$FORGE_REPO/issues/$n/comments" --jq '.[] | {login: .user.login, at: .created_at, body: .body}'; then
+      echo "remote-run.sh: listing the comments of #$n failed, so the engine of $b's dispatch is not read: $GH_ERR" >&2
+      return 0
+    fi
+    listed="$listed$GH_OUT"$'\n'
+  done
+  if ! answer=$(printf '%s' "$listed" | jq -s -r --argjson m "$markers" --argjson since "$since" '
+    [.[] | select(type == "object" and .login == "github-actions[bot]" and (.at | type) == "string")
+      | ((.body // "") | gsub("\r"; "") | split("\n") | map(select(test("^\\s*$") | not)) | last // "") as $last
+      | select($m[$last] != null)
+      | (.at | try fromdateiso8601 catch null) as $t
+      | select($t != null and $t >= $since)
+      | {t: $t, e: $m[$last]}]
+    | sort_by(.t) | last | .e // ""' 2>/dev/null); then
+    echo "remote-run.sh: the comments of $b's issue and pull request are not the expected JSON, so the engine of its dispatch is not read" >&2
+    return 0
+  fi
+  FORGE_DISPATCH_ENGINE="$answer"
   return 0
 }
 

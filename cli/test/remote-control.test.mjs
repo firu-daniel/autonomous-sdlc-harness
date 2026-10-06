@@ -22,7 +22,15 @@
  * default one `in_progress` `harness run <branch>` run), a run's artifact list from `STUB_ARTIFACTS`, a
  * `run download` by writing a status.json whose `status` is `STUB_BUNDLE_STATUS`, and the labels GET with
  * `[]`. `STUB_BUNDLE_FIELDS` adds fields to that status.json, and `STUB_BUNDLE_QUESTIONS` writes an open
- * `clarifications/feat_x/question_<n>.md` beside it for each <n>. No case reaches the network.
+ * `clarifications/feat_x/question_<n>.md` beside it for each <n>. `STUB_ITEM_COMMENTS` (number to
+ * comments) overrides `STUB_COMMENTS` per item, `STUB_ARTIFACTS_BY_RUN` (run id to answer) overrides
+ * `STUB_ARTIFACTS` per run, and `STUB_JOBS` answers a run's jobs. No case reaches the network.
+ *
+ * A run whose `run` job GitHub never started takes its engine from the newest `github-actions[bot]`
+ * comment on the issue or pull request whose last line is that branch's `started`, `round` or
+ * engine-carrying `reply` marker, posted no earlier than `DISPATCH_MARKER_SLACK_SECS` before the run;
+ * with one, `resume` dispatches with it, a run with no bundle anywhere included, and with none the
+ * existing refusals stand.
  *
  * `resume` and `clear` are asserted to send exactly the local relay's dispatch — `clear` alone adding
  * `park_loop_clear` — and to refuse every other state, and an unrecorded engine, with no `workflow run`.
@@ -57,6 +65,7 @@ const MARKER = (event, branch) => `<!-- sdlc-harness event=${event} branch=${bra
 const BOT = 'github-actions[bot]';
 const PAUSE_DISPATCH = 'workflow run harness-run.yml --ref feat_x -f action=pause -f branch=feat_x';
 const COMMENTS_JQ = '.[] | {login: .user.login, body: .body}';
+const ENGINE_COMMENTS_JQ = '.[] | {login: .user.login, at: .created_at, body: .body}';
 
 const STUB = `#!/usr/bin/env node
 const { appendFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
@@ -74,16 +83,23 @@ if (args[0] === 'pr' && args[1] === 'view') {
   process.stdout.write(process.env.STUB_PRS || '[]');
 } else if (args[0] === 'api' && args[1] === '--paginate') {
   const jq = args[args.indexOf('--jq') + 1];
-  if (jq !== ${JSON.stringify(COMMENTS_JQ)}) fail('unexpected --jq ' + jq);
-  for (const c of JSON.parse(process.env.STUB_COMMENTS || '[]')) {
-    process.stdout.write(JSON.stringify({ login: c.user.login, body: c.body }) + '\\n');
+  const withAt = jq === ${JSON.stringify(ENGINE_COMMENTS_JQ)};
+  if (jq !== ${JSON.stringify(COMMENTS_JQ)} && !withAt) fail('unexpected --jq ' + jq);
+  const item = /\\/issues\\/([0-9]+)\\/comments$/.exec(args[2] ?? '')?.[1];
+  const byItem = JSON.parse(process.env.STUB_ITEM_COMMENTS || '{}');
+  for (const c of byItem[item] ?? JSON.parse(process.env.STUB_COMMENTS || '[]')) {
+    process.stdout.write(JSON.stringify(withAt ? { login: c.user.login, at: c.created_at, body: c.body } : { login: c.user.login, body: c.body }) + '\\n');
   }
 } else if (args[0] === 'api' && permission) {
   const answer = JSON.parse(process.env.STUB_PERMISSIONS || '{}')[permission[1]];
   if (answer === undefined || answer === 'FAIL') fail('stub permission failure');
   process.stdout.write(JSON.stringify({ permission: answer }));
 } else if (args[0] === 'api' && /\\/actions\\/runs\\/[0-9]+\\/artifacts$/.test(args[1] ?? '')) {
-  process.stdout.write(process.env.STUB_ARTIFACTS || '{"artifacts":[]}');
+  const run = /\\/runs\\/([0-9]+)\\//.exec(args[1])[1];
+  const byRun = JSON.parse(process.env.STUB_ARTIFACTS_BY_RUN || '{}');
+  process.stdout.write(byRun[run] ? JSON.stringify(byRun[run]) : process.env.STUB_ARTIFACTS || '{"artifacts":[]}');
+} else if (args[0] === 'api' && /\\/actions\\/runs\\/[0-9]+\\/jobs$/.test(args[1] ?? '') && process.env.STUB_JOBS) {
+  process.stdout.write(process.env.STUB_JOBS);
 } else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1] ?? '')) {
   process.stdout.write('[]');
 } else if (args[0] === 'api') {
@@ -198,6 +214,9 @@ async function controlFixture(t, { forge = 'github', ledger: ledgerText = '# Pro
         STUB_COMMENTS: '',
         STUB_RUN_LIST: '',
         STUB_ARTIFACTS: '',
+        STUB_ARTIFACTS_BY_RUN: '',
+        STUB_ITEM_COMMENTS: '',
+        STUB_JOBS: '',
         STUB_BUNDLE_STATUS: '',
         STUB_BUNDLE_FIELDS: '',
         STUB_BUNDLE_QUESTIONS: '',
@@ -796,6 +815,81 @@ test('without a stop run, pause names a paused run paused and resume names a par
   const reply = assertRefused(g, await g.control('@sdlc-harness resume', {}, parkedRun('1')), /is `parked`, waiting for an answer/);
   assert.doesNotMatch(reply.body, /`stopped`/);
 });
+
+const NEVER_STARTED_AT = '2026-01-01T01:00:00Z';
+
+/** NEVER_STARTED_AT moved by <secs>, in GitHub's `created_at` form. */
+const atOffset = (secs) => new Date(Date.parse(NEVER_STARTED_AT) + secs * 1000).toISOString().replace('.000Z', 'Z');
+
+/** A comment by <login> created <secs> from NEVER_STARTED_AT whose body is <body>. */
+const timedComment = (body, secs, login = BOT) => ({ user: { login }, created_at: atOffset(secs), body });
+
+/**
+ * The environment of a newest `harness run feat_x` run, 602, that completed with no artifact and whose
+ * `run` job GitHub never started, under an older run, 601, that carries a bundle when <olderBundle>;
+ * <comments> maps an item number to its comments.
+ */
+const neverStarted = ({ olderBundle, comments }) => ({
+  STUB_RUN_LIST: JSON.stringify([
+    { databaseId: 602, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'cancelled', createdAt: NEVER_STARTED_AT, url: 'https://example.test/runs/602' },
+    { databaseId: 601, displayTitle: 'harness run feat_x', status: 'completed', conclusion: 'success', createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/601' },
+  ]),
+  STUB_ARTIFACTS_BY_RUN: JSON.stringify({
+    601: { artifacts: olderBundle ? [{ name: 'harness-state', expired: false }] : [] },
+    602: { artifacts: [] },
+  }),
+  STUB_JOBS: JSON.stringify({ jobs: [{ id: 9001, name: 'run', status: 'completed', conclusion: 'cancelled', steps: [] }] }),
+  STUB_ITEM_COMMENTS: JSON.stringify(comments),
+  STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+});
+
+const RESUME_DISPATCH_AS = (engine) =>
+  `workflow run harness-run.yml --ref feat_x -f action=run -f branch=feat_x -f engine=${engine} -f resume=pause -f chain=0`;
+
+test('resume of a never-started run takes user_review from the pull request\'s round comment', async (t) => {
+  const f = await controlFixture(t);
+  const env = neverStarted({ olderBundle: true, comments: { 12: [timedComment(`Round 2 placed.\n\n${MARKER('round', 'feat_x')}\n`, 10)] } });
+  const result = await f.control('@sdlc-harness resume', {}, env);
+  assertResumed(f, result, RESUME_DISPATCH_AS('user_review'), /^Resume requested by @alice/);
+  assert.equal(lastLine(replies(f.calls())[0].body), DISPATCHED_MARKER('user_review'));
+});
+
+test('resume of a never-started run with no bundle anywhere takes task from the issue\'s started marker', async (t) => {
+  const f = await controlFixture(t);
+  const env = neverStarted({ olderBundle: false, comments: { 7: [{ ...startComment('feat_x'), created_at: atOffset(5) }] } });
+  const result = await f.control('@sdlc-harness resume', { number: 7, pr: false }, env);
+  assertResumed(f, result, RESUME_DISPATCH_AS('task'), /^Resume requested by @alice/);
+  assert.equal(lastLine(replies(f.calls())[0].body), DISPATCHED_MARKER('task'));
+});
+
+test('a never-started run with no bundle anywhere and no qualifying marker stays failed', async (t) => {
+  const f = await controlFixture(t);
+  const env = neverStarted({ olderBundle: false, comments: { 7: [{ ...startComment('feat_x'), created_at: atOffset(-600) }] } });
+  const result = await f.control('@sdlc-harness resume', { number: 7, pr: false }, env);
+  assertRefused(f, result, /only a paused run can be resumed, and the run on `feat_x` is `failed`/);
+});
+
+test('a reply marker carrying an engine inside the slack before the run answers that engine', async (t) => {
+  const f = await controlFixture(t);
+  const reply = timedComment(`Resume requested by @alice.\n\n<!-- sdlc-harness event=reply branch=feat_x engine=task -->\n`, -30);
+  const result = await f.control('@sdlc-harness resume', {}, neverStarted({ olderBundle: true, comments: { 12: [reply] } }));
+  assertResumed(f, result, RESUME_DISPATCH_AS('task'), /^Resume requested by @alice/);
+});
+
+for (const [name, comment] of [
+  ['a stale marker', timedComment(`Round 2 placed.\n\n${MARKER('round', 'feat_x')}\n`, -600)],
+  ['a marker posted by a person', timedComment(`Round 2 placed.\n\n${MARKER('round', 'feat_x')}\n`, 10, 'alice')],
+  ['a quoted marker', timedComment(`> ${MARKER('round', 'feat_x')}\n\nThat was the round.\n`, 10)],
+  ['a reply marker with no engine', timedComment(`Done.\n\n${MARKER('reply', 'feat_x')}\n`, 10)],
+  ['the wrong branch', timedComment(`Round 2 placed.\n\n${MARKER('round', 'feat_xy')}\n`, 10)],
+]) {
+  test(`resume of a never-started run with ${name} records no engine`, async (t) => {
+    const f = await controlFixture(t);
+    const result = await f.control('@sdlc-harness resume', {}, neverStarted({ olderBundle: true, comments: { 12: [comment] } }));
+    const reply = assertRefused(f, result, /records no engine, and the harness does not guess one/);
+    assert.match(reply.body, /\*\*Run workflow\*\* form/);
+  });
+}
 
 const STATUS_LEDGER = '# Progress\n\n## Phase A\n\n- [x] Plan the story\n\n## Phase B\n\n- [x] Task 1\n- [ ] Task 2 — write the reply\n- [ ] Task 3\n';
 
