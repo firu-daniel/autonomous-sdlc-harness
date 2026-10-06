@@ -41,7 +41,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control_pr_at
 14. [x] **Task 14** — Schema and `docs/config.md`: `execution.progressComments`, and `forge`'s description _(layer: general)_ _(points: 10)_
 15. [x] **Task 15** — `docs/github-run-control.md` §4 and §5: the pull request from the start, the target rule and the table _(layer: general)_ _(points: 20)_
 16. [x] **Task 16** — `docs/github-run-control.md` §1, §2, §3 and §8: recognition, resolved threads, questions on the pull request, unverified facts _(layer: general)_ _(points: 15)_
-17. [ ] **Task 17** — `docs/remote-execution.md`: the `open` step, the draft state and the progress comment _(layer: general)_ _(points: 15)_
+17. [x] **Task 17** — `docs/remote-execution.md`: the `open` step, the draft state and the progress comment _(layer: general)_ _(points: 15)_
 18. [ ] **Task 18** — `docs/cli.md`, `docs/watcher.md`, `README.md` and `ARCHITECTURE.md`: a run's pull request opens at start _(layer: general)_ _(points: 10)_
 19. [ ] **Task 19** — `docs/development.md`: Gate 12 (xiv) checks each transition, and roadmap item 19 ships _(layer: general)_ _(points: 15)_
 
