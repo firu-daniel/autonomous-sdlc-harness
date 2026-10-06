@@ -77,3 +77,9 @@ The file name carries the slash-command name verbatim (`.claude/CLAUDE.md` → `
   - `--add-dir` naming its `instructions/` subdirectory.
 
   The script's plugin check accepts the directory, because `commands/harness-read-mention.md` exists there.
+
+**Deviations from plan:**
+
+- The whiteboard's counts were stale by one before this task: Task 7 had added `mention_reading.md` without updating them, so the listing printed 29 for `instructions/`. Re-derived from `ls`: commands 21, instructions 29 (twenty-eight instruction files plus `README.md`), agents 22 unchanged; the row-3 figure is *twenty-eight* and the README overflow is a *twenty-second* command.
+- The end-to-end `REPRO` `mention` drive with Task 2 was not executed: its setup chains through `report`'s and `deliver`'s fixture setups. The claim rests on reading `control_mention` and `control_mention_session` in `cli/templates/scripts/remote-run.sh` (argv `-p "$MENTION_COMMAND" --plugin-dir "$HARNESS_MENTION_PLUGIN_DIR" --add-dir "$HARNESS_MENTION_PLUGIN_DIR/instructions"`; plugin check `-f "$HARNESS_MENTION_PLUGIN_DIR/commands/$base.md"`) and on `test -f plugin/commands/harness-read-mention.md` succeeding.
+- The manifest gate (`claude plugin validate --strict plugin`) is deferred to the Run gates phase, as the plan states.
