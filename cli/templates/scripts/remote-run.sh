@@ -424,8 +424,18 @@
 # marker quoted mid-body, in a comment not opening with that sentence, or by
 # anyone else, is never trusted; none is a refusal. Both paths then pass
 # `control_check_branch`: a branch `hr_branch_is_protected` does not answer 1
-# for is refused, then it is fetched, and one whose origin tip carries no
-# flow-progress ledger (`forge_recognised`) is not a harness branch.
+# for is refused, then it is fetched. It is a harness branch when its origin
+# tip carries the flow-progress ledger (`forge_recognised`); or, for a command
+# typed on an issue, when it is the branch that issue's genuine `started`
+# marker names and it still exists on origin (`remote_branch_exists`) — the
+# marker shows the harness started a run on it, so a first run GitHub never
+# started, which committed only its task prompt, is still commandable; an
+# issue keeps its marker after its branch is deleted, so a marker-named branch
+# gone from origin is refused as deleted, and a failed existence check is a
+# refusal naming the read; or when a `harness run <branch>` run is queued,
+# waiting, requested, pending or in progress (`control_run_in_flight`), so a
+# run is commandable from its first minute on its pull request too. Otherwise
+# it is not a harness branch. A failed listing is a refusal naming the read.
 # THE ARMS. `pause`: the state by a `fetch` child (`control_state_var`); only
 # `running` sends `pause <branch>` as a child and replies that the run yields at
 # its next clean checkpoint; any other state is a refusal naming it. `stop`:
@@ -4941,11 +4951,46 @@ control_stopped_refuse() {
   esac
 }
 
-# control_check_branch <branch> — the refusals both paths share, in order: a
-# branch not answered 1 by hr_branch_is_protected, then (after a fetch) one
-# whose origin tip carries no flow-progress ledger. Each is a reply and exit 2.
+# control_run_in_flight <branch> — 0 when a run titled exactly
+# `harness run <branch>` is queued, in_progress, waiting, requested or
+# pending; 1 when none is; 2 with GH_ERR set when the listing failed or was
+# not a JSON array. Passes <branch> explicitly rather than reading the global
+# `branch` list_runs reads, and leaves GH_OUT as it found it.
+control_run_in_flight() {
+  local saved="$GH_OUT" verdict status=0
+  if ! gh_call run list --workflow "$WORKFLOW_RUN_FILE" --branch "$1" \
+    --json displayTitle,status --limit "$RUN_LIST_LIMIT"; then
+    GH_OUT="$saved"
+    return 2
+  fi
+  verdict=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness run $1" '
+    if type != "array" then error("not an array") else
+      if any(.[]; .displayTitle == $t
+        and (.status == "queued" or .status == "in_progress" or .status == "waiting"
+             or .status == "requested" or .status == "pending"))
+      then "yes" else "no" end
+    end' 2>/dev/null) || verdict=""
+  GH_OUT="$saved"
+  case "$verdict" in
+    yes) status=0 ;;
+    no) status=1 ;;
+    *) GH_ERR="its run list is not the expected JSON"; status=2 ;;
+  esac
+  return "$status"
+}
+
+# control_check_branch <branch> [started] — the refusals every path shares, in
+# order: a branch not answered 1 by hr_branch_is_protected, then (after a
+# fetch) one that is not a harness branch. A branch passes with the
+# flow-progress ledger on its origin tip; or, with `started` (passed only by
+# control_branch_from_issue, whose issue's genuine `started` marker names it),
+# while it still exists on origin — gone is refused as deleted, a failed
+# existence check names the read, and no run list is read; or with a
+# `harness run <branch>` run in flight. Otherwise the refusal reads "no ledger
+# and no `harness run` in flight", and a failed listing names the read. Each
+# refusal is a reply and exit 2, or 3 for a failed read.
 control_check_branch() {
-  local b="$1" protected=0
+  local b="$1" protected=0 exists=0 inflight=0
   if ! valid_branch "$b" || ! git check-ref-format --branch "$b" >/dev/null 2>&1; then
     control_refuse "$EXIT_REFUSED" "\`$b\` is not a valid branch name" "Comment on the pull request of the run's branch instead."
   fi
@@ -4959,8 +5004,25 @@ control_check_branch() {
   esac
   forge_fetch_branch "$b"
   if ! forge_recognised "$b"; then
-    control_refuse "$EXIT_REFUSED" "\`$b\` is not a harness branch: its tip carries no flow-progress ledger" \
-      "Only a branch a harness run works on can be commanded."
+    if [ "${2-}" = started ]; then
+      remote_branch_exists "$b" || exists=$?
+      case "$exists" in
+        0) ;;
+        1) control_refuse "$EXIT_REFUSED" "\`$b\` no longer exists on origin, so its run cannot be resumed or commanded" \
+             "Start a new run from a new issue or the Run workflow form." ;;
+        *) control_refuse "$EXIT_GH" "whether \`$b\` still exists on origin could not be read ($REMOTE_BRANCH_ERR)" \
+             "Comment again to retry." ;;
+      esac
+    else
+      control_run_in_flight "$b" || inflight=$?
+      case "$inflight" in
+        0) ;;
+        1) control_refuse "$EXIT_REFUSED" "\`$b\` is not a harness branch: its tip carries no flow-progress ledger, and no \`harness run $b\` run is queued or in progress" \
+             "Only a branch a harness run works on can be commanded." ;;
+        *) control_refuse "$EXIT_GH" "whether \`$b\` has a harness run in flight could not be read ($GH_ERR)" \
+             "Comment again to retry." ;;
+      esac
+    fi
   fi
   CONTROL_BRANCH="$b"
 }
@@ -5036,7 +5098,8 @@ control_issue_branch_var() {
 }
 
 # control_branch_from_issue <number> — control_issue_branch_var, its failures
-# refused, then control_check_branch's refusals.
+# refused, then control_check_branch with `started`: the verified marker makes
+# the branch a harness branch while it still exists on origin.
 control_branch_from_issue() {
   if ! control_issue_branch_var "$1"; then
     if [ -n "$ISSUE_BRANCH_ERR" ]; then
@@ -5045,7 +5108,7 @@ control_branch_from_issue() {
     control_refuse "$EXIT_REFUSED" "no harness run was started from this issue" \
       "Comment on the pull request of the run's branch instead."
   fi
-  control_check_branch "$ISSUE_BRANCH"
+  control_check_branch "$ISSUE_BRANCH" started
 }
 
 # control_verb_handled <verb> — 0 when an arm below carries out <verb>.

@@ -64,7 +64,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 7. [x] **Task 7** — A never-started run takes its engine from its dispatch's marker _(layer: cli)_ _(points: 18)_
 8. [x] **Task 8** — `collect` reports a run whose job never started, and offers a re-run of `collect` when a round fails to place _(layer: cli)_ _(points: 20)_
 9. [x] **Task 9** — The poller waits on a listed bundle it cannot download, bounded, and skips a run that never started _(layer: cli)_ _(points: 18)_
-10. [ ] **Task 10** — `control` accepts a branch the issue's `started` marker names, or whose `harness run` is queued or in progress _(layer: cli)_ _(points: 15)_
+10. [x] **Task 10** — `control` accepts a branch the issue's `started` marker names, or whose `harness run` is queued or in progress _(layer: cli)_ _(points: 15)_
 11. [ ] **Task 11** — The job logs how long it waited for a runner, and notes a long wait on its `resumed` comment _(layer: cli)_ _(points: 10)_
 12. [ ] **Task 12** — `harness-run.yml`: the gate cites §7 step 4 and §11, and the header says `collect` reports a job that never started _(layer: cli)_ _(points: 8)_
 13. [ ] **Task 16** — `branch-resume`: a `killed` run whose job GitHub never started, a first run included _(layer: plugin)_ _(points: 5)_

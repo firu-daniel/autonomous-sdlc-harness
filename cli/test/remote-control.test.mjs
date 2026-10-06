@@ -8,9 +8,11 @@
  * replies.** Each ignored shape is driven and asserted to call no `gh` at all; each refusal arm —
  * `HARNESS_REMOTE_STOP`, the coupling off, a `read` answer, a failed permission call, a writer the list
  * does not admit, `ghost`, an unlisted bot, an unknown verb, a fork, a head
- * without the ledger, a protected branch, an issue with no genuine start — is asserted to send no
- * `workflow run` and to post exactly one reply. On an issue, only a `github-actions[bot]` comment that
- * opens with the trigger's start sentence and ends with the `started` marker names the branch.
+ * with neither the ledger nor a `harness run` in flight, a protected branch, an issue with no genuine
+ * start, an issue whose started branch is gone from origin — is asserted to send no `workflow run` and
+ * to post exactly one reply. On an issue, only a `github-actions[bot]` comment that opens with the
+ * trigger's start sentence and ends with the `started` marker names the branch, and that marker makes
+ * it a harness branch, ledger or not, while it still exists on origin.
  *
  * The fixture is `remote-report.test.mjs`'s shape — `init`, `execution.target` `github-actions`, `forge`
  * `github`, the adopted tree pushed to the fixture's bare `origin`, and `feat_x` pushed carrying its task
@@ -412,13 +414,71 @@ test('a closed pull request is refused', async (t) => {
   assertRefused(f, result, /is CLOSED, not open/);
 });
 
-test('a pull request whose head carries no ledger is not a harness branch', async (t) => {
+const FEAT_Y_PR = JSON.stringify({ headRefName: 'feat_y', isCrossRepository: false, state: 'OPEN' });
+const featYRun = (status, fields = {}) =>
+  ({ databaseId: 801, displayTitle: 'harness run feat_y', status, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/801', ...fields });
+/** control_run_in_flight's listing, the one `run list` asking for `displayTitle,status` alone. */
+const inFlightListings = (calls) => calls.filter((call) => call.line.startsWith('run list ') && call.line.includes('--json displayTitle,status --limit'));
+const NO_LEDGER_REFUSAL =
+  /`feat_y` is not a harness branch: its tip carries no flow-progress ledger, and no `harness run feat_y` run is queued or in progress\. Only a branch a harness run works on can be commanded\./;
+
+test('a branch with a ledger is accepted with no in-flight listing', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness pause');
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.deepEqual(inFlightListings(f.calls()), []);
+});
+
+test('a pull request whose head has no ledger but a harness run in progress is accepted by stop', async (t) => {
+  const f = await controlFixture(t);
+  await f.pushBranch('feat_y', { ledger: false });
+  const result = await f.control('@sdlc-harness stop', {}, {
+    STUB_PR: FEAT_Y_PR,
+    STUB_RUN_LIST: JSON.stringify([featYRun('in_progress')]),
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.equal(inFlightListings(calls).length, 1);
+  assert.ok(calls.some((call) => call.line === 'workflow run harness-run.yml --ref feat_y -f action=stop -f branch=feat_y'),
+    JSON.stringify(calls.map((call) => call.line)));
+  const posted = replies(calls);
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].body, /^Stop requested by @alice/);
+});
+
+test('a pull request whose head has no ledger but a queued harness run is accepted by pause', async (t) => {
   const f = await controlFixture(t);
   await f.pushBranch('feat_y', { ledger: false });
   const result = await f.control('@sdlc-harness pause', {}, {
-    STUB_PR: JSON.stringify({ headRefName: 'feat_y', isCrossRepository: false, state: 'OPEN' }),
+    STUB_PR: FEAT_Y_PR,
+    STUB_RUN_LIST: JSON.stringify([featYRun('queued')]),
   });
-  assertRefused(f, result, /`feat_y` is not a harness branch/);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.deepEqual(dispatches(f.calls()).map((call) => call.line),
+    ['workflow run harness-run.yml --ref feat_y -f action=pause -f branch=feat_y']);
+});
+
+test('a pull request whose head has no ledger and only a completed run is not a harness branch', async (t) => {
+  const f = await controlFixture(t);
+  await f.pushBranch('feat_y', { ledger: false });
+  const result = await f.control('@sdlc-harness pause', {}, {
+    STUB_PR: FEAT_Y_PR,
+    STUB_RUN_LIST: JSON.stringify([featYRun('completed', { conclusion: 'success' })]),
+  });
+  assertRefused(f, result, NO_LEDGER_REFUSAL);
+});
+
+test('a failed in-flight listing is refused naming the read, never as not a harness branch', async (t) => {
+  const f = await controlFixture(t);
+  await f.pushBranch('feat_y', { ledger: false });
+  const result = await f.control('@sdlc-harness pause', {}, { STUB_PR: FEAT_Y_PR, STUB_FAIL_ON: 'run list' });
+  assert.equal(result.status, 3, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(dispatches(calls), []);
+  const posted = replies(calls);
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].body, /whether `feat_y` has a harness run in flight could not be read \([^)]*stub gh failure\)\. Comment again to retry\./);
+  assert.doesNotMatch(posted[0].body, /not a harness branch/);
 });
 
 test('on an issue, a github-actions[bot] genuine start names the branch', async (t) => {
@@ -469,13 +529,31 @@ test('an issue whose genuine start names a protected branch is refused', async (
   assert.ok(reply.body.includes(`\`${protectedBranch}\` is a protected branch`), reply.body);
 });
 
-test('an issue whose genuine start names a branch without the ledger is refused', async (t) => {
+test('an issue whose genuine start names a branch without the ledger is accepted by stop, with no in-flight listing', async (t) => {
   const f = await controlFixture(t);
   await f.pushBranch('feat_y', { ledger: false });
-  const result = await f.control('@sdlc-harness pause', { number: 7, pr: false }, {
+  const result = await f.control('@sdlc-harness stop', { number: 7, pr: false }, {
     STUB_COMMENTS: JSON.stringify([startComment('feat_y')]),
   });
-  assertRefused(f, result, /`feat_y` is not a harness branch/);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(inFlightListings(calls), []);
+  assert.ok(calls.some((call) => call.line === 'workflow run harness-run.yml --ref feat_y -f action=stop -f branch=feat_y'),
+    JSON.stringify(calls.map((call) => call.line)));
+  const posted = commentsOn(calls, 7).filter((call) => /<!-- sdlc-harness event=reply /.test(call.body));
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].body, /^Stop requested by @alice/);
+});
+
+test('an issue whose genuine start names a branch gone from origin is refused as deleted', async (t) => {
+  const f = await controlFixture(t);
+  const result = await f.control('@sdlc-harness resume', { number: 7, pr: false }, {
+    STUB_COMMENTS: JSON.stringify([startComment('feat_y')]),
+  });
+  const reply = assertRefused(f, result,
+    /`feat_y` no longer exists on origin, so its run cannot be resumed or commanded\. Start a new run from a new issue or the Run workflow form\./);
+  assert.doesNotMatch(reply.body, /not a harness branch/);
+  assert.deepEqual(inFlightListings(f.calls()), []);
 });
 
 test('stop on a pull request: the marker, the cancel, the stopped comment and a reply, each naming @alice', async (t) => {
@@ -874,6 +952,39 @@ test('a reply marker carrying an engine inside the slack before the run answers 
   const reply = timedComment(`Resume requested by @alice.\n\n<!-- sdlc-harness event=reply branch=feat_x engine=task -->\n`, -30);
   const result = await f.control('@sdlc-harness resume', {}, neverStarted({ olderBundle: true, comments: { 12: [reply] } }));
   assertResumed(f, result, RESUME_DISPATCH_AS('task'), /^Resume requested by @alice/);
+});
+
+/**
+ * A first run GitHub never started, as `verb_start` leaves it: `feat_y` on origin with no ledger, no pull
+ * request, and one `harness run feat_y` run that completed with no artifact and a `run` job with no
+ * steps; issue 7 carries the `started` marker <secs> from the run's `createdAt`.
+ */
+const firstRunNeverStarted = (secs) => ({
+  STUB_RUN_LIST: JSON.stringify([featYRun('completed', { databaseId: 802, conclusion: 'cancelled', createdAt: NEVER_STARTED_AT })]),
+  STUB_ARTIFACTS: JSON.stringify({ artifacts: [] }),
+  STUB_JOBS: JSON.stringify({ jobs: [{ id: 9002, name: 'run', status: 'completed', conclusion: 'cancelled', steps: [] }] }),
+  STUB_ITEM_COMMENTS: JSON.stringify({ 7: [{ ...startComment('feat_y'), created_at: atOffset(secs) }] }),
+  STUB_PRS: '[]',
+});
+
+test('resume on the issue of a first run GitHub never started dispatches engine task', async (t) => {
+  const f = await controlFixture(t);
+  await f.pushBranch('feat_y', { ledger: false });
+  const result = await f.control('@sdlc-harness resume', { number: 7, pr: false }, firstRunNeverStarted(5));
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(dispatches(calls).map((call) => call.line),
+    ['workflow run harness-run.yml --ref feat_y -f action=run -f branch=feat_y -f engine=task -f resume=pause -f chain=0']);
+  const posted = replies(calls);
+  assert.equal(posted.length, 1);
+  assert.equal(lastLine(posted[0].body), '<!-- sdlc-harness event=reply branch=feat_y engine=task -->');
+});
+
+test('resume on the issue of a first run whose started marker is too old is refused as failed', async (t) => {
+  const f = await controlFixture(t);
+  await f.pushBranch('feat_y', { ledger: false });
+  const result = await f.control('@sdlc-harness resume', { number: 7, pr: false }, firstRunNeverStarted(-600));
+  assertRefused(f, result, /only a paused run can be resumed, and the run on `feat_y` is `failed`/);
 });
 
 for (const [name, comment] of [
