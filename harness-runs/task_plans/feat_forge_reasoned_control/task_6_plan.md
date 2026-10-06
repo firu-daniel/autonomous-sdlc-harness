@@ -36,3 +36,8 @@
 - `commands.typecheck` exits 0.
 - `npm test --workspace cli -- test/doctor.test.mjs` and `npm test --workspace cli -- test/remote-names.test.mjs` pass, along with any other test file this task edited. Run each on its own as one plain foreground command from the repository root.
 - End to end: in a throwaway fixture adopted with `forge` `github` and `execution.target` `github-actions`, run `doctor`, and the `forge` line names mentions with no credential warning. Delete the two `IN_` lines from `.github/workflows/harness-control.yml` and run `doctor` again: the line warns, naming `init --force`, and `doctor` still exits by its own contract for a `warn`.
+
+**Deviations from plan:**
+
+- The end-to-end bullet was carried out by the two new `doctor.test.mjs` cases rather than a separate manual run: each adopts a throwaway fixture with `forge` `github` and remote execution on, runs the compiled `doctor`, and asserts the pass line (no credential warning) and, with both `secrets.` lines deleted, the `warn` line naming the mention and `init --force` with exit status 0.
+- `cli/test/trigger-workflow-init.test.mjs` also edited: it holds the assertion on `init`'s run-control summary sentence, and now also asserts the new mention clause.

@@ -6967,6 +6967,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line?.includes('HARNESS_TRIGGER_LABEL label (default `sdlc-harness`) starts a task run'), `${stdout}\n${stderr}`);
     assert.ok(line.includes(REMOTE_CONTROL_WORKFLOW), line);
     assert.ok(line.includes('`@sdlc-harness <verb>` comment'), line);
+    assert.ok(line.includes('a mention of `@sdlc-harness` anywhere else in a comment is read by an agent, which carries out answer, pause, resume, status and asks the commenter to confirm stop, clear'), line);
     assert.ok(line.includes('a run opens a draft pull request when it starts, marked ready for review when it completes'), line);
     assert.ok(line.includes('carries them'), line);
     assert.ok(!line.includes('still to come'), line);
@@ -7008,6 +7009,42 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line !== undefined, `${stdout}\n${stderr}`);
     assert.ok(!line.includes(BEFORE_RUN_ACTORS), line);
     assert.ok(!line.includes('init --force'), line);
+  });
+
+  const NO_MENTION_CREDENTIAL = 'passes the mention agent no credential secret';
+
+  await t.test('github with harness-control.yml passing no credential secret warns naming the mention and init --force', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await configure(dir, [['forge', 'github']], { init: true });
+    const path = join(dir, REMOTE_CONTROL_WORKFLOW);
+    const before = readFileSync(path, 'utf8');
+    const after = before.replace(/^.*secrets\.(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY).*\r?\n/gm, '');
+    assert.notEqual(after, before, 'harness-control.yml carries no credential secret line to remove');
+    writeFileSync(path, after, 'utf8');
+    await pushWorkflows(dir);
+    const stub = await ghStub(subtest);
+
+    const { status, stdout, stderr } = await doctorWithStub(dir, stub);
+
+    assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
+    const line = reportLine(stderr, 'warn', 'forge');
+    assert.ok(line?.includes(`${REMOTE_CONTROL_WORKFLOW} ${NO_MENTION_CREDENTIAL}, so a mention of \`@sdlc-harness\` anywhere in a comment is answered that it was not read`), `${stdout}\n${stderr}`);
+    assert.ok(line.includes('the `@sdlc-harness <verb>` commands still work'), line);
+    assert.ok(line.includes('`npx autonomous-sdlc-harness init --force`'), line);
+    assert.ok(!line.includes(BEFORE_RUN_ACTORS), line);
+  });
+
+  await t.test('github with harness-control.yml as init writes it says nothing about a mention credential', async (subtest) => {
+    const dir = await remoteFixture(subtest);
+    await configure(dir, [['forge', 'github']], { init: true });
+    await pushWorkflows(dir);
+    const stub = await ghStub(subtest);
+
+    const { stdout, stderr } = await doctorWithStub(dir, stub);
+
+    const line = reportLine(stdout, 'pass', 'forge');
+    assert.ok(line !== undefined, `${stdout}\n${stderr}`);
+    assert.ok(!line.includes(NO_MENTION_CREDENTIAL), line);
   });
 
   await t.test('github under --check-github names remote-github instead of the flag', async (subtest) => {

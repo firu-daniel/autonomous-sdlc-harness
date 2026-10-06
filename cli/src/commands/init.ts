@@ -207,6 +207,8 @@ import {
   COMMAND_HANDLE,
   COMMAND_VERBS,
   DEFAULT_TRIGGER_LABEL,
+  MENTION_ACT_VERBS,
+  MENTION_CONFIRM_VERBS,
   PUSH_URL_SECRET,
   REMOTE_STOP_VARIABLE,
   RUNNER_VARIABLE,
@@ -2740,7 +2742,7 @@ function reportGithubSteps(
       `${step}. A run opens its draft pull request when it starts, with the job's token only once "${PR_CREATE_SETTING}" is switched on under ${PR_CREATE_SETTING_PATH}: switch it on, or set ${GIT_TOKEN_SECRET}, which opens the pull request so the repository's CI runs on it without an approval click. With ${GIT_TOKEN_SECRET} set, the pull request's author is the token's owner, who cannot request changes on it, so a solo maintainer uses a token of a machine account or starts review rounds locally with ${USER_REVIEW_COMMAND}.`,
     );
     ctx.report.info(
-      `   On a run's issue or pull request, a comment starting ${COMMAND_HANDLE} followed by ${nameList([...COMMAND_VERBS])} steers the run, and a review requesting changes on the run's pull request starts a user-review round.`,
+      `   On a run's issue or pull request, a comment starting ${COMMAND_HANDLE} followed by ${nameList([...COMMAND_VERBS])} steers the run; a mention of ${COMMAND_HANDLE} anywhere else in a comment is read by an agent, which carries out ${nameList([...MENTION_ACT_VERBS])} and asks the commenter to confirm ${nameList([...MENTION_CONFIRM_VERBS])}; and a review requesting changes on the run's pull request starts a user-review round.`,
     );
     ctx.report.info('');
   }

@@ -49,6 +49,7 @@ import {
   WORKFLOW_RUN_PATH,
   WORKFLOW_TRIGGER_FILE,
   WORKFLOW_TRIGGER_PATH,
+  carriesMentionCredential,
   carriesRunActors,
   effectiveRunActors,
   ghCli,
@@ -159,6 +160,14 @@ test('effectiveRunActors and runActorAdmitted apply the allow-list grammar', () 
 test('carriesRunActors tells a workflow that reads the allow-list from one that does not', () => {
   assert.equal(carriesRunActors('        env:\n          RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}\n'), true);
   assert.equal(carriesRunActors('        env:\n          RUNNER: ${{ vars.HARNESS_RUNNER }}\n'), false);
+});
+
+test('carriesMentionCredential tells a control workflow that passes the agent a credential from one that does not', () => {
+  assert.equal(carriesMentionCredential("          IN_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}\n"), true);
+  assert.equal(carriesMentionCredential("          IN_API: ${{ secrets.ANTHROPIC_API_KEY || '' }}\n"), true);
+  assert.equal(carriesMentionCredential('          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n'), false);
+  const template = readFileSync(join(PACKAGE_ROOT, 'templates', 'github', 'workflows', WORKFLOW_CONTROL_FILE), 'utf8');
+  assert.equal(carriesMentionCredential(template), true);
 });
 
 test('remote-run.sh mirrors the two trigger labels byte for byte', () => {

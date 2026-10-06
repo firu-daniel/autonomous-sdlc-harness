@@ -261,6 +261,15 @@ export function carriesRunActors(workflowText: string): boolean {
   return workflowText.includes(`vars.${RUN_ACTORS_VARIABLE}`);
 }
 
+/**
+ * Whether a workflow's text reads `secrets.CLAUDE_CODE_OAUTH_TOKEN` or `secrets.ANTHROPIC_API_KEY`;
+ * `false` marks a `harness-control.yml` written before a mention could be read. Pure — the caller
+ * reads the file.
+ */
+export function carriesMentionCredential(workflowText: string): boolean {
+  return workflowText.includes(`secrets.${OAUTH_TOKEN_SECRET}`) || workflowText.includes(`secrets.${API_KEY_SECRET}`);
+}
+
 /** The `repository_dispatch` `event_type` the trigger workflow listens to. */
 export const TRIGGER_DISPATCH_EVENT_TYPE = 'harness-task';
 
