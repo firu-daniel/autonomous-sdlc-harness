@@ -5,7 +5,9 @@
 # routes an inbox filename to its engine and branch (`hr_inbox_route_var`),
 # derives a branch name from a title (`hr_derive_branch`), judges whether a
 # path lies strictly inside the state directory's scratch directory
-# (`hr_scratch_path_var`), places a dropped
+# (`hr_scratch_path_var`), answers whether the progress comment is on
+# (`hr_progress_comments`) and which main phases a flow-progress ledger records
+# as through (`hr_ledger_phases`), places a dropped
 # artifact in a working copy and commits and pushes it, and derives the
 # anchors (main checkout, work root, worktree directory, repo slug,
 # state-dir paths) the scripts would otherwise each re-derive slightly
@@ -98,6 +100,11 @@
 # rename there is an edit here, byte for byte:
 #   HR_REMOTE_WORKFLOW_RUN_FILE mirrors  WORKFLOW_RUN_FILE
 #   HR_REMOTE_STATE_ARTIFACT    mirrors  STATE_ARTIFACT_NAME
+#
+# MIRROR OF `plugin/instructions/autonomous_pause_and_ledger.md` →
+# `### 1.3 Templates`, which owns the flow-progress ledger's two header forms
+# and its entry ids; `hr_ledger_phases` codes both, so renaming an id or a
+# header form there is an edit here.
 #
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
 # `hr_remote_record_init`, `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
@@ -603,10 +610,11 @@ hr_config_load() {
   # which is what lets an explicitly EMPTY list read as a configured set rather
   # than as an absent one.
   #
-  # A `phases.*` or `docs.retrieval` value that is not a boolean is emitted as
-  # `invalid`, so the string `"true"` — which `tostring` would otherwise make
-  # indistinguishable from `true` — reaches `hr_phase_enabled` or
-  # `hr_docs_retrieval_applies` as a value it refuses (2).
+  # A `phases.*`, `docs.retrieval` or `execution.progressComments` value that is
+  # not a boolean is emitted as `invalid`, so the string `"true"` — which
+  # `tostring` would otherwise make indistinguishable from `true` — reaches
+  # `hr_phase_enabled`, `hr_docs_retrieval_applies` or `hr_progress_comments` as
+  # a value it refuses (2).
   out=$(jq -n -r '
     def s($k; $v):
       if $v == null then empty
@@ -641,6 +649,8 @@ hr_config_load() {
       s("phases.qa";             try (.phases.qa     | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("phases.docs";           try (.phases.docs   | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("execution.target";      try .execution.target     catch null),
+      s("execution.progressComments";
+        try (.execution.progressComments | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("docs.retrievalBackend"; try .docs.retrievalBackend catch null),
       s("docs.retrieval";        try (.docs.retrieval | if type == "boolean" or . == null then . else "invalid" end) catch null),
       s("forge";                 try .forge                catch null),
@@ -928,6 +938,107 @@ hr_forge() {
       ;;
   esac
   return 2
+}
+
+# `execution.progressComments` — whether a remote run keeps its progress
+# comment on the pull request. THE ONE READER OF THE KEY IN THIS FAMILY; a
+# script that needs it calls this. PRINTS NOTHING: the answer is the status, as
+# `hr_phase_enabled`'s is, except that an absent key is the schema default
+# `true`. 0 = `true` or absent; 1 = `false`; 2 = the configuration is
+# unresolvable or the value is not a boolean — refused rather than guessed about.
+hr_progress_comments() {
+  local root="${1-}"
+  hr_config_load "$root" || return 2
+  hr_cfg_scalar_var "execution.progressComments" || return 0
+  case "$HR_CFG_VALUE" in
+    true) return 0 ;;
+    false) return 1 ;;
+  esac
+  return 2
+}
+
+# ---------------------------------------------------------------------------
+# The flow-progress ledger — which of a run's four main phases it records as
+# through. A mirror of the plugin's ledger templates; see the header.
+# ---------------------------------------------------------------------------
+
+# 0 when every id after <settled> appears in <settled>, a space-delimited list
+# with a leading and trailing space; 1 otherwise.
+hr_ledger_all_settled() {
+  local settled="${1-}" id
+  shift
+  for id in "$@"; do
+    case "$settled" in
+      *" $id "*) ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
+}
+
+# Print `<engine> <round> <phase1> <phase2> <phase3> <phase4>` for the ledger at
+# <ledger_file> and return 0 — `<engine>` is `task` or `user_review`, `<round>`
+# the header's round or `-` for the task engine, each phase `done` or `pending`.
+# Return 1, printing nothing, when the file is missing or unreadable or its first
+# line is not a task-engine or user-review-engine header: any other ledger has
+# no phases to report.
+#
+# A phase is `done` when every id of its set is `[x]` or `[-]` (skipped before
+# the run began). An id absent from the file is NOT settled, so a malformed
+# ledger reads as `pending`, never as `done`. Phase 3 groups every end-of-branch
+# review with its fixes, QA and the run gates.
+hr_ledger_phases() {
+  local file="${1-}" line first=1 engine="" round="-" settled=" " rest id
+  local p1 p2 p3 p4 s1 s2 s3 s4
+  [ -n "$file" ] && [ -f "$file" ] && [ -r "$file" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$first" -eq 1 ]; then
+      first=0
+      case "$line" in
+        *"(engine: task)"*)
+          engine="task"
+          ;;
+        *"(engine: user_review, round "*")"*)
+          engine="user_review"
+          round=${line#*"(engine: user_review, round "}
+          round=${round%%")"*}
+          case "$round" in
+            ''|*[!0-9]*) return 1 ;;
+          esac
+          ;;
+        *) return 1 ;;
+      esac
+      continue
+    fi
+    case "$line" in
+      "- [x] "*|"- [-] "*) ;;
+      *) continue ;;
+    esac
+    rest=${line#"- ["?"] "}
+    id=${rest%% *}
+    id=${id%.}
+    if [ -n "$id" ]; then settled="$settled$id "; fi
+  done < "$file"
+  [ -n "$engine" ] || return 1
+
+  if [ "$engine" = "task" ]; then
+    p1="P1 P2 P3"
+    p2="A"
+    p3="A1.5g A1.5f A2g A2f Bg Bm C C2g C2m C2f E G"
+    p4="D"
+  else
+    p1="R1 R2"
+    p2="R3"
+    p3="R4 RG"
+    p4="R5"
+  fi
+  # Unquoted on purpose: each set is a fixed list of space-free ids.
+  if hr_ledger_all_settled "$settled" $p1; then s1="done"; else s1="pending"; fi
+  if hr_ledger_all_settled "$settled" $p2; then s2="done"; else s2="pending"; fi
+  if hr_ledger_all_settled "$settled" $p3; then s3="done"; else s3="pending"; fi
+  if hr_ledger_all_settled "$settled" $p4; then s4="done"; else s4="pending"; fi
+  printf '%s %s %s %s %s %s\n' "$engine" "$round" "$s1" "$s2" "$s3" "$s4"
+  return 0
 }
 
 # Whether the docs phase's retrieval step runs: `phases.docs` and

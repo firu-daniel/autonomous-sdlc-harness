@@ -17,6 +17,10 @@
  * `github`:** a parked case posts its comment on the issue the branch's provenance line names, and the
  * same case with `forge` unset makes no `issues/` call.
  *
+ * **A job reports a ledger phase change through `remote-run.sh report progress`, and an unchanged
+ * ledger once at the first pass and once at the end:** the `progress:` cases assert the comment on
+ * the stub's pull request, its opt-out, and the invocation count read off the watcher log.
+ *
  * **Every watcher this file starts is bounded and reaped, so a hang fails by name.** Each `runBash`
  * call carries `timeoutMs: WATCHER_RUN_TIMEOUT_MS` and `t.signal`. The value sits below the per-test
  * timeout (`--test-timeout=1800000`), because that expiry kills this file's process and leaves the
@@ -108,6 +112,7 @@ if (line.startsWith('run list') && process.env.STUB_RUN_LIST_LATER !== undefined
   process.stdout.write(n === 0 ? process.env.STUB_RUN_LIST || '[]' : process.env.STUB_RUN_LIST_LATER);
 } else if (line.startsWith('run list')) process.stdout.write(process.env.STUB_RUN_LIST || '[]');
 if (line.startsWith('run view')) process.stdout.write(process.env.STUB_RUN_VIEW || '{}');
+if (line.startsWith('pr list') && process.env.STUB_PR_LIST !== undefined) process.stdout.write(process.env.STUB_PR_LIST);
 `;
 
 const nowSecs = () => Math.floor(Date.now() / 1000);
@@ -1002,6 +1007,87 @@ test('report: a job whose sessions keep failing reports failed on its issue once
   const calls = j.ghCalls();
   // The fixture has no pull request, so each `failed` report labels the issue once.
   assert.equal(calls.filter((c) => c.includes('labels[]=sdlc-harness: failed')).length, 1, calls.join('\n'));
+});
+
+const TASK_LEDGER_IDS = ['P1', 'P2', 'P3', 'A', 'A1.5g', 'A1.5f', 'A2g', 'A2f', 'Bg', 'Bm', 'C', 'C2g', 'C2m', 'C2f', 'E', 'G', 'D'];
+
+/** A task-engine ledger in the template's shape: every id in `done` is `[x]`, every other `[ ]`. */
+function taskLedger(branch, done = []) {
+  const lines = [`# Flow progress — ${branch}   (engine: task)`, '', '## Run mode', '- skipped: none', ''];
+  for (const id of TASK_LEDGER_IDS) lines.push(`- [${done.includes(id) ? 'x' : ' '}] ${`${id}.`.padEnd(8)} label for ${id}`);
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * Write the ledger stages under the recorder and a stub body that copies each into the checkout's
+ * ledger, holding it `holdSecs` so at least one poll reads it, then exits 0.
+ */
+async function ledgerTicks(j, stages, holdSecs) {
+  const ledgerPath = join(j.dir, STATE_DIR, 'flow_progress', `${j.branch}_progress.md`);
+  const steps = [`mkdir -p ${shellQuote(join(j.dir, STATE_DIR, 'flow_progress'))}`];
+  for (const [i, done] of stages.entries()) {
+    const stage = join(j.dir, 'job-test', `ledger-${i}.md`);
+    await writeFile(stage, taskLedger(j.branch, done), 'utf8');
+    steps.push(`cp ${shellQuote(stage)} ${shellQuote(ledgerPath)}`, `sleep ${holdSecs}`);
+  }
+  await j.setStub(steps.join('\n'));
+}
+
+const PR_12 = JSON.stringify([{ number: 12, isCrossRepository: false }]);
+const progressBodies = (j) => j.ghBodies().filter((b) => b.includes('event=progress'));
+
+test('progress: a job reports a ledger phase change on its pull request', async (t) => {
+  await t.test('ticks P1 to P3 -> a progress POST on #12, the last write carrying Planning: done', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    await wireForge(j, 'github');
+    await ledgerTicks(j, [[], ['P1'], ['P1', 'P2'], ['P1', 'P2', 'P3']], 1.5);
+    const result = await j.job([j.branch, 'task', 'none'], {
+      GITHUB_REPOSITORY: FORGE_REPOSITORY,
+      STUB_PR_LIST: PR_12,
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(lastLine(result.stdout), 'job: completed stop');
+
+    const calls = j.ghCalls();
+    const post = `api --method POST repos/${FORGE_REPOSITORY}/issues/12/comments `;
+    assert.ok(calls.some((c) => c.startsWith(post)), calls.join('\n'));
+    const bodies = progressBodies(j);
+    assert.ok(bodies.length >= 1, j.ghBodies().join('\n---\n'));
+    assert.match(bodies.at(-1), /^- Planning: done$/m, bodies.at(-1));
+    assert.match(bodies.at(-1), /^- Implementation: in progress$/m, bodies.at(-1));
+  });
+
+  await t.test('execution.progressComments false -> no progress write', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    await wireForge(j, 'github');
+    const configPath = join(j.dir, 'harness.config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.execution = { ...config.execution, progressComments: false };
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+    await ledgerTicks(j, [[], ['P1'], ['P1', 'P2'], ['P1', 'P2', 'P3']], 1.5);
+    const result = await j.job([j.branch, 'task', 'none'], {
+      GITHUB_REPOSITORY: FORGE_REPOSITORY,
+      STUB_PR_LIST: PR_12,
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.deepEqual(progressBodies(j), [], j.ghBodies().join('\n---\n'));
+    assert.equal(j.ghCalls().some((c) => c.startsWith('api --method PATCH')), false, j.ghCalls().join('\n'));
+    assert.match(j.watcherLog(), /progress comments are off by execution\.progressComments/);
+  });
+
+  await t.test('a ledger unchanged after the first pass -> one report progress, then the final one', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    await ledgerTicks(j, [['P1']], 4);
+    const result = await j.job([j.branch, 'task', 'none']);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(lastLine(result.stdout), 'job: completed stop');
+    // forge is unset, so each `report progress` writes exactly this one line into the watcher log.
+    const reports = j.watcherLog().match(/^remote-run\.sh: report: the forge coupling is off.*$/gm) ?? [];
+    assert.equal(reports.length, 2, j.watcherLog());
+  });
 });
 
 test('runner wait: logged from the run createdAt, and noted on a resumed comment only when long', async (t) => {

@@ -32,6 +32,8 @@
 #   remote-run.sh discard <dir> [--repo <root>]
 #   remote-run.sh report <event> <branch> [--note <text>] [--repo <root>]
 #                 (always 0, 1 only on a usage error: its paragraph)
+#   remote-run.sh open <branch> [--repo <root>]
+#                 (always 0, 1 only on a usage error: its paragraph)
 #   remote-run.sh deliver <branch> <bundle_dir> [--repo <root>]
 #                 (always 0, 1 only on a usage error: its paragraph)
 #   remote-run.sh collect <branch> [--pr <n>] [--repo <root>]
@@ -284,9 +286,9 @@
 # as `trigger` is, and outside the sending-verb gate: it does nothing, with one
 # line, unless `hr_forge` is `github` and `hr_execution_target` is
 # `github-actions`. The comment goes to the open same-repository pull request
-# whose head is <branch> when origin's <branch> carries
-# `<state_dir>/flow_progress/<branch>_progress.md`, else to the issue named by
-# the last `Started from <server>/<repo>/issues/<n> by @` line of its committed
+# whose head is <branch> when origin's <branch> carries its task prompt or
+# `<state_dir>/flow_progress/<branch>_progress.md` (`forge_recognised`), else to
+# the issue named by the last `Started from <server>/<repo>/issues/<n> by @` line of its committed
 # task prompt, else nowhere (`stop`'s `--pr` and `--branch-gone` change this
 # for its own report: its paragraph). The label `STATE_LABEL_PREFIX<state>` replaces any
 # other state label on that issue and that pull request, each when known; the
@@ -298,6 +300,19 @@
 # and the branch is unchanged, and names its way on: `COMMAND_HANDLE resume`
 # when the state is paused and an engine was recovered, else the **Run
 # workflow** form with that engine, or with the three to choose from.
+# On a pull-request target that is not a draft, `round` runs `gh pr ready
+# --undo` before its comment, with the caller's own token, and its comment says
+# the pull request is a draft again until the round completes; a refusal (a
+# plan without drafts) is one `::warning::` line naming gh's error, and the
+# comment then says turning it back was refused and it stays ready for review
+# while the round works. A `failed` comment on a pull request reads the
+# registry record's `engine`: for
+# `user_review` it names a review requesting changes and says the pull request
+# stays open; otherwise it says the draft stays open, to close to discard the
+# run, or, when an issue is known, to re-apply the trigger label there for a
+# new run on the next indexed branch. A plain `stopped` on a pull request says
+# its draft stays open and closing it discards the run. No other event changes
+# a pull request's draft state.
 # Every job event — `parked`, `park_loop`, `paused`, `resumed`, `round`,
 # `failed` and `not_started` — posts nothing and sets no label when `remote_branch_stopped`,
 # asked afresh, finds the branch stopped, so a job a stop overtook never
@@ -323,36 +338,127 @@
 # comment and its answer are public, as the artifact already is
 # (`docs/remote-execution.md` -> `## 11. Security`, *What a reader of the
 # repository's Actions runs can see*).
+# `progress` (`forge_progress`) keeps ONE comment per run or round on the pull
+# request, never on the issue, and sets no label. Gated in order, each stop one
+# line: `forge_on`; `hr_progress_comments` (`execution.progressComments` false,
+# or unreadable); `remote_branch_stopped`, as for the job events above; no task
+# or user-review ledger at `$root`'s `<state_dir>/flow_progress/<branch>_progress.md`
+# (`hr_ledger_phases` — a docs-engine ledger posts nothing); no open
+# same-repository pull request that `forge_recognised` holds for. The body is
+# *Progress of the harness run on `<branch>`:* or *Progress of user-review round
+# <n> on `<branch>`:*, then `- <label>: done`, `in progress` (the first pending
+# phase) or `not started` for `Planning`, `Implementation`, `Branch review`,
+# `Done` (a round: `Fix plan`, `Fix implementation`, `Branch review`, `Done`) —
+# plain list items, no timestamp, no run URL — then the marker
+# `<!-- sdlc-harness event=progress branch=<branch> -->`, gaining ` round=<n>`
+# for a round. One paginated comment listing picks the newest
+# `github-actions[bot]` comment whose last non-empty line is that marker: none
+# is one `forge_comment`; a body equal to the render (carriage returns and
+# trailing newlines aside) is no call and one `already current` line; otherwise
+# one `PATCH` of that comment — the only comment this file ever edits. A refused
+# listing, create or edit is one `::warning::` line.
 # It never fails its caller: every problem is one line and exit 0.
+#
+# `open` OPENS THE RUN'S DRAFT PULL REQUEST at the run's start, so its issue
+# links it from the moment it exists. Job-side for its root and self-gated, as
+# `deliver` is (`forge_on`, one line when off); it takes <branch> and no
+# bundle. A pull-request lookup that fails is one `::warning::` line and opens
+# nothing; an open same-repository pull request whose head is <branch> is one
+# line, and none is opened. Otherwise `forge_open_pr` — the one opener, which
+# `deliver` also calls — creates it against `defaultBranch` with `deliver`'s
+# title, body, token and retry rules: a `--draft` create with
+# `HARNESS_PR_TOKEN` as `GH_TOKEN` when set, no retry on `PR_CREATE_FORBIDDEN`,
+# one retry without `--draft` on any other failure. Opened, the pull request is
+# labelled `STATE_LABEL_PREFIX`running, and when the task prompt names an issue
+# one comment there names it — as a draft, or as not a draft because the
+# repository's plan may not offer drafts — says the run's questions, lifecycle
+# comments and progress go to it from now on while `COMMAND_HANDLE` commands
+# keep working on the issue, adds this run's URL when `GITHUB_RUN_ID` is set,
+# and ends with the `opened` marker. With no issue nothing is posted. Not
+# opened is one `::warning::` line naming why and saying the run goes on, its
+# comments reach the issue and `deliver` tries again at the run's end; nothing
+# is posted, since `deliver`'s `completed` comment is the one notification.
+# It never fails its caller: every outcome but a usage error is exit 0.
 #
 # `deliver` HANDS A COMPLETED RUN TO REVIEW: the run workflow's step after the
 # job's own `push-branch.sh`, which opens no pull request. Job-side for its
 # root and self-gated, as `report` is (`forge_on`, one line when off). Anything
 # but `status: completed` in <bundle_dir>/status.json, or no status.json, is
-# one line and nothing sent. Otherwise, by the forge surface: an open
-# same-repository pull request whose head is <branch> is reused and no second
-# one is opened; else a draft is created against `defaultBranch`, titled from
-# the task prompt's `# ` first line (cut to `PR_TITLE_MAX_CHARS`, else
-# <branch>), whose body names the issue as `Started from #<n>.` — a plain
-# mention, never a closing keyword — states what a review requesting changes
-# and the `COMMAND_HANDLE` commands do, and ends with the `pull-request`
-# marker. The create runs with `HARNESS_PR_TOKEN` as `GH_TOKEN` when that is
-# set, so the adopter's CI runs without an approval click; every other call
-# uses the job's token. A pull request so opened is authored by that token's
-# owner, who therefore cannot request changes on it: use a machine account's
-# token, another reviewer, or a local `branch-user-review` round. A create
-# refused with `PR_CREATE_FORBIDDEN` is not retried, and the comment names the
-# Actions setting and `HARNESS_GIT_TOKEN`; any other failure is retried once
-# without `--draft`, and a second failure is named in the comment with the
-# branch's compare URL. A pull-request lookup that fails opens nothing. Then
-# one `completed` comment: on the issue naming the new pull request's URL; on
-# the pull request when there is no issue, or when it existed before this run
-# (saying the round finished); on the issue alone when none could be opened;
-# nowhere when neither is known. It names reviewing and requesting changes as
-# the next action, and with `phases.qa` true the local `branch-qa-test` still
-# owed. Then `sdlc-harness: done` on the issue and the pull request, each when
-# known. It writes at most one pull request, one comment and those labels, and
-# never pushes. It never fails its caller: every problem is one line and exit 0.
+# one line and nothing sent. The bundle's `engine` names what completed:
+# `user_review` is a round, anything else a run. An open same-repository pull
+# request whose head is <branch> is reused and no second one is opened. With
+# none open and a lookup that succeeded, `forge_open_pr` is the fallback — one
+# line says none was open at completion, because the start's attempt failed or
+# the workflow predates `open`. It is created against `defaultBranch`, titled
+# from the task prompt's `# ` first line (cut to `PR_TITLE_MAX_CHARS`, else
+# <branch>), with a body naming the issue as `Started from #<n>.` — a plain
+# mention, never a closing keyword — stating what a review requesting changes
+# and the `COMMAND_HANDLE` commands do, and ending with the `pull-request`
+# marker: a `--draft` create with `HARNESS_PR_TOKEN` as `GH_TOKEN` when set, so
+# the adopter's CI runs without an approval click, no retry on
+# `PR_CREATE_FORBIDDEN`, one retry without `--draft` on any other failure. A
+# pull request so opened is authored by that token's owner, who therefore
+# cannot request changes on it: use a machine account's token, another
+# reviewer, or a local `branch-user-review` round. A lookup that fails opens
+# nothing. Then the ready flip, with the job's token and never
+# `HARNESS_PR_TOKEN`: a draft gets one `gh pr ready` (flipped), and a refusal
+# is one `::warning::` line naming gh's error (refused); a pull request that is
+# not a draft — no drafts on the plan, or a person marked it ready — gets no
+# call (not a draft) and is left alone. A round's review threads are handled
+# next, after the flip and before the comments, with the job's token, per THE
+# REVIEW-COMMENT LINE below: only when the pull request is known, the
+# highest-numbered round file on origin's tip is the highest-numbered marked
+# one (`round_markers_read`) — a round placed by the local command consumes no
+# pull-request item — and its marker's `comments=` is non-empty; otherwise one
+# line. Its fix plan is `<branch>_fix_plan.md` and `<branch>_fix_plan/` for
+# round 1, `<branch>_fix_plan_<n>.md` and `<branch>_fix_plan_<n>/` for round
+# <n>, read from origin's tip. A verdict is kept only for an id the round
+# collected: `fixed <sha>` for an implemented finding, `reason <text>` for an
+# out-of-scope bullet; a collected id with none is one line, left alone. One
+# paginated `api graphql` listing of the pull request's `reviewThreads` (`id`,
+# `isResolved`, each comment's `databaseId`, `createdAt` and `body`); the
+# thread holding a collected id is that id's thread. Left alone, one line
+# each: a thread already resolved; a thread with a comment created after the
+# round's `collected_at` that is not a collected id and carries no
+# `COMMENT_MARKER` — the reviewer replied after the collection; and a thread
+# already carrying this round's `thread` marker (` round=<n>` included), so a
+# re-run of the same round replies nothing twice while a later round still
+# handles a thread an earlier round replied to. Otherwise one reply, through
+# `pulls/<pr>/comments/<id>/replies` to the thread's first comment, ending with
+# `forge_marker thread <branch>` and the round's ` round=<n>` — whose
+# `COMMENT_MARKER` keeps the next `round_collect` from collecting it: for
+# `fixed`, ``Addressed in `<sha>`.`` and, only once that reply is posted, one
+# `resolveReviewThread` mutation; for `reason`, `Not changed in this round:
+# <reason>`, the thread left open. A refused listing, reply or resolve is one
+# `::warning::` line. It never dismisses a review.
+# THE REVIEW-COMMENT LINE is this file's contract, written by one writer,
+# `plugin/agents/user-review-fix-plan-writer.md`, and read by `deliver` alone:
+#   - in a per-finding file `<state_dir>/user_reviews/<branch>_fix_plan[_<n>]/
+#     finding_<K>.md`, one line beginning `**Review comments:** ` followed by
+#     one or more comment ids separated by `, `, e.g.
+#     `**Review comments:** 2735551234, 2735551240`;
+#   - in the fix-plan index's `## Out of scope / verified-OK` section, a bullet
+#     (a line beginning `- `) ending with ` **Review comments:** <id>[, <id>…]`,
+#     its text before that suffix the reason the reply quotes;
+#   - the ids are the round marker's `comments=` ids, GitHub's review-comment
+#     `id`s; an observation from no inline comment carries no such line;
+#   - finding <K> is implemented when the index carries the literal
+#     `[x] **Finding <K>**`, and its fix commit is the oldest commit on
+#     `origin/<branch>` that introduced that literal into the index (`git log
+#     --reverse -S`), else origin's tip — the committer flips the entry in the
+#     fix's own commit.
+# Then one `completed` comment
+# on the pull request, its readiness clause by the flip's outcome, and one on
+# the issue naming the pull request's number and URL, each when known; with no
+# pull request, one comment on the issue alone naming why none could be opened
+# — the Actions setting and `HARNESS_GIT_TOKEN` on `PR_CREATE_FORBIDDEN`, else
+# gh's error — with the branch's compare URL; nowhere when neither is known.
+# Each names reviewing and requesting changes as the next action, and with
+# `phases.qa` true the local `branch-qa-test` still owed. Then
+# `sdlc-harness: done` on the issue and the pull request, each when known. It
+# writes at most one pull request, one flip, a round's thread replies and
+# resolves, two comments and those labels, and never pushes. It never fails its caller: every problem, a refused flip
+# included, is one line and exit 0.
 #
 # `collect` STARTS THE NEXT ROUND FROM THE REVIEWS COLLECTED DURING A RUN: the
 # one step of the run workflow's `collect` job, which follows its `run` job, so
@@ -425,7 +531,9 @@
 # anyone else, is never trusted; none is a refusal. Both paths then pass
 # `control_check_branch`: a branch `hr_branch_is_protected` does not answer 1
 # for is refused, then it is fetched. It is a harness branch when its origin
-# tip carries the flow-progress ledger (`forge_recognised`); or, for a command
+# tip carries its task prompt or the flow-progress ledger (`forge_recognised`)
+# — the task prompt, `start`'s first commit, makes a pull request opened at
+# the run's start commandable before the ledger's first push; or, for a command
 # typed on an issue, when it is the branch that issue's genuine `started`
 # marker names and it still exists on origin (`remote_branch_exists`) — the
 # marker shows the harness started a run on it, so a first run GitHub never
@@ -611,8 +719,8 @@
 #      answers 1): GitHub closed the pull request because the branch was
 #      deleted, and the `delete` event's job stops the run; an `ls-remote` that
 #      cannot answer is one line and proceeds
-# There is no ledger-at-tip check (`forge_recognised`): a merged or deleted
-# branch may no longer carry one, and a listed `harness run <b>` run is the
+# There is no harness-branch check (`forge_recognised`): a merged or deleted
+# branch may no longer carry its task prompt or ledger, and a listed `harness run <b>` run is the
 # proof. The state is read by `control_state_var`: only `running`, `parked`,
 # `park_loop` and `paused` are acted on; `completed`, `failed` and `none` are
 # `left alone: the run on <b> is <state>`, and one `remote_branch_stopped`
@@ -991,7 +1099,9 @@
 # files under `RUNNER_TEMP`, one comment on the issue and the label removal, or
 # for a dispatch event a block in the step summary. `report` writes its comment
 # file under `RUNNER_TEMP` (removed), one comment and the state labels on the
-# issue and the pull request, and nothing local. `deliver` writes its body and
+# issue and the pull request, and nothing local. `open` writes its body and
+# comment files under `RUNNER_TEMP` (removed), at most one pull request, its
+# `running` label and one comment on the issue. `deliver` writes its body and
 # comment files under `RUNNER_TEMP` (removed), at most one pull request, one
 # comment and the state labels. `control` writes its reply file and its
 # `fetch` directory under `RUNNER_TEMP` (removed) and one reply comment, plus
@@ -1251,15 +1361,45 @@
 #              naming `@sdlc-harness resume`, then `api --method POST
 #              repos/o/r/issues/7/labels -f labels[]=sdlc-harness: paused`
 #   forge off  `"forge": "none"`, then the same -> 0, one line, "$s.log" unchanged
+#   progress   a task ledger at sdlc-harness/flow_progress/feat_x_progress.md in
+#              the checkout and the stub answering `pr list` with [{"number":12,
+#              "isCrossRepository":false}]: bash scripts/remote-run.sh report
+#              progress feat_x -> 0; "$s.log" gains `api --paginate
+#              repos/o/r/issues/12/comments ...`, then one POST on 12 ending in
+#              `event=progress branch=feat_x -->`; with that comment listed, no
+#              write; with the ledger changed, one `PATCH repos/o/r/issues/comments/<id>`
 #
 #   deliver needs report's setup, a stub answering the create with
 #   https://github.com/o/r/pull/12, and <b> a bundle directory whose status.json
 #   carries schema "1" and status completed:
 #   deliver    bash scripts/remote-run.sh deliver feat_x <b> -> 0; "$s.log" gains
-#              a `--draft` create with `--base main --head feat_x`, then one
-#              comment on issue 7 naming /pull/12, then `sdlc-harness: done` on
-#              7 and 12
+#              a `--draft` create with `--base main --head feat_x`, then `pr
+#              ready 12` with the job's token, then one comment on 12 saying
+#              it is now marked ready, then one on issue 7 naming #12 and
+#              /pull/12, then `sdlc-harness: done` on 7 and 12
+#   reused     the stub answering `pr list` with [{"number":12,
+#              "isCrossRepository":false,"isDraft":false}] -> 0, no create, no
+#              `pr ready`, the pull request's comment saying it is not a draft
+#   refused    the stub failing `pr ready` -> 0, one `::warning::` line, both
+#              comments posted, the pull request's saying the flip was refused
 #   not done   status parked, or an empty <b> -> 0, one line, "$s.log" unchanged
+#   threads    <b>'s engine user_review; on feat_x a `feat_x_review.md` ending in
+#              the marker `comments=101,103`, a `feat_x_fix_plan.md` whose
+#              `1. [x] **Finding 1**` lands in its own commit and whose `## Out
+#              of scope / verified-OK` bullet ends ` **Review comments:** 103`,
+#              and `feat_x_fix_plan/finding_1.md` carrying `**Review comments:**
+#              101`; a stub answering `api graphql` with one open thread per id
+#              -> 0; "$s.log" gains a reply on comment 101 naming that commit,
+#              then one `resolveReviewThread`, then a reply on 103 quoting the
+#              bullet and no resolve; no dismissal call
+#
+#   open needs deliver's setup without the bundle:
+#   open       bash scripts/remote-run.sh open feat_x -> 0; "$s.log" gains a
+#              `--draft` create with `--base main --head feat_x`, then
+#              `sdlc-harness: running` on 12, then one comment on issue 7
+#              naming /pull/12 and ending in `event=opened branch=feat_x`
+#   reused     the stub answering `pr list` with [{"number":12,
+#              "isCrossRepository":false}] -> 0, one line, no create, no comment
 #
 #   collect needs deliver's setup, a story index on feat_x, a stub answering
 #   `pr list` with [{"number":12,"isCrossRepository":false}], `run list` with a
@@ -1388,6 +1528,7 @@ usage() {
   echo "       remote-run.sh list [--repo <root>]" >&2
   echo "       remote-run.sh discard <dir> [--repo <root>]" >&2
   echo "       remote-run.sh report <event> <branch> [--note <text>] [--repo <root>]" >&2
+  echo "       remote-run.sh open <branch> [--repo <root>]" >&2
   echo "       remote-run.sh deliver <branch> <bundle_dir> [--repo <root>]" >&2
   echo "       remote-run.sh collect <branch> [--pr <n>] [--repo <root>]" >&2
   echo "       remote-run.sh control [--repo <root>]" >&2
@@ -1460,7 +1601,7 @@ verb=""
 verb="$1"
 shift
 case "$verb" in
-  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard|report|deliver|collect|control) ;;
+  dispatch|pause|warm|stop|status|sync|fetch|restore|save|continue|poll|pause-requested|run-created-at|start|review|trigger|list|discard|report|open|deliver|collect|control) ;;
   *) usage "unknown verb '$verb'" ;;
 esac
 
@@ -1685,10 +1826,11 @@ fi
 # ---------------------------------------------------------------------------
 
 # setup_fail <message> — a configuration problem: exit 1, except for save,
-# report, deliver and collect, which never fail the step that calls them.
+# report, open, deliver and collect, which never fail the step that calls them.
 setup_fail() {
   echo "remote-run.sh: $1" >&2
-  [ "$verb" != save ] && [ "$verb" != report ] && [ "$verb" != deliver ] && [ "$verb" != collect ] || exit "$EXIT_OK"
+  [ "$verb" != save ] && [ "$verb" != report ] && [ "$verb" != open ] && [ "$verb" != deliver ] \
+    && [ "$verb" != collect ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
 
@@ -1696,8 +1838,8 @@ if [ -n "$repo_arg" ]; then
   root=$(hr_repo_root "$repo_arg") || setup_fail "'$repo_arg' is not a git repository"
 elif [ "$verb" = restore ] || [ "$verb" = save ] || [ "$verb" = continue ] || [ "$verb" = poll ] \
   || [ "$verb" = pause-requested ] || [ "$verb" = run-created-at ] || [ "$verb" = trigger ] \
-  || [ "$verb" = discard ] || [ "$verb" = report ] || [ "$verb" = deliver ] || [ "$verb" = collect ] \
-  || [ "$verb" = control ]; then
+  || [ "$verb" = discard ] || [ "$verb" = report ] || [ "$verb" = open ] || [ "$verb" = deliver ] \
+  || [ "$verb" = collect ] || [ "$verb" = control ]; then
   root=$(hr_repo_root "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
@@ -1716,7 +1858,7 @@ case "$verb" in
   trigger|control)
     # Gates itself, after reading the event, so a refusal can still be commented.
     ;;
-  report|deliver|collect)
+  report|open|deliver|collect)
     # Gates itself (`forge_on`) and exits 0 on every outcome.
     ;;
   status|sync)
@@ -4086,9 +4228,12 @@ The task is the dispatch's \`client_payload\` title and body. Sending the same d
 # never exits, and reports a failure as one `remote-run.sh: …` line on stderr.
 #
 # THE TARGET RULE. A comment goes to the open same-repository pull request
-# whose head is the branch when `forge_recognised` holds for that branch, else
-# to the issue the run was started from (`FORGE_ISSUE`), else nowhere. The
-# state label goes on that issue and on that pull request, each when known.
+# whose head is the branch when `forge_recognised` holds for that branch — its
+# origin tip carries its task prompt or its flow-progress ledger — else to the
+# issue the run was started from (`FORGE_ISSUE`), else nowhere. The task prompt
+# counts so that a pull request opened at the run's start is a target before
+# the ledger's first push. The state label goes on that issue and on that pull
+# request, each when known.
 #
 # THE LABEL IS A VIEW, NEVER AN AUTHORITY. The run list is the authority
 # (`remote_state`); the harness overwrites any state label set by hand, and
@@ -4147,12 +4292,12 @@ forge_fetch_branch() {
   return 0
 }
 
-# forge_marker <event> <branch> [<question> [<engine>]] — the one producer of a
-# comment's marker line, built from COMMENT_MARKER: ` question=<n>` then
-# ` engine=<engine>`, each only when non-empty, before ` -->`.
+# forge_marker <event> <branch> [<question> [<engine> [<round>]]] — the one
+# producer of a comment's marker line, built from COMMENT_MARKER: ` question=<n>`,
+# ` engine=<engine>` then ` round=<n>`, each only when non-empty, before ` -->`.
 forge_marker() {
-  printf '%s event=%s branch=%s%s%s -->\n' "$COMMENT_MARKER" "$1" "$2" \
-    "${3:+ question=$3}" "${4:+ engine=$4}"
+  printf '%s event=%s branch=%s%s%s%s -->\n' "$COMMENT_MARKER" "$1" "$2" \
+    "${3:+ question=$3}" "${4:+ engine=$4}" "${5:+ round=$5}"
 }
 
 # forge_issue_var <branch> — FORGE_ISSUE from the last provenance line
@@ -4233,29 +4378,39 @@ forge_provenance_parse() {
 }
 
 # forge_recognised <branch> — the harness-branch test, read from committed
-# state: 0 when origin's copy of the branch carries its flow-progress ledger.
+# state: 0 when origin's copy of the branch carries its task prompt or its
+# flow-progress ledger, 1 otherwise.
 forge_recognised() {
   local state_rel
   state_rel=$(hr_state_dir "$root" 2>/dev/null) || return 1
   [ -n "$state_rel" ] || return 1
-  git -C "$root" cat-file -e "refs/remotes/origin/$1:${state_rel%/}/flow_progress/$1_progress.md" 2>/dev/null
+  git -C "$root" cat-file -e "refs/remotes/origin/$1:${state_rel%/}/flow_progress/$1_progress.md" 2>/dev/null \
+    || git -C "$root" cat-file -e "refs/remotes/origin/$1:$(hr_task_prompt_rel "$state_rel" "$1")" 2>/dev/null
 }
 
 # forge_pr_var <branch> — FORGE_PR, the open pull request whose head is
-# <branch> in this repository (a fork's same-named head is skipped), or empty.
+# <branch> in this repository (a fork's same-named head is skipped), or empty;
+# FORGE_PR_DRAFT, that same pull request's `isDraft` as `true` or `false`, or
+# empty when FORGE_PR is.
 FORGE_PR=""
+FORGE_PR_DRAFT=""
 forge_pr_var() {
+  local sel
   FORGE_PR=""
-  if ! gh_call pr list --repo "$FORGE_REPO" --head "$1" --state open --json number,isCrossRepository --limit 10; then
+  FORGE_PR_DRAFT=""
+  if ! gh_call pr list --repo "$FORGE_REPO" --head "$1" --state open --json number,isCrossRepository,isDraft --limit 10; then
     echo "remote-run.sh: listing the open pull requests of $1 failed: $GH_ERR" >&2
     return 1
   fi
-  if ! FORGE_PR=$(printf '%s' "$GH_OUT" | jq -r \
-    'if type == "array" then [.[] | select(.isCrossRepository == false) | .number | numbers] | first // empty else error end' 2>/dev/null); then
-    FORGE_PR=""
+  if ! sel=$(printf '%s' "$GH_OUT" | jq -r \
+    'if type == "array" then [.[] | select(.isCrossRepository == false and (.number | type) == "number")] | first // empty | "\(.number) \(.isDraft == true)" else error end' 2>/dev/null); then
     GH_ERR="its pr list is not the expected JSON"
     echo "remote-run.sh: listing the open pull requests of $1 failed: $GH_ERR" >&2
     return 1
+  fi
+  if [ -n "$sel" ]; then
+    FORGE_PR="${sel%% *}"
+    FORGE_PR_DRAFT="${sel#* }"
   fi
   return 0
 }
@@ -4317,11 +4472,11 @@ forge_dispatch_engine_var() {
   return 0
 }
 
-# forge_comment <number> <event> <branch> <body_file> [<question> [<engine>]] —
-# append the marker to <body_file> and post it on issue or pull request <number>.
+# forge_comment <number> <event> <branch> <body_file> [<question> [<engine> [<round>]]]
+# — append the marker to <body_file> and post it on issue or pull request <number>.
 forge_comment() {
-  local number="$1" event="$2" branch="$3" file="$4" question="${5-}" engine="${6-}" status
-  if ! { printf '\n'; forge_marker "$event" "$branch" "$question" "$engine"; } >>"$file"; then
+  local number="$1" event="$2" branch="$3" file="$4" question="${5-}" engine="${6-}" round="${7-}" status
+  if ! { printf '\n'; forge_marker "$event" "$branch" "$question" "$engine" "$round"; } >>"$file"; then
     echo "remote-run.sh: cannot append the marker to '$file'" >&2
     return 1
   fi
@@ -4444,7 +4599,7 @@ REPORT_NOT_STARTED_STATE=""
 REPORT_NOT_STARTED_ENGINE=""
 forge_report() {
   local event="$1" br="$2" note="${3-}" pr="${4-}" gone="${5-}" gone_sha="${6-}" state reason="" resume_at="" when registry_file
-  local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n route
+  local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n route engine=""
   case "$event" in
     parked|park_loop) state=parked ;;
     paused) state=paused ;;
@@ -4499,7 +4654,7 @@ forge_report() {
     forge_pr_var "$br" || FORGE_PR=""
   fi
   if [ -z "$pr" ] && [ -n "$FORGE_PR" ] && ! forge_recognised "$br"; then
-    echo "remote-run.sh: report: pull request #$FORGE_PR's head carries no flow-progress ledger; it is not a target"
+    echo "remote-run.sh: report: pull request #$FORGE_PR's head carries neither a task prompt nor a flow-progress ledger; it is not a target"
     FORGE_PR=""
   fi
   if [ -n "$FORGE_PR" ]; then
@@ -4516,6 +4671,7 @@ forge_report() {
   if [ -n "$registry_file" ] && [ -f "$registry_file" ]; then
     reason=$(hr_registry_get "$registry_file" "$br" pause_reason)
     resume_at=$(hr_registry_get "$registry_file" "$br" usage_resume_at)
+    [ "$event" != failed ] || engine=$(hr_registry_get "$registry_file" "$br" engine)
   fi
 
   case "$event" in
@@ -4531,10 +4687,13 @@ forge_report() {
     resumed)
       text="The harness run on \`$br\` resumed." ;;
     failed)
-      if [ "$kind" = pr ]; then
-        text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, submit a review on this pull request requesting changes."
+      trigger_label="${FORGE_TRIGGER_LABEL:-${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}}"
+      if [ "$kind" = pr ] && [ "$engine" = user_review ]; then
+        text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, submit a review on this pull request requesting changes. This pull request stays open."
+      elif [ "$kind" = pr ]; then
+        # No review route: a round would start over a task run that never completed.
+        text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. This draft pull request stays open: close it to discard the run${FORGE_ISSUE:+, or re-apply the label \`$trigger_label\` to issue #$FORGE_ISSUE to start a new run on the next indexed branch}."
       else
-        trigger_label="${FORGE_TRIGGER_LABEL:-${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}}"
         text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, re-apply the label \`$trigger_label\` to this issue; that starts a new run, on the next indexed branch."
       fi ;;
     stopped)
@@ -4545,9 +4704,19 @@ forge_report() {
         text="The harness run on \`$br\` was stopped. While the branch exists, reopen this pull request and comment \`${COMMAND_HANDLE} resume\` here, or comment it on the run's issue, to continue it from its committed ledger. A merged pull request cannot be reopened; after a merge, use the issue."
       else
         text="The harness run on \`$br\` was stopped. Comment \`${COMMAND_HANDLE} resume\` to continue it from its committed ledger. A review that requests changes is collected now, and its round starts once the resumed run finishes."
+        [ "$kind" != pr ] || text="$text Its draft pull request stays open; closing it discards the run."
       fi ;;
     round)
-      text="A user-review round started on \`$br\`; a \`completed\` comment follows when the branch is ready for review again." ;;
+      text="A user-review round started on \`$br\`; a \`completed\` comment follows when the branch is ready for review again."
+      # The undo runs before the comment is written, so the comment states its outcome.
+      if [ "$kind" = pr ] && [ "$FORGE_PR_DRAFT" = false ]; then
+        if gh_call pr ready "$FORGE_PR" --repo "$FORGE_REPO" --undo; then
+          text="$text This pull request is a draft again until the round completes."
+        else
+          echo "::warning::remote-run.sh: report: turning pull request #$FORGE_PR back to a draft was refused: $GH_ERR"
+          text="$text Turning this pull request back to a draft was refused, so it stays ready for review while the round works."
+        fi
+      fi ;;
     not_started)
       text="GitHub did not start the job of the harness run on \`$br\`, so nothing ran and the branch is unchanged."
       if [ "$state" = paused ] && [ -n "$REPORT_NOT_STARTED_ENGINE" ]; then
@@ -4608,8 +4777,122 @@ forge_report() {
   return 0
 }
 
+# forge_progress <branch> — upsert the one progress comment of the run or round
+# on its pull request, rendered from the job checkout's flow-progress ledger:
+# created when none is listed, edited in place only when its body differs. No
+# issue fallback, no label. Always 0.
+forge_progress() {
+  local br="$1" status state_rel phases engine round p line i first=1 marker
+  local tmp made_tmp="" file pick id same
+  local -a labels states
+  if ! forge_on; then
+    echo "remote-run.sh: report: the forge coupling is off (forge github and execution.target github-actions); nothing posted"
+    return 0
+  fi
+  status=0
+  hr_progress_comments "$root" || status=$?
+  case "$status" in
+    0) ;;
+    1) echo "remote-run.sh: report: progress comments are off by execution.progressComments; nothing posted"; return 0 ;;
+    *) echo "remote-run.sh: report: execution.progressComments is unreadable; nothing posted"; return 0 ;;
+  esac
+  forge_repo_var || return 0
+  ALL_RUNS_LISTED=0
+  status=0
+  remote_branch_stopped "$br" || status=$?
+  if [ "$status" -eq 0 ]; then
+    echo "remote-run.sh: report: $br was stopped, and the stop already reported the run; nothing posted"
+    return 0
+  fi
+  [ "$status" -eq 1 ] \
+    || echo "remote-run.sh: report: whether $br was stopped is unknown ($GH_ERR); reporting the progress" >&2
+  state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
+  if [ -z "$state_rel" ] || ! phases=$(hr_ledger_phases "$root/${state_rel%/}/flow_progress/${br}_progress.md"); then
+    echo "remote-run.sh: report: $br has no task or user-review ledger; nothing posted"
+    return 0
+  fi
+  read -r engine round states[0] states[1] states[2] states[3] <<<"$phases"
+  forge_fetch_branch "$br"
+  forge_pr_var "$br" || FORGE_PR=""
+  if [ -z "$FORGE_PR" ] || ! forge_recognised "$br"; then
+    echo "remote-run.sh: report: $br has no recognised open pull request; nothing posted"
+    return 0
+  fi
+
+  if [ "$engine" = user_review ]; then
+    labels=('Fix plan' 'Fix implementation' 'Branch review' 'Done')
+    line="Progress of user-review round $round on \`$br\`:"
+  else
+    labels=('Planning' 'Implementation' 'Branch review' 'Done')
+    line="Progress of the harness run on \`$br\`:"
+    round=""
+  fi
+  marker=$(forge_marker progress "$br" "" "" "$round")
+
+  tmp="${RUNNER_TEMP-}"
+  if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
+    tmp=$(mktemp -d) || tmp=""
+    made_tmp="$tmp"
+  fi
+  if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-progress-comment.XXXXXX"); then
+    echo "::warning::remote-run.sh: report: cannot create the progress comment file for #$FORGE_PR; nothing posted"
+    [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+    return 0
+  fi
+  # No timestamp and no run URL: an unchanged ledger must render byte-identical.
+  # Plain list items: a `- [ ]` box is clickable by anyone with write access.
+  {
+    printf '%s\n\n' "$line"
+    for i in 0 1 2 3; do
+      if [ "${states[$i]}" = done ]; then
+        p=done
+      elif [ "$first" -eq 1 ]; then
+        p="in progress"; first=0
+      else
+        p="not started"
+      fi
+      printf -- '- %s: %s\n' "${labels[$i]}" "$p"
+    done
+  } >"$file"
+  { cat "$file"; printf '\n%s\n' "$marker"; } >"$file.full"
+
+  if ! gh_call api --paginate "repos/$FORGE_REPO/issues/$FORGE_PR/comments" --jq '.[] | {id, login: .user.login, body}'; then
+    echo "::warning::remote-run.sh: report: listing the comments of #$FORGE_PR was refused, so the progress is not posted: $GH_ERR"
+  elif ! pick=$(printf '%s' "$GH_OUT" | jq -s -r --arg m "$marker" --arg want "$(cat "$file.full")" '
+      def norm: gsub("\r"; "") | sub("\n+$"; "");
+      [.[] | select(type == "object" and .login == "github-actions[bot]" and (.id | type) == "number")
+        | select(((.body // "") | gsub("\r"; "") | split("\n") | map(select(test("^\\s*$") | not)) | last // "") == $m)]
+      | max_by(.id) // empty
+      | "\(.id) \(if ((.body // "") | norm) == ($want | norm) then "same" else "differs" end)"' 2>/dev/null); then
+    echo "::warning::remote-run.sh: report: the comments of #$FORGE_PR are not the expected JSON, so the progress is not posted"
+  elif [ -z "$pick" ]; then
+    if forge_comment "$FORGE_PR" progress "$br" "$file" "" "" "$round"; then
+      echo "remote-run.sh: report: progress on $br posted on #$FORGE_PR"
+    else
+      echo "::warning::remote-run.sh: report: posting the progress comment on #$FORGE_PR was refused: $GH_ERR"
+    fi
+  else
+    id="${pick%% *}"
+    same="${pick#* }"
+    if [ "$same" = same ]; then
+      echo "remote-run.sh: report: the progress comment on #$FORGE_PR is already current"
+    elif gh_call api --method PATCH "repos/$FORGE_REPO/issues/comments/$id" -F "body=@$file.full"; then
+      echo "remote-run.sh: report: progress on $br edited in comment $id on #$FORGE_PR"
+    else
+      echo "::warning::remote-run.sh: report: editing the progress comment $id on #$FORGE_PR was refused: $GH_ERR"
+    fi
+  fi
+  rm -f "$file" "$file.full"
+  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+  return 0
+}
+
 verb_report() {
-  forge_report "$report_event" "$branch" "$report_note"
+  if [ "$report_event" = progress ]; then
+    forge_progress "$branch"
+  else
+    forge_report "$report_event" "$branch" "$report_note"
+  fi
   exit "$EXIT_OK"
 }
 
@@ -4644,7 +4927,7 @@ deliver_pr_body() {
     verbs="$verbs${verbs:+, }\`$COMMAND_HANDLE $v\`"
   done
   {
-    printf 'This pull request carries the harness run on `%s`, ready for your review. The harness never merges it.\n' "$2"
+    printf 'This pull request carries the harness run on `%s`. It stays a draft while the run works, and the harness marks it ready for review when the run completes; the harness never merges it.\n' "$2"
     [ -z "$FORGE_ISSUE" ] || printf '\nStarted from #%s.\n' "$FORGE_ISSUE"
     printf '\nA review that requests changes starts a user-review round on this branch.\n'
     printf 'Comment %s to act on the run; each says when it applies (docs/github-run-control.md in the harness documentation).\n' "$verbs"
@@ -4666,11 +4949,280 @@ deliver_create() {
   fi
 }
 
-# verb_deliver — after a `completed` bundle: find or open the branch's pull
-# request, post the one `completed` comment, and set `done`. Always exit 0.
+# forge_open_pr <branch> — the one opener of a run's pull request, against
+# `defaultBranch`: a `--draft` create, then on any failure but
+# PR_CREATE_FORBIDDEN one retry without `--draft`. The caller has set
+# FORGE_REPO, FORGE_SERVER and FORGE_ISSUE. 0 when opened, setting FORGE_PR,
+# FORGE_PR_URL and FORGE_PR_DRAFT (`false` after the retry); 1 when not,
+# setting OPEN_ERR (one line) and OPEN_FORBIDDEN (1 on PR_CREATE_FORBIDDEN).
+# Always sets OPEN_BASE, empty when unreadable. Never posts, never exits.
+FORGE_PR_URL=""
+OPEN_ERR=""
+OPEN_FORBIDDEN=0
+OPEN_BASE=""
+forge_open_pr() {
+  local br="$1" tmp made_tmp="" body="" draft=""
+  FORGE_PR=""
+  FORGE_PR_URL=""
+  FORGE_PR_DRAFT=""
+  OPEN_ERR=""
+  OPEN_FORBIDDEN=0
+  OPEN_BASE=$(hr_default_branch "$root" 2>/dev/null) || OPEN_BASE=""
+  deliver_title_var "$br"
+  if [ -z "$OPEN_BASE" ]; then
+    OPEN_ERR="the configured defaultBranch could not be read"
+    return 1
+  fi
+  tmp="${RUNNER_TEMP-}"
+  if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
+    tmp=$(mktemp -d) || tmp=""
+    made_tmp="$tmp"
+  fi
+  if [ -z "$tmp" ] || ! body=$(mktemp "$tmp/harness-pr-body.XXXXXX") || ! deliver_pr_body "$body" "$br"; then
+    OPEN_ERR="its body file could not be written"
+  elif deliver_create "$OPEN_BASE" "$br" "$body" --draft; then
+    draft=true
+  else
+    OPEN_ERR="$GH_ERR"
+    case "$GH_ERR" in
+      *"$PR_CREATE_FORBIDDEN"*) OPEN_FORBIDDEN=1 ;;
+      *)
+        # Drafts depend on the account's plan (C3, not measured): one retry as ready.
+        echo "remote-run.sh: $verb: opening a draft pull request failed ($GH_ERR); retrying once without --draft" >&2
+        if deliver_create "$OPEN_BASE" "$br" "$body"; then
+          draft=false
+        else
+          OPEN_ERR="$GH_ERR"
+        fi ;;
+    esac
+  fi
+  [ -z "$body" ] || rm -f "$body"
+  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+  [ -n "$draft" ] || return 1
+  FORGE_PR=$(printf '%s\n' "$GH_OUT" | sed -n 's|.*/pull/\([0-9][0-9]*\).*|\1|p' | tail -n 1)
+  if [ -z "$FORGE_PR" ]; then
+    OPEN_ERR="gh printed no pull request URL"
+    return 1
+  fi
+  FORGE_PR_URL="$FORGE_SERVER/$FORGE_REPO/pull/$FORGE_PR"
+  FORGE_PR_DRAFT="$draft"
+  return 0
+}
+
+# deliver_comment <number> <tmp> <text> — one `completed` comment on <number>:
+# <text>, the `phases.qa` sentence when that phase is on, this run's URL when
+# GITHUB_RUN_ID is set, then the marker. A failure is one line.
+deliver_comment() {
+  local number="$1" tmp="$2" text="$3" file
+  if hr_phase_enabled "$root" qa; then
+    text="$text
+
+The interactive-test phase was skipped on GitHub Actions. Before merging, run \`/autonomous-sdlc-harness:branch-qa-test $branch\` locally."
+  fi
+  if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-deliver-comment.XXXXXX"); then
+    echo "remote-run.sh: deliver: cannot create the comment file for #$number; no comment posted" >&2
+    return 0
+  fi
+  {
+    printf '%s\n' "$text"
+    [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
+  } >"$file"
+  forge_comment "$number" completed "$branch" "$file" || :
+  rm -f "$file"
+}
+
+# deliver_thread_reply <tmp> <comment_id> <text> — one reply to the review
+# thread holding <comment_id>, <text> then the `thread` marker. 0 when posted;
+# otherwise one `::warning::` line and 1.
+deliver_thread_reply() {
+  local tmp="$1" id="$2" text="$3" file
+  if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-thread-reply.XXXXXX"); then
+    echo "::warning::remote-run.sh: deliver: cannot create the reply file for comment $id; no reply posted"
+    return 1
+  fi
+  if ! { printf '%s\n\n' "$text"; forge_marker thread "$branch" "" "" "$RC_MARKED_N"; } >"$file"; then
+    rm -f "$file"
+    echo "::warning::remote-run.sh: deliver: cannot write the reply file for comment $id; no reply posted"
+    return 1
+  fi
+  if ! gh_call api --method POST "repos/$FORGE_REPO/pulls/$FORGE_PR/comments/$id/replies" -F "body=@$file"; then
+    rm -f "$file"
+    echo "::warning::remote-run.sh: deliver: the reply to review comment $id was refused: $GH_ERR"
+    return 1
+  fi
+  rm -f "$file"
+  return 0
+}
+
+# deliver_round_threads <tmp> — at a round's completion, handle each inline
+# review thread the round collected by the fix plan's verdict on its comment:
+# `fixed` is a reply naming the fix commit, then the thread resolved; `reason`
+# is a reply quoting it, the thread left open. The wire it reads is the
+# header's THE REVIEW-COMMENT LINE. Never dismisses a review; never fails.
+deliver_round_threads() {
+  local tmp="$1" plan index_rel dir_rel index names path name k line rest id ids
+  local sha tip since pages threads row t_id t_resolved t_ids t_root t_later t_own
+  local i found handled="," own_marker re
+  local -a v_id=() v_kind=() v_val=()
+  if ! round_markers_read ""; then
+    echo "::warning::remote-run.sh: deliver: the round's review threads were not read: $RC_ERR"
+    return 0
+  fi
+  if [ "$RC_NEWEST_N" -eq 0 ]; then
+    echo "remote-run.sh: deliver: $branch has no round file; no review thread handled"
+    return 0
+  fi
+  if [ "$RC_NEWEST_N" -ne "$RC_MARKED_N" ]; then
+    echo "remote-run.sh: deliver: round $RC_NEWEST_N of $branch was not placed from a pull-request review; no review thread handled"
+    return 0
+  fi
+  if [ -z "$RC_MARKED_C" ]; then
+    echo "remote-run.sh: deliver: round $RC_MARKED_N of $branch collected no inline comment; no review thread handled"
+    return 0
+  fi
+
+  plan="${branch}_fix_plan"
+  [ "$RC_MARKED_N" -eq 1 ] || plan="${plan}_$RC_MARKED_N"
+  index_rel="$RC_STATE_REL/user_reviews/$plan.md"
+  dir_rel="$RC_STATE_REL/user_reviews/$plan"
+  if ! index=$(git -C "$root" show "refs/remotes/origin/$branch:$index_rel" 2>/dev/null); then
+    echo "remote-run.sh: deliver: round $RC_MARKED_N of $branch has no fix plan at $index_rel; no review thread handled"
+    return 0
+  fi
+  tip=$(git -C "$root" rev-parse "refs/remotes/origin/$branch" 2>/dev/null) || tip=""
+
+  # Verdicts, kept only for ids the round collected; the first verdict an id gets wins.
+  names=$(git -C "$root" ls-tree --name-only "refs/remotes/origin/$branch" -- "$dir_rel/" 2>/dev/null) || names=""
+  while IFS= read -r path; do
+    name="${path##*/}"
+    [[ "$name" =~ ^finding_([0-9]+)\.md$ ]] || continue
+    k=$((10#${BASH_REMATCH[1]}))
+    case "$index" in *"[x] **Finding $k**"*) ;; *) continue ;; esac
+    line=$(git -C "$root" show "refs/remotes/origin/$branch:$path" 2>/dev/null | grep -E '^\*\*Review comments:\*\* ' | head -n 1) || line=""
+    [ -n "$line" ] || continue
+    sha=$(git -C "$root" log --reverse --format=%H -S "[x] **Finding $k**" "refs/remotes/origin/$branch" -- "$index_rel" 2>/dev/null | head -n 1) || sha=""
+    [ -n "$sha" ] || sha="$tip"
+    rest="${line#'**Review comments:** '}"
+    rest="${rest%$'\r'}"
+    ids="${rest//[[:space:]]/}"
+    for id in ${ids//,/ }; do
+      [[ "$id" =~ ^[0-9]+$ ]] || continue
+      v_id+=("$id"); v_kind+=(fixed); v_val+=("$sha")
+    done
+  done <<NAMES
+$names
+NAMES
+  re='^- (.*) \*\*Review comments:\*\* ([0-9][0-9, ]*)$'
+  found=0
+  while IFS= read -r line; do
+    line="${line%$'\r'}"
+    case "$line" in
+      '## Out of scope / verified-OK'*) found=1; continue ;;
+      '## '*) found=0; continue ;;
+    esac
+    [ "$found" -eq 1 ] || continue
+    [[ "$line" =~ $re ]] || continue
+    rest="${BASH_REMATCH[1]}"
+    ids="${BASH_REMATCH[2]//[[:space:]]/}"
+    for id in ${ids//,/ }; do
+      [[ "$id" =~ ^[0-9]+$ ]] || continue
+      v_id+=("$id"); v_kind+=(reason); v_val+=("$rest")
+    done
+  done <<INDEX
+$index
+INDEX
+
+  if ! since=$(jq -n -r --arg t "$RC_MARKED_AT" '$t | fromdateiso8601' 2>/dev/null) || [ -z "$since" ]; then
+    echo "::warning::remote-run.sh: deliver: round $RC_MARKED_N's collected_at '$RC_MARKED_AT' is not a UTC time; no review thread handled"
+    return 0
+  fi
+  if ! gh_call api graphql --paginate -f "owner=${FORGE_REPO%%/*}" -f "name=${FORGE_REPO#*/}" -F "number=$FORGE_PR" \
+    -f 'query=query($owner: String!, $name: String!, $number: Int!, $endCursor: String) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor } nodes { id isResolved comments(first: 100) { nodes { databaseId createdAt body } } } } } } }'; then
+    echo "::warning::remote-run.sh: deliver: listing the review threads of pull request #$FORGE_PR was refused: $GH_ERR"
+    return 0
+  fi
+  pages="$GH_OUT"
+  own_marker=$(forge_marker thread "$branch" "" "" "$RC_MARKED_N")
+  # One `|`-joined row per thread (a GraphQL node id carries no `|`): id,
+  # resolved, its comment ids, its first comment's id, whether a comment came
+  # after the round, whether it carries this harness's reply.
+  if ! threads=$(printf '%s' "$pages" | jq -s -r --argjson since "$since" --arg collected ",$RC_MARKED_C," \
+    --arg marker "$COMMENT_MARKER" --arg own "$own_marker" '
+    [ .[] | .data.repository.pullRequest.reviewThreads.nodes[] ]
+    | .[] | (.comments.nodes // []) as $c
+    | [ .id, (.isResolved == true | tostring),
+        ($c | map(.databaseId | tostring) | join(",")),
+        (($c[0].databaseId // "") | tostring),
+        (any($c[]; ("," + (.databaseId | tostring) + ",") as $k
+          | ((.createdAt // "") | try fromdateiso8601 catch 0) > $since
+          and (($collected | contains($k)) | not)
+          and (((.body // "") | contains($marker)) | not)) | tostring),
+        (any($c[]; (.body // "") | contains($own)) | tostring) ]
+    | join("|")' 2>/dev/null); then
+    echo "::warning::remote-run.sh: deliver: the review threads of pull request #$FORGE_PR are not the expected JSON; no review thread handled"
+    return 0
+  fi
+
+  for id in ${RC_MARKED_C//,/ }; do
+    i=0; found=""
+    while [ "$i" -lt "${#v_id[@]}" ]; do
+      if [ "${v_id[$i]}" = "$id" ]; then found="$i"; break; fi
+      i=$((i + 1))
+    done
+    if [ -z "$found" ]; then
+      echo "remote-run.sh: deliver: review comment $id has no verdict in the fix plan; left alone"
+      continue
+    fi
+    row=""
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      IFS='|' read -r t_id t_resolved t_ids t_root t_later t_own <<<"$line"
+      case ",$t_ids," in *",$id,"*) row="$line"; break ;; esac
+    done <<THREADS
+$threads
+THREADS
+    if [ -z "$row" ]; then
+      echo "remote-run.sh: deliver: review comment $id is in no review thread of pull request #$FORGE_PR; left alone"
+      continue
+    fi
+    case "$handled" in
+      *",$t_id,"*) echo "remote-run.sh: deliver: review comment $id's thread was handled for another comment; left alone"; continue ;;
+    esac
+    handled="$handled$t_id,"
+    if [ "$t_resolved" = true ]; then
+      echo "remote-run.sh: deliver: review comment $id's thread is already resolved; left alone"
+      continue
+    fi
+    if [ "$t_later" = true ]; then
+      echo "remote-run.sh: deliver: review comment $id's thread has a reply newer than round $RC_MARKED_N; left alone"
+      continue
+    fi
+    if [ "$t_own" = true ]; then
+      echo "remote-run.sh: deliver: review comment $id's thread already carries this harness's reply; left alone"
+      continue
+    fi
+    # Replies attach to a thread's first comment: GitHub does not take a reply to a reply.
+    if [ "${v_kind[$found]}" = fixed ]; then
+      deliver_thread_reply "$tmp" "$t_root" "Addressed in \`${v_val[$found]}\`." || continue
+      if gh_call api graphql -f 'query=mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }' -f "id=$t_id"; then
+        echo "remote-run.sh: deliver: replied to review comment $id and resolved its thread"
+      else
+        echo "::warning::remote-run.sh: deliver: resolving review comment $id's thread was refused: $GH_ERR"
+      fi
+    else
+      deliver_thread_reply "$tmp" "$t_root" "Not changed in this round: ${v_val[$found]}" || continue
+      echo "remote-run.sh: deliver: replied to review comment $id with the reason; its thread stays open"
+    fi
+  done
+  return 0
+}
+
+# verb_deliver — after a `completed` bundle: reuse the branch's pull request or
+# open it, mark it ready, post `completed` on it and on the issue, and set
+# `done`. Always exit 0.
 verb_deliver() {
-  local status base="" pr_url="" opened=0 lookup_failed=0 create_err="" forbidden=0
-  local tmp made_tmp="" body="" file target text compare
+  local status engine noun verb_done pr_url="" lookup_failed=0 create_err="" forbidden=0 base=""
+  local tmp made_tmp="" ready="" text readiness compare posted=""
   if ! forge_on; then
     echo "remote-run.sh: deliver: the forge coupling is off (forge github and execution.target github-actions); nothing posted"
     exit "$EXIT_OK"
@@ -4681,11 +5233,47 @@ verb_deliver() {
     echo "remote-run.sh: deliver: the bundle's status is '${status:-unreadable}', not completed; nothing posted"
     exit "$EXIT_OK"
   fi
+  engine=$(hr_remote_status_get "$bundle_dir/$HR_REMOTE_STATUS_FILE" engine 2>/dev/null) || engine=""
+  if [ "$engine" = user_review ]; then
+    noun=round; verb_done=finished
+  else
+    noun=run; verb_done=completed
+  fi
   forge_repo_var || exit "$EXIT_OK"
 
   forge_fetch_branch "$branch"
   forge_issue_var "$branch" || FORGE_ISSUE=""
-  forge_pr_var "$branch" || { FORGE_PR=""; lookup_failed=1; create_err="whether a pull request is already open could not be read ($GH_ERR)"; }
+  forge_pr_var "$branch" || { FORGE_PR=""; FORGE_PR_DRAFT=""; lookup_failed=1; create_err="whether a pull request is already open could not be read ($GH_ERR)"; }
+
+  if [ -n "$FORGE_PR" ]; then
+    pr_url="$FORGE_SERVER/$FORGE_REPO/pull/$FORGE_PR"
+    echo "remote-run.sh: deliver: $branch already has pull request #$FORGE_PR; none opened"
+  elif [ "$lookup_failed" -eq 0 ]; then
+    echo "remote-run.sh: deliver: $branch has no open pull request at completion — the start's attempt failed or the workflow predates the open step; opening it now"
+    if forge_open_pr "$branch"; then
+      pr_url="$FORGE_PR_URL"
+      echo "remote-run.sh: deliver: opened pull request #$FORGE_PR for $branch"
+    else
+      create_err="$OPEN_ERR"
+      forbidden="$OPEN_FORBIDDEN"
+    fi
+    base="$OPEN_BASE"
+  fi
+
+  # The flip runs with the job's token, never HARNESS_PR_TOKEN.
+  if [ -n "$FORGE_PR" ]; then
+    if [ "$FORGE_PR_DRAFT" = true ]; then
+      if gh_call pr ready "$FORGE_PR" --repo "$FORGE_REPO"; then
+        ready=flipped
+        echo "remote-run.sh: deliver: marked pull request #$FORGE_PR ready for review"
+      else
+        ready=refused
+        echo "::warning::remote-run.sh: deliver: marking pull request #$FORGE_PR ready for review was refused: $GH_ERR"
+      fi
+    else
+      ready=not-draft
+    fi
+  fi
 
   tmp="${RUNNER_TEMP-}"
   if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
@@ -4693,87 +5281,111 @@ verb_deliver() {
     made_tmp="$tmp"
   fi
 
+  # After the flip, before the comments.
+  if [ "$noun" = round ] && [ -n "$FORGE_PR" ]; then
+    deliver_round_threads "$tmp"
+  fi
+
   if [ -n "$FORGE_PR" ]; then
-    pr_url="$FORGE_SERVER/$FORGE_REPO/pull/$FORGE_PR"
-    echo "remote-run.sh: deliver: $branch already has pull request #$FORGE_PR; none opened"
-  elif [ "$lookup_failed" -eq 0 ]; then
-    base=$(hr_default_branch "$root" 2>/dev/null) || base=""
-    deliver_title_var "$branch"
-    if [ -z "$base" ]; then
-      create_err="the configured defaultBranch could not be read"
-    elif [ -z "$tmp" ] || ! body=$(mktemp "$tmp/harness-deliver-body.XXXXXX") || ! deliver_pr_body "$body" "$branch"; then
-      create_err="its body file could not be written"
-    elif deliver_create "$base" "$branch" "$body" --draft; then
-      opened=1
-    else
-      create_err="$GH_ERR"
-      case "$GH_ERR" in
-        *"$PR_CREATE_FORBIDDEN"*) forbidden=1 ;;
-        *)
-          # Drafts depend on the account's plan (C3, not measured): one retry as ready.
-          echo "remote-run.sh: deliver: opening a draft pull request failed ($GH_ERR); retrying once without --draft" >&2
-          if deliver_create "$base" "$branch" "$body"; then
-            opened=1
-          else
-            create_err="$GH_ERR"
-          fi ;;
-      esac
-    fi
-    [ -z "$body" ] || rm -f "$body"
-    if [ "$opened" -eq 1 ]; then
-      FORGE_PR=$(printf '%s\n' "$GH_OUT" | sed -n 's|.*/pull/\([0-9][0-9]*\).*|\1|p' | tail -n 1)
-      if [ -n "$FORGE_PR" ]; then
-        pr_url="$FORGE_SERVER/$FORGE_REPO/pull/$FORGE_PR"
-        echo "remote-run.sh: deliver: opened pull request #$FORGE_PR for $branch"
+    case "$ready" in
+      flipped)
+        if [ "$noun" = round ]; then
+          readiness="The harness round on \`$branch\` finished, and this pull request is marked ready for review again."
+        else
+          readiness="The harness run on \`$branch\` completed, and this pull request is now marked ready for your review."
+        fi ;;
+      not-draft)
+        readiness="The harness $noun on \`$branch\` $verb_done. This pull request is not a draft — drafts may not be available on this repository's plan, or someone marked it ready — so it was left as it is." ;;
+      *)
+        readiness="The harness $noun on \`$branch\` $verb_done. Marking this draft ready for review was refused; mark it ready by hand." ;;
+    esac
+    deliver_comment "$FORGE_PR" "$tmp" "$readiness A review that requests changes starts another round."
+    posted="#$FORGE_PR"
+    if [ -n "$FORGE_ISSUE" ]; then
+      if [ "$ready" = refused ]; then
+        text="The harness $noun on \`$branch\` $verb_done. Its pull request #$FORGE_PR is still a draft — marking it ready for review was refused, so mark it ready by hand: $pr_url"
+      elif [ "$noun" = round ]; then
+        text="The harness round on \`$branch\` finished. Pull request #$FORGE_PR is ready for review again: $pr_url"
       else
-        opened=0
-        create_err="gh printed no pull request URL"
+        text="The harness run on \`$branch\` completed. Its pull request #$FORGE_PR is ready for your review: $pr_url"
       fi
-    fi
-  fi
-
-  compare="$FORGE_SERVER/$FORGE_REPO/compare/${base:-<default branch>}...$branch?expand=1"
-  if [ -z "$pr_url" ]; then
-    target="$FORGE_ISSUE"
-    if [ "$forbidden" -eq 1 ]; then
-      text="The harness run on \`$branch\` completed, but its pull request could not be opened: GitHub Actions is not permitted to create pull requests in this repository. Turn on *$PR_CREATE_SETTING* under $PR_CREATE_SETTING_PATH, or set the \`HARNESS_GIT_TOKEN\` secret, for the next run. For this one, open the pull request from the branch: $compare"
-    else
-      text="The harness run on \`$branch\` completed, but its pull request could not be opened: $create_err. Open it by hand from the branch: $compare"
-    fi
-  elif [ "$opened" -eq 0 ]; then
-    target="$FORGE_PR"
-    text="The harness round on \`$branch\` finished. Review this pull request; a review that requests changes starts another round."
-  elif [ -n "$FORGE_ISSUE" ]; then
-    target="$FORGE_ISSUE"
-    text="The harness run on \`$branch\` completed. Its pull request is ready for your review: $pr_url
+      deliver_comment "$FORGE_ISSUE" "$tmp" "$text
 Review it there; a review that requests changes starts another round."
+      posted="$posted and #$FORGE_ISSUE"
+    fi
+  elif [ -n "$FORGE_ISSUE" ]; then
+    compare="$FORGE_SERVER/$FORGE_REPO/compare/${base:-<default branch>}...$branch?expand=1"
+    if [ "$forbidden" -eq 1 ]; then
+      text="The harness $noun on \`$branch\` $verb_done, but its pull request could not be opened: GitHub Actions is not permitted to create pull requests in this repository. Turn on *$PR_CREATE_SETTING* under $PR_CREATE_SETTING_PATH, or set the \`HARNESS_GIT_TOKEN\` secret, for the next run. For this one, open the pull request from the branch: $compare"
+    else
+      text="The harness $noun on \`$branch\` $verb_done, but its pull request could not be opened: $create_err. Open it by hand from the branch: $compare"
+    fi
+    deliver_comment "$FORGE_ISSUE" "$tmp" "$text"
+    posted="#$FORGE_ISSUE"
   else
-    target="$FORGE_PR"
-    text="The harness run on \`$branch\` completed and opened this pull request. Review it; a review that requests changes starts another round."
-  fi
-  if hr_phase_enabled "$root" qa; then
-    text="$text
-
-The interactive-test phase was skipped on GitHub Actions. Before merging, run \`/autonomous-sdlc-harness:branch-qa-test $branch\` locally."
-  fi
-
-  if [ -z "$target" ]; then
     echo "remote-run.sh: deliver: $branch has no pull request and no issue it was started from; nothing posted"
-  elif [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-deliver-comment.XXXXXX"); then
-    {
-      printf '%s\n' "$text"
-      [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
-    } >"$file"
-    forge_comment "$target" completed "$branch" "$file" || :
-    rm -f "$file"
-  else
-    echo "remote-run.sh: deliver: cannot create the comment file for #$target; no comment posted" >&2
   fi
   [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
 
   [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" done || :
   [ -z "$FORGE_PR" ] || forge_set_state "$FORGE_PR" done || :
-  echo "remote-run.sh: deliver: completed on $branch reported${target:+ on #$target}"
+  echo "remote-run.sh: deliver: completed on $branch reported${posted:+ on $posted}"
+  exit "$EXIT_OK"
+}
+
+# verb_open — at the run's start: open the branch's draft pull request when none
+# is open, set it `running`, and name it once on the source issue. Always exit 0.
+verb_open() {
+  local tmp made_tmp="" file
+  if ! forge_on; then
+    echo "remote-run.sh: open: the forge coupling is off (forge github and execution.target github-actions); nothing opened"
+    exit "$EXIT_OK"
+  fi
+  forge_repo_var || exit "$EXIT_OK"
+  forge_fetch_branch "$branch"
+  forge_issue_var "$branch" || FORGE_ISSUE=""
+  if ! forge_pr_var "$branch"; then
+    echo "::warning::remote-run.sh: open: whether $branch already has a pull request could not be read ($GH_ERR); none opened"
+    exit "$EXIT_OK"
+  fi
+  if [ -n "$FORGE_PR" ]; then
+    echo "remote-run.sh: open: $branch already has pull request #$FORGE_PR; none opened"
+    exit "$EXIT_OK"
+  fi
+  if ! forge_open_pr "$branch"; then
+    echo "::warning::remote-run.sh: open: the pull request of $branch could not be opened: $OPEN_ERR. The run goes on and its comments reach its issue; deliver tries again when the run completes"
+    exit "$EXIT_OK"
+  fi
+  echo "remote-run.sh: open: opened pull request #$FORGE_PR for $branch"
+  forge_set_state "$FORGE_PR" running || :
+  if [ -z "$FORGE_ISSUE" ]; then
+    echo "remote-run.sh: open: $branch was started from no issue; nothing posted"
+    exit "$EXIT_OK"
+  fi
+  tmp="${RUNNER_TEMP-}"
+  if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
+    tmp=$(mktemp -d) || tmp=""
+    made_tmp="$tmp"
+  fi
+  if [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-open-comment.XXXXXX"); then
+    {
+      if [ "$FORGE_PR_DRAFT" = false ]; then
+        printf 'The harness run on `%s` opened its pull request #%s, not as a draft — this repository'"'"'s plan may not offer drafts: %s\n' \
+          "$branch" "$FORGE_PR" "$FORGE_PR_URL"
+      else
+        printf 'The harness run on `%s` opened its draft pull request #%s: %s\n' "$branch" "$FORGE_PR" "$FORGE_PR_URL"
+      fi
+      printf '\nThe run'"'"'s questions, lifecycle comments and progress are posted there from now on; `%s` commands keep working on this issue.\n' \
+        "$COMMAND_HANDLE"
+      [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
+    } >"$file"
+    forge_comment "$FORGE_ISSUE" opened "$branch" "$file" || :
+    rm -f "$file"
+  else
+    echo "remote-run.sh: open: cannot create the comment file for #$FORGE_ISSUE; no comment posted" >&2
+  fi
+  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+  echo "remote-run.sh: open: pull request #$FORGE_PR named on #$FORGE_ISSUE"
   exit "$EXIT_OK"
 }
 
@@ -4988,13 +5600,14 @@ control_run_in_flight() {
 
 # control_check_branch <branch> [started] — the refusals every path shares, in
 # order: a branch not answered 1 by hr_branch_is_protected, then (after a
-# fetch) one that is not a harness branch. A branch passes with the
-# flow-progress ledger on its origin tip; or, with `started` (passed only by
+# fetch) one that is not a harness branch. A branch passes with its task
+# prompt or the flow-progress ledger on its origin tip (`forge_recognised`);
+# or, with `started` (passed only by
 # control_branch_from_issue, whose issue's genuine `started` marker names it),
 # while it still exists on origin — gone is refused as deleted, a failed
 # existence check names the read, and no run list is read; or with a
-# `harness run <branch>` run in flight. Otherwise the refusal reads "no ledger
-# and no `harness run` in flight", and a failed listing names the read. Each
+# `harness run <branch>` run in flight. Otherwise the refusal reads "neither a
+# task prompt nor a ledger, and no `harness run` in flight", and a failed listing names the read. Each
 # refusal is a reply and exit 2, or 3 for a failed read.
 control_check_branch() {
   local b="$1" protected=0 exists=0 inflight=0
@@ -5024,7 +5637,7 @@ control_check_branch() {
       control_run_in_flight "$b" || inflight=$?
       case "$inflight" in
         0) ;;
-        1) control_refuse "$EXIT_REFUSED" "\`$b\` is not a harness branch: its tip carries no flow-progress ledger, and no \`harness run $b\` run is queued or in progress" \
+        1) control_refuse "$EXIT_REFUSED" "\`$b\` is not a harness branch: its tip carries neither a task prompt nor a flow-progress ledger, and no \`harness run $b\` run is queued or in progress" \
              "Only a branch a harness run works on can be commanded." ;;
         *) control_refuse "$EXIT_GH" "whether \`$b\` has a harness run in flight could not be read ($GH_ERR)" \
              "Comment again to retry." ;;
@@ -5529,18 +6142,27 @@ RC_ERR=""
 # origin's tip consumed, from their marker lines: RC_SEEN_R and RC_SEEN_C (the
 # recorded review and comment ids, comma-wrapped), RC_MARKED_AT (the
 # highest-numbered marked round's `collected_at`, empty when none is marked),
-# RC_EVENT_ROUND (the round recording <event_review_id>), and RC_STATE_REL.
-# 4 with RC_ERR when a round cannot be listed or read. `control` also calls it
-# on its own, to name the round a review in flight is already part of.
+# RC_MARKED_N and RC_MARKED_C (that round's number, 0 when none, and its
+# `comments=` ids as written), RC_NEWEST_N (the highest round number of any
+# round file, marked or not, 0 when none), RC_EVENT_ROUND (the round recording
+# <event_review_id>), and RC_STATE_REL. 4 with RC_ERR when a round cannot be
+# listed or read. `control` also calls it on its own, to name the round a
+# review in flight is already part of, and `deliver` to find a round's threads.
 RC_SEEN_R=","
 RC_SEEN_C=","
 RC_MARKED_AT=""
+RC_MARKED_N=0
+RC_MARKED_C=""
+RC_NEWEST_N=0
 RC_STATE_REL=""
 round_markers_read() {
-  local event_id="${1-}" names name path n line marked_max=0
+  local event_id="${1-}" names name path n line
   RC_SEEN_R=","
   RC_SEEN_C=","
   RC_MARKED_AT=""
+  RC_MARKED_N=0
+  RC_MARKED_C=""
+  RC_NEWEST_N=0
   RC_EVENT_ROUND=""
   RC_STATE_REL=$(hr_state_dir "$root" 2>/dev/null) || RC_STATE_REL=""
   RC_STATE_REL="${RC_STATE_REL%/}"
@@ -5558,6 +6180,7 @@ round_markers_read() {
     [ "${BASH_REMATCH[1]}" = "$branch" ] || continue
     n="${BASH_REMATCH[3]:-1}"
     n=$((10#$n))
+    [ "$n" -le "$RC_NEWEST_N" ] || RC_NEWEST_N="$n"
     if ! line=$(git -C "$root" show "refs/remotes/origin/$branch:$path" 2>/dev/null); then
       RC_ERR="the previous round \`$path\` could not be read"
       return 4
@@ -5567,9 +6190,10 @@ round_markers_read() {
     [[ "$line" =~ ^"$COMMENT_MARKER round collected_at="([0-9T:Z-]+)" reviews="([0-9,]*)" comments="([0-9,]*)" -->"$ ]] || continue
     RC_SEEN_R="$RC_SEEN_R${BASH_REMATCH[2]}${BASH_REMATCH[2]:+,}"
     RC_SEEN_C="$RC_SEEN_C${BASH_REMATCH[3]}${BASH_REMATCH[3]:+,}"
-    if [ "$n" -gt "$marked_max" ]; then
-      marked_max="$n"
+    if [ "$n" -gt "$RC_MARKED_N" ]; then
+      RC_MARKED_N="$n"
       RC_MARKED_AT="${BASH_REMATCH[1]}"
+      RC_MARKED_C="${BASH_REMATCH[3]}"
     fi
     case ",${BASH_REMATCH[2]}," in
       *",$event_id,"*) [ -z "$event_id" ] || RC_EVENT_ROUND="$n" ;;
@@ -6115,7 +6739,7 @@ control_close() {
   fi
 
   # No forge_recognised check: a merged or deleted branch may no longer carry
-  # its ledger, and a listed `harness run <b>` run is what proves a harness run.
+  # its task prompt or ledger, and a listed `harness run <b>` run is what proves a harness run.
   if ! control_state_var "$b"; then
     echo "::error::remote-run.sh: control: the state of the run on \`$b\` could not be read ($CS_ERR)"
     exit "$EXIT_GH"
@@ -6460,6 +7084,7 @@ case "$verb" in
   list) verb_list ;;
   discard) verb_discard ;;
   report) verb_report ;;
+  open) verb_open ;;
   deliver) verb_deliver ;;
   collect) verb_collect ;;
   control) verb_control ;;

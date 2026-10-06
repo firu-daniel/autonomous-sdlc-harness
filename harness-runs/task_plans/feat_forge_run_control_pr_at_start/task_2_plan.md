@@ -1,0 +1,29 @@
+### Task 2 — Add `hr_progress_comments` and `hr_ledger_phases` to the run library
+
+**Goal:** Give the shell side the two answers item 6 needs, each with one producer in `cli/templates/scripts/lib/harness-run-lib.sh`. The first is whether the progress comment is on, read from `execution.progressComments`. The second is which of the four main phases a flow-progress ledger records as through. Both `remote-run.sh` (Task 9) and the watcher's job loop (Task 10) read the same mapping, so it lives in the library rather than in either script (`.claude/context/conventions.md` → *"Before adding a copy of anything, grep for it."*).
+
+**Where this task stops.** This task adds two pure readers and changes no caller. Posting, rendering and editing the comment is **Task 9's** (`remote-run.sh report progress`), and deciding *when* to call it is **Task 10's** (`autonomous-watcher.sh` → `run_job`). The configuration key's model and check are **Task 1's**, and its schema property is **Task 14's**.
+
+### Targets
+
+- `cli/templates/scripts/lib/harness-run-lib.sh` — two new functions beside `hr_execution_target` / `hr_forge`, and their entries in the header's function list.
+- `cli/test/ledger-phases.test.mjs` (new) — drives both functions through `bash` in a throwaway fixture.
+
+**The interfaces, stated exactly. Tasks 9 and 10 call them as written here:**
+
+- `hr_progress_comments <root>`: prints nothing, and the status is the answer. It returns **0** when the comment is on, meaning `execution.progressComments` is `true` or absent (the schema default). It returns **1** when the key is `false`. It returns **2** when the configuration cannot be loaded or the value is not a boolean. It is built like `hr_phase_enabled`, on `hr_config_load` and `hr_cfg_scalar_var "execution.progressComments"`, except that an absent key is **0**, not 1.
+- `hr_ledger_phases <ledger_file>`: on success it prints exactly one line, `<engine> <round> <phase1> <phase2> <phase3> <phase4>`, and returns 0. `<engine>` is `task` or `user_review`. `<round>` is the round number from the header, or `-` for the task engine. Each phase is `done` or `pending`. Examples: `task - done done pending pending`, `user_review 2 done pending pending pending`. It returns **1** and prints nothing when the file is missing or unreadable, or when its first line is not a task-engine or user-review-engine header. A docs-engine ledger, or anything else, gets no progress comment.
+
+**Work:**
+
+- [ ] `hr_progress_comments`: write it as specified above, with a comment that names it *the one reader of `execution.progressComments` in this family*, as `hr_execution_target`'s comment does for its key.
+- [ ] `hr_ledger_phases` — the header. The first line is `# Flow progress — <branch>   (engine: task)` or `# Flow progress — <branch>   (engine: user_review, round <n>)` (`plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3 Templates`). Match on the `(engine: …)` group only, so the branch name and the spacing are never part of the match.
+- [ ] `hr_ledger_phases` — the entries. Each is a line `- [<m>] <ID>.` followed by spaces and the label, where `<m>` is `x`, a space or `-`. Examples: `- [x] P1. …`, `- [-] A1.5g.  …`, `- [ ] RG. …`. An entry is **settled** when `<m>` is `x` or `-`, because `[-]` is a phase skipped before the run began. A phase is `done` when every id in its set is settled. An id absent from the file counts as **not** settled, so a malformed ledger reads as `pending` and never as `done`. The sets are as follows. **Task engine:** phase 1 `P1 P2 P3`; phase 2 `A`; phase 3 `A1.5g A1.5f A2g A2f Bg Bm C C2g C2m C2f E G`, which is every end-of-branch review with its fixes, plus QA and the run gates, so none is posted on its own; phase 4 `D`. **User-review engine:** phase 1 `R1 R2`; phase 2 `R3`; phase 3 `R4 RG`, the round's closing checks, since a round's ledger carries no review entries; phase 4 `R5`. Use only bash 3.2 constructs and set no shell option (`.claude/context/conventions.md` → `## Shell assets`: *"A sourced library sets no shell options at all"*).
+- [ ] The library header: add both functions to its function list. Declare the mirror: the entry ids and the two header forms are owned by `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3 Templates`, so renaming an id there is an edit here too. Task 13 adds the reverse pointer on the plugin side.
+- [ ] `cli/test/ledger-phases.test.mjs` (new): open with the rule it enforces, *a phase is done only when every entry of its set is `[x]` or `[-]`, and only a task or user-review ledger has phases*. Build a fixture with `createFixture` / `runCli` (`cli/test/helpers/fixture.mjs`), write ledgers into the fixture's own temp directory, and call the functions as `runBash` does for the other library suites (`cli/test/remote-names.test.mjs` is the model). Cases: a fresh task ledger (all `pending`); `P1`–`P3` ticked with `P2` `[-]` (`done pending pending pending`); everything but `D` settled (`done done done pending`); a user-review round 3 ledger with `R1`–`R3` ticked (`user_review 3 done done pending pending`); a ledger missing the `G` line (phase 3 `pending`); a docs-engine or non-ledger file (status 1, no output); a missing file (status 1). For `hr_progress_comments`: absent → 0, `true` → 0, `false` → 1, `"no"` → 2.
+
+**Verification:**
+
+- `npm test --workspace cli -- test/ledger-phases.test.mjs` passes, run once from the repository root as one plain foreground command.
+- `bash scripts/typecheck.sh` passes.
+- Read the ids in `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3 Templates` against the sets coded here, and confirm that every id in the two templates appears in exactly one phase set. That includes the `[-]`-eligible ids (`P2`, `E`, `R4`, `A1.5g`, `A1.5f`, `A2g`, `A2f`), which settle by `[-]` when a run skips them.

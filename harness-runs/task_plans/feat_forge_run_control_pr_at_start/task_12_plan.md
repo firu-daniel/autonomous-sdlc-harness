@@ -1,0 +1,33 @@
+### Task 12 — The user-review fix plan records the review-comment ids of each finding
+
+**Goal:** Item 13's writer side. When a round placed from a pull-request review becomes a fix plan, the `user-review-fix-plan-writer` records which collected inline comments each finding came from, so that the run workflow's `deliver` step can reply to and resolve exactly those threads when the round completes. The record covers both kinds of observation: those that become valid findings, and those filed as invalid or out of scope. Today the fix plan records no comment id at all.
+
+**Depends on:** Task 8, which owns the line's shape in `cli/templates/scripts/remote-run.sh` → the header's `deliver` paragraph, **THE REVIEW-COMMENT LINE**, as that header's `control` paragraph already owns the round file's shape. Restated exactly so this task needs nothing else:
+
+- In a per-finding file, one line whose text begins `**Review comments:** ` followed by one or more comment ids separated by `, `. Example: `**Review comments:** 2735551234, 2735551240`.
+- In the index's `## Out of scope / verified-OK` section, a bullet (a line beginning `- `) that ends with ` **Review comments:** <id>[, <id>…]`. Its text before that suffix is the reason the reply quotes, so it must read as a reason on its own.
+- The ids are the ones the round file's closing marker records (`<!-- sdlc-harness round collected_at=<utc> reviews=<id,…> comments=<id,…> -->`). An inline comment's own id also ends its `By @<login>: <url>` line's URL, as `#discussion_r<id>`. An observation from no inline comment (a `## Review by @<login>` section, or a numbered item of a hand-written review) carries no such line.
+- `deliver` treats a finding as implemented when the index carries `[x] **Finding <K>**`, so the writer changes nothing about the readiness list.
+
+**Where this task stops.** This task changes the writer's contract and the fixtures that show its shape. Reading the line is Task 8's, and the user-facing documentation of thread resolution is **Task 16's** (§2). The fix loop (`plugin/instructions/user_review_fixes_instructions*.md`) reads the readiness list and one per-finding file, and the new line is inert to it. The scope register records that file as `no-change`.
+
+### Targets
+
+- `plugin/agents/user-review-fix-plan-writer.md` — `## Process` steps 2 (the **Pull-request review comment** bullet), 4 (the per-finding file and the `## Out of scope / verified-OK` bullet) and 5 (quality checks).
+- `plugin/agents/test-fix-plan-writer.md` — `## Process` step 6's adaptation of the user-review fixture.
+- `plugin/samples/sample_user_review_fix_plan.md` — the header blockquote.
+- `plugin/samples/sample_user_review_fix_plan/finding_1.md`, `finding_2.md`, `finding_3.md` — the header blockquote of each.
+
+**Work:**
+
+- [ ] `user-review-fix-plan-writer.md`, step 2's **Pull-request review comment** bullet: add that the comment's id is the number after `#discussion_r` in its `By @<login>: <url>` line, and that it is one of the round marker's `comments=` ids. Say to carry it into the finding or the out-of-scope bullet the comment becomes. Several comments may become one finding, and one comment one finding.
+- [ ] `user-review-fix-plan-writer.md`, step 4: in the per-finding file's description, add the `**Review comments:** <id>[, <id>…]` line, written only when the finding came from one or more inline comments, and placed after the site anchor. In the `## Out of scope / verified-OK` description, add the bullet suffix ` **Review comments:** <id>[, <id>…]` for an observation from an inline comment, with the reasoning before it written to stand alone as the reply a reviewer reads on GitHub. Cite the owner of the shape as `<scripts_dir>/remote-run.sh` → the header's `deliver` paragraph, in the same form step 1 already cites the `control` paragraph. `<scripts_dir>` is already declared in the file's `## Resolved values`, so no new token is introduced.
+- [ ] `user-review-fix-plan-writer.md`, step 5: add a quality check. Every id the round marker's `comments=` lists appears in exactly one per-finding file's `**Review comments:**` line or one out-of-scope bullet's suffix, or the observation is under `## Questions`. No other id appears. Before editing, as the implementer, list the readers of this shape with `git grep -l -e 'Out of scope / verified-OK' -e 'sample_user_review_fix_plan' -e '_fix_plan/finding_' -- plugin cli/templates docs` and read every hit (`.claude/context/conventions.md` → *"The plugin corpus quotes its own literal wire strings across files"*). The story index's scope register lists them, and none but this file, its fixtures and `test-fix-plan-writer.md` change in this task. `cli/templates/state-dir/user_reviews/README.md` is Task 8's.
+- [ ] `test-fix-plan-writer.md`, step 6: where it takes `${CLAUDE_PLUGIN_ROOT}/samples/sample_user_review_fix_plan.md` as the split-format reference *"adapted as below"*, add that the `**Review comments:**` line and bullet suffix are the user-review fix plan's alone, and a test fix plan writes neither.
+- [ ] Fixtures. In `sample_user_review_fix_plan.md`'s header blockquote, add one sentence: a fix plan written from a round placed from a pull-request review carries the ` **Review comments:** <id>` suffix on each out-of-scope bullet that came from an inline comment. This sample's observations come from a hand-written review, so its bullets carry none, and the worked example is `- **Observation 2 — "…"** Verified-OK. … **Review comments:** 2735551234`. In each of `finding_1.md`, `finding_2.md` and `finding_3.md`'s header blockquote, add the matching sentence for the per-finding line, with the example `**Review comments:** 2735551234, 2735551240` placed after the `**File:**` site anchor. Change no finding number, title, observation or `_(layer: …)_` tag, because the fixtures describe one coherent worked branch (`plugin/samples/README.md`).
+
+**Verification:**
+
+- Grep `plugin/agents/user-review-fix-plan-writer.md` for `Review comments:` and find the per-finding line, the bullet suffix, and the quality check, each citing `remote-run.sh` → `deliver` as the shape's owner.
+- Run `git grep -n 'Review comments:' -- plugin cli/templates`. Every hit is in this task's targets or in `cli/templates/scripts/remote-run.sh`'s header (Task 8), and the example strings in the fixtures match the form stated above byte for byte.
+- Run `find plugin/samples -type f` and confirm that the file set is unchanged from before this task, which creates and deletes no fixture file, so the sample-pointer demand in `plugin/samples/README.md` cannot have changed.
