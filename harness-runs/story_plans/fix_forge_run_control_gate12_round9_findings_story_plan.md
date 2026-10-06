@@ -30,7 +30,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 
 1. [x] **Task 1** — `push-branch.sh` never pushes back a tracked branch its remote deleted _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — A `stopped` report rewrites the progress comment's `in progress` line to `stopped` _(layer: cli)_ _(points: 18)_
-3. [ ] **Task 3** — `stop --branch-gone` reports on the run's unmerged pull requests that still read unfinished _(layer: cli)_ _(points: 18)_
+3. [x] **Task 3** — `stop --branch-gone` reports on the run's unmerged pull requests that still read unfinished _(layer: cli)_ _(points: 18)_
 4. [ ] **Task 4** — A park that overtakes a requested pause says the pause is folded into it _(layer: cli)_ _(points: 12)_
 5. [ ] **Task 5** — `docs/github-run-control.md`: the deleted branch's pull request, the stopped progress comment, the folded pause _(layer: general)_ _(points: 13)_
 6. [ ] **Task 6** — `docs/remote-execution.md`: a deleted branch stays deleted, and the poller's unverified schedule _(layer: general)_ _(points: 12)_

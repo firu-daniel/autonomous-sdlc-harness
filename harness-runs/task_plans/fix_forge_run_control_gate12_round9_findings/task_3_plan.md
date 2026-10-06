@@ -65,3 +65,9 @@ The label test stands in for `forge_recognised`. It also excludes an earlier pul
 - `bash scripts/typecheck.sh` exits 0.
 - End-to-end through the real caller: one of `remote-control-close.test.mjs`'s `branch deleted` cases is run with `STUB_PRS` listing an unmerged same-repository pull request labelled `sdlc-harness: running`. It drives `control` on a `delete` event, through `control_close`, the `stop --branch-gone` child and `forge_report`, and shows that pull request commented and labelled `stopped`. Add that case if none of the existing ones can carry it.
 - The story index's second `Top risks:` entry, a settled pull request relabelled, is shown by #18 and #13 receiving no write in the new `remote-run.test.mjs` case.
+
+**Deviations from plan:**
+- `remote-run.test.mjs`'s stub has no `STUB_COMMENTS`; its comment listing is `STUB_ITEM_COMMENTS`, used instead, and the stub now passes each comment's `id` through (absent ids still drop out of the JSON), because `forge_progress_comment_var` picks by `id`.
+- The one-comment body write moved into a new helper `forge_report_text`, so the issue and each listed pull request get the same text without duplicating the block; `forge_report`'s temporary directory is now removed after the pull-request loop.
+- The header's `stop` paragraph sentence following the inserted text now opens "The issue read rests on…" (was "That read…"), since "that" would otherwise point at the pull-request sentence.
+- The `remote-control-close.test.mjs` end-to-end case does not assert the progress-comment edit: that suite's stub refuses any `--paginate` with a `--jq` other than its own, so `forge_progress_stopped` logs its "listing … refused" warning there and returns 0; the edit itself is asserted in `remote-run.test.mjs`.

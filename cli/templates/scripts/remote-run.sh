@@ -722,7 +722,8 @@
 #   5. `hr_branch_is_protected` does not answer 1
 #   6. on `pull_request`, the head branch absent on origin (`remote_branch_exists`
 #      answers 1): GitHub closed the pull request because the branch was
-#      deleted, and the `delete` event's job stops the run; an `ls-remote` that
+#      deleted, and the `delete` event's job stops the run and reports it on
+#      this pull request; an `ls-remote` that
 #      cannot answer is one line and proceeds
 # There is no harness-branch check (`forge_recognised`): a merged or deleted
 # branch may no longer carry its task prompt or ledger, and a listed `harness run <b>` run is the
@@ -1069,7 +1070,11 @@
 # task prompt at the newest `harness run <branch>` run's `headSha` through the
 # contents API rather than from `origin/<branch>` (a failed read is one line
 # and no issue), and its text says the branch was deleted, so the run cannot
-# be resumed, and that its workflow runs and artifacts are kept. That read
+# be resumed, and that its workflow runs and artifacts are kept. (4) also
+# reports on each pull request of the branch from this repository that is not
+# merged and still carries `running`, `parked` or `paused`: each gets the same
+# comment, the `stopped` label and its progress comment marked stopped
+# (`forge_gone_prs_var`, `forge_progress_stopped`). The issue read
 # rests on GitHub serving a commit no branch points at, which is unverified
 # (`docs/github-run-control.md` -> `## 8. What is not verified here`).
 #
@@ -4420,6 +4425,35 @@ forge_pr_var() {
   return 0
 }
 
+# forge_gone_prs_var <branch> — FORGE_GONE_PRS, the space-separated numbers of
+# the pull requests of <branch>, in any state, from this repository, not merged
+# and still labelled `STATE_LABEL_PREFIX` running, parked or paused: the states
+# control_close stops, so a pull request an earlier stop or a merge settled is
+# left out. Stands in for forge_recognised, which cannot read a deleted branch.
+# A failed listing, or one not the expected JSON, is one line and an empty list.
+# Always 0.
+FORGE_GONE_PRS=""
+forge_gone_prs_var() {
+  local sel
+  FORGE_GONE_PRS=""
+  if ! gh_call pr list --repo "$FORGE_REPO" --head "$1" --state all --json number,isCrossRepository,mergedAt,labels --limit 10; then
+    echo "remote-run.sh: report: listing the pull requests of $1 in every state failed: $GH_ERR" >&2
+    return 0
+  fi
+  if ! sel=$(printf '%s' "$GH_OUT" | jq -r --arg p "$STATE_LABEL_PREFIX" '
+      if type == "array" then
+        [.[] | select(type == "object" and .isCrossRepository == false and .mergedAt == null
+            and (.number | type) == "number"
+            and ([.labels[]? | .name? | strings] | any(. == ($p + "running") or . == ($p + "parked") or . == ($p + "paused"))))
+          | .number | tostring] | join(" ")
+      else error end' 2>/dev/null); then
+    echo "remote-run.sh: report: listing the pull requests of $1 in every state failed: its pr list is not the expected JSON" >&2
+    return 0
+  fi
+  FORGE_GONE_PRS="$sel"
+  return 0
+}
+
 # forge_dispatch_engine_var <branch> <created_at_iso> — FORGE_DISPATCH_ENGINE,
 # the engine the dispatch that created the run at <created_at_iso> recorded in
 # its comment on the branch's issue or open pull request, or empty. Only a
@@ -4594,7 +4628,9 @@ forge_question_body() {
 # comment (on `parked`, one per open question) and the state label, by the
 # target rule above. Read on `stopped` only: <pr>, an explicit pull request
 # that is the target whatever its state; `gone`, the branch deleted on GitHub,
-# its issue read from the task prompt at <sha>. Every event but `stopped` is
+# its issue read from the task prompt at <sha>, and then each pull request
+# forge_gone_prs_var lists given the same comment, the label and its progress
+# comment marked stopped; nothing is posted only when neither is known. Every event but `stopped` is
 # withheld when the branch's newest `harness stop` run is newer than its newest
 # `harness run` run, read from a fresh listing. `not_started` reads
 # REPORT_NOT_STARTED_STATE (`paused`, else `failed`) and
@@ -4605,6 +4641,7 @@ REPORT_NOT_STARTED_ENGINE=""
 forge_report() {
   local event="$1" br="$2" note="${3-}" pr="${4-}" gone="${5-}" gone_sha="${6-}" state reason="" resume_at="" when registry_file
   local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n route engine=""
+  local gone_prs="" reported=""
   case "$event" in
     parked|park_loop) state=parked ;;
     paused) state=paused ;;
@@ -4653,8 +4690,11 @@ forge_report() {
   if [ -n "$pr" ]; then
     FORGE_PR="$pr"
   elif [ -n "$gone" ]; then
-    # GitHub closes a pull request whose head is deleted, so none is open.
+    # No pull request of a deleted head is open, so the run's unfinished ones
+    # are found in every state by forge_gone_prs_var.
     FORGE_PR=""
+    forge_gone_prs_var "$br"
+    gone_prs="$FORGE_GONE_PRS"
   else
     forge_pr_var "$br" || FORGE_PR=""
   fi
@@ -4666,6 +4706,8 @@ forge_report() {
     target="$FORGE_PR"; kind=pr
   elif [ -n "$FORGE_ISSUE" ]; then
     target="$FORGE_ISSUE"; kind=issue
+  elif [ -n "$gone_prs" ]; then
+    target=""; kind=pr
   else
     echo "remote-run.sh: report: $br has no open pull request and no issue it was started from; nothing posted"
     return 0
@@ -4763,26 +4805,42 @@ forge_report() {
         echo "remote-run.sh: report: cannot create question $n's comment file for #$target; not posted" >&2
       fi
     done
-  elif [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-report-comment.XXXXXX"); then
-    {
-      printf '%s\n' "$text"
-      [ -z "$note" ] || printf '\n%s\n' "$note"
-      [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
-    } >"$file"
-    forge_comment "$target" "$event" "$br" "$file" || :
-    rm -f "$file"
-  else
-    echo "remote-run.sh: report: cannot create the comment file for #$target; no comment posted" >&2
+  elif [ -n "$target" ]; then
+    forge_report_text "$target" "$event" "$br" "$tmp" "$text" "$note"
   fi
-  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
 
   [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" "$state" || :
   [ -z "$FORGE_PR" ] || forge_set_state "$FORGE_PR" "$state" || :
   if [ "$event" = stopped ]; then
     [ -z "$FORGE_PR" ] || forge_progress_stopped "$FORGE_PR" "$br"
   fi
-  echo "remote-run.sh: report: $event on $br reported on #$target"
+  reported="${target:+#$target}"
+  for n in $gone_prs; do
+    forge_report_text "$n" "$event" "$br" "$tmp" "$text" "$note"
+    forge_set_state "$n" "$state" || :
+    forge_progress_stopped "$n" "$br"
+    reported="${reported:+$reported, }#$n"
+  done
+  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+  echo "remote-run.sh: report: $event on $br reported on $reported"
   return 0
+}
+
+# forge_report_text <number> <event> <branch> <tmp_dir> <text> <note> — post
+# forge_report's one comment, <text>, <note> and the run URL, on <number>.
+forge_report_text() {
+  local number="$1" event="$2" br="$3" tmp="$4" text="$5" note="$6" file
+  if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-report-comment.XXXXXX"); then
+    echo "remote-run.sh: report: cannot create the comment file for #$number; no comment posted" >&2
+    return 0
+  fi
+  {
+    printf '%s\n' "$text"
+    [ -z "$note" ] || printf '\n%s\n' "$note"
+    [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
+  } >"$file"
+  forge_comment "$number" "$event" "$br" "$file" || :
+  rm -f "$file"
 }
 
 # forge_progress_comment_var <pr> <marker> [any-round] — the one lookup of a
@@ -6823,10 +6881,11 @@ control_close() {
   CONTROL_BRANCH="$b"
   if [ "$CLOSE_KIND" = pr_closed ] || [ "$CLOSE_KIND" = pr_merged ]; then
     # GitHub closes a pull request whose head is deleted; the `delete` event's
-    # own job stops that run from the default branch, so this one stays quiet.
+    # own job stops that run from the default branch and reports it on this
+    # pull request, so this one stays quiet.
     remote_branch_exists "$b"
     case $? in
-      1) control_close_ignore "the branch \`$b\` of pull request #$CONTROL_NUMBER is gone from origin; the deletion's own job stops the run" ;;
+      1) control_close_ignore "the branch \`$b\` of pull request #$CONTROL_NUMBER is gone from origin; the deletion's own job stops the run and reports it here" ;;
       2) echo "remote-run.sh: control: whether \`$b\` exists on origin could not be checked ($REMOTE_BRANCH_ERR); proceeding" ;;
     esac
   fi
