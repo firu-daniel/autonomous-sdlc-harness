@@ -19,7 +19,7 @@ One non-blocking item: `ARCHITECTURE.md`'s engine-launch inventory does not list
 
 1. [x] **Finding 1** — Read the mention session's model from `agentModel`, not a frozen `MENTION_MODEL='sonnet'` _(layer: cli)_
 2. [x] **Finding 2** — Shipped plugin assets cite this repository's `.claude/context/*.md` as rule sources _(layer: plugin)_
-3. [ ] **Finding 3** — `ARCHITECTURE.md`'s engine-launch inventory omits the mention session `remote-run.sh` now launches _(layer: general)_
+3. [x] **Finding 3** — `ARCHITECTURE.md`'s engine-launch inventory omits the mention session `remote-run.sh` now launches _(layer: general)_
 
 ## Must Fix
 
