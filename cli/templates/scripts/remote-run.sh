@@ -699,7 +699,9 @@
 #   HARNESS_MAX_CHAIN    the automatic-dispatch limit; `24` when empty. Not a
 #                        non-negative integer: nothing is dispatched
 #   HARNESS_POLL_MAX_DISPATCH_FAILURES   `poll` only: failed re-dispatches of
-#                        one paused run before it gives up; `3` when empty
+#                        one paused run, and consecutive failed downloads of
+#                        one run's listed bundle, each counted apart, before it
+#                        gives up; `3` when empty
 #   HARNESS_POLL_GIVE_UP_AFTER_MINUTES   `poll` only: minutes after a run's
 #                        `usage_resume_at` past which a failed re-dispatch gives
 #                        up; `360` when empty. Either one not a non-negative
@@ -710,7 +712,9 @@
 #   GITHUB_RUN_ID, GITHUB_SERVER_URL, GITHUB_REPOSITORY   the run URL
 # Notifications go through the sibling `autonomous-notify.sh`, as `paused` or
 # `failed`, and each is then reported as `report` reports that event, with a
-# note of its own that names no slash command and no shell command. A re-dispatch is `dispatch <branch> --engine <status.json engine>
+# note of its own that names no slash command and no shell command. The one
+# exception is `poll`'s push-only `bundle_unreadable`, which posts no comment
+# and sets no label. A re-dispatch is `dispatch <branch> --engine <status.json engine>
 # --resume pause --chain <chain + 1>`, composed by `dispatch` itself.
 #
 # `chain` HAS ONE SOURCE: the bundle's `status.json`, whose `chain` is the
@@ -757,7 +761,8 @@
 # than `GITHUB_RUN_ID` (bounded) carrying an unexpired `harness-poll-state`
 # artifact is downloaded to `<state_dir>/autonomous_logs/poll_state/previous/`;
 # any failure to find or read it is one line and an empty state. Its
-# `poll_state.json` is {"<branch>": {"run_id", "failures", "notified"}}; an
+# `poll_state.json` is {"<branch>": {"run_id", "failures", "notified",
+# "download_failures"}}, the last absent until a download fails; an
 # entry whose `run_id` is not the branch's newest `harness run` run is dropped,
 # so a new run restarts the count. `poll` writes the state to `poll_state/
 # current/` on every exit, `HARNESS_REMOTE_STOP` included, and the poller
@@ -772,9 +777,16 @@
 # download that fails for it is one line and waiting. For a `completed` run,
 # skipped, not waiting: a stopped branch, a branch absent on origin (its state
 # entry dropped, so a later branch of the name starts clean; an `ls-remote`
-# that cannot answer is one line and proceeds), a bundle that cannot be
-# downloaded (one line), and anything but `status: paused` / `pause_reason: usage` with an
-# integer `usage_resume_at`, and a run whose state entry says `notified`. Due
+# that cannot answer is one line and proceeds), a run whose `run` job GitHub
+# never started (one line; its `collect` job reports it), and anything but
+# `status: paused` / `pause_reason: usage` with an integer `usage_resume_at`,
+# and a run whose state entry says `notified`. A failed artifact lookup on a
+# `completed` run is one line and waiting. A listed bundle that cannot be
+# downloaded is waiting, counted per run in `download_failures` and reset by a
+# later successful download; at `HARNESS_POLL_MAX_DISPATCH_FAILURES`
+# consecutive failures it sends exactly one `bundle_unreadable` push
+# notification, with no comment and no label, the entry marked `notified`, and
+# is no longer waiting. Due
 # (reset passed): re-dispatched under the same chain limit — a refusal is one
 # `failed` and not waiting; a success drops the branch's state entry. A
 # dispatch that fails counts one more failure for that run and is still
@@ -2653,12 +2665,9 @@ verb_save() {
   return 0
 }
 
-# notify <event> <branch> <detail> <forge_note> — one lifecycle notification,
-# then `forge_report` of the same event; never fails. Every call site supplies
-# both texts: <detail> is the push notification's, slash commands included;
-# <forge_note> is the comment's, naming no slash command and no shell command,
-# and states only what happened, since `forge_report` adds the next action.
-notify() {
+# notify_push <event> <branch> <detail> — the push notification alone: it
+# posts no comment and sets no label. Never fails.
+notify_push() {
   if [ -n "${HARNESS_REMOTE_SLUG-}" ]; then
     HARNESS_REPO_SLUG="$HARNESS_REMOTE_SLUG"
     export HARNESS_REPO_SLUG
@@ -2666,6 +2675,15 @@ notify() {
   bash "$script_dir/autonomous-notify.sh" "$1" "$2" "" "$3" \
     || echo "remote-run.sh: the $1 notification for $2 could not be sent" >&2
   echo "remote-run.sh: notified $1 for $2: $3"
+}
+
+# notify <event> <branch> <detail> <forge_note> — notify_push, then
+# `forge_report` of the same event; never fails. Every call site supplies
+# both texts: <detail> is the push notification's, slash commands included;
+# <forge_note> is the comment's, naming no slash command and no shell command,
+# and states only what happened, since `forge_report` adds the next action.
+notify() {
+  notify_push "$1" "$2" "$3"
   # stdin closed: `poll` calls this inside a loop reading its run list.
   forge_report "$1" "$2" "$4" </dev/null
 }
@@ -2862,7 +2880,10 @@ verb_continue() {
 }
 
 # POLL_STATE — the poller state carried between ticks, one object keyed by
-# branch: {"<branch>": {"run_id", "failures", "notified"}}, every value a string.
+# branch: {"<branch>": {"run_id", "failures", "notified", "download_failures"}},
+# every value a string. `failures` counts failed re-dispatches only;
+# `download_failures`, absent until a download fails, counts consecutive failed
+# downloads of the run's listed bundle.
 POLL_STATE='{}'
 POLL_STATE_FILE_NAME='poll_state.json'
 
@@ -2870,9 +2891,21 @@ poll_state_get() {
   printf '%s' "$POLL_STATE" | jq -r --arg b "$1" --arg f "$2" '.[$b][$f] // "" | tostring'
 }
 
+# poll_state_put <branch> <run_id> <failures> <notified> — keeps the entry's
+# `download_failures` when its `run_id` is the same.
 poll_state_put() {
-  POLL_STATE=$(printf '%s' "$POLL_STATE" | jq -c --arg b "$1" --arg r "$2" --arg f "$3" --arg n "$4" \
-    '.[$b] = {run_id: $r, failures: $f, notified: $n}')
+  POLL_STATE=$(printf '%s' "$POLL_STATE" | jq -c --arg b "$1" --arg r "$2" --arg f "$3" --arg n "$4" '
+    (.[$b] // {}) as $o
+    | .[$b] = {run_id: $r, failures: $f, notified: $n}
+      + (if $o.run_id == $r and ($o | has("download_failures")) then {download_failures: $o.download_failures} else {} end)')
+}
+
+# poll_state_downloads_put <branch> <run_id> <count> — sets `download_failures`,
+# on a fresh entry when the stored `run_id` differs.
+poll_state_downloads_put() {
+  POLL_STATE=$(printf '%s' "$POLL_STATE" | jq -c --arg b "$1" --arg r "$2" --arg c "$3" '
+    (.[$b] // {}) as $o
+    | .[$b] = (if $o.run_id == $r then $o else {run_id: $r, failures: "", notified: ""} end) + {download_failures: $c}')
 }
 
 poll_state_drop() {
@@ -2991,7 +3024,7 @@ poll_usage_paused() {
 # With may_dispatch 0 nothing is sent and nothing notified: a due run that
 # would be dispatched counts as waiting, one that would be refused does not.
 poll_branch() {
-  local id="$1" state="$2" may_dispatch="$3" at engine_value now failures
+  local id="$1" state="$2" may_dispatch="$3" at engine_value now failures downloads
   if [ "$may_dispatch" -eq 1 ] && [ -n "$(poll_state_get "$branch" run_id)" ] \
     && [ "$(poll_state_get "$branch" run_id)" != "$id" ]; then
     poll_state_drop "$branch"
@@ -3026,9 +3059,40 @@ poll_branch() {
     echo "remote-run.sh: poll: $branch's run $id was already reported as not re-dispatchable; skipped"
     return 1
   fi
+  bundle_listed "$id"
+  case $? in
+    1)
+      if run_not_started_var "$id"; then
+        echo "remote-run.sh: poll: run $id of $branch never started ($NOT_STARTED_REASON); its collect job reports it; not waiting"
+      else
+        echo "remote-run.sh: poll: $branch skipped"
+      fi
+      return 1
+      ;;
+    2) echo "remote-run.sh: poll: reading the artifacts of run $id ($branch) failed ($GH_ERR); counted as waiting"; return 0 ;;
+  esac
+  downloads=""
+  [ "$(poll_state_get "$branch" run_id)" != "$id" ] || downloads=$(poll_state_get "$branch" download_failures)
   if ! poll_fetch "$id"; then
-    echo "remote-run.sh: poll: $branch skipped"
+    case "$downloads" in
+      ''|*[!0-9]*) downloads=0 ;;
+    esac
+    downloads=$((10#$downloads + 1))
+    if [ "$downloads" -lt "$((10#$POLL_MAX_FAILURES))" ]; then
+      [ "$may_dispatch" -eq 0 ] || poll_state_downloads_put "$branch" "$id" "$downloads"
+      echo "remote-run.sh: poll: the bundle of run $id ($branch) could not be downloaded, attempt $downloads of $POLL_MAX_FAILURES; still waiting"
+      return 0
+    fi
+    if [ "$may_dispatch" -eq 1 ]; then
+      poll_state_put "$branch" "$id" "$(poll_state_get "$branch" failures)" 1
+      # Push only, under a word outside autonomous-notify.sh's events: the run's
+      # state is unknown, so neither a `failed` report nor a label is true of it.
+      notify_push bundle_unreadable "$branch" "The resume poller could not download the state bundle of run $id after $downloads attempts ($GH_ERR); it no longer watches $branch. Its state is unknown: check the run, then run $RESUME_HINT $branch if it is paused; $(hr_github_resume_route "$branch" "")."
+    fi
     return 1
+  fi
+  if [ -n "$downloads" ] && [ "$may_dispatch" -eq 1 ]; then
+    poll_state_downloads_put "$branch" "$id" ""
   fi
   poll_usage_paused || return 1
   at=$(hr_remote_status_get "$POLL_STATUS_FILE" usage_resume_at) || at=""
