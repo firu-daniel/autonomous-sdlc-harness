@@ -4634,10 +4634,10 @@ forge_question_body() {
 # that is the target whatever its state; `gone`, the branch deleted on GitHub,
 # its issue read from the task prompt at <sha>, and then each pull request
 # forge_gone_prs_var lists given the same comment, the label and its progress
-# comment marked stopped; nothing is posted only when neither is known. Every event but `stopped` is
-# withheld when the branch's newest `harness stop` run is newer than its newest
-# `harness run` run, read from a fresh listing. `not_started` reads
-# REPORT_NOT_STARTED_STATE (`paused`, else `failed`) and
+# comment marked stopped; nothing is posted only when neither is known. Every
+# event but `stopped` is withheld when the branch's newest `harness stop` run is
+# newer than its newest `harness run` run, read from a fresh listing.
+# `not_started` reads REPORT_NOT_STARTED_STATE (`paused`, else `failed`) and
 # REPORT_NOT_STARTED_ENGINE (empty or the recovered engine), set by its caller.
 # Always 0.
 REPORT_NOT_STARTED_STATE=""
