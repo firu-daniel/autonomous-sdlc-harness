@@ -58,3 +58,7 @@
 - The `## 2.` lost-race sentence is still present byte for byte.
 - Every quoted reply, refusal and comment sentence matches the literal in `cli/templates/scripts/remote-run.sh`. Grep the template for each quoted string.
 - Every link this task adds to `remote-execution.md` names a heading that exists there, including Task 13's `### When GitHub fails or lags`.
+
+**Deviations from plan:**
+- `## 5.`'s paragraph after the table listed the events a stop overtakes as `parked`, `park_loop`, `paused`, `resumed`, a started round and `failed`; `remote-run.sh`'s header (the `Every job event` sentence) includes `not_started`, so it was added to that list.
+- The round 8 citations name `development.md` → Gate 12 → Round 8, finding <n>, in this file's existing citation form; that section is Task 15's to write, so the citation resolves once Task 15 lands.
