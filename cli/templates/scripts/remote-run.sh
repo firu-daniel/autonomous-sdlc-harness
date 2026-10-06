@@ -587,11 +587,22 @@
 # `MENTION_TEXT_MAX_BYTES` with a `(cut)` line — then a footer saying an agent
 # wrote it and changed nothing, listing the commands; `fixes` posts this
 # script's text pointing at a review requesting changes or
-# `/autonomous-sdlc-harness:branch-user-review`; `command` posts a
-# confirmation request naming the exact form it was read as, and carries out
-# no verb. Exits: 0 answered or nothing to do; 2 refused; 3 a state read,
-# plugin, binary or agent failure, or a credential value in `text` or
-# `answer`. The workflow's interface: `IN_OAUTH` / `IN_API` and
+# `/autonomous-sdlc-harness:branch-user-review`; `command` with a verb in
+# `MENTION_ACT_VERBS` is carried out by that verb's own arm (`control_run_verb`)
+# from the exact form's `CONTROL_ARGS` and `CONTROL_BODY` — for `answer`, the
+# command line then the decision's `answer` below it, byte for byte — every
+# reply the arm posts opening with `CONTROL_MENTION_NOTE`, `Read from your
+# mention as` and that form, `answer` adding the answer fenced by
+# `JQ_DEF_FENCE` after `JQ_DEF_SANITISE`; an `answer` carrying a credential
+# value was refused above, so it reaches neither the answer file, the dispatch
+# nor the note; a state the arm refuses is that arm's refusal and exit,
+# unchanged. `command` with a verb in `MENTION_CONFIRM_VERBS` posts a
+# confirmation request naming the exact form it was read as and carries out no
+# verb: `stop` because it is destructive, `clear` because on GitHub typing it
+# is `branch-resume`'s confirmation. Exits: 0 answered or nothing to do; 2
+# refused; 3 a state read, plugin, binary or agent failure, or a credential
+# value in `text` or `answer`; a carried-out verb, its arm's. The workflow's
+# interface: `IN_OAUTH` / `IN_API` and
 # `HARNESS_MENTION_PLUGIN_DIR`.
 # THE BRANCH. On a pull request (`.issue.pull_request.url` set), its head, by
 # `pr view`: a fork's pull request is refused, because this event carries the
@@ -1515,6 +1526,11 @@
 #              {"action":"reply","text":"It is running.","reason":"r"}}>
 #              -> 0; "$s.log" gains one comment on 12 opening `@alice: It is
 #              running.`, and no `workflow run`
+#   act        the same with the stub's structured_output {"action":"command",
+#              "verb":"pause","reason":"r"} -> 0; "$s.log" gains `workflow run
+#              harness-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
+#              then one comment on 12 opening `Read from your mention as
+#              `@sdlc-harness pause`.`
 
 set -u
 
@@ -2792,6 +2808,12 @@ JQ_DEF_SANITISE='def sanitise($login; $handle):
       if (.l | ascii_downcase) == ($login | ascii_downcase)
         or (("@" + .l) | ascii_downcase) == ($handle | ascii_downcase)
       then "@" + .l else "@​" + .l end);'
+
+# fence, string to string: the code fence that quotes the input — one backtick
+# longer than its longest backtick run, at least three.
+JQ_DEF_FENCE='def fence:
+  (([match("`+"; "g") | .length] | max) // 0) as $m
+  | "`" * ([$m + 1, 3] | max);'
 
 verb_restore() {
   local id download status_file clar n tmp status_source
@@ -5684,11 +5706,17 @@ control_cleanup() {
 # non-empty value adds ` engine=<engine>` to every later reply's marker.
 CONTROL_REPLY_ENGINE=""
 
+# How control_mention read the mention a verb arm is carrying out; non-empty,
+# it opens every reply, an arm's refusal included.
+CONTROL_MENTION_NOTE=""
+
 # control_post <text> — post <text> on CONTROL_NUMBER as a `reply` comment,
-# its marker carrying CONTROL_REPLY_ENGINE; 1, after an `::error::` line, when
-# it cannot be posted.
+# after CONTROL_MENTION_NOTE and a blank line when that is set, its marker
+# carrying CONTROL_REPLY_ENGINE; 1, after an `::error::` line, when it cannot
+# be posted.
 control_post() {
   local text="$1" file status=0
+  [ -z "$CONTROL_MENTION_NOTE" ] || text="$CONTROL_MENTION_NOTE"$'\n\n'"$text"
   if ! forge_repo_var; then
     echo "::error::remote-run.sh: control: the reply on #$CONTROL_NUMBER could not be posted: $GH_ERR"
     return 1
@@ -6581,10 +6609,9 @@ AUTHORS
   RC_REVIEWERS=$(printf '%s' "$kept" | jq -r '
     reduce (.reviews[] | .user.login) as $l ([]; if any(.[]; . == $l) then . else . + [$l] end) | join(",")')
 
-  # A hunk's fence is one backtick longer than its longest backtick run, at
-  # least three. The trailing `x` keeps the text's final newline through the
-  # substitution.
-  if ! text=$(printf '%s' "$kept" | jq -j --arg pr "$pr" --arg at "$collected_at" --arg marker "$COMMENT_MARKER" --arg state "$REVIEW_ROUND_STATE" '
+  # A hunk is fenced by JQ_DEF_FENCE. The trailing `x` keeps the text's final
+  # newline through the substitution.
+  if ! text=$(printf '%s' "$kept" | jq -j --arg pr "$pr" --arg at "$collected_at" --arg marker "$COMMENT_MARKER" --arg state "$REVIEW_ROUND_STATE" "$JQ_DEF_FENCE"'
     def nl: if endswith("\n") then . else . + "\n" end;
     .reviews as $rv | .comments as $cm
     | ($rv | map(
@@ -6602,8 +6629,7 @@ AUTHORS
     + (if ($cm | length) == 0 then "" else
         "\n## Inline comments\n" + ($cm | map(
           (.diff_hunk // "") as $h
-          | (([$h | match("`+"; "g") | .length] | max) // 0) as $m
-          | ("`" * ([$m + 1, 3] | max)) as $f
+          | ($h | fence) as $f
           | "\n### `" + (.path // "") + "`"
             + (if .line != null then ", line \(.line)"
                elif .original_line != null then ", original line \(.original_line) (outdated)"
@@ -7178,7 +7204,7 @@ control_mention_session() {
 # and the binary, the context directory, one session, then its decision
 # extracted, validated, checked for a credential and answered. Always exits.
 control_mention() {
-  local base dir out err why decision from rule action verb question reason text answer file reply
+  local base dir out err why decision from rule action verb question reason text answer file reply quote
   control_state_var "$CONTROL_BRANCH" \
     || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($CS_ERR)" "Comment again to retry."
   control_state_word_var
@@ -7285,9 +7311,38 @@ control_mention() {
     command)
       question=""
       [ "$verb" != answer ] || question=$(printf '%s' "$decision" | jq -r '.d.question | numbers | floor')
-      reply="@$CONTROL_ACTOR: your mention reads as \`$COMMAND_HANDLE $verb${question:+ $question}\`. Comment that command to carry it out"
-      [ "$verb" != answer ] || reply="$reply, with the answer on the lines below it"
-      control_reply "$EXIT_OK" "$reply." ;;
+      case " $MENTION_CONFIRM_VERBS " in
+        *" $verb "*)
+          reply="@$CONTROL_ACTOR: your mention reads as \`$COMMAND_HANDLE $verb${question:+ $question}\`. Comment that command to carry it out"
+          [ "$verb" != answer ] || reply="$reply, with the answer on the lines below it"
+          control_reply "$EXIT_OK" "$reply." ;;
+      esac
+      case " $MENTION_ACT_VERBS " in
+        *" $verb "*)
+          # What control_answer reads from the exact form: the command line,
+          # then the answer below it. The credential check above has already
+          # refused an `answer` carrying a saved credential.
+          CONTROL_BODY="$COMMAND_HANDLE $verb${question:+ $question}"
+          reply="Read from your mention as \`$CONTROL_BODY\`."
+          if [ "$verb" = answer ]; then
+            # The `x` keeps the answer's final newlines through the substitution.
+            answer=$(printf '%s' "$decision" | jq -j '.d.answer' && printf x) \
+              || control_refuse "$EXIT_GH" "the agent's answer could not be read" "Comment again to retry."
+            answer=${answer%x}
+            quote=$(printf '%s' "$decision" | jq -r --arg login "$CONTROL_ACTOR" --arg handle "$COMMAND_HANDLE" \
+              "$JQ_DEF_SANITISE $JQ_DEF_FENCE"' .d.answer | sanitise($login; $handle)
+                | (if endswith("\n") then . else . + "\n" end) as $q
+                | ($q | fence) as $f
+                | $f + "\n" + $q + $f') \
+              || control_refuse "$EXIT_GH" "the agent's answer could not be quoted" "Comment again to retry."
+            CONTROL_BODY="$CONTROL_BODY"$'\n'"$answer"
+            reply="Read from your mention as \`$COMMAND_HANDLE $verb${question:+ $question}\`, with this answer:"$'\n\n'"$quote"
+          fi
+          CONTROL_VERB="$verb"
+          CONTROL_ARGS="$question"
+          CONTROL_MENTION_NOTE="$reply"
+          control_run_verb ;;
+      esac ;;
   esac
   echo "::error::remote-run.sh: control: the validated action \`$action\` has no answer"
   exit "$EXIT_GH"

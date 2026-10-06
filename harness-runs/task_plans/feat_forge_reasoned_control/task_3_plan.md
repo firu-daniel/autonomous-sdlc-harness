@@ -66,3 +66,11 @@
 - `grep -n 'max) // 0' cli/templates/scripts/remote-run.sh`: every hit sits inside `JQ_DEF_FENCE`'s definition, and none in `round_collect` or `control_mention`. The fence rule has one body.
 - End to end: the `REPRO` `mention` example with the stub's `pause` decision logs one `workflow run … -f action=pause` and posts one reply, opening with the read-as note, on the commented item.
 - Grep `control_mention`'s `command` branch for `workflow run`, `gh_call` and `control_child`, and find none: every state change goes through an existing arm.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/remote-run.sh` was refused by the permission layer (twice, absolute and relative path). The parse claim rests instead on `remote-control-mention.test.mjs` passing (38/38), every case of which executes the script.
+- The `REPRO` `mention` example is extended with a sibling `act` row (same setup, the stub's `command` / `pause` decision) rather than a second outcome folded into the `mention` row.
+- The end-to-end `REPRO` check was not hand-run; it rests on the test case *command pause on a running run sends the pause dispatch…*, which drives the same setup through the stubs and asserts the one `-f action=pause` dispatch and the one reply opening with the read-as note.
+- The review-round suite guarding `round_collect`'s byte-identity, `cli/test/remote-control-review.test.mjs` (*a hunk carrying a triple-backtick line is fenced with four backticks*), was not run: deferred to the Run gates phase.
+- Task 2's credential-value check was confirmed to run once, after validation and before the `action` `case`, over both `text` and `answer`; it was not moved or widened.

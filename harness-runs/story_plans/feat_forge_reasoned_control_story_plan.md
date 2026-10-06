@@ -73,7 +73,7 @@ Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_forge_
 
 1. [x] **Task 1** — Declare the mention names in `githubActions.ts` and mirror them in `remote-run.sh` _(layer: cli)_ _(points: 10)_
 2. [x] **Task 2** — Read a mention through a read-only agent and validate its decision against the closed set _(layer: cli)_ _(points: 20)_
-3. [ ] **Task 3** — Carry out a mention's `answer`, `pause`, `resume` and `status` through the existing verb arms _(layer: cli)_ _(points: 15)_
+3. [x] **Task 3** — Carry out a mention's `answer`, `pause`, `resume` and `status` through the existing verb arms _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Give the mention agent the item, its recent conversation and the pull request's diff _(layer: cli)_ _(points: 10)_
 5. [ ] **Task 5** — Give `harness-control.yml`'s comment path the credential, the agent CLI and the pinned plugin _(layer: cli)_ _(points: 15)_
 6. [ ] **Task 6** — Report mentions in `doctor` and `init`, and warn on a control workflow that passes no credential _(layer: cli)_ _(points: 12)_
