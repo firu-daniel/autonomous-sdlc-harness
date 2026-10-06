@@ -223,6 +223,9 @@ const commentsOn = (calls, n) =>
   calls.filter((call) => call.line.startsWith(`api --method POST repos/${REPOSITORY}/issues/${n}/comments `));
 const allComments = (calls) => calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/comments /.test(call.line));
 const replies = (calls) => allComments(calls).filter((call) => /<!-- sdlc-harness event=reply /.test(call.body));
+const lastLine = (body) => body.trimEnd().split('\n').at(-1);
+const REPLY_MARKER = '<!-- sdlc-harness event=reply branch=feat_x -->';
+const DISPATCHED_MARKER = (engine) => `<!-- sdlc-harness event=reply branch=feat_x engine=${engine} -->`;
 const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workflow run '));
 const permissionCalls = (calls) => calls.filter((call) => /\/collaborators\//.test(call.line));
 
@@ -572,6 +575,7 @@ test('resume on a paused run sends the relay\'s dispatch, replies naming @alice 
   const f = await controlFixture(t);
   const result = await f.control('@sdlc-harness resume', {}, finishedRun('paused', { pause_reason: 'user', engine: 'task' }));
   assertResumed(f, result, RESUME_DISPATCH, /^Resume requested by @alice: `feat_x` continues from its committed ledger\.\n/);
+  assert.equal(lastLine(replies(f.calls())[0].body), DISPATCHED_MARKER('task'));
 });
 
 test('resume on a run paused as expired is dispatched the same way', async (t) => {
@@ -615,7 +619,8 @@ test('clear on a paused run is refused, with no dispatch', async (t) => {
 test('resume on a running run is refused as already running', async (t) => {
   const f = await controlFixture(t);
   const result = await f.control('@sdlc-harness resume');
-  assertRefused(f, result, /already `running`/);
+  const reply = assertRefused(f, result, /already `running`/);
+  assert.equal(lastLine(reply.body), REPLY_MARKER);
 });
 
 test('a resume whose dispatch fails replies naming the failure and exits 3', async (t) => {
@@ -640,6 +645,7 @@ test('answer with lines below and one open question sends them, replies that it 
   const result = await f.control('@sdlc-harness answer\r\nUse A.\r\nBecause it is smaller.\n', {}, parkedRun('1'));
   assertResumed(f, result, ANSWER_DISPATCH({ 1: 'Use A.\nBecause it is smaller.\n' }),
     /^Answer to question 1 received from @alice; every open question is answered, so `feat_x` resumes\.\n/);
+  assert.equal(lastLine(replies(f.calls())[0].body), DISPATCHED_MARKER('task'));
   assert.deepEqual(readdirNames(f.runnerTemp), []);
 });
 
@@ -666,6 +672,7 @@ test('answer 2 with two open is sent, names question 1 as still open and leaves 
   assert.equal(posted.length, 1);
   assert.match(posted[0].body,
     /^Answer to question 2 received from @alice and sent; question\(s\) 1 still need an answer: `@sdlc-harness answer 1`\.\n/);
+  assert.equal(lastLine(posted[0].body), DISPATCHED_MARKER('task'));
   assert.ok(!calls.some((call) => /\/labels -f labels\[\]=/.test(call.line)), JSON.stringify(calls.map((call) => call.line)));
 });
 

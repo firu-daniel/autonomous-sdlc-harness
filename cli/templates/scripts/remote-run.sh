@@ -554,8 +554,10 @@
 # submitting a review requesting changes retries now.
 # A child's failure is a reply
 # naming its last stderr line, and exit 3. Every reply goes to the item the comment was
-# typed on, opens `@<login>`, and carries the `reply` marker; a refusal reads
-# `@<login>: `<verb>` was not run: <reason>. <way on>`.
+# typed on, opens `@<login>`, and carries the `reply` marker; a reply posted
+# after a successful dispatch adds ` engine=<engine>` to that marker, the engine
+# the dispatch named, so a run whose job never ran can still be resumed with
+# it. A refusal reads `@<login>: `<verb>` was not run: <reason>. <way on>`.
 # THE CLOSE. Whatever the run's phase, it is stopped when its issue is closed,
 # its pull request closed or merged, or its branch deleted; the routing is by
 # event name, never by verb, so a comment naming `close` is not one. `issues`
@@ -3943,14 +3945,12 @@ forge_fetch_branch() {
   return 0
 }
 
-# forge_marker <event> <branch> [<question>] — the one producer of a comment's
-# marker line, built from COMMENT_MARKER.
+# forge_marker <event> <branch> [<question> [<engine>]] — the one producer of a
+# comment's marker line, built from COMMENT_MARKER: ` question=<n>` then
+# ` engine=<engine>`, each only when non-empty, before ` -->`.
 forge_marker() {
-  if [ -n "${3-}" ]; then
-    printf '%s event=%s branch=%s question=%s -->\n' "$COMMENT_MARKER" "$1" "$2" "$3"
-  else
-    printf '%s event=%s branch=%s -->\n' "$COMMENT_MARKER" "$1" "$2"
-  fi
+  printf '%s event=%s branch=%s%s%s -->\n' "$COMMENT_MARKER" "$1" "$2" \
+    "${3:+ question=$3}" "${4:+ engine=$4}"
 }
 
 # forge_issue_var <branch> — FORGE_ISSUE from the last provenance line
@@ -4058,11 +4058,11 @@ forge_pr_var() {
   return 0
 }
 
-# forge_comment <number> <event> <branch> <body_file> [<question>] — append the
-# marker to <body_file> and post it on issue or pull request <number>.
+# forge_comment <number> <event> <branch> <body_file> [<question> [<engine>]] —
+# append the marker to <body_file> and post it on issue or pull request <number>.
 forge_comment() {
-  local number="$1" event="$2" branch="$3" file="$4" question="${5-}" status
-  if ! { printf '\n'; forge_marker "$event" "$branch" "$question"; } >>"$file"; then
+  local number="$1" event="$2" branch="$3" file="$4" question="${5-}" engine="${6-}" status
+  if ! { printf '\n'; forge_marker "$event" "$branch" "$question" "$engine"; } >>"$file"; then
     echo "remote-run.sh: cannot append the marker to '$file'" >&2
     return 1
   fi
@@ -4525,8 +4525,13 @@ control_cleanup() {
   return 0
 }
 
-# control_post <text> — post <text> on CONTROL_NUMBER as a `reply` comment;
-# 1, after an `::error::` line, when it cannot be posted.
+# The engine a dispatch child named, set only once that child exited 0; a
+# non-empty value adds ` engine=<engine>` to every later reply's marker.
+CONTROL_REPLY_ENGINE=""
+
+# control_post <text> — post <text> on CONTROL_NUMBER as a `reply` comment,
+# its marker carrying CONTROL_REPLY_ENGINE; 1, after an `::error::` line, when
+# it cannot be posted.
 control_post() {
   local text="$1" file status=0
   if ! forge_repo_var; then
@@ -4541,7 +4546,7 @@ control_post() {
     printf '%s\n' "$text"
     [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
   } >"$file"
-  if ! forge_comment "$CONTROL_NUMBER" reply "$CONTROL_BRANCH" "$file"; then
+  if ! forge_comment "$CONTROL_NUMBER" reply "$CONTROL_BRANCH" "$file" "" "$CONTROL_REPLY_ENGINE"; then
     echo "::error::remote-run.sh: control: the reply on #$CONTROL_NUMBER could not be posted: $GH_ERR"
     status=1
   fi
@@ -4817,6 +4822,7 @@ control_resume_dispatch() {
     *) control_refuse "$EXIT_GH" "the dispatch could not be sent ($CHILD_LAST)" "Comment \`$COMMAND_HANDLE $CONTROL_VERB\` again to retry." ;;
   esac
   status="$EXIT_OK"
+  CONTROL_REPLY_ENGINE="$CS_ENGINE"
   control_post "$done_text" || status="$EXIT_GH"
   # The job posts its own `resumed` comment; the labels say `running` now.
   forge_issue_var "$CONTROL_BRANCH" || FORGE_ISSUE=""
@@ -5119,6 +5125,7 @@ control_answer() {
       control_refuse "$EXIT_GH" "the dispatch could not be sent ($CHILD_LAST)" \
         "Comment \`$COMMAND_HANDLE answer $n\` again to retry." ;;
   esac
+  CONTROL_REPLY_ENGINE="$CS_ENGINE"
 
   cmds=""
   for v in $CS_OPEN; do
