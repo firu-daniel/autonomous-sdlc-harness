@@ -28,7 +28,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control_pr_at
 1. [x] **Task 1** — Declare `execution.progressComments` in the configuration model and its check _(layer: cli)_ _(points: 10)_
 2. [x] **Task 2** — Add `hr_progress_comments` and `hr_ledger_phases` to the run library _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Recognise a run's branch by its task prompt or its ledger, and read the pull request's draft state _(layer: cli)_ _(points: 20)_
-4. [ ] **Task 4** — Add the `open` verb: open the draft pull request at the run's start and name it on the source issue _(layer: cli)_ _(points: 20)_
+4. [x] **Task 4** — Add the `open` verb: open the draft pull request at the run's start and name it on the source issue _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Run `open` from `harness-run.yml` before the harness step of every person-started job _(layer: cli)_ _(points: 10)_
 6. [ ] **Task 6** — `deliver`: post `completed` on the pull request and the issue, and mark the pull request ready _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — `report`: turn the pull request back to draft when a round starts, and say the draft stays open on `failed` and `stopped` _(layer: cli)_ _(points: 10)_

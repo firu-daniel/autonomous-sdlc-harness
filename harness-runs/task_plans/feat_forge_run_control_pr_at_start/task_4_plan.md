@@ -31,3 +31,8 @@
 - Only when this task edited `cli/test/remote-deliver.test.mjs` (an assertion quoted the old body sentence): `npm test --workspace cli -- test/remote-deliver.test.mjs` passes, run the same way. When it was not edited, it is not run here. Phase G's suite covers the refactored create path.
 - `bash scripts/typecheck.sh` passes.
 - Grep `remote-run.sh` for `deliver_create` and find it called only inside `forge_open_pr`: the create has one owner.
+
+**Deviations from plan:**
+
+- The body temp file `forge_open_pr` writes is named `harness-pr-body.XXXXXX` (was `harness-deliver-body.XXXXXX`), since `open` now writes it too; it is removed before the function returns, so `deliver`'s posted text and labels are unchanged. Its retry stderr line names the calling verb (`$verb`) rather than a fixed `deliver`.
+- `cli/test/remote-deliver.test.mjs` was not edited: no assertion quoted the old *ready for your review* body sentence, so per the second Verification bullet it was not run here (deferred to the Run gates phase).
