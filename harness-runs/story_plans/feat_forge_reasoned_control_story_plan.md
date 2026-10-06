@@ -72,7 +72,7 @@ Until Task 8 ships, a real job finds no `commands/harness-read-mention.md` in it
 Each entry resolves 1:1 to a self-contained `harness-runs/task_plans/feat_forge_reasoned_control/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, in the configured layer order `cli`, `plugin`, `general`, with the catch-all `general` last.
 
 1. [x] **Task 1** — Declare the mention names in `githubActions.ts` and mirror them in `remote-run.sh` _(layer: cli)_ _(points: 10)_
-2. [ ] **Task 2** — Read a mention through a read-only agent and validate its decision against the closed set _(layer: cli)_ _(points: 20)_
+2. [x] **Task 2** — Read a mention through a read-only agent and validate its decision against the closed set _(layer: cli)_ _(points: 20)_
 3. [ ] **Task 3** — Carry out a mention's `answer`, `pause`, `resume` and `status` through the existing verb arms _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Give the mention agent the item, its recent conversation and the pull request's diff _(layer: cli)_ _(points: 10)_
 5. [ ] **Task 5** — Give `harness-control.yml`'s comment path the credential, the agent CLI and the pinned plugin _(layer: cli)_ _(points: 15)_

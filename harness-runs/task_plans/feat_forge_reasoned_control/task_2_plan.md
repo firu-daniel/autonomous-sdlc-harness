@@ -154,3 +154,11 @@ Until Tasks 5, 7 and 8 ship, a real job passes no credential and no plugin direc
 - Every field name of the contract (`action`, `verb`, `question`, `answer`, `text`, `reason`) and every `MENTION_ACTIONS` value appear in the schema built here. Task 7's verification greps the instruction file for the same names.
 - Grep `control_mention` for `source`, `. "$` and `bash "$HARNESS_MENTION_PLUGIN_DIR`, and find none: the plugin directory reaches only `claude`'s argv (`--plugin-dir`, `--add-dir`) and a `-f` test.
 - End to end: drive the `REPRO` `mention` example by hand against a throwaway fixture. The stubbed agent's `reply` decision posts exactly one comment on the item, and nothing reaches `workflow run`.
+
+**Deviations from plan:**
+
+- `bash -n cli/templates/scripts/remote-run.sh` was not run: the tool layer asked for approval of the command, which this unit cannot grant. The syntax claim rests instead on both suites executing the script end to end (`remote-control.test.mjs` 83/83, `remote-control-mention.test.mjs` 29/29), which a parse error would fail.
+- The hand-driven `REPRO` `mention` run was not carried out. That claim rests on the suite's `reply posts the prefix, the text and the footer, and exits 0` case instead. It drives the same path through an agent stub and a throwaway plugin directory, and asserts one reply comment and no `workflow run`.
+- The validator adds a fifth rule after the plan's four: `reason` must be a string. The plan's own decision contract marks `reason` required, and the validator is that contract's one authority.
+- `verb_control` runs `unset MENTION_OAUTH MENTION_API` ahead of the two capture assignments. An inherited export of either name would otherwise keep the saved credential exported to every child.
+- The mention suite carries one case the plan does not list: a context file over `MENTION_FILE_MAX_BYTES` is cut at a whole line with the `(cut at <n> bytes)` note. No listed case reaches `mention_cap` otherwise.

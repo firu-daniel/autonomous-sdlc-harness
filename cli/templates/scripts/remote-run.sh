@@ -512,12 +512,17 @@
 # into a variable (data, never shell source), plus `trigger`'s environment.
 # Ignored, with one line and no `gh` call: an action other than `created`; a
 # body carrying `COMMENT_MARKER` anywhere (the harness's own comment, whoever
-# posted it); and a body whose first line — a trailing CR stripped, leading
-# spaces and tabs skipped — does not open with a word equal to
-# `COMMAND_HANDLE`, compared lowercase. So `pause`, `Let's @sdlc-harness
-# pause` and `> @sdlc-harness pause` start nothing. The verb is the next word,
-# lowercased, and `CONTROL_ARGS` the rest of that line. Then refused, in this
-# order, each a reply and exit 2:
+# posted it); and a body that does not hold `COMMAND_HANDLE` as a word
+# anywhere, compared lowercase (the ERE `(^|[^a-z0-9])<handle>([^a-z0-9-]|$)`).
+# So `pause` and `foo@sdlc-harnessx` start nothing. THE EXACT FORM is a first
+# line — a trailing CR stripped, leading spaces and tabs skipped — opening with
+# a word equal to `COMMAND_HANDLE`, compared lowercase, whose next word,
+# lowercased, is a `COMMAND_VERBS` word: that is the verb, and `CONTROL_ARGS`
+# the rest of that line. Any other body holding the handle is A MENTION
+# (`CONTROL_MENTION`, no verb): `Let's @sdlc-harness pause`, `> @sdlc-harness
+# pause`, the handle on a later line, and `@sdlc-harness check the question`
+# alike, each read by MENTION below. Then refused, in this order, each a reply
+# and exit 2:
 #   1. `HARNESS_REMOTE_STOP` is set
 #   2. `forge_on` fails — before any authorisation, so a disabled coupling asks
 #      GitHub nothing about the commenter
@@ -525,8 +530,69 @@
 #      refuses, before the event's own actor is checked
 #   3. `authorise_actor` fails: `AUTH_WHY`, and who may command a run — a
 #      writer the `HARNESS_RUN_ACTORS` allow-list admits, or a listed bot
-#   4. the verb is empty, not a `COMMAND_VERBS` word, or one no arm carries out
-#      yet: the reply lists every command and names `docs/github-run-control.md`
+#   4. the exact form's verb is one no arm carries out (`control_verb_handled`;
+#      no such word exists today): the reply lists every command and names
+#      `docs/github-run-control.md`. Skipped for a mention.
+# Then THE BRANCH, and the exact form's arm (`control_run_verb`) or MENTION.
+# MENTION. `verb_control`'s first statements, for every event, copy `IN_OAUTH`
+# / `IN_API` into the non-exported `MENTION_OAUTH` / `MENTION_API` and unset
+# them, with `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY`, so no `gh`, `git`
+# or `control_child` process the job spawns inherits a credential; only the
+# agent subshell receives it. After the gates and the branch, `control_mention`
+# reads the state (`control_state_var`; a failed read is exit 3), then refuses
+# with no session: no saved credential (exit 2, the reply listing every
+# command); no `commands/<basename of MENTION_COMMAND>.md` under
+# `HARNESS_MENTION_PLUGIN_DIR` (exit 3, naming `HARNESS_CLI_VERSION` in
+# `harness-run.yml` and `docs/remote-execution.md` -> `### Upgrading`); and an
+# agent binary, `${HARNESS_AGENT_CLI:-claude}`, that `command -v` does not
+# resolve (exit 3). The plugin directory is a path only: nothing under it is
+# sourced or run by this script. THE CONTEXT DIRECTORY, a fresh one under
+# `RUNNER_TEMP` (removed on exit): `comment.md` (`handle: <COMMAND_HANDLE>`,
+# `Comment by @<login> on <issue|pull request> #<n>:`, a blank line, the body
+# verbatim), `run.md` (`branch:`, the `fetch` keys, `stopped: yes|no`, the next
+# ledger entry and its section, or that every entry is ticked or the ledger
+# could not be read) and `questions/question_<n>.md` per open question, each
+# capped at `MENTION_FILE_MAX_BYTES` at a whole line with a `(cut at <n>
+# bytes)` line. THE SESSION runs once, never retried, in a subshell `cd` into
+# that directory with `GH_TOKEN`, `GITHUB_TOKEN` and `HARNESS_PR_TOKEN` unset
+# and `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY` exported from whichever
+# saved value is set: `-p "$MENTION_COMMAND"` (no argument, so no comment text
+# reaches argv) `--plugin-dir <dir> --add-dir <dir>/instructions
+# --output-format json --json-schema <built by jq from MENTION_ACTIONS and
+# COMMAND_VERBS> --tools Read,Grep,Glob --restricted --strict-mcp-config
+# --no-session-persistence --permission-prompts none --model "$MENTION_MODEL"
+# --max-budget-usd "$MENTION_MAX_BUDGET_USD"`; never `--bare`, which reads no
+# OAuth token, and never `--disable-slash-commands`, which would stop the `-p`
+# command expanding. The command is `plugin/commands/harness-read-mention.md`
+# (`MENTION_COMMAND`), and it loads `plugin/instructions/mention_reading.md`,
+# whose `## Output contract` restates the decision contract validated here: a
+# field renamed on either side is an edit to both. A command declares no
+# allowlist, so the read-only closure is the session's `--tools` and
+# `--restricted` alone. EXTRACTION: a non-zero exit, stdout that is not one
+# JSON object, `.is_error` true or a `.subtype` other than `success` is a
+# failure, exit 3; the decision is `.structured_output` when an object, else
+# `.result | fromjson?` when an object, and one stdout line logs it (`mention
+# on #<n> by @<login> read as <action>[ <verb>] from <field>: <reason>`).
+# VALIDATION, by `jq`, the sole authority whatever the schema did: `action` in
+# `MENTION_ACTIONS`; `command` needs a `verb` in `COMMAND_VERBS`; `answer`
+# needs a non-blank `answer` and an optional integer `question` of 1 or more;
+# `reply` and `clarify` need a non-blank `text`; `reason` is a string. Unknown
+# keys are ignored; an invalid decision is refused, exit 2, naming the first
+# rule broken. Then, once and before any action is answered, a `text` or
+# `answer` holding a saved credential value is an `::error::` line that never
+# prints it, nothing posted, exit 3. THE ANSWERS, each through `control_post`:
+# `none` posts nothing; `reply` / `clarify` post `@<login>: <text>` — `text`
+# through `JQ_DEF_SANITISE` (`<!--` neutralised, every other `@<login>` but the
+# commenter's and the handle given U+200B) and capped at
+# `MENTION_TEXT_MAX_BYTES` with a `(cut)` line — then a footer saying an agent
+# wrote it and changed nothing, listing the commands; `fixes` posts this
+# script's text pointing at a review requesting changes or
+# `/autonomous-sdlc-harness:branch-user-review`; `command` posts a
+# confirmation request naming the exact form it was read as, and carries out
+# no verb. Exits: 0 answered or nothing to do; 2 refused; 3 a state read,
+# plugin, binary or agent failure, or a credential value in `text` or
+# `answer`. The workflow's interface: `IN_OAUTH` / `IN_API` and
+# `HARNESS_MENTION_PLUGIN_DIR`.
 # THE BRANCH. On a pull request (`.issue.pull_request.url` set), its head, by
 # `pr view`: a fork's pull request is refused, because this event carries the
 # repository's secrets, and nothing from its head is checked out or run; one
@@ -1090,7 +1156,8 @@
 # repository from that checkout's remote. The configuration read is that
 # root's `harness.config.json`.
 #
-# WHAT IT NEVER DOES. It never launches a local session, never writes the
+# WHAT IT NEVER DOES. It never launches a local session but `control`'s one
+# read-only mention session (MENTION, in `control`'s paragraph), never writes the
 # inbox, and never watches a run it sent beyond the bounded lookup of its
 # listing that `trigger` and `review` make. Only `start` and `review` push, and
 # only through `create-worktree.sh` and `push-branch.sh`; `start`'s writes are
@@ -1116,8 +1183,9 @@
 # comment files under `RUNNER_TEMP` (removed), at most one pull request, its
 # `running` label and one comment on the issue. `deliver` writes its body and
 # comment files under `RUNNER_TEMP` (removed), at most one pull request, one
-# comment and the state labels. `control` writes its reply file and its
-# `fetch` directory under `RUNNER_TEMP` (removed) and one reply comment, plus
+# comment and the state labels. `control` writes its reply file, its `fetch`
+# directory and, for a mention, its context directory and the session's output
+# files under `RUNNER_TEMP` (removed) and one reply comment, plus
 # what the child verb it runs writes, and the fetch of origin's <branch> that
 # force-writes `refs/remotes/origin/<branch>` in its checkout. `collect` writes its round file and its
 # settledness directory under `RUNNER_TEMP` (removed), at most one comment, on
@@ -1438,8 +1506,15 @@
 #   pause      bash scripts/remote-run.sh control -> 0; "$s.log" gains `workflow
 #              run harness-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
 #              then one comment on 12 naming @alice
-#   ignored    c.json's body `Let's @sdlc-harness pause` -> 0, one line,
-#              "$s.log" unchanged
+#   ignored    c.json's body `pause` -> 0, one line, "$s.log" unchanged
+#   mention    c.json's body `Let's @sdlc-harness pause`, with
+#              HARNESS_MENTION_PLUGIN_DIR=<a throwaway directory holding an
+#              empty commands/harness-read-mention.md>, IN_OAUTH=x and
+#              HARNESS_AGENT_CLI=<a stub printing {"type":"result",
+#              "subtype":"success","is_error":false,"structured_output":
+#              {"action":"reply","text":"It is running.","reason":"r"}}>
+#              -> 0; "$s.log" gains one comment on 12 opening `@alice: It is
+#              running.`, and no `workflow run`
 
 set -u
 
@@ -1477,6 +1552,15 @@ PR_CREATE_SETTING_PATH='Settings -> Actions -> General -> Workflow permissions'
 # to be trusted (docs/github-integration-research.md -> S6); the margin is the
 # framing lines and the marker.
 QUESTION_COMMENT_MAX_BYTES=250000
+# The most bytes of each file in a mention's context directory, and of the
+# agent-written text a mention reply posts (under QUESTION_COMMENT_MAX_BYTES
+# with room for the prefix, the footer and the marker).
+MENTION_FILE_MAX_BYTES=200000
+MENTION_TEXT_MAX_BYTES=60000
+# The mention session's model (a command declares no `model:`), and its spend
+# bound: a bound on one read, not a measured cost.
+MENTION_MODEL='sonnet'
+MENTION_MAX_BUDGET_USD=1
 # Name no login: the job sees only the `harness pause` run, whose actor is the bot.
 PAUSE_FOLDED_NOTE='A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows.'
 PAUSE_FOLDED_HOLD_NOTE='A pause was requested on this run before it was put on hold, so it is folded into this hold: the run waits for the hold to be cleared and continues once it is, and no separate `paused` comment follows.'
@@ -2697,6 +2781,17 @@ ANSWERS_SHAPE='env.HARNESS_INPUT_ANSWERS | fromjson
   | type == "object" and length > 0
     and all(to_entries[]; (.value | type) == "string"
       and (.key | explode | length > 0 and .[0] != 48 and all(.[]; . >= 48 and . <= 57)))'
+
+# sanitise($login; $handle), string to string, for agent-written text a reply
+# quotes: no `<!--` survives to read as a harness marker, and every `@<login>`
+# but the commenter's and the handle gets U+200B after the `@`, so it notifies
+# nobody.
+JQ_DEF_SANITISE='def sanitise($login; $handle):
+  gsub("<!--"; "&lt;!--")
+  | gsub("@(?<l>[A-Za-z0-9][A-Za-z0-9-]*)";
+      if (.l | ascii_downcase) == ($login | ascii_downcase)
+        or (("@" + .l) | ascii_downcase) == ($handle | ascii_downcase)
+      then "@" + .l else "@​" + .l end);'
 
 verb_restore() {
   local id download status_file clar n tmp status_source
@@ -6723,11 +6818,13 @@ control_review_intake() {
 }
 
 # control_comment_intake — read an `issue_comment` event; returns 1 when it is
-# ignored, after one line.
+# ignored, after one line. The exact form sets CONTROL_VERB / CONTROL_ARGS; any
+# other mention of the handle as a word sets CONTROL_MENTION and no verb.
 CONTROL_SENDER_TYPE=""
 CONTROL_IS_PR=""
+CONTROL_MENTION=0
 control_comment_intake() {
-  local action first word rest handle
+  local action first word rest handle verb body re
   { event_field '.action // ""' && action="$EVENT_VALUE" \
     && event_field '.comment.body // ""' && CONTROL_BODY="$EVENT_VALUE" \
     && event_field '.issue.number // ""' && CONTROL_NUMBER="$EVENT_VALUE" \
@@ -6754,15 +6851,27 @@ control_comment_intake() {
   rest=${first#"$word"}
   rest=${rest#"${rest%%[!$' \t']*}"}
   handle=$(printf '%s' "$COMMAND_HANDLE" | tr '[:upper:]' '[:lower:]')
-  if [ "$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')" != "$handle" ]; then
-    echo "remote-run.sh: control: ignored, the first line does not open with $COMMAND_HANDLE"
-    return 1
+  if [ "$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')" = "$handle" ]; then
+    word=${rest%%[$' \t']*}
+    verb=$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')
+    case " $COMMAND_VERBS " in
+      *" $verb "*)
+        if [ -n "$verb" ]; then
+          CONTROL_VERB="$verb"
+          CONTROL_ARGS=${rest#"$word"}
+          CONTROL_ARGS=${CONTROL_ARGS#"${CONTROL_ARGS%%[!$' \t']*}"}
+          return 0
+        fi ;;
+    esac
   fi
-  word=${rest%%[$' \t']*}
-  CONTROL_VERB=$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')
-  CONTROL_ARGS=${rest#"$word"}
-  CONTROL_ARGS=${CONTROL_ARGS#"${CONTROL_ARGS%%[!$' \t']*}"}
-  return 0
+  body=$(printf '%s' "$CONTROL_BODY" | tr '[:upper:]' '[:lower:]')
+  re="(^|[^a-z0-9])${handle}([^a-z0-9-]|\$)"
+  if [[ $body =~ $re ]]; then
+    CONTROL_MENTION=1
+    return 0
+  fi
+  echo "remote-run.sh: control: ignored, the comment does not mention $COMMAND_HANDLE"
+  return 1
 }
 
 # The close: CLOSE_KIND (`issue`, `pr_closed`, `pr_merged`, `deleted`) and
@@ -6945,9 +7054,253 @@ control_close() {
   exit "$EXIT_OK"
 }
 
+# control_commands_way — prints the way on that lists every command and names
+# the documentation, the unknown-verb refusal's and every mention refusal's.
+control_commands_way() {
+  local v verbs=""
+  for v in $COMMAND_VERBS; do
+    [ "$v" != answer ] || v="answer [<n>]"
+    verbs="$verbs${verbs:+, }\`$COMMAND_HANDLE $v\`"
+  done
+  printf '%s' "The commands are $verbs; \`docs/github-run-control.md\` in the harness documentation states each."
+}
+
+# The credential `verb_control`'s first statements take out of the environment;
+# never exported, so only the agent subshell in control_mention_session sees it.
+MENTION_OAUTH=""
+MENTION_API=""
+
+# mention_has_credential <string> — 0 when <string> contains a non-empty saved
+# credential value.
+mention_has_credential() {
+  if [ -n "$MENTION_OAUTH" ]; then
+    case "$1" in *"$MENTION_OAUTH"*) return 0 ;; esac
+  fi
+  if [ -n "$MENTION_API" ]; then
+    case "$1" in *"$MENTION_API"*) return 0 ;; esac
+  fi
+  return 1
+}
+
+# mention_cap <file> <max bytes> <note> — over <max bytes>, <file> keeps its
+# first <max bytes> cut back to the last whole line, then the line <note>.
+mention_cap() {
+  local file="$1" max="$2" note="$3" size
+  size=$(wc -c <"$file") || return 1
+  size=${size//[!0-9]/}
+  [ "${size:-0}" -gt "$max" ] || return 0
+  head -c "$max" "$file" >"$file.cut" || return 1
+  if [ -n "$(tail -c 1 "$file.cut")" ]; then
+    sed '$d' "$file.cut" >"$file.line" || return 1
+    mv -f "$file.line" "$file.cut" || return 1
+  fi
+  printf '%s\n' "$note" >>"$file.cut"
+  mv -f "$file.cut" "$file"
+}
+
+# control_mention_context <dir> — comment.md, run.md and questions/ in <dir>,
+# every file capped at MENTION_FILE_MAX_BYTES; 1 when one cannot be written.
+control_mention_context() {
+  local dir="$1" kind=issue n src f
+  [ -z "$CONTROL_IS_PR" ] || kind="pull request"
+  {
+    printf 'handle: %s\n' "$COMMAND_HANDLE"
+    printf 'Comment by @%s on %s #%s:\n\n' "$CONTROL_ACTOR" "$kind" "$CONTROL_NUMBER"
+    printf '%s' "$CONTROL_BODY"
+  } >"$dir/comment.md" || return 1
+  {
+    printf 'branch: %s\n' "$CONTROL_BRANCH"
+    printf 'state: %s\n' "$CS_STATE"
+    printf 'pause_reason: %s\n' "$CS_REASON"
+    printf 'engine: %s\n' "$CS_ENGINE"
+    printf 'open_questions: %s\n' "$CS_OPEN"
+    printf 'detail: %s\n' "$CS_DETAIL"
+    printf 'run_url: %s\n' "$CS_URL"
+    printf 'run_status: %s\n' "$CS_RUN_STATUS"
+    if [ "$CS_STOPPED" = 1 ]; then printf 'stopped: yes\n'; else printf 'stopped: no\n'; fi
+    if ! control_ledger_next_var; then
+      printf 'next: the flow-progress ledger could not be read\n'
+    elif [ -z "$LEDGER_NEXT" ]; then
+      printf 'next: every entry of the flow-progress ledger is ticked\n'
+    else
+      printf 'next: %s\n' "$LEDGER_NEXT"
+      printf 'section: %s\n' "$LEDGER_SECTION"
+    fi
+  } >"$dir/run.md" || return 1
+  mkdir "$dir/questions" || return 1
+  for n in $CS_OPEN; do
+    case "$n" in ''|*[!0-9]*) continue ;; esac
+    src="$CS_DIR/clarifications/$CONTROL_BRANCH/question_$n.md"
+    [ -f "$src" ] || continue
+    cp "$src" "$dir/questions/question_$n.md" || return 1
+  done
+  for f in "$dir/comment.md" "$dir/run.md" "$dir"/questions/question_*.md; do
+    [ -f "$f" ] || continue
+    mention_cap "$f" "$MENTION_FILE_MAX_BYTES" "(cut at $MENTION_FILE_MAX_BYTES bytes)" || return 1
+  done
+  return 0
+}
+
+# control_mention_session <dir> <out> <err> — the one read-only session, run
+# once in a subshell in <dir>; AGENT_STATUS is its exit.
+AGENT_STATUS=0
+control_mention_session() {
+  local dir="$1" out="$2" err="$3" schema
+  AGENT_STATUS=0
+  schema=$(jq -n -c --arg actions "$MENTION_ACTIONS" --arg verbs "$COMMAND_VERBS" '
+    def words: split(" ") | map(select(length > 0));
+    { type: "object", additionalProperties: false, required: ["action", "reason"],
+      properties: {
+        action: { type: "string", enum: ($actions | words) },
+        verb: { type: "string", enum: ($verbs | words) },
+        question: { type: "integer", minimum: 1 },
+        answer: { type: "string" },
+        text: { type: "string" },
+        reason: { type: "string" } } }') || { AGENT_STATUS=1; return 0; }
+  (
+    cd "$dir" || exit 1
+    unset GH_TOKEN GITHUB_TOKEN HARNESS_PR_TOKEN
+    [ -z "$MENTION_OAUTH" ] || export CLAUDE_CODE_OAUTH_TOKEN="$MENTION_OAUTH"
+    [ -z "$MENTION_API" ] || export ANTHROPIC_API_KEY="$MENTION_API"
+    exec "$AGENT_CLI" -p "$MENTION_COMMAND" \
+      --plugin-dir "$HARNESS_MENTION_PLUGIN_DIR" \
+      --add-dir "$HARNESS_MENTION_PLUGIN_DIR/instructions" \
+      --output-format json \
+      --json-schema "$schema" \
+      --tools Read,Grep,Glob --restricted \
+      --strict-mcp-config --no-session-persistence --permission-prompts none \
+      --model "$MENTION_MODEL" --max-budget-usd "$MENTION_MAX_BUDGET_USD"
+  ) </dev/null >"$out" 2>"$err" || AGENT_STATUS=$?
+  return 0
+}
+
+# control_mention — MENTION (the header): the state, the credential, the plugin
+# and the binary, the context directory, one session, then its decision
+# extracted, validated, checked for a credential and answered. Always exits.
+control_mention() {
+  local base dir out err why decision from rule action verb question reason text answer file reply
+  control_state_var "$CONTROL_BRANCH" \
+    || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($CS_ERR)" "Comment again to retry."
+  control_state_word_var
+
+  if [ -z "$MENTION_OAUTH" ] && [ -z "$MENTION_API" ]; then
+    control_refuse "$EXIT_REFUSED" "\`$WORKFLOW_CONTROL_FILE\` passes the agent that reads a mention no credential, so a mention is not read" \
+      "$(control_commands_way)"
+  fi
+  base=${MENTION_COMMAND##*:}
+  if [ -z "${HARNESS_MENTION_PLUGIN_DIR-}" ] || [ ! -f "$HARNESS_MENTION_PLUGIN_DIR/commands/$base.md" ]; then
+    control_refuse "$EXIT_GH" "the harness plugin carrying the mention command is not available to this job" \
+      "The control job fetches the plugin at the version \`HARNESS_CLI_VERSION\` pins in \`harness-run.yml\`; see \`docs/remote-execution.md\` → \`### Upgrading\`, then comment again, or comment a command. $(control_commands_way)"
+  fi
+  AGENT_CLI="${HARNESS_AGENT_CLI:-claude}"
+  if ! command -v "$AGENT_CLI" >/dev/null 2>&1; then
+    control_refuse "$EXIT_GH" "the agent binary \`$AGENT_CLI\` is not on this job's PATH" \
+      "Comment a command instead. $(control_commands_way)"
+  fi
+
+  if ! dir=$(mktemp -d "$control_tmp/harness-control-mention.XXXXXX"); then
+    control_refuse "$EXIT_GH" "a context directory could not be created under '$control_tmp'" "Comment again to retry."
+  fi
+  out="$dir.out"
+  err="$dir.err"
+  control_dirs="$control_dirs $dir $out $err"
+  control_mention_context "$dir" \
+    || control_refuse "$EXIT_GH" "the mention's context could not be written under '$dir'" "Comment again to retry."
+
+  control_mention_session "$dir" "$out" "$err"
+
+  why=$(jq -r -s '
+    if length != 1 or (.[0] | type) != "object" then "its output is not one JSON object"
+    elif .[0].is_error == true then "it reported an error (\(.[0].subtype // "no subtype"))"
+    elif (.[0].subtype // "") != "success" then "it ended as \(.[0].subtype // "no subtype")"
+    else "" end' "$out" 2>/dev/null) || why="its output is not one JSON object"
+  if [ "$AGENT_STATUS" -ne 0 ] || [ -n "$why" ]; then
+    reason=$(grep -v '^[[:space:]]*$' "$err" 2>/dev/null | tail -n 1)
+    ! mention_has_credential "$reason" || reason=""
+    [ "$AGENT_STATUS" -eq 0 ] || why="it exited $AGENT_STATUS${reason:+: $reason}"
+    control_refuse "$EXIT_GH" "the agent that reads a mention failed: $why" \
+      "Comment again, or comment a command. $(control_commands_way)"
+  fi
+
+  decision=$(jq -c -s '.[0] as $r
+    | if ($r.structured_output | type) == "object" then { from: "structured_output", d: $r.structured_output }
+      else ([$r.result | strings | fromjson? | objects] | first) as $p
+        | if $p != null then { from: "result", d: $p } else { from: "", d: null } end
+      end' "$out") || decision='{"from":"","d":null}'
+  from=$(printf '%s' "$decision" | jq -r '.from')
+  if [ -z "$from" ]; then
+    control_refuse "$EXIT_REFUSED" "the agent's reading of the mention carries no decision object" \
+      "Comment again, or comment a command. $(control_commands_way)"
+  fi
+  action=$(printf '%s' "$decision" | jq -r '.d.action | if type == "string" then . else tojson end')
+  verb=$(printf '%s' "$decision" | jq -r '.d.verb | strings')
+  reason=$(printf '%s' "$decision" | jq -r '.d.reason | strings | gsub("[\r\n]+"; " ") | .[0:200]')
+  ! mention_has_credential "$reason" || reason="(withheld: it carries a credential value)"
+  echo "remote-run.sh: control: mention on #$CONTROL_NUMBER by @$CONTROL_ACTOR read as $action${verb:+ $verb} from $from: $reason"
+
+  rule=$(printf '%s' "$decision" | jq -r --arg actions "$MENTION_ACTIONS" --arg verbs "$COMMAND_VERBS" '
+    def words: split(" ") | map(select(length > 0));
+    def nonblank: type == "string" and test("\\S");
+    .d as $d
+    | ($actions | words) as $A
+    | ($verbs | words) as $V
+    | if ($d | type) != "object" then "it is not an object"
+      elif ($A | any(.[]; . == $d.action) | not) then "its `action` is not one of \($A | join(", "))"
+      elif $d.action == "command" and ($V | any(.[]; . == $d.verb) | not) then "a `command` names no `verb` among \($V | join(", "))"
+      elif $d.action == "command" and $d.verb == "answer" and ($d.answer | nonblank | not) then "an `answer` carries no non-blank `answer`"
+      elif $d.action == "command" and $d.verb == "answer" and $d.question != null
+        and (($d.question | type) != "number" or $d.question != ($d.question | floor) or $d.question < 1) then "its `question` is not an integer of 1 or more"
+      elif ($d.action == "reply" or $d.action == "clarify") and ($d.text | nonblank | not) then "a `\($d.action)` carries no non-blank `text`"
+      elif ($d.reason | type) != "string" then "it carries no `reason`"
+      else "" end') || rule="it could not be read"
+  if [ -n "$rule" ]; then
+    control_refuse "$EXIT_REFUSED" "the agent's reading of the mention is not a valid decision: $rule" \
+      "Comment again, or comment a command. $(control_commands_way)"
+  fi
+
+  # Once, before any action is answered: no branch, this one or a later one,
+  # sees a decision whose posted or dispatched text carries a credential.
+  text=$(printf '%s' "$decision" | jq -r '.d.text | strings')
+  answer=$(printf '%s' "$decision" | jq -r '.d.answer | strings')
+  if mention_has_credential "$text" || mention_has_credential "$answer"; then
+    echo "::error::remote-run.sh: control: the decision on the mention on #$CONTROL_NUMBER carries a credential value in its text or answer; nothing it wrote is posted"
+    exit "$EXIT_GH"
+  fi
+
+  case "$action" in
+    none)
+      echo "remote-run.sh: control: the mention on #$CONTROL_NUMBER needs no answer"
+      exit "$EXIT_OK" ;;
+    reply|clarify)
+      file="$dir.text"
+      control_dirs="$control_dirs $file"
+      printf '%s' "$decision" | jq -r --arg login "$CONTROL_ACTOR" --arg handle "$COMMAND_HANDLE" \
+        "$JQ_DEF_SANITISE"' .d.text | sanitise($login; $handle)' >"$file" \
+        && mention_cap "$file" "$MENTION_TEXT_MAX_BYTES" "(cut)" \
+        || control_refuse "$EXIT_GH" "the agent's reply could not be prepared under '$control_tmp'" "Comment again to retry."
+      text=$(cat "$file")
+      control_reply "$EXIT_OK" "@$CONTROL_ACTOR: $text"$'\n\n'"_Written by an agent that read your mention; it changed nothing. $(control_commands_way)_" ;;
+    fixes)
+      control_reply "$EXIT_OK" "@$CONTROL_ACTOR: a mention does not start a round of fixes. A review that requests changes on the run's pull request starts one (\`docs/github-run-control.md\` → \`## 2.\`). An author who cannot request changes on their own pull request starts the round locally with \`/autonomous-sdlc-harness:branch-user-review\` (\`## 4.\`)." ;;
+    command)
+      question=""
+      [ "$verb" != answer ] || question=$(printf '%s' "$decision" | jq -r '.d.question | numbers | floor')
+      reply="@$CONTROL_ACTOR: your mention reads as \`$COMMAND_HANDLE $verb${question:+ $question}\`. Comment that command to carry it out"
+      [ "$verb" != answer ] || reply="$reply, with the answer on the lines below it"
+      control_reply "$EXIT_OK" "$reply." ;;
+  esac
+  echo "::error::remote-run.sh: control: the validated action \`$action\` has no answer"
+  exit "$EXIT_GH"
+}
+
 verb_control() {
   local LC_ALL=C
-  local review=0 close=0 forge="" target="" status verbs="" v
+  local review=0 close=0 forge="" target="" status
+  # Unset first so an inherited export of either name cannot keep it exported.
+  unset MENTION_OAUTH MENTION_API
+  MENTION_OAUTH="${IN_OAUTH-}"
+  MENTION_API="${IN_API-}"
+  unset IN_OAUTH IN_API CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY
   case "${GITHUB_EVENT_NAME-}" in
     issue_comment) ;;
     pull_request_review) review=1 ;;
@@ -7012,16 +7365,12 @@ verb_control() {
       "Only a collaborator with write, maintain or admin access whom the repository variable \`HARNESS_RUN_ACTORS\` admits (when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one), or a bot listed in \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
   fi
 
-  if [ "$review" -eq 0 ] && { [ -z "$CONTROL_VERB" ] || ! control_verb_handled "$CONTROL_VERB"; }; then
-    for v in $COMMAND_VERBS; do
-      [ "$v" != answer ] || v="answer [<n>]"
-      verbs="$verbs${verbs:+, }\`$COMMAND_HANDLE $v\`"
-    done
-    control_refuse "$EXIT_REFUSED" "it is not a command this harness carries out" \
-      "The commands are $verbs; \`docs/github-run-control.md\` in the harness documentation states each."
+  if [ "$review" -eq 0 ] && [ "$CONTROL_MENTION" != 1 ] \
+    && { [ -z "$CONTROL_VERB" ] || ! control_verb_handled "$CONTROL_VERB"; }; then
+    control_refuse "$EXIT_REFUSED" "it is not a command this harness carries out" "$(control_commands_way)"
   fi
 
-  forge_repo_var || control_reply "$EXIT_GH" "@$CONTROL_ACTOR: \`$CONTROL_VERB\` was not run: the repository's name could not be read."
+  forge_repo_var || control_reply "$EXIT_GH" "@$CONTROL_ACTOR: \`${CONTROL_VERB:-$COMMAND_HANDLE}\` was not run: the repository's name could not be read."
   if [ "$review" -eq 1 ]; then
     control_check_branch "$REVIEW_HEAD"
   elif [ -n "$CONTROL_IS_PR" ]; then
@@ -7030,7 +7379,16 @@ verb_control() {
     control_branch_from_issue "$CONTROL_NUMBER"
   fi
 
+  if [ "$CONTROL_MENTION" = 1 ]; then
+    echo "remote-run.sh: control: a mention on $CONTROL_BRANCH from @$CONTROL_ACTOR on #$CONTROL_NUMBER"
+    control_mention
+  fi
   echo "remote-run.sh: control: $CONTROL_VERB on $CONTROL_BRANCH from @$CONTROL_ACTOR on #$CONTROL_NUMBER"
+  control_run_verb
+}
+
+# control_run_verb — the arm carrying out CONTROL_VERB.
+control_run_verb() {
   case "$CONTROL_VERB" in
     answer) control_answer ;;
     pause) control_pause ;;
