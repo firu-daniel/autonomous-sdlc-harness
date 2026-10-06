@@ -27,7 +27,7 @@ const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
 const COLLECTED_AT = '2026-01-01T00:00:00Z';
 const REASON = '**Observation 3 — "Rename the helper."** Out of scope: the name is the public API.';
-const THREAD_MARKER = '<!-- sdlc-harness event=thread branch=feat_x -->\n';
+const THREAD_MARKER = '<!-- sdlc-harness event=thread branch=feat_x round=1 -->\n';
 
 const STUB = `#!/usr/bin/env node
 const { appendFileSync, existsSync, readFileSync, writeFileSync } = require('node:fs');
@@ -246,6 +246,24 @@ test('a thread already carrying the harness reply is not replied to again', asyn
   assert.equal(resolves(calls).length, 0);
   assert.equal(repliesTo(calls, 103).length, 1);
   assert.match(result.stdout, /comment 101's thread already carries this harness's reply; left alone/);
+  assert.deepEqual(warnings(result), []);
+  assertNoDismissal(calls);
+});
+
+test('a thread carrying an earlier round\'s harness reply is still replied to and resolved', async (t) => {
+  const f = await threadsFixture(t);
+  const page = JSON.parse(threadsPage());
+  page.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes.push(
+    comment(106, '2026-01-02T00:00:00Z', 'Not changed in this round: earlier.\n\n<!-- sdlc-harness event=thread branch=feat_x round=7 -->\n'),
+  );
+  const result = await f.deliver({ STUB_THREADS: JSON.stringify(page) });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  const on101 = repliesTo(calls, 101);
+  assert.equal(on101.length, 1);
+  assert.equal(on101[0].body, `Addressed in \`${f.flip}\`.\n\n${THREAD_MARKER}`);
+  assert.equal(resolves(calls).length, 1);
+  assert.doesNotMatch(result.stdout, /already carries/);
   assert.deepEqual(warnings(result), []);
   assertNoDismissal(calls);
 });

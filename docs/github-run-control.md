@@ -187,9 +187,9 @@ The commands are `@sdlc-harness answer [<n>]`, `@sdlc-harness pause`, `@sdlc-har
 
 - An implemented finding (`[x] **Finding K**` in the fix plan's index) gets the reply ``Addressed in `<sha>`.``, `<sha>` being the commit that flipped that entry, and its thread is then resolved with `resolveReviewThread`.
 - An out-of-scope or invalid observation gets the reply `Not changed in this round: <reason>`, and its thread is left open for the reviewer.
-- A thread already resolved, one the reviewer replied to after the round was collected, and one already carrying the harness's reply are left alone, so a re-run replies nothing twice.
+- A thread already resolved, one the reviewer replied to after the round was collected, and one already carrying this round's reply are left alone, so a re-run replies nothing twice.
 
-Each reply carries the hidden marker (`event=thread`), so the next round never collects it. No review is ever dismissed. Only an inline comment has a thread, so a review's summary has nothing to resolve. The threads are read with the job's token through a paginated GraphQL `pullRequest.reviewThreads` listing, each comment matched on its `databaseId`; a refused listing, reply or resolve is one warning line in the job's log ([§8](#8-what-is-not-verified-here)).
+Each reply carries the hidden marker (`event=thread`, with the round's `round=<n>`), so the next round never collects it. No review is ever dismissed. Only an inline comment has a thread, so a review's summary has nothing to resolve. The threads are read with the job's token through a paginated GraphQL `pullRequest.reviewThreads` listing, each comment matched on its `databaseId`; a refused listing, reply or resolve is one warning line in the job's log ([§8](#8-what-is-not-verified-here)).
 
 **The story index.** A round also needs `<stateDir>/story_plans/<branch>_story_plan.md` at the branch tip, because the round's statistics step reads it. A review on a branch without one is refused with a reply.
 

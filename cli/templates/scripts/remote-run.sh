@@ -419,9 +419,11 @@
 # each: a thread already resolved; a thread with a comment created after the
 # round's `collected_at` that is not a collected id and carries no
 # `COMMENT_MARKER` — the reviewer replied after the collection; and a thread
-# already carrying the `thread` marker, so a re-run replies nothing twice.
-# Otherwise one reply, through `pulls/<pr>/comments/<id>/replies` to the
-# thread's first comment, ending with `forge_marker thread <branch>` — whose
+# already carrying this round's `thread` marker (` round=<n>` included), so a
+# re-run of the same round replies nothing twice while a later round still
+# handles a thread an earlier round replied to. Otherwise one reply, through
+# `pulls/<pr>/comments/<id>/replies` to the thread's first comment, ending with
+# `forge_marker thread <branch>` and the round's ` round=<n>` — whose
 # `COMMENT_MARKER` keeps the next `round_collect` from collecting it: for
 # `fixed`, ``Addressed in `<sha>`.`` and, only once that reply is posted, one
 # `resolveReviewThread` mutation; for `reason`, `Not changed in this round:
@@ -5035,7 +5037,7 @@ deliver_thread_reply() {
     echo "::warning::remote-run.sh: deliver: cannot create the reply file for comment $id; no reply posted"
     return 1
   fi
-  if ! { printf '%s\n\n' "$text"; forge_marker thread "$branch"; } >"$file"; then
+  if ! { printf '%s\n\n' "$text"; forge_marker thread "$branch" "" "" "$RC_MARKED_N"; } >"$file"; then
     rm -f "$file"
     echo "::warning::remote-run.sh: deliver: cannot write the reply file for comment $id; no reply posted"
     return 1
@@ -5137,7 +5139,7 @@ INDEX
     return 0
   fi
   pages="$GH_OUT"
-  own_marker=$(forge_marker thread "$branch")
+  own_marker=$(forge_marker thread "$branch" "" "" "$RC_MARKED_N")
   # One `|`-joined row per thread (a GraphQL node id carries no `|`): id,
   # resolved, its comment ids, its first comment's id, whether a comment came
   # after the round, whether it carries this harness's reply.
