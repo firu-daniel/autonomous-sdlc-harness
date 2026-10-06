@@ -27,7 +27,7 @@
 
 Each entry resolves to `harness-runs/skeptic_reviews/feat_forge_run_control_pr_at_start_skeptic_review/finding_<K>.md` through its `**Finding K**` reference.
 
-1. [ ] **Finding 1** — Word the round's start comment by the outcome of turning the pull request back to a draft _(layer: cli)_
+1. [x] **Finding 1** — Word the round's start comment by the outcome of turning the pull request back to a draft _(layer: cli)_
 
 ---
 

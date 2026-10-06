@@ -301,10 +301,12 @@
 # when the state is paused and an engine was recovered, else the **Run
 # workflow** form with that engine, or with the three to choose from.
 # On a pull-request target that is not a draft, `round` runs `gh pr ready
-# --undo` after its labels, with the caller's own token, and its comment says
+# --undo` before its comment, with the caller's own token, and its comment says
 # the pull request is a draft again until the round completes; a refusal (a
-# plan without drafts) is one `::warning::` line naming gh's error. A `failed`
-# comment on a pull request reads the registry record's `engine`: for
+# plan without drafts) is one `::warning::` line naming gh's error, and the
+# comment then says turning it back was refused and it stays ready for review
+# while the round works. A `failed` comment on a pull request reads the
+# registry record's `engine`: for
 # `user_review` it names a review requesting changes and says the pull request
 # stays open; otherwise it says the draft stays open, to close to discard the
 # run, or, when an issue is known, to re-apply the trigger label there for a
@@ -4597,7 +4599,7 @@ REPORT_NOT_STARTED_STATE=""
 REPORT_NOT_STARTED_ENGINE=""
 forge_report() {
   local event="$1" br="$2" note="${3-}" pr="${4-}" gone="${5-}" gone_sha="${6-}" state reason="" resume_at="" when registry_file
-  local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n route engine="" undo=0
+  local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n route engine=""
   case "$event" in
     parked|park_loop) state=parked ;;
     paused) state=paused ;;
@@ -4706,10 +4708,14 @@ forge_report() {
       fi ;;
     round)
       text="A user-review round started on \`$br\`; a \`completed\` comment follows when the branch is ready for review again."
-      # Written before the undo below, so it states the intent; a refusal is its warning line.
+      # The undo runs before the comment is written, so the comment states its outcome.
       if [ "$kind" = pr ] && [ "$FORGE_PR_DRAFT" = false ]; then
-        undo=1
-        text="$text This pull request is a draft again until the round completes."
+        if gh_call pr ready "$FORGE_PR" --repo "$FORGE_REPO" --undo; then
+          text="$text This pull request is a draft again until the round completes."
+        else
+          echo "::warning::remote-run.sh: report: turning pull request #$FORGE_PR back to a draft was refused: $GH_ERR"
+          text="$text Turning this pull request back to a draft was refused, so it stays ready for review while the round works."
+        fi
       fi ;;
     not_started)
       text="GitHub did not start the job of the harness run on \`$br\`, so nothing ran and the branch is unchanged."
@@ -4767,9 +4773,6 @@ forge_report() {
 
   [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" "$state" || :
   [ -z "$FORGE_PR" ] || forge_set_state "$FORGE_PR" "$state" || :
-  if [ "$undo" -eq 1 ] && ! gh_call pr ready "$FORGE_PR" --repo "$FORGE_REPO" --undo; then
-    echo "::warning::remote-run.sh: report: turning pull request #$FORGE_PR back to a draft was refused: $GH_ERR"
-  fi
   echo "remote-run.sh: report: $event on $br reported on #$target"
   return 0
 }

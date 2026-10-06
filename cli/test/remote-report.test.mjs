@@ -11,7 +11,7 @@
  * ascending, the file whole less its own `answer_<n>.md` lines or cut at a line within the byte bound, one
  * answer instruction and its copy block, and its marker carrying `question=<n>`; with no open question it
  * posts nothing and prints an `::error::` line. Only `round` changes a pull request's draft state, undoing a
- * ready one after its labels; `failed` and `stopped` on a pull request say it stays open.
+ * ready one before its comment; `failed` and `stopped` on a pull request say it stays open.
  *
  * The fixture is `remote-trigger.test.mjs`'s shape — `init`, `execution.target` `github-actions`,
  * `forge` `github`, the adopted tree pushed to the fixture's bare `origin` — plus branches pushed with a
@@ -372,14 +372,14 @@ const prOn = (draft) => JSON.stringify([{ number: 12, isCrossRepository: false, 
 const readyCalls = (calls) => calls.filter((call) => call.args[0] === 'pr' && call.args[1] === 'ready');
 const DRAFT_AGAIN = 'This pull request is a draft again until the round completes.';
 
-test('round on a ready pull request turns it back to a draft after its labels, and says so', async (t) => {
+test('round on a ready pull request turns it back to a draft before its comment, and says so', async (t) => {
   const f = await reportFixture(t);
   const result = await f.report(['round', 'feat_x'], { STUB_PRS: prOn(false) });
   assert.equal(result.status, 0, result.stderr);
   const calls = f.calls();
   assert.deepEqual(readyCalls(calls).map((call) => call.line), [`pr ready 12 --repo ${REPOSITORY} --undo`]);
-  const lastLabel = calls.findLastIndex((call) => /\/labels\b/.test(call.line));
-  assert.ok(calls.findIndex((call) => call.args[1] === 'ready') > lastLabel, calls.map((c) => c.line).join('\n'));
+  const firstComment = calls.findIndex((call) => /issues\/12\/comments\b/.test(call.line));
+  assert.ok(calls.findIndex((call) => call.args[1] === 'ready') < firstComment, calls.map((c) => c.line).join('\n'));
   const [posted] = commentsOn(calls, 12);
   assert.ok(posted.body.includes(DRAFT_AGAIN), posted.body);
 });
@@ -400,6 +400,9 @@ test('round whose undo is refused prints one ::warning:: line, exits 0 and keeps
   assert.equal(result.stdout.match(/^::warning::/gm)?.length, 1, result.stdout);
   assert.match(result.stdout, /back to a draft was refused: gh exited 4: stub gh failure/);
   assert.deepEqual(labelAdds(f.calls(), 12).map((call) => call.args.at(-1)), ['labels[]=sdlc-harness: running']);
+  const [posted] = commentsOn(f.calls(), 12);
+  assert.ok(!posted.body.includes(DRAFT_AGAIN), posted.body);
+  assert.match(posted.body, /Turning this pull request back to a draft was refused, so it stays ready for review while the round works\./);
 });
 
 test('failed on a pull request for a task run names closing it and re-applying the label on the issue', async (t) => {
