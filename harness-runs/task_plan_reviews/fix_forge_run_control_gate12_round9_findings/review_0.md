@@ -1,0 +1,36 @@
+# Task plan review — iteration 0
+
+## Must Fix
+
+1. **Scope register: the derivation misses every statement outside three docs and four templates of when `push-branch.sh` pushes** — story index (`fix_forge_run_control_gate12_round9_findings_story_plan.md`), `## Scope register`.
+   Task 1 changes when `push-branch.sh` pushes, which is D6's decision rule (a), plus "what the end-of-job push does", rule (b). Only these entries reach that site class: D3, a grep for four exact phrases; D6, limited to the headers of four templates; and D7, limited to named sections of three documents. Re-running D1 to D5 verbatim and re-walking D6 to D10 reaches none of the sites below, and none of them is a row:
+   - `docs/outer-loop-verification.md` → the **Drift since that stamp** block's sentence "The other five — `commit-on-branch.sh`, `push-branch.sh`, … — have comment-only diffs since the stamp, so no §1 row's mechanism moved." Task 1's executable change to `push-branch.sh` makes this false. The document's own rule is to re-run the recipe after any later touch to a template.
+   - `docs/outer-loop-verification.md` → `### 1.2 \`push-branch.sh\` — refuses **visibly and non-fatally**`. Its outcome table is "rows a later change re-runs rather than re-argues", and it has no row for the new outcome: a tracked branch its remote deleted is not pushed, and the run exits 0.
+   - `plugin/docs/AUTONOMOUS_FLOW.md` → **What the flow does push.** The Context argues in prose that this paragraph stays true, but the register records no row or disposition for it.
+   - `docs/watcher.md` → the scripts table row for `push-branch.sh` ("Pushes the current non-protected branch, and never aborts its caller").
+   - `docs/github-run-control.md` → **A push the remote refused is retried.**
+   - `docs/remote-execution.md` → `### When GitHub fails or lags` → the `push-branch.sh` **Decision:** paragraph, and `## 4.` → **Push frequency — a finding, not a change.** That paragraph says "the job's final `push-branch.sh` under `always()` retries the second whenever that step still runs", which is rule (b).
+   - `plugin/agents/committer.md` → the `push` argument bullet, and step h. **Push**: each says when the helper pushes the branch to its upstream.
+   - `plugin/instructions/autonomous_pause_and_ledger.md` → the sentence "`push-branch.sh` is non-fatal and only fast-forwards already-committed work, so an unconditional push is a …".
+   - `plugin/instructions/task_plan_writing_instructions_autonomous.md` and `plugin/instructions/user_review_fix_plan_writing_instructions_autonomous.md` → each **Push after the commit.** paragraph ("it pushes the worktree branch to its upstream whenever a commit landed").
+   **Fix:** Add a wider derivation entry for this site class, and a row for each site it reaches, with a `change` (owning task) or `no-change` (reason) disposition. Every site above must be a row. The `outer-loop-verification.md` drift sentence and `### 1.2` table most likely need `change`. That would be a `general` task, or an extension of Task 6 within its point and bullet budget. A suitable entry is a command:
+   ```
+   git grep -n "push-branch" -- docs plugin cli/templates README.md ARCHITECTURE.md
+   ```
+   Pair it with a procedure decision rule: a hit is a site when its sentence states when or whether `push-branch.sh` pushes (D6 (a)) or what the end-of-job push does (D6 (b)). A bare invocation line such as `bash <scripts_dir>/push-branch.sh "$REPO_ROOT"` is not a site.
+
+2. **Scope register: two sites the stated entries reach are not rows** — story index (`fix_forge_run_control_gate12_round9_findings_story_plan.md`), `## Scope register`.
+   - **D7** traverses `docs/github-run-control.md` → `## 8.`'s table under decision rule (d), "which comment the file edits". It reaches the row *The job's token may edit its own issue comment (`PATCH issues/comments/<id>`)*. That row's *What rests on it* reads "The progress comment, edited in place rather than posted anew". Task 2 adds a second edit of that comment on the stop path. That edit is made by the control job's token or, on a local `remote-run.sh stop`, by the operator's own token editing the bot's comment. The register has rows for the new `## 8.` row (39) and the deletion-close row (40), but none for this one.
+   - **D6** traverses the leading comment blocks of `cli/templates/github/workflows/harness-run.yml` under decision rule (b), "what the end-of-job push does". It reaches **WHY THE REPORT STEP MAY FAIL.** ("runs `remote-run.sh deliver` after the push, so the pull request's head carries the run's last commit"). Row 7 lists four other header paragraphs of that file but not this one.
+   **Fix:** Add a row for each site, with its disposition and owning task or reason. For the `## 8.` PATCH row, decide whether its *What rests on it* cell must also name the stop's rewrite (Task 2), and if so give it to Task 5.
+
+## Should Fix
+
+1. **Task 1 misstates how a new branch reaches its first push** — `task_1_plan.md` and the story index's `## Context` / `Top risks:`. The plan says "A new branch has neither [tracking test], so `start` and a first push are unchanged." Its **Verification** also says the *Never pushed* case is "the route `remote-run.sh start` takes for a newly cut branch". Neither holds. `create-worktree.sh` cuts a branch with `git worktree add -b "$branch" … "origin/$default_branch"`, which by git's default `branch.autoSetupMerge` tracks `refs/heads/<default>`. It then pushes with its own `git push -u origin "$branch"`, not through `push-branch.sh`. Task 1's check would ask `ls-remote` about the default branch in the window before that push, or when that push never ran, which is harmless but not what the plan describes. Correct the claim, and either add a positive-control case for a branch cut from `origin/<default>` that has not yet been pushed (expected: pushed as before), or say why it is not needed.
+2. **Task 4's folded-pause line is wrong on a `park_loop` comment** — `task_4_plan.md`, with the quotes in `task_5_plan.md` and `task_7_plan.md`. `PAUSE_FOLDED_NOTE` says "the run waits for the answer and continues once it is answered". A `park_loop` comment's next action is `@sdlc-harness clear`, not an answer. Either word the line for both events (for example, "waits for the park to be resolved"), or append it on `parked` only and say why `park_loop` is left out.
+3. **Task 7's verification contradicts its own Work** — `task_7_plan.md`. The **Leg (h), What it settles** bullet adds the inline quote *`gh pr list --head <branch> --state all` lists a pull request…*, a row title. The first **Verification** bullet then requires that the diff add no inline backticked `gh ` command outside a fence. Exempt quoted `## 8.` row titles from that grep, or quote the row another way.
+4. **Task 2's grep check hard-codes an expected count** — `task_2_plan.md`, the last **Verification** bullet expects exactly two `--method PATCH` hits. State the property instead: every executable `PATCH` hit edits the progress comment.
+
+## Nice to Have
+
+1. `task_1_plan.md` → the *Remote cannot answer* test case: set `PUSH_RETRY_DELAY_SECS=0`, as `push-branch-retry.test.mjs` does, so the three failing attempts do not wait 5 s and 15 s.

@@ -311,8 +311,10 @@
 # stays open; otherwise it says the draft stays open, to close to discard the
 # run, or, when an issue is known, to re-apply the trigger label there for a
 # new run on the next indexed branch. A plain `stopped` on a pull request says
-# its draft stays open and closing it discards the run. No other event changes
-# a pull request's draft state.
+# its draft stays open and closing it discards the run. A `stopped` report also
+# rewrites the progress comment of each pull request it labels, its
+# `in progress` line becoming `stopped` (`forge_progress_stopped`). No other
+# event changes a pull request's draft state.
 # Every job event — `parked`, `park_loop`, `paused`, `resumed`, `round`,
 # `failed` and `not_started` — posts nothing and sets no label when `remote_branch_stopped`,
 # asked afresh, finds the branch stopped, so a job a stop overtook never
@@ -334,8 +336,11 @@
 # `COMMAND_HANDLE answer <n>` over `<your answer>`; the marker adds
 # `question=<n>`. With no question open it posts nothing, sets no label and
 # prints one `::error::` line naming the branch. The label
-# is set once per target, not per question. On a public repository a question
-# comment and its answer are public, as the artifact already is
+# is set once per target, not per question. When the registry's `pause_reason`
+# is `user` (a pause the job dropped and the run never honoured), `parked`
+# appends `PAUSE_FOLDED_NOTE` to <note> and `park_loop` appends
+# `PAUSE_FOLDED_HOLD_NOTE`, each after one blank line. On a public repository a
+# question comment and its answer are public, as the artifact already is
 # (`docs/remote-execution.md` -> `## 11. Security`, *What a reader of the
 # repository's Actions runs can see*).
 # `progress` (`forge_progress`) keeps ONE comment per run or round on the pull
@@ -356,7 +361,10 @@
 # is one `forge_comment`; a body equal to the render (carriage returns and
 # trailing newlines aside) is no call and one `already current` line; otherwise
 # one `PATCH` of that comment — the only comment this file ever edits. A refused
-# listing, create or edit is one `::warning::` line.
+# listing, create or edit is one `::warning::` line. After a stop,
+# `forge_progress_stopped` edits that same comment, so it is still the only
+# comment this file edits, and a resumed job's first progress pass renders it
+# from the ledger again.
 # It never fails its caller: every problem is one line and exit 0.
 #
 # `open` OPENS THE RUN'S DRAFT PULL REQUEST at the run's start, so its issue
@@ -717,7 +725,8 @@
 #   5. `hr_branch_is_protected` does not answer 1
 #   6. on `pull_request`, the head branch absent on origin (`remote_branch_exists`
 #      answers 1): GitHub closed the pull request because the branch was
-#      deleted, and the `delete` event's job stops the run; an `ls-remote` that
+#      deleted, and the `delete` event's job stops the run and reports it on
+#      this pull request; an `ls-remote` that
 #      cannot answer is one line and proceeds
 # There is no harness-branch check (`forge_recognised`): a merged or deleted
 # branch may no longer carry its task prompt or ledger, and a listed `harness run <b>` run is the
@@ -1064,7 +1073,11 @@
 # task prompt at the newest `harness run <branch>` run's `headSha` through the
 # contents API rather than from `origin/<branch>` (a failed read is one line
 # and no issue), and its text says the branch was deleted, so the run cannot
-# be resumed, and that its workflow runs and artifacts are kept. That read
+# be resumed, and that its workflow runs and artifacts are kept. (4) also
+# reports on each pull request of the branch from this repository that is not
+# merged and still carries `running`, `parked` or `paused`: each gets the same
+# comment, the `stopped` label and its progress comment marked stopped
+# (`forge_gone_prs_var`, `forge_progress_stopped`). The issue read
 # rests on GitHub serving a commit no branch points at, which is unverified
 # (`docs/github-run-control.md` -> `## 8. What is not verified here`).
 #
@@ -1456,6 +1469,9 @@ PR_CREATE_SETTING_PATH='Settings -> Actions -> General -> Workflow permissions'
 # to be trusted (docs/github-integration-research.md -> S6); the margin is the
 # framing lines and the marker.
 QUESTION_COMMENT_MAX_BYTES=250000
+# Name no login: the job sees only the `harness pause` run, whose actor is the bot.
+PAUSE_FOLDED_NOTE='A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows.'
+PAUSE_FOLDED_HOLD_NOTE='A pause was requested on this run before it was put on hold, so it is folded into this hold: the run waits for the hold to be cleared and continues once it is, and no separate `paused` comment follows.'
 GH="${HARNESS_GH_CLI:-gh}"
 
 # How many runs `status` prints, and how many `run list` returns for status
@@ -4415,6 +4431,35 @@ forge_pr_var() {
   return 0
 }
 
+# forge_gone_prs_var <branch> — FORGE_GONE_PRS, the space-separated numbers of
+# the pull requests of <branch>, in any state, from this repository, not merged
+# and still labelled `STATE_LABEL_PREFIX` running, parked or paused: the states
+# control_close stops, so a pull request an earlier stop or a merge settled is
+# left out. Stands in for forge_recognised, which cannot read a deleted branch.
+# A failed listing, or one not the expected JSON, is one line and an empty list.
+# Always 0.
+FORGE_GONE_PRS=""
+forge_gone_prs_var() {
+  local sel
+  FORGE_GONE_PRS=""
+  if ! gh_call pr list --repo "$FORGE_REPO" --head "$1" --state all --json number,isCrossRepository,mergedAt,labels --limit 10; then
+    echo "remote-run.sh: report: listing the pull requests of $1 in every state failed: $GH_ERR" >&2
+    return 0
+  fi
+  if ! sel=$(printf '%s' "$GH_OUT" | jq -r --arg p "$STATE_LABEL_PREFIX" '
+      if type == "array" then
+        [.[] | select(type == "object" and .isCrossRepository == false and .mergedAt == null
+            and (.number | type) == "number"
+            and ([.labels[]? | .name? | strings] | any(. == ($p + "running") or . == ($p + "parked") or . == ($p + "paused"))))
+          | .number | tostring] | join(" ")
+      else error end' 2>/dev/null); then
+    echo "remote-run.sh: report: listing the pull requests of $1 in every state failed: its pr list is not the expected JSON" >&2
+    return 0
+  fi
+  FORGE_GONE_PRS="$sel"
+  return 0
+}
+
 # forge_dispatch_engine_var <branch> <created_at_iso> — FORGE_DISPATCH_ENGINE,
 # the engine the dispatch that created the run at <created_at_iso> recorded in
 # its comment on the branch's issue or open pull request, or empty. Only a
@@ -4589,10 +4634,12 @@ forge_question_body() {
 # comment (on `parked`, one per open question) and the state label, by the
 # target rule above. Read on `stopped` only: <pr>, an explicit pull request
 # that is the target whatever its state; `gone`, the branch deleted on GitHub,
-# its issue read from the task prompt at <sha>. Every event but `stopped` is
-# withheld when the branch's newest `harness stop` run is newer than its newest
-# `harness run` run, read from a fresh listing. `not_started` reads
-# REPORT_NOT_STARTED_STATE (`paused`, else `failed`) and
+# its issue read from the task prompt at <sha>, and then each pull request
+# forge_gone_prs_var lists given the same comment, the label and its progress
+# comment marked stopped; nothing is posted only when neither is known. Every
+# event but `stopped` is withheld when the branch's newest `harness stop` run is
+# newer than its newest `harness run` run, read from a fresh listing.
+# `not_started` reads REPORT_NOT_STARTED_STATE (`paused`, else `failed`) and
 # REPORT_NOT_STARTED_ENGINE (empty or the recovered engine), set by its caller.
 # Always 0.
 REPORT_NOT_STARTED_STATE=""
@@ -4600,6 +4647,7 @@ REPORT_NOT_STARTED_ENGINE=""
 forge_report() {
   local event="$1" br="$2" note="${3-}" pr="${4-}" gone="${5-}" gone_sha="${6-}" state reason="" resume_at="" when registry_file
   local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n route engine=""
+  local gone_prs="" reported="" folded=""
   case "$event" in
     parked|park_loop) state=parked ;;
     paused) state=paused ;;
@@ -4648,8 +4696,11 @@ forge_report() {
   if [ -n "$pr" ]; then
     FORGE_PR="$pr"
   elif [ -n "$gone" ]; then
-    # GitHub closes a pull request whose head is deleted, so none is open.
+    # No pull request of a deleted head is open, so the run's unfinished ones
+    # are found in every state by forge_gone_prs_var.
     FORGE_PR=""
+    forge_gone_prs_var "$br"
+    gone_prs="$FORGE_GONE_PRS"
   else
     forge_pr_var "$br" || FORGE_PR=""
   fi
@@ -4661,6 +4712,8 @@ forge_report() {
     target="$FORGE_PR"; kind=pr
   elif [ -n "$FORGE_ISSUE" ]; then
     target="$FORGE_ISSUE"; kind=issue
+  elif [ -n "$gone_prs" ]; then
+    target=""; kind=pr
   else
     echo "remote-run.sh: report: $br has no open pull request and no issue it was started from; nothing posted"
     return 0
@@ -4673,6 +4726,14 @@ forge_report() {
     resume_at=$(hr_registry_get "$registry_file" "$br" usage_resume_at)
     [ "$event" != failed ] || engine=$(hr_registry_get "$registry_file" "$br" engine)
   fi
+  case "$event" in
+    parked|park_loop)
+      if [ "$reason" = user ]; then
+        folded="$PAUSE_FOLDED_NOTE"
+        [ "$event" != park_loop ] || folded="$PAUSE_FOLDED_HOLD_NOTE"
+        if [ -z "$note" ]; then note="$folded"; else note="$note"$'\n\n'"$folded"; fi
+      fi ;;
+  esac
 
   case "$event" in
     paused)
@@ -4758,22 +4819,75 @@ forge_report() {
         echo "remote-run.sh: report: cannot create question $n's comment file for #$target; not posted" >&2
       fi
     done
-  elif [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-report-comment.XXXXXX"); then
-    {
-      printf '%s\n' "$text"
-      [ -z "$note" ] || printf '\n%s\n' "$note"
-      [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
-    } >"$file"
-    forge_comment "$target" "$event" "$br" "$file" || :
-    rm -f "$file"
-  else
-    echo "remote-run.sh: report: cannot create the comment file for #$target; no comment posted" >&2
+  elif [ -n "$target" ]; then
+    forge_report_text "$target" "$event" "$br" "$tmp" "$text" "$note"
   fi
-  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
 
   [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" "$state" || :
   [ -z "$FORGE_PR" ] || forge_set_state "$FORGE_PR" "$state" || :
-  echo "remote-run.sh: report: $event on $br reported on #$target"
+  if [ "$event" = stopped ]; then
+    [ -z "$FORGE_PR" ] || forge_progress_stopped "$FORGE_PR" "$br"
+  fi
+  reported="${target:+#$target}"
+  for n in $gone_prs; do
+    forge_report_text "$n" "$event" "$br" "$tmp" "$text" "$note"
+    forge_set_state "$n" "$state" || :
+    forge_progress_stopped "$n" "$br"
+    reported="${reported:+$reported, }#$n"
+  done
+  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+  echo "remote-run.sh: report: $event on $br reported on $reported"
+  return 0
+}
+
+# forge_report_text <number> <event> <branch> <tmp_dir> <text> <note> — post
+# forge_report's one comment, <text>, <note> and the run URL, on <number>.
+forge_report_text() {
+  local number="$1" event="$2" br="$3" tmp="$4" text="$5" note="$6" file
+  if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-report-comment.XXXXXX"); then
+    echo "remote-run.sh: report: cannot create the comment file for #$number; no comment posted" >&2
+    return 0
+  fi
+  {
+    printf '%s\n' "$text"
+    [ -z "$note" ] || printf '\n%s\n' "$note"
+    [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
+  } >"$file"
+  forge_comment "$number" "$event" "$br" "$file" || :
+  rm -f "$file"
+}
+
+# forge_progress_comment_var <pr> <marker> [any-round] — the one lookup of a
+# progress comment: one paginated listing of <pr>'s comments, then the newest
+# `github-actions[bot]` comment with a numeric id whose last non-empty line is
+# <marker>, or, with `any-round`, <marker> with ` round=<digits>` before its
+# ` -->`. Sets PROGRESS_COMMENT_ID and PROGRESS_COMMENT_BODY, both empty when
+# none is picked. 0 when the listing parsed, picked or not; 1 when gh refused it
+# (GH_ERR as gh_call set it); 2 when it is not the expected JSON. Prints
+# nothing. No temporary file: forge_progress needs its own before this lookup,
+# forge_progress_stopped only after it.
+PROGRESS_COMMENT_ID=""
+PROGRESS_COMMENT_BODY=""
+forge_progress_comment_var() {
+  local pr="$1" marker="$2" any="${3-}" pick id body
+  PROGRESS_COMMENT_ID=""
+  PROGRESS_COMMENT_BODY=""
+  gh_call api --paginate "repos/$FORGE_REPO/issues/$pr/comments" --jq '.[] | {id, login: .user.login, body}' || return 1
+  pick=$(printf '%s' "$GH_OUT" | jq -s -c --arg m "$marker" --arg any "$any" '
+      def hit: . == $m
+        or ($any == "any-round"
+          and (($m | sub(" -->$"; "")) as $stem
+            | startswith($stem) and (.[($stem | length):] | test("^ round=[0-9]+ -->$"))));
+      [.[] | select(type == "object" and .login == "github-actions[bot]" and (.id | type) == "number")
+        | select((.body // "") | gsub("\r"; "") | split("\n") | map(select(test("^\\s*$") | not)) | last // "" | hit)]
+      | max_by(.id) // empty
+      | {id, body: (.body // "")}' 2>/dev/null) || return 2
+  [ -n "$pick" ] || return 0
+  id=$(printf '%s' "$pick" | jq -r '.id' 2>/dev/null) || return 2
+  # The sentinel keeps the body's trailing newlines, which $(…) would strip.
+  body=$(printf '%s' "$pick" | jq -j '.body' 2>/dev/null && printf x) || return 2
+  PROGRESS_COMMENT_ID="$id"
+  PROGRESS_COMMENT_BODY="${body%x}"
   return 0
 }
 
@@ -4783,7 +4897,7 @@ forge_report() {
 # issue fallback, no label. Always 0.
 forge_progress() {
   local br="$1" status state_rel phases engine round p line i first=1 marker
-  local tmp made_tmp="" file pick id same
+  local tmp made_tmp="" file id same
   local -a labels states
   if ! forge_on; then
     echo "remote-run.sh: report: the forge coupling is off (forge github and execution.target github-actions); nothing posted"
@@ -4856,24 +4970,23 @@ forge_progress() {
   } >"$file"
   { cat "$file"; printf '\n%s\n' "$marker"; } >"$file.full"
 
-  if ! gh_call api --paginate "repos/$FORGE_REPO/issues/$FORGE_PR/comments" --jq '.[] | {id, login: .user.login, body}'; then
+  status=0
+  forge_progress_comment_var "$FORGE_PR" "$marker" || status=$?
+  if [ "$status" -eq 1 ]; then
     echo "::warning::remote-run.sh: report: listing the comments of #$FORGE_PR was refused, so the progress is not posted: $GH_ERR"
-  elif ! pick=$(printf '%s' "$GH_OUT" | jq -s -r --arg m "$marker" --arg want "$(cat "$file.full")" '
-      def norm: gsub("\r"; "") | sub("\n+$"; "");
-      [.[] | select(type == "object" and .login == "github-actions[bot]" and (.id | type) == "number")
-        | select(((.body // "") | gsub("\r"; "") | split("\n") | map(select(test("^\\s*$") | not)) | last // "") == $m)]
-      | max_by(.id) // empty
-      | "\(.id) \(if ((.body // "") | norm) == ($want | norm) then "same" else "differs" end)"' 2>/dev/null); then
+  elif [ "$status" -ne 0 ]; then
     echo "::warning::remote-run.sh: report: the comments of #$FORGE_PR are not the expected JSON, so the progress is not posted"
-  elif [ -z "$pick" ]; then
+  elif [ -z "$PROGRESS_COMMENT_ID" ]; then
     if forge_comment "$FORGE_PR" progress "$br" "$file" "" "" "$round"; then
       echo "remote-run.sh: report: progress on $br posted on #$FORGE_PR"
     else
       echo "::warning::remote-run.sh: report: posting the progress comment on #$FORGE_PR was refused: $GH_ERR"
     fi
   else
-    id="${pick%% *}"
-    same="${pick#* }"
+    id="$PROGRESS_COMMENT_ID"
+    same=$(jq -n -r --arg body "$PROGRESS_COMMENT_BODY" --arg want "$(cat "$file.full")" '
+      def norm: gsub("\r"; "") | sub("\n+$"; "");
+      if ($body | norm) == ($want | norm) then "same" else "differs" end' 2>/dev/null) || same=differs
     if [ "$same" = same ]; then
       echo "remote-run.sh: report: the progress comment on #$FORGE_PR is already current"
     elif gh_call api --method PATCH "repos/$FORGE_REPO/issues/comments/$id" -F "body=@$file.full"; then
@@ -4883,6 +4996,58 @@ forge_progress() {
     fi
   fi
   rm -f "$file" "$file.full"
+  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+  return 0
+}
+
+# forge_progress_stopped <pr> <branch> — after a stop, rewrite each
+# `- <label>: in progress` line of <branch>'s progress comment on <pr>, the task
+# run's or any round's, to `- <label>: stopped`, leaving every other byte; the
+# cancelled job's last progress pass is withheld, so nothing else does. Gated by
+# hr_progress_comments; no comment or no such line is no edit. Always 0.
+forge_progress_stopped() {
+  local pr="$1" br="$2" status count tmp made_tmp="" file
+  status=0
+  hr_progress_comments "$root" || status=$?
+  case "$status" in
+    0) ;;
+    1) echo "remote-run.sh: report: progress comments are off by execution.progressComments; nothing marked stopped"; return 0 ;;
+    *) echo "remote-run.sh: report: execution.progressComments is unreadable; nothing marked stopped"; return 0 ;;
+  esac
+  status=0
+  forge_progress_comment_var "$pr" "$(forge_marker progress "$br")" any-round || status=$?
+  if [ "$status" -eq 1 ]; then
+    echo "::warning::remote-run.sh: report: listing the comments of #$pr was refused, so its progress comment is not marked stopped: $GH_ERR"
+    return 0
+  elif [ "$status" -ne 0 ]; then
+    echo "::warning::remote-run.sh: report: the comments of #$pr are not the expected JSON, so its progress comment is not marked stopped"
+    return 0
+  fi
+  # A trailing carriage return is kept, so a CRLF body is rewritten in its own line endings.
+  count=0
+  [ -z "$PROGRESS_COMMENT_ID" ] \
+    || count=$(jq -n -r --arg b "$PROGRESS_COMMENT_BODY" \
+      '[$b | split("\n")[] | select(test("^- .+: in progress\r?$"))] | length' 2>/dev/null) || count=0
+  if [ "$count" = 0 ]; then
+    echo "remote-run.sh: report: #$pr has no progress comment of $br in progress; nothing to mark stopped"
+    return 0
+  fi
+  tmp="${RUNNER_TEMP-}"
+  if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
+    tmp=$(mktemp -d) || tmp=""
+    made_tmp="$tmp"
+  fi
+  if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-progress-stopped.XXXXXX"); then
+    echo "::warning::remote-run.sh: report: cannot create the progress comment file for #$pr; nothing marked stopped"
+  elif ! jq -n -j --arg b "$PROGRESS_COMMENT_BODY" '$b | split("\n")
+      | map(sub("^(?<l>- .+): in progress(?<cr>\r?)$"; "\(.l): stopped\(.cr)")) | join("\n")' >"$file" 2>/dev/null; then
+    echo "::warning::remote-run.sh: report: cannot write the stopped progress comment for #$pr; nothing marked stopped"
+  elif gh_call api --method PATCH "repos/$FORGE_REPO/issues/comments/$PROGRESS_COMMENT_ID" -F "body=@$file"; then
+    echo "remote-run.sh: report: progress of $br marked stopped in comment $PROGRESS_COMMENT_ID on #$pr"
+  else
+    echo "::warning::remote-run.sh: report: editing the progress comment $PROGRESS_COMMENT_ID on #$pr was refused: $GH_ERR"
+  fi
+  [ -z "${file-}" ] || rm -f "$file"
   [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
   return 0
 }
@@ -6730,10 +6895,11 @@ control_close() {
   CONTROL_BRANCH="$b"
   if [ "$CLOSE_KIND" = pr_closed ] || [ "$CLOSE_KIND" = pr_merged ]; then
     # GitHub closes a pull request whose head is deleted; the `delete` event's
-    # own job stops that run from the default branch, so this one stays quiet.
+    # own job stops that run from the default branch and reports it on this
+    # pull request, so this one stays quiet.
     remote_branch_exists "$b"
     case $? in
-      1) control_close_ignore "the branch \`$b\` of pull request #$CONTROL_NUMBER is gone from origin; the deletion's own job stops the run" ;;
+      1) control_close_ignore "the branch \`$b\` of pull request #$CONTROL_NUMBER is gone from origin; the deletion's own job stops the run and reports it here" ;;
       2) echo "remote-run.sh: control: whether \`$b\` exists on origin could not be checked ($REMOTE_BRANCH_ERR); proceeding" ;;
     esac
   fi
