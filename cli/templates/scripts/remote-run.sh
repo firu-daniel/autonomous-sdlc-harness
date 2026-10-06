@@ -587,8 +587,9 @@
 # `reply` and `clarify` need a non-blank `text`; `reason` is a string. Unknown
 # keys are ignored; an invalid decision is refused, exit 2, naming the first
 # rule broken. Then, once and before any action is answered, a `text` or
-# `answer` holding a saved credential value is an `::error::` line that never
-# prints it, nothing posted, exit 3. THE ANSWERS, each through `control_post`:
+# `answer` holding a saved credential value, or the job's `GH_TOKEN` raw or in
+# the base64 form `actions/checkout` persists, verbatim, is an `::error::` line
+# that never prints it, nothing posted, exit 3. THE ANSWERS, each through `control_post`:
 # `none` posts nothing; `reply` / `clarify` post `@<login>: <text>` — `text`
 # through `JQ_DEF_SANITISE` (`<!--` neutralised, every other `@<login>` but the
 # commenter's and the handle given U+200B) and capped at
@@ -7103,15 +7104,25 @@ control_commands_way() {
 # never exported, so only the agent subshell in control_mention_session sees it.
 MENTION_OAUTH=""
 MENTION_API=""
+# The job's `GH_TOKEN` in the base64 form `actions/checkout` persists into the
+# checkout's git configuration; never exported.
+MENTION_JOB_TOKEN_B64=""
 
-# mention_has_credential <string> — 0 when <string> contains a non-empty saved
-# credential value.
+# mention_has_credential <string> — 0 when <string> contains, verbatim, a
+# non-empty saved credential value, or the job's `GH_TOKEN` raw or in its
+# persisted base64 form. An encoded or split copy is not caught.
 mention_has_credential() {
   if [ -n "$MENTION_OAUTH" ]; then
     case "$1" in *"$MENTION_OAUTH"*) return 0 ;; esac
   fi
   if [ -n "$MENTION_API" ]; then
     case "$1" in *"$MENTION_API"*) return 0 ;; esac
+  fi
+  if [ -n "${GH_TOKEN-}" ]; then
+    case "$1" in *"$GH_TOKEN"*) return 0 ;; esac
+  fi
+  if [ -n "$MENTION_JOB_TOKEN_B64" ]; then
+    case "$1" in *"$MENTION_JOB_TOKEN_B64"*) return 0 ;; esac
   fi
   return 1
 }
@@ -7416,9 +7427,11 @@ verb_control() {
   local LC_ALL=C
   local review=0 close=0 forge="" target="" status
   # Unset first so an inherited export of either name cannot keep it exported.
-  unset MENTION_OAUTH MENTION_API
+  unset MENTION_OAUTH MENTION_API MENTION_JOB_TOKEN_B64
   MENTION_OAUTH="${IN_OAUTH-}"
   MENTION_API="${IN_API-}"
+  MENTION_JOB_TOKEN_B64=""
+  [ -z "${GH_TOKEN-}" ] || MENTION_JOB_TOKEN_B64="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
   unset IN_OAUTH IN_API CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY
   case "${GITHUB_EVENT_NAME-}" in
     issue_comment) ;;

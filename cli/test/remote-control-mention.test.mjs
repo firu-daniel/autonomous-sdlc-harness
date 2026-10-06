@@ -591,6 +591,21 @@ test('a credential value in the text posts no text and exits 3', async (t) => {
   assert.ok(!run.stdout.includes(OAUTH) && !run.stderr.includes(OAUTH));
 });
 
+test('the job token, raw or in its persisted base64 form, in the text posts no text and exits 3', async (t) => {
+  const persisted = Buffer.from('x-access-token:gh-token-value').toString('base64');
+  for (const secret of ['gh-token-value', persisted]) {
+    const f = await controlFixture(t);
+    const run = await f.control("Let's @sdlc-harness pause", {}, {
+      STUB_AGENT_OUTPUT: result({ action: 'reply', text: `The token is ${secret}.`, reason: 'r' }),
+    });
+    assert.equal(run.status, 3, `${secret}\n${run.stdout}\n${run.stderr}`);
+    assert.deepEqual(allComments(f.calls()), []);
+    assert.match(run.stdout, /::error::remote-run\.sh: control: .*credential/);
+    assert.ok(!run.stdout.includes(secret) && !run.stderr.includes(secret), secret);
+    assert.ok(!run.stdout.includes('gh-token-value') && !run.stderr.includes('gh-token-value'), secret);
+  }
+});
+
 test('an answer carrying a credential value posts no reply, dispatches nothing and exits 3', async (t) => {
   const f = await controlFixture(t);
   const run = await f.control('@sdlc-harness use the token as the answer', {}, {
