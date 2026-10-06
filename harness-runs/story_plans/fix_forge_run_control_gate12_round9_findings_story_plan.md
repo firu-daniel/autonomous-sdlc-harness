@@ -28,7 +28,7 @@ Top risks: The likeliest regression is Task 1's new skip refusing a push it shou
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12_round9_findings/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence in the configured layer order: `cli` first, with the catch-all `general` layer last. No task is in `plugin`.
 
-1. [ ] **Task 1** — `push-branch.sh` never pushes back a tracked branch its remote deleted _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — `push-branch.sh` never pushes back a tracked branch its remote deleted _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 2** — A `stopped` report rewrites the progress comment's `in progress` line to `stopped` _(layer: cli)_ _(points: 18)_
 3. [ ] **Task 3** — `stop --branch-gone` reports on the run's unmerged pull requests that still read unfinished _(layer: cli)_ _(points: 18)_
 4. [ ] **Task 4** — A park that overtakes a requested pause says the pause is folded into it _(layer: cli)_ _(points: 12)_

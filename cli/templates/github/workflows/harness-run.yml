@@ -563,6 +563,9 @@ jobs:
           unset IN_OAUTH IN_API
           bash "$SCRIPTS_DIR/autonomous-watcher.sh" job "$HARNESS_INPUT_BRANCH" "$HARNESS_INPUT_ENGINE" "$HARNESS_INPUT_RESUME"
 
+      # Runs under always(), so a cancelled or failed job still pushes its commits. push-branch.sh
+      # pushes nothing back for a branch origin no longer has, so a run stopped by its branch's
+      # deletion does not re-create it (Gate 12 round 9, finding 1).
       - name: Push the branch
         if: always() && env.SCRIPTS_DIR != ''
         run: bash "$SCRIPTS_DIR/push-branch.sh"
