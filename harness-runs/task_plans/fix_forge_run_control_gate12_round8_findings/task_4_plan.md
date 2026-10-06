@@ -43,6 +43,8 @@ Gate 12 round 8, finding 2, is the evidence. The `collect` job's round placement
   - origin's branch advanced by another clone's commit, with the real `push-branch.sh` and `PUSH_RETRY_DELAY_SECS=0`, returns `2`, and `HR_PUSH_REMOTE_TIP` echoes that commit's short id.
 - [ ] **`remote-start.test.mjs`.** The existing case *"…rejects the one carrying the prompt commit"* also asserts stderr matches `the remote refused the push`. Add a case where origin's `feat_x` gains a commit from another clone between the cut and the push. A `pre-receive` hook can't do this, so run the cut through `create-worktree.sh`, push from a second clone, then run `start` against the existing remote branch, or use whatever the suite's helpers allow. Assert exit 4, `moved to`, nothing dispatched, and nothing left behind (`f.assertNothingLeft()`). If the suite cannot stage a moved remote without a new helper, cover `2` in `outer-loop-scripts.test.mjs` alone, and say so in your return.
 
+**Deviations from plan:** The moved-remote `start` case stages the move with a `post-receive` hook on the fixture's bare origin (on the cut's creating push of `feat_x`, it lands a `someone else` commit on top), not with a second clone, so no new helper was needed and `2` is covered in both suites. `outer-loop-scripts.test.mjs`'s moved case does use a second clone, as planned.
+
 **Verification:**
 
 - `npm test --workspace cli -- test/outer-loop-scripts.test.mjs` and `npm test --workspace cli -- test/remote-start.test.mjs`, from the repository root, pass.

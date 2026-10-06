@@ -921,9 +921,13 @@
 # listing that `trigger` and `review` make. Only `start` and `review` push, and
 # only through `create-worktree.sh` and `push-branch.sh`; `start`'s writes are
 # the prompt committed on `origin/<branch>`, through a working copy and a local
-# branch it removes before it returns; `review`'s are the round committed on
-# `origin/<branch>`, through the record's mirror or a copy and a local branch
-# it removes, the record's `status` / `engine`, the bundle download
+# branch it removes before it returns, and, after a push that did not land, a
+# fetch that force-writes that copy's `refs/remotes/origin/<branch>`
+# (`hr_push_landed`'s, to name the commit the remote moved to); `review`'s are
+# the round committed on `origin/<branch>`, through the record's mirror or a
+# copy and a local branch it removes, and, after a push that did not land, the
+# same `hr_push_landed` fetch force-writing `refs/remotes/origin/<branch>` in
+# that mirror or copy, the record's `status` / `engine`, the bundle download
 # directory `sync` uses, and `report`'s writes for the round. A user's chain-0 `dispatch --resume answer|pause`
 # writes the record's `status`, `resumed_at` and `resume_kind` in one write
 # when the main checkout's registry file exists and holds a record with
@@ -3136,8 +3140,12 @@ verb_start() {
   status=0
   hr_commit_placed "$script_dir/commit-on-branch.sh" "$worktree" "$rel" "$subject" >&2 || status=$?
   [ "$status" -ne 1 ] || placement_fail "committing '$rel'"
-  hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 \
-    || placement_fail "pushing $branch (origin/$branch is not HEAD)"
+  status=0
+  hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 || status=$?
+  [ "$status" -ne 2 ] \
+    || placement_fail "pushing $branch: origin/$branch moved to $HR_PUSH_REMOTE_TIP, which this branch does not have (something else pushed)"
+  [ "$status" -eq 0 ] \
+    || placement_fail "pushing $branch: the remote refused the push (push-branch.sh names the refusal above)"
   start_remove_copy
   trap - EXIT
 
@@ -3290,8 +3298,12 @@ NAMES
   status=0
   hr_commit_placed "$script_dir/commit-on-branch.sh" "$worktree" "$rel" "$(hr_user_review_subject "$branch")" >&2 || status=$?
   [ "$status" -eq 0 ] || review_fail "committing '$rel'"
-  hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 \
-    || review_fail "pushing $branch (origin/$branch is not HEAD)"
+  status=0
+  hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 || status=$?
+  [ "$status" -ne 2 ] \
+    || review_fail "pushing $branch: origin/$branch moved to $HR_PUSH_REMOTE_TIP, which this branch does not have (something else pushed)"
+  [ "$status" -eq 0 ] \
+    || review_fail "pushing $branch: the remote refused the push (push-branch.sh names the refusal above)"
   pushed=$(git -C "$worktree" rev-parse HEAD 2>/dev/null) || pushed=""
   if [ "$use_mirror" -eq 0 ]; then
     start_remove_copy
