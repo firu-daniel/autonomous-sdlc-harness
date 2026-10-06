@@ -292,9 +292,14 @@
 # other state label on that issue and that pull request, each when known; the
 # label is a view, and the run list stays the authority. The state map:
 # `parked` and `park_loop` -> parked, `paused` -> paused, `resumed` -> running,
-# `failed` -> failed, `stopped` -> stopped, `round` (review's) -> running.
-# Every job event — `parked`, `park_loop`, `paused`, `resumed`, `round` and
-# `failed` — posts nothing and sets no label when `remote_branch_stopped`,
+# `failed` -> failed, `stopped` -> stopped, `round` (review's) -> running,
+# `not_started` (collect's) -> paused or failed, as its caller says. A
+# `not_started` comment says GitHub did not start the run's job, so nothing ran
+# and the branch is unchanged, and names its way on: `COMMAND_HANDLE resume`
+# when the state is paused and an engine was recovered, else the **Run
+# workflow** form with that engine, or with the three to choose from.
+# Every job event — `parked`, `park_loop`, `paused`, `resumed`, `round`,
+# `failed` and `not_started` — posts nothing and sets no label when `remote_branch_stopped`,
 # asked afresh, finds the branch stopped, so a job a stop overtook never
 # overwrites `stopped`; a failed listing reports anyway, and `stopped` is never
 # withheld. `completed` (deliver's) and `launched` (the trigger's
@@ -355,19 +360,27 @@
 # Job-side for its root and self-gated, as `report` and `deliver` are
 # (`forge_on`, one line when off). In order, each stop one line and exit 0:
 # `HARNESS_REMOTE_STOP` set; `remote_branch_stopped` finding the branch stopped,
-# or failing; no pull request, from --pr or else `forge_pr_var` (a failed lookup
-# included); `branch_settled_var`, read as `control` reads it, finding the
+# or failing; `branch_settled_var`, read as `control` reads it, failing; the
+# newest run's job never started — when that run is this one (or
+# `GITHUB_RUN_ID` is unset), `report`'s `not_started` on its pull request or
+# issue, with the state and engine the read derived, and one push notification,
+# no round collected, since the reviews stay for the resumed run's own end;
+# when it is another run, one line, since that run's own `collect` reports it;
+# no pull request, from --pr or else `forge_pr_var` (a failed lookup
+# included); the settledness read finding the
 # branch in flight — a newer run listed, or this run ending `parked`,
 # `park_loop` or `paused` (a budget chain's included), whose own end collects
-# next — or failing; `round_collect` finding no review requesting changes
+# next; `round_collect` finding no review requesting changes
 # pending (inline comments alone start no round, as *Comment* starts none; they
 # ride along in the next), or failing, a `::warning::` line. Otherwise `review
 # <branch> --review-file <file> --allow-no-run --reviewers <logins> --source
 # <pull request url>` runs as a child, as `control` runs it, placing,
 # dispatching and reporting the round. A child that exits non-zero gets exactly
 # one comment on the pull request, with the `reply` marker, naming its last
-# stderr line and saying the reviews stay there and that submitting a review
-# requesting changes retries; there is no automatic retry. It never fails its
+# stderr line and saying the reviews stay there and that, when `GITHUB_RUN_ID`
+# is set, re-running this run's `collect` job retries with no new review, and
+# that submitting a review requesting changes retries; there is no automatic
+# retry. It never fails its
 # caller: every outcome but a usage error is exit 0.
 #
 # `control` IS THE COMMENT AND REVIEW ADAPTER, the twin of `trigger` and the one
@@ -960,8 +973,12 @@
 # `fetch` directory under `RUNNER_TEMP` (removed) and one reply comment, plus
 # what the child verb it runs writes, and the fetch of origin's <branch> that
 # force-writes `refs/remotes/origin/<branch>` in its checkout. `collect` writes its round file and its
-# settledness directory under `RUNNER_TEMP` (removed), at most one comment on
-# the pull request, plus what its `review` child writes. `stop`, `continue` and `poll` also make
+# settledness directory under `RUNNER_TEMP` (removed), at most one comment, on
+# the pull request, or on the issue for a run whose job never started, and for
+# that event `report`'s state labels on both items and one push notification,
+# the fetch of origin's <branch> its settledness read makes for such a run,
+# force-writing `refs/remotes/origin/<branch>`, plus what its `review` child
+# writes. `stop`, `continue` and `poll` also make
 # `report`'s writes for each event they report. Every other verb's only writes are the
 # registry record (`stop`, `sync`) and, for `sync`, the download directory
 # `<state_dir>/autonomous_logs/remote_download/<branch>/<id>/` and
@@ -4338,13 +4355,20 @@ forge_question_body() {
 # that is the target whatever its state; `gone`, the branch deleted on GitHub,
 # its issue read from the task prompt at <sha>. Every event but `stopped` is
 # withheld when the branch's newest `harness stop` run is newer than its newest
-# `harness run` run, read from a fresh listing. Always 0.
+# `harness run` run, read from a fresh listing. `not_started` reads
+# REPORT_NOT_STARTED_STATE (`paused`, else `failed`) and
+# REPORT_NOT_STARTED_ENGINE (empty or the recovered engine), set by its caller.
+# Always 0.
+REPORT_NOT_STARTED_STATE=""
+REPORT_NOT_STARTED_ENGINE=""
 forge_report() {
   local event="$1" br="$2" note="${3-}" pr="${4-}" gone="${5-}" gone_sha="${6-}" state reason="" resume_at="" when registry_file
-  local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n
+  local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n route
   case "$event" in
     parked|park_loop) state=parked ;;
     paused) state=paused ;;
+    not_started)
+      if [ "$REPORT_NOT_STARTED_STATE" = paused ]; then state=paused; else state=failed; fi ;;
     resumed) state=running ;;
     failed) state=failed ;;
     stopped) state=stopped ;;
@@ -4443,6 +4467,15 @@ forge_report() {
       fi ;;
     round)
       text="A user-review round started on \`$br\`; a \`completed\` comment follows when the branch is ready for review again." ;;
+    not_started)
+      text="GitHub did not start the job of the harness run on \`$br\`, so nothing ran and the branch is unchanged."
+      if [ "$state" = paused ] && [ -n "$REPORT_NOT_STARTED_ENGINE" ]; then
+        text="$text Comment \`${COMMAND_HANDLE} resume\` to start it again from its committed ledger."
+      else
+        # A job that never started uploaded no artifact to read an engine from.
+        route=$(hr_github_resume_route "$br" "${REPORT_NOT_STARTED_ENGINE:-<task, user_review or docs: the one the run was started with>}")
+        text="$text Start it again with the **Run workflow** form: ${route#or from GitHub: }."
+      fi ;;
   esac
 
   OPEN_QUESTIONS=""
@@ -5576,12 +5609,16 @@ REVIEW_RETRY_WAY="The reviews stay on the pull request and are collected by the 
 # control_settled_var — `branch_settled_var` for CONTROL_BRANCH, with no run
 # counted as settled, run in a command substitution so that its exit on a
 # failed read reaches this process as a status, not as an exit with no reply:
-# BS_SETTLED, BS_STATE and BS_REASON; 1 with BS_ERR, its last stderr line, on a
-# failed read.
+# BS_SETTLED, BS_STATE and BS_REASON, and RS_NOT_STARTED, RS_RUN_ID, RS_ENGINE
+# and RS_DETAIL as BS_NOT_STARTED, BS_RUN_ID, BS_ENGINE and BS_DETAIL; 1 with
+# BS_ERR, its last stderr line, on a failed read. BS_DETAIL is read last, so a
+# `|` inside it shifts no other field.
 BS_SETTLED=0; BS_STATE=""; BS_REASON=""; BS_ERR=""
+BS_NOT_STARTED=0; BS_RUN_ID=""; BS_ENGINE=""; BS_DETAIL=""
 control_settled_var() {
   local dir errfile line status=0
   BS_SETTLED=0; BS_STATE=""; BS_REASON=""; BS_ERR=""
+  BS_NOT_STARTED=0; BS_RUN_ID=""; BS_ENGINE=""; BS_DETAIL=""
   if ! dir=$(mktemp -d "$control_tmp/harness-control-settled.XXXXXX"); then
     BS_ERR="a state directory could not be created under '$control_tmp'"
     return 1
@@ -5590,14 +5627,15 @@ control_settled_var() {
   control_dirs="$control_dirs $dir $errfile"
   branch="$CONTROL_BRANCH"
   line=$(branch_settled_var "$dir" 1 >/dev/null 2>"$errfile" \
-    && printf '%s|%s|%s\n' "$SETTLED" "$RS_STATE" "$RS_PAUSE_REASON") || status=$?
+    && printf '%s|%s|%s|%s|%s|%s|%s\n' "$SETTLED" "$RS_STATE" "$RS_PAUSE_REASON" \
+      "$RS_NOT_STARTED" "$RS_RUN_ID" "$RS_ENGINE" "$RS_DETAIL") || status=$?
   cat "$errfile" >&2 2>/dev/null || :
   if [ "$status" -ne 0 ] || [ -z "$line" ]; then
     BS_ERR=$(grep -v '^[[:space:]]*$' "$errfile" 2>/dev/null | tail -n 1)
     [ -n "$BS_ERR" ] || BS_ERR="exit $status, no message"
     return 1
   fi
-  IFS='|' read -r BS_SETTLED BS_STATE BS_REASON <<<"$line"
+  IFS='|' read -r BS_SETTLED BS_STATE BS_REASON BS_NOT_STARTED BS_RUN_ID BS_ENGINE BS_DETAIL <<<"$line"
   return 0
 }
 
@@ -6095,7 +6133,7 @@ collect_notify() {
 }
 
 verb_collect() {
-  local status=0 dir file out
+  local status=0 dir file out reason
   if ! forge_on; then
     echo "remote-run.sh: collect: the forge coupling is off (forge github and execution.target github-actions); nothing collected"
     exit "$EXIT_OK"
@@ -6120,17 +6158,7 @@ verb_collect() {
       exit "$EXIT_OK" ;;
   esac
 
-  if [ -n "$pr_arg" ]; then
-    FORGE_PR="$pr_arg"
-  elif ! forge_pr_var "$branch"; then
-    echo "remote-run.sh: collect: the pull request of $branch could not be read; nothing collected"
-    exit "$EXIT_OK"
-  fi
-  if [ -z "$FORGE_PR" ]; then
-    echo "remote-run.sh: collect: no open pull request; nothing to collect"
-    exit "$EXIT_OK"
-  fi
-
+  # Read before the pull request is required: a first run has none.
   control_tmp="${RUNNER_TEMP-}"
   if [ -z "$control_tmp" ] || [ ! -d "$control_tmp" ]; then
     control_tmp=$(mktemp -d) || { echo "remote-run.sh: collect: mktemp failed; nothing collected"; exit "$EXIT_OK"; }
@@ -6141,6 +6169,33 @@ verb_collect() {
   CONTROL_BRANCH="$branch"
   if ! control_settled_var; then
     echo "remote-run.sh: collect: the state of the run on $branch could not be read ($BS_ERR); no round started"
+    exit "$EXIT_OK"
+  fi
+  if [ "$BS_NOT_STARTED" = 1 ]; then
+    if [ -n "${GITHUB_RUN_ID-}" ] && [ "$BS_RUN_ID" != "$GITHUB_RUN_ID" ]; then
+      echo "remote-run.sh: collect: run $BS_RUN_ID of $branch never started; its own collect reports it"
+      exit "$EXIT_OK"
+    fi
+    reason="${BS_DETAIL#"GitHub did not start the job of run $BS_RUN_ID ("}"
+    if [ "$reason" = "$BS_DETAIL" ]; then reason=""; else reason="${reason%"): "*}"; fi
+    REPORT_NOT_STARTED_STATE="$BS_STATE"
+    REPORT_NOT_STARTED_ENGINE="$BS_ENGINE"
+    notify not_started "$branch" \
+      "$BS_DETAIL. Run $RESUME_HINT $branch to start it again; $(hr_github_resume_route "$branch" "${BS_ENGINE:-<task, user_review or docs: the one the run was started with>}")." \
+      "$reason"
+    # The reviews stay for the resumed run's own end.
+    echo "remote-run.sh: collect: run ${BS_RUN_ID} of $branch never started; reported, and no round collected"
+    exit "$EXIT_OK"
+  fi
+
+  if [ -n "$pr_arg" ]; then
+    FORGE_PR="$pr_arg"
+  elif ! forge_pr_var "$branch"; then
+    echo "remote-run.sh: collect: the pull request of $branch could not be read; nothing collected"
+    exit "$EXIT_OK"
+  fi
+  if [ -z "$FORGE_PR" ]; then
+    echo "remote-run.sh: collect: no open pull request; nothing to collect"
     exit "$EXIT_OK"
   fi
   if [ "$BS_SETTLED" != 1 ]; then
@@ -6179,7 +6234,11 @@ verb_collect() {
     echo "remote-run.sh: collect: started the next round of $branch from @${RC_REVIEWERS//,/, @}"
     exit "$EXIT_OK"
   fi
-  collect_notify "The reviews requesting changes collected during the run on \`$branch\` could not start the next round: ${CHILD_LAST%.}. They stay on the pull request; submit a review requesting changes to retry."
+  if [ -n "${GITHUB_RUN_ID-}" ]; then
+    collect_notify "The reviews requesting changes collected during the run on \`$branch\` could not start the next round: ${CHILD_LAST%.}. They stay on the pull request. To retry, re-run this run's \`collect\` job (no new review is needed), or submit a review requesting changes."
+  else
+    collect_notify "The reviews requesting changes collected during the run on \`$branch\` could not start the next round: ${CHILD_LAST%.}. They stay on the pull request; submit a review requesting changes to retry."
+  fi
   echo "remote-run.sh: collect: review exited $CHILD_STATUS; the pull request was told, and nothing is retried"
   exit "$EXIT_OK"
 }
