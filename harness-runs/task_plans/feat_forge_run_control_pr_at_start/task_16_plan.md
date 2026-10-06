@@ -27,3 +27,9 @@
 - Grep `docs/github-run-control.md` for `its tip carries no flow-progress ledger` and `the questions are posted on the issue until a pull request exists` and find neither.
 - Count the §8 rows naming `resolveReviewThread`, `--undo`, `replies`, `databaseId` and `PATCH`, and find each exactly once.
 - `git grep -n '^## [1238]\. ' -- docs/github-run-control.md` lists the same headings, byte for byte, as before this task.
+
+**Deviations from plan:**
+
+- The `PATCH` row count: a plain `grep -c PATCH` over §8's table rows returns 2, because the pre-existing `DISPATCH_MARKER_SLACK_SECS` row contains the substring; the word-bounded `grep -cw PATCH` returns 1, the new progress-comment row. The `--undo` literal appears only in the plan-without-drafts row; the ready/draft row names `gh pr ready` and "its undo form" so each probed literal stays in exactly one row.
+- The `--undo` row names no Gate 12 (xiv) leg as observing it: leg (a) observes the pull request opening as a draft, so the gate's repository has drafts and cannot reach a plan without them. The row says so instead of naming a leg.
+- §1's third recognition bullet (the in-flight clause) now says it covers a run dispatched by hand on a branch carrying neither file, replacing "a pull request whose head has no ledger yet", which the task-prompt clause now covers. §3's opening paragraph's closing reason now reads "a conversation comment, on an issue or a pull request, has no thread", since questions now go to the pull request's conversation.
