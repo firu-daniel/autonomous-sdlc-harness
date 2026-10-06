@@ -63,7 +63,8 @@
  * nothing.
  *
  * **For the job's read verbs `pause-requested` and `run-created-at`, the rule is that a failed read is
- * exit 3 and never an answer**, so job mode, which pauses only on exit 0, cannot pause on a gh fault.
+ * exit 3 and never an answer**, so job mode, which pauses only on exit 0, cannot pause on a gh fault;
+ * `pause-requested`'s "no pause" is exit 5, so a usage refusal (exit 1) is never read as one.
  *
  * **For the commands' `fetch`, the rule is that it reads a branch's newest state from GitHub alone and
  * writes nothing but its `<out_dir>`**; its `key: value` lines are a wire, so each case asserts the
@@ -1865,10 +1866,10 @@ const PAUSE_RUNS = JSON.stringify([
   { databaseId: 7, displayTitle: 'harness pause feat_x', status: 'completed', createdAt: '2026-01-01T00:00:10Z' },
 ]);
 
-test('pause-requested: 0 for an exact-title run at or after the epoch, 1 for none, 3 when gh fails', async (t) => {
+test('pause-requested: 0 for an exact-title run at or after the epoch, 5 for none, 1 for a usage error, 3 when gh fails', async (t) => {
   const fx = await remoteFixture(t, 'local');
   const env = { STUB_RUN_LIST: PAUSE_RUNS };
-  for (const [since, expected] of [[PAUSE_CREATED - 10, 0], [PAUSE_CREATED, 0], [PAUSE_CREATED + 1, 1]]) {
+  for (const [since, expected] of [[PAUSE_CREATED - 10, 0], [PAUSE_CREATED, 0], [PAUSE_CREATED + 1, 5]]) {
     const result = await remoteRun(fx, ['pause-requested', 'feat_x', String(since)], env);
     assert.equal(result.status, expected, `since ${since}: ${result.stdout}\n${result.stderr}`);
   }
@@ -1878,6 +1879,12 @@ test('pause-requested: 0 for an exact-title run at or after the epoch, 1 for non
   assert.equal(failed.status, 3, failed.stderr);
   const garbled = await remoteRun(fx, ['pause-requested', 'feat_x', '0'], { STUB_RUN_LIST: 'not json' });
   assert.equal(garbled.status, 3, garbled.stderr);
+
+  const missing = await remoteRun(fx, ['pause-requested', 'feat_x'], env);
+  assert.equal(missing.status, 1, missing.stderr);
+  assert.match(missing.stderr, /pause-requested <branch> <since_epoch>/);
+  const nonInteger = await remoteRun(fx, ['pause-requested', 'feat_x', 'abc'], env);
+  assert.equal(nonInteger.status, 1, nonInteger.stderr);
 });
 
 test('run-created-at prints the run createdAt as an epoch second, or exits 3', async (t) => {

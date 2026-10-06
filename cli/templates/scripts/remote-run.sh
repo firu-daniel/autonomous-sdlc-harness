@@ -53,9 +53,7 @@
 #     1  usage error, or the library or the configuration could not be
 #        resolved; for fetch, <out_dir> is not an existing, empty directory;
 #        for discard, <dir>'s parent does not resolve or the removal failed;
-#        for sync and restore, a local copy or write failed; for
-#        pause-requested, also NO such run — a caller that reads 1 as "no
-#        pause" passes arguments it has already validated
+#        for sync and restore, a local copy or write failed
 #     2  refused, nothing sent or written: execution.target is not
 #        github-actions (sending verbs, fetch, review and list); for
 #        review, a protected branch, a review file that is not a readable
@@ -91,6 +89,7 @@
 #        copy (the branch checked out in another working copy included), the
 #        fast-forward, the commit or the push — and nothing was dispatched; a
 #        copy it cut was removed
+#     5  pause-requested only: the read succeeded and found no such run
 #
 # `start` IS THE ADAPTERS' ONE ENTRY: every trigger (an issue event, a forge
 # dispatch, anything later) reduces to a branch and a task text and ends here.
@@ -783,9 +782,12 @@
 # `pause-requested` lists the branch's runs and exits 0 when one whose
 # `displayTitle` is exactly `harness pause <branch>` has a `createdAt` at or
 # after <since_epoch> — AT, because `createdAt` has one-second resolution and
-# the caller takes <since_epoch> just before the query it will next start
-# from, so a pause created later in that same second is still seen; seeing one
-# twice is harmless, since the caller drops PAUSE once. `run-created-at` prints
+# the caller passes a bound that starts at the job's own starting bound and
+# afterwards lags each query by an overlap (`CONTROL_POLL_OVERLAP_SECS` in
+# `autonomous-watcher.sh`), floored at that starting bound, so a pause created
+# later in a second already queried is still seen; seeing one twice is
+# harmless, since the caller drops PAUSE once. Exit 5 is "no pause"; exit 1 is
+# a refused call and never one. `run-created-at` prints
 # `gh run view <run_id> --json createdAt` as an epoch second.
 #
 # `status` AND `sync` READ THE RECORD, NOT THE KEY. A run keeps the execution
@@ -1139,7 +1141,9 @@
 #   the job's reads: a `run list` answer whose run has `displayTitle` `harness
 #   pause feat_x` and `createdAt` `2026-01-01T00:00:10Z` (epoch 1767225610):
 #   pause-requested  bash scripts/remote-run.sh pause-requested feat_x 1767225600
-#              -> 0; with 1767225620 -> 1; a stub failing `run list` -> 3
+#              -> 0; with 1767225620 -> 5; a stub failing `run list` -> 3;
+#              bash scripts/remote-run.sh pause-requested feat_x (no
+#              <since_epoch>) -> 1
 #   run-created-at   a stub answering `run view 42 --json createdAt` with
 #              {"createdAt":"2026-01-01T00:00:10Z"}: bash scripts/remote-run.sh
 #              run-created-at 42 -> prints 1767225610, 0; a failing stub -> 3
@@ -1285,8 +1289,9 @@ EXIT_USAGE=1
 EXIT_REFUSED=2
 EXIT_GH=3
 EXIT_PLACEMENT=4
-# pause-requested only: the read succeeded and found no pause.
-EXIT_NO_PAUSE=1
+# pause-requested only: the read succeeded and found no pause; distinct from
+# EXIT_USAGE so a caller never reads a refused call as no pause.
+EXIT_NO_PAUSE=5
 
 usage() {
   echo "remote-run.sh: $1" >&2
