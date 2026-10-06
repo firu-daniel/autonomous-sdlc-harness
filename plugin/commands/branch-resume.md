@@ -98,8 +98,10 @@ it ends. The only scripts it invokes are `<scripts_dir>/remote-run.sh sync`, for
    since the workflow input defaults to `task`. By state:
    - **`paused`**, any `pause_reason`: run
      `bash <scripts_dir>/remote-run.sh dispatch <branch> --engine <engine> --resume pause --chain 0`.
-     A `pause_reason: killed` — a job that ended mid-run — resumes exactly like any other paused run, from
-     the committed ledger. A `pause_reason: expired` — its state bundle expired — resumes the same way; say
+     A `pause_reason: killed` — a job that ended mid-run, or one GitHub never started — resumes exactly like
+     any other paused run, from the committed ledger. When the job GitHub never started was the branch's
+     first, the branch has no ledger yet: the resumed job finds no previous bundle and starts as the
+     branch's first, from its committed task prompt. A `pause_reason: expired` — its state bundle expired — resumes the same way; say
      that its carried park-loop, auto-resume and stall counts, its clarification history and any planning
      drafts not yet committed that it carried are lost, and that a run that was still planning runs its
      planning writer again from the committed ledger.
