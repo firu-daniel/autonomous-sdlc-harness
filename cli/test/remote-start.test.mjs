@@ -249,6 +249,25 @@ exit 0
   await f.assertNothingLeft();
 });
 
+test('a push that lands while refs/remotes/origin/feat_x stays behind is a landing, and dispatches', async (t) => {
+  const f = await startFixture(t);
+  // Pushes by origin's path, so the push lands without updating the tracking ref, as a push the
+  // server committed but reported as failed would leave it.
+  writeFileSync(
+    join(f.dir, 'scripts', 'push-branch.sh'),
+    `#!/bin/sh
+git -C "$1" push --quiet --no-verify '${f.origin}' HEAD:refs/heads/feat_x
+exit 0
+`,
+    { mode: 0o755 },
+  );
+
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  assert.notEqual(result.status, 4, result.stderr);
+  assert.doesNotMatch(result.stderr, /the remote refused the push/);
+  assert.deepEqual(f.calls(), [TASK_DISPATCH]);
+});
+
 test('a push of the prompt commit after origin/feat_x moved exits 4, names the commit and leaves nothing local', async (t) => {
   const f = await startFixture(t);
   // Once the cut's push creates feat_x, another pusher lands a commit on it before the prompt's push.

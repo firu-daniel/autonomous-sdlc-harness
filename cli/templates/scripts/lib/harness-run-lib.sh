@@ -1870,7 +1870,8 @@ hr_commit_placed() {
 
 # hr_push_landed <push_wrapper> <worktree> <branch> — run <push_wrapper>, then
 # answer from refs alone, because `push-branch.sh` exits 0 on every path:
-#   0  landed: `HEAD` and `refs/remotes/origin/<branch>` resolve and are equal;
+#   0  landed: `HEAD` and `refs/remotes/origin/<branch>` resolve and are equal,
+#      before or after that fetch;
 #   2  the remote moved: after the failed landing, a fetch of
 #      `refs/remotes/origin/<branch>` succeeds and it names a commit that is not
 #      an ancestor of `HEAD`. `HR_PUSH_REMOTE_TIP` is set to its short id;
@@ -1888,6 +1889,7 @@ hr_push_landed() {
     && [ "$head" = "$upstream" ] && return 0
   git -C "$worktree" fetch --quiet origin "+refs/heads/$branch:refs/remotes/origin/$branch" || return 1
   upstream=$(git -C "$worktree" rev-parse --verify --quiet "refs/remotes/origin/$branch") || return 1
+  [ "$head" != "$upstream" ] || return 0
   git -C "$worktree" merge-base --is-ancestor "$upstream" "$head" && return 1
   HR_PUSH_REMOTE_TIP=$(git -C "$worktree" rev-parse --short "$upstream") || return 1
   return 2
