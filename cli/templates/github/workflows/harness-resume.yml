@@ -34,12 +34,13 @@
 # cost nothing.
 #
 # WHAT IT READS.
-#   Secrets: HARNESS_PUSH_URL (optional notifications: the poller's own failed
-#     notice when it cannot resume a run).
+#   Secrets: HARNESS_PUSH_URL (optional notifications: the poller's own notice
+#     when it cannot resume a run or cannot download its bundle).
 #   Variables: HARNESS_RUNNER, HARNESS_REMOTE_STOP (any value: the tick
 #     dispatches nothing), HARNESS_MAX_CHAIN (the automatic-dispatch limit),
 #     HARNESS_POLL_MAX_DISPATCH_FAILURES (failed re-dispatches of one paused
-#     run before the poller gives up on it; 3 when unset) and
+#     run, or consecutive failed downloads of one run's listed bundle, before
+#     the poller gives up on it; 3 when unset) and
 #     HARNESS_POLL_GIVE_UP_AFTER_MINUTES (minutes after the usage reset past
 #     which it gives up; 360 when unset).
 #   harness.config.json, at run time: `scriptsDir` and `stateDir`. No
@@ -53,8 +54,8 @@
 # workflow-level `permissions:` block sets every permission it does not list to
 # `none`.
 #
-# WHAT IT WRITES. The `harness-poll-state` artifact: the failed-dispatch count
-#   `poll` carries to the next tick, kept 7 days.
+# WHAT IT WRITES. The `harness-poll-state` artifact: the failed-dispatch and
+#   failed-download counts `poll` carries to the next tick, kept 7 days.
 #
 # THE RULE EVERY EDIT KEEPS. Every GitHub expression has a space after its
 # opening braces, and every value reaches a shell line through `env:`. `init`

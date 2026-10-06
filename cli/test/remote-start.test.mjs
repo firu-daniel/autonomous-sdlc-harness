@@ -240,9 +240,58 @@ exit 0
     { mode: 0o755 },
   );
 
-  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  // `push-branch.sh` retries the refused push; no wait between its attempts.
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt], { PUSH_RETRY_DELAY_SECS: '0' });
   assert.equal(result.status, 4, result.stderr);
   assert.match(result.stderr, /failed at pushing feat_x/);
+  assert.match(result.stderr, /the remote refused the push/);
+  assert.deepEqual(f.calls(), []);
+  await f.assertNothingLeft();
+});
+
+test('a push that lands while refs/remotes/origin/feat_x stays behind is a landing, and dispatches', async (t) => {
+  const f = await startFixture(t);
+  // Pushes by origin's path, so the push lands without updating the tracking ref, as a push the
+  // server committed but reported as failed would leave it.
+  writeFileSync(
+    join(f.dir, 'scripts', 'push-branch.sh'),
+    `#!/bin/sh
+git -C "$1" push --quiet --no-verify '${f.origin}' HEAD:refs/heads/feat_x
+exit 0
+`,
+    { mode: 0o755 },
+  );
+
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  assert.notEqual(result.status, 4, result.stderr);
+  assert.doesNotMatch(result.stderr, /the remote refused the push/);
+  assert.deepEqual(f.calls(), [TASK_DISPATCH]);
+});
+
+test('a push of the prompt commit after origin/feat_x moved exits 4, names the commit and leaves nothing local', async (t) => {
+  const f = await startFixture(t);
+  // Once the cut's push creates feat_x, another pusher lands a commit on it before the prompt's push.
+  const hook = join(f.origin, 'hooks', 'post-receive');
+  writeFileSync(
+    hook,
+    `#!/bin/sh
+while read -r old new ref; do
+  [ "$ref" = refs/heads/feat_x ] || continue
+  case "$old" in *[!0]*) continue ;; esac
+  moved=$(git commit-tree "$new^{tree}" -p "$new" -m "someone else") || exit 1
+  git update-ref refs/heads/feat_x "$moved" "$new" || exit 1
+done
+exit 0
+`,
+    { mode: 0o755 },
+  );
+
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt], { PUSH_RETRY_DELAY_SECS: '0' });
+  assert.equal(result.status, 4, result.stderr);
+  const moved = await f.git(f.origin, ['rev-parse', '--short', 'refs/heads/feat_x']);
+  assert.equal(await f.git(f.origin, ['log', '-1', '--format=%s', 'refs/heads/feat_x']), 'someone else');
+  assert.match(result.stderr, /failed at pushing feat_x/);
+  assert.ok(result.stderr.includes(`origin/feat_x moved to ${moved}`), result.stderr);
   assert.deepEqual(f.calls(), []);
   await f.assertNothingLeft();
 });

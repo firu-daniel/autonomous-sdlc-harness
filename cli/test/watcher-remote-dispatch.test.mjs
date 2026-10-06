@@ -52,6 +52,9 @@ done
 exit 0
 `;
 
+/** A tick whose push origin refuses: `push-branch.sh` retries it, so without waiting between attempts. */
+const NO_PUSH_DELAY = { PUSH_RETRY_DELAY_SECS: '0' };
+
 const taskDispatch = (branch, engine) =>
   `workflow run harness-run.yml --ref ${branch} -f action=run -f branch=${branch} -f engine=${engine} -f resume=none -f chain=0`;
 
@@ -187,7 +190,7 @@ test('a push origin refuses blocks the dispatch', async (t) => {
 
   await f.rejectUpdates();
   await f.drop('feat_x_task_prompt.md', 'do the thing\n');
-  await f.tick();
+  await f.tick(NO_PUSH_DELAY);
 
   assert.equal(await f.subject(), 'chore: add task prompt for feat_x', 'the commit itself should land');
   assert.deepEqual(f.workflowRuns(), []);
@@ -209,7 +212,7 @@ test('an identical re-drop after a refused push skips the commit, lands the push
   await f.patchRecord({ status: 'completed' });
   await f.rejectUpdates();
   await f.drop('feat_x_review.md', 'fix the button\n');
-  await f.tick();
+  await f.tick(NO_PUSH_DELAY);
   assert.equal(await f.subject(), 'chore: add user review for feat_x');
   assert.notEqual(await f.originTip(), await f.head());
   assert.equal(f.workflowRuns().length, 1, 'a refused push was followed by a dispatch');
@@ -259,7 +262,7 @@ test('a remote review drop fast-forwards, commits, pushes and dispatches; a refu
     const before = failures(f).length;
 
     await f.drop('feat_x_review_2.md', 'round two\n');
-    await f.tick();
+    await f.tick(NO_PUSH_DELAY);
     assert.equal(await f.subject(), 'chore: add user review for feat_x');
     assert.notEqual(await f.originTip(), await f.head());
     assert.equal(f.record().status, 'failed');
@@ -268,7 +271,7 @@ test('a remote review drop fast-forwards, commits, pushes and dispatches; a refu
 
     const committed = await f.head();
     await f.drop('feat_x_review_2.md', 'round two\n');
-    await f.tick();
+    await f.tick(NO_PUSH_DELAY);
     assert.equal(await f.head(), committed, 'the identical re-drop made a commit');
     assert.match(f.watcherLog(), /already committed \(identical re-drop\) — skipping the commit, pushing anyway/);
     assert.equal(f.record().status, 'failed');

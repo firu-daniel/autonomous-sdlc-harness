@@ -260,6 +260,11 @@ function gateBody(job) {
 test('the run-actor gate is the first step of run and collect, identical in both, before any secret', () => {
   assert.equal(gateBody('run'), gateBody('collect'));
   assert.ok(!gateBody('run').includes('${{'), 'no expression inside the gate body');
+  assert.ok(
+    gateBody('run').includes('docs/remote-execution.md, section 7 step 4, and section 11'),
+    'the refusal points at the allow-list setup and the security section',
+  );
+  assert.ok(!gateBody('run').includes('section 9'), 'the refusal no longer points at section 9');
   const runSteps = jobSteps('run');
   const firstSecret = runSteps.findIndex((s) => s.join('\n').includes('secrets.'));
   assert.ok(firstSecret > 0, 'no step of run reading a secret comes before the gate');

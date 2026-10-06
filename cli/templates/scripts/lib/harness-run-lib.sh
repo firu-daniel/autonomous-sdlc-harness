@@ -87,7 +87,10 @@
 #      file is ever removed.
 #   4. THE ARTIFACT PLACEMENT writes one artifact into a working copy. Fence:
 #      the caller-named `<worktree>/<rel>`, its parent directories and that
-#      path's index entry, plus whatever the two caller-named wrappers do.
+#      path's index entry, plus whatever the two caller-named wrappers do, plus
+#      one write of its own: `hr_push_landed`'s fetch, which force-writes
+#      `refs/remotes/origin/<branch>` in `<worktree>`, made only after a failed
+#      landing, to name the commit the remote moved to.
 #      Written only by `hr_place_artifact`, `hr_commit_placed` and
 #      `hr_push_landed`.
 #
@@ -1865,17 +1868,31 @@ hr_commit_placed() {
   return 0
 }
 
-# hr_push_landed <push_wrapper> <worktree> <branch> — run <push_wrapper>, then 0
-# only when `HEAD` and `refs/remotes/origin/<branch>` both resolve and are
-# equal; 1 otherwise. `push-branch.sh` exits 0 on every path, so its status is
-# never the answer.
+# hr_push_landed <push_wrapper> <worktree> <branch> — run <push_wrapper>, then
+# answer from refs alone, because `push-branch.sh` exits 0 on every path:
+#   0  landed: `HEAD` and `refs/remotes/origin/<branch>` resolve and are equal,
+#      before or after that fetch;
+#   2  the remote moved: after the failed landing, a fetch of
+#      `refs/remotes/origin/<branch>` succeeds and it names a commit that is not
+#      an ancestor of `HEAD`. `HR_PUSH_REMOTE_TIP` is set to its short id;
+#   1  anything else — the push was refused, the fetch failed, or a ref did not
+#      resolve.
+# It never retries and never rebases; the retry is `push-branch.sh`'s.
 hr_push_landed() {
   local wrapper="${1-}" worktree="${2-}" branch="${3-}" head upstream
+  HR_PUSH_REMOTE_TIP=""
   [ -n "$wrapper" ] && [ -n "$worktree" ] && [ -n "$branch" ] || return 1
   "$wrapper" "$worktree"
   head=$(git -C "$worktree" rev-parse --verify --quiet HEAD) || return 1
+  [ -n "$head" ] || return 1
+  upstream=$(git -C "$worktree" rev-parse --verify --quiet "refs/remotes/origin/$branch") \
+    && [ "$head" = "$upstream" ] && return 0
+  git -C "$worktree" fetch --quiet origin "+refs/heads/$branch:refs/remotes/origin/$branch" || return 1
   upstream=$(git -C "$worktree" rev-parse --verify --quiet "refs/remotes/origin/$branch") || return 1
-  [ -n "$head" ] && [ "$head" = "$upstream" ]
+  [ "$head" != "$upstream" ] || return 0
+  git -C "$worktree" merge-base --is-ancestor "$upstream" "$head" && return 1
+  HR_PUSH_REMOTE_TIP=$(git -C "$worktree" rev-parse --short "$upstream") || return 1
+  return 2
 }
 
 # ---------------------------------------------------------------------------
@@ -1946,8 +1963,7 @@ hr_push_landed() {
 #                           the counters that must survive a job boundary
 #   chain                   the writing job's OWN input `HARNESS_INPUT_CHAIN`, never
 #                           a value carried from an earlier bundle
-#   control_polled_at       the epoch second up to which the job checked for a
-#                           `harness pause <branch>` run, or empty
+#   control_polled_at       the lower bound of the next control poll, or empty
 #   decision                `continue` | `wait-poller` | `stop`
 #   detail                  one human-readable line
 #   run_id, run_url, written_at
