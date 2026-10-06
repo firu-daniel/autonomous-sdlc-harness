@@ -64,3 +64,7 @@ The code does more than that.
 ```
 
 The two existing cases with `'pause'` and `pause_reason: 'user'` keep asserting the note on the job's start-of-job `resumed` comment, and still pass: their note is attached before the clear. Run only `npm test --workspace cli -- test/watcher-remote-job.test.mjs` as this unit's own verification.
+
+**Deviations from plan:**
+- The `docs/remote-execution.md` → `### Runs longer than a job` → **The runner wait is logged.** replacement is outside the `cli` layer's path scope (`docs/` belongs to `general`); not made in this `cli` dispatch. It needs a `general`-layer dispatch. Landed by the `general`-layer dispatch, as worded in the finding.
+- The new subtest was not run against the unfixed watcher (no mutation run); its failing-before claim rests on the finding's reachability reading of `job_auto_resume` → `notify resumed` → `job_report`.

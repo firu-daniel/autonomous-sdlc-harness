@@ -38,7 +38,7 @@
 
 Each entry resolves to `harness-runs/skeptic_reviews/fix_forge_run_control_gate12_round8_findings_skeptic_review/finding_<K>.md` through its `**Finding K**` reference.
 
-1. [ ] **Finding 1** — Clear the runner-wait note after the job's start-of-job launch, so an automatic resume's `resumed` comment never carries it _(layer: cli, general)_
+1. [x] **Finding 1** — Clear the runner-wait note after the job's start-of-job launch, so an automatic resume's `resumed` comment never carries it _(layer: cli, general)_
 
 ---
 

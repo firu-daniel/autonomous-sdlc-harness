@@ -1055,6 +1055,27 @@ test('runner wait: logged from the run createdAt, and noted on a resumed comment
     assert.equal(resumed[0].includes('GitHub took'), false, resumed[0]);
   });
 
+  await t.test('a long wait, then an automatic resume: its resumed comment carries no note', async (t) => {
+    const j = await createJobFixture(t);
+    if (j === null) return;
+    await wireForge(j, 'github');
+    await j.setStub(`${COUNT_LAUNCH}\nif [ "$n" = 1 ]; then : > "$STATE/PAUSE_ACK"; exit 0; fi`);
+    const start = nowSecs();
+    const result = await j.job([j.branch, 'task', 'none'], {
+      HARNESS_JOB_STARTED_EPOCH: String(start),
+      REMOTE_AUTO_RESUME_DELAY_SECS: '0',
+      GITHUB_RUN_ID: '77',
+      GITHUB_RUN_ATTEMPT: '1',
+      GITHUB_REPOSITORY: FORGE_REPOSITORY,
+      STUB_RUN_VIEW: JSON.stringify({ createdAt: iso(start - 600) }),
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stdout, /job: waited 600s for a runner/);
+    const resumed = j.ghBodies().filter((b) => b.includes('resumed.'));
+    assert.equal(resumed.length, 1, j.ghBodies().join('\n---\n'));
+    assert.equal(resumed[0].includes('GitHub took'), false, resumed[0]);
+  });
+
   await t.test('no GITHUB_RUN_ID: the wait is unknown', async (t) => {
     const j = await createJobFixture(t);
     if (j === null) return;

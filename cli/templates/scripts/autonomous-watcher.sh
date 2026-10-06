@@ -369,7 +369,8 @@
 #     starting bound takes. On a re-run attempt (`GITHUB_RUN_ATTEMPT` above 1)
 #     that `createdAt` is the first attempt's, so the wait is not measured and
 #     no note is added. A wait of at least RUNNER_WAIT_NOTE_SECS is noted on
-#     the job's `resumed` comment. The budget already starts at
+#     the `resumed` comment the job posts as it starts, never on a later
+#     automatic resume's. The budget already starts at
 #     HARNESS_JOB_STARTED_EPOCH, so a wait costs no budget.
 #   * THE DECISION, when the run leaves `running`: `paused` for `budget` ->
 #     `continue`; for `user` -> `stop`; by the usage gate (`usage`) -> a lost
@@ -4307,6 +4308,10 @@ run_job() {
       spawn_engine "$branch" "$worktree" "$log_path"
       ;;
   esac || registry_set "$branch" status failed
+
+  # The runner-wait note belongs to the job's own start: a later automatic
+  # resume's `resumed` comment never carries it (THE RUNNER WAIT in the header).
+  JOB_RUNNER_WAIT_NOTE=""
 
   # The supervision loop: the header's JOB MODE block states each decision.
   local status reason ra when decision="stop" detail="" usage_waiting=0 restarts
