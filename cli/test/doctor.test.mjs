@@ -6735,7 +6735,7 @@ test('the remote-github check asks GitHub only under --check-github and grades e
 
     assert.equal(status, 0, `doctor exited ${status}\n${stdout}\n${stderr}`);
     const line = reportLine(stdout, 'pass', 'remote-github');
-    assert.ok(line?.includes('a completed run opens its draft pull request with HARNESS_GIT_TOKEN'), `${stdout}\n${stderr}`);
+    assert.ok(line?.includes('a run opens its draft pull request with HARNESS_GIT_TOKEN'), `${stdout}\n${stderr}`);
   });
 
   await t.test('with the trigger on, a refused pull-request-setting read is a not-checked note', async (subtest) => {
@@ -6967,7 +6967,7 @@ test('the forge check names every forge state and never fails', async (t) => {
     assert.ok(line?.includes('HARNESS_TRIGGER_LABEL label (default `sdlc-harness`) starts a task run'), `${stdout}\n${stderr}`);
     assert.ok(line.includes(REMOTE_CONTROL_WORKFLOW), line);
     assert.ok(line.includes('`@sdlc-harness <verb>` comment'), line);
-    assert.ok(line.includes('a completed run opens a draft pull request'), line);
+    assert.ok(line.includes('a run opens a draft pull request when it starts, marked ready for review when it completes'), line);
     assert.ok(line.includes('carries them'), line);
     assert.ok(!line.includes('still to come'), line);
     assert.ok(line.includes('doctor --check-github'), line);

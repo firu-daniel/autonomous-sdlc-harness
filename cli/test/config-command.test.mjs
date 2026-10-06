@@ -23,9 +23,10 @@
  *    the structural check run over the result of the edit — so these tests exercise the same route an
  *    adopter's own mistake takes rather than a list that would have to be kept in step with it.
  *
- * **`execution.target` takes exactly `local` or `github-actions`, and nothing else under `execution`.**
- * Every reader treats any other value as local, so a misspelt target is refused at `set` rather than
- * stored as a remote setting that silently keeps runs on this machine.
+ * **`execution.target` takes exactly `local` or `github-actions`, `execution.progressComments` only a
+ * boolean, and nothing else under `execution` is accepted.** Every reader treats any other target as
+ * local, so a misspelt target is refused at `set` rather than stored as a remote setting that silently
+ * keeps runs on this machine.
  */
 
 import assert from 'node:assert/strict';
@@ -328,6 +329,28 @@ test('set of an undeclared key under execution is refused as unknown, and writes
   assert.notEqual(status, 0, 'config set execution.runner x was accepted');
   assert.match(stderr, /execution\.runner: unknown key/);
   assert.deepEqual(await snapshotTree(dir), before, 'a refused set of execution.runner changed the tree');
+});
+
+test('execution.progressComments is reported when it is not a boolean, and accepted false or absent', async (t) => {
+  const dir = await wiredFixture(t);
+  const path = join(dir, CONFIG_FILE);
+  const wired = readJson(path);
+  const withExecution = (execution) => `${JSON.stringify({ ...wired, execution }, null, 2)}\n`;
+
+  writeFileSync(path, withExecution({ progressComments: 'yes' }));
+  const { stderr } = await configOk(dir, ['list']);
+  assert.match(stderr, /execution\.progressComments: must be true or false/);
+  const refused = await runCli(dir, ['config', 'get', 'defaultBranch']);
+  assert.equal(refused.status, 1, 'config get did not refuse a non-boolean execution.progressComments');
+  assert.match(refused.stderr, /execution\.progressComments/);
+
+  // `false` turns the comment off and an absent key keeps it on; neither is a problem to name.
+  for (const execution of [{ progressComments: false }, { target: 'local' }]) {
+    writeFileSync(path, withExecution(execution));
+    const listed = await configOk(dir, ['list']);
+    assert.doesNotMatch(listed.stderr, /progressComments/, `${JSON.stringify(execution)} was reported`);
+    await configOk(dir, ['get', 'defaultBranch']);
+  }
 });
 
 test('set stores a legal value for a key init writes no line for', async (t) => {

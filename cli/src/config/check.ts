@@ -141,7 +141,7 @@ const PARITY_KEYS = ['referenceName', 'referenceImplPath', 'toolchainCommands'] 
 const PARITY_STRING_KEYS = ['referenceName', 'referenceImplPath'] as const;
 const DEPLOY_KEYS = ['provider', 'target', 'command'] as const;
 const DESIGN_KEYS = ['source'] as const;
-const EXECUTION_KEYS = ['target'] as const;
+const EXECUTION_KEYS = ['target', 'progressComments'] as const;
 
 /** A plain object — not `null`, not an array. */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -251,7 +251,7 @@ function checkStringArray(parent: Record<string, unknown>, key: string, prefix: 
   });
 }
 
-/** A declared boolean key: the three `phases` toggles and `docs.retrieval`. */
+/** A declared boolean key: the three `phases` toggles, `docs.retrieval` and `execution.progressComments`. */
 function checkBoolean(parent: Record<string, unknown>, key: string, prefix: string, problems: Problems): void {
   const value = parent[key];
   if (value === undefined) return;
@@ -706,6 +706,7 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
       'The key is optional and leaving it out keeps runs on this machine. Every reader treats a value other than "github-actions" as local, so a misspelt target would silently keep runs on this machine rather than send them where the file says.',
       problems,
     );
+    checkBoolean(execution, 'progressComments', 'execution', problems);
   }
 
   checkPhaseSections(value, phases, problems);

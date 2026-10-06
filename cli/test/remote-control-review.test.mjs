@@ -133,12 +133,13 @@ async function reviewFixture(t) {
     await runGit(dir, ['checkout', '--quiet', config.defaultBranch]);
   };
 
-  /** Push <branch> with its task prompt and, when asked, its ledger and its story index. */
-  const pushBranch = async (branch, { ledger = true, story = true } = {}) => {
-    const files = {
-      [`${STATE_DIR}/task_prompts/${branch}_task_prompt.md`]:
-        `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`,
-    };
+  /** Push <branch> with, when asked, its task prompt, its ledger and its story index. */
+  const pushBranch = async (branch, { prompt = true, ledger = true, story = true } = {}) => {
+    const files = {};
+    if (prompt) {
+      files[`${STATE_DIR}/task_prompts/${branch}_task_prompt.md`] =
+        `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`;
+    }
     if (ledger) files[`${STATE_DIR}/flow_progress/${branch}_progress.md`] = '# Progress\n';
     if (story) files[`${STATE_DIR}/story_plans/${branch}_story_plan.md`] = '# Stories\n';
     await commitOn(branch, files, `fixture: ${branch}`);
@@ -518,11 +519,19 @@ test('a review by a writer HARNESS_RUN_ACTORS does not admit places no round and
   assert.match(reply.body, /whom the repository variable `HARNESS_RUN_ACTORS` admits/);
 });
 
-test('a head without the ledger is refused as not a harness branch', async (t) => {
+test('a head carrying neither a task prompt nor a ledger is refused as not a harness branch', async (t) => {
   const f = await reviewFixture(t);
-  await f.pushBranch('feat_y', { ledger: false });
+  await f.pushBranch('feat_y', { prompt: false, ledger: false });
   const before = await f.originRefs();
   await assertRefused(f, await f.control({ head: 'feat_y' }), before, /`feat_y` is not a harness branch/);
+});
+
+test('a head carrying its task prompt and story index but no ledger is not refused as not a harness branch', async (t) => {
+  const f = await reviewFixture(t);
+  await f.pushBranch('feat_y', { ledger: false });
+  const result = await f.control({ head: 'feat_y' });
+  const text = `${result.stdout}\n${result.stderr}\n${allComments(f.calls()).map((call) => call.body).join('\n')}`;
+  assert.doesNotMatch(text, /not a harness branch/);
 });
 
 test('a head without the story index is refused: the round cannot start on it', async (t) => {
