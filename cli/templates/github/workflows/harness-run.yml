@@ -60,8 +60,11 @@
 # the two never place a round at once; and the settledness test reads "the
 # `run` job is completed", which no step inside that job could see. Under
 # `!cancelled()` a failed `run` job still reaches it, and the run's state bundle
-# decides whether the run ended or only paused or parked; a cancelled or
-# stopped run skips it. The group name mirrors harness-control.yml's, and
+# decides whether the run ended or only paused or parked. A `run` job GitHub
+# cancelled before any step ran, for example one no runner acquired, reaches it
+# too, and `collect` reports that run once (remote-run.sh's header, its
+# `collect` paragraph), because the job itself could report nothing; a workflow
+# run cancelled or stopped as a whole skips it. The group name mirrors harness-control.yml's, and
 # RUN_JOB_NAME in remote-run.sh mirrors the `run` job's key (DECLARED MIRRORS
 # above). It reads no secret: its own token pushes the round, dispatches it and
 # comments. It checks out the default branch, as harness-control.yml's review
@@ -123,8 +126,9 @@
 #   Secrets: CLAUDE_CODE_OAUTH_TOKEN and/or ANTHROPIC_API_KEY (one is required;
 #     billing follows the API key when both are set), HARNESS_GIT_TOKEN (optional:
 #     a personal or App token, so the job's pushes trigger your own CI, which
-#     GITHUB_TOKEN pushes never do; it also opens the run's draft pull request,
-#     so your CI runs on it without an approval click), HARNESS_PUSH_URL
+#     GITHUB_TOKEN pushes never do; it also opens the run's draft pull request
+#     when the run starts, and `deliver` opens one only when none is open at
+#     completion, so your CI runs on it without an approval click), HARNESS_PUSH_URL
 #     (optional notifications).
 #   Variables: HARNESS_RUNNER, HARNESS_REMOTE_STOP (any value stops every job
 #     before it launches anything), HARNESS_RUN_ACTORS (THE RUN-ACTOR GATE),
@@ -141,13 +145,24 @@
 #   actions        to dispatch, poll and enable the poller
 #   issues         to comment and set labels on the issue and the pull request,
 #                  which both use the issues API
-#   pull-requests  to open the draft pull request and label it
+#   pull-requests  to open the run's pull request, update it and label it
 #
 # WHY THE REPORT STEP MAY FAIL. `Open the pull request and report` runs
 # `remote-run.sh deliver` after the push, so the pull request's head carries the
 # run's last commit. It is `continue-on-error`: a repository that re-rendered
 # this file without `init --force` still runs scripts with no `deliver` verb,
 # and a finished run must not be marked failed for its report.
+#
+# WHY THE OPEN STEP RUNS ONLY WHEN chain IS 0. `Open the draft pull request`
+# runs `remote-run.sh open` before the harness, so the run's draft pull request
+# exists from its first job. `chain` counts automatic dispatches since the last
+# user action, so 0 is a job a person's action started: the first job, a
+# resume, an answer, a round. An automatic continuation therefore never retries
+# a create that failed, and the attempts per run stay bounded by people's
+# actions; `deliver`'s fallback at completion is the last attempt, and its
+# `completed` comment names the error. It is `continue-on-error` for the report
+# step's reason above: scripts older than this file carry no `open` verb, and a
+# run must not fail for its pull request.
 #
 # THE SELF-PAUSE POINT, MEASURED. On a hosted runner the job drops its own PAUSE
 # REMOTE_SELF_PAUSE_AFTER_SECS after it started, the run yields at its next
@@ -364,7 +379,7 @@ jobs:
           else
             why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
           fi
-          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 9)."
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
           exit 1
 
       - name: Compute the time budget
@@ -529,6 +544,13 @@ jobs:
         if: env.HARNESS_STOPPED != '1'
         run: bash "$SCRIPTS_DIR/remote-run.sh" restore "$HARNESS_INPUT_BRANCH" --resume "$HARNESS_INPUT_RESUME"
 
+      - name: Open the draft pull request
+        if: env.HARNESS_STOPPED != '1' && inputs.chain == 0
+        continue-on-error: true
+        env:
+          HARNESS_PR_TOKEN: ${{ secrets.HARNESS_GIT_TOKEN }}
+        run: bash "$SCRIPTS_DIR/remote-run.sh" open "$HARNESS_INPUT_BRANCH"
+
       - name: Run the harness
         if: env.HARNESS_STOPPED != '1'
         timeout-minutes: ${{ fromJSON(env.HARNESS_STEP_TIMEOUT_MINUTES || env.HARNESS_HOSTED_JOB_LIMIT_MINUTES) }}
@@ -634,7 +656,7 @@ jobs:
           else
             why="it is unset, and this repository has no single owner to admit (its owner type is ${IN_OWNER_TYPE:-unreadable}), so it admits nobody."
           fi
-          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 9)."
+          echo "::error::@${actor:-(no actor)} dispatched or re-ran this run, and the repository variable HARNESS_RUN_ACTORS does not admit them: $why Nothing was launched and no credential was read. Add the login to the comma-separated repository variable HARNESS_RUN_ACTORS, or set it to * for every writer (docs/remote-execution.md, section 7 step 4, and section 11)."
           exit 1
 
       - name: Check out the default branch for collecting

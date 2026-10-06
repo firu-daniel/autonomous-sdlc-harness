@@ -65,7 +65,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { lstat } from 'node:fs/promises';
+import { lstat, rm } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import test from 'node:test';
 
@@ -500,6 +500,30 @@ test('the artifact placement commits one path once, skips an identical re-drop a
     (await runGit(dir, ['rev-parse', 'refs/remotes/origin/feat_x'])).stdout,
     (await runGit(dir, ['rev-parse', 'HEAD'])).stdout,
   );
+
+  await runGit(dir, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', 'ahead of origin']);
+  const behind = await libCall(dir, `${landed} >/dev/null 2>&1; printf '%s|%s' "$?" "$HR_PUSH_REMOTE_TIP"`, [
+    join(dir, 'watcher-test/push-nothing.sh'),
+  ]);
+  assert.equal(behind.stdout, '1|', 'an unpushed commit over an ancestor origin did not read as a refused push');
+
+  // Another clone advances origin's feat_x, so this branch's push is rejected as a non-fast-forward.
+  const other = `${dir}-other`;
+  t.after(() => rm(other, { recursive: true, force: true }));
+  const originUrl = (await runGit(dir, ['remote', 'get-url', 'origin'])).stdout.trim();
+  await runGit(dir, ['clone', '--quiet', '--branch', 'feat_x', originUrl, other]);
+  await runGit(other, ['config', 'user.email', 'other@example.invalid']);
+  await runGit(other, ['config', 'user.name', 'other']);
+  await runGit(other, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', 'someone else']);
+  await runGit(other, ['push', '--quiet', '--no-verify', 'origin', 'feat_x']);
+  const elsewhere = (await runGit(other, ['rev-parse', '--short', 'HEAD'])).stdout.trim();
+  const moved = await libCall(
+    dir,
+    `${landed} >/dev/null 2>&1; printf '%s|%s' "$?" "$HR_PUSH_REMOTE_TIP"`,
+    [join(dir, SCRIPTS_DIR, 'push-branch.sh')],
+    { PUSH_RETRY_DELAY_SECS: '0' },
+  );
+  assert.equal(moved.stdout, `2|${elsewhere}`, `a moved origin did not read as moved: ${moved.stderr}`);
 });
 
 test('hr_remote_record_init writes a remote record\'s starting fields, leaves status to its caller and resets the counters', async (t) => {

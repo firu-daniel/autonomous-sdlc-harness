@@ -18,7 +18,15 @@
  * default a bundle saying `completed`); `pr list` from `STUB_PRS` (by default pull request 12); the
  * paginated `pulls/<n>/reviews` and `pulls/<n>/comments` listings from `STUB_PR_REVIEWS` and
  * `STUB_PR_COMMENTS`; the permission call per login from `STUB_PERMISSIONS`; and the labels GET with
- * `[]`. `HARNESS_TRIGGER_LOOKUP_SECS` is `0`. No case reaches the network.
+ * `[]`; the paginated `issues/<n>/comments` listing per item from `STUB_ITEM_COMMENTS`, and a check run's
+ * annotations from `STUB_ANNOTATIONS`. `HARNESS_TRIGGER_LOOKUP_SECS` is `0`. No case reaches the network:
+ * the fixture's `autonomous-notify.sh` is replaced by a recorder, so a push never reads the machine's
+ * `push.env` or raises a desktop banner, and a case asserts what was sent through `notifications()`.
+ *
+ * A newest run whose `run` job GitHub never started is reported by this run's own `collect` in one
+ * `not_started` comment, on the pull request or else the issue, naming `@sdlc-harness resume` when its
+ * dispatch's marker recorded an engine and the **Run workflow** form when none did; another run's is one
+ * line, and no round is collected either way.
  *
  * The fixture's checkout is left on the default branch, never on `feat_x`, because the `collect` job
  * checks out the default branch: `review` cuts its own working copy of `feat_x`, which
@@ -34,6 +42,7 @@ import test from 'node:test';
 import { createFixture, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
 const SCRIPT = 'scripts/remote-run.sh';
+const NOTIFY = 'scripts/autonomous-notify.sh';
 const STATE_DIR = 'sdlc-harness';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;
@@ -54,6 +63,13 @@ if (args[0] === 'pr' && args[1] === 'list') {
 } else if (args[0] === 'api' && args[1] === '--paginate' && /^repos\\/[^/]+\\/[^/]+\\/pulls\\/[0-9]+\\/(comments|reviews)$/.test(args[2] ?? '')) {
   const items = JSON.parse((args[2].endsWith('/reviews') ? process.env.STUB_PR_REVIEWS : process.env.STUB_PR_COMMENTS) || '[]');
   process.stdout.write(items.length === 0 ? '[]' : items.map((c) => JSON.stringify([c])).join(''));
+} else if (args[0] === 'api' && args[1] === '--paginate' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/comments$/.test(args[2] ?? '')) {
+  const item = args[2].split('/').slice(-2)[0];
+  for (const c of JSON.parse(process.env.STUB_ITEM_COMMENTS || '{}')[item] || []) {
+    process.stdout.write(JSON.stringify({ login: c.user.login, at: c.created_at, body: c.body }) + '\\n');
+  }
+} else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/check-runs\\/[0-9]+\\/annotations$/.test(args[1] ?? '')) {
+  process.stdout.write(process.env.STUB_ANNOTATIONS || '[]');
 } else if (args[0] === 'api' && permission) {
   const answer = JSON.parse(process.env.STUB_PERMISSIONS || '{}')[permission[1]];
   if (answer === undefined) fail('stub permission failure');
@@ -107,11 +123,12 @@ const review = (id, login, fields = {}) => ({
 
 /**
  * An adopted fixture on `origin`, with `feat_x` pushed carrying its provenance line, its ledger and its
- * story index.
+ * story index; with `ledger: false`, its task prompt alone, as `start` leaves a first run's branch.
  *
  * @param {import('node:test').TestContext} t
+ * @param {{ ledger?: boolean }} [options]
  */
-async function collectFixture(t) {
+async function collectFixture(t, { ledger = true } = {}) {
   const fixture = await createFixture({
     files: {
       'package.json': { name: 'fixture-project', private: true, version: '0.0.0', scripts: { test: 'echo test' } },
@@ -127,6 +144,11 @@ async function collectFixture(t) {
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  // The notifier is a recorder, so a `not_started` push never reaches the machine's push.env or desktop.
+  const notes = join(dir, STATE_DIR, 'stub', 'notifications.tsv');
+  writeFileSync(join(dir, NOTIFY),
+    `#!/usr/bin/env bash\nprintf '%s\\t%s\\t%s\\n' "$1" "$2" "\${4-}" >> '${notes}'\n`,
+    { mode: 0o755 });
   await runGit(dir, ['add', '-A']);
   await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: adopt the harness']);
   await runGit(dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${config.defaultBranch}`]);
@@ -135,8 +157,12 @@ async function collectFixture(t) {
   const files = {
     [`${STATE_DIR}/task_prompts/feat_x_task_prompt.md`]:
       `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`,
-    [`${STATE_DIR}/flow_progress/feat_x_progress.md`]: '# Progress\n',
-    [`${STATE_DIR}/story_plans/feat_x_story_plan.md`]: '# Stories\n',
+    ...(ledger
+      ? {
+          [`${STATE_DIR}/flow_progress/feat_x_progress.md`]: '# Progress\n',
+          [`${STATE_DIR}/story_plans/feat_x_story_plan.md`]: '# Stories\n',
+        }
+      : {}),
   };
   await runGit(dir, ['checkout', '--quiet', '-b', 'feat_x']);
   for (const [path, text] of Object.entries(files)) {
@@ -188,8 +214,21 @@ async function collectFixture(t) {
         STUB_PERMISSIONS: JSON.stringify({ bob: 'write' }),
         STUB_PR_REVIEWS: JSON.stringify([review(5, 'bob')]),
         STUB_PR_COMMENTS: '',
+        STUB_ITEM_COMMENTS: '',
+        STUB_ANNOTATIONS: '',
         ...env,
       }),
+    /** @returns {{ event: string, branch: string, detail: string }[]} what the recorder notifier was sent */
+    notifications: () =>
+      existsSync(notes)
+        ? readFileSync(notes, 'utf8')
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => {
+              const [event, branch, detail] = line.split('\t');
+              return { event, branch, detail };
+            })
+        : [],
     /** @returns {{ args: string[], body: string | null, line: string }[]} */
     calls: () =>
       existsSync(log)
@@ -207,13 +246,14 @@ async function collectFixture(t) {
 const allComments = (calls) => calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/comments /.test(call.line));
 const dispatches = (calls) => calls.filter((call) => call.line.startsWith('workflow run '));
 
-/** Assert nothing started: exit 0, a line matching <pattern>, no dispatch, no comment, origin unchanged. */
+/** Assert nothing started: exit 0, a line matching <pattern>, no dispatch, no comment, no notification, origin unchanged. */
 const assertNothing = async (f, result, before, pattern) => {
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, pattern);
   const calls = f.calls();
   assert.deepEqual(dispatches(calls), []);
   assert.deepEqual(allComments(calls), []);
+  assert.deepEqual(f.notifications(), []);
   assert.equal(await f.originRefs(), before);
 };
 
@@ -312,15 +352,19 @@ test('review failing placement: exactly one pull-request comment, exit 0, nothin
   const f = await collectFixture(t);
   writeFileSync(join(f.origin, 'hooks', 'pre-receive'), '#!/bin/sh\necho "push refused by the fixture" >&2\nexit 1\n', { mode: 0o755 });
   const before = await f.originRefs();
-  const result = await f.collect();
+  // `push-branch.sh` retries the refused push; no wait between its attempts.
+  const result = await f.collect({ PUSH_RETRY_DELAY_SECS: '0', GITHUB_RUN_ID: '601' });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   assert.deepEqual(dispatches(calls), []);
   const posted = allComments(calls);
   assert.equal(posted.length, 1, JSON.stringify(calls.map((call) => call.line)));
   assert.match(posted[0].line, /issues\/12\/comments /);
-  assert.match(posted[0].body, /^The reviews requesting changes collected during the run on `feat_x` could not start the next round: /);
-  assert.match(posted[0].body, /They stay on the pull request; submit a review requesting changes to retry\.\n/);
+  assert.match(posted[0].body, /^The reviews requesting changes collected during the run on `feat_x` could not start the next round: [^\n]*the remote refused the push/);
+  assert.match(
+    posted[0].body,
+    /They stay on the pull request\. To retry, re-run this run's `collect` job \(no new review is needed\), or submit a review requesting changes\.\n/,
+  );
   assert.match(posted[0].body, /<!-- sdlc-harness event=reply branch=feat_x -->/);
   assert.equal(await f.originRefs(), before);
 });
@@ -337,4 +381,117 @@ test('--pr names the pull request even when none is listed; a --pr that is not a
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.equal(await f.originSubject(), 'chore: add user review for feat_x');
   assert.ok(f.calls().some((call) => call.line === `api --paginate repos/${REPOSITORY}/pulls/12/reviews`));
+});
+
+/** An older `harness run feat_x` run, completed, before THIS_RUN. */
+const OLDER_RUN = run(600, 'harness run feat_x', 'completed', '2025-12-31T00:00:00Z');
+const NOT_STARTED_WHY = 'The job was not started because your account is locked due to a billing issue.';
+const ROUTE_CHOICE = '<task, user_review or docs: the one the run was started with>';
+
+/** A `github-actions[bot]` comment <secs> after THIS_RUN was created, ending in <marker>. */
+const botComment = (marker, secs = 5) => ({
+  user: { login: 'github-actions[bot]' },
+  created_at: new Date(Date.parse(THIS_RUN.createdAt) + secs * 1000).toISOString().replace('.000Z', 'Z'),
+  body: `Dispatched.\n\n<!-- sdlc-harness event=${marker} branch=feat_x -->\n`,
+});
+
+/**
+ * The environment of THIS_RUN, the newest, whose `run` job GitHub never started and which has no bundle;
+ * OLDER_RUN carries one when <olderBundle>. <comments> maps an item number to its comments.
+ */
+const neverStarted = ({ olderBundle, comments = {}, prs = [{ number: 12, isCrossRepository: false }] }) => ({
+  GITHUB_RUN_ID: '601',
+  STUB_RUN_LIST: JSON.stringify([THIS_RUN, OLDER_RUN]),
+  STUB_JOBS: JSON.stringify({
+    601: [{ id: 9001, name: 'run', status: 'completed', conclusion: 'cancelled', steps: [] }, { name: 'collect', status: 'in_progress' }],
+  }),
+  STUB_BUNDLES: JSON.stringify(olderBundle ? { 600: { status: 'completed' } } : {}),
+  STUB_ANNOTATIONS: JSON.stringify([{ message: NOT_STARTED_WHY }]),
+  STUB_ITEM_COMMENTS: JSON.stringify(comments),
+  STUB_PRS: JSON.stringify(prs),
+});
+
+const labelCalls = (calls) =>
+  calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/labels /.test(call.line)).map((call) => call.line);
+const labelOn = (n, state) => `api --method POST repos/${REPOSITORY}/issues/${n}/labels -f labels[]=sdlc-harness: ${state}`;
+
+/** The detail of the one `not_started` push the recorder got for feat_x; fails unless there is exactly one. */
+const notifiedNotStarted = (f) => {
+  const notes = f.notifications();
+  assert.deepEqual(notes.map(({ event, branch }) => `${event} ${branch}`), ['not_started feat_x']);
+  return notes[0].detail;
+};
+
+/** Assert one `not_started` comment on #<n>, one `not_started` notification, and nothing pushed to origin or dispatched; returns its body. */
+const assertNotStarted = async (f, result, before, n) => {
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(dispatches(calls), []);
+  const posted = allComments(calls);
+  assert.equal(posted.length, 1, JSON.stringify(calls.map((call) => call.line)));
+  assert.match(posted[0].line, new RegExp(`issues/${n}/comments `));
+  assert.match(posted[0].body, /^GitHub did not start the job of the harness run on `feat_x`, so nothing ran and the branch is unchanged\. /);
+  assert.ok(posted[0].body.includes(`\n\n${NOT_STARTED_WHY}\n`), posted[0].body);
+  assert.match(posted[0].body, /<!-- sdlc-harness event=not_started branch=feat_x -->/);
+  assert.equal(await f.originRefs(), before);
+  notifiedNotStarted(f);
+  return posted[0].body;
+};
+
+test('a run whose job never started, with a pull request and a recorded engine: one comment naming resume, paused', async (t) => {
+  const f = await collectFixture(t);
+  const before = await f.originRefs();
+  const result = await f.collect(neverStarted({ olderBundle: true, comments: { 12: [botComment('round')] } }));
+  const body = await assertNotStarted(f, result, before, 12);
+  assert.ok(body.includes('Comment `@sdlc-harness resume` to start it again.'), body);
+  assert.ok(!body.includes('Run workflow'), body);
+  const labels = labelCalls(f.calls());
+  assert.ok(labels.includes(labelOn(12, 'paused')), labels.join('\n'));
+  assert.ok(labels.includes(labelOn(7, 'paused')), labels.join('\n'));
+});
+
+test('a first run whose job never started, with its issue\'s started marker: one issue comment naming resume, paused', async (t) => {
+  const f = await collectFixture(t, { ledger: false });
+  const before = await f.originRefs();
+  const result = await f.collect(neverStarted({ olderBundle: false, prs: [], comments: { 7: [botComment('started')] } }));
+  const body = await assertNotStarted(f, result, before, 7);
+  assert.ok(body.includes('Comment `@sdlc-harness resume`'), body);
+  assert.ok(notifiedNotStarted(f).includes('/autonomous-sdlc-harness:branch-resume'));
+  assert.deepEqual(labelCalls(f.calls()), [labelOn(7, 'paused')]);
+});
+
+test('a first run whose job never started, with no marker: one issue comment naming the Run workflow form, failed', async (t) => {
+  const f = await collectFixture(t, { ledger: false });
+  const before = await f.originRefs();
+  const result = await f.collect(neverStarted({ olderBundle: false, prs: [] }));
+  const body = await assertNotStarted(f, result, before, 7);
+  assert.ok(body.includes('Start it again with the **Run workflow** form: '), body);
+  assert.ok(body.includes(ROUTE_CHOICE), body);
+  assert.ok(!body.includes('harness-state'), body);
+  assert.ok(!body.includes('@sdlc-harness resume'), body);
+  assert.ok(!notifiedNotStarted(f).includes('/autonomous-sdlc-harness:branch-resume'));
+  assert.deepEqual(labelCalls(f.calls()), [labelOn(7, 'failed')]);
+});
+
+test('another run whose job never started: nothing, since its own collect reports it', async (t) => {
+  const f = await collectFixture(t);
+  const before = await f.originRefs();
+  const result = await f.collect({
+    ...neverStarted({ olderBundle: true, comments: { 12: [botComment('round')] } }),
+    GITHUB_RUN_ID: '599',
+  });
+  await assertNothing(f, result, before, /run 601 of feat_x never started; its own collect reports it/);
+  assert.deepEqual(labelCalls(f.calls()), []);
+});
+
+test('a run whose job never started on a stopped branch: nothing posted', async (t) => {
+  const f = await collectFixture(t);
+  const before = await f.originRefs();
+  const env = neverStarted({ olderBundle: true, comments: { 12: [botComment('round')] } });
+  const result = await f.collect({
+    ...env,
+    STUB_RUN_LIST: JSON.stringify([run(603, 'harness stop feat_x', 'completed', '2026-01-03T00:00:00Z'), THIS_RUN, OLDER_RUN]),
+  });
+  await assertNothing(f, result, before, /feat_x is stopped; no round started/);
+  assert.deepEqual(labelCalls(f.calls()), []);
 });

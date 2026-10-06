@@ -357,9 +357,21 @@
 #     restored bundle's under HARNESS_INPUT_CHAIN above 0, else at this run's own
 #     `createdAt` (`remote-run.sh run-created-at "$GITHUB_RUN_ID"`), else at
 #     HARNESS_JOB_STARTED_EPOCH — NEVER at the job's own start alone, which
-#     would lose a pause sent while the job was queued. Each successful poll
-#     advances it to the epoch taken just before its query; a failed poll
-#     advances nothing and pauses nothing.
+#     would lose a pause sent while the job was queued. That starting bound is
+#     the job's FLOOR. The verb's exit decides: `0` a pause, `5` none — each
+#     advances the bound to the larger of the floor and the epoch taken just
+#     before the query less CONTROL_POLL_OVERLAP_SECS, so a run the listing
+#     shows late is still read; anything else, `1` included, is a failed poll,
+#     which advances nothing and pauses nothing. Every poll logs one line,
+#     `job: control poll of '<branch>' since <since> (exit <rc>): <last line>`.
+#   * THE RUNNER WAIT: the job logs HARNESS_JOB_STARTED_EPOCH less this run's
+#     `createdAt` — read once per job, the same read the control poll's
+#     starting bound takes. On a re-run attempt (`GITHUB_RUN_ATTEMPT` above 1)
+#     that `createdAt` is the first attempt's, so the wait is not measured and
+#     no note is added. A wait of at least RUNNER_WAIT_NOTE_SECS is noted on
+#     the `resumed` comment the job posts as it starts, never on a later
+#     automatic resume's. The budget already starts at
+#     HARNESS_JOB_STARTED_EPOCH, so a wait costs no budget.
 #   * THE DECISION, when the run leaves `running`: `paused` for `budget` ->
 #     `continue`; for `user` -> `stop`; by the usage gate (`usage`) -> a lost
 #     `usage_resume_at` is first given the gate's fallback and reported as
@@ -396,6 +408,19 @@
 #     issue and moves its state label when `forge` is `github`; `autonomous-notify.sh`
 #     is unchanged, and `completed` is reported by the workflow's `deliver` step
 #     after the push.
+#   * THE PROGRESS PASS (job_progress_pass): every `running` pass reads the
+#     flow-progress ledger the flow pushes in this checkout through
+#     lib/harness-run-lib.sh's `hr_ledger_phases`, and calls `remote-run.sh
+#     report progress <branch>` when that reading differs from the last one
+#     this job reported, and once more when the job ends, so a tick landing
+#     after the last poll is still reported. It reads nothing from GitHub to
+#     decide and keeps no state across jobs: the render is deterministic and
+#     `report progress` edits the comment only when its body differs, so a
+#     job's first pass syncs once and a budget continuation posts nothing new
+#     unless a phase moved — consistent with `docs/github-run-control.md` ->
+#     §5's *The budget is silent*, because what is posted is a phase, not the
+#     continuation. What is posted, where, and whether at all is `report
+#     progress`'s to decide; the watcher decides only when to call it.
 #   * THE INTERACTIVE-TEST PHASE IS SKIPPED, not run: a runner has no browser
 #     wiring, application dependencies or QA credentials for it. With
 #     `phases.qa` true, the task and user_review launch prompts gain one clause
@@ -686,8 +711,14 @@
 #                    A stub writing PAUSE_ACK unrequested, then exiting 0 ->
 #                    one auto-resume, `job: completed stop`; a stub ending
 #                    `exit 2` with REMOTE_AUTO_RESUME_DELAY_SECS=0 -> launched
-#                    1 + REMOTE_AUTO_RESUME_MAX times, `job: failed stop`
-#   remote drop   `a drop`'s fixture, with "$d"'s own files committed and pushed
+#                    1 + REMOTE_AUTO_RESUME_MAX times, `job: failed stop`. A
+#                    stub writing a task ledger at
+#                    "$d/sdlc-harness/flow_progress/feat_x_progress.md" and
+#                    sleeping past a few polls, the ledger never ticked ->
+#                    the watcher log carries one `remote-run.sh: report:` line
+#                    from the first pass and one from the job's end, none
+#                    between
+#   remote drop  `a drop`'s fixture, with "$d"'s own files committed and pushed
 #                 to origin's default branch, `"execution":{"target":
 #                 "github-actions"}` in its harness.config.json, and
 #                 HARNESS_GH_CLI pointed at a recorder (see remote-run.sh's
@@ -1111,6 +1142,11 @@ USAGE_WARNING_STREAK=0
 # none of them. How often the control poll asks GitHub for a `harness pause
 # <branch>` run — each poll is one `gh run list`.
 REMOTE_CONTROL_POLL_SECS="${REMOTE_CONTROL_POLL_SECS:-60}"
+# Not a tunable. How far each control poll's next lower bound reaches back:
+# GitHub's run listing is eventually consistent, so the window re-reads the last
+# five minutes. A marker seen twice is harmless — JOB_USER_PAUSE_DROPPED drops
+# PAUSE once per job.
+CONTROL_POLL_OVERLAP_SECS=300
 # The longest usage-reset wait a HOSTED job sits through rather than handing
 # the run to the resume poller, since a hosted job bills for the minutes it
 # waits. A self-hosted job waits for any reset before its deadline.
@@ -1121,6 +1157,9 @@ REMOTE_AUTO_RESUME_MAX="${REMOTE_AUTO_RESUME_MAX:-2}"
 # How long job mode waits before each of those resumes, so a transient outage
 # has time to clear.
 REMOTE_AUTO_RESUME_DELAY_SECS="${REMOTE_AUTO_RESUME_DELAY_SECS:-300}"
+# The runner wait at or above which the job's `resumed` comment says so (see
+# THE RUNNER WAIT in the header).
+RUNNER_WAIT_NOTE_SECS=300
 
 # JOB MODE (see the header). Assigned HERE, after the override channel and every
 # tunable default, so neither the file nor an inherited value can turn a
@@ -1129,9 +1168,18 @@ REMOTE_AUTO_RESUME_DELAY_SECS="${REMOTE_AUTO_RESUME_DELAY_SECS:-300}"
 JOB_MODE=0
 # Job mode's pass state, for the same reason: when the control poll last ran,
 # whether each pass has already dropped its one PAUSE, and the job's start
-# (HARNESS_JOB_STARTED_EPOCH, else when run_job began).
+# (HARNESS_JOB_STARTED_EPOCH, else when run_job began), and the control poll's
+# starting bound, below which no later bound falls.
 JOB_START_EPOCH=0
+JOB_CONTROL_FLOOR=0
+# This run's `createdAt`, read once per job (empty when unread), and the note
+# job_report adds to a `resumed` report when the runner wait was long.
+JOB_RUN_CREATED_AT=""
+JOB_RUNNER_WAIT_NOTE=""
 LAST_CONTROL_POLL=0
+# The ledger reading the progress pass last reported; empty, so a job's first
+# pass always reports once.
+JOB_PROGRESS_LAST=""
 JOB_USER_PAUSE_DROPPED=0
 JOB_BUDGET_PAUSE_DROPPED=0
 if [ "${1:-}" = "job" ]; then
@@ -1185,16 +1233,21 @@ notify() {
 
 # job_report <event> <branch> [<log>] — the only route to GitHub. The detail is
 # withheld: it names local slash commands, and `report` words its comment from
-# the registry record itself.
+# the registry record itself. A `resumed` report carries JOB_RUNNER_WAIT_NOTE
+# when it is set.
 job_report() {
+  local note=()
   if [ ! -r "$REMOTE_RUN" ]; then
     log "notify: '$REMOTE_RUN' is not readable — '${1:-?}' event for '${2:-?}' not reported on GitHub"
     return 0
   fi
+  if [ "$1" = "resumed" ] && [ -n "$JOB_RUNNER_WAIT_NOTE" ]; then
+    note=(--note "$JOB_RUNNER_WAIT_NOTE")
+  fi
   if [ -n "${3:-}" ]; then
-    bash "$REMOTE_RUN" report "$1" "$2" --repo "$MAIN_REPO" >>"$3" 2>&1 || true
+    bash "$REMOTE_RUN" report "$1" "$2" ${note[@]+"${note[@]}"} --repo "$MAIN_REPO" >>"$3" 2>&1 || true
   else
-    bash "$REMOTE_RUN" report "$1" "$2" --repo "$MAIN_REPO" >/dev/null 2>&1 || true
+    bash "$REMOTE_RUN" report "$1" "$2" ${note[@]+"${note[@]}"} --repo "$MAIN_REPO" >/dev/null 2>&1 || true
   fi
 }
 
@@ -1330,11 +1383,11 @@ job_report() {
 #                       0, else `0` — so ANY USER ACTION (a drop, an answer, a
 #                       resume: each a chain-0 dispatch) resets it and restores
 #                       the full allowance
-#   control_polled_at   job mode only: the epoch second up to which the job has
-#                       checked for a `harness pause <branch>` run — the lower
-#                       bound of the next control poll, this job's or the next
-#                       chained one's. Set at start (see JOB MODE) and advanced
-#                       by every successful poll
+#   control_polled_at   job mode only: the lower bound of the next control poll,
+#                       this job's or the next chained one's — set at start (see
+#                       JOB MODE), and after each successful poll the larger of
+#                       that starting bound and the epoch before the query less
+#                       CONTROL_POLL_OVERLAP_SECS
 #   pause_note_stale    job mode only: `1` when a `pause` job's restored
 #                       `status.json` was not `paused` or named another engine,
 #                       so spawn_engine's pause-resume prompt says there is no
@@ -4022,6 +4075,30 @@ job_int() {
   printf '%s\n' "$((10#$1))"
 }
 
+# job_runner_wait — the job's one `run-created-at` read, into JOB_RUN_CREATED_AT,
+# then THE RUNNER WAIT's log line and JOB_RUNNER_WAIT_NOTE (the header).
+job_runner_wait() {
+  local wait mins
+  if [ -n "${GITHUB_RUN_ID:-}" ]; then
+    JOB_RUN_CREATED_AT="$(job_int "$(bash "$REMOTE_RUN" run-created-at "$GITHUB_RUN_ID" --repo "$MAIN_REPO" 2>>"$WATCHER_LOG")")" || JOB_RUN_CREATED_AT=""
+  fi
+  if [ -z "$JOB_RUN_CREATED_AT" ]; then
+    log "job: this run's createdAt could not be read — the runner wait is unknown"
+    return 0
+  fi
+  if [ "${GITHUB_RUN_ATTEMPT:-1}" != 1 ]; then
+    log "job: run attempt ${GITHUB_RUN_ATTEMPT} — this run's createdAt is its first attempt's, so the runner wait is not measured"
+    return 0
+  fi
+  wait=$((JOB_START_EPOCH - JOB_RUN_CREATED_AT))
+  [ "$wait" -ge 0 ] || wait=0
+  log "job: waited ${wait}s for a runner (run created $JOB_RUN_CREATED_AT, job started $JOB_START_EPOCH)"
+  if [ "$wait" -ge "$RUNNER_WAIT_NOTE_SECS" ]; then
+    mins=$(((wait + 59) / 60))
+    JOB_RUNNER_WAIT_NOTE="GitHub took $mins minutes to start this job, so nothing moved until then."
+  fi
+}
+
 # job_start_control_bound <branch> <remote_status> — the control poll's first
 # lower bound, in the order the header's JOB MODE block states.
 job_start_control_bound() {
@@ -4029,35 +4106,40 @@ job_start_control_bound() {
   if [ "$HARNESS_INPUT_CHAIN" -gt 0 ] && [ -f "$remote_status" ]; then
     bound="$(job_int "$(hr_remote_status_get "$remote_status" control_polled_at)")" || bound=""
   fi
-  if [ -z "$bound" ] && [ -n "${GITHUB_RUN_ID:-}" ]; then
-    bound="$(job_int "$(bash "$REMOTE_RUN" run-created-at "$GITHUB_RUN_ID" --repo "$MAIN_REPO" 2>>"$WATCHER_LOG")")" || bound=""
-  fi
+  [ -n "$bound" ] || bound="$JOB_RUN_CREATED_AT"
   if [ -z "$bound" ]; then
     bound="$JOB_START_EPOCH"
     log "job: could not read this run's createdAt — the control poll starts from the job's start ($bound)"
   fi
+  JOB_CONTROL_FLOOR="$bound"
   registry_set "$branch" control_polled_at "$bound"
 }
 
 # job_control_poll <branch> <state_abs> <remote_status> — the `user` pass.
+# Exit map of `pause-requested`: 0 a pause, 5 none, anything else a failed poll
+# that neither moves the bound nor pauses.
 job_control_poll() {
-  local branch="$1" state_abs="$2" remote_status="$3" now since before rc
+  local branch="$1" state_abs="$2" remote_status="$3" now since before rc out next
   [ "$JOB_USER_PAUSE_DROPPED" = "0" ] || return 0
   now="$(date +%s)"
   [ $((now - LAST_CONTROL_POLL)) -ge "$REMOTE_CONTROL_POLL_SECS" ] || return 0
   LAST_CONTROL_POLL="$now"
   since="$(job_int "$(registry_get "$branch" control_polled_at)")" || since="$JOB_START_EPOCH"
   before="$(date +%s)"
-  bash "$REMOTE_RUN" pause-requested "$branch" "$since" --repo "$MAIN_REPO" >>"$WATCHER_LOG" 2>&1
+  out="$(bash "$REMOTE_RUN" pause-requested "$branch" "$since" --repo "$MAIN_REPO" 2>&1)"
   rc=$?
+  [ -z "$out" ] || printf '%s\n' "$out" >>"$WATCHER_LOG"
+  log "job: control poll of '$branch' since $since (exit $rc): $(printf '%s\n' "$out" | awk 'NF { l = $0 } END { print l }')"
   case "$rc" in
-    0 | 1) ;;
+    0 | 5) ;;
     *)
       log "job: the control poll for '$branch' failed (exit $rc) — not pausing; control_polled_at stays $since"
       return 0
       ;;
   esac
-  registry_set "$branch" control_polled_at "$before"
+  next=$((before - CONTROL_POLL_OVERLAP_SECS))
+  [ "$next" -ge "$JOB_CONTROL_FLOOR" ] || next="$JOB_CONTROL_FLOOR"
+  registry_set "$branch" control_polled_at "$next"
   if [ "$rc" = "0" ]; then
     JOB_USER_PAUSE_DROPPED=1
     registry_set "$branch" pause_reason user
@@ -4078,6 +4160,17 @@ job_budget_pass() {
   [ "$(registry_get "$branch" pause_reason)" = "user" ] || registry_set "$branch" pause_reason budget
   touch "$state_abs/PAUSE"
   log "job: ${after}s of the hosted time budget have passed — dropped PAUSE (reason budget)"
+}
+
+# job_progress_pass <branch> <state_abs> [final] — THE PROGRESS PASS (the
+# header's JOB MODE block). `final` reports even an unchanged reading.
+job_progress_pass() {
+  local branch="$1" state_abs="$2" line
+  [ "$JOB_MODE" = "1" ] || return 0
+  line="$(hr_ledger_phases "$state_abs/flow_progress/${branch}_progress.md")" || return 0
+  [ "$line" != "$JOB_PROGRESS_LAST" ] || [ "${3:-}" = "final" ] || return 0
+  JOB_PROGRESS_LAST="$line"
+  bash "$REMOTE_RUN" report progress "$branch" --repo "$MAIN_REPO" >>"$WATCHER_LOG" 2>&1 || true
 }
 
 # job_usage_wait_ok <branch> — 0 when a usage pause is waited out in the job;
@@ -4145,6 +4238,7 @@ run_job() {
   local prev_status="" prev_engine="" aside_rc
 
   JOB_START_EPOCH="$(job_int "${HARNESS_JOB_STARTED_EPOCH:-}")" || JOB_START_EPOCH="$(date +%s)"
+  job_runner_wait
   state_rel="$(run_state_dir "$worktree")" || fatal "job: the state directory in '$worktree' is unresolvable"
   state_abs="$worktree/$state_rel"
   clar_dir="$state_abs/clarifications/$branch"
@@ -4248,6 +4342,10 @@ run_job() {
       ;;
   esac || registry_set "$branch" status failed
 
+  # The runner-wait note belongs to the job's own start: a later automatic
+  # resume's `resumed` comment never carries it (THE RUNNER WAIT in the header).
+  JOB_RUNNER_WAIT_NOTE=""
+
   # The supervision loop: the header's JOB MODE block states each decision.
   local status reason ra when decision="stop" detail="" usage_waiting=0 restarts
   local wait_ok=1 usage_wait_start=0 usage_wait_ra=0
@@ -4263,6 +4361,7 @@ run_job() {
         [ "$(registry_get "$branch" status)" = "running" ] || continue
         job_control_poll "$branch" "$state_abs" "$remote_status"
         job_budget_pass "$branch" "$state_abs"
+        job_progress_pass "$branch" "$state_abs"
         ;;
       paused)
         reason="$(registry_get "$branch" pause_reason)"
@@ -4354,6 +4453,7 @@ run_job() {
   [ "$final" = "paused" ] || registry_set "$branch" pause_reason ""
   [ -n "$detail" ] || detail="the run ended $final in this job"
   [ "$final" != "failed" ] || job_report failed "$branch" "$log_path"
+  job_progress_pass "$branch" "$state_abs" final
   job_write_status "$branch" "$remote_status" "$decision" "$detail"
   echo "job: $final $decision"
   exit 0

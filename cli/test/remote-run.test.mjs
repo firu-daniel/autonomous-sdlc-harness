@@ -7,7 +7,9 @@
  * refusal sends nothing at all, and `stop` always sends its `action=stop` marker before any cancel —
  * whether or not a run is in progress.** No case reaches the network: the stub is a Node script that
  * appends its argument vector, as one JSON line, to a log, prints canned JSON for `run list`,
- * `repo view` and a run's artifact list, and materialises a fixture bundle on `run download`.
+ * `repo view`, a run's artifact list, a run's jobs (`STUB_JOBS`) and a check run's annotations
+ * (`STUB_ANNOTATIONS`) — the last two empty when unset — and materialises a fixture bundle on
+ * `run download`.
  *
  * **For `status` and `sync`, the rule is that the newest finished run decides and a bundle already
  * applied is never applied again**: `status` leaves every byte under the state directory as it found
@@ -42,7 +44,10 @@
  * waiting; the count is carried between ticks the way GitHub carries it — the test copies a tick's
  * `poll_state/current/` aside and serves it as the next tick's `harness-poll-state` artifact, listed
  * under `STUB_RESUME_RUN_LIST`, and `STUB_FAIL_TIMES` fails `STUB_FAIL_ON` only for its first calls
- * as counted in the stub's own log. Most
+ * as counted in the stub's own log. A completed run's listed bundle that cannot be downloaded keeps the
+ * poller enabled under its own consecutive count, and at the bound sends one push-only
+ * `bundle_unreadable` with no issue write; a completed run with no bundle whose `run` job never
+ * started is not waiting and reported by nothing here. Most
  * cases replace the fixture's `autonomous-notify.sh` with a recorder, as the watcher suite does, so no
  * desktop banner fires; the failed-enable case keeps the real notifier and records through
  * `HARNESS_PUSH_CMD`, with `XDG_CONFIG_HOME` pointed into the fixture so no machine push file is read.
@@ -50,7 +55,9 @@
  * **For the forge coupling, the rule is that `continue`'s notification and a complete `stop` reach the
  * run's issue as a comment naming no slash command, plus the state label, while a partial stop and a
  * coupling that is off post nothing**: every pre-existing case runs with `forge` unset and keeps its
- * exact call list. The stub answers `pr list` and an issue's label read with `[]`, a `contents/` read
+ * exact call list. The stub answers `pr list` with `STUB_PRS` (`[]` when unset), a paginated comment
+ * list with `STUB_ITEM_COMMENTS` (item number to comments) when set, an issue's label read with `STUB_LABELS`
+ * (`[]` when unset), a `contents/` read
  * with `STUB_CONTENTS` (a 404 when unset), and logs each `body=@<path>` call with that file's content
  * to `<log>.bodies`. A `stop --pr <n>` reports on #<n> though no open pull request is listed, and a
  * `stop --branch-gone` on a branch origin no longer has marks on GitHub's default branch, reads its
@@ -63,11 +70,14 @@
  * nothing.
  *
  * **For the job's read verbs `pause-requested` and `run-created-at`, the rule is that a failed read is
- * exit 3 and never an answer**, so job mode, which pauses only on exit 0, cannot pause on a gh fault.
+ * exit 3 and never an answer**, so job mode, which pauses only on exit 0, cannot pause on a gh fault;
+ * `pause-requested`'s "no pause" is exit 5, so a usage refusal (exit 1) is never read as one.
  *
  * **For the commands' `fetch`, the rule is that it reads a branch's newest state from GitHub alone and
  * writes nothing but its `<out_dir>`**; its `key: value` lines are a wire, so each case asserts the
- * keys it reads. **No verb makes a run started on GitHub local: `adopt` is an unknown verb, so no
+ * keys it reads. A finished run with no bundle whose `run` job GitHub never started keeps its case's
+ * state and gets a detail naming GitHub's reason; a failed jobs lookup changes nothing but stderr.
+ * **No verb makes a run started on GitHub local: `adopt` is an unknown verb, so no
  * command can create a working copy or a record for another branch through it.** **A user's chain-0
  * resume dispatch marks an existing remote record `running`, and
  * no other dispatch creates or touches a registry.** **For `review`, the rule is that a round lands
@@ -130,11 +140,25 @@ if (line.startsWith('run list --workflow harness-resume.yml')) process.stdout.wr
 else if (line.startsWith('run list')) process.stdout.write(after('STUB_RUN_LIST') || '[]');
 if (line.startsWith('repo view')) process.stdout.write(process.env.STUB_REPO_VIEW || '{}');
 if (line.startsWith('run view')) process.stdout.write(process.env.STUB_RUN_VIEW || '{}');
-if (line.startsWith('pr list')) process.stdout.write('[]');
-if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1])) process.stdout.write('[]');
+if (line.startsWith('pr list')) process.stdout.write(process.env.STUB_PRS || '[]');
+if (args[0] === 'api' && args[1] === '--paginate' && process.env.STUB_ITEM_COMMENTS !== undefined) {
+  const item = /\\/issues\\/([0-9]+)\\/comments$/.exec(args[2] ?? '')?.[1];
+  for (const c of JSON.parse(process.env.STUB_ITEM_COMMENTS)[item] ?? []) {
+    process.stdout.write(JSON.stringify({ login: c.user.login, at: c.created_at, body: c.body }) + '\\n');
+  }
+}
+else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1])) process.stdout.write(process.env.STUB_LABELS || '[]');
 else if (args[0] === 'api' && args[1].includes('/contents/')) {
   if (process.env.STUB_CONTENTS === undefined) { process.stderr.write('HTTP 404: Not Found\\n'); process.exit(1); }
   process.stdout.write(process.env.STUB_CONTENTS);
+}
+else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/actions\\/runs\\/[0-9]+\\/jobs$/.test(args[1])) {
+  const id = args[1].split('/')[5];
+  process.stdout.write(JSON.stringify({ jobs: JSON.parse(process.env.STUB_JOBS || '{}')[id] || [] }));
+}
+else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/check-runs\\/[0-9]+\\/annotations$/.test(args[1])) {
+  const id = args[1].split('/')[4];
+  process.stdout.write(JSON.stringify(JSON.parse(process.env.STUB_ANNOTATIONS || '{}')[id] || []));
 }
 else if (args[0] === 'api') {
   const parts = args[1].split('/');
@@ -1846,6 +1870,132 @@ test('poll restarts the failure count for a newer run of the branch', async (t) 
   assert.deepEqual(disables(fx), []);
 });
 
+/** A poller state directory carrying `state`, for `pollTick`'s `served`. */
+function servedState(fx, name, state) {
+  const dir = join(fx.dir, STATE_DIR, 'stub', 'poll_states', name);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'poll_state.json'), JSON.stringify(state));
+  return dir;
+}
+
+/** Any call that changes the issue: a comment, or a label added or removed. */
+const issueWrites = (fx) => joined(fx).filter((line) => /--method (POST|DELETE|PATCH) repos\/o\/r\/issues\//.test(line));
+
+test('poll keeps itself enabled for a listed bundle it cannot download, and counts the download apart', async (t) => {
+  const fx = await loopFixture(t);
+  const notes = recordNotifications(fx);
+  const served = servedState(fx, 'listed', { feat_x: { run_id: '801', failures: '1', notified: '' } });
+  // Listed under `harness-state`, with no bundle to copy: `run download` fails.
+  const result = await pollTick(fx, { tick: 1, runId: 801, bundleDir: undefined, served });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /the bundle of run 801 \(feat_x\) could not be downloaded, attempt 1 of 3; still waiting/);
+  assert.deepEqual(disables(fx), []);
+  assert.deepEqual(pollState(fx), { feat_x: { run_id: '801', failures: '1', notified: '', download_failures: '1' } });
+  assert.deepEqual(notes(), []);
+});
+
+/** feat_x's run 801 under forge github, its bundle listed but undownloadable, one failure short of the bound. */
+async function downloadBoundTick(t, labels) {
+  const fx = await forgeFixture(t);
+  const notes = recordNotifications(fx);
+  const served = servedState(fx, 'bound', { feat_x: { run_id: '801', failures: '', notified: '', download_failures: '2' } });
+  const result = await pollTick(fx, { tick: 1, runId: 801, bundleDir: undefined, served, extra: { STUB_LABELS: labels } });
+  assert.equal(result.status, 0, result.stderr);
+  return { fx, notes };
+}
+
+test('poll at the download bound sends one push-only bundle_unreadable, posts nothing, and disables itself', async (t) => {
+  const { fx, notes } = await downloadBoundTick(t, '[]');
+  const sent = notes();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].event, 'bundle_unreadable');
+  assert.equal(sent[0].branch, 'feat_x');
+  assert.match(sent[0].detail, /after 3 attempts \([^)]*no artifact matches\)/);
+  assert.match(sent[0].detail, /autonomous-sdlc-harness:branch-resume feat_x/);
+  assert.deepEqual(issueWrites(fx), []);
+  assert.deepEqual(posted(fx), []);
+  assert.equal(pollState(fx).feat_x.notified, '1');
+  assert.deepEqual(disables(fx), ['workflow disable harness-resume.yml']);
+});
+
+test('poll counts a failed artifact lookup on a completed run as a failed download, up to one bundle_unreadable', async (t) => {
+  const fx = await forgeFixture(t);
+  const notes = recordNotifications(fx);
+  const extra = {
+    STUB_LABELS: '[]',
+    STUB_FAIL_ON: 'api repos/{owner}/{repo}/actions/runs/801/artifacts',
+    STUB_FAIL_STDERR: 'HTTP 502: bad gateway',
+  };
+  let served = servedState(fx, 'lookup', { feat_x: { run_id: '801', failures: '', notified: '' } });
+  for (const tick of [1, 2]) {
+    const result = await pollTick(fx, { tick, runId: 801, bundleDir: bundle(fx, `lookup${tick}`), served, extra });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /reading the artifacts of run 801 \(feat_x\) failed \([^)]*HTTP 502: bad gateway\)/);
+    assert.match(result.stdout, new RegExp(`could not be downloaded, attempt ${tick} of 3; still waiting`));
+    assert.equal(pollState(fx).feat_x.download_failures, String(tick));
+    assert.deepEqual(notes(), []);
+    assert.deepEqual(disables(fx), []);
+    served = uploadState(fx, tick);
+  }
+  const last = await pollTick(fx, { tick: 3, runId: 801, bundleDir: bundle(fx, 'lookup3'), served, extra });
+  assert.equal(last.status, 0, last.stderr);
+  const sent = notes();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].event, 'bundle_unreadable');
+  assert.match(sent[0].detail, /after 3 attempts \([^)]*HTTP 502: bad gateway\)/);
+  assert.equal(pollState(fx).feat_x.notified, '1');
+  assert.deepEqual(issueWrites(fx), []);
+  assert.deepEqual(disables(fx), ['workflow disable harness-resume.yml']);
+});
+
+test('poll at the download bound leaves a delivered run\'s label unchanged', async (t) => {
+  const { fx, notes } = await downloadBoundTick(t, '[{"name":"sdlc-harness: done"}]');
+  assert.equal(notes().length, 1);
+  assert.equal(notes()[0].event, 'bundle_unreadable');
+  assert.deepEqual(joined(fx).filter((line) => line.includes('/issues/7/labels') && line.includes('--method')), []);
+  assert.deepEqual(issueWrites(fx), []);
+});
+
+test('poll resets the download count when the bundle downloads', async (t) => {
+  const fx = await loopFixture(t);
+  const notes = recordNotifications(fx);
+  const served = servedState(fx, 'reset', { feat_x: { run_id: '801', failures: '', notified: '', download_failures: '2' } });
+  const result = await pollTick(fx, { tick: 1, runId: 801, bundleDir: bundle(fx, 'parked'), served });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(pollState(fx).feat_x.download_failures, '');
+  assert.deepEqual(notes(), []);
+});
+
+test('poll treats a completed run whose run job never started as not waiting, and reports nothing', async (t) => {
+  const fx = await forgeFixture(t);
+  const notes = recordNotifications(fx);
+  const result = await remoteRun(fx, ['poll'], {
+    ...syncEnv({ runs: [ghRun(801, 'completed', 1)] }),
+    STUB_JOBS: JSON.stringify({ 801: [{ name: 'run', status: 'completed', conclusion: 'cancelled', steps: [], id: 556 }] }),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /poll: run 801 of feat_x never started \(.+\); its collect job reports it; not waiting/);
+  assert.deepEqual(notes(), []);
+  assert.deepEqual(posted(fx), []);
+  assert.deepEqual(issueWrites(fx), []);
+  assert.deepEqual(downloads(fx), []);
+  assert.deepEqual(disables(fx), ['workflow disable harness-resume.yml']);
+});
+
+test('poll skips a completed run with no bundle whose run job started', async (t) => {
+  const fx = await loopFixture(t);
+  const notes = recordNotifications(fx);
+  const result = await remoteRun(fx, ['poll'], {
+    ...syncEnv({ runs: [ghRun(801, 'completed', 1)] }),
+    STUB_JOBS: JSON.stringify({ 801: [{ name: 'run', status: 'completed', conclusion: 'success', steps: [{ name: 'harness' }], id: 557 }] }),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /poll: feat_x skipped/);
+  assert.doesNotMatch(result.stdout, /never started/);
+  assert.deepEqual(notes(), []);
+  assert.deepEqual(disables(fx), ['workflow disable harness-resume.yml']);
+});
+
 test('poll with a give-up bound that is not a non-negative integer exits 1 and dispatches nothing', async (t) => {
   const fx = await loopFixture(t);
   recordNotifications(fx);
@@ -1865,10 +2015,10 @@ const PAUSE_RUNS = JSON.stringify([
   { databaseId: 7, displayTitle: 'harness pause feat_x', status: 'completed', createdAt: '2026-01-01T00:00:10Z' },
 ]);
 
-test('pause-requested: 0 for an exact-title run at or after the epoch, 1 for none, 3 when gh fails', async (t) => {
+test('pause-requested: 0 for an exact-title run at or after the epoch, 5 for none, 1 for a usage error, 3 when gh fails', async (t) => {
   const fx = await remoteFixture(t, 'local');
   const env = { STUB_RUN_LIST: PAUSE_RUNS };
-  for (const [since, expected] of [[PAUSE_CREATED - 10, 0], [PAUSE_CREATED, 0], [PAUSE_CREATED + 1, 1]]) {
+  for (const [since, expected] of [[PAUSE_CREATED - 10, 0], [PAUSE_CREATED, 0], [PAUSE_CREATED + 1, 5]]) {
     const result = await remoteRun(fx, ['pause-requested', 'feat_x', String(since)], env);
     assert.equal(result.status, expected, `since ${since}: ${result.stdout}\n${result.stderr}`);
   }
@@ -1878,6 +2028,12 @@ test('pause-requested: 0 for an exact-title run at or after the epoch, 1 for non
   assert.equal(failed.status, 3, failed.stderr);
   const garbled = await remoteRun(fx, ['pause-requested', 'feat_x', '0'], { STUB_RUN_LIST: 'not json' });
   assert.equal(garbled.status, 3, garbled.stderr);
+
+  const missing = await remoteRun(fx, ['pause-requested', 'feat_x'], env);
+  assert.equal(missing.status, 1, missing.stderr);
+  assert.match(missing.stderr, /pause-requested <branch> <since_epoch>/);
+  const nonInteger = await remoteRun(fx, ['pause-requested', 'feat_x', 'abc'], env);
+  assert.equal(nonInteger.status, 1, nonInteger.stderr);
 });
 
 test('run-created-at prints the run createdAt as an epoch second, or exits 3', async (t) => {
@@ -1993,6 +2149,83 @@ test('fetch of an expired bundle prints paused / expired and downloads nothing',
   assert.deepEqual(downloads(fx), []);
 });
 
+const NOT_ACQUIRED = 'The job was not acquired by Runner of type hosted even after multiple attempts';
+
+/** A newest completed run 202 with no artifact, over an older run 201 that carries a bundle. */
+function case4Env(fx, steps, extra = {}) {
+  return {
+    ...syncEnv({
+      runs: [ghRun(202, 'completed', 2), ghRun(201, 'completed', 1)],
+      artifacts: { 201: ['harness-state'] },
+      bundles: { 201: bundle(fx, 'old') },
+    }),
+    STUB_JOBS: JSON.stringify({ 202: [{ name: 'run', status: 'completed', conclusion: 'cancelled', steps, id: 555 }] }),
+    STUB_ANNOTATIONS: JSON.stringify({ 555: [{ message: NOT_ACQUIRED }] }),
+    ...extra,
+  };
+}
+
+test('fetch of a newest run GitHub never started, over an older bundle, prints paused / killed naming GitHub\'s reason', async (t) => {
+  const fx = await remoteFixture(t);
+  const out = outDir(t);
+  const result = await remoteRun(fx, ['fetch', 'feat_x', out], case4Env(fx, []));
+  assert.equal(result.status, 0, result.stderr);
+  const lines = fetched(result.stdout);
+  assert.equal(lines.state, 'paused');
+  assert.equal(lines.pause_reason, 'killed');
+  assert.equal(lines.detail, `GitHub did not start the job of run 202 (${NOT_ACQUIRED}): ${runUrl(202)}`);
+  assert.ok(joined(fx).includes('api repos/{owner}/{repo}/check-runs/555/annotations'));
+  assert.deepEqual(downloads(fx), []);
+});
+
+test('sync of a newest run GitHub never started records the engine its dispatch\'s round comment names', async (t) => {
+  const fx = await forgeFixture(t);
+  remoteRecord(fx, { status: 'completed', engine: 'task', remote_run_id: '201' });
+  const round = {
+    user: { login: 'github-actions[bot]' },
+    created_at: '2026-01-01T00:02:10Z',
+    body: 'Round 4 placed.\n\n<!-- sdlc-harness event=round branch=feat_x -->\n',
+  };
+  const result = await remoteRun(fx, ['sync', 'feat_x'], case4Env(fx, [], {
+    GITHUB_REPOSITORY: 'o/r',
+    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+    STUB_ITEM_COMMENTS: JSON.stringify({ 12: [round] }),
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  const rec = record(fx);
+  assert.equal(rec.status, 'paused');
+  assert.equal(rec.pause_reason, 'killed');
+  assert.equal(rec.engine, 'user_review');
+  assert.equal(rec.remote_run_id, '202');
+});
+
+test('fetch of a newest run whose job ran a step, over an older bundle, keeps the no-bundle detail', async (t) => {
+  const fx = await remoteFixture(t);
+  const out = outDir(t);
+  const result = await remoteRun(fx, ['fetch', 'feat_x', out], case4Env(fx, [{ name: 'Set up job', status: 'completed' }]));
+  assert.equal(result.status, 0, result.stderr);
+  const lines = fetched(result.stdout);
+  assert.equal(lines.state, 'paused');
+  assert.equal(lines.pause_reason, 'killed');
+  assert.equal(lines.detail, `run 202 ended with no state bundle (killed, cancelled or replaced): ${runUrl(202)}`);
+  assert.ok(!joined(fx).some((line) => line.includes('/annotations')), 'a started job had its annotations read');
+});
+
+test('fetch whose jobs lookup fails keeps today\'s state and detail, and names the failure on stderr', async (t) => {
+  const fx = await remoteFixture(t);
+  const out = outDir(t);
+  const result = await remoteRun(fx, ['fetch', 'feat_x', out], case4Env(fx, [], {
+    STUB_FAIL_ON: 'api repos/{owner}/{repo}/actions/runs/202/jobs',
+    STUB_FAIL_STDERR: 'HTTP 502: jobs unavailable',
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  const lines = fetched(result.stdout);
+  assert.equal(lines.state, 'paused');
+  assert.equal(lines.pause_reason, 'killed');
+  assert.equal(lines.detail, `run 202 ended with no state bundle (killed, cancelled or replaced): ${runUrl(202)}`);
+  assert.match(result.stderr, /could not tell whether GitHub started the job of run 202: .*HTTP 502: jobs unavailable/);
+});
+
 test('fetch is refused under execution.target local, and needs an existing, empty out_dir', async (t) => {
   const local = await remoteFixture(t, 'local');
   const refused = await remoteRun(local, ['fetch', 'feat_x', outDir(t)]);
@@ -2073,6 +2306,20 @@ test('status with no record and an expired newest bundle prints the expired line
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^ {2}pause_reason: expired$/m);
   assert.equal(result.stdout.split('the state bundle of run 102 expired on 2026-01-02T00:00:00Z').length - 1, 1);
+  assert.equal(downloads(fx).length, 0);
+  assert.deepEqual(await stateSnapshot(fx), before);
+});
+
+test('status with no record and a never-started newest run with no annotation prints failed, naming the conclusion', async (t) => {
+  const fx = await remoteFixture(t);
+  const before = await stateSnapshot(fx);
+  const result = await remoteRun(fx, ['status', 'feat_x'], {
+    ...syncEnv({ runs: [ghRun(102, 'completed', 2)] }),
+    STUB_JOBS: JSON.stringify({ 102: [{ name: 'run', status: 'completed', conclusion: 'cancelled', steps: [], id: 556 }] }),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^ {2}state: failed$/m);
+  assert.match(result.stdout, /^ {2}detail: GitHub did not start the job of run 102 \(its `run` job ended `cancelled` with no step run\): /m);
   assert.equal(downloads(fx).length, 0);
   assert.deepEqual(await stateSnapshot(fx), before);
 });

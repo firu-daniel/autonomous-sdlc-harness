@@ -45,7 +45,7 @@
     "forge": {
       "type": "string",
       "enum": ["github", "gitlab", "none"],
-      "description": "Which code-hosting platform's pull-request and remote conventions the flow uses. 'none' means no forge integration at all: work stays on branches and no pull request is opened. With execution.target 'github-actions', 'github' makes init write the issue-trigger and run-control workflows: a labelled issue starts a run, comments and reviews steer it, lifecycle comments and state labels report it, and a completed run opens a draft pull request. 'gitlab' writes nothing in this release. Deliberately has no default: an absent value must read as 'not yet decided', which doctor's forge check reports, rather than as a silent assumption of one platform, and a default here would oblige the configuration model's defaults to carry a value no generator writes."
+      "description": "Which code-hosting platform's pull-request and remote conventions the flow uses. 'none' means no forge integration at all: work stays on branches and no pull request is opened. With execution.target 'github-actions', 'github' makes init write the issue-trigger and run-control workflows: a labelled issue starts a run, comments and reviews steer it, lifecycle comments and state labels report it, and the run's draft pull request opens when the run starts and is marked ready for review when it completes. 'gitlab' writes nothing in this release. Deliberately has no default: an absent value must read as 'not yet decided', which doctor's forge check reports, rather than as a silent assumption of one platform, and a default here would oblige the configuration model's defaults to carry a value no generator writes."
     },
     "stateDir": {
       "type": "string",
@@ -352,13 +352,18 @@
     "execution": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Where an unattended run executes. Read by init (which writes the GitHub Actions workflows), by doctor, and by the run watcher (which dispatches instead of launching).",
+      "description": "Where an unattended run executes. Read by init (which writes the GitHub Actions workflows), by doctor, and by the run watcher (which dispatches instead of launching). Also holds one reporting switch, progressComments, read by the run job.",
       "properties": {
         "target": {
           "type": "string",
           "enum": ["local", "github-actions"],
           "default": "local",
           "description": "Where an unattended run executes: on this machine, or in a GitHub Actions job the watcher dispatches."
+        },
+        "progressComments": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether a run that executes on GitHub Actions with forge 'github' keeps one progress comment on its pull request, edited as the run passes its four main phases (for a task run planning, implementation, branch review and done; for a user-review round fix plan, fix implementation, branch review and done). false posts none; every other lifecycle comment is unchanged. Read at run time from the run's branch; an absent key is true."
         }
       }
     }

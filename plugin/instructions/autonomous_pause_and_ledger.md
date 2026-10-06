@@ -108,6 +108,10 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - [ ] R5. Post-user-review statistics committed
 ```
 
+**A shell reader keys on these templates too.** `<scripts_dir>/lib/harness-run-lib.sh` → `hr_ledger_phases`
+reads the entry ids and the two header forms above and maps them to the four phases a GitHub run's progress
+comment shows, so renaming, adding or removing an id here is an edit to that function in the same change.
+
 **The three markers.** Every phase entry carries exactly one of:
 - `[ ]` — **not yet done.** The first one is the resume point (§1.7).
 - `[x]` — **done**, on §1.2's terms: its phase reached a recorded outcome the entry names — detail checklist

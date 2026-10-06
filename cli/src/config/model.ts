@@ -143,6 +143,8 @@ export interface HarnessDesign {
 export interface HarnessExecution {
   /** Where an unattended run executes: on this machine, or in a GitHub Actions job the watcher dispatches. */
   target?: HarnessExecutionTarget;
+  /** Whether a run on GitHub Actions with `forge` `github` keeps one phase-progress comment on its pull request; read at run time by `hr_progress_comments` in the run library, and by nothing in this package. */
+  progressComments?: boolean;
 }
 
 /**
@@ -240,7 +242,7 @@ export const DEFAULTS = {
   clientEnvPrefix: null,
   phases: { qa: false, docs: false, parity: false },
   qa: { driver: 'web-playwright', portSeed: 3001 },
-  execution: { target: 'local' },
+  execution: { target: 'local', progressComments: true },
 } as const;
 
 /**

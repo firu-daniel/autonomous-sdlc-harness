@@ -28,7 +28,13 @@
 # must NEVER abort the calling run — a stale remote is recoverable and a halted
 # run is not. That is why this script uses `set -uo pipefail` deliberately
 # WITHOUT `set -e`, and why even the fail-closed arm below exits 0: it refuses
-# to push, which is the closed outcome here, and says so.
+# to push, which is the closed outcome here, and says so. A push the remote
+# refused for any reason but a `[rejected]` ref is attempted up to
+# PUSH_ATTEMPTS times in all — waiting PUSH_RETRY_DELAY_SECS before the second
+# attempt and three times that before the third — and is still never fatal once
+# given up. PUSH_RETRY_DELAY_SECS is read from the environment as a test and
+# tuning seam: default 5, and anything but a non-negative integer falls back to
+# 5 with one line.
 #
 # DEFENCE IN DEPTH, NOT THE SOLE GUARD. The caller-agnostic backstop is the
 # committed pre-push hook `init` writes into the configured `githooksDir`, which
@@ -52,7 +58,11 @@
 #
 # WHAT IT NEVER DOES. It performs only a fast-forward push of already-committed
 # work: no `--force`, no `--force-with-lease`, no history-rewriting flag, no
-# commit of its own, and no non-zero exit.
+# commit of its own, and no non-zero exit. It never retries a push git reports
+# as `! [rejected]` (non-fast-forward, fetch first), and never fetches or
+# rebases: a push that lost a race fails loudly, which is the run-control rule
+# of record (docs/github-run-control.md -> "A push that loses a race fails
+# loudly, and is never fetched, rebased or retried").
 #
 # Usage: push-branch.sh [<repo-dir>]
 #   <repo-dir>  worktree/repository to operate in (default: $PWD)
@@ -73,8 +83,34 @@
 #                     -> exit 0, refusal message, nothing pushed
 #   push fails        git -C "$d" remote set-url origin /nonexistent.git
 #                     -> exit 0 with a visible failure line
+#   refused once      printf '%s\n' '#!/bin/sh' 'c="$GIT_DIR/refusals"' \
+#                       '[ -e "$c" ] && exit 0' ': > "$c"; exit 1' > "$b/hooks/pre-receive"
+#                     chmod +x "$b/hooks/pre-receive"
+#                     git -C "$d" commit -qm x --allow-empty
+#                     PUSH_RETRY_DELAY_SECS=0 push-branch.sh "$d"
+#                     -> exit 0, one "retrying" line, and `git -C "$b" rev-parse
+#                     feat_x` equals `git -C "$d" rev-parse HEAD`
+#   remote moved      c=$(mktemp -d); git clone -q -b feat_x "$b" "$c"
+#                     git -C "$c" commit -qm other --allow-empty; git -C "$c" push -q
+#                     git -C "$d" commit -qm mine --allow-empty; push-branch.sh "$d"
+#                     -> exit 0, a "(not retried)" line, one push attempt
 
 set -uo pipefail
+
+# Attempts in all, and the wait before the second; the third waits three times
+# that (EVERY FAILURE PATH IS NON-FATAL above).
+PUSH_ATTEMPTS=3
+PUSH_RETRY_DELAY_SECS="${PUSH_RETRY_DELAY_SECS:-5}"
+case "$PUSH_RETRY_DELAY_SECS" in
+  '' | *[!0-9]*)
+    echo "push-branch.sh: PUSH_RETRY_DELAY_SECS='$PUSH_RETRY_DELAY_SECS' is not a non-negative integer — using 5"
+    PUSH_RETRY_DELAY_SECS=5
+    ;;
+  *)
+    # Base 10, so a leading zero is not read as octal.
+    PUSH_RETRY_DELAY_SECS=$((10#$PUSH_RETRY_DELAY_SECS))
+    ;;
+esac
 
 # The library is reached by a path computed from this script's own location — no
 # session root, and no runtime-substituted token, is assumed. Not finding it is
@@ -125,16 +161,38 @@ esac
 # set it on the fly, so a branch with no upstream is still pushed. Fast-forward
 # only.
 if git -C "$top" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
-  git -C "$top" push
+  push_cmd=(git -C "$top" push)
 else
-  git -C "$top" push --set-upstream origin "$branch"
+  push_cmd=(git -C "$top" push --set-upstream origin "$branch")
 fi
-push_status=$?
 
-if [ "$push_status" -eq 0 ]; then
-  echo "push-branch.sh: pushed $branch to origin"
-else
-  # Visible but non-blocking: a push problem must never abort the calling run.
-  echo "push-branch.sh: push failed for $branch (see output above)"
-fi
+# Every failure line keeps the `push failed for <branch>` prefix: logs and
+# Gate 12 records quote it.
+attempt=1
+delay="$PUSH_RETRY_DELAY_SECS"
+while :; do
+  push_out="$("${push_cmd[@]}" 2>&1)"
+  push_status=$?
+  # git writes its ref-status lines to stderr; keep them there.
+  [ -n "$push_out" ] && printf '%s\n' "$push_out" >&2
+
+  if [ "$push_status" -eq 0 ]; then
+    echo "push-branch.sh: pushed $branch to origin"
+    break
+  fi
+  # A here-string, not a pipe: `grep -q` exiting early would fail a pipeline
+  # under pipefail.
+  if grep -q '^ ! \[rejected\]' <<<"$push_out"; then
+    echo "push-branch.sh: push failed for $branch: origin has commits this branch does not (not retried)"
+    break
+  fi
+  if [ "$attempt" -ge "$PUSH_ATTEMPTS" ]; then
+    echo "push-branch.sh: push failed for $branch after $PUSH_ATTEMPTS attempts (see output above)"
+    break
+  fi
+  echo "push-branch.sh: push failed for $branch (attempt $attempt of $PUSH_ATTEMPTS); retrying in ${delay}s"
+  sleep "$delay"
+  attempt=$((attempt + 1))
+  delay=$((delay * 3))
+done
 exit 0

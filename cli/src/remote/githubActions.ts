@@ -75,8 +75,9 @@ export type CommandVerb = (typeof COMMAND_VERBS)[number];
 
 /**
  * The prefix of the hidden line every harness comment carries; the whole line is
- * `<!-- sdlc-harness event=<event> branch=<branch>[ question=<n>] -->`. A comment containing the
- * prefix anywhere is never a command.
+ * `<!-- sdlc-harness event=<event> branch=<branch>[ question=<n>][ engine=<engine>] -->`, where
+ * `engine=` is carried only by a `reply` posted after a successful dispatch. A comment containing
+ * the prefix anywhere is never a command.
  */
 export const COMMENT_MARKER = '<!-- sdlc-harness';
 
