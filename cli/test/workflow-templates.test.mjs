@@ -14,7 +14,10 @@
  * `actions`, `issues` and `pull-requests`, each `write`; the `Open the pull request and report`
  * step running `remote-run.sh deliver` after `Upload the state bundle` and before `Continue, wait
  * or stop`, `continue-on-error: true`, with `HARNESS_PR_TOKEN` drawn from `secrets.HARNESS_GIT_TOKEN`
- * through `env:`; the cancelled-job step calling `remote-run.sh report failed`; every GitHub
+ * through `env:`; the `run` job's `Open the draft pull request` step running `remote-run.sh open`
+ * after `Restore the previous job's state` and before `Run the harness`, its `if:` exactly
+ * `env.HARNESS_STOPPED != '1' && inputs.chain == 0`, `continue-on-error: true`, the same
+ * `HARNESS_PR_TOKEN` through `env:` and no expression in its `run:` line; the cancelled-job step calling `remote-run.sh report failed`; every GitHub
  * expression spaced after its braces and `{{cliVersion}}` the only template token, so the CLI's
  * renderer (`cli/src/core/templating.ts`) sees nothing else; no input or secret expression inside a
  * `run:` block (script injection); `continue` under `!cancelled()` and the upload and final push
@@ -383,6 +386,26 @@ test('deliver opens the pull request and reports, after the upload and before co
   assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.HARNESS_GIT_TOKEN \}\}$/m);
   const [body] = runBodies(step.split('\n'));
   assert.equal(body, 'bash "$SCRIPTS_DIR/remote-run.sh" deliver "$HARNESS_INPUT_BRANCH" "$RUNNER_TEMP/harness-state"');
+});
+
+test('open opens the draft pull request only in a person-started job, after the restore and before the harness, never failing the job', () => {
+  const runSteps = jobSteps('run');
+  const names = runSteps.map((s) => /- name: (.*)$/.exec(s[0])[1]);
+  const at = (name) => {
+    const i = names.indexOf(name);
+    assert.notEqual(i, -1, `the run job has a step named ${name}`);
+    return i;
+  };
+  const open = at('Open the draft pull request');
+  assert.ok(at("Restore the previous job's state") < open);
+  assert.ok(open < at('Run the harness'));
+  const step = runSteps[open].join('\n');
+  assert.equal(ifOf(step), "env.HARNESS_STOPPED != '1' && inputs.chain == 0");
+  assert.match(step, /^\s*continue-on-error: true$/m);
+  assert.match(step, /^\s*HARNESS_PR_TOKEN: \$\{\{ secrets\.HARNESS_GIT_TOKEN \}\}$/m);
+  const [body] = runBodies(runSteps[open]);
+  assert.ok(body.includes('remote-run.sh" open "$HARNESS_INPUT_BRANCH"'), body);
+  assert.ok(!body.includes('${{'), 'no expression inside the open step body');
 });
 
 test('a cancelled job reports failed through remote-run.sh report', () => {
