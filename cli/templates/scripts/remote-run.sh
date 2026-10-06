@@ -336,7 +336,9 @@
 # `COMMAND_HANDLE answer <n>` over `<your answer>`; the marker adds
 # `question=<n>`. With no question open it posts nothing, sets no label and
 # prints one `::error::` line naming the branch. The label
-# is set once per target, not per question. On a public repository a question
+# is set once per target, not per question. `parked` and `park_loop` append
+# `PAUSE_FOLDED_NOTE` to <note>, after one blank line, when the registry's
+# `pause_reason` is `user`: a pause the job dropped and the run never honoured. On a public repository a question
 # comment and its answer are public, as the artifact already is
 # (`docs/remote-execution.md` -> `## 11. Security`, *What a reader of the
 # repository's Actions runs can see*).
@@ -1466,6 +1468,8 @@ PR_CREATE_SETTING_PATH='Settings -> Actions -> General -> Workflow permissions'
 # to be trusted (docs/github-integration-research.md -> S6); the margin is the
 # framing lines and the marker.
 QUESTION_COMMENT_MAX_BYTES=250000
+# Names no login: the job sees only the `harness pause` run, whose actor is the bot.
+PAUSE_FOLDED_NOTE='A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows.'
 GH="${HARNESS_GH_CLI:-gh}"
 
 # How many runs `status` prints, and how many `run list` returns for status
@@ -4720,6 +4724,12 @@ forge_report() {
     resume_at=$(hr_registry_get "$registry_file" "$br" usage_resume_at)
     [ "$event" != failed ] || engine=$(hr_registry_get "$registry_file" "$br" engine)
   fi
+  case "$event" in
+    parked|park_loop)
+      if [ "$reason" = user ]; then
+        if [ -z "$note" ]; then note="$PAUSE_FOLDED_NOTE"; else note="$note"$'\n\n'"$PAUSE_FOLDED_NOTE"; fi
+      fi ;;
+  esac
 
   case "$event" in
     paused)
