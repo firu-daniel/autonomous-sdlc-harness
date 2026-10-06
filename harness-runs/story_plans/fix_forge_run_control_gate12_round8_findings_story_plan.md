@@ -57,7 +57,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 
 1. [x] **Task 1** — `pause-requested` answers "no pause" with its own exit code, `5` _(layer: cli)_ _(points: 8)_
 2. [x] **Task 2** — The job's control poll overlaps its bound, floors it at the job's start, and logs every poll _(layer: cli)_ _(points: 15)_
-3. [ ] **Task 3** — `push-branch.sh` retries a push the remote refused, at most three attempts in all, and never a `[rejected]` one _(layer: cli)_ _(points: 12)_
+3. [x] **Task 3** — `push-branch.sh` retries a push the remote refused, at most three attempts in all, and never a `[rejected]` one _(layer: cli)_ _(points: 12)_
 4. [ ] **Task 4** — `hr_push_landed` tells a moved remote from a refused push, and `start` and `review` name which _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — `control`'s reply after a dispatch records the engine in its marker _(layer: cli)_ _(points: 8)_
 6. [ ] **Task 6** — `remote_state` recognises a run whose `run` job GitHub never started _(layer: cli)_ _(points: 15)_

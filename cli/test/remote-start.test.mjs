@@ -240,7 +240,8 @@ exit 0
     { mode: 0o755 },
   );
 
-  const result = await f.start(['feat_x', '--prompt-file', f.prompt]);
+  // `push-branch.sh` retries the refused push; no wait between its attempts.
+  const result = await f.start(['feat_x', '--prompt-file', f.prompt], { PUSH_RETRY_DELAY_SECS: '0' });
   assert.equal(result.status, 4, result.stderr);
   assert.match(result.stderr, /failed at pushing feat_x/);
   assert.deepEqual(f.calls(), []);

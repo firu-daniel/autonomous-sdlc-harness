@@ -312,7 +312,8 @@ test('review failing placement: exactly one pull-request comment, exit 0, nothin
   const f = await collectFixture(t);
   writeFileSync(join(f.origin, 'hooks', 'pre-receive'), '#!/bin/sh\necho "push refused by the fixture" >&2\nexit 1\n', { mode: 0o755 });
   const before = await f.originRefs();
-  const result = await f.collect();
+  // `push-branch.sh` retries the refused push; no wait between its attempts.
+  const result = await f.collect({ PUSH_RETRY_DELAY_SECS: '0' });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
   assert.deepEqual(dispatches(calls), []);
