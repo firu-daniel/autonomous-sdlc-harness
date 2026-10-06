@@ -31,7 +31,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control_pr_at
 4. [x] **Task 4** — Add the `open` verb: open the draft pull request at the run's start and name it on the source issue _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Run `open` from `harness-run.yml` before the harness step of every person-started job _(layer: cli)_ _(points: 10)_
 6. [x] **Task 6** — `deliver`: post `completed` on the pull request and the issue, and mark the pull request ready _(layer: cli)_ _(points: 15)_
-7. [ ] **Task 7** — `report`: turn the pull request back to draft when a round starts, and say the draft stays open on `failed` and `stopped` _(layer: cli)_ _(points: 10)_
+7. [x] **Task 7** — `report`: turn the pull request back to draft when a round starts, and say the draft stays open on `failed` and `stopped` _(layer: cli)_ _(points: 10)_
 8. [ ] **Task 8** — `deliver`: reply to and resolve the review threads a round implemented _(layer: cli)_ _(points: 20)_
 9. [ ] **Task 9** — `report progress`: one phase-progress comment per run or round, edited in place _(layer: cli)_ _(points: 15)_
 10. [ ] **Task 10** — The job's supervision loop reports a phase change from the ledger _(layer: cli)_ _(points: 15)_

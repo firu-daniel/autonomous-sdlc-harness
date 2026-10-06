@@ -300,6 +300,17 @@
 # and the branch is unchanged, and names its way on: `COMMAND_HANDLE resume`
 # when the state is paused and an engine was recovered, else the **Run
 # workflow** form with that engine, or with the three to choose from.
+# On a pull-request target that is not a draft, `round` runs `gh pr ready
+# --undo` after its labels, with the caller's own token, and its comment says
+# the pull request is a draft again until the round completes; a refusal (a
+# plan without drafts) is one `::warning::` line naming gh's error. A `failed`
+# comment on a pull request reads the registry record's `engine`: for
+# `user_review` it names a review requesting changes and says the pull request
+# stays open; otherwise it says the draft stays open, to close to discard the
+# run, or, when an issue is known, to re-apply the trigger label there for a
+# new run on the next indexed branch. A plain `stopped` on a pull request says
+# its draft stays open and closing it discards the run. No other event changes
+# a pull request's draft state.
 # Every job event — `parked`, `park_loop`, `paused`, `resumed`, `round`,
 # `failed` and `not_started` — posts nothing and sets no label when `remote_branch_stopped`,
 # asked afresh, finds the branch stopped, so a job a stop overtook never
@@ -4509,7 +4520,7 @@ REPORT_NOT_STARTED_STATE=""
 REPORT_NOT_STARTED_ENGINE=""
 forge_report() {
   local event="$1" br="$2" note="${3-}" pr="${4-}" gone="${5-}" gone_sha="${6-}" state reason="" resume_at="" when registry_file
-  local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n route
+  local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n route engine="" undo=0
   case "$event" in
     parked|park_loop) state=parked ;;
     paused) state=paused ;;
@@ -4581,6 +4592,7 @@ forge_report() {
   if [ -n "$registry_file" ] && [ -f "$registry_file" ]; then
     reason=$(hr_registry_get "$registry_file" "$br" pause_reason)
     resume_at=$(hr_registry_get "$registry_file" "$br" usage_resume_at)
+    [ "$event" != failed ] || engine=$(hr_registry_get "$registry_file" "$br" engine)
   fi
 
   case "$event" in
@@ -4596,10 +4608,13 @@ forge_report() {
     resumed)
       text="The harness run on \`$br\` resumed." ;;
     failed)
-      if [ "$kind" = pr ]; then
-        text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, submit a review on this pull request requesting changes."
+      trigger_label="${FORGE_TRIGGER_LABEL:-${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}}"
+      if [ "$kind" = pr ] && [ "$engine" = user_review ]; then
+        text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, submit a review on this pull request requesting changes. This pull request stays open."
+      elif [ "$kind" = pr ]; then
+        # No review route: a round would start over a task run that never completed.
+        text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. This draft pull request stays open: close it to discard the run${FORGE_ISSUE:+, or re-apply the label \`$trigger_label\` to issue #$FORGE_ISSUE to start a new run on the next indexed branch}."
       else
-        trigger_label="${FORGE_TRIGGER_LABEL:-${HARNESS_TRIGGER_LABEL:-$DEFAULT_TRIGGER_LABEL}}"
         text="The harness run on \`$br\` failed. Its log is \`run.log\` in the run's \`$STATE_ARTIFACT_NAME\` artifact. To start again, re-apply the label \`$trigger_label\` to this issue; that starts a new run, on the next indexed branch."
       fi ;;
     stopped)
@@ -4610,9 +4625,15 @@ forge_report() {
         text="The harness run on \`$br\` was stopped. While the branch exists, reopen this pull request and comment \`${COMMAND_HANDLE} resume\` here, or comment it on the run's issue, to continue it from its committed ledger. A merged pull request cannot be reopened; after a merge, use the issue."
       else
         text="The harness run on \`$br\` was stopped. Comment \`${COMMAND_HANDLE} resume\` to continue it from its committed ledger. A review that requests changes is collected now, and its round starts once the resumed run finishes."
+        [ "$kind" != pr ] || text="$text Its draft pull request stays open; closing it discards the run."
       fi ;;
     round)
-      text="A user-review round started on \`$br\`; a \`completed\` comment follows when the branch is ready for review again." ;;
+      text="A user-review round started on \`$br\`; a \`completed\` comment follows when the branch is ready for review again."
+      # Written before the undo below, so it states the intent; a refusal is its warning line.
+      if [ "$kind" = pr ] && [ "$FORGE_PR_DRAFT" = false ]; then
+        undo=1
+        text="$text This pull request is a draft again until the round completes."
+      fi ;;
     not_started)
       text="GitHub did not start the job of the harness run on \`$br\`, so nothing ran and the branch is unchanged."
       if [ "$state" = paused ] && [ -n "$REPORT_NOT_STARTED_ENGINE" ]; then
@@ -4669,6 +4690,9 @@ forge_report() {
 
   [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" "$state" || :
   [ -z "$FORGE_PR" ] || forge_set_state "$FORGE_PR" "$state" || :
+  if [ "$undo" -eq 1 ] && ! gh_call pr ready "$FORGE_PR" --repo "$FORGE_REPO" --undo; then
+    echo "::warning::remote-run.sh: report: turning pull request #$FORGE_PR back to a draft was refused: $GH_ERR"
+  fi
   echo "remote-run.sh: report: $event on $br reported on #$target"
   return 0
 }

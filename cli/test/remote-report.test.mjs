@@ -10,13 +10,14 @@
  * one comment per open question file, written into the fixture checkout's clarification directory:
  * ascending, the file whole less its own `answer_<n>.md` lines or cut at a line within the byte bound, one
  * answer instruction and its copy block, and its marker carrying `question=<n>`; with no open question it
- * posts nothing and prints an `::error::` line.
+ * posts nothing and prints an `::error::` line. Only `round` changes a pull request's draft state, undoing a
+ * ready one after its labels; `failed` and `stopped` on a pull request say it stays open.
  *
  * The fixture is `remote-trigger.test.mjs`'s shape — `init`, `execution.target` `github-actions`,
  * `forge` `github`, the adopted tree pushed to the fixture's bare `origin` — plus branches pushed with a
  * task prompt and, unless a case says otherwise, `flow_progress/<branch>_progress.md`. `gh` is a stub
  * reached through `HARNESS_GH_CLI`: it logs each argument vector with the content of any `body=@<path>`,
- * answers `pr list` from `STUB_PRS`, a label read from `STUB_LABELS` and `run list` from
+ * answers `pr ready` with nothing, `pr list` from `STUB_PRS`, a label read from `STUB_LABELS` and `run list` from
  * `STUB_RUN_LIST` (each `[]` by default), and exits 4 on a call starting `STUB_FAIL_ON`. No case reaches
  * the network.
  */
@@ -46,6 +47,8 @@ if (process.env.STUB_FAIL_ON && args.join(' ').startsWith(process.env.STUB_FAIL_
 }
 if (args[0] === 'pr' && args[1] === 'list') {
   process.stdout.write(process.env.STUB_PRS || '[]');
+} else if (args[0] === 'pr' && args[1] === 'ready') {
+  process.stdout.write('');
 } else if (args[0] === 'run' && args[1] === 'list') {
   process.stdout.write(process.env.STUB_RUN_LIST || '[]');
 } else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1] ?? '')) {
@@ -363,6 +366,76 @@ test('failed on an issue names the label its provenance line records, not the de
   const [posted] = commentsOn(f.calls(), 7);
   assert.match(posted.body, /re-apply the label `ai-run`/);
   assert.ok(!posted.body.includes('`sdlc-harness`'), posted.body);
+});
+
+const prOn = (draft) => JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: draft }]);
+const readyCalls = (calls) => calls.filter((call) => call.args[0] === 'pr' && call.args[1] === 'ready');
+const DRAFT_AGAIN = 'This pull request is a draft again until the round completes.';
+
+test('round on a ready pull request turns it back to a draft after its labels, and says so', async (t) => {
+  const f = await reportFixture(t);
+  const result = await f.report(['round', 'feat_x'], { STUB_PRS: prOn(false) });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  assert.deepEqual(readyCalls(calls).map((call) => call.line), [`pr ready 12 --repo ${REPOSITORY} --undo`]);
+  const lastLabel = calls.findLastIndex((call) => /\/labels\b/.test(call.line));
+  assert.ok(calls.findIndex((call) => call.args[1] === 'ready') > lastLabel, calls.map((c) => c.line).join('\n'));
+  const [posted] = commentsOn(calls, 12);
+  assert.ok(posted.body.includes(DRAFT_AGAIN), posted.body);
+});
+
+test('round on a pull request that is already a draft makes no pr ready call', async (t) => {
+  const f = await reportFixture(t);
+  const result = await f.report(['round', 'feat_x'], { STUB_PRS: prOn(true) });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  assert.deepEqual(readyCalls(calls), []);
+  assert.ok(!commentsOn(calls, 12)[0].body.includes(DRAFT_AGAIN));
+});
+
+test('round whose undo is refused prints one ::warning:: line, exits 0 and keeps the running label', async (t) => {
+  const f = await reportFixture(t);
+  const result = await f.report(['round', 'feat_x'], { STUB_PRS: prOn(false), STUB_FAIL_ON: 'pr ready' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.match(/^::warning::/gm)?.length, 1, result.stdout);
+  assert.match(result.stdout, /back to a draft was refused: gh exited 4: stub gh failure/);
+  assert.deepEqual(labelAdds(f.calls(), 12).map((call) => call.args.at(-1)), ['labels[]=sdlc-harness: running']);
+});
+
+test('failed on a pull request for a task run names closing it and re-applying the label on the issue', async (t) => {
+  const f = await reportFixture(t);
+  f.record('feat_x', { engine: 'task' });
+  const result = await f.report(['failed', 'feat_x'], { STUB_PRS: prOn(true) });
+  assert.equal(result.status, 0, result.stderr);
+  const [posted] = commentsOn(f.calls(), 12);
+  assert.match(posted.body, /This draft pull request stays open: close it to discard the run, or re-apply the label `sdlc-harness` to issue #7 to start a new run on the next indexed branch\./);
+  assert.doesNotMatch(posted.body, /requesting changes/);
+});
+
+test('failed on a pull request for a round names a review requesting changes and says it stays open', async (t) => {
+  const f = await reportFixture(t);
+  f.record('feat_x', { engine: 'user_review' });
+  const result = await f.report(['failed', 'feat_x'], { STUB_PRS: prOn(true) });
+  assert.equal(result.status, 0, result.stderr);
+  const [posted] = commentsOn(f.calls(), 12);
+  assert.match(posted.body, /submit a review on this pull request requesting changes\. This pull request stays open\./);
+});
+
+test('stopped on a pull request says its draft stays open and closing it discards the run', async (t) => {
+  const f = await reportFixture(t);
+  const result = await f.report(['stopped', 'feat_x'], { STUB_PRS: prOn(true) });
+  assert.equal(result.status, 0, result.stderr);
+  const [posted] = commentsOn(f.calls(), 12);
+  assert.match(posted.body, /Its draft pull request stays open; closing it discards the run\./);
+});
+
+test('paused on a ready pull request changes no draft state', async (t) => {
+  const f = await reportFixture(t);
+  const result = await f.report(['paused', 'feat_x'], { STUB_PRS: prOn(false) });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  assert.equal(commentsOn(calls, 12).length, 1);
+  assert.deepEqual(readyCalls(calls), []);
 });
 
 test('completed is deliver\'s: nothing posted', async (t) => {
