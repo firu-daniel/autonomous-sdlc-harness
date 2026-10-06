@@ -47,7 +47,7 @@
 Each entry resolves to `harness-runs/code_reviews/feat_forge_reasoned_control_code_review/finding_<K>.md` through its `**Finding K**` reference. The leading number is the fix order; `K` is the finding's stable identity.
 
 1. [x] **Finding 4** — Declare `harness-control.yml`'s reads of the `HARNESS_CLI_VERSION:` line and the release-tag shape in `harness-run.yml`'s `DECLARED MIRRORS` _(layer: cli)_
-2. [ ] **Finding 3** — Strip line breaks from the agent's `action` and `verb` before the decision log line prints them _(layer: cli)_
+2. [x] **Finding 3** — Strip line breaks from the agent's `action` and `verb` before the decision log line prints them _(layer: cli)_
 3. [ ] **Finding 1** — Add a Gate 12 (xiv) leg (j) step that observes the `--restricted` confinement, and point the `## 8` row at it _(layer: general)_
 4. [ ] **Finding 2** — Add the job's token to the credential-value check, and state in `## 6` and `## 8` that the check catches verbatim copies only _(layer: cli, general)_
 

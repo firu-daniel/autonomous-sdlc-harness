@@ -7322,8 +7322,8 @@ control_mention() {
     control_refuse "$EXIT_REFUSED" "the agent's reading of the mention carries no decision object" \
       "Comment again, or comment a command. $(control_commands_way)"
   fi
-  action=$(printf '%s' "$decision" | jq -r '.d.action | if type == "string" then . else tojson end')
-  verb=$(printf '%s' "$decision" | jq -r '.d.verb | strings')
+  action=$(printf '%s' "$decision" | jq -r '.d.action | if type == "string" then gsub("[\r\n]+"; " ") else tojson end')
+  verb=$(printf '%s' "$decision" | jq -r '.d.verb | strings | gsub("[\r\n]+"; " ")')
   reason=$(printf '%s' "$decision" | jq -r '.d.reason | strings | gsub("[\r\n]+"; " ") | .[0:200]')
   ! mention_has_credential "$reason" || reason="(withheld: it carries a credential value)"
   echo "remote-run.sh: control: mention on #$CONTROL_NUMBER by @$CONTROL_ACTOR read as $action${verb:+ $verb} from $from: $reason"

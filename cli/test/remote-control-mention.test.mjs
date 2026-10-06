@@ -759,6 +759,14 @@ for (const [name, decision, rule] of [
   });
 }
 
+test('an action carrying a line break is refused with exit 2 and puts no workflow command on stdout', async (t) => {
+  const f = await controlFixture(t);
+  const run = await f.control("Let's @sdlc-harness pause", {}, { STUB_AGENT_OUTPUT: result({ action: 'x\n::error::forged', reason: 'r' }) });
+  const body = assertOneReply(f, run, 2);
+  assert.match(body, /was not run: the agent's reading of the mention is not a valid decision: /);
+  assert.ok(!run.stdout.split('\n').some((line) => line.startsWith('::error::forged')), run.stdout);
+});
+
 test('an agent exiting 1, and an is_error result, each reply and exit 3', async (t) => {
   const exited = await controlFixture(t);
   const exitedBody = assertOneReply(exited, await exited.control("Let's @sdlc-harness pause", {}, { STUB_AGENT_EXIT: '1', STUB_AGENT_OUTPUT: '' }), 3);
