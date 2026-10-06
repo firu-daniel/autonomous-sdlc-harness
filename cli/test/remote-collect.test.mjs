@@ -395,6 +395,13 @@ const labelCalls = (calls) =>
   calls.filter((call) => /^api --method POST repos\/[^ ]+\/issues\/\d+\/labels /.test(call.line)).map((call) => call.line);
 const labelOn = (n, state) => `api --method POST repos/${REPOSITORY}/issues/${n}/labels -f labels[]=sdlc-harness: ${state}`;
 
+/** The `not_started` push notification's stdout line for feat_x; fails when there is none. */
+const notifiedNotStarted = (result) => {
+  const line = result.stdout.split('\n').find((l) => l.startsWith('remote-run.sh: notified not_started for feat_x: '));
+  assert.ok(line, result.stdout);
+  return line;
+};
+
 /** Assert one `not_started` comment on #<n> and nothing pushed or dispatched; returns its body. */
 const assertNotStarted = async (f, result, before, n) => {
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
@@ -428,6 +435,7 @@ test('a first run whose job never started, with its issue\'s started marker: one
   const result = await f.collect(neverStarted({ olderBundle: false, prs: [], comments: { 7: [botComment('started')] } }));
   const body = await assertNotStarted(f, result, before, 7);
   assert.ok(body.includes('Comment `@sdlc-harness resume`'), body);
+  assert.ok(notifiedNotStarted(result).includes('/autonomous-sdlc-harness:branch-resume'), result.stdout);
   assert.deepEqual(labelCalls(f.calls()), [labelOn(7, 'paused')]);
 });
 
@@ -440,6 +448,7 @@ test('a first run whose job never started, with no marker: one issue comment nam
   assert.ok(body.includes(ROUTE_CHOICE), body);
   assert.ok(!body.includes('harness-state'), body);
   assert.ok(!body.includes('@sdlc-harness resume'), body);
+  assert.ok(!notifiedNotStarted(result).includes('/autonomous-sdlc-harness:branch-resume'), result.stdout);
   assert.deepEqual(labelCalls(f.calls()), [labelOn(7, 'failed')]);
 });
 

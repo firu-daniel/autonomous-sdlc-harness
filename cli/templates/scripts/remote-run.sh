@@ -6260,7 +6260,7 @@ collect_notify() {
 }
 
 verb_collect() {
-  local status=0 dir file out reason
+  local status=0 dir file out reason route way
   if ! forge_on; then
     echo "remote-run.sh: collect: the forge coupling is off (forge github and execution.target github-actions); nothing collected"
     exit "$EXIT_OK"
@@ -6307,9 +6307,13 @@ verb_collect() {
     if [ "$reason" = "$BS_DETAIL" ]; then reason=""; else reason="${reason%"): "*}"; fi
     REPORT_NOT_STARTED_STATE="$BS_STATE"
     REPORT_NOT_STARTED_ENGINE="$BS_ENGINE"
-    notify not_started "$branch" \
-      "$BS_DETAIL. Run $RESUME_HINT $branch to start it again; $(hr_github_resume_route "$branch" "${BS_ENGINE:-<task, user_review or docs: the one the run was started with>}")." \
-      "$reason"
+    route=$(hr_github_resume_route "$branch" "${BS_ENGINE:-<task, user_review or docs: the one the run was started with>}")
+    if [ "$BS_STATE" = paused ]; then
+      way="Run $RESUME_HINT $branch to start it again; $route."
+    else
+      way="Start it again ${route#or }."
+    fi
+    notify not_started "$branch" "$BS_DETAIL. $way" "$reason"
     # The reviews stay for the resumed run's own end.
     echo "remote-run.sh: collect: run ${BS_RUN_ID} of $branch never started; reported, and no round collected"
     exit "$EXIT_OK"
