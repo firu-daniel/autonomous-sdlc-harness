@@ -26,3 +26,5 @@
 - `npm test --workspace cli -- test/remote-progress.test.mjs` passes, run once from the repository root as one plain foreground command.
 - `bash scripts/typecheck.sh` passes.
 - Grep `remote-run.sh` for `issues/comments/` and find the `PATCH` only inside `forge_progress`: no other comment is ever edited.
+
+**Deviations from plan:** The "already current" comparison strips carriage returns **and trailing newlines** from both the listed and the rendered body, not only carriage returns. A stored body that lost its final newline would otherwise be PATCHed on every call. The header states this.

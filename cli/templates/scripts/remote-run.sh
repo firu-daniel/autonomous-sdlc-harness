@@ -336,6 +336,25 @@
 # comment and its answer are public, as the artifact already is
 # (`docs/remote-execution.md` -> `## 11. Security`, *What a reader of the
 # repository's Actions runs can see*).
+# `progress` (`forge_progress`) keeps ONE comment per run or round on the pull
+# request, never on the issue, and sets no label. Gated in order, each stop one
+# line: `forge_on`; `hr_progress_comments` (`execution.progressComments` false,
+# or unreadable); `remote_branch_stopped`, as for the job events above; no task
+# or user-review ledger at `$root`'s `<state_dir>/flow_progress/<branch>_progress.md`
+# (`hr_ledger_phases` — a docs-engine ledger posts nothing); no open
+# same-repository pull request that `forge_recognised` holds for. The body is
+# *Progress of the harness run on `<branch>`:* or *Progress of user-review round
+# <n> on `<branch>`:*, then `- <label>: done`, `in progress` (the first pending
+# phase) or `not started` for `Planning`, `Implementation`, `Branch review`,
+# `Done` (a round: `Fix plan`, `Fix implementation`, `Branch review`, `Done`) —
+# plain list items, no timestamp, no run URL — then the marker
+# `<!-- sdlc-harness event=progress branch=<branch> -->`, gaining ` round=<n>`
+# for a round. One paginated comment listing picks the newest
+# `github-actions[bot]` comment whose last non-empty line is that marker: none
+# is one `forge_comment`; a body equal to the render (carriage returns and
+# trailing newlines aside) is no call and one `already current` line; otherwise
+# one `PATCH` of that comment — the only comment this file ever edits. A refused
+# listing, create or edit is one `::warning::` line.
 # It never fails its caller: every problem is one line and exit 0.
 #
 # `open` OPENS THE RUN'S DRAFT PULL REQUEST at the run's start, so its issue
@@ -1338,6 +1357,13 @@
 #              naming `@sdlc-harness resume`, then `api --method POST
 #              repos/o/r/issues/7/labels -f labels[]=sdlc-harness: paused`
 #   forge off  `"forge": "none"`, then the same -> 0, one line, "$s.log" unchanged
+#   progress   a task ledger at sdlc-harness/flow_progress/feat_x_progress.md in
+#              the checkout and the stub answering `pr list` with [{"number":12,
+#              "isCrossRepository":false}]: bash scripts/remote-run.sh report
+#              progress feat_x -> 0; "$s.log" gains `api --paginate
+#              repos/o/r/issues/12/comments ...`, then one POST on 12 ending in
+#              `event=progress branch=feat_x -->`; with that comment listed, no
+#              write; with the ledger changed, one `PATCH repos/o/r/issues/comments/<id>`
 #
 #   deliver needs report's setup, a stub answering the create with
 #   https://github.com/o/r/pull/12, and <b> a bundle directory whose status.json
@@ -4262,12 +4288,12 @@ forge_fetch_branch() {
   return 0
 }
 
-# forge_marker <event> <branch> [<question> [<engine>]] — the one producer of a
-# comment's marker line, built from COMMENT_MARKER: ` question=<n>` then
-# ` engine=<engine>`, each only when non-empty, before ` -->`.
+# forge_marker <event> <branch> [<question> [<engine> [<round>]]] — the one
+# producer of a comment's marker line, built from COMMENT_MARKER: ` question=<n>`,
+# ` engine=<engine>` then ` round=<n>`, each only when non-empty, before ` -->`.
 forge_marker() {
-  printf '%s event=%s branch=%s%s%s -->\n' "$COMMENT_MARKER" "$1" "$2" \
-    "${3:+ question=$3}" "${4:+ engine=$4}"
+  printf '%s event=%s branch=%s%s%s%s -->\n' "$COMMENT_MARKER" "$1" "$2" \
+    "${3:+ question=$3}" "${4:+ engine=$4}" "${5:+ round=$5}"
 }
 
 # forge_issue_var <branch> — FORGE_ISSUE from the last provenance line
@@ -4442,11 +4468,11 @@ forge_dispatch_engine_var() {
   return 0
 }
 
-# forge_comment <number> <event> <branch> <body_file> [<question> [<engine>]] —
-# append the marker to <body_file> and post it on issue or pull request <number>.
+# forge_comment <number> <event> <branch> <body_file> [<question> [<engine> [<round>]]]
+# — append the marker to <body_file> and post it on issue or pull request <number>.
 forge_comment() {
-  local number="$1" event="$2" branch="$3" file="$4" question="${5-}" engine="${6-}" status
-  if ! { printf '\n'; forge_marker "$event" "$branch" "$question" "$engine"; } >>"$file"; then
+  local number="$1" event="$2" branch="$3" file="$4" question="${5-}" engine="${6-}" round="${7-}" status
+  if ! { printf '\n'; forge_marker "$event" "$branch" "$question" "$engine" "$round"; } >>"$file"; then
     echo "remote-run.sh: cannot append the marker to '$file'" >&2
     return 1
   fi
@@ -4746,8 +4772,122 @@ forge_report() {
   return 0
 }
 
+# forge_progress <branch> — upsert the one progress comment of the run or round
+# on its pull request, rendered from the job checkout's flow-progress ledger:
+# created when none is listed, edited in place only when its body differs. No
+# issue fallback, no label. Always 0.
+forge_progress() {
+  local br="$1" status state_rel phases engine round p line i first=1 marker
+  local tmp made_tmp="" file pick id same
+  local -a labels states
+  if ! forge_on; then
+    echo "remote-run.sh: report: the forge coupling is off (forge github and execution.target github-actions); nothing posted"
+    return 0
+  fi
+  status=0
+  hr_progress_comments "$root" || status=$?
+  case "$status" in
+    0) ;;
+    1) echo "remote-run.sh: report: progress comments are off by execution.progressComments; nothing posted"; return 0 ;;
+    *) echo "remote-run.sh: report: execution.progressComments is unreadable; nothing posted"; return 0 ;;
+  esac
+  forge_repo_var || return 0
+  ALL_RUNS_LISTED=0
+  status=0
+  remote_branch_stopped "$br" || status=$?
+  if [ "$status" -eq 0 ]; then
+    echo "remote-run.sh: report: $br was stopped, and the stop already reported the run; nothing posted"
+    return 0
+  fi
+  [ "$status" -eq 1 ] \
+    || echo "remote-run.sh: report: whether $br was stopped is unknown ($GH_ERR); reporting the progress" >&2
+  state_rel=$(hr_state_dir "$root" 2>/dev/null) || state_rel=""
+  if [ -z "$state_rel" ] || ! phases=$(hr_ledger_phases "$root/${state_rel%/}/flow_progress/${br}_progress.md"); then
+    echo "remote-run.sh: report: $br has no task or user-review ledger; nothing posted"
+    return 0
+  fi
+  read -r engine round states[0] states[1] states[2] states[3] <<<"$phases"
+  forge_fetch_branch "$br"
+  forge_pr_var "$br" || FORGE_PR=""
+  if [ -z "$FORGE_PR" ] || ! forge_recognised "$br"; then
+    echo "remote-run.sh: report: $br has no recognised open pull request; nothing posted"
+    return 0
+  fi
+
+  if [ "$engine" = user_review ]; then
+    labels=('Fix plan' 'Fix implementation' 'Branch review' 'Done')
+    line="Progress of user-review round $round on \`$br\`:"
+  else
+    labels=('Planning' 'Implementation' 'Branch review' 'Done')
+    line="Progress of the harness run on \`$br\`:"
+    round=""
+  fi
+  marker=$(forge_marker progress "$br" "" "" "$round")
+
+  tmp="${RUNNER_TEMP-}"
+  if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
+    tmp=$(mktemp -d) || tmp=""
+    made_tmp="$tmp"
+  fi
+  if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-progress-comment.XXXXXX"); then
+    echo "::warning::remote-run.sh: report: cannot create the progress comment file for #$FORGE_PR; nothing posted"
+    [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+    return 0
+  fi
+  # No timestamp and no run URL: an unchanged ledger must render byte-identical.
+  # Plain list items: a `- [ ]` box is clickable by anyone with write access.
+  {
+    printf '%s\n\n' "$line"
+    for i in 0 1 2 3; do
+      if [ "${states[$i]}" = done ]; then
+        p=done
+      elif [ "$first" -eq 1 ]; then
+        p="in progress"; first=0
+      else
+        p="not started"
+      fi
+      printf -- '- %s: %s\n' "${labels[$i]}" "$p"
+    done
+  } >"$file"
+  { cat "$file"; printf '\n%s\n' "$marker"; } >"$file.full"
+
+  if ! gh_call api --paginate "repos/$FORGE_REPO/issues/$FORGE_PR/comments" --jq '.[] | {id, login: .user.login, body}'; then
+    echo "::warning::remote-run.sh: report: listing the comments of #$FORGE_PR was refused, so the progress is not posted: $GH_ERR"
+  elif ! pick=$(printf '%s' "$GH_OUT" | jq -s -r --arg m "$marker" --arg want "$(cat "$file.full")" '
+      def norm: gsub("\r"; "") | sub("\n+$"; "");
+      [.[] | select(type == "object" and .login == "github-actions[bot]" and (.id | type) == "number")
+        | select(((.body // "") | gsub("\r"; "") | split("\n") | map(select(test("^\\s*$") | not)) | last // "") == $m)]
+      | max_by(.id) // empty
+      | "\(.id) \(if ((.body // "") | norm) == ($want | norm) then "same" else "differs" end)"' 2>/dev/null); then
+    echo "::warning::remote-run.sh: report: the comments of #$FORGE_PR are not the expected JSON, so the progress is not posted"
+  elif [ -z "$pick" ]; then
+    if forge_comment "$FORGE_PR" progress "$br" "$file" "" "" "$round"; then
+      echo "remote-run.sh: report: progress on $br posted on #$FORGE_PR"
+    else
+      echo "::warning::remote-run.sh: report: posting the progress comment on #$FORGE_PR was refused: $GH_ERR"
+    fi
+  else
+    id="${pick%% *}"
+    same="${pick#* }"
+    if [ "$same" = same ]; then
+      echo "remote-run.sh: report: the progress comment on #$FORGE_PR is already current"
+    elif gh_call api --method PATCH "repos/$FORGE_REPO/issues/comments/$id" -F "body=@$file.full"; then
+      echo "remote-run.sh: report: progress on $br edited in comment $id on #$FORGE_PR"
+    else
+      echo "::warning::remote-run.sh: report: editing the progress comment $id on #$FORGE_PR was refused: $GH_ERR"
+    fi
+  fi
+  rm -f "$file" "$file.full"
+  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+  return 0
+}
+
 verb_report() {
-  forge_report "$report_event" "$branch" "$report_note"
+  if [ "$report_event" = progress ]; then
+    forge_progress "$branch"
+  else
+    forge_report "$report_event" "$branch" "$report_note"
+  fi
   exit "$EXIT_OK"
 }
 
