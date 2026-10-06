@@ -25,7 +25,7 @@ Top risks: the widened recognition could send comments or labels to a pull reque
 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control_pr_at_start/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence in the configured layer order (`cli`, `plugin`), with the catch-all `general` layer last.
 
-1. [ ] **Task 1** — Declare `execution.progressComments` in the configuration model and its check _(layer: cli)_ _(points: 10)_
+1. [x] **Task 1** — Declare `execution.progressComments` in the configuration model and its check _(layer: cli)_ _(points: 10)_
 2. [ ] **Task 2** — Add `hr_progress_comments` and `hr_ledger_phases` to the run library _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Recognise a run's branch by its task prompt or its ledger, and read the pull request's draft state _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Add the `open` verb: open the draft pull request at the run's start and name it on the source issue _(layer: cli)_ _(points: 20)_
