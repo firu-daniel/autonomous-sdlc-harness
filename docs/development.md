@@ -1254,6 +1254,26 @@ gh workflow list --all
 
 Passes when `harness-run`, `harness-resume`, `harness-trigger` and `harness-control` are each listed by that name, which is the templates' own `name:` value, and none by its `.github/workflows/<file>` path. GitHub lists a file it cannot parse by its path, as round 7 recorded for `harness-control.yml`; the `doctor --check-github` run below now fails on such a file, naming it.
 
+Read the poller's workflow record; its id and state are also on its line of the workflow list above:
+
+```
+gh workflow view harness-resume.yml --repo <owner>/<scratch-repo>
+```
+
+Where its state reads `disabled_manually`, enable it:
+
+```
+gh workflow enable harness-resume.yml --repo <owner>/<scratch-repo>
+```
+
+Over the hour after the adoption push, watch for its first scheduled run; the legs below need not wait for it:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-resume.yml --event schedule
+```
+
+Record the record's id and state, and whether a `schedule` run appears within about an hour. If none does, make a trivial edit to `.github/workflows/harness-resume.yml`, commit and push it as above, and record whether ticks start. This records `docs/remote-execution.md` → `## 6. What is not verified here`'s row on a `schedule` workflow whose record GitHub reused. A missing tick is an observation, not a failed setup.
+
 Read the pull-request setting:
 
 ```
@@ -1483,7 +1503,7 @@ Then, on the issue:
 gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@SDLC-HARNESS pause"
 ```
 
-Passes when a `harness-control.yml` run for it gets past its `if:` and a reply follows, accepted or refused by the run's state. A commenter without write access is not runnable on a scratch repository owned by a personal account, where every collaborator holds `write`, as round 5's leg (b) was not; record it as not run.
+Passes when a `harness-control.yml` run for it gets past its `if:` and a reply follows, accepted or refused by the run's state. Where the pause is accepted and the run parks before it yields, the park's comment carries the line *"A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows."*, and no `paused` comment follows; where it yields first, a `paused` comment follows. Record which happened. A commenter without write access is not runnable on a scratch repository owned by a personal account, where every collaborator holds `write`, as round 5's leg (b) was not; record it as not run.
 
 **(g) Stop.**
 
@@ -1565,7 +1585,7 @@ gh issue comment <issue> --repo <owner>/<scratch-repo> --body "@sdlc-harness res
 gh api -X DELETE repos/<owner>/<scratch-repo>/git/refs/heads/<slug>
 ```
 
-Passes when the issue carries a `stopped` comment saying the branch was deleted and the run cannot be resumed, the issue carries `sdlc-harness: stopped`, a `harness stop <slug>` run is listed under the default branch, and no `harness-resume.yml` run dispatches `<slug>` again: no `harness run <slug>` run follows the stop. Read the runs with:
+Passes when the issue carries a `stopped` comment saying the branch was deleted and the run cannot be resumed, the issue carries `sdlc-harness: stopped`, a `harness stop <slug>` run is listed under the default branch, and no `harness-resume.yml` run dispatches `<slug>` again: no `harness run <slug>` run follows the stop. The run's pull request, the draft the resume opened, which GitHub closes with the deletion, also carries a `stopped` comment and `sdlc-harness: stopped`, and its progress comment reads `stopped` where it read `in progress`. The branch also stays deleted: once the cancelled `harness run <slug>` run has finished, origin has no `<slug>`, and that run's `Push the branch` step logs `push-branch.sh: origin no longer has <slug>, which this checkout tracks; not pushing it back`. Read the runs with:
 
 ```
 gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml
@@ -1574,6 +1594,22 @@ gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml
 ```
 gh run list --repo <owner>/<scratch-repo> --workflow harness-resume.yml
 ```
+
+Then read the branch, the pull request and the cancelled run's log:
+
+```
+gh api repos/<owner>/<scratch-repo>/branches/<slug>
+```
+
+```
+gh pr view <pr> --repo <owner>/<scratch-repo> --json state,labels
+```
+
+```
+gh run view <run id> --repo <owner>/<scratch-repo> --log
+```
+
+The first answers `HTTP 404` (`Branch not found`). The legs run from another device with the machine off, so the branch is read through the API rather than a local clone. Record the `Push the branch` step's line and the pull request's labels.
 
 Record the deletion's `harness-control.yml` run with the two `harness-control.yml` commands above. A close by a triage-role user is not runnable on a scratch repository owned by a personal account, where every collaborator holds `write`, as (f) records for the triage refusal; record it as not run.
 
@@ -1593,7 +1629,7 @@ gh run view <run id> --repo <owner>/<scratch-repo> --log-failed
 
 Passes when the run's `wrong-ref` job fails with an `::error::` line naming `<slug>` as the ref to use, and its `run` job is skipped. Record the error line.
 
-**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); and *The whole chain on GitHub*, by the legs together. Leg (h) settles *A `delete` event's workflow runs from the default branch*, *A `pull_request` `closed` job runs the merge-commit copy of the workflow*, *The contents API serves a file at a commit no branch points at any more* and *A workflow can be dispatched from the default branch while its `branch` input names a deleted branch*; leg (d) settles *A pull request opened with `HARNESS_GIT_TOKEN` puts a cross-reference on the issue its body mentions* where that secret is set. *The job's token may mark a pull request ready for review and convert it back to draft* is settled by leg (d) for the ready flip and by leg (e) for the conversion to draft. Leg (e) also settles *The job's token may reply to a review comment*, *`resolveReviewThread` accepts the job's token*, *A review comment's GraphQL `databaseId` equals the REST `id` the round marker records* and, through the progress comment's edits, *The job's token may edit its own issue comment*.
+**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); and *The whole chain on GitHub*, by the legs together. Leg (h) settles *A `delete` event's workflow runs from the default branch*, *A `pull_request` `closed` job runs the merge-commit copy of the workflow*, *The contents API serves a file at a commit no branch points at any more* and *A workflow can be dispatched from the default branch while its `branch` input names a deleted branch*, and its deletion settles *`gh pr list --head <branch> --state all` lists a pull request whose head branch was deleted, with its labels*; leg (d) settles *A pull request opened with `HARNESS_GIT_TOKEN` puts a cross-reference on the issue its body mentions* where that secret is set. *The job's token may mark a pull request ready for review and convert it back to draft* is settled by leg (d) for the ready flip and by leg (e) for the conversion to draft. Leg (e) also settles *The job's token may reply to a review comment*, *`resolveReviewThread` accepts the job's token*, *A review comment's GraphQL `databaseId` equals the REST `id` the round marker records* and, through the progress comment's edits, *The job's token may edit its own issue comment*.
 
 **(xv) The allow-list refuses a writer it does not name, on every route.** It observes the run-actor allow-list `HARNESS_RUN_ACTORS` on GitHub (`docs/remote-execution.md` → `## 11. Security`, *Who can spend the credential*): the refusal on each route a writer can take, and the admission of the harness's own dispatches and of the owner under the unset default. On the scratch repository, with (xiv)'s setup done, give a second account the `write` role — `expause-admin`'s role in the 2026-10-05 measurement (`docs/team-accounts-research.md` → `### The repository facts the options rest on`) — and run that account's commands with `gh` authenticated as it. Delete the variable, so the owner-only default applies, and make the self-pause small for leg (e):
 

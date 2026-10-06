@@ -34,7 +34,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 4. [x] **Task 4** — A park that overtakes a requested pause says the pause is folded into it _(layer: cli)_ _(points: 12)_
 5. [x] **Task 5** — `docs/github-run-control.md`: the deleted branch's pull request, the stopped progress comment, the folded pause _(layer: general)_ _(points: 13)_
 6. [x] **Task 6** — `docs/remote-execution.md`: a deleted branch stays deleted, and the poller's unverified schedule _(layer: general)_ _(points: 12)_
-7. [ ] **Task 7** — `docs/development.md` Gate 12 procedure: legs (f) and (h) pass conditions, and the poller schedule check _(layer: general)_ _(points: 10)_
+7. [x] **Task 7** — `docs/development.md` Gate 12 procedure: legs (f) and (h) pass conditions, and the poller schedule check _(layer: general)_ _(points: 10)_
 8. [ ] **Task 8** — `docs/development.md`: the Gate 12 round 9 record, copied as written _(layer: general)_ _(points: 8)_
 9. [ ] **Task 9** — `docs/outer-loop-verification.md`: the drift block's comment-only scripts re-graded, and `### 1.2`'s deleted-on-origin row _(layer: general)_ _(points: 10)_
 

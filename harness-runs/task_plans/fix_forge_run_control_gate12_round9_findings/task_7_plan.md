@@ -67,3 +67,7 @@
 - Every command added sits alone in a fenced block, one command per line, as the ledger's adopter-facing rule requires: grep the diff for an added inline backticked `gh ` or `git ` command outside a fence and find none.
 - The quoted folded-pause line equals `PAUSE_FOLDED_NOTE`'s value in `cli/templates/scripts/remote-run.sh`, byte for byte.
 - `git diff docs/development.md` changes nothing above the line `**Setup.**`.
+
+**Deviations from plan:**
+- The first Verification bullet's grep finds one added inline backticked `gh ` string outside a fence: the quoted `## 8.` row title *`gh pr list --head <branch> --state all` lists a pull request whose head branch was deleted, with its labels* in leg (h)'s **What it settles**, which this task's own last Work bullet requires verbatim. It is a row citation, not a command the reader runs; no other added line matches.
+- The poller check says the record's id and state are also on its line of the `gh workflow list --all` output already in the setup, because whether `gh workflow view`'s default output prints the state could not be checked: running `gh workflow view --help` was refused in this session. The evidence is reading, not execution.
