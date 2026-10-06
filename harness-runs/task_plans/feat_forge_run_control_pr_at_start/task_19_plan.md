@@ -39,3 +39,9 @@
 - Grep `docs/development.md` for `is the issue's number until leg (d)` and find nothing. Grep it for `isDraft` inside (xiv) and find it in legs (a), (c) or (d), (e) and (h).
 - Every command added to (xiv) sits alone in its own fenced block, one command per line (lessons ledger, *Adopter-facing documentation*). Check with `git diff HEAD -- docs/development.md` before committing.
 - Row 19 opens with `**Shipped.**`, and the round records *Round 6*, *Round 7* and *Round 8* show no hunk in that diff.
+
+**Deviations from plan:**
+
+- Leg (f)'s commands also had `<number>` / `<issue number>` renamed to `<issue>` / `<pr>`: the introduction's `<number>` definition was removed, so leaving them would have cited an undefined placeholder. Its pass conditions are unchanged.
+- Leg (e)'s post-round read (threads, `isDraft` `false`, the round progress comment) is placed at leg (f)'s step that waits for (e)'s round to complete, because (f) acts while that round is still running.
+- `gh pr list --head <slug>` moved from leg (d) to leg (a), where the pull request now first exists.
