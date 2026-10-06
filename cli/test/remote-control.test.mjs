@@ -8,7 +8,7 @@
  * replies.** Each ignored shape is driven and asserted to call no `gh` at all; each refusal arm —
  * `HARNESS_REMOTE_STOP`, the coupling off, a `read` answer, a failed permission call, a writer the list
  * does not admit, `ghost`, an unlisted bot, an unknown verb, a fork, a head
- * with neither the ledger nor a `harness run` in flight, a protected branch, an issue with no genuine
+ * with neither a task prompt, the ledger nor a `harness run` in flight, a protected branch, an issue with no genuine
  * start, an issue whose started branch is gone from origin — is asserted to send no `workflow run` and
  * to post exactly one reply. On an issue, only a `github-actions[bot]` comment that opens with the
  * trigger's start sentence and ends with the `started` marker names the branch, and that marker makes
@@ -150,19 +150,27 @@ async function controlFixture(t, { forge = 'github', ledger: ledgerText = '# Pro
   await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: adopt the harness']);
   await runGit(dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${config.defaultBranch}`]);
 
-  /** Push <branch> to origin with a task prompt naming issue 7 and, when <ledger>, its ledger. */
-  const pushBranch = async (branch, { ledger = true } = {}) => {
+  /**
+   * Push <branch> to origin with, when <prompt>, a task prompt naming issue 7 and, when <ledger>, its
+   * ledger; with neither, the branch's one commit is empty.
+   */
+  const pushBranch = async (branch, { prompt = true, ledger = true } = {}) => {
     await runGit(dir, ['checkout', '--quiet', '-b', branch]);
-    const files = [`${STATE_DIR}/task_prompts/${branch}_task_prompt.md`];
-    mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
-    writeFileSync(join(dir, files[0]), `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`);
-    if (ledger) {
-      files.push(`${STATE_DIR}/flow_progress/${branch}_progress.md`);
-      mkdirSync(join(dir, STATE_DIR, 'flow_progress'), { recursive: true });
-      writeFileSync(join(dir, files[1]), ledgerText);
+    const files = [];
+    if (prompt) {
+      const promptFile = `${STATE_DIR}/task_prompts/${branch}_task_prompt.md`;
+      files.push(promptFile);
+      mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
+      writeFileSync(join(dir, promptFile), `# A task\n\nDo it.\n\n---\n\nStarted from ${ISSUE_URL} by @alice, who applied the label \`sdlc-harness\`.\n`);
     }
-    await runGit(dir, ['add', '--force', ...files]);
-    await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', `fixture: ${branch}`]);
+    if (ledger) {
+      const ledgerFile = `${STATE_DIR}/flow_progress/${branch}_progress.md`;
+      files.push(ledgerFile);
+      mkdirSync(join(dir, STATE_DIR, 'flow_progress'), { recursive: true });
+      writeFileSync(join(dir, ledgerFile), ledgerText);
+    }
+    if (files.length > 0) await runGit(dir, ['add', '--force', ...files]);
+    await runGit(dir, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', `fixture: ${branch}`]);
     const push = await runGit(dir, ['push', '--quiet', '--no-verify', 'origin', `HEAD:refs/heads/${branch}`]);
     assert.equal(push.status, 0, push.stderr);
     await runGit(dir, ['checkout', '--quiet', config.defaultBranch]);
@@ -419,8 +427,8 @@ const featYRun = (status, fields = {}) =>
   ({ databaseId: 801, displayTitle: 'harness run feat_y', status, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/801', ...fields });
 /** control_run_in_flight's listing, the one `run list` asking for `displayTitle,status` alone. */
 const inFlightListings = (calls) => calls.filter((call) => call.line.startsWith('run list ') && call.line.includes('--json displayTitle,status --limit'));
-const NO_LEDGER_REFUSAL =
-  /`feat_y` is not a harness branch: its tip carries no flow-progress ledger, and no `harness run feat_y` run is queued or in progress\. Only a branch a harness run works on can be commanded\./;
+const NOT_HARNESS_BRANCH_REFUSAL =
+  /`feat_y` is not a harness branch: its tip carries neither a task prompt nor a flow-progress ledger, and no `harness run feat_y` run is queued or in progress\. Only a branch a harness run works on can be commanded\./;
 
 test('a branch with a ledger is accepted with no in-flight listing', async (t) => {
   const f = await controlFixture(t);
@@ -429,9 +437,22 @@ test('a branch with a ledger is accepted with no in-flight listing', async (t) =
   assert.deepEqual(inFlightListings(f.calls()), []);
 });
 
-test('a pull request whose head has no ledger but a harness run in progress is accepted by stop', async (t) => {
+test('a pull request whose head carries only its task prompt, with no run in flight, is accepted with no in-flight listing', async (t) => {
   const f = await controlFixture(t);
   await f.pushBranch('feat_y', { ledger: false });
+  const result = await f.control('@sdlc-harness status', {}, { STUB_PR: FEAT_Y_PR, STUB_RUN_LIST: '[]' });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  assert.deepEqual(inFlightListings(calls), []);
+  const posted = replies(calls);
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].body, /^@alice: no harness run is listed for `feat_y`\./);
+  assert.doesNotMatch(posted[0].body, /not a harness branch/);
+});
+
+test('a pull request whose head carries neither a task prompt nor a ledger but a harness run in progress is accepted by stop', async (t) => {
+  const f = await controlFixture(t);
+  await f.pushBranch('feat_y', { prompt: false, ledger: false });
   const result = await f.control('@sdlc-harness stop', {}, {
     STUB_PR: FEAT_Y_PR,
     STUB_RUN_LIST: JSON.stringify([featYRun('in_progress')]),
@@ -446,9 +467,9 @@ test('a pull request whose head has no ledger but a harness run in progress is a
   assert.match(posted[0].body, /^Stop requested by @alice/);
 });
 
-test('a pull request whose head has no ledger but a queued harness run is accepted by pause', async (t) => {
+test('a pull request whose head carries neither a task prompt nor a ledger but a queued harness run is accepted by pause', async (t) => {
   const f = await controlFixture(t);
-  await f.pushBranch('feat_y', { ledger: false });
+  await f.pushBranch('feat_y', { prompt: false, ledger: false });
   const result = await f.control('@sdlc-harness pause', {}, {
     STUB_PR: FEAT_Y_PR,
     STUB_RUN_LIST: JSON.stringify([featYRun('queued')]),
@@ -458,19 +479,19 @@ test('a pull request whose head has no ledger but a queued harness run is accept
     ['workflow run harness-run.yml --ref feat_y -f action=pause -f branch=feat_y']);
 });
 
-test('a pull request whose head has no ledger and only a completed run is not a harness branch', async (t) => {
+test('a pull request whose head carries neither a task prompt nor a ledger and only a completed run is not a harness branch', async (t) => {
   const f = await controlFixture(t);
-  await f.pushBranch('feat_y', { ledger: false });
+  await f.pushBranch('feat_y', { prompt: false, ledger: false });
   const result = await f.control('@sdlc-harness pause', {}, {
     STUB_PR: FEAT_Y_PR,
     STUB_RUN_LIST: JSON.stringify([featYRun('completed', { conclusion: 'success' })]),
   });
-  assertRefused(f, result, NO_LEDGER_REFUSAL);
+  assertRefused(f, result, NOT_HARNESS_BRANCH_REFUSAL);
 });
 
 test('a failed in-flight listing is refused naming the read, never as not a harness branch', async (t) => {
   const f = await controlFixture(t);
-  await f.pushBranch('feat_y', { ledger: false });
+  await f.pushBranch('feat_y', { prompt: false, ledger: false });
   const result = await f.control('@sdlc-harness pause', {}, { STUB_PR: FEAT_Y_PR, STUB_FAIL_ON: 'run list' });
   assert.equal(result.status, 3, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
@@ -559,7 +580,7 @@ test('an issue whose genuine start names a branch gone from origin is refused as
 test('stop on a pull request: the marker, the cancel, the stopped comment and a reply, each naming @alice', async (t) => {
   const f = await controlFixture(t);
   const result = await f.control('@sdlc-harness stop', {}, {
-    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: false }]),
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
@@ -580,7 +601,7 @@ test('stop typed on the issue posts stopped on the pull request and the reply on
   const f = await controlFixture(t);
   const result = await f.control('@sdlc-harness stop', { number: 7, pr: false }, {
     STUB_COMMENTS: JSON.stringify([startComment('feat_x')]),
-    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: false }]),
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   const calls = f.calls();
@@ -646,7 +667,7 @@ const finishedRun = (status, fields = {}, questions = '') => ({
   STUB_BUNDLE_STATUS: status,
   STUB_BUNDLE_FIELDS: JSON.stringify(fields),
   STUB_BUNDLE_QUESTIONS: questions,
-  STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+  STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: false }]),
 });
 
 /** Assert a sent resume: exit 0, <dispatch> alone, one reply matching <pattern>, `running` on 7 and 12. */
@@ -918,7 +939,7 @@ const neverStarted = ({ olderBundle, comments }) => ({
   }),
   STUB_JOBS: JSON.stringify({ jobs: [{ id: 9001, name: 'run', status: 'completed', conclusion: 'cancelled', steps: [] }] }),
   STUB_ITEM_COMMENTS: JSON.stringify(comments),
-  STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+  STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: false }]),
 });
 
 const RESUME_DISPATCH_AS = (engine) =>

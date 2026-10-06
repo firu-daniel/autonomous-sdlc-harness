@@ -37,3 +37,11 @@
 - Grep `cli/test` for `ledger: false`. Every hit is either one of the cases this task names, now carrying `prompt: false` beside it, or one that the first Tests sub-step recorded as independent of recognition.
 - `bash scripts/typecheck.sh` passes.
 - Grep `cli/templates/scripts/remote-run.sh` for `carries no flow-progress ledger` and find nothing: every refusal and log line names both files.
+
+**Deviations from plan:**
+
+- The new `remote-report.test.mjs` prompt-only case pushes `feat_y` with `{ ledger: false }` rather than `feat_x`: the fixture already pushes `feat_x` with its ledger, so `feat_x` cannot carry the prompt alone.
+- The new `remote-control.test.mjs` prompt-only case with no run in flight uses `@sdlc-harness status` with `STUB_RUN_LIST: '[]'`: every acting verb refuses a run that is not listed, so `status` is the verb that is accepted with nothing in flight.
+- Both `pushBranch` helpers that build a file list (`remote-report`, `remote-control`) commit with `--allow-empty`, so `{ prompt: false, ledger: false }` pushes an empty commit.
+- Also updated beyond the listed targets, for the same rule: the `stop` paragraph's and `control`'s `forge_recognised` comments (*"no ledger-at-tip check"*, *"may no longer carry its ledger"*), `control_check_branch`'s doc comment, and the suites' header paragraphs that named the ledger-only rule.
+- `remote-control.test.mjs` was run with its output piped through `grep` for the summary lines (86 tests, 86 pass, 0 fail); the other two suites ran as plain foreground commands. A scratch probe confirmed the `forge_pr_var` jq filter yields `12 true` / `12 false` for the first same-repository element, empty for `[]`, and an error for a non-array.

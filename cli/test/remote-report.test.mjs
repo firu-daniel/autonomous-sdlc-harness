@@ -4,8 +4,8 @@
  * **The rule these tests exist to enforce: a lifecycle event reaches the run's pull request, else its
  * issue, as one marked comment naming a GitHub action, and leaves exactly one state label on each; with
  * the forge coupling off it calls no `gh` at all.** The target rule's arms — a same-repository pull
- * request whose head carries the flow-progress ledger, one whose head does not, a fork's, and no target
- * at all — are each driven, as are the state-label replacement, the bounded create-and-retry of a failed
+ * request whose head carries the flow-progress ledger, one whose head carries only its task prompt, one
+ * whose head carries neither, a fork's, and no target at all — are each driven, as are the state-label replacement, the bounded create-and-retry of a failed
  * add, the stop check on every job event, and a note carrying shell syntax posted byte for byte. `parked` posts
  * one comment per open question file, written into the fixture checkout's clarification directory:
  * ascending, the file whole less its own `answer_<n>.md` lines or cut at a line within the byte bound, one
@@ -83,22 +83,28 @@ async function reportFixture(t, { forge = 'github' } = {}) {
   await runGit(dir, ['push', '--quiet', '--force', '--no-verify', 'origin', `HEAD:refs/heads/${config.defaultBranch}`]);
 
   /**
-   * Push <branch> to origin with a task prompt whose provenance names <issueUrl> (none when null) and the
-   * trigger <label>, and, when <ledger>, its flow-progress ledger; the checkout returns to the default branch.
+   * Push <branch> to origin with, when <prompt>, a task prompt whose provenance names <issueUrl> (none when
+   * null) and the trigger <label>, and, when <ledger>, its flow-progress ledger; with neither, the branch's
+   * one commit is empty. The checkout returns to the default branch.
    */
-  const pushBranch = async (branch, { issueUrl = ISSUE_URL, ledger = true, label = 'sdlc-harness' } = {}) => {
+  const pushBranch = async (branch, { issueUrl = ISSUE_URL, prompt = true, ledger = true, label = 'sdlc-harness' } = {}) => {
     await runGit(dir, ['checkout', '--quiet', '-b', branch]);
-    const files = [`${STATE_DIR}/task_prompts/${branch}_task_prompt.md`];
-    const provenance = issueUrl === null ? 'Started by hand.' : `Started from ${issueUrl} by @alice, who applied the label \`${label}\`.`;
-    mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
-    writeFileSync(join(dir, files[0]), `# A task\n\nDo it.\n\n---\n\n${provenance}\n`);
-    if (ledger) {
-      files.push(`${STATE_DIR}/flow_progress/${branch}_progress.md`);
-      mkdirSync(join(dir, STATE_DIR, 'flow_progress'), { recursive: true });
-      writeFileSync(join(dir, files[1]), '# Progress\n');
+    const files = [];
+    if (prompt) {
+      const promptFile = `${STATE_DIR}/task_prompts/${branch}_task_prompt.md`;
+      files.push(promptFile);
+      const provenance = issueUrl === null ? 'Started by hand.' : `Started from ${issueUrl} by @alice, who applied the label \`${label}\`.`;
+      mkdirSync(join(dir, STATE_DIR, 'task_prompts'), { recursive: true });
+      writeFileSync(join(dir, promptFile), `# A task\n\nDo it.\n\n---\n\n${provenance}\n`);
     }
-    await runGit(dir, ['add', '--force', ...files]);
-    await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', `fixture: ${branch}`]);
+    if (ledger) {
+      const ledgerFile = `${STATE_DIR}/flow_progress/${branch}_progress.md`;
+      files.push(ledgerFile);
+      mkdirSync(join(dir, STATE_DIR, 'flow_progress'), { recursive: true });
+      writeFileSync(join(dir, ledgerFile), '# Progress\n');
+    }
+    if (files.length > 0) await runGit(dir, ['add', '--force', ...files]);
+    await runGit(dir, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', `fixture: ${branch}`]);
     const push = await runGit(dir, ['push', '--quiet', '--no-verify', 'origin', `HEAD:refs/heads/${branch}`]);
     assert.equal(push.status, 0, push.stderr);
     await runGit(dir, ['checkout', '--quiet', config.defaultBranch]);
@@ -214,7 +220,7 @@ test('an existing state label is removed by its encoded name, and any other labe
 test('an open same-repository pull request on a ledgered head takes the comment; both carry the label', async (t) => {
   const f = await reportFixture(t);
   const result = await f.report(['resumed', 'feat_x'], {
-    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: false }]),
   });
   assert.equal(result.status, 0, result.stderr);
   const calls = f.calls();
@@ -225,23 +231,40 @@ test('an open same-repository pull request on a ledgered head takes the comment;
   assert.equal(labelAdds(calls, 12)[0].args.at(-1), 'labels[]=sdlc-harness: running');
 });
 
-test('a pull request whose head lacks the ledger is not a target: the issue alone is', async (t) => {
+test('a pull request whose head carries neither a task prompt nor a ledger is not a target, and nothing is posted', async (t) => {
   const f = await reportFixture(t);
-  await f.pushBranch('feat_y', { ledger: false });
+  await f.pushBranch('feat_y', { prompt: false, ledger: false });
   const result = await f.report(['resumed', 'feat_y'], {
-    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: false }]),
   });
   assert.equal(result.status, 0, result.stderr);
   const calls = f.calls();
-  assert.equal(commentsOn(calls, 7).length, 1);
+  assert.deepEqual(allComments(calls), []);
+  assert.deepEqual(labelAdds(calls, 7), []);
+  assert.deepEqual(labelAdds(calls, 12), []);
+  const notTarget = result.stdout.indexOf(
+    "pull request #12's head carries neither a task prompt nor a flow-progress ledger; it is not a target");
+  const nothing = result.stdout.indexOf('feat_y has no open pull request and no issue it was started from; nothing posted');
+  assert.ok(notTarget >= 0 && nothing > notTarget, result.stdout);
+});
+
+test('a pull request whose head carries its task prompt and no ledger takes the comment', async (t) => {
+  const f = await reportFixture(t);
+  await f.pushBranch('feat_y', { ledger: false });
+  const result = await f.report(['paused', 'feat_y'], {
+    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: false }]),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  assert.equal(commentsOn(calls, 12).length, 1);
   assert.equal(allComments(calls).length, 1);
-  assert.equal(labelAdds(calls, 12).length, 0);
+  assert.doesNotMatch(result.stdout, /it is not a target/);
 });
 
 test('a cross-repository pull request is ignored', async (t) => {
   const f = await reportFixture(t);
   const result = await f.report(['resumed', 'feat_x'], {
-    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: true }]),
+    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: true, isDraft: false }]),
   });
   assert.equal(result.status, 0, result.stderr);
   const calls = f.calls();
@@ -431,7 +454,7 @@ test('parked on a pull request target adds the parked label once on each target'
   const f = await reportFixture(t);
   clarify(f.dir, 'feat_x', { 'question_1.md': 'one\n', 'question_2.md': 'two\n' });
   const result = await f.report(['parked', 'feat_x'], {
-    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false, isDraft: false }]),
   });
   assert.equal(result.status, 0, result.stderr);
   const calls = f.calls();

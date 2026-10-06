@@ -284,9 +284,9 @@
 # as `trigger` is, and outside the sending-verb gate: it does nothing, with one
 # line, unless `hr_forge` is `github` and `hr_execution_target` is
 # `github-actions`. The comment goes to the open same-repository pull request
-# whose head is <branch> when origin's <branch> carries
-# `<state_dir>/flow_progress/<branch>_progress.md`, else to the issue named by
-# the last `Started from <server>/<repo>/issues/<n> by @` line of its committed
+# whose head is <branch> when origin's <branch> carries its task prompt or
+# `<state_dir>/flow_progress/<branch>_progress.md` (`forge_recognised`), else to
+# the issue named by the last `Started from <server>/<repo>/issues/<n> by @` line of its committed
 # task prompt, else nowhere (`stop`'s `--pr` and `--branch-gone` change this
 # for its own report: its paragraph). The label `STATE_LABEL_PREFIX<state>` replaces any
 # other state label on that issue and that pull request, each when known; the
@@ -425,7 +425,9 @@
 # anyone else, is never trusted; none is a refusal. Both paths then pass
 # `control_check_branch`: a branch `hr_branch_is_protected` does not answer 1
 # for is refused, then it is fetched. It is a harness branch when its origin
-# tip carries the flow-progress ledger (`forge_recognised`); or, for a command
+# tip carries its task prompt or the flow-progress ledger (`forge_recognised`)
+# — the task prompt, `start`'s first commit, makes a pull request opened at
+# the run's start commandable before the ledger's first push; or, for a command
 # typed on an issue, when it is the branch that issue's genuine `started`
 # marker names and it still exists on origin (`remote_branch_exists`) — the
 # marker shows the harness started a run on it, so a first run GitHub never
@@ -611,8 +613,8 @@
 #      answers 1): GitHub closed the pull request because the branch was
 #      deleted, and the `delete` event's job stops the run; an `ls-remote` that
 #      cannot answer is one line and proceeds
-# There is no ledger-at-tip check (`forge_recognised`): a merged or deleted
-# branch may no longer carry one, and a listed `harness run <b>` run is the
+# There is no harness-branch check (`forge_recognised`): a merged or deleted
+# branch may no longer carry its task prompt or ledger, and a listed `harness run <b>` run is the
 # proof. The state is read by `control_state_var`: only `running`, `parked`,
 # `park_loop` and `paused` are acted on; `completed`, `failed` and `none` are
 # `left alone: the run on <b> is <state>`, and one `remote_branch_stopped`
@@ -4086,9 +4088,12 @@ The task is the dispatch's \`client_payload\` title and body. Sending the same d
 # never exits, and reports a failure as one `remote-run.sh: …` line on stderr.
 #
 # THE TARGET RULE. A comment goes to the open same-repository pull request
-# whose head is the branch when `forge_recognised` holds for that branch, else
-# to the issue the run was started from (`FORGE_ISSUE`), else nowhere. The
-# state label goes on that issue and on that pull request, each when known.
+# whose head is the branch when `forge_recognised` holds for that branch — its
+# origin tip carries its task prompt or its flow-progress ledger — else to the
+# issue the run was started from (`FORGE_ISSUE`), else nowhere. The task prompt
+# counts so that a pull request opened at the run's start is a target before
+# the ledger's first push. The state label goes on that issue and on that pull
+# request, each when known.
 #
 # THE LABEL IS A VIEW, NEVER AN AUTHORITY. The run list is the authority
 # (`remote_state`); the harness overwrites any state label set by hand, and
@@ -4233,29 +4238,39 @@ forge_provenance_parse() {
 }
 
 # forge_recognised <branch> — the harness-branch test, read from committed
-# state: 0 when origin's copy of the branch carries its flow-progress ledger.
+# state: 0 when origin's copy of the branch carries its task prompt or its
+# flow-progress ledger, 1 otherwise.
 forge_recognised() {
   local state_rel
   state_rel=$(hr_state_dir "$root" 2>/dev/null) || return 1
   [ -n "$state_rel" ] || return 1
-  git -C "$root" cat-file -e "refs/remotes/origin/$1:${state_rel%/}/flow_progress/$1_progress.md" 2>/dev/null
+  git -C "$root" cat-file -e "refs/remotes/origin/$1:${state_rel%/}/flow_progress/$1_progress.md" 2>/dev/null \
+    || git -C "$root" cat-file -e "refs/remotes/origin/$1:$(hr_task_prompt_rel "$state_rel" "$1")" 2>/dev/null
 }
 
 # forge_pr_var <branch> — FORGE_PR, the open pull request whose head is
-# <branch> in this repository (a fork's same-named head is skipped), or empty.
+# <branch> in this repository (a fork's same-named head is skipped), or empty;
+# FORGE_PR_DRAFT, that same pull request's `isDraft` as `true` or `false`, or
+# empty when FORGE_PR is.
 FORGE_PR=""
+FORGE_PR_DRAFT=""
 forge_pr_var() {
+  local sel
   FORGE_PR=""
-  if ! gh_call pr list --repo "$FORGE_REPO" --head "$1" --state open --json number,isCrossRepository --limit 10; then
+  FORGE_PR_DRAFT=""
+  if ! gh_call pr list --repo "$FORGE_REPO" --head "$1" --state open --json number,isCrossRepository,isDraft --limit 10; then
     echo "remote-run.sh: listing the open pull requests of $1 failed: $GH_ERR" >&2
     return 1
   fi
-  if ! FORGE_PR=$(printf '%s' "$GH_OUT" | jq -r \
-    'if type == "array" then [.[] | select(.isCrossRepository == false) | .number | numbers] | first // empty else error end' 2>/dev/null); then
-    FORGE_PR=""
+  if ! sel=$(printf '%s' "$GH_OUT" | jq -r \
+    'if type == "array" then [.[] | select(.isCrossRepository == false and (.number | type) == "number")] | first // empty | "\(.number) \(.isDraft == true)" else error end' 2>/dev/null); then
     GH_ERR="its pr list is not the expected JSON"
     echo "remote-run.sh: listing the open pull requests of $1 failed: $GH_ERR" >&2
     return 1
+  fi
+  if [ -n "$sel" ]; then
+    FORGE_PR="${sel%% *}"
+    FORGE_PR_DRAFT="${sel#* }"
   fi
   return 0
 }
@@ -4499,7 +4514,7 @@ forge_report() {
     forge_pr_var "$br" || FORGE_PR=""
   fi
   if [ -z "$pr" ] && [ -n "$FORGE_PR" ] && ! forge_recognised "$br"; then
-    echo "remote-run.sh: report: pull request #$FORGE_PR's head carries no flow-progress ledger; it is not a target"
+    echo "remote-run.sh: report: pull request #$FORGE_PR's head carries neither a task prompt nor a flow-progress ledger; it is not a target"
     FORGE_PR=""
   fi
   if [ -n "$FORGE_PR" ]; then
@@ -4988,13 +5003,14 @@ control_run_in_flight() {
 
 # control_check_branch <branch> [started] — the refusals every path shares, in
 # order: a branch not answered 1 by hr_branch_is_protected, then (after a
-# fetch) one that is not a harness branch. A branch passes with the
-# flow-progress ledger on its origin tip; or, with `started` (passed only by
+# fetch) one that is not a harness branch. A branch passes with its task
+# prompt or the flow-progress ledger on its origin tip (`forge_recognised`);
+# or, with `started` (passed only by
 # control_branch_from_issue, whose issue's genuine `started` marker names it),
 # while it still exists on origin — gone is refused as deleted, a failed
 # existence check names the read, and no run list is read; or with a
-# `harness run <branch>` run in flight. Otherwise the refusal reads "no ledger
-# and no `harness run` in flight", and a failed listing names the read. Each
+# `harness run <branch>` run in flight. Otherwise the refusal reads "neither a
+# task prompt nor a ledger, and no `harness run` in flight", and a failed listing names the read. Each
 # refusal is a reply and exit 2, or 3 for a failed read.
 control_check_branch() {
   local b="$1" protected=0 exists=0 inflight=0
@@ -5024,7 +5040,7 @@ control_check_branch() {
       control_run_in_flight "$b" || inflight=$?
       case "$inflight" in
         0) ;;
-        1) control_refuse "$EXIT_REFUSED" "\`$b\` is not a harness branch: its tip carries no flow-progress ledger, and no \`harness run $b\` run is queued or in progress" \
+        1) control_refuse "$EXIT_REFUSED" "\`$b\` is not a harness branch: its tip carries neither a task prompt nor a flow-progress ledger, and no \`harness run $b\` run is queued or in progress" \
              "Only a branch a harness run works on can be commanded." ;;
         *) control_refuse "$EXIT_GH" "whether \`$b\` has a harness run in flight could not be read ($GH_ERR)" \
              "Comment again to retry." ;;
@@ -6115,7 +6131,7 @@ control_close() {
   fi
 
   # No forge_recognised check: a merged or deleted branch may no longer carry
-  # its ledger, and a listed `harness run <b>` run is what proves a harness run.
+  # its task prompt or ledger, and a listed `harness run <b>` run is what proves a harness run.
   if ! control_state_var "$b"; then
     echo "::error::remote-run.sh: control: the state of the run on \`$b\` could not be read ($CS_ERR)"
     exit "$EXIT_GH"
