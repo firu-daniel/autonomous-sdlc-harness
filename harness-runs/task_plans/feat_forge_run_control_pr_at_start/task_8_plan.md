@@ -32,3 +32,9 @@
 - `npm test --workspace cli -- test/remote-deliver-threads.test.mjs` passes, run once from the repository root as one plain foreground command.
 - `bash scripts/typecheck.sh` passes.
 - Grep `remote-run.sh` for `collected_at=` parsing and find it only inside `round_markers_read`: the marker line keeps one reader.
+
+**Deviations from plan:**
+
+- The reply is posted to `pulls/<pr>/comments/<root>/replies`, where `<root>` is the `databaseId` of the thread's **first** comment, not the collected id itself. GitHub's reply endpoint does not accept a reply to a reply, and a collected inline comment can be a reply inside a thread. For a collected id that opens its thread, which is every case in the test, the two are the same id.
+- The test fixture adds `finding_2.md` (`**Review comments:** 102`, entry `[x]`), so that 102 has a verdict and its "already resolved" rule actually runs. Without it, 102 would be left alone only because it has no verdict.
+- Deferred to the Run gates phase: `cli/test/remote-deliver.test.mjs`. This unit changed what its round case runs, because that case's branch has no round file and now prints one extra line. This unit did not edit that test file, so it did not run it.

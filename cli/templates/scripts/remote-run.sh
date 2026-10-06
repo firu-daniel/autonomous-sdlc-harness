@@ -383,8 +383,48 @@
 # `HARNESS_PR_TOKEN`: a draft gets one `gh pr ready` (flipped), and a refusal
 # is one `::warning::` line naming gh's error (refused); a pull request that is
 # not a draft — no drafts on the plan, or a person marked it ready — gets no
-# call (not a draft) and is left alone. A round's review threads are resolved
-# next, after the flip and before the comments. Then one `completed` comment
+# call (not a draft) and is left alone. A round's review threads are handled
+# next, after the flip and before the comments, with the job's token, per THE
+# REVIEW-COMMENT LINE below: only when the pull request is known, the
+# highest-numbered round file on origin's tip is the highest-numbered marked
+# one (`round_markers_read`) — a round placed by the local command consumes no
+# pull-request item — and its marker's `comments=` is non-empty; otherwise one
+# line. Its fix plan is `<branch>_fix_plan.md` and `<branch>_fix_plan/` for
+# round 1, `<branch>_fix_plan_<n>.md` and `<branch>_fix_plan_<n>/` for round
+# <n>, read from origin's tip. A verdict is kept only for an id the round
+# collected: `fixed <sha>` for an implemented finding, `reason <text>` for an
+# out-of-scope bullet; a collected id with none is one line, left alone. One
+# paginated `api graphql` listing of the pull request's `reviewThreads` (`id`,
+# `isResolved`, each comment's `databaseId`, `createdAt` and `body`); the
+# thread holding a collected id is that id's thread. Left alone, one line
+# each: a thread already resolved; a thread with a comment created after the
+# round's `collected_at` that is not a collected id and carries no
+# `COMMENT_MARKER` — the reviewer replied after the collection; and a thread
+# already carrying the `thread` marker, so a re-run replies nothing twice.
+# Otherwise one reply, through `pulls/<pr>/comments/<id>/replies` to the
+# thread's first comment, ending with `forge_marker thread <branch>` — whose
+# `COMMENT_MARKER` keeps the next `round_collect` from collecting it: for
+# `fixed`, ``Addressed in `<sha>`.`` and, only once that reply is posted, one
+# `resolveReviewThread` mutation; for `reason`, `Not changed in this round:
+# <reason>`, the thread left open. A refused listing, reply or resolve is one
+# `::warning::` line. It never dismisses a review.
+# THE REVIEW-COMMENT LINE is this file's contract, written by one writer,
+# `plugin/agents/user-review-fix-plan-writer.md`, and read by `deliver` alone:
+#   - in a per-finding file `<state_dir>/user_reviews/<branch>_fix_plan[_<n>]/
+#     finding_<K>.md`, one line beginning `**Review comments:** ` followed by
+#     one or more comment ids separated by `, `, e.g.
+#     `**Review comments:** 2735551234, 2735551240`;
+#   - in the fix-plan index's `## Out of scope / verified-OK` section, a bullet
+#     (a line beginning `- `) ending with ` **Review comments:** <id>[, <id>…]`,
+#     its text before that suffix the reason the reply quotes;
+#   - the ids are the round marker's `comments=` ids, GitHub's review-comment
+#     `id`s; an observation from no inline comment carries no such line;
+#   - finding <K> is implemented when the index carries the literal
+#     `[x] **Finding <K>**`, and its fix commit is the oldest commit on
+#     `origin/<branch>` that introduced that literal into the index (`git log
+#     --reverse -S`), else origin's tip — the committer flips the entry in the
+#     fix's own commit.
+# Then one `completed` comment
 # on the pull request, its readiness clause by the flip's outcome, and one on
 # the issue naming the pull request's number and URL, each when known; with no
 # pull request, one comment on the issue alone naming why none could be opened
@@ -393,8 +433,8 @@
 # Each names reviewing and requesting changes as the next action, and with
 # `phases.qa` true the local `branch-qa-test` still owed. Then
 # `sdlc-harness: done` on the issue and the pull request, each when known. It
-# writes at most one pull request, one flip, two comments and those labels,
-# and never pushes. It never fails its caller: every problem, a refused flip
+# writes at most one pull request, one flip, a round's thread replies and
+# resolves, two comments and those labels, and never pushes. It never fails its caller: every problem, a refused flip
 # included, is one line and exit 0.
 #
 # `collect` STARTS THE NEXT ROUND FROM THE REVIEWS COLLECTED DURING A RUN: the
@@ -1313,6 +1353,15 @@
 #   refused    the stub failing `pr ready` -> 0, one `::warning::` line, both
 #              comments posted, the pull request's saying the flip was refused
 #   not done   status parked, or an empty <b> -> 0, one line, "$s.log" unchanged
+#   threads    <b>'s engine user_review; on feat_x a `feat_x_review.md` ending in
+#              the marker `comments=101,103`, a `feat_x_fix_plan.md` whose
+#              `1. [x] **Finding 1**` lands in its own commit and whose `## Out
+#              of scope / verified-OK` bullet ends ` **Review comments:** 103`,
+#              and `feat_x_fix_plan/finding_1.md` carrying `**Review comments:**
+#              101`; a stub answering `api graphql` with one open thread per id
+#              -> 0; "$s.log" gains a reply on comment 101 naming that commit,
+#              then one `resolveReviewThread`, then a reply on 103 quoting the
+#              bullet and no resolve; no dismissal call
 #
 #   open needs deliver's setup without the bundle:
 #   open       bash scripts/remote-run.sh open feat_x -> 0; "$s.log" gains a
@@ -4837,6 +4886,192 @@ The interactive-test phase was skipped on GitHub Actions. Before merging, run \`
   rm -f "$file"
 }
 
+# deliver_thread_reply <tmp> <comment_id> <text> — one reply to the review
+# thread holding <comment_id>, <text> then the `thread` marker. 0 when posted;
+# otherwise one `::warning::` line and 1.
+deliver_thread_reply() {
+  local tmp="$1" id="$2" text="$3" file
+  if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-thread-reply.XXXXXX"); then
+    echo "::warning::remote-run.sh: deliver: cannot create the reply file for comment $id; no reply posted"
+    return 1
+  fi
+  if ! { printf '%s\n\n' "$text"; forge_marker thread "$branch"; } >"$file"; then
+    rm -f "$file"
+    echo "::warning::remote-run.sh: deliver: cannot write the reply file for comment $id; no reply posted"
+    return 1
+  fi
+  if ! gh_call api --method POST "repos/$FORGE_REPO/pulls/$FORGE_PR/comments/$id/replies" -F "body=@$file"; then
+    rm -f "$file"
+    echo "::warning::remote-run.sh: deliver: the reply to review comment $id was refused: $GH_ERR"
+    return 1
+  fi
+  rm -f "$file"
+  return 0
+}
+
+# deliver_round_threads <tmp> — at a round's completion, handle each inline
+# review thread the round collected by the fix plan's verdict on its comment:
+# `fixed` is a reply naming the fix commit, then the thread resolved; `reason`
+# is a reply quoting it, the thread left open. The wire it reads is the
+# header's THE REVIEW-COMMENT LINE. Never dismisses a review; never fails.
+deliver_round_threads() {
+  local tmp="$1" plan index_rel dir_rel index names path name k line rest id ids
+  local sha tip since pages threads row t_id t_resolved t_ids t_root t_later t_own
+  local i found handled="," own_marker re
+  local -a v_id=() v_kind=() v_val=()
+  if ! round_markers_read ""; then
+    echo "::warning::remote-run.sh: deliver: the round's review threads were not read: $RC_ERR"
+    return 0
+  fi
+  if [ "$RC_NEWEST_N" -eq 0 ]; then
+    echo "remote-run.sh: deliver: $branch has no round file; no review thread handled"
+    return 0
+  fi
+  if [ "$RC_NEWEST_N" -ne "$RC_MARKED_N" ]; then
+    echo "remote-run.sh: deliver: round $RC_NEWEST_N of $branch was not placed from a pull-request review; no review thread handled"
+    return 0
+  fi
+  if [ -z "$RC_MARKED_C" ]; then
+    echo "remote-run.sh: deliver: round $RC_MARKED_N of $branch collected no inline comment; no review thread handled"
+    return 0
+  fi
+
+  plan="${branch}_fix_plan"
+  [ "$RC_MARKED_N" -eq 1 ] || plan="${plan}_$RC_MARKED_N"
+  index_rel="$RC_STATE_REL/user_reviews/$plan.md"
+  dir_rel="$RC_STATE_REL/user_reviews/$plan"
+  if ! index=$(git -C "$root" show "refs/remotes/origin/$branch:$index_rel" 2>/dev/null); then
+    echo "remote-run.sh: deliver: round $RC_MARKED_N of $branch has no fix plan at $index_rel; no review thread handled"
+    return 0
+  fi
+  tip=$(git -C "$root" rev-parse "refs/remotes/origin/$branch" 2>/dev/null) || tip=""
+
+  # Verdicts, kept only for ids the round collected; the first verdict an id gets wins.
+  names=$(git -C "$root" ls-tree --name-only "refs/remotes/origin/$branch" -- "$dir_rel/" 2>/dev/null) || names=""
+  while IFS= read -r path; do
+    name="${path##*/}"
+    [[ "$name" =~ ^finding_([0-9]+)\.md$ ]] || continue
+    k=$((10#${BASH_REMATCH[1]}))
+    case "$index" in *"[x] **Finding $k**"*) ;; *) continue ;; esac
+    line=$(git -C "$root" show "refs/remotes/origin/$branch:$path" 2>/dev/null | grep -E '^\*\*Review comments:\*\* ' | head -n 1) || line=""
+    [ -n "$line" ] || continue
+    sha=$(git -C "$root" log --reverse --format=%H -S "[x] **Finding $k**" "refs/remotes/origin/$branch" -- "$index_rel" 2>/dev/null | head -n 1) || sha=""
+    [ -n "$sha" ] || sha="$tip"
+    rest="${line#'**Review comments:** '}"
+    rest="${rest%$'\r'}"
+    ids="${rest//[[:space:]]/}"
+    for id in ${ids//,/ }; do
+      [[ "$id" =~ ^[0-9]+$ ]] || continue
+      v_id+=("$id"); v_kind+=(fixed); v_val+=("$sha")
+    done
+  done <<NAMES
+$names
+NAMES
+  re='^- (.*) \*\*Review comments:\*\* ([0-9][0-9, ]*)$'
+  found=0
+  while IFS= read -r line; do
+    line="${line%$'\r'}"
+    case "$line" in
+      '## Out of scope / verified-OK'*) found=1; continue ;;
+      '## '*) found=0; continue ;;
+    esac
+    [ "$found" -eq 1 ] || continue
+    [[ "$line" =~ $re ]] || continue
+    rest="${BASH_REMATCH[1]}"
+    ids="${BASH_REMATCH[2]//[[:space:]]/}"
+    for id in ${ids//,/ }; do
+      [[ "$id" =~ ^[0-9]+$ ]] || continue
+      v_id+=("$id"); v_kind+=(reason); v_val+=("$rest")
+    done
+  done <<INDEX
+$index
+INDEX
+
+  if ! since=$(jq -n -r --arg t "$RC_MARKED_AT" '$t | fromdateiso8601' 2>/dev/null) || [ -z "$since" ]; then
+    echo "::warning::remote-run.sh: deliver: round $RC_MARKED_N's collected_at '$RC_MARKED_AT' is not a UTC time; no review thread handled"
+    return 0
+  fi
+  if ! gh_call api graphql --paginate -f "owner=${FORGE_REPO%%/*}" -f "name=${FORGE_REPO#*/}" -F "number=$FORGE_PR" \
+    -f 'query=query($owner: String!, $name: String!, $number: Int!, $endCursor: String) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor } nodes { id isResolved comments(first: 100) { nodes { databaseId createdAt body } } } } } } }'; then
+    echo "::warning::remote-run.sh: deliver: listing the review threads of pull request #$FORGE_PR was refused: $GH_ERR"
+    return 0
+  fi
+  pages="$GH_OUT"
+  own_marker=$(forge_marker thread "$branch")
+  # One `|`-joined row per thread (a GraphQL node id carries no `|`): id,
+  # resolved, its comment ids, its first comment's id, whether a comment came
+  # after the round, whether it carries this harness's reply.
+  if ! threads=$(printf '%s' "$pages" | jq -s -r --argjson since "$since" --arg collected ",$RC_MARKED_C," \
+    --arg marker "$COMMENT_MARKER" --arg own "$own_marker" '
+    [ .[] | .data.repository.pullRequest.reviewThreads.nodes[] ]
+    | .[] | (.comments.nodes // []) as $c
+    | [ .id, (.isResolved == true | tostring),
+        ($c | map(.databaseId | tostring) | join(",")),
+        (($c[0].databaseId // "") | tostring),
+        (any($c[]; ("," + (.databaseId | tostring) + ",") as $k
+          | ((.createdAt // "") | try fromdateiso8601 catch 0) > $since
+          and (($collected | contains($k)) | not)
+          and (((.body // "") | contains($marker)) | not)) | tostring),
+        (any($c[]; (.body // "") | contains($own)) | tostring) ]
+    | join("|")' 2>/dev/null); then
+    echo "::warning::remote-run.sh: deliver: the review threads of pull request #$FORGE_PR are not the expected JSON; no review thread handled"
+    return 0
+  fi
+
+  for id in ${RC_MARKED_C//,/ }; do
+    i=0; found=""
+    while [ "$i" -lt "${#v_id[@]}" ]; do
+      if [ "${v_id[$i]}" = "$id" ]; then found="$i"; break; fi
+      i=$((i + 1))
+    done
+    if [ -z "$found" ]; then
+      echo "remote-run.sh: deliver: review comment $id has no verdict in the fix plan; left alone"
+      continue
+    fi
+    row=""
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      IFS='|' read -r t_id t_resolved t_ids t_root t_later t_own <<<"$line"
+      case ",$t_ids," in *",$id,"*) row="$line"; break ;; esac
+    done <<THREADS
+$threads
+THREADS
+    if [ -z "$row" ]; then
+      echo "remote-run.sh: deliver: review comment $id is in no review thread of pull request #$FORGE_PR; left alone"
+      continue
+    fi
+    case "$handled" in
+      *",$t_id,"*) echo "remote-run.sh: deliver: review comment $id's thread was handled for another comment; left alone"; continue ;;
+    esac
+    handled="$handled$t_id,"
+    if [ "$t_resolved" = true ]; then
+      echo "remote-run.sh: deliver: review comment $id's thread is already resolved; left alone"
+      continue
+    fi
+    if [ "$t_later" = true ]; then
+      echo "remote-run.sh: deliver: review comment $id's thread has a reply newer than round $RC_MARKED_N; left alone"
+      continue
+    fi
+    if [ "$t_own" = true ]; then
+      echo "remote-run.sh: deliver: review comment $id's thread already carries this harness's reply; left alone"
+      continue
+    fi
+    # Replies attach to a thread's first comment: GitHub does not take a reply to a reply.
+    if [ "${v_kind[$found]}" = fixed ]; then
+      deliver_thread_reply "$tmp" "$t_root" "Addressed in \`${v_val[$found]}\`." || continue
+      if gh_call api graphql -f 'query=mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { isResolved } } }' -f "id=$t_id"; then
+        echo "remote-run.sh: deliver: replied to review comment $id and resolved its thread"
+      else
+        echo "::warning::remote-run.sh: deliver: resolving review comment $id's thread was refused: $GH_ERR"
+      fi
+    else
+      deliver_thread_reply "$tmp" "$t_root" "Not changed in this round: ${v_val[$found]}" || continue
+      echo "remote-run.sh: deliver: replied to review comment $id with the reason; its thread stays open"
+    fi
+  done
+  return 0
+}
+
 # verb_deliver — after a `completed` bundle: reuse the branch's pull request or
 # open it, mark it ready, post `completed` on it and on the issue, and set
 # `done`. Always exit 0.
@@ -4895,12 +5130,15 @@ verb_deliver() {
     fi
   fi
 
-  # A round's review threads are resolved here: after the flip, before the comments.
-
   tmp="${RUNNER_TEMP-}"
   if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
     tmp=$(mktemp -d) || tmp=""
     made_tmp="$tmp"
+  fi
+
+  # After the flip, before the comments.
+  if [ "$noun" = round ] && [ -n "$FORGE_PR" ]; then
+    deliver_round_threads "$tmp"
   fi
 
   if [ -n "$FORGE_PR" ]; then
@@ -5757,18 +5995,27 @@ RC_ERR=""
 # origin's tip consumed, from their marker lines: RC_SEEN_R and RC_SEEN_C (the
 # recorded review and comment ids, comma-wrapped), RC_MARKED_AT (the
 # highest-numbered marked round's `collected_at`, empty when none is marked),
-# RC_EVENT_ROUND (the round recording <event_review_id>), and RC_STATE_REL.
-# 4 with RC_ERR when a round cannot be listed or read. `control` also calls it
-# on its own, to name the round a review in flight is already part of.
+# RC_MARKED_N and RC_MARKED_C (that round's number, 0 when none, and its
+# `comments=` ids as written), RC_NEWEST_N (the highest round number of any
+# round file, marked or not, 0 when none), RC_EVENT_ROUND (the round recording
+# <event_review_id>), and RC_STATE_REL. 4 with RC_ERR when a round cannot be
+# listed or read. `control` also calls it on its own, to name the round a
+# review in flight is already part of, and `deliver` to find a round's threads.
 RC_SEEN_R=","
 RC_SEEN_C=","
 RC_MARKED_AT=""
+RC_MARKED_N=0
+RC_MARKED_C=""
+RC_NEWEST_N=0
 RC_STATE_REL=""
 round_markers_read() {
-  local event_id="${1-}" names name path n line marked_max=0
+  local event_id="${1-}" names name path n line
   RC_SEEN_R=","
   RC_SEEN_C=","
   RC_MARKED_AT=""
+  RC_MARKED_N=0
+  RC_MARKED_C=""
+  RC_NEWEST_N=0
   RC_EVENT_ROUND=""
   RC_STATE_REL=$(hr_state_dir "$root" 2>/dev/null) || RC_STATE_REL=""
   RC_STATE_REL="${RC_STATE_REL%/}"
@@ -5786,6 +6033,7 @@ round_markers_read() {
     [ "${BASH_REMATCH[1]}" = "$branch" ] || continue
     n="${BASH_REMATCH[3]:-1}"
     n=$((10#$n))
+    [ "$n" -le "$RC_NEWEST_N" ] || RC_NEWEST_N="$n"
     if ! line=$(git -C "$root" show "refs/remotes/origin/$branch:$path" 2>/dev/null); then
       RC_ERR="the previous round \`$path\` could not be read"
       return 4
@@ -5795,9 +6043,10 @@ round_markers_read() {
     [[ "$line" =~ ^"$COMMENT_MARKER round collected_at="([0-9T:Z-]+)" reviews="([0-9,]*)" comments="([0-9,]*)" -->"$ ]] || continue
     RC_SEEN_R="$RC_SEEN_R${BASH_REMATCH[2]}${BASH_REMATCH[2]:+,}"
     RC_SEEN_C="$RC_SEEN_C${BASH_REMATCH[3]}${BASH_REMATCH[3]:+,}"
-    if [ "$n" -gt "$marked_max" ]; then
-      marked_max="$n"
+    if [ "$n" -gt "$RC_MARKED_N" ]; then
+      RC_MARKED_N="$n"
       RC_MARKED_AT="${BASH_REMATCH[1]}"
+      RC_MARKED_C="${BASH_REMATCH[3]}"
     fi
     case ",${BASH_REMATCH[2]}," in
       *",$event_id,"*) [ -z "$event_id" ] || RC_EVENT_ROUND="$n" ;;
