@@ -66,7 +66,7 @@ Revise the test fix plan at <test_fix_plan_path> per architecture findings: <fin
 
 5. **Rewrite machine paths before quoting.** Every file you write is committed, the log carries machine paths, and the self-containment gate (gate 6a) refuses a tracked file naming the running user's home directory. So, in every log line you quote in the index and in every `finding_<N>.md`: an absolute path under `<repo_root>` becomes its repo-relative form, and any other path under the home directory (from a bare `printenv HOME`) has that prefix replaced by `<home>`, giving `<home>/…`. This is a rule, not a judgement call.
 
-6. **Write the split plan** with the `Write` tool at absolute paths built from `<repo_root>`; never a Bash heredoc. Take `${CLAUDE_PLUGIN_ROOT}/samples/sample_user_review_fix_plan.md` and `${CLAUDE_PLUGIN_ROOT}/samples/sample_user_review_fix_plan/finding_<N>.md` as the split-format reference, adapted as below. Heading text must match exactly — the caller keys off it.
+6. **Write the split plan** with the `Write` tool at absolute paths built from `<repo_root>`; never a Bash heredoc. Take `${CLAUDE_PLUGIN_ROOT}/samples/sample_user_review_fix_plan.md` and `${CLAUDE_PLUGIN_ROOT}/samples/sample_user_review_fix_plan/finding_<N>.md` as the split-format reference, adapted as below. The `**Review comments:**` line and bullet suffix are the user-review fix plan's alone; a test fix plan writes neither. Heading text must match exactly — the caller keys off it.
 
    **The index** at `<test_fix_plan_path>`, in this order:
 
