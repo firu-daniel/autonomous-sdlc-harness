@@ -51,3 +51,7 @@
 - The quoted `push-branch.sh` line fragment matches the script: grep `cli/templates/scripts/push-branch.sh` for `no longer has`.
 - `git diff docs/remote-execution.md` touches only the sites under Targets, and the poller command sits alone in its fenced block.
 - Grep the document for `always()`. Every hit that says what the end-of-job push does now names the deleted-branch exception, or is one of the unedited sites listed under **Where this task stops**.
+
+**Deviations from plan:**
+- The `always()` grep also reaches `### Runs longer than a job` → **The backstop is the step timeout.** ("the later `always()` and `!cancelled()` steps still push, upload and re-dispatch"), which neither Targets nor **Where this task stops** lists. Left unedited: it states that those steps still run after a step-timeout overrun, a case whose branch still exists on origin, not what the push does for a deleted branch; editing it would also break the "diff touches only the sites under Targets" check.
+- The **What it costs** sentence's "Its line names the hand push" is written as "the line `push-branch.sh` prints then names the hand push that publishes it again", and the two pointers sit in that sentence's closing parenthesis, matching the document's inline **Decision:** / **Reason:** / **What it costs:** paragraph form.
