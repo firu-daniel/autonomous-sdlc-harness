@@ -70,7 +70,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 13. [x] **Task 16** — `branch-resume`: a `killed` run whose job GitHub never started, a first run included _(layer: plugin)_ _(points: 5)_
 14. [x] **Task 13** — `docs/remote-execution.md`: the poll bound, push retries, jobs GitHub never starts, what `killed` covers, the runner wait, and round 8's verified rows _(layer: general)_ _(points: 18)_
 15. [x] **Task 14** — `docs/github-run-control.md`: branch recognition, the recorded engine, the push rule, the `not_started` comment, and §8 _(layer: general)_ _(points: 15)_
-16. [ ] **Task 15** — `docs/development.md`: the Gate 12 round 8 record, copied as written _(layer: general)_ _(points: 8)_
+16. [x] **Task 15** — `docs/development.md`: the Gate 12 round 8 record, copied as written _(layer: general)_ _(points: 8)_
 
 ## Scope register
 
