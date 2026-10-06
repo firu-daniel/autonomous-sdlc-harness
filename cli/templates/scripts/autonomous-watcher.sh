@@ -408,6 +408,19 @@
 #     issue and moves its state label when `forge` is `github`; `autonomous-notify.sh`
 #     is unchanged, and `completed` is reported by the workflow's `deliver` step
 #     after the push.
+#   * THE PROGRESS PASS (job_progress_pass): every `running` pass reads the
+#     flow-progress ledger the flow pushes in this checkout through
+#     lib/harness-run-lib.sh's `hr_ledger_phases`, and calls `remote-run.sh
+#     report progress <branch>` when that reading differs from the last one
+#     this job reported, and once more when the job ends, so a tick landing
+#     after the last poll is still reported. It reads nothing from GitHub to
+#     decide and keeps no state across jobs: the render is deterministic and
+#     `report progress` edits the comment only when its body differs, so a
+#     job's first pass syncs once and a budget continuation posts nothing new
+#     unless a phase moved — consistent with `docs/github-run-control.md` ->
+#     §5's *The budget is silent*, because what is posted is a phase, not the
+#     continuation. What is posted, where, and whether at all is `report
+#     progress`'s to decide; the watcher decides only when to call it.
 #   * THE INTERACTIVE-TEST PHASE IS SKIPPED, not run: a runner has no browser
 #     wiring, application dependencies or QA credentials for it. With
 #     `phases.qa` true, the task and user_review launch prompts gain one clause
@@ -698,8 +711,14 @@
 #                    A stub writing PAUSE_ACK unrequested, then exiting 0 ->
 #                    one auto-resume, `job: completed stop`; a stub ending
 #                    `exit 2` with REMOTE_AUTO_RESUME_DELAY_SECS=0 -> launched
-#                    1 + REMOTE_AUTO_RESUME_MAX times, `job: failed stop`
-#   remote drop   `a drop`'s fixture, with "$d"'s own files committed and pushed
+#                    1 + REMOTE_AUTO_RESUME_MAX times, `job: failed stop`. A
+#                    stub writing a task ledger at
+#                    "$d/sdlc-harness/flow_progress/feat_x_progress.md" and
+#                    sleeping past a few polls, the ledger never ticked ->
+#                    the watcher log carries one `remote-run.sh: report:` line
+#                    from the first pass and one from the job's end, none
+#                    between
+#   remote drop  `a drop`'s fixture, with "$d"'s own files committed and pushed
 #                 to origin's default branch, `"execution":{"target":
 #                 "github-actions"}` in its harness.config.json, and
 #                 HARNESS_GH_CLI pointed at a recorder (see remote-run.sh's
@@ -1158,6 +1177,9 @@ JOB_CONTROL_FLOOR=0
 JOB_RUN_CREATED_AT=""
 JOB_RUNNER_WAIT_NOTE=""
 LAST_CONTROL_POLL=0
+# The ledger reading the progress pass last reported; empty, so a job's first
+# pass always reports once.
+JOB_PROGRESS_LAST=""
 JOB_USER_PAUSE_DROPPED=0
 JOB_BUDGET_PAUSE_DROPPED=0
 if [ "${1:-}" = "job" ]; then
@@ -4140,6 +4162,17 @@ job_budget_pass() {
   log "job: ${after}s of the hosted time budget have passed — dropped PAUSE (reason budget)"
 }
 
+# job_progress_pass <branch> <state_abs> [final] — THE PROGRESS PASS (the
+# header's JOB MODE block). `final` reports even an unchanged reading.
+job_progress_pass() {
+  local branch="$1" state_abs="$2" line
+  [ "$JOB_MODE" = "1" ] || return 0
+  line="$(hr_ledger_phases "$state_abs/flow_progress/${branch}_progress.md")" || return 0
+  [ "$line" != "$JOB_PROGRESS_LAST" ] || [ "${3:-}" = "final" ] || return 0
+  JOB_PROGRESS_LAST="$line"
+  bash "$REMOTE_RUN" report progress "$branch" --repo "$MAIN_REPO" >>"$WATCHER_LOG" 2>&1 || true
+}
+
 # job_usage_wait_ok <branch> — 0 when a usage pause is waited out in the job;
 # leaves usage_resume_at_var's USAGE_RESUME_AT and USAGE_RESUME_REPAIRED set.
 # With no usable usage_resume_at: `paused_by=usage` still set means the value was
@@ -4328,6 +4361,7 @@ run_job() {
         [ "$(registry_get "$branch" status)" = "running" ] || continue
         job_control_poll "$branch" "$state_abs" "$remote_status"
         job_budget_pass "$branch" "$state_abs"
+        job_progress_pass "$branch" "$state_abs"
         ;;
       paused)
         reason="$(registry_get "$branch" pause_reason)"
@@ -4419,6 +4453,7 @@ run_job() {
   [ "$final" = "paused" ] || registry_set "$branch" pause_reason ""
   [ -n "$detail" ] || detail="the run ended $final in this job"
   [ "$final" != "failed" ] || job_report failed "$branch" "$log_path"
+  job_progress_pass "$branch" "$state_abs" final
   job_write_status "$branch" "$remote_status" "$decision" "$detail"
   echo "job: $final $decision"
   exit 0
