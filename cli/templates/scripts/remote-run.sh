@@ -884,7 +884,9 @@
 #      older finished run carries one): a job that died before its upload,
 #      or that GitHub never started (the detail says so).
 #      `paused` / `killed`, `remote_run_id` / `remote_run_url` re-pointed at
-#      THIS run, nothing restored — so a later sync with no newer run is case 1
+#      THIS run, and, for a run GitHub never started whose dispatch's comment
+#      records its engine, `engine` set to that engine; nothing restored — so
+#      a later sync with no newer run is case 1
 #   5. no bundle in any run and an empty `remote_run_id`: `failed`. Not
 #      `paused`: with no bundle anywhere a pause resume has nothing to restore,
 #      and re-dropping the artifact is the recovery, except a run whose job
@@ -2418,10 +2420,16 @@ verb_sync() {
     return 0
   fi
 
-  # Case 4 — a newer run with no bundle, while some bundle exists.
+  # Case 4 — a newer run with no bundle, while some bundle exists; also a run
+  # GitHub never started whose engine its dispatch's comment records.
   if [ "$RS_STATE" = paused ]; then
-    set_many_or_fail status paused pause_reason killed remote_run_id "$id" remote_run_url "$url" \
-      remote_detail "$RS_DETAIL" remote_synced_at "$now"
+    if [ "$RS_NOT_STARTED" = 1 ] && valid_engine "$RS_ENGINE"; then
+      set_many_or_fail status paused pause_reason killed remote_run_id "$id" remote_run_url "$url" \
+        remote_detail "$RS_DETAIL" remote_synced_at "$now" engine "$RS_ENGINE"
+    else
+      set_many_or_fail status paused pause_reason killed remote_run_id "$id" remote_run_url "$url" \
+        remote_detail "$RS_DETAIL" remote_synced_at "$now"
+    fi
     echo "remote-run.sh: run $id of $branch left no bundle; the record is paused (killed), nothing restored"
     return 0
   fi

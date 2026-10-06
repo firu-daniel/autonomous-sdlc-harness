@@ -55,7 +55,8 @@
  * **For the forge coupling, the rule is that `continue`'s notification and a complete `stop` reach the
  * run's issue as a comment naming no slash command, plus the state label, while a partial stop and a
  * coupling that is off post nothing**: every pre-existing case runs with `forge` unset and keeps its
- * exact call list. The stub answers `pr list` with `[]`, an issue's label read with `STUB_LABELS`
+ * exact call list. The stub answers `pr list` with `STUB_PRS` (`[]` when unset), a paginated comment
+ * list with `STUB_ITEM_COMMENTS` (item number to comments) when set, an issue's label read with `STUB_LABELS`
  * (`[]` when unset), a `contents/` read
  * with `STUB_CONTENTS` (a 404 when unset), and logs each `body=@<path>` call with that file's content
  * to `<log>.bodies`. A `stop --pr <n>` reports on #<n> though no open pull request is listed, and a
@@ -139,8 +140,14 @@ if (line.startsWith('run list --workflow harness-resume.yml')) process.stdout.wr
 else if (line.startsWith('run list')) process.stdout.write(after('STUB_RUN_LIST') || '[]');
 if (line.startsWith('repo view')) process.stdout.write(process.env.STUB_REPO_VIEW || '{}');
 if (line.startsWith('run view')) process.stdout.write(process.env.STUB_RUN_VIEW || '{}');
-if (line.startsWith('pr list')) process.stdout.write('[]');
-if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1])) process.stdout.write(process.env.STUB_LABELS || '[]');
+if (line.startsWith('pr list')) process.stdout.write(process.env.STUB_PRS || '[]');
+if (args[0] === 'api' && args[1] === '--paginate' && process.env.STUB_ITEM_COMMENTS !== undefined) {
+  const item = /\\/issues\\/([0-9]+)\\/comments$/.exec(args[2] ?? '')?.[1];
+  for (const c of JSON.parse(process.env.STUB_ITEM_COMMENTS)[item] ?? []) {
+    process.stdout.write(JSON.stringify({ login: c.user.login, at: c.created_at, body: c.body }) + '\\n');
+  }
+}
+else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1])) process.stdout.write(process.env.STUB_LABELS || '[]');
 else if (args[0] === 'api' && args[1].includes('/contents/')) {
   if (process.env.STUB_CONTENTS === undefined) { process.stderr.write('HTTP 404: Not Found\\n'); process.exit(1); }
   process.stdout.write(process.env.STUB_CONTENTS);
@@ -2139,6 +2146,27 @@ test('fetch of a newest run GitHub never started, over an older bundle, prints p
   assert.equal(lines.detail, `GitHub did not start the job of run 202 (${NOT_ACQUIRED}): ${runUrl(202)}`);
   assert.ok(joined(fx).includes('api repos/{owner}/{repo}/check-runs/555/annotations'));
   assert.deepEqual(downloads(fx), []);
+});
+
+test('sync of a newest run GitHub never started records the engine its dispatch\'s round comment names', async (t) => {
+  const fx = await forgeFixture(t);
+  remoteRecord(fx, { status: 'completed', engine: 'task', remote_run_id: '201' });
+  const round = {
+    user: { login: 'github-actions[bot]' },
+    created_at: '2026-01-01T00:02:10Z',
+    body: 'Round 4 placed.\n\n<!-- sdlc-harness event=round branch=feat_x -->\n',
+  };
+  const result = await remoteRun(fx, ['sync', 'feat_x'], case4Env(fx, [], {
+    GITHUB_REPOSITORY: 'o/r',
+    STUB_PRS: JSON.stringify([{ number: 12, isCrossRepository: false }]),
+    STUB_ITEM_COMMENTS: JSON.stringify({ 12: [round] }),
+  }));
+  assert.equal(result.status, 0, result.stderr);
+  const rec = record(fx);
+  assert.equal(rec.status, 'paused');
+  assert.equal(rec.pause_reason, 'killed');
+  assert.equal(rec.engine, 'user_review');
+  assert.equal(rec.remote_run_id, '202');
 });
 
 test('fetch of a newest run whose job ran a step, over an older bundle, keeps the no-bundle detail', async (t) => {

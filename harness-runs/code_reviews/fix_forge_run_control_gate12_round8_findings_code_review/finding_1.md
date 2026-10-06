@@ -32,8 +32,8 @@ The record's `engine` is written only by a case-3 `sync` (read from a bundle) an
   fi
 ```
 
-- [ ] Amend the header paragraph `` `sync` READS THE NEWEST `harness run <branch>` RUN ``, case 4. After "`paused` / `killed`, `remote_run_id` / `remote_run_url` re-pointed at THIS run, nothing restored", add: "and, for a run GitHub never started whose dispatch's comment records its engine, `engine` set to that engine".
-- [ ] Add a case to `cli/test/remote-run.test.mjs`. Set it up with:
+- [x] Amend the header paragraph `` `sync` READS THE NEWEST `harness run <branch>` RUN ``, case 4. After "`paused` / `killed`, `remote_run_id` / `remote_run_url` re-pointed at THIS run, nothing restored", add: "and, for a run GitHub never started whose dispatch's comment records its engine, `engine` set to that engine".
+- [x] Add a case to `cli/test/remote-run.test.mjs`. Set it up with:
   - a local remote record whose `engine` is `task`;
   - a newest completed `harness run feat_x` run whose `run` job ended `cancelled` with an empty `steps`;
   - an older run carrying a bundle;
