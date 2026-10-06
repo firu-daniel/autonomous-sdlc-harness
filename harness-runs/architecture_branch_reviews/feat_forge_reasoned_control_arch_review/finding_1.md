@@ -34,3 +34,7 @@ The plan's reason, that a command declares no `model:` so the flag alone sets it
   - The accompanying set `.claude/context/conventions.md` → `## What accompanies a new unit of each kind` lists for a configuration key.
 
   Do not keep a literal model in the script.
+
+**Deviations from plan:**
+- Route (a) taken. Fallback when `hr_agent_model` fails (configuration unreadable): the `--model` flag is omitted so the agent CLI applies its own default, following `autonomous-watcher.sh`'s `model_args` precedent, rather than writing `opus` into `remote-run.sh` — the schema default is only reachable through `hr_agent_model` on a readable configuration, and a literal copy would be a second home for it.
+- `docs/github-run-control.md` states no fixed model for the session's argv (`grep -n "sonnet\|--model\|MENTION_MODEL"` returns nothing), so no docs edit was needed; that file is also outside the `cli` path scope.

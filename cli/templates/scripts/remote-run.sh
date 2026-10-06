@@ -566,8 +566,10 @@
 # reaches argv) `--plugin-dir <dir> --add-dir <dir>/instructions
 # --output-format json --json-schema <built by jq from MENTION_ACTIONS and
 # COMMAND_VERBS> --tools Read,Grep,Glob --restricted --strict-mcp-config
-# --no-session-persistence --permission-prompts none --model "$MENTION_MODEL"
-# --max-budget-usd "$MENTION_MAX_BUDGET_USD"`; never `--bare`, which reads no
+# --no-session-persistence --permission-prompts none --model <agentModel>
+# --max-budget-usd "$MENTION_MAX_BUDGET_USD"`, the model read through
+# `hr_agent_model` (a command declares no `model:`) and the flag left off only
+# when the configuration cannot be read; never `--bare`, which reads no
 # OAuth token, and never `--disable-slash-commands`, which would stop the `-p`
 # command expanding. The command is `plugin/commands/harness-read-mention.md`
 # (`MENTION_COMMAND`), and it loads `plugin/instructions/mention_reading.md`,
@@ -1581,9 +1583,7 @@ MENTION_FILE_MAX_BYTES=200000
 MENTION_TEXT_MAX_BYTES=60000
 # How many of the comments before a mention its context's conversation.md keeps.
 MENTION_COMMENTS_MAX=30
-# The mention session's model (a command declares no `model:`), and its spend
-# bound: a bound on one read, not a measured cost.
-MENTION_MODEL='sonnet'
+# The mention session's spend bound: a bound on one read, not a measured cost.
 MENTION_MAX_BUDGET_USD=1
 # Name no login: the job sees only the `harness pause` run, whose actor is the bot.
 PAUSE_FOLDED_NOTE='A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows.'
@@ -7230,8 +7230,13 @@ control_mention_context_extra() {
 # once in a subshell in <dir>; AGENT_STATUS is its exit.
 AGENT_STATUS=0
 control_mention_session() {
-  local dir="$1" out="$2" err="$3" schema
+  local dir="$1" out="$2" err="$3" schema model model_args
   AGENT_STATUS=0
+  # Omitted rather than passed empty, so the CLI applies its own default; the
+  # `${arr[@]+…}` form keeps an empty array safe under `set -u` on bash 3.2.
+  model=$(hr_agent_model "$root" 2>/dev/null) || model=""
+  model_args=()
+  [ -z "$model" ] || model_args=(--model "$model")
   schema=$(jq -n -c --arg actions "$MENTION_ACTIONS" --arg verbs "$COMMAND_VERBS" '
     def words: split(" ") | map(select(length > 0));
     { type: "object", additionalProperties: false, required: ["action", "reason"],
@@ -7254,7 +7259,7 @@ control_mention_session() {
       --json-schema "$schema" \
       --tools Read,Grep,Glob --restricted \
       --strict-mcp-config --no-session-persistence --permission-prompts none \
-      --model "$MENTION_MODEL" --max-budget-usd "$MENTION_MAX_BUDGET_USD"
+      ${model_args[@]+"${model_args[@]}"} --max-budget-usd "$MENTION_MAX_BUDGET_USD"
   ) </dev/null >"$out" 2>"$err" || AGENT_STATUS=$?
   return 0
 }

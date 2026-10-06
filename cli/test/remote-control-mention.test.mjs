@@ -125,8 +125,9 @@ const result = (decision) => JSON.stringify({ type: 'result', subtype: 'success'
  * An adopted fixture on `origin` with `feat_x` pushed, a gh stub, an agent stub and a throwaway plugin.
  *
  * @param {import('node:test').TestContext} t
+ * @param {Record<string, unknown>} [settings] keys merged into `harness.config.json` before it is committed
  */
-async function controlFixture(t) {
+async function controlFixture(t, settings = {}) {
   const fixture = await createFixture({
     files: {
       'package.json': { name: 'fixture-project', private: true, version: '0.0.0', scripts: { test: 'echo test' } },
@@ -141,6 +142,7 @@ async function controlFixture(t) {
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   config.execution = { target: 'github-actions' };
   config.forge = 'github';
+  Object.assign(config, settings);
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
   await runGit(dir, ['add', '-A']);
   await runGit(dir, ['commit', '--quiet', '--no-verify', '-m', 'fixture: adopt the harness']);
@@ -376,7 +378,7 @@ test('the agent runs read-only with the plugin command, never the comment text i
   assert.equal(value('--output-format'), 'json');
   assert.equal(value('--tools'), 'Read,Grep,Glob');
   assert.equal(value('--permission-prompts'), 'none');
-  assert.equal(value('--model'), 'sonnet');
+  assert.equal(value('--model'), 'opus');
   assert.equal(value('--max-budget-usd'), '1');
   for (const flag of ['--restricted', '--strict-mcp-config', '--no-session-persistence']) assert.ok(argv.includes(flag), flag);
   for (const flag of ['--agent', '--disable-slash-commands', '--bare', '--system-prompt']) assert.ok(!argv.includes(flag), flag);
@@ -389,6 +391,15 @@ test('the agent runs read-only with the plugin command, never the comment text i
   assert.deepEqual(schema.properties.verb.enum, ['answer', 'pause', 'resume', 'stop', 'clear', 'status']);
   assert.deepEqual(schema.properties.question, { type: 'integer', minimum: 1 });
   assert.deepEqual(Object.keys(schema.properties).sort(), ['action', 'answer', 'question', 'reason', 'text', 'verb']);
+});
+
+test('the session\'s model is the configured agentModel', async (t) => {
+  const f = await controlFixture(t, { agentModel: 'claude-fixture-model-1' });
+  const run = await f.control('@sdlc-harness is it done?');
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  const { argv } = f.agentCalls()[0];
+  assert.equal(argv[argv.indexOf('--model') + 1], 'claude-fixture-model-1');
+  assert.equal(argv.filter((arg) => arg === '--model').length, 1);
 });
 
 test('the context directory holds comment.md opening with the handle, run.md and the open questions', async (t) => {

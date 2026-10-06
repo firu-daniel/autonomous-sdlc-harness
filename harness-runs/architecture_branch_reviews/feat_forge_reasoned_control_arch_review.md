@@ -17,7 +17,7 @@ One non-blocking item: `ARCHITECTURE.md`'s engine-launch inventory does not list
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Read the mention session's model from `agentModel`, not a frozen `MENTION_MODEL='sonnet'` _(layer: cli)_
+1. [x] **Finding 1** — Read the mention session's model from `agentModel`, not a frozen `MENTION_MODEL='sonnet'` _(layer: cli)_
 2. [ ] **Finding 2** — Shipped plugin assets cite this repository's `.claude/context/*.md` as rule sources _(layer: plugin)_
 3. [ ] **Finding 3** — `ARCHITECTURE.md`'s engine-launch inventory omits the mention session `remote-run.sh` now launches _(layer: general)_
 
