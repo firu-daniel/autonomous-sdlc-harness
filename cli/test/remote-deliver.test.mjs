@@ -223,7 +223,10 @@ test('a refused flip is one warning line, exit 0, the refused sentence, and both
   assertReadyTokens(calls);
   const [onPr] = commentsOn(calls, 12);
   assert.match(onPr.body, /Marking this draft ready for review was refused; mark it ready by hand/);
-  assert.equal(commentsOn(calls, 7).length, 1);
+  const onIssue = commentsOn(calls, 7);
+  assert.equal(onIssue.length, 1);
+  assert.match(onIssue[0].body, /still a draft — marking it ready for review was refused/);
+  assert.doesNotMatch(onIssue[0].body, /is ready for your review/);
   assert.deepEqual(labelAdds(calls, 12), ['labels[]=sdlc-harness: done']);
 });
 

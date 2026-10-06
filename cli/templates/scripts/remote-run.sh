@@ -5297,7 +5297,9 @@ verb_deliver() {
     deliver_comment "$FORGE_PR" "$tmp" "$readiness A review that requests changes starts another round."
     posted="#$FORGE_PR"
     if [ -n "$FORGE_ISSUE" ]; then
-      if [ "$noun" = round ]; then
+      if [ "$ready" = refused ]; then
+        text="The harness $noun on \`$branch\` $verb_done. Its pull request #$FORGE_PR is still a draft — marking it ready for review was refused, so mark it ready by hand: $pr_url"
+      elif [ "$noun" = round ]; then
         text="The harness round on \`$branch\` finished. Pull request #$FORGE_PR is ready for review again: $pr_url"
       else
         text="The harness run on \`$branch\` completed. Its pull request #$FORGE_PR is ready for your review: $pr_url"
