@@ -6,7 +6,8 @@
  * writes nothing, a moved phase edits that comment's id in place, and a round gets its own comment
  * whose marker carries `round=<n>`. `execution.progressComments` `false` calls no `gh` at all; no
  * recognised pull request, a docs-engine ledger and a stopped branch each post nothing. `forge_marker`'s
- * four-argument output is unchanged by its fifth field.
+ * four-argument output is unchanged by its fifth field. A `report stopped` rewrites that comment's
+ * `in progress` line, the task run's or a round's, to `stopped` in one `PATCH` and nothing else.
  *
  * The fixture is `remote-report.test.mjs`'s shape — `init`, `execution.target` `github-actions`,
  * `forge` `github`, `feat_x` pushed to the fixture's bare `origin` with its task prompt and ledger —
@@ -110,6 +111,20 @@ async function progressFixture(t) {
     /** @param {Record<string, string>} [env] */
     progress: (env = {}) =>
       runBash(dir, [SCRIPT, 'report', 'progress', 'feat_x', '--repo', dir], {
+        HARNESS_GH_CLI: stub,
+        STUB_LOG: log,
+        GITHUB_REPOSITORY: REPOSITORY,
+        GITHUB_SERVER_URL: 'https://github.com',
+        GITHUB_RUN_ID: '',
+        RUNNER_TEMP: runnerTemp,
+        STUB_PRS: PR_12,
+        STUB_RUN_LIST: '',
+        STUB_COMMENTS: '',
+        ...env,
+      }),
+    /** `report stopped feat_x`, under the same stubs as `progress`. @param {Record<string, string>} [env] */
+    stopped: (env = {}) =>
+      runBash(dir, [SCRIPT, 'report', 'stopped', 'feat_x', '--repo', dir], {
         HARNESS_GH_CLI: stub,
         STUB_LOG: log,
         GITHUB_REPOSITORY: REPOSITORY,
@@ -259,4 +274,75 @@ test('forge_marker with four or fewer arguments prints what it printed before th
     result.stdout,
     '<!-- sdlc-harness event=started branch=feat_x -->\n<!-- sdlc-harness event=progress branch=feat_x round=3 -->\n',
   );
+});
+
+/** A progress comment body as `forge_progress` renders it, with `- Implementation: <second>`. */
+const progressBody = (second, marker = '<!-- sdlc-harness event=progress branch=feat_x -->') =>
+  `Progress of the harness run on \`feat_x\`:\n\n- Planning: done\n- Implementation: ${second}\n- Branch review: not started\n- Done: not started\n\n${marker}\n`;
+const listings = (calls) =>
+  calls.filter((call) => call.args[0] === 'api' && call.args[1] === '--paginate' && /\/issues\/12\/comments$/.test(call.args[2]));
+
+test("a stopped report rewrites the task run's progress comment from in progress to stopped", async (t) => {
+  const f = await progressFixture(t);
+  const body = progressBody('in progress');
+  const result = await f.stopped({ STUB_COMMENTS: JSON.stringify([{ id: 501, login: BOT, body }]) });
+  assert.equal(result.status, 0, result.stderr);
+  const edits = patches(f.calls());
+  assert.equal(edits.length, 1);
+  assert.equal(edits[0].args[3], `repos/${REPOSITORY}/issues/comments/501`);
+  assert.equal(edits[0].body, body.replace('- Implementation: in progress\n', '- Implementation: stopped\n'));
+  assert.equal(writes(f.calls()).length, 2, 'the stopped comment and the progress edit, nothing else');
+});
+
+test("a stopped report rewrites a round's progress comment too", async (t) => {
+  const f = await progressFixture(t);
+  const body = progressBody('in progress', '<!-- sdlc-harness event=progress branch=feat_x round=2 -->');
+  const result = await f.stopped({ STUB_COMMENTS: JSON.stringify([{ id: 777, login: BOT, body }]) });
+  assert.equal(result.status, 0, result.stderr);
+  const edits = patches(f.calls());
+  assert.equal(edits.length, 1);
+  assert.equal(edits[0].args[3], `repos/${REPOSITORY}/issues/comments/777`);
+  assert.equal(edits[0].body, body.replace('- Implementation: in progress\n', '- Implementation: stopped\n'));
+});
+
+test('a stopped report leaves a progress comment with nothing in progress alone', async (t) => {
+  const f = await progressFixture(t);
+  const result = await f.stopped({ STUB_COMMENTS: JSON.stringify([{ id: 501, login: BOT, body: progressBody('done') }]) });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(listings(f.calls()).length, 1);
+  assert.deepEqual(patches(f.calls()), []);
+  assert.match(result.stdout, /nothing to mark stopped/);
+});
+
+test('a stopped report with progress comments off lists no comments', async (t) => {
+  const f = await progressFixture(t);
+  f.setConfig((c) => {
+    c.execution.progressComments = false;
+  });
+  const result = await f.stopped({ STUB_COMMENTS: JSON.stringify([{ id: 501, login: BOT, body: progressBody('in progress') }]) });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(listings(f.calls()), []);
+  assert.deepEqual(patches(f.calls()), []);
+});
+
+test("a stopped report does not edit another login's comment carrying the marker", async (t) => {
+  const f = await progressFixture(t);
+  const result = await f.stopped({ STUB_COMMENTS: JSON.stringify([{ id: 501, login: 'alice', body: progressBody('in progress') }]) });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(listings(f.calls()).length, 1);
+  assert.deepEqual(patches(f.calls()), []);
+});
+
+test("a stopped report's round matcher is anchored to the branch and to a numeric round", async (t) => {
+  const f = await progressFixture(t);
+  const result = await f.stopped({
+    STUB_COMMENTS: JSON.stringify([
+      { id: 501, login: BOT, body: progressBody('in progress', '<!-- sdlc-harness event=progress branch=feat_xy -->') },
+      { id: 502, login: BOT, body: progressBody('in progress', '<!-- sdlc-harness event=progress branch=feat_x round=two -->') },
+      { id: 503, login: BOT, body: progressBody('in progress', '<!-- sdlc-harness event=progress branch=feat_xy round=2 -->') },
+    ]),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(listings(f.calls()).length, 1);
+  assert.deepEqual(patches(f.calls()), []);
 });
