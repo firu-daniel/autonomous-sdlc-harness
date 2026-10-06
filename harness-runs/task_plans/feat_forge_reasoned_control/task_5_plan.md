@@ -77,3 +77,8 @@ The agent binary is `${HARNESS_AGENT_CLI:-claude}`, resolved with `command -v`; 
 - `commands.typecheck` exits 0.
 - Read the rendered file: the job's `if:` prefilter, its `concurrency:` expression, its `permissions:` block and the act step's `run:` line are byte-identical to before. Phase G's gate 14 parses and lints the rendered workflows, so no gate is run here.
 - End to end with Task 2, from a throwaway fixture: run `remote-run.sh control` with `GITHUB_EVENT_NAME=issue_comment`, `IN_OAUTH` set and `HARNESS_MENTION_PLUGIN_DIR` pointing at a directory holding `commands/harness-read-mention.md`, as these steps would. The agent stub is called with `--plugin-dir` naming that directory. With `GITHUB_EVENT_NAME=pull_request_review`, the env this file passes is empty by construction, which the test above asserts on the expression.
+
+**Deviations from plan:**
+
+- The end-to-end `remote-run.sh control` check with `HARNESS_MENTION_PLUGIN_DIR` and an agent stub is deferred to the Run gates phase: it is `cli/test/remote-control-mention.test.mjs`'s coverage, a test file this unit neither created nor edited. The Fetch step's pin extraction was probed by running its `awk` program against `cli/templates/github/workflows/harness-run.yml` and a sample `HARNESS_CLI_VERSION: '0.7.0' # pinned` line; the clone, marketplace and manifest checks rest on reading, not execution.
+- Besides the `secrets.`-line rewrite, the control test gained a check that `Install the claude CLI when absent`'s `run:` body equals `harness-run.yml`'s. The existing `control carries no template token, and every expression is spaced and outside run blocks` case already bars every expression from a control `run:` block, so no secret-only extension was added.

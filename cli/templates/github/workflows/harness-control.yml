@@ -19,9 +19,13 @@
 # WHAT IT DOES. One job runs `remote-run.sh control`, which does everything
 # else: it authorises the actor — their write access, then the allow-list
 # HARNESS_RUN_ACTORS — finds the run's branch, carries out the
-# command or places the review round, and replies. Every decision lives in that
-# script; this file carries only the events, the permissions, a prefilter and
-# the concurrency group.
+# command or places the review round, and replies. A comment that mentions
+# `@sdlc-harness` anywhere, not in the exact command form, is read by one
+# read-only agent session running the plugin's mention-reading slash command,
+# which `remote-run.sh control` launches and whose decision it validates.
+# Every decision lives in that script; this file carries only the events, the
+# permissions, a prefilter, the concurrency group, and on a comment job the
+# credential, the agent CLI and the pinned plugin that session needs.
 # The `run-name` below is not harness-run.yml's `harness <action> <branch>`
 # title, so no run lookup `remote-run.sh` makes by that title can match it.
 #
@@ -73,8 +77,18 @@
 #   issues: write          reply on the issue or pull request, and label it
 #   pull-requests: write   read the pull request, its reviews and comments,
 #                          and label it
-# The job reads no repository secret: it needs only its own token, so the
-# credential secrets never reach the job that reads untrusted comment text.
+# Only an `issue_comment` event's act step receives a credential: its `env:`
+# passes CLAUDE_CODE_OAUTH_TOKEN and ANTHROPIC_API_KEY as IN_OAUTH and IN_API,
+# each through an expression that is the empty string unless the event is
+# `issue_comment`, and nothing at job level reads a secret. A
+# `pull_request_review`, `issues`, `pull_request` or `delete` event gets empty
+# strings. A `pull_request_review` job runs the pull request's merge-commit
+# copy of this file, which a same-repository head can edit to read the secret;
+# that writer could already read it through any workflow of their own
+# (docs/remote-execution.md, section 9, Credentials and billing), and a fork's
+# review job gets no secret (C2). The decision of record, its exposure and why
+# a comment's text cannot steer the session outside its closed set of actions:
+# docs/github-run-control.md, section 6.
 # Every reply is posted as github-actions[bot] and starts no workflow (S3).
 #
 # FORK PULL REQUESTS. Never `pull_request_target`, which would run with this
@@ -113,6 +127,20 @@
 #     harness-run.yml's `collect` job is the one such job today (DECLARED
 #     MIRRORS below).
 #
+# THE PLUGIN. This file carries no pin of its own. A comment job reads the
+# first HARNESS_CLI_VERSION in the checkout's harness-run.yml, clones the
+# release tag `autonomous-sdlc-harness--v<that version>` outside the checkout
+# as harness-run.yml's `Install the pinned plugin` step does, checks the
+# plugin manifest's version against it, and hands the plugin's directory to
+# the act step as HARNESS_MENTION_PLUGIN_DIR; the session loads it with
+# `--plugin-dir`, so nothing is installed. The plugin a mention runs under is
+# therefore the release the run job installs. A pinned release older than
+# mentions carries no mention-reading command and gets `control`'s no-plugin
+# reply; the route is `init --upgrade-workflows` (docs/remote-execution.md,
+# `### Upgrading`). The three comment-only steps are `continue-on-error`, so a
+# failed install never blocks an exact-form command: `control` then finds no
+# agent binary or plugin and answers a mention with its exit-3 reply.
+#
 # A REFUSAL IS A SUCCESS. `remote-run.sh control` exits 2 for a refusal it has
 # already replied to; that exit code is the script's contract with every other
 # caller, so the step, not the script, maps it: `|| [ $? -eq 2 ]` turns a
@@ -141,23 +169,38 @@
 #                                     (`changes_requested`), HARNESS_RUNNER,
 #                                     HARNESS_REMOTE_STOP,
 #                                     HARNESS_TRIGGER_ALLOWED_BOTS,
-#                                     HARNESS_RUN_ACTORS
+#                                     HARNESS_RUN_ACTORS,
+#                                     OAUTH_TOKEN_SECRET
+#                                     (`CLAUDE_CODE_OAUTH_TOKEN`),
+#                                     API_KEY_SECRET (`ANTHROPIC_API_KEY`),
+#                                     CLI_VERSION_VARIABLE
+#                                     (`HARNESS_CLI_VERSION`, read from
+#                                     harness-run.yml)
+#   cli/src/generators/projectSettings.ts   MARKETPLACE_NAME
+#                                     (`autonomous-sdlc-harness`)
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir
 #   harness-run.yml                   the concurrency group
 #                                     `harness-review-<branch>`, held by its
-#                                     `collect` job
+#                                     `collect` job; the release-tag shape
+#                                     `autonomous-sdlc-harness--v<version>`
+#                                     of its `Install the pinned plugin` step
+#   remote-run.sh (the scriptsDir copy) IN_OAUTH, IN_API and
+#                                     HARNESS_MENTION_PLUGIN_DIR, the env
+#                                     interface `control` reads (its MENTION
+#                                     paragraph)
 #
 # ACTION PINS.
 #   actions/checkout@v5
-# The lowest major whose own action.yml declares `runs.using: node24`, per a
-# maintainer's lookups of its action.yml and release notes on
-# 2026-09-29T08:21Z (UTC). That major's release notes require Actions Runner
-# 2.327.1 or newer; a GitHub-hosted runner already has it, and a self-hosted
-# one must run it (docs/remote-execution.md, section 8). A major tag, not a
-# commit sha: it is GitHub's own `actions/` organisation, the owner of the
-# runner and GITHUB_TOKEN this job already trusts, and a major tag takes the
-# action's own patch and security releases where a sha would freeze your copy.
-# Pin a sha in your copy if you want one.
+#   actions/setup-node@v5
+# Each is the lowest major whose own action.yml declares `runs.using: node24`,
+# per a maintainer's lookups of each action's action.yml and release notes on
+# 2026-09-29T08:21Z (UTC). Each of those majors' release notes requires
+# Actions Runner 2.327.1 or newer; a GitHub-hosted runner already has it, and
+# a self-hosted one must run it (docs/remote-execution.md, section 8). A major
+# tag, not a commit sha: every action here is GitHub's own `actions/`
+# organisation, the owner of the runner and GITHUB_TOKEN this job already
+# trusts, and a major tag takes the action's own patch and security releases
+# where a sha would freeze your copy. Pin shas in your copy if you want them.
 
 name: harness-control
 run-name: harness control ${{ github.event.issue.number || github.event.pull_request.number || github.event.ref }}
@@ -226,5 +269,60 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Set up Node
+        if: github.event_name == 'issue_comment'
+        continue-on-error: true
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          # As in harness-run.yml: no npm cache is used, and a lockfile-less repository must not fail this step.
+          package-manager-cache: false
+
+      - name: Install the claude CLI when absent
+        if: github.event_name == 'issue_comment'
+        continue-on-error: true
+        run: |
+          if ! command -v claude >/dev/null 2>&1; then
+            npm install -g @anthropic-ai/claude-code
+          fi
+          claude --version
+
+      - name: Fetch the pinned plugin
+        if: github.event_name == 'issue_comment'
+        continue-on-error: true
+        run: |
+          pin=$(awk '/^[[:space:]]*HARNESS_CLI_VERSION:/ { sub(/^[[:space:]]*HARNESS_CLI_VERSION:[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, ""); sub(/[[:space:]]+$/, ""); gsub(/["\047]/, ""); print; exit }' .github/workflows/harness-run.yml 2>/dev/null || true)
+          if [ -z "$pin" ]; then
+            echo "::warning::.github/workflows/harness-run.yml carries no HARNESS_CLI_VERSION, so no plugin was fetched and a mention gets the no-plugin reply."
+            exit 1
+          fi
+          source_repo=$(jq -r '.extraKnownMarketplaces["autonomous-sdlc-harness"].source.repo // empty' .claude/settings.json 2>/dev/null || true)
+          if [ -z "$source_repo" ]; then
+            echo "::warning::.claude/settings.json names no marketplace source for autonomous-sdlc-harness, so the plugin at $pin was not fetched."
+            exit 1
+          fi
+          tag="autonomous-sdlc-harness--v$pin"
+          marketplace_dir="$RUNNER_TEMP/harness-marketplace"
+          # --quiet does not cover the detached-HEAD advice a tag checkout prints; only advice.detachedHead gates it.
+          if ! git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$tag" "https://github.com/$source_repo.git" "$marketplace_dir"; then
+            echo "::warning::$source_repo has no release tag $tag, so the plugin at $pin was not fetched."
+            exit 1
+          fi
+          plugin_source=$(jq -r '[.plugins[]? | select(.name == "autonomous-sdlc-harness") | .source | strings][0] // empty' "$marketplace_dir/.claude-plugin/marketplace.json" 2>/dev/null || true)
+          if [ -z "$plugin_source" ]; then
+            echo "::warning::$tag's .claude-plugin/marketplace.json has no readable autonomous-sdlc-harness entry, so the plugin at $pin was not handed to the mention session."
+            exit 1
+          fi
+          plugin_dir="$marketplace_dir/${plugin_source#./}"
+          version=$(jq -r '.version // empty' "$plugin_dir/.claude-plugin/plugin.json" 2>/dev/null || true)
+          if [ "$version" != "$pin" ]; then
+            echo "::warning::the plugin cloned at $tag is version '${version:-none}', not $pin, so it was not handed to the mention session."
+            exit 1
+          fi
+          echo "HARNESS_MENTION_PLUGIN_DIR=$plugin_dir" >> "$GITHUB_ENV"
+
       - name: Act on the comment, review, close or deletion
+        env:
+          IN_OAUTH: ${{ github.event_name == 'issue_comment' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+          IN_API: ${{ github.event_name == 'issue_comment' && secrets.ANTHROPIC_API_KEY || '' }}
         run: bash "$SCRIPTS_DIR/remote-run.sh" control || [ $? -eq 2 ]
