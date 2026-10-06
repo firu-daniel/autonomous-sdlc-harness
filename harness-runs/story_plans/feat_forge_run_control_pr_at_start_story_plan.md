@@ -37,7 +37,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_forge_run_control_pr_at
 10. [x] **Task 10** — The job's supervision loop reports a phase change from the ledger _(layer: cli)_ _(points: 15)_
 11. [x] **Task 11** — Reword `doctor`'s and `init`'s pull-request-setting messages for a pull request that opens at start _(layer: cli)_ _(points: 10)_
 12. [x] **Task 12** — The user-review fix plan records the review-comment ids of each finding _(layer: plugin)_ _(points: 15)_
-13. [ ] **Task 13** — Plugin flow documents: the pull request opens at start, and the ledger's ids have a shell reader _(layer: plugin)_ _(points: 10)_
+13. [x] **Task 13** — Plugin flow documents: the pull request opens at start, and the ledger's ids have a shell reader _(layer: plugin)_ _(points: 10)_
 14. [ ] **Task 14** — Schema and `docs/config.md`: `execution.progressComments`, and `forge`'s description _(layer: general)_ _(points: 10)_
 15. [ ] **Task 15** — `docs/github-run-control.md` §4 and §5: the pull request from the start, the target rule and the table _(layer: general)_ _(points: 20)_
 16. [ ] **Task 16** — `docs/github-run-control.md` §1, §2, §3 and §8: recognition, resolved threads, questions on the pull request, unverified facts _(layer: general)_ _(points: 15)_
