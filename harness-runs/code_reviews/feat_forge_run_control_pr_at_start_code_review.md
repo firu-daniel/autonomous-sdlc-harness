@@ -16,7 +16,7 @@ Every behaviour the plan adds lands with a stub-driven suite (`remote-open`, `re
 
 Each entry resolves to `harness-runs/code_reviews/feat_forge_run_control_pr_at_start_code_review/finding_<K>.md` through its `**Finding K**` reference. The leading `N.` is the fix order and `K` is the finding's stable number.
 
-1. [ ] **Finding 3** — Name the `open` paragraph and the open step in `docs/github-run-control.md`'s code-of-record sentence _(layer: general)_
+1. [x] **Finding 3** — Name the `open` paragraph and the open step in `docs/github-run-control.md`'s code-of-record sentence _(layer: general)_
 2. [ ] **Finding 2** — Make the issue's `completed` comment say the pull request is still a draft when the ready flip was refused _(layer: cli)_
 3. [ ] **Finding 1** — Scope the review-thread reply marker to the round so a later round still replies to and resolves a thread _(layer: cli, general)_
 
