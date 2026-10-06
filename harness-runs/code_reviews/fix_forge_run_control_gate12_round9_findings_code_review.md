@@ -32,7 +32,7 @@ Two findings are left: one Should Fix and one Nice to Have.
 Each entry resolves to `harness-runs/code_reviews/fix_forge_run_control_gate12_round9_findings_code_review/finding_<K>.md`. The list runs from the smallest, safest fix to the widest.
 
 1. [x] **Finding 2** — Re-wrap the overlong line in `forge_report`'s function comment _(layer: cli)_
-2. [ ] **Finding 1** — Give a `park_loop` comment its own folded-pause line, which says the hold continues on `clear`, not on an answer _(layer: cli, general)_
+2. [x] **Finding 1** — Give a `park_loop` comment its own folded-pause line, which says the hold continues on `clear`, not on an answer _(layer: cli, general)_
 
 ---
 

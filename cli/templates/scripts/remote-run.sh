@@ -336,10 +336,11 @@
 # `COMMAND_HANDLE answer <n>` over `<your answer>`; the marker adds
 # `question=<n>`. With no question open it posts nothing, sets no label and
 # prints one `::error::` line naming the branch. The label
-# is set once per target, not per question. `parked` and `park_loop` append
-# `PAUSE_FOLDED_NOTE` to <note>, after one blank line, when the registry's
-# `pause_reason` is `user`: a pause the job dropped and the run never honoured. On a public repository a question
-# comment and its answer are public, as the artifact already is
+# is set once per target, not per question. When the registry's `pause_reason`
+# is `user` (a pause the job dropped and the run never honoured), `parked`
+# appends `PAUSE_FOLDED_NOTE` to <note> and `park_loop` appends
+# `PAUSE_FOLDED_HOLD_NOTE`, each after one blank line. On a public repository a
+# question comment and its answer are public, as the artifact already is
 # (`docs/remote-execution.md` -> `## 11. Security`, *What a reader of the
 # repository's Actions runs can see*).
 # `progress` (`forge_progress`) keeps ONE comment per run or round on the pull
@@ -1468,8 +1469,9 @@ PR_CREATE_SETTING_PATH='Settings -> Actions -> General -> Workflow permissions'
 # to be trusted (docs/github-integration-research.md -> S6); the margin is the
 # framing lines and the marker.
 QUESTION_COMMENT_MAX_BYTES=250000
-# Names no login: the job sees only the `harness pause` run, whose actor is the bot.
+# Name no login: the job sees only the `harness pause` run, whose actor is the bot.
 PAUSE_FOLDED_NOTE='A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows.'
+PAUSE_FOLDED_HOLD_NOTE='A pause was requested on this run before it was put on hold, so it is folded into this hold: the run waits for the hold to be cleared and continues once it is, and no separate `paused` comment follows.'
 GH="${HARNESS_GH_CLI:-gh}"
 
 # How many runs `status` prints, and how many `run list` returns for status
@@ -4645,7 +4647,7 @@ REPORT_NOT_STARTED_ENGINE=""
 forge_report() {
   local event="$1" br="$2" note="${3-}" pr="${4-}" gone="${5-}" gone_sha="${6-}" state reason="" resume_at="" when registry_file
   local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n route engine=""
-  local gone_prs="" reported=""
+  local gone_prs="" reported="" folded=""
   case "$event" in
     parked|park_loop) state=parked ;;
     paused) state=paused ;;
@@ -4727,7 +4729,9 @@ forge_report() {
   case "$event" in
     parked|park_loop)
       if [ "$reason" = user ]; then
-        if [ -z "$note" ]; then note="$PAUSE_FOLDED_NOTE"; else note="$note"$'\n\n'"$PAUSE_FOLDED_NOTE"; fi
+        folded="$PAUSE_FOLDED_NOTE"
+        [ "$event" != park_loop ] || folded="$PAUSE_FOLDED_HOLD_NOTE"
+        if [ -z "$note" ]; then note="$folded"; else note="$note"$'\n\n'"$folded"; fi
       fi ;;
   esac
 

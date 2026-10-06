@@ -10,8 +10,10 @@
  * one comment per open question file, written into the fixture checkout's clarification directory:
  * ascending, the file whole less its own `answer_<n>.md` lines or cut at a line within the byte bound, one
  * answer instruction and its copy block, and its marker carrying `question=<n>`; with no open question it
- * posts nothing and prints an `::error::` line. A `parked` or `park_loop` report whose registry
- * `pause_reason` is `user` appends the folded-pause line; no other event or reason does. Only `round` changes a pull request's draft state, undoing a
+ * posts nothing and prints an `::error::` line. A `parked` report whose registry `pause_reason` is
+ * `user` appends the folded-pause line, and a `park_loop` report the folded-hold line; no other event or reason
+ * does.
+ * Only `round` changes a pull request's draft state, undoing a
  * ready one before its comment; `failed` and `stopped` on a pull request say it stays open.
  *
  * The fixture is `remote-trigger.test.mjs`'s shape — `init`, `execution.target` `github-actions`,
@@ -619,6 +621,8 @@ test('a question file over the bound is cut at a line boundary within the bound 
 
 const PAUSE_FOLDED_NOTE =
   'A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows.';
+const PAUSE_FOLDED_HOLD_NOTE =
+  'A pause was requested on this run before it was put on hold, so it is folded into this hold: the run waits for the hold to be cleared and continues once it is, and no separate `paused` comment follows.';
 const COPY_BLOCK = (n) => `\n\`\`\`\n@sdlc-harness answer ${n}\n<your answer>\n\`\`\`\n`;
 
 test('parked with a user pause pending carries the folded-pause line after the answer form', async (t) => {
@@ -657,13 +661,14 @@ for (const [label, fields] of [['a budget reason', { pause_reason: 'budget' }], 
   });
 }
 
-test('park_loop with a user pause pending carries the folded-pause line after its text', async (t) => {
+test('park_loop with a user pause pending carries the folded-hold line after its text', async (t) => {
   const f = await reportFixture(t);
   f.record('feat_x', { pause_reason: 'user' });
   const result = await f.report(['park_loop', 'feat_x']);
   assert.equal(result.status, 0, result.stderr);
   const [posted] = commentsOn(f.calls(), 7);
-  assert.ok(posted.body.includes(`to clear the hold and let it continue.\n\n${PAUSE_FOLDED_NOTE}\n`), posted.body);
+  assert.ok(posted.body.includes(`to clear the hold and let it continue.\n\n${PAUSE_FOLDED_HOLD_NOTE}\n`), posted.body);
+  assert.ok(!posted.body.includes(PAUSE_FOLDED_NOTE), posted.body);
 });
 
 test('paused with a user reason carries no folded-pause line', async (t) => {
