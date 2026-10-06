@@ -1946,8 +1946,7 @@ hr_push_landed() {
 #                           the counters that must survive a job boundary
 #   chain                   the writing job's OWN input `HARNESS_INPUT_CHAIN`, never
 #                           a value carried from an earlier bundle
-#   control_polled_at       the epoch second up to which the job checked for a
-#                           `harness pause <branch>` run, or empty
+#   control_polled_at       the lower bound of the next control poll, or empty
 #   decision                `continue` | `wait-poller` | `stop`
 #   detail                  one human-readable line
 #   run_id, run_url, written_at

@@ -357,9 +357,13 @@
 #     restored bundle's under HARNESS_INPUT_CHAIN above 0, else at this run's own
 #     `createdAt` (`remote-run.sh run-created-at "$GITHUB_RUN_ID"`), else at
 #     HARNESS_JOB_STARTED_EPOCH — NEVER at the job's own start alone, which
-#     would lose a pause sent while the job was queued. Each successful poll
-#     advances it to the epoch taken just before its query; a failed poll
-#     advances nothing and pauses nothing.
+#     would lose a pause sent while the job was queued. That starting bound is
+#     the job's FLOOR. The verb's exit decides: `0` a pause, `5` none — each
+#     advances the bound to the larger of the floor and the epoch taken just
+#     before the query less CONTROL_POLL_OVERLAP_SECS, so a run the listing
+#     shows late is still read; anything else, `1` included, is a failed poll,
+#     which advances nothing and pauses nothing. Every poll logs one line,
+#     `job: control poll of '<branch>' since <since> (exit <rc>): <last line>`.
 #   * THE DECISION, when the run leaves `running`: `paused` for `budget` ->
 #     `continue`; for `user` -> `stop`; by the usage gate (`usage`) -> a lost
 #     `usage_resume_at` is first given the gate's fallback and reported as
@@ -1111,6 +1115,11 @@ USAGE_WARNING_STREAK=0
 # none of them. How often the control poll asks GitHub for a `harness pause
 # <branch>` run — each poll is one `gh run list`.
 REMOTE_CONTROL_POLL_SECS="${REMOTE_CONTROL_POLL_SECS:-60}"
+# Not a tunable. How far each control poll's next lower bound reaches back:
+# GitHub's run listing is eventually consistent, so the window re-reads the last
+# five minutes. A marker seen twice is harmless — JOB_USER_PAUSE_DROPPED drops
+# PAUSE once per job.
+CONTROL_POLL_OVERLAP_SECS=300
 # The longest usage-reset wait a HOSTED job sits through rather than handing
 # the run to the resume poller, since a hosted job bills for the minutes it
 # waits. A self-hosted job waits for any reset before its deadline.
@@ -1129,8 +1138,10 @@ REMOTE_AUTO_RESUME_DELAY_SECS="${REMOTE_AUTO_RESUME_DELAY_SECS:-300}"
 JOB_MODE=0
 # Job mode's pass state, for the same reason: when the control poll last ran,
 # whether each pass has already dropped its one PAUSE, and the job's start
-# (HARNESS_JOB_STARTED_EPOCH, else when run_job began).
+# (HARNESS_JOB_STARTED_EPOCH, else when run_job began), and the control poll's
+# starting bound, below which no later bound falls.
 JOB_START_EPOCH=0
+JOB_CONTROL_FLOOR=0
 LAST_CONTROL_POLL=0
 JOB_USER_PAUSE_DROPPED=0
 JOB_BUDGET_PAUSE_DROPPED=0
@@ -1330,11 +1341,11 @@ job_report() {
 #                       0, else `0` — so ANY USER ACTION (a drop, an answer, a
 #                       resume: each a chain-0 dispatch) resets it and restores
 #                       the full allowance
-#   control_polled_at   job mode only: the epoch second up to which the job has
-#                       checked for a `harness pause <branch>` run — the lower
-#                       bound of the next control poll, this job's or the next
-#                       chained one's. Set at start (see JOB MODE) and advanced
-#                       by every successful poll
+#   control_polled_at   job mode only: the lower bound of the next control poll,
+#                       this job's or the next chained one's — set at start (see
+#                       JOB MODE), and after each successful poll the larger of
+#                       that starting bound and the epoch before the query less
+#                       CONTROL_POLL_OVERLAP_SECS
 #   pause_note_stale    job mode only: `1` when a `pause` job's restored
 #                       `status.json` was not `paused` or named another engine,
 #                       so spawn_engine's pause-resume prompt says there is no
@@ -4036,28 +4047,35 @@ job_start_control_bound() {
     bound="$JOB_START_EPOCH"
     log "job: could not read this run's createdAt — the control poll starts from the job's start ($bound)"
   fi
+  JOB_CONTROL_FLOOR="$bound"
   registry_set "$branch" control_polled_at "$bound"
 }
 
 # job_control_poll <branch> <state_abs> <remote_status> — the `user` pass.
+# Exit map of `pause-requested`: 0 a pause, 5 none, anything else a failed poll
+# that neither moves the bound nor pauses.
 job_control_poll() {
-  local branch="$1" state_abs="$2" remote_status="$3" now since before rc
+  local branch="$1" state_abs="$2" remote_status="$3" now since before rc out next
   [ "$JOB_USER_PAUSE_DROPPED" = "0" ] || return 0
   now="$(date +%s)"
   [ $((now - LAST_CONTROL_POLL)) -ge "$REMOTE_CONTROL_POLL_SECS" ] || return 0
   LAST_CONTROL_POLL="$now"
   since="$(job_int "$(registry_get "$branch" control_polled_at)")" || since="$JOB_START_EPOCH"
   before="$(date +%s)"
-  bash "$REMOTE_RUN" pause-requested "$branch" "$since" --repo "$MAIN_REPO" >>"$WATCHER_LOG" 2>&1
+  out="$(bash "$REMOTE_RUN" pause-requested "$branch" "$since" --repo "$MAIN_REPO" 2>&1)"
   rc=$?
+  [ -z "$out" ] || printf '%s\n' "$out" >>"$WATCHER_LOG"
+  log "job: control poll of '$branch' since $since (exit $rc): $(printf '%s\n' "$out" | awk 'NF { l = $0 } END { print l }')"
   case "$rc" in
-    0 | 1) ;;
+    0 | 5) ;;
     *)
       log "job: the control poll for '$branch' failed (exit $rc) — not pausing; control_polled_at stays $since"
       return 0
       ;;
   esac
-  registry_set "$branch" control_polled_at "$before"
+  next=$((before - CONTROL_POLL_OVERLAP_SECS))
+  [ "$next" -ge "$JOB_CONTROL_FLOOR" ] || next="$JOB_CONTROL_FLOOR"
+  registry_set "$branch" control_polled_at "$next"
   if [ "$rc" = "0" ]; then
     JOB_USER_PAUSE_DROPPED=1
     registry_set "$branch" pause_reason user

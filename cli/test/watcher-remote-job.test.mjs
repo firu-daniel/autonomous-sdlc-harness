@@ -82,10 +82,12 @@ function shellQuote(value) {
 
 /**
  * `gh`, recorded: every argument vector appended to `STUB_LOG`, `run list` and `run view` answered
- * from the environment, and any call starting with `STUB_FAIL_ON` failed with exit 4.
+ * from the environment, and any call starting with `STUB_FAIL_ON` failed with exit 4. With
+ * `STUB_RUN_LIST_LATER` set, every `run list` after the first answers it instead of `STUB_RUN_LIST`,
+ * counted in `<STUB_LOG>.run-list-count` — a listing that shows a run late.
  */
 const GH_STUB = `#!/usr/bin/env node
-const { appendFileSync } = require('node:fs');
+const { appendFileSync, existsSync, readFileSync, writeFileSync } = require('node:fs');
 const args = process.argv.slice(2);
 appendFileSync(process.env.STUB_LOG, JSON.stringify(args) + '\\n');
 const line = args.join(' ');
@@ -94,7 +96,12 @@ if (failOn && line.startsWith(failOn)) {
   process.stderr.write('stub failure\\n');
   process.exit(4);
 }
-if (line.startsWith('run list')) process.stdout.write(process.env.STUB_RUN_LIST || '[]');
+if (line.startsWith('run list') && process.env.STUB_RUN_LIST_LATER !== undefined) {
+  const counter = process.env.STUB_LOG + '.run-list-count';
+  const n = existsSync(counter) ? Number(readFileSync(counter, 'utf8')) : 0;
+  writeFileSync(counter, String(n + 1));
+  process.stdout.write(n === 0 ? process.env.STUB_RUN_LIST || '[]' : process.env.STUB_RUN_LIST_LATER);
+} else if (line.startsWith('run list')) process.stdout.write(process.env.STUB_RUN_LIST || '[]');
 if (line.startsWith('run view')) process.stdout.write(process.env.STUB_RUN_VIEW || '{}');
 `;
 
@@ -566,6 +573,49 @@ test('control poll: a failed read never pauses', async (t) => {
   assert.match(j.watcherLog(), /the control poll for 'feat_x' failed \(exit 3\)/);
 });
 
+test('control poll: a pause the listing shows only after a poll that missed it is still seen', async (t) => {
+  const j = await createJobFixture(t);
+  if (j === null) return;
+
+  const start = nowSecs() - 10;
+  await j.setStub(HONOUR_PAUSE(100));
+  const result = await j.job([j.branch, 'task', 'none'], {
+    HARNESS_JOB_STARTED_EPOCH: String(start),
+    STUB_RUN_LIST: '[]',
+    STUB_RUN_LIST_LATER: pauseRunList(start + 5),
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(lastLine(result.stdout), 'job: paused stop');
+  assert.equal(j.status().pause_reason, 'user');
+  assert.ok(j.ghCalls().filter((c) => c.startsWith('run list')).length >= 2, j.ghCalls().join('\n'));
+  assert.match(result.stdout, /job: control poll of 'feat_x' since \d+ \(exit 5\): remote-run\.sh: no 'harness pause feat_x' run/);
+  assert.match(result.stdout, /job: control poll of 'feat_x' since \d+ \(exit 0\): remote-run\.sh: a 'harness pause feat_x' run/);
+});
+
+test('control poll: a usage refusal is a failed poll', async (t) => {
+  const j = await createJobFixture(t);
+  if (j === null) return;
+
+  const scripts = join(j.dir, 'scripts');
+  await writeFile(join(scripts, 'remote-run-real.sh'), readFileSync(join(scripts, 'remote-run.sh')), { mode: 0o755 });
+  await writeFile(
+    join(scripts, 'remote-run.sh'),
+    '#!/usr/bin/env bash\n[ "$1" = pause-requested ] && exit 1\nexec bash "$(dirname "$0")/remote-run-real.sh" "$@"\n',
+    { mode: 0o755 },
+  );
+  const start = nowSecs() - 10;
+  await j.setStub(HONOUR_PAUSE(30));
+  const result = await j.job([j.branch, 'task', 'none'], {
+    HARNESS_JOB_STARTED_EPOCH: String(start),
+    STUB_RUN_LIST: pauseRunList(start + 5),
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(lastLine(result.stdout), 'job: completed stop');
+  assert.equal(j.status().pause_reason, '');
+  assert.match(j.watcherLog(), /the control poll for 'feat_x' failed \(exit 1\)/);
+  assert.equal(j.status().control_polled_at, String(start));
+});
+
 test('control poll: the lower bound is never the job start alone', async (t) => {
   await t.test('chain 0: a pause sent while the job queued, after its own run createdAt', async (t) => {
     const j = await createJobFixture(t);
@@ -615,7 +665,7 @@ test('control poll: the lower bound is never the job start alone', async (t) => 
     });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.equal(lastLine(result.stdout), 'job: completed stop');
-    assert.ok(Number(j.status().control_polled_at) >= start, `control_polled_at ${j.status().control_polled_at} < ${start}`);
+    assert.equal(j.status().control_polled_at, String(start - 5));
   });
 });
 

@@ -56,7 +56,7 @@ Top risks: The likeliest regression is the overlapping poll bound re-seeing a `h
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12_round8_findings/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence, in the configured layer order: `cli` first, then `plugin`, with the catch-all `general` layer last. Task 16 was added in revision and sits at entry 13, in `plugin`'s place; entry numbers and task numbers differ from there on, and each entry names the file it resolves to. Within `cli`, finding 1 (High) comes first, then findings 2, 3 and 5 (Medium), then finding 6's runner-wait logging, then finding 4 (Low).
 
 1. [x] **Task 1** — `pause-requested` answers "no pause" with its own exit code, `5` _(layer: cli)_ _(points: 8)_
-2. [ ] **Task 2** — The job's control poll overlaps its bound, floors it at the job's start, and logs every poll _(layer: cli)_ _(points: 15)_
+2. [x] **Task 2** — The job's control poll overlaps its bound, floors it at the job's start, and logs every poll _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — `push-branch.sh` retries a push the remote refused, at most three attempts in all, and never a `[rejected]` one _(layer: cli)_ _(points: 12)_
 4. [ ] **Task 4** — `hr_push_landed` tells a moved remote from a refused push, and `start` and `review` name which _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — `control`'s reply after a dispatch records the engine in its marker _(layer: cli)_ _(points: 8)_
