@@ -70,3 +70,11 @@ Then correct every sentence of §1, §3 and the entry point that says only the e
 - Every in-document anchor this task writes resolves to a heading that exists, `#6-who-can-act-and-pull-requests-from-forks` and `#8-what-is-not-verified-here` included.
 - `grep -n "reasoned" docs/github-run-control.md` finds nothing. Every command an adopter is told to type sits in a fenced block, one command per line (lessons ledger, *Adopter-facing documentation*).
 - Each literal reply this file quotes matches `cli/templates/scripts/remote-run.sh` byte for byte: the read-as note, the confirmation, the footer and the `fixes` text. Check with `grep -F` on each quoted string.
+
+**Deviations from plan:**
+
+- `### Mentions read by an agent` is placed at the end of §1, after *"**The handle.**"*, not before *"**Who and where.**"*. A heading has no end, so placing it there would have put *Who and where*, *Replies*, the refusal order, *A refusal is a success* and *The handle* — all of which govern the exact form too — under a mention subheading. Its anchor, `#mentions-read-by-an-agent`, is the same either way.
+- The decision table carries an `Example mention` column, the plan's one example per row. The task prompt's *Why* supplies examples for `answer`, `pause`, `status` (from *"what is the status on this branch"*), `reply`, `fixes` and `none`; the `resume`, `stop`, `clear` and `clarify` rows carry illustrative examples written for this document, since the *Why* has none for them.
+- §1's *"**The handle.**"* sentence *"The command is matched as text … never delivered through the mention"* now reads *"A command or a mention is matched as text … never delivered through GitHub's notification of the handle"*: it used "mention" in GitHub's sense, which this document now uses for the harness's own surface.
+- The table's literal replies are given in fenced blocks below it rather than in its cells, because each carries backticks; every one was checked with `grep -F` against `cli/templates/scripts/remote-run.sh` (each fragment matched).
+- D1 re-run reaches one site beyond rows 15–20: the new subsection's opening (*"*Never a command, and never read* above holds for it too"*), inside §1 and written by this task. It states mentions, not that only the exact form acts.

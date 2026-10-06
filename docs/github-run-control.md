@@ -1,6 +1,6 @@
 # Working a run from GitHub
 
-**Who reads this:** a maintainer or team member who works runs from GitHub, and anyone changing `harness-control.yml`, `harness-run.yml`'s `collect` job or `remote-run.sh`'s `open`, `control`, `collect`, `report` and `deliver`. It owns the design of record for comment commands, review rounds, parks over comments, the draft pull request and its draft state, lifecycle comments, the progress comment, state labels and the resolution of review threads.
+**Who reads this:** a maintainer or team member who works runs from GitHub, and anyone changing `harness-control.yml`, `harness-run.yml`'s `collect` job or `remote-run.sh`'s `open`, `control`, `collect`, `report` and `deliver`. It owns the design of record for comment commands, mentions read by an agent, review rounds, parks over comments, the draft pull request and its draft state, lifecycle comments, the progress comment, state labels and the resolution of review threads.
 
 It cites rather than restates. Every GitHub fact below is cited from [`github-integration-research.md`](github-integration-research.md) by its ID (S3–S6, T1–T4, C1–C4), retrieved there on 2026-09-30 and not re-verified here. The run's own lifecycle is [`remote-execution.md`](remote-execution.md)'s, and starting a run is [`github-issue-trigger.md`](github-issue-trigger.md)'s. The code of record is `cli/templates/scripts/remote-run.sh` → the header's `open`, `control`, `collect`, `report` and `deliver` paragraphs, the header of `cli/templates/github/workflows/harness-control.yml`, and in `cli/templates/github/workflows/harness-run.yml` the `Open the draft pull request` step with its `WHY THE OPEN STEP RUNS ONLY WHEN chain IS 0` header paragraph and the `collect` job with its `THE COLLECT JOB` header paragraph.
 
@@ -27,7 +27,7 @@ GitHub is a second entry point **beside** the local one, never instead of it. On
 **2. What a team member the allow-list admits then does from GitHub alone:**
 
 - labels an issue `sdlc-harness` to start a run ([`github-issue-trigger.md`](github-issue-trigger.md));
-- answers, pauses, resumes or stops the run with `@sdlc-harness` comments ([§1](#1-commands-in-a-comment));
+- answers, pauses, resumes or stops the run with `@sdlc-harness` comments, or mentions `@sdlc-harness` in a comment to ask about it ([§1](#1-commands-in-a-comment));
 - requests changes on a pull request from the run's branch, draft or not, to start the next round ([§2](#2-a-review-that-requests-changes-starts-a-round));
 - follows the run through its lifecycle comments and state labels ([§5](#5-lifecycle-comments-and-state-labels)).
 
@@ -69,7 +69,7 @@ The triage role is refused ([§6](#6-who-can-act-and-pull-requests-from-forks)).
 
 ## 1. Commands in a comment
 
-**A command is a new comment whose first line opens with `@sdlc-harness`, followed by a verb.** The handle must be the first word of the first line; leading spaces and tabs are skipped, and the handle and the verb are matched case-insensitively. Text after `pause`, `resume`, `stop`, `clear` or `status` on the same line is ignored. A comment is read once, when it is created: an edited comment is never re-read, so a correction is a new comment.
+**A command is a new comment whose first line opens with `@sdlc-harness`, followed by a verb.** The handle must be the first word of the first line; leading spaces and tabs are skipped, and the handle and the verb are matched case-insensitively. Text after `pause`, `resume`, `stop`, `clear` or `status` on the same line is ignored. A comment is read once, when it is created: an edited comment is never re-read, so a correction is a new comment. Any other comment carrying the handle as a word, a first line that opens with the handle followed by no command included, is a **mention**, read by an agent as [*Mentions read by an agent*](#mentions-read-by-an-agent) below says.
 
 ```
 @sdlc-harness pause
@@ -119,14 +119,14 @@ When the flow-progress ledger on the branch tip reads fully ticked, `status` say
 
 **Why `status` exists.** A run worked from GitHub alone had no way to ask its state: the only answer was a local `/autonomous-sdlc-harness:branch-status`, which needs the setup this entry point exists to spare. The command reads only what is already there — the branch's run list, the run's state bundle and the flow-progress ledger on the branch tip — so it adds no state of its own to keep true. A round's job writes its fresh ledger only after it starts, so a reply in that gap read the previous engine's completed ledger and called it all ticked while the run was `running`; the three replies above exist for that gap ([`development.md`](development.md) → Gate 12 → Round 7, finding 2).
 
-**Never a command:**
+**Never a command, and never read:**
 
 - `pause` — no handle;
 - `pause this` — no handle;
-- `Let's @sdlc-harness pause` — the handle is not the first word;
-- `> @sdlc-harness pause` — a quote is not the first word either;
 - an edited comment, whatever it now says;
 - any comment carrying the harness's hidden line, which opens `<!-- sdlc-harness`. Every comment the harness posts carries it, so a harness reply that quotes a command never acts on it, and the harness's own comments are ignored without a reply.
+
+`Let's @sdlc-harness pause` and `> @sdlc-harness pause` are not commands either, because the handle is not the first word, but they are mentions: the agent reads them, and treats a quoted line as someone else's words.
 
 **Who and where.** A command is obeyed only from a collaborator whose permission on the repository is `admin` or `write` and whom the allow-list `HARNESS_RUN_ACTORS` admits, or from a bot listed in `HARNESS_TRIGGER_ALLOWED_BOTS`. The permission API reports the maintain role as `write`, so it passes, and triage as `read`, so it is refused (T3). The list is read after the permission, so a writer it does not admit is refused with a reply naming it. This is the trigger's own check ([`github-issue-trigger.md`](github-issue-trigger.md) → `## 3. Who can start a run`). A command on a pull request acts on its head branch. A command on an issue acts on the branch the trigger started from that issue, read from the trigger's own `started` comment, posted by `github-actions[bot]`. Either branch must be unprotected, and is acted on when any one of three holds:
 
@@ -149,17 +149,98 @@ Every refused command gets a reply in one form, `` @<login>: `<verb>` was not ru
 1. the repository variable `HARNESS_REMOTE_STOP` is set;
 2. the default branch's `harness.config.json` does not set `forge` to `github` and `execution.target` to `github-actions`. This is checked before the actor, so a disabled coupling asks GitHub nothing about the commenter;
 3. the commenter is not authorised;
-4. the verb is not one of the six.
+4. for the exact form only, the verb is one no arm carries out.
 
-An unknown verb's reply lists all six:
+A word after the handle that is not one of the six makes the comment a mention, not an unknown command, so step 4 has nothing to refuse today. The reply that lists all six is now what a mention gets when no credential reaches the job:
 
 ```
 The commands are `@sdlc-harness answer [<n>]`, `@sdlc-harness pause`, `@sdlc-harness resume`, `@sdlc-harness stop`, `@sdlc-harness clear`, `@sdlc-harness status`; `docs/github-run-control.md` in the harness documentation states each.
 ```
 
-**A refusal is a success.** The `harness control` run that replied with a refusal concludes `success`, because the refusal was answered: nobody gets a failure e-mail for a command that was correctly turned down. Only a failure to act or to reply fails the run.
+**A refusal is a success.** The `harness control` run that replied with a refusal concludes `success`, because the refusal was answered: nobody gets a failure e-mail for a command that was correctly turned down. A mention's refusals, an invalid decision and no credential among them, follow the same rule. Only a failure to act or to reply fails the run: an agent that could not run, or that ended in error, fails the job with exit 3 after replying.
 
-**The handle.** Type `@sdlc-harness` in full: GitHub does not autocomplete it. It renders as a link to [github.com/sdlc-harness](https://github.com/sdlc-harness), a placeholder organisation created only so that nobody else can take the name. It is not a user, not an app and not a member of any repository, so nothing is notified. The command is matched as **text** in the comment by `control`, never delivered through the mention. A comment that contains `@claude` as a word also triggers `anthropics/claude-code-action` where that action is installed (C4), and a harness command needs no such word. The shorter `@harness` was not used because it belongs to another organisation (`gh api users/harness`, observed by the maintainer on 2026-10-01).
+**The handle.** Type `@sdlc-harness` in full: GitHub does not autocomplete it. It renders as a link to [github.com/sdlc-harness](https://github.com/sdlc-harness), a placeholder organisation created only so that nobody else can take the name. It is not a user, not an app and not a member of any repository, so nothing is notified. A command or a mention is matched as **text** in the comment by `control`, never delivered through GitHub's notification of the handle. A comment that contains `@claude` as a word also triggers `anthropics/claude-code-action` where that action is installed (C4), and a harness command needs no such word. The shorter `@harness` was not used because it belongs to another organisation (`gh api users/harness`, observed by the maintainer on 2026-10-01).
+
+### Mentions read by an agent
+
+**A mention is a new comment that carries `@sdlc-harness` as a word anywhere and is not the exact form above.** The handle is matched case-insensitively and never inside a longer word: a letter or digit before it, or a letter, digit or hyphen after it, makes it no mention. The comment may be on an issue or a pull request's conversation. A mention is read once, when it is created, and *Never a command, and never read* above holds for it too.
+
+**The checks, in order, before any session.** The first that fails is replied in §1's refusal form, the handle standing in for the verb: `` @<login>: `@sdlc-harness` was not run: <reason>. <way on> ``.
+
+1. The repository variable `HARNESS_REMOTE_STOP` is set.
+2. The default branch's `harness.config.json` does not set `forge` to `github` and `execution.target` to `github-actions`.
+3. The job is a re-run whose re-runner the allow-list `HARNESS_RUN_ACTORS` does not admit.
+4. The commenter is not authorised (*Who and where*).
+5. The branch cannot be acted on. The refusals are a command's, word for word, so a mention on a pull request whose branch *"is not a harness branch"*, or on an issue from which *"no harness run was started"*, starts no session.
+6. The run's state cannot be read (exit 3).
+7. No credential secret reaches the job. The reply lists the six commands, as above (exit 2).
+8. The plugin carrying the mention command did not reach the job, or the agent binary is not on its `PATH` (exit 3). A pin older than mentions carries no such command; the reply names `### Upgrading` in [`remote-execution.md`](remote-execution.md).
+9. Otherwise, one session runs.
+
+**What reads it.** One read-only session running the plugin's `/autonomous-sdlc-harness:harness-read-mention` command, at the release `harness-run.yml` is pinned to, which loads `plugin/instructions/mention_reading.md`. The session runs once and is never retried. How the control job reaches the plugin and a credential is in [§6](#6-who-can-act-and-pull-requests-from-forks).
+
+**What the agent receives**, each file cut at a whole line within 200,000 bytes, and a read that failed said in the file rather than refused:
+
+- `comment.md` — who commented, on which issue or pull request, and the comment verbatim;
+- `run.md` — the branch, the run's state, whether it was stopped, and the next flow-progress ledger entry;
+- `questions/question_<n>.md` — each open question;
+- `item.md` — the issue or pull request's title, author, URL and body;
+- `conversation.md` — the 30 comments before this one, oldest first, the harness's own marked as such;
+- `diff.patch` — on a pull request only, its diff as text. Nothing from the pull request is checked out or run.
+
+**The decision is one of a closed set**, and the script validates it before anything happens:
+
+| `action` | Example mention | What happens | Reply | Exit |
+|---|---|---|---|---|
+| `command`, `answer` | *"@sdlc-harness it hit the plan loop cap. If the question has an option to give it more rounds, give it three more"* | The `answer` arm writes and dispatches the answer, with every check §3 lists | The read-as note with the answer quoted in full, then the arm's reply | The arm's |
+| `command`, `pause` | *"Let's pause the run so I can take a better look before it proceeds. @sdlc-harness"* | The `pause` arm, with its state check | The read-as note, then the arm's reply | The arm's |
+| `command`, `resume` | *"@sdlc-harness the usage limit has reset, carry on"* | The `resume` arm, with its state check | The read-as note, then the arm's reply | The arm's |
+| `command`, `status` | *"@sdlc-harness what is the status on this branch?"* | The `status` arm; nothing changes | The read-as note, then the arm's reply | The arm's |
+| `command`, `stop` | *"@sdlc-harness this is going the wrong way, kill it"* | Nothing | The confirmation | 0 |
+| `command`, `clear` | *"@sdlc-harness let it out of the loop"* | Nothing | The confirmation | 0 |
+| `reply` | *"The session parked. @sdlc-harness check the question and let me know"* | Nothing | The agent's text, with the footer | 0 |
+| `clarify` | *"@sdlc-harness do what we agreed"* | Nothing | The agent's question back, with the footer | 0 |
+| `fixes` | *"@sdlc-harness fix this"* | Nothing; no round starts | The script's own text, below | 0 |
+| `none` | *"thanks @sdlc-harness"* | Nothing | None | 0 |
+| anything else | — | Nothing | A refusal naming the rule the decision broke | 2 |
+
+An agent that could not run, or that ended in error, gets a refusal reply and exit 3. Neither that nor an invalid decision is retried: a new comment is.
+
+The read-as note opens every reply of a carried-out verb, the arm's refusals included, so the commenter sees which command the mention was read as. For `pause`, `resume` and `status` it is ``Read from your mention as `@sdlc-harness <verb>`.``; for `answer`, where `<n>` is left out when the agent named no question:
+
+```
+Read from your mention as `@sdlc-harness answer <n>`, with this answer:
+```
+
+followed by the answer that was sent to the run, fenced. The confirmation:
+
+```
+@<login>: your mention reads as `@sdlc-harness <verb>`. Comment that command to carry it out.
+```
+
+A `reply` or `clarify` is posted as `@<login>: <text>`, then the footer, *"Written by an agent that read your mention; it changed nothing."*, followed by the six commands. The `fixes` reply:
+
+```
+@<login>: a mention does not start a round of fixes. A review that requests changes on the run's pull request starts one (`docs/github-run-control.md` → `## 2.`). An author who cannot request changes on their own pull request starts the round locally with `/autonomous-sdlc-harness:branch-user-review` (`## 4.`).
+```
+
+That is [§2](#2-a-review-that-requests-changes-starts-a-round) and [§4](#4-the-draft-pull-request).
+
+**Why `stop` and `clear` only ask.** `stop` is destructive, so a misreading would cost a run. Typing `clear` is itself the confirmation `/autonomous-sdlc-harness:branch-resume` asks for before releasing a park loop, so a mention read as `clear` cannot stand in for it. Comment the command itself:
+
+```
+@sdlc-harness stop
+```
+
+```
+@sdlc-harness clear
+```
+
+**A run in flight.** A mention on a run in flight is answered with the run's state through the same arms: an `answer` read from it is refused while a job runs, exactly as the exact form is. Delivering a mention into the running job is not done.
+
+**Every decision is logged.** The job's log carries one line per mention, naming the action, the verb and the agent's one-line reason: `remote-run.sh: control: mention on #<n> by @<login> read as <action>[ <verb>] from <field>: <reason>`.
+
+The credential the job now holds and the boundary against hostile text in a comment, a question or a diff are in [§6](#6-who-can-act-and-pull-requests-from-forks). What is not yet observed on GitHub is in [§8](#8-what-is-not-verified-here).
 
 ---
 
@@ -260,10 +341,10 @@ The new timeout applies only to the upload call.
 
 A refused answer is refused rather than queued for the reason §1 gives: a newer pending run in the branch's concurrency group could cancel the job it waited behind.
 
-**Why an answer is not a reply to the question.** An answer is the `@sdlc-harness answer <n>` command and nothing else. The other channels considered:
+**Why an answer is not a reply to the question.** The `@sdlc-harness answer <n>` command is the one channel that never passes through an agent. A comment that mentions the handle may also answer, when the agent reads it as an answer ([§1](#mentions-read-by-an-agent)): that answer goes through the same `answer` arm, and the reply quotes the text that was sent, so the commenter sees what the run received. The other channels considered:
 
-- **A quote reply** is rejected. A partial or ambiguous quote, a quote of a question already archived, and a quote made in ordinary discussion would each send text to the run as an answer. A quoted line opens `>`, so it is never a command anyway (§1, *Never a command*).
-- **Any plain comment** is rejected, for the same reason at a larger scale: every remark on the item would become an answer.
+- **A quote reply** is rejected. A partial or ambiguous quote, a quote of a question already archived, and a quote made in ordinary discussion would each send text to the run as an answer. A quoted line opens `>`, so it is never a command (§1, *Never a command, and never read*). A quote that does not mention the handle is never read; one that does is a mention, and the agent treats the quoted line as someone else's words.
+- **Any plain comment** is rejected, for the same reason at a larger scale: every remark on the item would become an answer. A remark that does not mention the handle is still never read.
 - **A threaded pull-request review comment** is **not taken by this release**. Listening for a thread reply means listening to `pull_request_review_comment`, which §2 deliberately does not, because one review raises one such event per inline comment and so starts one job per comment. It stays the maintainer's proposal: whether a thread reply is worth that event is the maintainer's to decide.
 - **No short alias** is added. A second grammar for one command doubles what can be mistyped and refused.
 
