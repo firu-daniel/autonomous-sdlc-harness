@@ -40,7 +40,7 @@ The quick start, in five steps:
 
 ## The two halves
 
-- [plugin/](https://github.com/firu-daniel/autonomous-sdlc-harness/tree/main/plugin): the Claude Code plugin carrying the process assets a run executes, namely agents, `branch-*` commands, `/autonomous-sdlc-harness:harness-analyze`, guard hooks, instructions and samples.
+- [plugin/](https://github.com/firu-daniel/autonomous-sdlc-harness/tree/main/plugin): the Claude Code plugin carrying the process assets a run executes, namely agents, `branch-*` commands, `/autonomous-sdlc-harness:harness-analyze`, `/autonomous-sdlc-harness:harness-read-mention`, guard hooks, instructions and samples.
 - [cli/](https://github.com/firu-daniel/autonomous-sdlc-harness/tree/main/cli): the npm package `autonomous-sdlc-harness` carrying the outer loop, namely `init`, `doctor`, `config` and `daemon`, plus `docs`, an opt-in local docs-retrieval search: measured against agent navigation on a real catalog, verdict withdrawn, kept opt-in by maintainer decision.
 - [plugin/README.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/plugin/README.md): the inventory of the plugin's asset directories.
 - [cli/README.md](https://github.com/firu-daniel/autonomous-sdlc-harness/blob/main/cli/README.md): the CLI package's commands, flags, exit codes and recorded decisions.

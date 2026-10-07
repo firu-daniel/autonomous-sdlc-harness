@@ -311,8 +311,10 @@
 # stays open; otherwise it says the draft stays open, to close to discard the
 # run, or, when an issue is known, to re-apply the trigger label there for a
 # new run on the next indexed branch. A plain `stopped` on a pull request says
-# its draft stays open and closing it discards the run. No other event changes
-# a pull request's draft state.
+# its draft stays open and closing it discards the run. A `stopped` report also
+# rewrites the progress comment of each pull request it labels, its
+# `in progress` line becoming `stopped` (`forge_progress_stopped`). No other
+# event changes a pull request's draft state.
 # Every job event — `parked`, `park_loop`, `paused`, `resumed`, `round`,
 # `failed` and `not_started` — posts nothing and sets no label when `remote_branch_stopped`,
 # asked afresh, finds the branch stopped, so a job a stop overtook never
@@ -334,8 +336,11 @@
 # `COMMAND_HANDLE answer <n>` over `<your answer>`; the marker adds
 # `question=<n>`. With no question open it posts nothing, sets no label and
 # prints one `::error::` line naming the branch. The label
-# is set once per target, not per question. On a public repository a question
-# comment and its answer are public, as the artifact already is
+# is set once per target, not per question. When the registry's `pause_reason`
+# is `user` (a pause the job dropped and the run never honoured), `parked`
+# appends `PAUSE_FOLDED_NOTE` to <note> and `park_loop` appends
+# `PAUSE_FOLDED_HOLD_NOTE`, each after one blank line. On a public repository a
+# question comment and its answer are public, as the artifact already is
 # (`docs/remote-execution.md` -> `## 11. Security`, *What a reader of the
 # repository's Actions runs can see*).
 # `progress` (`forge_progress`) keeps ONE comment per run or round on the pull
@@ -356,7 +361,10 @@
 # is one `forge_comment`; a body equal to the render (carriage returns and
 # trailing newlines aside) is no call and one `already current` line; otherwise
 # one `PATCH` of that comment — the only comment this file ever edits. A refused
-# listing, create or edit is one `::warning::` line.
+# listing, create or edit is one `::warning::` line. After a stop,
+# `forge_progress_stopped` edits that same comment, so it is still the only
+# comment this file edits, and a resumed job's first progress pass renders it
+# from the ledger again.
 # It never fails its caller: every problem is one line and exit 0.
 #
 # `open` OPENS THE RUN'S DRAFT PULL REQUEST at the run's start, so its issue
@@ -504,12 +512,17 @@
 # into a variable (data, never shell source), plus `trigger`'s environment.
 # Ignored, with one line and no `gh` call: an action other than `created`; a
 # body carrying `COMMENT_MARKER` anywhere (the harness's own comment, whoever
-# posted it); and a body whose first line — a trailing CR stripped, leading
-# spaces and tabs skipped — does not open with a word equal to
-# `COMMAND_HANDLE`, compared lowercase. So `pause`, `Let's @sdlc-harness
-# pause` and `> @sdlc-harness pause` start nothing. The verb is the next word,
-# lowercased, and `CONTROL_ARGS` the rest of that line. Then refused, in this
-# order, each a reply and exit 2:
+# posted it); and a body that does not hold `COMMAND_HANDLE` as a word
+# anywhere, compared lowercase (the ERE `(^|[^a-z0-9])<handle>([^a-z0-9-]|$)`).
+# So `pause` and `foo@sdlc-harnessx` start nothing. THE EXACT FORM is a first
+# line — a trailing CR stripped, leading spaces and tabs skipped — opening with
+# a word equal to `COMMAND_HANDLE`, compared lowercase, whose next word,
+# lowercased, is a `COMMAND_VERBS` word: that is the verb, and `CONTROL_ARGS`
+# the rest of that line. Any other body holding the handle is A MENTION
+# (`CONTROL_MENTION`, no verb): `Let's @sdlc-harness pause`, `> @sdlc-harness
+# pause`, the handle on a later line, and `@sdlc-harness check the question`
+# alike, each read by MENTION below. Then refused, in this order, each a reply
+# and exit 2:
 #   1. `HARNESS_REMOTE_STOP` is set
 #   2. `forge_on` fails — before any authorisation, so a disabled coupling asks
 #      GitHub nothing about the commenter
@@ -517,8 +530,89 @@
 #      refuses, before the event's own actor is checked
 #   3. `authorise_actor` fails: `AUTH_WHY`, and who may command a run — a
 #      writer the `HARNESS_RUN_ACTORS` allow-list admits, or a listed bot
-#   4. the verb is empty, not a `COMMAND_VERBS` word, or one no arm carries out
-#      yet: the reply lists every command and names `docs/github-run-control.md`
+#   4. the exact form's verb is one no arm carries out (`control_verb_handled`;
+#      no such word exists today): the reply lists every command and names
+#      `docs/github-run-control.md`. Skipped for a mention.
+# Then THE BRANCH, and the exact form's arm (`control_run_verb`) or MENTION.
+# MENTION. `verb_control`'s first statements, for every event, copy `IN_OAUTH`
+# / `IN_API` into the non-exported `MENTION_OAUTH` / `MENTION_API` and unset
+# them, with `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY`, so no `gh`, `git`
+# or `control_child` process the job spawns inherits a credential; only the
+# agent subshell receives it. After the gates and the branch, `control_mention`
+# reads the state (`control_state_var`; a failed read is exit 3), then refuses
+# with no session: no saved credential (exit 2, the reply listing every
+# command); no `commands/<basename of MENTION_COMMAND>.md` under
+# `HARNESS_MENTION_PLUGIN_DIR` (exit 3, naming `HARNESS_CLI_VERSION` in
+# `harness-run.yml` and `docs/remote-execution.md` -> `### Upgrading`); and an
+# agent binary, `${HARNESS_AGENT_CLI:-claude}`, that `command -v` does not
+# resolve (exit 3). The plugin directory is a path only: nothing under it is
+# sourced or run by this script. THE CONTEXT DIRECTORY, a fresh one under
+# `RUNNER_TEMP` (removed on exit): `comment.md` (`handle: <COMMAND_HANDLE>`,
+# `Comment by @<login> on <issue|pull request> #<n>:`, a blank line, the body
+# verbatim), `run.md` (`branch:`, the `fetch` keys, `stopped: yes|no`, the next
+# ledger entry and its section, or that every entry is ticked or the ledger
+# could not be read), `questions/question_<n>.md` per open question,
+# `item.md` (`kind:`, `number:`, `title:`, `author:`, `url:`, a blank line, the
+# body, from `api repos/<repo>/issues/<n>`), `conversation.md` (the last
+# `MENTION_COMMENTS_MAX` comments before the commenter's own, oldest first,
+# each `### @<login> at <at>`, `(posted by the harness)` when it carries
+# `COMMENT_MARKER`, then its body, from the paginated comment listing) and, on
+# a pull request, `diff.patch` (`pr diff`, text only: nothing is checked out),
+# each capped at `MENTION_FILE_MAX_BYTES` at a whole line with a `(cut at <n>
+# bytes)` line; a failed read is said in the file, never refused. THE SESSION runs once, never retried, in a subshell `cd` into
+# that directory with `GH_TOKEN`, `GITHUB_TOKEN` and `HARNESS_PR_TOKEN` unset
+# and `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY` exported from whichever
+# saved value is set: `-p "$MENTION_COMMAND"` (no argument, so no comment text
+# reaches argv) `--plugin-dir <dir> --add-dir <dir>/instructions
+# --output-format json --json-schema <built by jq from MENTION_ACTIONS and
+# COMMAND_VERBS> --tools Read,Grep,Glob --restricted --strict-mcp-config
+# --no-session-persistence --permission-prompts none --model <agentModel>
+# --max-budget-usd "$MENTION_MAX_BUDGET_USD"`, the model read through
+# `hr_agent_model` (a command declares no `model:`) and the flag left off only
+# when the configuration cannot be read; never `--bare`, which reads no
+# OAuth token, and never `--disable-slash-commands`, which would stop the `-p`
+# command expanding. The command is `plugin/commands/harness-read-mention.md`
+# (`MENTION_COMMAND`), and it loads `plugin/instructions/mention_reading.md`,
+# whose `## Output contract` restates the decision contract validated here: a
+# field renamed on either side is an edit to both. A command declares no
+# allowlist, so the read-only closure is the session's `--tools` and
+# `--restricted` alone. EXTRACTION: a non-zero exit, stdout that is not one
+# JSON object, `.is_error` true or a `.subtype` other than `success` is a
+# failure, exit 3; the decision is `.structured_output` when an object, else
+# `.result | fromjson?` when an object, and one stdout line logs it (`mention
+# on #<n> by @<login> read as <action>[ <verb>] from <field>: <reason>`).
+# VALIDATION, by `jq`, the sole authority whatever the schema did: `action` in
+# `MENTION_ACTIONS`; `command` needs a `verb` in `COMMAND_VERBS`; `answer`
+# needs a non-blank `answer` and an optional integer `question` of 1 or more;
+# `reply` and `clarify` need a non-blank `text`; `reason` is a string. Unknown
+# keys are ignored; an invalid decision is refused, exit 2, naming the first
+# rule broken. Then, once and before any action is answered, a `text` or
+# `answer` holding a saved credential value, or the job's `GH_TOKEN` raw or in
+# the base64 form `actions/checkout` persists, verbatim, is an `::error::` line
+# that never prints it, nothing posted, exit 3. THE ANSWERS, each through `control_post`:
+# `none` posts nothing; `reply` / `clarify` post `@<login>: <text>` — `text`
+# through `JQ_DEF_SANITISE` (`<!--` neutralised, every other `@<login>` but the
+# commenter's and the handle given U+200B) and capped at
+# `MENTION_TEXT_MAX_BYTES` with a `(cut)` line — then a footer saying an agent
+# wrote it and changed nothing, listing the commands; `fixes` posts this
+# script's text pointing at a review requesting changes or
+# `/autonomous-sdlc-harness:branch-user-review`; `command` with a verb in
+# `MENTION_ACT_VERBS` is carried out by that verb's own arm (`control_run_verb`)
+# from the exact form's `CONTROL_ARGS` and `CONTROL_BODY` — for `answer`, the
+# command line then the decision's `answer` below it, byte for byte — every
+# reply the arm posts opening with `CONTROL_MENTION_NOTE`, `Read from your
+# mention as` and that form, `answer` adding the answer fenced by
+# `JQ_DEF_FENCE` after `JQ_DEF_SANITISE`; an `answer` carrying a credential
+# value was refused above, so it reaches neither the answer file, the dispatch
+# nor the note; a state the arm refuses is that arm's refusal and exit,
+# unchanged. `command` with a verb in `MENTION_CONFIRM_VERBS` posts a
+# confirmation request naming the exact form it was read as and carries out no
+# verb: `stop` because it is destructive, `clear` because on GitHub typing it
+# is `branch-resume`'s confirmation. Exits: 0 answered or nothing to do; 2
+# refused; 3 a state read, plugin, binary or agent failure, or a credential
+# value in `text` or `answer`; a carried-out verb, its arm's. The workflow's
+# interface: `IN_OAUTH` / `IN_API` and
+# `HARNESS_MENTION_PLUGIN_DIR`.
 # THE BRANCH. On a pull request (`.issue.pull_request.url` set), its head, by
 # `pr view`: a fork's pull request is refused, because this event carries the
 # repository's secrets, and nothing from its head is checked out or run; one
@@ -717,7 +811,8 @@
 #   5. `hr_branch_is_protected` does not answer 1
 #   6. on `pull_request`, the head branch absent on origin (`remote_branch_exists`
 #      answers 1): GitHub closed the pull request because the branch was
-#      deleted, and the `delete` event's job stops the run; an `ls-remote` that
+#      deleted, and the `delete` event's job stops the run and reports it on
+#      this pull request; an `ls-remote` that
 #      cannot answer is one line and proceeds
 # There is no harness-branch check (`forge_recognised`): a merged or deleted
 # branch may no longer carry its task prompt or ledger, and a listed `harness run <b>` run is the
@@ -1064,7 +1159,11 @@
 # task prompt at the newest `harness run <branch>` run's `headSha` through the
 # contents API rather than from `origin/<branch>` (a failed read is one line
 # and no issue), and its text says the branch was deleted, so the run cannot
-# be resumed, and that its workflow runs and artifacts are kept. That read
+# be resumed, and that its workflow runs and artifacts are kept. (4) also
+# reports on each pull request of the branch from this repository that is not
+# merged and still carries `running`, `parked` or `paused`: each gets the same
+# comment, the `stopped` label and its progress comment marked stopped
+# (`forge_gone_prs_var`, `forge_progress_stopped`). The issue read
 # rests on GitHub serving a commit no branch points at, which is unverified
 # (`docs/github-run-control.md` -> `## 8. What is not verified here`).
 #
@@ -1077,7 +1176,8 @@
 # repository from that checkout's remote. The configuration read is that
 # root's `harness.config.json`.
 #
-# WHAT IT NEVER DOES. It never launches a local session, never writes the
+# WHAT IT NEVER DOES. It never launches a local session but `control`'s one
+# read-only mention session (MENTION, in `control`'s paragraph), never writes the
 # inbox, and never watches a run it sent beyond the bounded lookup of its
 # listing that `trigger` and `review` make. Only `start` and `review` push, and
 # only through `create-worktree.sh` and `push-branch.sh`; `start`'s writes are
@@ -1103,8 +1203,9 @@
 # comment files under `RUNNER_TEMP` (removed), at most one pull request, its
 # `running` label and one comment on the issue. `deliver` writes its body and
 # comment files under `RUNNER_TEMP` (removed), at most one pull request, one
-# comment and the state labels. `control` writes its reply file and its
-# `fetch` directory under `RUNNER_TEMP` (removed) and one reply comment, plus
+# comment and the state labels. `control` writes its reply file, its `fetch`
+# directory and, for a mention, its context directory and the session's output
+# files under `RUNNER_TEMP` (removed) and one reply comment, plus
 # what the child verb it runs writes, and the fetch of origin's <branch> that
 # force-writes `refs/remotes/origin/<branch>` in its checkout. `collect` writes its round file and its
 # settledness directory under `RUNNER_TEMP` (removed), at most one comment, on
@@ -1148,6 +1249,10 @@
 #   WORKFLOW_CONTROL_FILE        mirrors  WORKFLOW_CONTROL_FILE
 #   COMMAND_HANDLE               mirrors  COMMAND_HANDLE
 #   COMMAND_VERBS                mirrors  COMMAND_VERBS, space-separated
+#   MENTION_ACTIONS              mirrors  MENTION_ACTIONS, space-separated, same order
+#   MENTION_ACT_VERBS            mirrors  MENTION_ACT_VERBS, space-separated, same order
+#   MENTION_CONFIRM_VERBS        mirrors  MENTION_CONFIRM_VERBS, space-separated, same order
+#   MENTION_COMMAND              mirrors  MENTION_COMMAND, the plugin-qualified slash command
 #   COMMENT_MARKER               mirrors  COMMENT_MARKER
 #   REVIEW_ROUND_STATE           mirrors  REVIEW_ROUND_STATE
 #   STATE_LABEL_PREFIX           mirrors  STATE_LABEL_PREFIX
@@ -1421,8 +1526,20 @@
 #   pause      bash scripts/remote-run.sh control -> 0; "$s.log" gains `workflow
 #              run harness-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
 #              then one comment on 12 naming @alice
-#   ignored    c.json's body `Let's @sdlc-harness pause` -> 0, one line,
-#              "$s.log" unchanged
+#   ignored    c.json's body `pause` -> 0, one line, "$s.log" unchanged
+#   mention    c.json's body `Let's @sdlc-harness pause`, with
+#              HARNESS_MENTION_PLUGIN_DIR=<a throwaway directory holding an
+#              empty commands/harness-read-mention.md>, IN_OAUTH=x and
+#              HARNESS_AGENT_CLI=<a stub printing {"type":"result",
+#              "subtype":"success","is_error":false,"structured_output":
+#              {"action":"reply","text":"It is running.","reason":"r"}}>
+#              -> 0; "$s.log" gains one comment on 12 opening `@alice: It is
+#              running.`, and no `workflow run`
+#   act        the same with the stub's structured_output {"action":"command",
+#              "verb":"pause","reason":"r"} -> 0; "$s.log" gains `workflow run
+#              harness-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
+#              then one comment on 12 opening `Read from your mention as
+#              `@sdlc-harness pause`.`
 
 set -u
 
@@ -1445,6 +1562,10 @@ TRIGGER_DISPATCH_EVENT_TYPE='harness-task'
 WORKFLOW_CONTROL_FILE='harness-control.yml'
 COMMAND_HANDLE='@sdlc-harness'
 COMMAND_VERBS='answer pause resume stop clear status'
+MENTION_ACTIONS='command reply clarify fixes none'
+MENTION_ACT_VERBS='answer pause resume status'
+MENTION_CONFIRM_VERBS='stop clear'
+MENTION_COMMAND='/autonomous-sdlc-harness:harness-read-mention'
 COMMENT_MARKER='<!-- sdlc-harness'
 REVIEW_ROUND_STATE='changes_requested'
 STATE_LABEL_PREFIX='sdlc-harness: '
@@ -1456,6 +1577,18 @@ PR_CREATE_SETTING_PATH='Settings -> Actions -> General -> Workflow permissions'
 # to be trusted (docs/github-integration-research.md -> S6); the margin is the
 # framing lines and the marker.
 QUESTION_COMMENT_MAX_BYTES=250000
+# The most bytes of each file in a mention's context directory, and of the
+# agent-written text a mention reply posts (under QUESTION_COMMENT_MAX_BYTES
+# with room for the prefix, the footer and the marker).
+MENTION_FILE_MAX_BYTES=200000
+MENTION_TEXT_MAX_BYTES=60000
+# How many of the comments before a mention its context's conversation.md keeps.
+MENTION_COMMENTS_MAX=30
+# The mention session's spend bound: a bound on one read, not a measured cost.
+MENTION_MAX_BUDGET_USD=1
+# Name no login: the job sees only the `harness pause` run, whose actor is the bot.
+PAUSE_FOLDED_NOTE='A pause was requested on this run before it parked, so it is folded into this park: the run waits for the answer and continues once it is answered, and no separate `paused` comment follows.'
+PAUSE_FOLDED_HOLD_NOTE='A pause was requested on this run before it was put on hold, so it is folded into this hold: the run waits for the hold to be cleared and continues once it is, and no separate `paused` comment follows.'
 GH="${HARNESS_GH_CLI:-gh}"
 
 # How many runs `status` prints, and how many `run list` returns for status
@@ -2673,6 +2806,23 @@ ANSWERS_SHAPE='env.HARNESS_INPUT_ANSWERS | fromjson
   | type == "object" and length > 0
     and all(to_entries[]; (.value | type) == "string"
       and (.key | explode | length > 0 and .[0] != 48 and all(.[]; . >= 48 and . <= 57)))'
+
+# sanitise($login; $handle), string to string, for agent-written text a reply
+# quotes: no `<!--` survives to read as a harness marker, and every `@<login>`
+# but the commenter's and the handle gets U+200B after the `@`, so it notifies
+# nobody.
+JQ_DEF_SANITISE='def sanitise($login; $handle):
+  gsub("<!--"; "&lt;!--")
+  | gsub("@(?<l>[A-Za-z0-9][A-Za-z0-9-]*)";
+      if (.l | ascii_downcase) == ($login | ascii_downcase)
+        or (("@" + .l) | ascii_downcase) == ($handle | ascii_downcase)
+      then "@" + .l else "@​" + .l end);'
+
+# fence, string to string: the code fence that quotes the input — one backtick
+# longer than its longest backtick run, at least three.
+JQ_DEF_FENCE='def fence:
+  (([match("`+"; "g") | .length] | max) // 0) as $m
+  | "`" * ([$m + 1, 3] | max);'
 
 verb_restore() {
   local id download status_file clar n tmp status_source
@@ -4415,6 +4565,35 @@ forge_pr_var() {
   return 0
 }
 
+# forge_gone_prs_var <branch> — FORGE_GONE_PRS, the space-separated numbers of
+# the pull requests of <branch>, in any state, from this repository, not merged
+# and still labelled `STATE_LABEL_PREFIX` running, parked or paused: the states
+# control_close stops, so a pull request an earlier stop or a merge settled is
+# left out. Stands in for forge_recognised, which cannot read a deleted branch.
+# A failed listing, or one not the expected JSON, is one line and an empty list.
+# Always 0.
+FORGE_GONE_PRS=""
+forge_gone_prs_var() {
+  local sel
+  FORGE_GONE_PRS=""
+  if ! gh_call pr list --repo "$FORGE_REPO" --head "$1" --state all --json number,isCrossRepository,mergedAt,labels --limit 10; then
+    echo "remote-run.sh: report: listing the pull requests of $1 in every state failed: $GH_ERR" >&2
+    return 0
+  fi
+  if ! sel=$(printf '%s' "$GH_OUT" | jq -r --arg p "$STATE_LABEL_PREFIX" '
+      if type == "array" then
+        [.[] | select(type == "object" and .isCrossRepository == false and .mergedAt == null
+            and (.number | type) == "number"
+            and ([.labels[]? | .name? | strings] | any(. == ($p + "running") or . == ($p + "parked") or . == ($p + "paused"))))
+          | .number | tostring] | join(" ")
+      else error end' 2>/dev/null); then
+    echo "remote-run.sh: report: listing the pull requests of $1 in every state failed: its pr list is not the expected JSON" >&2
+    return 0
+  fi
+  FORGE_GONE_PRS="$sel"
+  return 0
+}
+
 # forge_dispatch_engine_var <branch> <created_at_iso> — FORGE_DISPATCH_ENGINE,
 # the engine the dispatch that created the run at <created_at_iso> recorded in
 # its comment on the branch's issue or open pull request, or empty. Only a
@@ -4589,10 +4768,12 @@ forge_question_body() {
 # comment (on `parked`, one per open question) and the state label, by the
 # target rule above. Read on `stopped` only: <pr>, an explicit pull request
 # that is the target whatever its state; `gone`, the branch deleted on GitHub,
-# its issue read from the task prompt at <sha>. Every event but `stopped` is
-# withheld when the branch's newest `harness stop` run is newer than its newest
-# `harness run` run, read from a fresh listing. `not_started` reads
-# REPORT_NOT_STARTED_STATE (`paused`, else `failed`) and
+# its issue read from the task prompt at <sha>, and then each pull request
+# forge_gone_prs_var lists given the same comment, the label and its progress
+# comment marked stopped; nothing is posted only when neither is known. Every
+# event but `stopped` is withheld when the branch's newest `harness stop` run is
+# newer than its newest `harness run` run, read from a fresh listing.
+# `not_started` reads REPORT_NOT_STARTED_STATE (`paused`, else `failed`) and
 # REPORT_NOT_STARTED_ENGINE (empty or the recovered engine), set by its caller.
 # Always 0.
 REPORT_NOT_STARTED_STATE=""
@@ -4600,6 +4781,7 @@ REPORT_NOT_STARTED_ENGINE=""
 forge_report() {
   local event="$1" br="$2" note="${3-}" pr="${4-}" gone="${5-}" gone_sha="${6-}" state reason="" resume_at="" when registry_file
   local target kind text tmp made_tmp="" file trigger_label stopped state_rel="" count n route engine=""
+  local gone_prs="" reported="" folded=""
   case "$event" in
     parked|park_loop) state=parked ;;
     paused) state=paused ;;
@@ -4648,8 +4830,11 @@ forge_report() {
   if [ -n "$pr" ]; then
     FORGE_PR="$pr"
   elif [ -n "$gone" ]; then
-    # GitHub closes a pull request whose head is deleted, so none is open.
+    # No pull request of a deleted head is open, so the run's unfinished ones
+    # are found in every state by forge_gone_prs_var.
     FORGE_PR=""
+    forge_gone_prs_var "$br"
+    gone_prs="$FORGE_GONE_PRS"
   else
     forge_pr_var "$br" || FORGE_PR=""
   fi
@@ -4661,6 +4846,8 @@ forge_report() {
     target="$FORGE_PR"; kind=pr
   elif [ -n "$FORGE_ISSUE" ]; then
     target="$FORGE_ISSUE"; kind=issue
+  elif [ -n "$gone_prs" ]; then
+    target=""; kind=pr
   else
     echo "remote-run.sh: report: $br has no open pull request and no issue it was started from; nothing posted"
     return 0
@@ -4673,6 +4860,14 @@ forge_report() {
     resume_at=$(hr_registry_get "$registry_file" "$br" usage_resume_at)
     [ "$event" != failed ] || engine=$(hr_registry_get "$registry_file" "$br" engine)
   fi
+  case "$event" in
+    parked|park_loop)
+      if [ "$reason" = user ]; then
+        folded="$PAUSE_FOLDED_NOTE"
+        [ "$event" != park_loop ] || folded="$PAUSE_FOLDED_HOLD_NOTE"
+        if [ -z "$note" ]; then note="$folded"; else note="$note"$'\n\n'"$folded"; fi
+      fi ;;
+  esac
 
   case "$event" in
     paused)
@@ -4758,22 +4953,75 @@ forge_report() {
         echo "remote-run.sh: report: cannot create question $n's comment file for #$target; not posted" >&2
       fi
     done
-  elif [ -n "$tmp" ] && file=$(mktemp "$tmp/harness-report-comment.XXXXXX"); then
-    {
-      printf '%s\n' "$text"
-      [ -z "$note" ] || printf '\n%s\n' "$note"
-      [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
-    } >"$file"
-    forge_comment "$target" "$event" "$br" "$file" || :
-    rm -f "$file"
-  else
-    echo "remote-run.sh: report: cannot create the comment file for #$target; no comment posted" >&2
+  elif [ -n "$target" ]; then
+    forge_report_text "$target" "$event" "$br" "$tmp" "$text" "$note"
   fi
-  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
 
   [ -z "$FORGE_ISSUE" ] || forge_set_state "$FORGE_ISSUE" "$state" || :
   [ -z "$FORGE_PR" ] || forge_set_state "$FORGE_PR" "$state" || :
-  echo "remote-run.sh: report: $event on $br reported on #$target"
+  if [ "$event" = stopped ]; then
+    [ -z "$FORGE_PR" ] || forge_progress_stopped "$FORGE_PR" "$br"
+  fi
+  reported="${target:+#$target}"
+  for n in $gone_prs; do
+    forge_report_text "$n" "$event" "$br" "$tmp" "$text" "$note"
+    forge_set_state "$n" "$state" || :
+    forge_progress_stopped "$n" "$br"
+    reported="${reported:+$reported, }#$n"
+  done
+  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+  echo "remote-run.sh: report: $event on $br reported on $reported"
+  return 0
+}
+
+# forge_report_text <number> <event> <branch> <tmp_dir> <text> <note> — post
+# forge_report's one comment, <text>, <note> and the run URL, on <number>.
+forge_report_text() {
+  local number="$1" event="$2" br="$3" tmp="$4" text="$5" note="$6" file
+  if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-report-comment.XXXXXX"); then
+    echo "remote-run.sh: report: cannot create the comment file for #$number; no comment posted" >&2
+    return 0
+  fi
+  {
+    printf '%s\n' "$text"
+    [ -z "$note" ] || printf '\n%s\n' "$note"
+    [ -z "${GITHUB_RUN_ID-}" ] || printf '\nRun: %s\n' "$(this_run_url)"
+  } >"$file"
+  forge_comment "$number" "$event" "$br" "$file" || :
+  rm -f "$file"
+}
+
+# forge_progress_comment_var <pr> <marker> [any-round] — the one lookup of a
+# progress comment: one paginated listing of <pr>'s comments, then the newest
+# `github-actions[bot]` comment with a numeric id whose last non-empty line is
+# <marker>, or, with `any-round`, <marker> with ` round=<digits>` before its
+# ` -->`. Sets PROGRESS_COMMENT_ID and PROGRESS_COMMENT_BODY, both empty when
+# none is picked. 0 when the listing parsed, picked or not; 1 when gh refused it
+# (GH_ERR as gh_call set it); 2 when it is not the expected JSON. Prints
+# nothing. No temporary file: forge_progress needs its own before this lookup,
+# forge_progress_stopped only after it.
+PROGRESS_COMMENT_ID=""
+PROGRESS_COMMENT_BODY=""
+forge_progress_comment_var() {
+  local pr="$1" marker="$2" any="${3-}" pick id body
+  PROGRESS_COMMENT_ID=""
+  PROGRESS_COMMENT_BODY=""
+  gh_call api --paginate "repos/$FORGE_REPO/issues/$pr/comments" --jq '.[] | {id, login: .user.login, body}' || return 1
+  pick=$(printf '%s' "$GH_OUT" | jq -s -c --arg m "$marker" --arg any "$any" '
+      def hit: . == $m
+        or ($any == "any-round"
+          and (($m | sub(" -->$"; "")) as $stem
+            | startswith($stem) and (.[($stem | length):] | test("^ round=[0-9]+ -->$"))));
+      [.[] | select(type == "object" and .login == "github-actions[bot]" and (.id | type) == "number")
+        | select((.body // "") | gsub("\r"; "") | split("\n") | map(select(test("^\\s*$") | not)) | last // "" | hit)]
+      | max_by(.id) // empty
+      | {id, body: (.body // "")}' 2>/dev/null) || return 2
+  [ -n "$pick" ] || return 0
+  id=$(printf '%s' "$pick" | jq -r '.id' 2>/dev/null) || return 2
+  # The sentinel keeps the body's trailing newlines, which $(…) would strip.
+  body=$(printf '%s' "$pick" | jq -j '.body' 2>/dev/null && printf x) || return 2
+  PROGRESS_COMMENT_ID="$id"
+  PROGRESS_COMMENT_BODY="${body%x}"
   return 0
 }
 
@@ -4783,7 +5031,7 @@ forge_report() {
 # issue fallback, no label. Always 0.
 forge_progress() {
   local br="$1" status state_rel phases engine round p line i first=1 marker
-  local tmp made_tmp="" file pick id same
+  local tmp made_tmp="" file id same
   local -a labels states
   if ! forge_on; then
     echo "remote-run.sh: report: the forge coupling is off (forge github and execution.target github-actions); nothing posted"
@@ -4856,24 +5104,23 @@ forge_progress() {
   } >"$file"
   { cat "$file"; printf '\n%s\n' "$marker"; } >"$file.full"
 
-  if ! gh_call api --paginate "repos/$FORGE_REPO/issues/$FORGE_PR/comments" --jq '.[] | {id, login: .user.login, body}'; then
+  status=0
+  forge_progress_comment_var "$FORGE_PR" "$marker" || status=$?
+  if [ "$status" -eq 1 ]; then
     echo "::warning::remote-run.sh: report: listing the comments of #$FORGE_PR was refused, so the progress is not posted: $GH_ERR"
-  elif ! pick=$(printf '%s' "$GH_OUT" | jq -s -r --arg m "$marker" --arg want "$(cat "$file.full")" '
-      def norm: gsub("\r"; "") | sub("\n+$"; "");
-      [.[] | select(type == "object" and .login == "github-actions[bot]" and (.id | type) == "number")
-        | select(((.body // "") | gsub("\r"; "") | split("\n") | map(select(test("^\\s*$") | not)) | last // "") == $m)]
-      | max_by(.id) // empty
-      | "\(.id) \(if ((.body // "") | norm) == ($want | norm) then "same" else "differs" end)"' 2>/dev/null); then
+  elif [ "$status" -ne 0 ]; then
     echo "::warning::remote-run.sh: report: the comments of #$FORGE_PR are not the expected JSON, so the progress is not posted"
-  elif [ -z "$pick" ]; then
+  elif [ -z "$PROGRESS_COMMENT_ID" ]; then
     if forge_comment "$FORGE_PR" progress "$br" "$file" "" "" "$round"; then
       echo "remote-run.sh: report: progress on $br posted on #$FORGE_PR"
     else
       echo "::warning::remote-run.sh: report: posting the progress comment on #$FORGE_PR was refused: $GH_ERR"
     fi
   else
-    id="${pick%% *}"
-    same="${pick#* }"
+    id="$PROGRESS_COMMENT_ID"
+    same=$(jq -n -r --arg body "$PROGRESS_COMMENT_BODY" --arg want "$(cat "$file.full")" '
+      def norm: gsub("\r"; "") | sub("\n+$"; "");
+      if ($body | norm) == ($want | norm) then "same" else "differs" end' 2>/dev/null) || same=differs
     if [ "$same" = same ]; then
       echo "remote-run.sh: report: the progress comment on #$FORGE_PR is already current"
     elif gh_call api --method PATCH "repos/$FORGE_REPO/issues/comments/$id" -F "body=@$file.full"; then
@@ -4883,6 +5130,58 @@ forge_progress() {
     fi
   fi
   rm -f "$file" "$file.full"
+  [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
+  return 0
+}
+
+# forge_progress_stopped <pr> <branch> — after a stop, rewrite each
+# `- <label>: in progress` line of <branch>'s progress comment on <pr>, the task
+# run's or any round's, to `- <label>: stopped`, leaving every other byte; the
+# cancelled job's last progress pass is withheld, so nothing else does. Gated by
+# hr_progress_comments; no comment or no such line is no edit. Always 0.
+forge_progress_stopped() {
+  local pr="$1" br="$2" status count tmp made_tmp="" file
+  status=0
+  hr_progress_comments "$root" || status=$?
+  case "$status" in
+    0) ;;
+    1) echo "remote-run.sh: report: progress comments are off by execution.progressComments; nothing marked stopped"; return 0 ;;
+    *) echo "remote-run.sh: report: execution.progressComments is unreadable; nothing marked stopped"; return 0 ;;
+  esac
+  status=0
+  forge_progress_comment_var "$pr" "$(forge_marker progress "$br")" any-round || status=$?
+  if [ "$status" -eq 1 ]; then
+    echo "::warning::remote-run.sh: report: listing the comments of #$pr was refused, so its progress comment is not marked stopped: $GH_ERR"
+    return 0
+  elif [ "$status" -ne 0 ]; then
+    echo "::warning::remote-run.sh: report: the comments of #$pr are not the expected JSON, so its progress comment is not marked stopped"
+    return 0
+  fi
+  # A trailing carriage return is kept, so a CRLF body is rewritten in its own line endings.
+  count=0
+  [ -z "$PROGRESS_COMMENT_ID" ] \
+    || count=$(jq -n -r --arg b "$PROGRESS_COMMENT_BODY" \
+      '[$b | split("\n")[] | select(test("^- .+: in progress\r?$"))] | length' 2>/dev/null) || count=0
+  if [ "$count" = 0 ]; then
+    echo "remote-run.sh: report: #$pr has no progress comment of $br in progress; nothing to mark stopped"
+    return 0
+  fi
+  tmp="${RUNNER_TEMP-}"
+  if [ -z "$tmp" ] || [ ! -d "$tmp" ]; then
+    tmp=$(mktemp -d) || tmp=""
+    made_tmp="$tmp"
+  fi
+  if [ -z "$tmp" ] || ! file=$(mktemp "$tmp/harness-progress-stopped.XXXXXX"); then
+    echo "::warning::remote-run.sh: report: cannot create the progress comment file for #$pr; nothing marked stopped"
+  elif ! jq -n -j --arg b "$PROGRESS_COMMENT_BODY" '$b | split("\n")
+      | map(sub("^(?<l>- .+): in progress(?<cr>\r?)$"; "\(.l): stopped\(.cr)")) | join("\n")' >"$file" 2>/dev/null; then
+    echo "::warning::remote-run.sh: report: cannot write the stopped progress comment for #$pr; nothing marked stopped"
+  elif gh_call api --method PATCH "repos/$FORGE_REPO/issues/comments/$PROGRESS_COMMENT_ID" -F "body=@$file"; then
+    echo "remote-run.sh: report: progress of $br marked stopped in comment $PROGRESS_COMMENT_ID on #$pr"
+  else
+    echo "::warning::remote-run.sh: report: editing the progress comment $PROGRESS_COMMENT_ID on #$pr was refused: $GH_ERR"
+  fi
+  [ -z "${file-}" ] || rm -f "$file"
   [ -z "$made_tmp" ] || rmdir "$made_tmp" 2>/dev/null || :
   return 0
 }
@@ -5416,11 +5715,17 @@ control_cleanup() {
 # non-empty value adds ` engine=<engine>` to every later reply's marker.
 CONTROL_REPLY_ENGINE=""
 
+# How control_mention read the mention a verb arm is carrying out; non-empty,
+# it opens every reply, an arm's refusal included.
+CONTROL_MENTION_NOTE=""
+
 # control_post <text> — post <text> on CONTROL_NUMBER as a `reply` comment,
-# its marker carrying CONTROL_REPLY_ENGINE; 1, after an `::error::` line, when
-# it cannot be posted.
+# after CONTROL_MENTION_NOTE and a blank line when that is set, its marker
+# carrying CONTROL_REPLY_ENGINE; 1, after an `::error::` line, when it cannot
+# be posted.
 control_post() {
   local text="$1" file status=0
+  [ -z "$CONTROL_MENTION_NOTE" ] || text="$CONTROL_MENTION_NOTE"$'\n\n'"$text"
   if ! forge_repo_var; then
     echo "::error::remote-run.sh: control: the reply on #$CONTROL_NUMBER could not be posted: $GH_ERR"
     return 1
@@ -6313,10 +6618,9 @@ AUTHORS
   RC_REVIEWERS=$(printf '%s' "$kept" | jq -r '
     reduce (.reviews[] | .user.login) as $l ([]; if any(.[]; . == $l) then . else . + [$l] end) | join(",")')
 
-  # A hunk's fence is one backtick longer than its longest backtick run, at
-  # least three. The trailing `x` keeps the text's final newline through the
-  # substitution.
-  if ! text=$(printf '%s' "$kept" | jq -j --arg pr "$pr" --arg at "$collected_at" --arg marker "$COMMENT_MARKER" --arg state "$REVIEW_ROUND_STATE" '
+  # A hunk is fenced by JQ_DEF_FENCE. The trailing `x` keeps the text's final
+  # newline through the substitution.
+  if ! text=$(printf '%s' "$kept" | jq -j --arg pr "$pr" --arg at "$collected_at" --arg marker "$COMMENT_MARKER" --arg state "$REVIEW_ROUND_STATE" "$JQ_DEF_FENCE"'
     def nl: if endswith("\n") then . else . + "\n" end;
     .reviews as $rv | .comments as $cm
     | ($rv | map(
@@ -6334,8 +6638,7 @@ AUTHORS
     + (if ($cm | length) == 0 then "" else
         "\n## Inline comments\n" + ($cm | map(
           (.diff_hunk // "") as $h
-          | (([$h | match("`+"; "g") | .length] | max) // 0) as $m
-          | ("`" * ([$m + 1, 3] | max)) as $f
+          | ($h | fence) as $f
           | "\n### `" + (.path // "") + "`"
             + (if .line != null then ", line \(.line)"
                elif .original_line != null then ", original line \(.original_line) (outdated)"
@@ -6550,11 +6853,13 @@ control_review_intake() {
 }
 
 # control_comment_intake — read an `issue_comment` event; returns 1 when it is
-# ignored, after one line.
+# ignored, after one line. The exact form sets CONTROL_VERB / CONTROL_ARGS; any
+# other mention of the handle as a word sets CONTROL_MENTION and no verb.
 CONTROL_SENDER_TYPE=""
 CONTROL_IS_PR=""
+CONTROL_MENTION=0
 control_comment_intake() {
-  local action first word rest handle
+  local action first word rest handle verb body re
   { event_field '.action // ""' && action="$EVENT_VALUE" \
     && event_field '.comment.body // ""' && CONTROL_BODY="$EVENT_VALUE" \
     && event_field '.issue.number // ""' && CONTROL_NUMBER="$EVENT_VALUE" \
@@ -6581,15 +6886,27 @@ control_comment_intake() {
   rest=${first#"$word"}
   rest=${rest#"${rest%%[!$' \t']*}"}
   handle=$(printf '%s' "$COMMAND_HANDLE" | tr '[:upper:]' '[:lower:]')
-  if [ "$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')" != "$handle" ]; then
-    echo "remote-run.sh: control: ignored, the first line does not open with $COMMAND_HANDLE"
-    return 1
+  if [ "$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')" = "$handle" ]; then
+    word=${rest%%[$' \t']*}
+    verb=$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')
+    case " $COMMAND_VERBS " in
+      *" $verb "*)
+        if [ -n "$verb" ]; then
+          CONTROL_VERB="$verb"
+          CONTROL_ARGS=${rest#"$word"}
+          CONTROL_ARGS=${CONTROL_ARGS#"${CONTROL_ARGS%%[!$' \t']*}"}
+          return 0
+        fi ;;
+    esac
   fi
-  word=${rest%%[$' \t']*}
-  CONTROL_VERB=$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')
-  CONTROL_ARGS=${rest#"$word"}
-  CONTROL_ARGS=${CONTROL_ARGS#"${CONTROL_ARGS%%[!$' \t']*}"}
-  return 0
+  body=$(printf '%s' "$CONTROL_BODY" | tr '[:upper:]' '[:lower:]')
+  re="(^|[^a-z0-9])${handle}([^a-z0-9-]|\$)"
+  if [[ $body =~ $re ]]; then
+    CONTROL_MENTION=1
+    return 0
+  fi
+  echo "remote-run.sh: control: ignored, the comment does not mention $COMMAND_HANDLE"
+  return 1
 }
 
 # The close: CLOSE_KIND (`issue`, `pr_closed`, `pr_merged`, `deleted`) and
@@ -6730,10 +7047,11 @@ control_close() {
   CONTROL_BRANCH="$b"
   if [ "$CLOSE_KIND" = pr_closed ] || [ "$CLOSE_KIND" = pr_merged ]; then
     # GitHub closes a pull request whose head is deleted; the `delete` event's
-    # own job stops that run from the default branch, so this one stays quiet.
+    # own job stops that run from the default branch and reports it on this
+    # pull request, so this one stays quiet.
     remote_branch_exists "$b"
     case $? in
-      1) control_close_ignore "the branch \`$b\` of pull request #$CONTROL_NUMBER is gone from origin; the deletion's own job stops the run" ;;
+      1) control_close_ignore "the branch \`$b\` of pull request #$CONTROL_NUMBER is gone from origin; the deletion's own job stops the run and reports it here" ;;
       2) echo "remote-run.sh: control: whether \`$b\` exists on origin could not be checked ($REMOTE_BRANCH_ERR); proceeding" ;;
     esac
   fi
@@ -6771,9 +7089,350 @@ control_close() {
   exit "$EXIT_OK"
 }
 
+# control_commands_way — prints the way on that lists every command and names
+# the documentation, the unknown-verb refusal's and every mention refusal's.
+control_commands_way() {
+  local v verbs=""
+  for v in $COMMAND_VERBS; do
+    [ "$v" != answer ] || v="answer [<n>]"
+    verbs="$verbs${verbs:+, }\`$COMMAND_HANDLE $v\`"
+  done
+  printf '%s' "The commands are $verbs; \`docs/github-run-control.md\` in the harness documentation states each."
+}
+
+# The credential `verb_control`'s first statements take out of the environment;
+# never exported, so only the agent subshell in control_mention_session sees it.
+MENTION_OAUTH=""
+MENTION_API=""
+# The job's `GH_TOKEN` in the base64 form `actions/checkout` persists into the
+# checkout's git configuration; never exported.
+MENTION_JOB_TOKEN_B64=""
+
+# mention_has_credential <string> — 0 when <string> contains, verbatim, a
+# non-empty saved credential value, or the job's `GH_TOKEN` raw or in its
+# persisted base64 form. An encoded or split copy is not caught.
+mention_has_credential() {
+  if [ -n "$MENTION_OAUTH" ]; then
+    case "$1" in *"$MENTION_OAUTH"*) return 0 ;; esac
+  fi
+  if [ -n "$MENTION_API" ]; then
+    case "$1" in *"$MENTION_API"*) return 0 ;; esac
+  fi
+  if [ -n "${GH_TOKEN-}" ]; then
+    case "$1" in *"$GH_TOKEN"*) return 0 ;; esac
+  fi
+  if [ -n "$MENTION_JOB_TOKEN_B64" ]; then
+    case "$1" in *"$MENTION_JOB_TOKEN_B64"*) return 0 ;; esac
+  fi
+  return 1
+}
+
+# mention_cap <file> <max bytes> <note> — over <max bytes>, <file> keeps its
+# first <max bytes> cut back to the last whole line, then the line <note>.
+mention_cap() {
+  local file="$1" max="$2" note="$3" size
+  size=$(wc -c <"$file") || return 1
+  size=${size//[!0-9]/}
+  [ "${size:-0}" -gt "$max" ] || return 0
+  head -c "$max" "$file" >"$file.cut" || return 1
+  if [ -n "$(tail -c 1 "$file.cut")" ]; then
+    sed '$d' "$file.cut" >"$file.line" || return 1
+    mv -f "$file.line" "$file.cut" || return 1
+  fi
+  printf '%s\n' "$note" >>"$file.cut"
+  mv -f "$file.cut" "$file"
+}
+
+# control_mention_context <dir> — comment.md, run.md and questions/ in <dir>,
+# every file capped at MENTION_FILE_MAX_BYTES; 1 when one cannot be written.
+control_mention_context() {
+  local dir="$1" kind=issue n src f
+  [ -z "$CONTROL_IS_PR" ] || kind="pull request"
+  {
+    printf 'handle: %s\n' "$COMMAND_HANDLE"
+    printf 'Comment by @%s on %s #%s:\n\n' "$CONTROL_ACTOR" "$kind" "$CONTROL_NUMBER"
+    printf '%s' "$CONTROL_BODY"
+  } >"$dir/comment.md" || return 1
+  {
+    printf 'branch: %s\n' "$CONTROL_BRANCH"
+    printf 'state: %s\n' "$CS_STATE"
+    printf 'pause_reason: %s\n' "$CS_REASON"
+    printf 'engine: %s\n' "$CS_ENGINE"
+    printf 'open_questions: %s\n' "$CS_OPEN"
+    printf 'detail: %s\n' "$CS_DETAIL"
+    printf 'run_url: %s\n' "$CS_URL"
+    printf 'run_status: %s\n' "$CS_RUN_STATUS"
+    if [ "$CS_STOPPED" = 1 ]; then printf 'stopped: yes\n'; else printf 'stopped: no\n'; fi
+    if ! control_ledger_next_var; then
+      printf 'next: the flow-progress ledger could not be read\n'
+    elif [ -z "$LEDGER_NEXT" ]; then
+      printf 'next: every entry of the flow-progress ledger is ticked\n'
+    else
+      printf 'next: %s\n' "$LEDGER_NEXT"
+      printf 'section: %s\n' "$LEDGER_SECTION"
+    fi
+  } >"$dir/run.md" || return 1
+  mkdir "$dir/questions" || return 1
+  for n in $CS_OPEN; do
+    case "$n" in ''|*[!0-9]*) continue ;; esac
+    src="$CS_DIR/clarifications/$CONTROL_BRANCH/question_$n.md"
+    [ -f "$src" ] || continue
+    cp "$src" "$dir/questions/question_$n.md" || return 1
+  done
+  for f in "$dir/comment.md" "$dir/run.md" "$dir"/questions/question_*.md; do
+    [ -f "$f" ] || continue
+    mention_cap "$f" "$MENTION_FILE_MAX_BYTES" "(cut at $MENTION_FILE_MAX_BYTES bytes)" || return 1
+  done
+  return 0
+}
+
+# control_mention_context_extra <dir> — item.md, conversation.md and, on a pull
+# request, diff.patch in <dir>, each capped at MENTION_FILE_MAX_BYTES; a failed
+# read is one line in its file, never a refusal. 1 when a file cannot be
+# written. Every forge value reaches a file through `jq` or `printf '%s'` only.
+control_mention_context_extra() {
+  local dir="$1" kind=issue own f
+  [ -z "$CONTROL_IS_PR" ] || kind="pull request"
+  if ! gh_call api "repos/$FORGE_REPO/issues/$CONTROL_NUMBER"; then
+    printf 'The issue or pull request could not be read (%s).\n' "$GH_ERR" >"$dir/item.md" || return 1
+  elif ! printf '%s' "$GH_OUT" | jq -j --arg kind "$kind" --arg n "$CONTROL_NUMBER" '
+      "kind: \($kind)\nnumber: \($n)\ntitle: \(.title // "" | tostring)\nauthor: @\(.user.login // "" | tostring)\nurl: \(.html_url // "" | tostring)\n\n\(.body // "" | tostring)"' \
+      >"$dir/item.md" 2>/dev/null; then
+    printf 'The issue or pull request could not be read (its answer is not the expected JSON).\n' >"$dir/item.md" || return 1
+  fi
+
+  # The commenter's own body goes to jq through a file: a comment can exceed
+  # the kernel's bound on one argument.
+  own="$dir.own"
+  control_dirs="$control_dirs $own"
+  printf '%s' "$CONTROL_BODY" >"$own" || return 1
+  if ! gh_call api --paginate "repos/$FORGE_REPO/issues/$CONTROL_NUMBER/comments" --jq '.[] | {login: .user.login, at: .created_at, body: .body}'; then
+    printf 'The comments of this %s could not be read (%s).\n' "$kind" "$GH_ERR" >"$dir/conversation.md" || return 1
+  elif ! printf '%s' "$GH_OUT" | jq -s -j --arg actor "$CONTROL_ACTOR" --rawfile own "$own" \
+      --arg marker "$COMMENT_MARKER" --arg kind "$kind" --argjson max "$MENTION_COMMENTS_MAX" '
+      [.[] | objects] as $all
+      | ([range(0; $all | length) | select($all[.].login == $actor and $all[.].body == $own)] | last) as $i
+      | (if $i == null then $all else $all[:$i] end) as $before
+      | (if ($before | length) > $max then $before[($before | length) - $max:] else $before end)
+      | if length == 0 then "No comment precedes this one on the \($kind).\n"
+        else map("### @\(.login // "" | tostring) at \(.at // "" | tostring)\n"
+          + (if ((.body // "" | tostring) | contains($marker)) then "(posted by the harness)\n" else "" end)
+          + "\n\(.body // "" | tostring)\n\n") | join("") end' \
+      >"$dir/conversation.md" 2>/dev/null; then
+    printf 'The comments of this %s could not be read (their listing is not the expected JSON).\n' "$kind" >"$dir/conversation.md" || return 1
+  fi
+
+  if [ -n "$CONTROL_IS_PR" ]; then
+    if ! gh_call pr diff "$CONTROL_NUMBER" --repo "$FORGE_REPO"; then
+      printf "The pull request's diff could not be read (%s).\n" "$GH_ERR" >"$dir/diff.patch" || return 1
+    else
+      printf '%s\n' "$GH_OUT" >"$dir/diff.patch" || return 1
+    fi
+  fi
+
+  for f in "$dir/item.md" "$dir/conversation.md" "$dir/diff.patch"; do
+    [ -f "$f" ] || continue
+    mention_cap "$f" "$MENTION_FILE_MAX_BYTES" "(cut at $MENTION_FILE_MAX_BYTES bytes)" || return 1
+  done
+  return 0
+}
+
+# control_mention_session <dir> <out> <err> — the one read-only session, run
+# once in a subshell in <dir>; AGENT_STATUS is its exit.
+AGENT_STATUS=0
+control_mention_session() {
+  local dir="$1" out="$2" err="$3" schema model model_args
+  AGENT_STATUS=0
+  # Omitted rather than passed empty, so the CLI applies its own default; the
+  # `${arr[@]+…}` form keeps an empty array safe under `set -u` on bash 3.2.
+  model=$(hr_agent_model "$root" 2>/dev/null) || model=""
+  model_args=()
+  [ -z "$model" ] || model_args=(--model "$model")
+  schema=$(jq -n -c --arg actions "$MENTION_ACTIONS" --arg verbs "$COMMAND_VERBS" '
+    def words: split(" ") | map(select(length > 0));
+    { type: "object", additionalProperties: false, required: ["action", "reason"],
+      properties: {
+        action: { type: "string", enum: ($actions | words) },
+        verb: { type: "string", enum: ($verbs | words) },
+        question: { type: "integer", minimum: 1 },
+        answer: { type: "string" },
+        text: { type: "string" },
+        reason: { type: "string" } } }') || { AGENT_STATUS=1; return 0; }
+  (
+    cd "$dir" || exit 1
+    unset GH_TOKEN GITHUB_TOKEN HARNESS_PR_TOKEN
+    [ -z "$MENTION_OAUTH" ] || export CLAUDE_CODE_OAUTH_TOKEN="$MENTION_OAUTH"
+    [ -z "$MENTION_API" ] || export ANTHROPIC_API_KEY="$MENTION_API"
+    exec "$AGENT_CLI" -p "$MENTION_COMMAND" \
+      --plugin-dir "$HARNESS_MENTION_PLUGIN_DIR" \
+      --add-dir "$HARNESS_MENTION_PLUGIN_DIR/instructions" \
+      --output-format json \
+      --json-schema "$schema" \
+      --tools Read,Grep,Glob --restricted \
+      --strict-mcp-config --no-session-persistence --permission-prompts none \
+      ${model_args[@]+"${model_args[@]}"} --max-budget-usd "$MENTION_MAX_BUDGET_USD"
+  ) </dev/null >"$out" 2>"$err" || AGENT_STATUS=$?
+  return 0
+}
+
+# control_mention — MENTION (the header): the state, the credential, the plugin
+# and the binary, the context directory, one session, then its decision
+# extracted, validated, checked for a credential and answered. Always exits.
+control_mention() {
+  local base dir out err why decision from rule action verb question reason text answer file reply quote
+  control_state_var "$CONTROL_BRANCH" \
+    || control_refuse "$EXIT_GH" "the state of the run on \`$CONTROL_BRANCH\` could not be read ($CS_ERR)" "Comment again to retry."
+  control_state_word_var
+
+  if [ -z "$MENTION_OAUTH" ] && [ -z "$MENTION_API" ]; then
+    control_refuse "$EXIT_REFUSED" "\`$WORKFLOW_CONTROL_FILE\` passes the agent that reads a mention no credential, so a mention is not read" \
+      "$(control_commands_way)"
+  fi
+  base=${MENTION_COMMAND##*:}
+  if [ -z "${HARNESS_MENTION_PLUGIN_DIR-}" ] || [ ! -f "$HARNESS_MENTION_PLUGIN_DIR/commands/$base.md" ]; then
+    control_refuse "$EXIT_GH" "the harness plugin carrying the mention command is not available to this job" \
+      "The control job fetches the plugin at the version \`HARNESS_CLI_VERSION\` pins in \`harness-run.yml\`; see \`docs/remote-execution.md\` → \`### Upgrading\`, then comment again, or comment a command. $(control_commands_way)"
+  fi
+  AGENT_CLI="${HARNESS_AGENT_CLI:-claude}"
+  if ! command -v "$AGENT_CLI" >/dev/null 2>&1; then
+    control_refuse "$EXIT_GH" "the agent binary \`$AGENT_CLI\` is not on this job's PATH" \
+      "Comment a command instead. $(control_commands_way)"
+  fi
+
+  if ! dir=$(mktemp -d "$control_tmp/harness-control-mention.XXXXXX"); then
+    control_refuse "$EXIT_GH" "a context directory could not be created under '$control_tmp'" "Comment again to retry."
+  fi
+  out="$dir.out"
+  err="$dir.err"
+  control_dirs="$control_dirs $dir $out $err"
+  { control_mention_context "$dir" && control_mention_context_extra "$dir"; } \
+    || control_refuse "$EXIT_GH" "the mention's context could not be written under '$dir'" "Comment again to retry."
+
+  control_mention_session "$dir" "$out" "$err"
+
+  why=$(jq -r -s '
+    if length != 1 or (.[0] | type) != "object" then "its output is not one JSON object"
+    elif .[0].is_error == true then "it reported an error (\(.[0].subtype // "no subtype"))"
+    elif (.[0].subtype // "") != "success" then "it ended as \(.[0].subtype // "no subtype")"
+    else "" end' "$out" 2>/dev/null) || why="its output is not one JSON object"
+  if [ "$AGENT_STATUS" -ne 0 ] || [ -n "$why" ]; then
+    reason=$(grep -v '^[[:space:]]*$' "$err" 2>/dev/null | tail -n 1)
+    ! mention_has_credential "$reason" || reason=""
+    [ "$AGENT_STATUS" -eq 0 ] || why="it exited $AGENT_STATUS${reason:+: $reason}"
+    control_refuse "$EXIT_GH" "the agent that reads a mention failed: $why" \
+      "Comment again, or comment a command. $(control_commands_way)"
+  fi
+
+  decision=$(jq -c -s '.[0] as $r
+    | if ($r.structured_output | type) == "object" then { from: "structured_output", d: $r.structured_output }
+      else ([$r.result | strings | fromjson? | objects] | first) as $p
+        | if $p != null then { from: "result", d: $p } else { from: "", d: null } end
+      end' "$out") || decision='{"from":"","d":null}'
+  from=$(printf '%s' "$decision" | jq -r '.from')
+  if [ -z "$from" ]; then
+    control_refuse "$EXIT_REFUSED" "the agent's reading of the mention carries no decision object" \
+      "Comment again, or comment a command. $(control_commands_way)"
+  fi
+  action=$(printf '%s' "$decision" | jq -r '.d.action | if type == "string" then gsub("[\r\n]+"; " ") else tojson end')
+  verb=$(printf '%s' "$decision" | jq -r '.d.verb | strings | gsub("[\r\n]+"; " ")')
+  reason=$(printf '%s' "$decision" | jq -r '.d.reason | strings | gsub("[\r\n]+"; " ") | .[0:200]')
+  ! mention_has_credential "$reason" || reason="(withheld: it carries a credential value)"
+  echo "remote-run.sh: control: mention on #$CONTROL_NUMBER by @$CONTROL_ACTOR read as $action${verb:+ $verb} from $from: $reason"
+
+  rule=$(printf '%s' "$decision" | jq -r --arg actions "$MENTION_ACTIONS" --arg verbs "$COMMAND_VERBS" '
+    def words: split(" ") | map(select(length > 0));
+    def nonblank: type == "string" and test("\\S");
+    .d as $d
+    | ($actions | words) as $A
+    | ($verbs | words) as $V
+    | if ($d | type) != "object" then "it is not an object"
+      elif ($A | any(.[]; . == $d.action) | not) then "its `action` is not one of \($A | join(", "))"
+      elif $d.action == "command" and ($V | any(.[]; . == $d.verb) | not) then "a `command` names no `verb` among \($V | join(", "))"
+      elif $d.action == "command" and $d.verb == "answer" and ($d.answer | nonblank | not) then "an `answer` carries no non-blank `answer`"
+      elif $d.action == "command" and $d.verb == "answer" and $d.question != null
+        and (($d.question | type) != "number" or $d.question != ($d.question | floor) or $d.question < 1) then "its `question` is not an integer of 1 or more"
+      elif ($d.action == "reply" or $d.action == "clarify") and ($d.text | nonblank | not) then "a `\($d.action)` carries no non-blank `text`"
+      elif ($d.reason | type) != "string" then "it carries no `reason`"
+      else "" end') || rule="it could not be read"
+  if [ -n "$rule" ]; then
+    control_refuse "$EXIT_REFUSED" "the agent's reading of the mention is not a valid decision: $rule" \
+      "Comment again, or comment a command. $(control_commands_way)"
+  fi
+
+  # Once, before any action is answered: no branch, this one or a later one,
+  # sees a decision whose posted or dispatched text carries a credential.
+  text=$(printf '%s' "$decision" | jq -r '.d.text | strings')
+  answer=$(printf '%s' "$decision" | jq -r '.d.answer | strings')
+  if mention_has_credential "$text" || mention_has_credential "$answer"; then
+    echo "::error::remote-run.sh: control: the decision on the mention on #$CONTROL_NUMBER carries a credential value in its text or answer; nothing it wrote is posted"
+    exit "$EXIT_GH"
+  fi
+
+  case "$action" in
+    none)
+      echo "remote-run.sh: control: the mention on #$CONTROL_NUMBER needs no answer"
+      exit "$EXIT_OK" ;;
+    reply|clarify)
+      file="$dir.text"
+      control_dirs="$control_dirs $file"
+      printf '%s' "$decision" | jq -r --arg login "$CONTROL_ACTOR" --arg handle "$COMMAND_HANDLE" \
+        "$JQ_DEF_SANITISE"' .d.text | sanitise($login; $handle)' >"$file" \
+        && mention_cap "$file" "$MENTION_TEXT_MAX_BYTES" "(cut)" \
+        || control_refuse "$EXIT_GH" "the agent's reply could not be prepared under '$control_tmp'" "Comment again to retry."
+      text=$(cat "$file")
+      control_reply "$EXIT_OK" "@$CONTROL_ACTOR: $text"$'\n\n'"_Written by an agent that read your mention; it changed nothing. $(control_commands_way)_" ;;
+    fixes)
+      control_reply "$EXIT_OK" "@$CONTROL_ACTOR: a mention does not start a round of fixes. A review that requests changes on the run's pull request starts one (\`docs/github-run-control.md\` → \`## 2.\`). An author who cannot request changes on their own pull request starts the round locally with \`/autonomous-sdlc-harness:branch-user-review\` (\`## 4.\`)." ;;
+    command)
+      question=""
+      [ "$verb" != answer ] || question=$(printf '%s' "$decision" | jq -r '.d.question | numbers | floor')
+      case " $MENTION_CONFIRM_VERBS " in
+        *" $verb "*)
+          reply="@$CONTROL_ACTOR: your mention reads as \`$COMMAND_HANDLE $verb${question:+ $question}\`. Comment that command to carry it out"
+          [ "$verb" != answer ] || reply="$reply, with the answer on the lines below it"
+          control_reply "$EXIT_OK" "$reply." ;;
+      esac
+      case " $MENTION_ACT_VERBS " in
+        *" $verb "*)
+          # What control_answer reads from the exact form: the command line,
+          # then the answer below it. The credential check above has already
+          # refused an `answer` carrying a saved credential.
+          CONTROL_BODY="$COMMAND_HANDLE $verb${question:+ $question}"
+          reply="Read from your mention as \`$CONTROL_BODY\`."
+          if [ "$verb" = answer ]; then
+            # The `x` keeps the answer's final newlines through the substitution.
+            answer=$(printf '%s' "$decision" | jq -j '.d.answer' && printf x) \
+              || control_refuse "$EXIT_GH" "the agent's answer could not be read" "Comment again to retry."
+            answer=${answer%x}
+            quote=$(printf '%s' "$decision" | jq -r --arg login "$CONTROL_ACTOR" --arg handle "$COMMAND_HANDLE" \
+              "$JQ_DEF_SANITISE $JQ_DEF_FENCE"' .d.answer | sanitise($login; $handle)
+                | (if endswith("\n") then . else . + "\n" end) as $q
+                | ($q | fence) as $f
+                | $f + "\n" + $q + $f') \
+              || control_refuse "$EXIT_GH" "the agent's answer could not be quoted" "Comment again to retry."
+            CONTROL_BODY="$CONTROL_BODY"$'\n'"$answer"
+            reply="Read from your mention as \`$COMMAND_HANDLE $verb${question:+ $question}\`, with this answer:"$'\n\n'"$quote"
+          fi
+          CONTROL_VERB="$verb"
+          CONTROL_ARGS="$question"
+          CONTROL_MENTION_NOTE="$reply"
+          control_run_verb ;;
+      esac ;;
+  esac
+  echo "::error::remote-run.sh: control: the validated action \`$action\` has no answer"
+  exit "$EXIT_GH"
+}
+
 verb_control() {
   local LC_ALL=C
-  local review=0 close=0 forge="" target="" status verbs="" v
+  local review=0 close=0 forge="" target="" status
+  # Unset first so an inherited export of either name cannot keep it exported.
+  unset MENTION_OAUTH MENTION_API MENTION_JOB_TOKEN_B64
+  MENTION_OAUTH="${IN_OAUTH-}"
+  MENTION_API="${IN_API-}"
+  MENTION_JOB_TOKEN_B64=""
+  [ -z "${GH_TOKEN-}" ] || MENTION_JOB_TOKEN_B64="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+  unset IN_OAUTH IN_API CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY
   case "${GITHUB_EVENT_NAME-}" in
     issue_comment) ;;
     pull_request_review) review=1 ;;
@@ -6838,16 +7497,12 @@ verb_control() {
       "Only a collaborator with write, maintain or admin access whom the repository variable \`HARNESS_RUN_ACTORS\` admits (when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one), or a bot listed in \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
   fi
 
-  if [ "$review" -eq 0 ] && { [ -z "$CONTROL_VERB" ] || ! control_verb_handled "$CONTROL_VERB"; }; then
-    for v in $COMMAND_VERBS; do
-      [ "$v" != answer ] || v="answer [<n>]"
-      verbs="$verbs${verbs:+, }\`$COMMAND_HANDLE $v\`"
-    done
-    control_refuse "$EXIT_REFUSED" "it is not a command this harness carries out" \
-      "The commands are $verbs; \`docs/github-run-control.md\` in the harness documentation states each."
+  if [ "$review" -eq 0 ] && [ "$CONTROL_MENTION" != 1 ] \
+    && { [ -z "$CONTROL_VERB" ] || ! control_verb_handled "$CONTROL_VERB"; }; then
+    control_refuse "$EXIT_REFUSED" "it is not a command this harness carries out" "$(control_commands_way)"
   fi
 
-  forge_repo_var || control_reply "$EXIT_GH" "@$CONTROL_ACTOR: \`$CONTROL_VERB\` was not run: the repository's name could not be read."
+  forge_repo_var || control_reply "$EXIT_GH" "@$CONTROL_ACTOR: \`${CONTROL_VERB:-$COMMAND_HANDLE}\` was not run: the repository's name could not be read."
   if [ "$review" -eq 1 ]; then
     control_check_branch "$REVIEW_HEAD"
   elif [ -n "$CONTROL_IS_PR" ]; then
@@ -6856,7 +7511,16 @@ verb_control() {
     control_branch_from_issue "$CONTROL_NUMBER"
   fi
 
+  if [ "$CONTROL_MENTION" = 1 ]; then
+    echo "remote-run.sh: control: a mention on $CONTROL_BRANCH from @$CONTROL_ACTOR on #$CONTROL_NUMBER"
+    control_mention
+  fi
   echo "remote-run.sh: control: $CONTROL_VERB on $CONTROL_BRANCH from @$CONTROL_ACTOR on #$CONTROL_NUMBER"
+  control_run_verb
+}
+
+# control_run_verb — the arm carrying out CONTROL_VERB.
+control_run_verb() {
   case "$CONTROL_VERB" in
     answer) control_answer ;;
     pause) control_pause ;;

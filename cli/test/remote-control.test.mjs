@@ -2,8 +2,9 @@
  * `remote-run.sh control`, the comment adapter: an `issue_comment` event becomes one harness action on
  * exactly one branch, through this script's own verbs run as children.
  *
- * **The rule these tests exist to enforce: only the handle as the first word of the first line is a
- * command, only a write-or-admin human `HARNESS_RUN_ACTORS` admits or a listed bot is obeyed, the
+ * **The rule these tests exist to enforce: only the handle as the first word of the first line,
+ * followed by a command verb, is a command — any other mention of the handle is
+ * `remote-control-mention.test.mjs`'s — only a write-or-admin human `HARNESS_RUN_ACTORS` admits or a listed bot is obeyed, the
  * harness's own comments and every pull request from a fork are never acted on, and a refusal always
  * replies.** Each ignored shape is driven and asserted to call no `gh` at all; each refusal arm —
  * `HARNESS_REMOTE_STOP`, the coupling off, a `read` answer, a failed permission call, a writer the list
@@ -305,9 +306,6 @@ test('the handle and verb match case-insensitively', async (t) => {
 for (const [name, body, event] of [
   ['a bare verb', 'pause', {}],
   ['a verb with words', 'pause this', {}],
-  ['the handle mid-line', "Let's @sdlc-harness pause", {}],
-  ['a quoted command', '> @sdlc-harness pause', {}],
-  ['the handle on a later line', 'Thanks!\n@sdlc-harness pause', {}],
   ['a body carrying the marker', `@sdlc-harness pause\n\n${MARKER('reply', 'feat_x')}`, {}],
   ['an edited comment', '@sdlc-harness pause', { action: 'edited' }],
 ]) {
@@ -394,11 +392,11 @@ test('forge none is refused before any permission call', async (t) => {
   assert.deepEqual(permissionCalls(f.calls()), []);
 });
 
-test('an unknown verb gets a reply listing the six commands', async (t) => {
+test('an unknown verb is a mention, and with no credential its refusal lists the six commands', async (t) => {
   const f = await controlFixture(t);
-  const result = await f.control('@sdlc-harness merge');
+  const result = await f.control('@sdlc-harness merge', {}, { IN_OAUTH: '', IN_API: '' });
   const reply = assertRefused(f, result);
-  assert.match(reply.body, /^@alice: `merge` was not run: /);
+  assert.match(reply.body, /^@alice: `@sdlc-harness` was not run: `harness-control\.yml` passes the agent that reads a mention no credential, so a mention is not read\. /);
   for (const command of ['answer [<n>]', 'pause', 'resume', 'stop', 'clear', 'status']) {
     assert.ok(reply.body.includes(`\`@sdlc-harness ${command}\``), command);
   }

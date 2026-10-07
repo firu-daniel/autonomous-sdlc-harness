@@ -52,7 +52,7 @@ You install two things: a Claude Code plugin and a Node CLI.
 ```mermaid
 flowchart TB
   subgraph ship["What ships"]
-    P["plugin/ — the Claude Code plugin<br/>agents · branch-* commands · /autonomous-sdlc-harness:harness-analyze<br/>PreToolUse guard hooks · instruction cores and forks<br/>samples · helper scripts · flow documents"]
+    P["plugin/ — the Claude Code plugin<br/>agents · branch-* commands · /autonomous-sdlc-harness:harness-analyze · harness-read-mention<br/>PreToolUse guard hooks · instruction cores and forks<br/>samples · helper scripts · flow documents"]
     C["cli/ — the npm package autonomous-sdlc-harness<br/>init · doctor · config · daemon · docs"]
   end
   subgraph repo["An adopted repository, after init"]
@@ -78,7 +78,7 @@ flowchart TB
   B --> N
 ```
 
-**The plugin carries the process assets a run executes.** These are the instruction cores and their thin forks, the agent definitions, the `branch-*` slash commands, the `/autonomous-sdlc-harness:harness-analyze` setup command, the guard hooks, the helper scripts and the sample fixtures. It also carries the two flow documents that describe the loop they run.
+**The plugin carries the process assets a run executes.** These are the instruction cores and their thin forks, the agent definitions, the `branch-*` slash commands, the `/autonomous-sdlc-harness:harness-analyze` setup command, the `/autonomous-sdlc-harness:harness-read-mention` command the control job runs to read a mention, the guard hooks, the helper scripts and the sample fixtures. It also carries the two flow documents that describe the loop they run.
 
 Every reference inside the plugin is written `${CLAUDE_PLUGIN_ROOT}/…`. It is the only form that resolves under both a git-sourced install and a directory-sourced one.
 
