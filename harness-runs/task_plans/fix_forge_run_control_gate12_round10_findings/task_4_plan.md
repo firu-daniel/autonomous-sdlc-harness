@@ -59,3 +59,8 @@ This task changes the procedure only. It writes no round 10 record, because the 
 - **The flag set.** Step 11's drive carries every flag of `control_mention_session`'s argv except the four this file names as left out, and the two output flags. Check it by reading that function.
 - **Cross-document links.** Both row titles quoted in (j)'s *What it settles* appear verbatim in `docs/github-run-control.md` → `## 8.`.
 - **No figures.** No sentence states a duration for the install or the clone, and no expected count appears in any command or pass condition.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the Work bullet's check that `jobs` is a field `gh run view --help` lists for `--json` could not be executed. `gh run view --help` and `gh help run view` were both refused by the tool layer (approval required), and no file in the tree uses `--json jobs`. The step-conclusion command was written as the plan gives it, resting on gh's documented `run view` JSON field set (`jobs`, whose entries carry `steps[].name` / `steps[].conclusion`), not on a run of the help text. The operator should confirm it against `gh run view --help` before round 11.
+- Step 11's `mkdir` commands use `-p` so `<probe>` and its subdirectory are made in one command per subdirectory; the probe is removed with `rm -r <probe>`, a hand-run step on the operator's machine.
