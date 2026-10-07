@@ -23,6 +23,9 @@
 # `@sdlc-harness` anywhere, not in the exact command form, is read by one
 # read-only agent session running the plugin's mention-reading slash command,
 # which `remote-run.sh control` launches and whose decision it validates.
+# A comment job first asks `remote-run.sh control --needs-agent` whether that
+# session would start (THE AGENT CHECK below); the act step re-checks
+# everything.
 # Every decision lives in that script; this file carries only the events, the
 # permissions, a prefilter, the concurrency group, and on a comment job the
 # credential, the agent CLI and the pinned plugin that session needs.
@@ -137,9 +140,22 @@
 # therefore the release the run job installs. A pinned release older than
 # mentions carries no mention-reading command and gets `control`'s no-plugin
 # reply; the route is `init --upgrade-workflows` (docs/remote-execution.md,
-# `### Upgrading`). The three comment-only steps are `continue-on-error`, so a
-# failed install never blocks an exact-form command: `control` then finds no
-# agent binary or plugin and answers a mention with its exit-3 reply.
+# `### Upgrading`). The three comment-only steps run only when THE AGENT CHECK
+# below did not answer `no`, so an exact-form command now skips them. They stay
+# `continue-on-error`, so a failed install still never blocks one: `control`
+# then finds no agent binary or plugin and answers a mention with its exit-3
+# reply.
+#
+# THE AGENT CHECK. A comment job runs `remote-run.sh control --needs-agent`
+# before the three comment-only steps. It tells the exact command form apart
+# from a mention, then runs `control`'s gates 1 to 3 on a mention, and posts,
+# dispatches and writes nothing. Only its exit 2 (no session would start: an
+# ignored comment, an exact-form command or a refused commenter) writes
+# `agent=no`, which skips those steps. Every other outcome installs, as
+# before: an older script that does not know the flag, a failed permission
+# call, a failed step. A mention by an admitted commenter costs one extra
+# permission call. It is a saving, not the authority, as THE PREFILTER says of
+# the `if:`: the act step re-checks every rule.
 #
 # A REFUSAL IS A SUCCESS. `remote-run.sh control` exits 2 for a refusal it has
 # already replied to; that exit code is the script's contract with every other
@@ -187,7 +203,9 @@
 #   remote-run.sh (the scriptsDir copy) IN_OAUTH, IN_API and
 #                                     HARNESS_MENTION_PLUGIN_DIR, the env
 #                                     interface `control` reads (its MENTION
-#                                     paragraph)
+#                                     paragraph); `control --needs-agent`,
+#                                     whose exit 2 alone means no session
+#                                     would start
 #
 # ACTION PINS.
 #   actions/checkout@v5
@@ -269,8 +287,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Set up Node
+      - name: Decide whether the comment needs the agent
+        id: needs
         if: github.event_name == 'issue_comment'
+        continue-on-error: true
+        run: |
+          status=0
+          bash "$SCRIPTS_DIR/remote-run.sh" control --needs-agent || status=$?
+          if [ "$status" -eq 2 ]; then
+            echo "agent=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "agent=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node
+        if: github.event_name == 'issue_comment' && steps.needs.outputs.agent != 'no'
         continue-on-error: true
         uses: actions/setup-node@v5
         with:
@@ -279,7 +310,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install the claude CLI when absent
-        if: github.event_name == 'issue_comment'
+        if: github.event_name == 'issue_comment' && steps.needs.outputs.agent != 'no'
         continue-on-error: true
         run: |
           if ! command -v claude >/dev/null 2>&1; then
@@ -288,7 +319,7 @@ jobs:
           claude --version
 
       - name: Fetch the pinned plugin
-        if: github.event_name == 'issue_comment'
+        if: github.event_name == 'issue_comment' && steps.needs.outputs.agent != 'no'
         continue-on-error: true
         run: |
           pin=$(awk '/^[[:space:]]*HARNESS_CLI_VERSION:/ { sub(/^[[:space:]]*HARNESS_CLI_VERSION:[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, ""); sub(/[[:space:]]+$/, ""); gsub(/["\047]/, ""); print; exit }' .github/workflows/harness-run.yml 2>/dev/null || true)

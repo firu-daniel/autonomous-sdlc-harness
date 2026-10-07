@@ -38,7 +38,8 @@
 #                 (always 0, 1 only on a usage error: its paragraph)
 #   remote-run.sh collect <branch> [--pr <n>] [--repo <root>]
 #                 (always 0, 1 only on a usage error: its paragraph)
-#   remote-run.sh control [--repo <root>]   (its own exit map: its paragraph)
+#   remote-run.sh control [--needs-agent] [--repo <root>]
+#                 (its own exit map: its paragraph)
 #     0  sent (for stop: the action=stop marker was dispatched, and every
 #        queued, waiting or in-progress `harness run` run of that branch was
 #        asked to cancel, or there was none); for status and fetch: printed
@@ -534,6 +535,18 @@
 #      no such word exists today): the reply lists every command and names
 #      `docs/github-run-control.md`. Skipped for a mention.
 # Then THE BRANCH, and the exact form's arm (`control_run_verb`) or MENTION.
+# `--needs-agent` answers only whether MENTION would start a session: the
+# intake above, then refusals 1 to 3 (`control_gates`, shared with `control`),
+# run alone, posting, dispatching and creating nothing; its one `gh` call is
+# `authorise_actor`'s permission call, and the branch is never resolved. One
+# stdout line each: exit 0 `needs-agent: yes, a mention by @<login> on #<n>`;
+# exit 2 `needs-agent: no, <reason>` for an event other than `issue_comment`,
+# an ignored comment (after its own line), the exact form (before any gate,
+# no `gh` call), or a refusal, whose <reason> is that refusal's reply text;
+# exit 3 `needs-agent: undecided, <AUTH_WHY>` when the permission call failed
+# (`control` still refuses that with exit 2); exit 1 as `control`'s.
+# `WORKFLOW_CONTROL_FILE` runs it before installing the agent; the act step,
+# plain `control`, still re-checks everything.
 # MENTION. `verb_control`'s first statements, for every event, copy `IN_OAUTH`
 # / `IN_API` into the non-exported `MENTION_OAUTH` / `MENTION_API` and unset
 # them, with `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY`, so no `gh`, `git`
@@ -611,8 +624,8 @@
 # is `branch-resume`'s confirmation. Exits: 0 answered or nothing to do; 2
 # refused; 3 a state read, plugin, binary or agent failure, or a credential
 # value in `text` or `answer`; a carried-out verb, its arm's. The workflow's
-# interface: `IN_OAUTH` / `IN_API` and
-# `HARNESS_MENTION_PLUGIN_DIR`.
+# interface: `IN_OAUTH` / `IN_API`, `HARNESS_MENTION_PLUGIN_DIR`, and
+# `control --needs-agent`'s exit 2, on which it skips installing the agent.
 # THE BRANCH. On a pull request (`.issue.pull_request.url` set), its head, by
 # `pr view`: a fork's pull request is refused, because this event carries the
 # repository's secrets, and nothing from its head is checked out or run; one
@@ -1540,6 +1553,13 @@
 #              harness-run.yml --ref feat_x -f action=pause -f branch=feat_x`,
 #              then one comment on 12 opening `Read from your mention as
 #              `@sdlc-harness pause`.`
+#   needs-agent  the mention's c.json, `control --needs-agent` -> 0, one line
+#              `needs-agent: yes, a mention by @alice on #12`; "$s.log" holds
+#              only the permission call
+#   needs-agent  c.json's body `@sdlc-harness pause` -> 2, one `needs-agent: no`
+#   exact      line naming the exact form; "$s.log" unchanged
+#   needs-agent  the mention with HARNESS_RUN_ACTORS=bob -> 2, one `needs-agent:
+#   unlisted   no` line naming HARNESS_RUN_ACTORS; nothing posted
 
 set -u
 
@@ -1664,7 +1684,7 @@ usage() {
   echo "       remote-run.sh open <branch> [--repo <root>]" >&2
   echo "       remote-run.sh deliver <branch> <bundle_dir> [--repo <root>]" >&2
   echo "       remote-run.sh collect <branch> [--pr <n>] [--repo <root>]" >&2
-  echo "       remote-run.sh control [--repo <root>]" >&2
+  echo "       remote-run.sh control [--needs-agent] [--repo <root>]" >&2
   [ "${verb-}" != save ] || exit "$EXIT_OK"
   exit "$EXIT_USAGE"
 }
@@ -1764,6 +1784,7 @@ reviewers_arg=""
 allow_no_run=0
 pr_arg=""
 branch_gone=0
+needs_agent=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -1824,6 +1845,9 @@ while [ "$#" -gt 0 ]; do
     --branch-gone)
       [ "$verb" = stop ] || usage "$1 is a stop option"
       branch_gone=1; shift ;;
+    --needs-agent)
+      [ "$verb" = control ] || usage "$1 is a control option"
+      needs_agent=1; shift ;;
     -*)
       usage "unknown option '$1'" ;;
     *)
@@ -7423,9 +7447,75 @@ control_mention() {
   exit "$EXIT_GH"
 }
 
+# control_gates — refusals 1 to 3 of `control`, in its order, for both
+# `control` and `--needs-agent`. 0 when all pass; otherwise 1 with CG_EXIT,
+# CG_WHY and CG_WAY set as `control_refuse` takes them, and CG_AUTH the
+# `authorise_actor` status (0 when an earlier gate refused). Posts nothing.
+CG_EXIT=0
+CG_WHY=""
+CG_WAY=""
+CG_AUTH=0
+control_gates() {
+  local forge target
+  CG_EXIT="$EXIT_REFUSED"
+  CG_WHY=""
+  CG_WAY=""
+  CG_AUTH=0
+  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
+    CG_WHY="the repository variable \`HARNESS_REMOTE_STOP\` is set, which stops every command"
+    CG_WAY="Clear it under **Settings → Secrets and variables → Actions → Variables**, then comment again."
+    return 1
+  fi
+
+  forge=$(hr_forge "$root") || forge=""
+  target=$(hr_execution_target "$root") || target=""
+  if [ "$forge" != github ] || [ "$target" != github-actions ]; then
+    CG_WHY="the default branch's \`harness.config.json\` does not turn run control on: it needs \`forge\` set to \`github\` (it is ${forge:-not set or unreadable}) and \`execution.target\` set to \`github-actions\` (it is ${target:-unreadable})"
+    CG_WAY="Set both keys on the default branch, then comment again."
+    return 1
+  fi
+
+  if ! rerun_actor_listed; then
+    CG_WHY="${RUN_ACTORS_WHY%.}"
+    CG_WAY="Only a person the repository variable \`HARNESS_RUN_ACTORS\` admits may re-run this job; one of them can comment again."
+    return 1
+  fi
+
+  authorise_actor "$CONTROL_ACTOR" "$CONTROL_SENDER_TYPE" || CG_AUTH=$?
+  if [ "$CG_AUTH" -ne 0 ]; then
+    CG_WHY="${AUTH_WHY%.}"
+    CG_WAY="Only a collaborator with write, maintain or admin access whom the repository variable \`HARNESS_RUN_ACTORS\` admits (when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one), or a bot listed in \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
+    return 1
+  fi
+  return 0
+}
+
+# control_needs_agent_no <reason> — the `--needs-agent` answer that no session
+# starts: one line, exit 2.
+control_needs_agent_no() {
+  echo "remote-run.sh: control: needs-agent: no, $1"
+  exit "$EXIT_REFUSED"
+}
+
+# control_needs_agent — `--needs-agent` after the comment intake: the exact
+# form, then `control_gates`, answered as one line and an exit. Never returns.
+control_needs_agent() {
+  [ -z "$CONTROL_VERB" ] \
+    || control_needs_agent_no "the comment is the exact form \`$COMMAND_HANDLE $CONTROL_VERB\`"
+  if ! control_gates; then
+    if [ "$CG_AUTH" -eq 4 ]; then
+      echo "remote-run.sh: control: needs-agent: undecided, $AUTH_WHY"
+      exit "$EXIT_GH"
+    fi
+    control_needs_agent_no "$CG_WHY"
+  fi
+  echo "remote-run.sh: control: needs-agent: yes, a mention by @$CONTROL_ACTOR on #$CONTROL_NUMBER"
+  exit "$EXIT_OK"
+}
+
 verb_control() {
   local LC_ALL=C
-  local review=0 close=0 forge="" target="" status
+  local review=0 close=0
   # Unset first so an inherited export of either name cannot keep it exported.
   unset MENTION_OAUTH MENTION_API MENTION_JOB_TOKEN_B64
   MENTION_OAUTH="${IN_OAUTH-}"
@@ -7447,9 +7537,17 @@ verb_control() {
   fi
   hr_have_jq || { echo "remote-run.sh: control needs jq" >&2; exit "$EXIT_USAGE"; }
 
+  if [ "$needs_agent" -eq 1 ] && [ "$GITHUB_EVENT_NAME" != issue_comment ]; then
+    control_needs_agent_no "a \`$GITHUB_EVENT_NAME\` event is not a comment"
+  fi
+
   case "$GITHUB_EVENT_NAME" in
     pull_request_review) control_review_intake || return 0 ;;
-    issue_comment) control_comment_intake || return 0 ;;
+    issue_comment)
+      if ! control_comment_intake; then
+        [ "$needs_agent" -eq 0 ] || control_needs_agent_no "the comment is ignored"
+        return 0
+      fi ;;
     issues) control_issues_intake || return 0 ;;
     pull_request) control_pull_request_intake || return 0 ;;
     delete) control_delete_intake || return 0 ;;
@@ -7463,6 +7561,8 @@ verb_control() {
     esac
   fi
 
+  [ "$needs_agent" -eq 0 ] || control_needs_agent
+
   control_tmp="${RUNNER_TEMP-}"
   if [ -z "$control_tmp" ] || [ ! -d "$control_tmp" ]; then
     control_tmp=$(mktemp -d) || { echo "remote-run.sh: control: mktemp failed" >&2; exit "$EXIT_USAGE"; }
@@ -7473,29 +7573,7 @@ verb_control() {
   # Decided by the event name, never CONTROL_VERB: a comment can name `close`.
   [ "$close" -eq 0 ] || control_close
 
-  if [ -n "${HARNESS_REMOTE_STOP-}" ]; then
-    control_refuse "$EXIT_REFUSED" "the repository variable \`HARNESS_REMOTE_STOP\` is set, which stops every command" \
-      "Clear it under **Settings → Secrets and variables → Actions → Variables**, then comment again."
-  fi
-
-  forge=$(hr_forge "$root") || forge=""
-  target=$(hr_execution_target "$root") || target=""
-  if [ "$forge" != github ] || [ "$target" != github-actions ]; then
-    control_refuse "$EXIT_REFUSED" "the default branch's \`harness.config.json\` does not turn run control on: it needs \`forge\` set to \`github\` (it is ${forge:-not set or unreadable}) and \`execution.target\` set to \`github-actions\` (it is ${target:-unreadable})" \
-      "Set both keys on the default branch, then comment again."
-  fi
-
-  if ! rerun_actor_listed; then
-    control_refuse "$EXIT_REFUSED" "${RUN_ACTORS_WHY%.}" \
-      "Only a person the repository variable \`HARNESS_RUN_ACTORS\` admits may re-run this job; one of them can comment again."
-  fi
-
-  status=0
-  authorise_actor "$CONTROL_ACTOR" "$CONTROL_SENDER_TYPE" || status=$?
-  if [ "$status" -ne 0 ]; then
-    control_refuse "$EXIT_REFUSED" "${AUTH_WHY%.}" \
-      "Only a collaborator with write, maintain or admin access whom the repository variable \`HARNESS_RUN_ACTORS\` admits (when unset, the owner alone of a repository a personal account owns, and nobody in an organisation-owned one), or a bot listed in \`HARNESS_TRIGGER_ALLOWED_BOTS\`, commands a run."
-  fi
+  control_gates || control_refuse "$CG_EXIT" "$CG_WHY" "$CG_WAY"
 
   if [ "$review" -eq 0 ] && [ "$CONTROL_MENTION" != 1 ] \
     && { [ -z "$CONTROL_VERB" ] || ! control_verb_handled "$CONTROL_VERB"; }; then
