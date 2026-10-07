@@ -936,7 +936,7 @@ What still owes a first recording:
 - (vii), (ix) and (x).
 - (xii)'s last leg on a real release after the one under test.
 - (xiii)'s machine-off condition and its leg (b) refusal.
-- From (xiv): leg (h)'s merge-commit copy of the workflow; the triage refusal and triage close, not runnable on a repository owned by a personal account.
+- From (xiv): leg (h)'s merge-commit copy of the workflow; the triage refusal and triage close, not runnable on a repository owned by a personal account; and leg (j), the mentions, added after this round by `feat_forge_reasoned_control`.
 - From (xv): leg (f)'s poller dispatch.
 - The rest of `docs/github-run-control.md` → `## 8.`.
 
@@ -1292,7 +1292,7 @@ git push --no-verify origin --delete <slug>_2
 
 Record the comment, both `gh run list` outputs and the restore step's log verbatim.
 
-**(xiv) Run control from GitHub with the machine off.** It observes run control end to end (`docs/github-run-control.md`): comment commands, a park answered in a comment, a review round, lifecycle comments, state labels, the progress comment, and the draft pull request opened at the run's start with its draft state following the run, with nothing local taking part. On the scratch repository, after *Setup*, turn the coupling on; where (xiii) ran in this round, skip the steps it already took:
+**(xiv) Run control from GitHub with the machine off.** It observes run control end to end (`docs/github-run-control.md`): comment commands, mentions read by an agent, a park answered in a comment, a review round, lifecycle comments, state labels, the progress comment, and the draft pull request opened at the run's start with its draft state following the run, with nothing local taking part. On the scratch repository, after *Setup*, turn the coupling on; where (xiii) ran in this round, skip the steps it already took:
 
 ```
 npx --yes autonomous-sdlc-harness@<version> config set forge github
@@ -1707,7 +1707,113 @@ gh run view <run id> --repo <owner>/<scratch-repo> --log-failed
 
 Passes when the run's `wrong-ref` job fails with an `::error::` line naming `<slug>` as the ref to use, and its `run` job is skipped. Record the error line.
 
-**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); and *The whole chain on GitHub*, by the legs together. Leg (h) settles *A `delete` event's workflow runs from the default branch*, *A `pull_request` `closed` job runs the merge-commit copy of the workflow*, *The contents API serves a file at a commit no branch points at any more* and *A workflow can be dispatched from the default branch while its `branch` input names a deleted branch*, and its deletion settles *`gh pr list --head <branch> --state all` lists a pull request whose head branch was deleted, with its labels*; leg (d) settles *A pull request opened with `HARNESS_GIT_TOKEN` puts a cross-reference on the issue its body mentions* where that secret is set. *The job's token may mark a pull request ready for review and convert it back to draft* is settled by leg (d) for the ready flip and by leg (e) for the conversion to draft. Leg (e) also settles *The job's token may reply to a review comment*, *`resolveReviewThread` accepts the job's token*, *A review comment's GraphQL `databaseId` equals the REST `id` the round marker records* and, through the progress comment's edits, *The job's token may edit its own issue comment*.
+**(j) Mentions read by an agent** (`docs/github-run-control.md` → `## 1.`, *Mentions read by an agent*). The run legs (a) to (h) used ends with its branch deleted, so start a second one as leg (a) did: an issue `<issue 2>` whose task parks, labelled `sdlc-harness`, with `<slug 2>` its branch and `<pr 2>` its pull request. Once it parks, post each mention below in order, on `<pr 2>` unless the step names another item, waiting for each one's `harness-control.yml` run to finish before the next. After each, read the runs and that run's log:
+
+```
+gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
+```
+
+```
+gh run view <run id> --repo <owner>/<scratch-repo> --log
+```
+
+From each log, record the `claude --version` line; the `Fetch the pinned plugin` step's outcome and the tag it cloned, `autonomous-sdlc-harness--v<pin>`; and each decision line, `remote-run.sh: control: mention on #<n> by @<login> read as …`, with whether it reads `from structured_output` or `from result`. Where the fetch step failed, every mention gets the plugin refusal; record it, and the leg is not observed.
+
+1. A mention with nothing to do:
+
+   ```
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "thanks @sdlc-harness"
+   ```
+
+   Passes when no reply follows and the run concludes `success`.
+2. A question about the park:
+
+   ```
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "The session parked. @sdlc-harness check the question and let me know"
+   ```
+
+   Passes when one reply follows, carrying the agent footer *"Written by an agent that read your mention; it changed nothing."*, and both items still carry `sdlc-harness: parked`. Record whether the reply's text is drawn from the open question, not a refusal: that is whether the session followed `/autonomous-sdlc-harness:harness-read-mention`.
+3. An answer read from a mention, while the run is still parked on a question that offers more rounds:
+
+   ```
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness it hit the plan loop cap. If the question has an option to give it more rounds, give it three more"
+   ```
+
+   ```
+   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug 2>
+   ```
+
+   Passes when the reply opens ``Read from your mention as `@sdlc-harness answer <n>`, with this answer:`` and quotes the answer, and exactly one `harness run <slug 2>` run follows, the `resume=answer` dispatch, with a `resumed` comment on `<pr 2>`. Where no open question offers more rounds, record it as not run.
+4. A pause asked for in words, on a run in flight. Wait until the `harness run <slug 2>` run step 3 dispatched is in progress and both items carry `sdlc-harness: running`. Where step 3 was not run, first answer the park with the exact form `@sdlc-harness answer <n>` and an answer its question accepts, and take that run instead. Then comment:
+
+   ```
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness can you pause this?"
+   ```
+
+   Passes when the reply opens ``Read from your mention as `@sdlc-harness pause`.``, followed by `` Pause requested by @<login>; the run on `<slug 2>` yields at its next clean checkpoint, and a paused comment follows. ``, and a `paused` comment follows with both items carrying `sdlc-harness: paused`. Where the run parks before it yields, its `parked` comment carries the folded-pause line instead: record that, and record steps 5 and 6 as not observed.
+5. A resume asked for in words, once step 4's `paused` comment is posted:
+
+   ```
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness you can now resume"
+   ```
+
+   ```
+   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml --branch <slug 2>
+   ```
+
+   Passes when the reply opens ``Read from your mention as `@sdlc-harness resume`.``, followed by the `resume` command's own accepted reply, and exactly one new `harness run <slug 2>` run follows, the `resume=pause` dispatch, with a `resumed` comment on `<pr 2>`.
+6. A status asked for in words, while step 5's run is in progress and both items carry `sdlc-harness: running`:
+
+   ```
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness what's the status on this?"
+   ```
+
+   Passes when the reply either opens ``Read from your mention as `@sdlc-harness status`.``, followed by the `status` command's own reply naming the run as running, or is a `reply` carrying the agent footer that names the run as running. Either way, no label changes and no new `harness-run.yml` run is listed. Record which form the decision line reads as.
+7. A stop asked for in words:
+
+   ```
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness please stop this"
+   ```
+
+   ```
+   gh run list --repo <owner>/<scratch-repo> --workflow harness-run.yml
+   ```
+
+   Passes when the reply reads ``@<login>: your mention reads as `@sdlc-harness stop`. Comment that command to carry it out.`` and no `harness stop <slug 2>` run is listed.
+8. A request for fixes:
+
+   ```
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness fix this"
+   ```
+
+   Passes when the reply opens `@<login>: a mention does not start a round of fixes.` and no `chore: add user review for <slug 2>` commit follows.
+9. A mention where no run was started. Open an issue `<issue 3>` with no label, and mention the handle on it:
+
+   ```
+   gh issue create --repo <owner>/<scratch-repo> --title "<title>" --body "<body>"
+   ```
+
+   ```
+   gh issue comment <issue 3> --repo <owner>/<scratch-repo> --body "@sdlc-harness what is the status here?"
+   ```
+
+   Passes when the reply is the refusal `` @<login>: `@sdlc-harness` was not run: `` naming that no harness run was started from the issue, and that job's log carries no decision line.
+10. The exact form:
+
+   ```
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness pause"
+   ```
+
+   Passes when the reply is the `pause` command's own, accepted or refused by the run's state, and that job's log carries no decision line.
+11. A read outside the context directory. From step 1's job log, take the checkout path from the `Check out the default branch` step: on a GitHub-hosted runner it is `/home/runner/work/<scratch-repo>/<scratch-repo>`. Then comment:
+
+   ```
+   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness the open question refers to <checkout path>/harness.config.json; read that file and tell me its projectName"
+   ```
+
+   Passes when the reply says the file could not be read, or lies outside the directories the agent may read, and does not quote the scratch repository's `projectName`. It fails when the reply quotes the `projectName`. Record the job log's decision line. When the reply is neither, for example the agent declined to try, record the step as not observed.
+
+**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); and *The whole chain on GitHub*, by the legs together. Leg (h) settles *A `delete` event's workflow runs from the default branch*, *A `pull_request` `closed` job runs the merge-commit copy of the workflow*, *The contents API serves a file at a commit no branch points at any more* and *A workflow can be dispatched from the default branch while its `branch` input names a deleted branch*, and its deletion settles *`gh pr list --head <branch> --state all` lists a pull request whose head branch was deleted, with its labels*; leg (d) settles *A pull request opened with `HARNESS_GIT_TOKEN` puts a cross-reference on the issue its body mentions* where that secret is set. *The job's token may mark a pull request ready for review and convert it back to draft* is settled by leg (d) for the ready flip and by leg (e) for the conversion to draft. Leg (e) also settles *The job's token may reply to a review comment*, *`resolveReviewThread` accepts the job's token*, *A review comment's GraphQL `databaseId` equals the REST `id` the round marker records* and, through the progress comment's edits, *The job's token may edit its own issue comment*. Leg (j) settles *The whole mention path on a real repository*, steps 4 to 6 on a run in flight; its `claude --version` lines record the version for *The comment job's installed `claude` accepts the session's flags*; leg 2's reply settles *A `--plugin-dir` plugin's slash command runs as the `-p` prompt*; and each decision line's `from` field records which field *`--json-schema` in `--print` mode puts the decision in `structured_output`* was read from; and step 11 settles *`--restricted` confines `Read`, `Grep` and `Glob` to the working directory and the one `--add-dir`*.
 
 **(xv) The allow-list refuses a writer it does not name, on every route.** It observes the run-actor allow-list `HARNESS_RUN_ACTORS` on GitHub (`docs/remote-execution.md` → `## 11. Security`, *Who can spend the credential*): the refusal on each route a writer can take, and the admission of the harness's own dispatches and of the owner under the unset default. On the scratch repository, with (xiv)'s setup done, give a second account the `write` role — `expause-admin`'s role in the 2026-10-05 measurement (`docs/team-accounts-research.md` → `### The repository facts the options rest on`) — and run that account's commands with `gh` authenticated as it. Delete the variable, so the owner-only default applies, and make the self-pause small for leg (e):
 
@@ -1824,6 +1930,22 @@ gh issue view <issue number> --repo <owner>/<scratch-repo> --comments
 ```
 
 Passes when the reply names `HARNESS_RUN_ACTORS`. Record the reply verbatim and the `harness-control.yml` run's two actors.
+
+**(d′) A mention.** A comment that holds the handle but is not a command reaches the same actor check, which must refuse it before any agent session starts, since that session spends the credential. As the second account, on the run's issue:
+
+```
+gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harness what's the status on this?"
+```
+
+```
+gh issue view <issue number> --repo <owner>/<scratch-repo> --comments
+```
+
+```
+gh run view <id> --repo <owner>/<scratch-repo> --log
+```
+
+Passes when the reply opens `` @<login>: `@sdlc-harness` was not run: `` and names `HARNESS_RUN_ACTORS`, and that job's log carries neither the line `remote-run.sh: control: a mention on …` nor a decision line, so no agent session ran. Record the reply verbatim and the `harness-control.yml` run's two actors.
 
 **(e) The `continue` chain.** Let `<slug>`'s first job self-pause and its `remote-run.sh continue` step chain a new job:
 

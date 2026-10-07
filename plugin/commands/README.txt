@@ -1,8 +1,8 @@
 commands/ — the harness's slash commands
 ========================================
 
-This directory holds the harness's slash-command definitions — the `branch-*`
-entry points a user (or the outer loop) invokes to write a branch plan, run the
+This directory holds the harness's slash-command definitions — chiefly the
+`branch-*` entry points a user (or the outer loop) invokes to write a branch plan, run the
 per-task implement/review loop in supervised, semi-autonomous or autonomous mode,
 run the end-of-branch review and its fix flow, run the documentation phase, drive
 the browser-QA session, and pause, resume or report on a run. Roadmap item 5
@@ -12,7 +12,12 @@ user-review commands across those modes, the phase-gated documentation and
 browser-QA commands, and the five run-control entry points. Not every command
 here is a `branch-*` one: item 15 added `/autonomous-sdlc-harness:harness-analyze`, the supervised
 first-session command that fills the conventions documents `init` writes as
-skeletons from the adopted repository's real code. Each command body reaches its
+skeletons from the adopted repository's real code.
+`/autonomous-sdlc-harness:harness-read-mention` is the one command a shipped
+script, rather than a person or the watcher's flow launch, runs:
+`remote-run.sh control` runs it on GitHub Actions as a read-only session's first
+message, to read a mention of the harness handle, and it loads
+`mention_reading.md` from the instructions directory. Each command body reaches its
 instruction, sample and script assets as `${CLAUDE_PLUGIN_ROOT}/<dir>/<file>`,
 the only form that resolves under both a git-sourced install and a
 directory-sourced one.

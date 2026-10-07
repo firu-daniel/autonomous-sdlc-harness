@@ -223,6 +223,7 @@ import {
 import { inspect, readRegistry, registryPath, type EntryState, type InspectedEntry } from '../machine/registry.js';
 import {
   API_KEY_SECRET,
+  carriesMentionCredential,
   carriesRunActors,
   CLI_VERSION_VARIABLE,
   DEFAULT_GH_CLI,
@@ -234,6 +235,8 @@ import {
   ghCli,
   GIT_TOKEN_SECRET,
   LEGACY_TRIGGER_LABEL,
+  MENTION_ACT_VERBS,
+  MENTION_CONFIRM_VERBS,
   OAUTH_TOKEN_SECRET,
   PR_CREATE_SETTING,
   PR_CREATE_SETTING_PATH,
@@ -3050,7 +3053,11 @@ const REMOTE_GITHUB_CHECK: Check = {
  * read {@link RUN_ACTORS_VARIABLE} ({@link carriesRunActors}), named in one warning with `init --force`
  * — these two carry no pin and move with the scripts, not with {@link upgradeWorkflowsCommand}. It is
  * local evidence because the workflows are what GitHub runs and only their text says whether the list
- * reaches the scripts; a read that throws is skipped.
+ * reaches the scripts; a read that throws is skipped. A fifth, joined the same way: a present
+ * {@link WORKFLOW_CONTROL_FILE} whose text reads neither credential secret
+ * ({@link carriesMentionCredential}), so every mention is answered *not read* until `init --force`
+ * replaces it. It is local evidence for the same reason — only the workflow's text says whether a
+ * credential reaches the mention agent; whether the secret is set on GitHub is not asked.
  *
  * A value outside {@link FORGE_KINDS} is the config check's `fail`, and is not graded here.
  */
@@ -3111,10 +3118,22 @@ const FORGE_CHECK: Check = {
     const listlessWarning = listless.length === 0
       ? ''
       : `${nameList(listless)} ${listless.length === 1 ? 'was' : 'were'} written before \`${RUN_ACTORS_VARIABLE}\` and ${listless.length === 1 ? 'passes' : 'pass'} the scripts no list: with scripts written at the same time every writer may still start and command a run, and with the scripts re-rendered every start and command is held to an unset list — the repository owner alone, or nobody in an organisation-owned repository; \`${CLI} init --force\` replaces both workflows and the scripts after a .bak (docs/remote-execution.md, section 7, Upgrading)`;
+    let credentialless = false;
+    if (forgeTriggerApplies(ctx.config) && presentWorkflows.includes(WORKFLOW_CONTROL_PATH)) {
+      try {
+        credentialless = !carriesMentionCredential(readFileSync(join(root, ...WORKFLOW_CONTROL_PATH.split('/')), 'utf8'));
+      } catch {
+        credentialless = false;
+      }
+    }
+    const credentialWarning = credentialless
+      ? `${WORKFLOW_CONTROL_PATH} passes the mention agent no credential secret, so a mention of \`${COMMAND_HANDLE}\` anywhere in a comment is answered that it was not read; the \`${COMMAND_HANDLE} <verb>\` commands still work; \`${CLI} init --force\` replaces it, and the scripts, after a .bak (docs/remote-execution.md, section 7, Upgrading)`
+      : '';
+    const joinedWarning = [listlessWarning, credentialWarning].filter((text) => text !== '').join('; ');
     const absent = forgeWorkflows.filter((path) => !presentWorkflows.includes(path));
     if (absent.length > 0) {
       return warn(
-        `${on}, but ${nameList(absent)} ${isAre(absent)} absent, so ${consequence(absent)}: re-run \`${CLI} init\`, which writes ${absent.length === 1 ? 'it' : 'them'} create-if-absent${listless.length > 0 ? `; ${listlessWarning}` : ''}`,
+        `${on}, but ${nameList(absent)} ${isAre(absent)} absent, so ${consequence(absent)}: re-run \`${CLI} init\`, which writes ${absent.length === 1 ? 'it' : 'them'} create-if-absent${joinedWarning !== '' ? `; ${joinedWarning}` : ''}`,
       );
     }
 
@@ -3128,20 +3147,20 @@ const FORGE_CHECK: Check = {
       const uncarried = forgeWorkflows.filter((path) => !pathAtRef(root, `origin/${branch}`, path));
       if (uncarried.length > 0) {
         return warn(
-          `${on}, but origin/${branch} does not carry ${nameList(uncarried)}, as this checkout last fetched it, and GitHub runs an issues or issue_comment workflow only from its default branch, so ${consequence(uncarried)} yet: commit ${uncarried.length === 1 ? 'it' : 'them'}, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}${listless.length > 0 ? ` ${listlessWarning}` : ''}`,
+          `${on}, but origin/${branch} does not carry ${nameList(uncarried)}, as this checkout last fetched it, and GitHub runs an issues or issue_comment workflow only from its default branch, so ${consequence(uncarried)} yet: commit ${uncarried.length === 1 ? 'it' : 'them'}, then run \`${WORKFLOW_SCOPE_COMMAND}\`, then \`${defaultBranchPushCommand(branch)}\`. ${WORKFLOW_SCOPE_REASON} ${defaultBranchPushReason(branch)}${joinedWarning !== '' ? ` ${joinedWarning}` : ''}`,
         );
       }
       carried = ` and origin/${branch} carries them`;
     }
-    if (listless.length > 0) {
-      return warn(`${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}; ${listlessWarning}`);
+    if (joinedWarning !== '') {
+      return warn(`${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}; ${joinedWarning}`);
     }
 
     const asked = ctx.probeGithub
       ? `the ${REMOTE_GITHUB_CHECK.id} check above reports what GitHub says`
       : `\`${CLI} doctor --check-github\` asks GitHub`;
     return pass(
-      `${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; a \`${COMMAND_HANDLE} <verb>\` comment (${nameList([...COMMAND_VERBS])}) steers it; a review requesting changes on the run's pull request starts a user-review round; and a run opens a draft pull request when it starts, marked ready for review when it completes. What this cannot see lives on GitHub — the label, the workflows GitHub knows (${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE}) and the pull-request setting; ${asked}`,
+      `${on}: ${WORKFLOW_TRIGGER_PATH} and ${WORKFLOW_CONTROL_PATH} are present${carried}. Labelling an issue with the ${TRIGGER_LABEL_VARIABLE} label (default \`${DEFAULT_TRIGGER_LABEL}\`) starts a task run; a \`${COMMAND_HANDLE} <verb>\` comment (${nameList([...COMMAND_VERBS])}) steers it; a mention of \`${COMMAND_HANDLE}\` anywhere else in a comment is read by an agent, which carries out ${nameList([...MENTION_ACT_VERBS])} and asks the commenter to confirm ${nameList([...MENTION_CONFIRM_VERBS])}; a review requesting changes on the run's pull request starts a user-review round; and a run opens a draft pull request when it starts, marked ready for review when it completes. What this cannot see lives on GitHub — the label, the workflows GitHub knows (${WORKFLOW_TRIGGER_FILE}, ${WORKFLOW_CONTROL_FILE}) and the pull-request setting; ${asked}`,
     );
   },
 };
