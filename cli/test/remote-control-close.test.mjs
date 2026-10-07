@@ -7,7 +7,7 @@
  * log line with no write to GitHub.** Each stopping case is asserted on the `action=stop` marker, the
  * `run cancel`, the `stopped` comment naming the actor and the reason, the `sdlc-harness: stopped`
  * label, and the absence of any `run delete`, artifact `DELETE` or `--method DELETE` on anything but a
- * state label. A close by a writer `HARNESS_RUN_ACTORS` does not admit is unauthorised; a branch
+ * state label. A deletion also reports on the branch's unmerged pull request still labelled running. A close by a writer `HARNESS_RUN_ACTORS` does not admit is unauthorised; a branch
  * deletion is never screened by that list, only a bot sender is. Each ignored case — an unauthorised closer, an issue with no start comment, a fork's pull
  * request, a pull request whose head branch is already gone from `origin`, a `reopened` action, a
  * deleted tag, a completed run, a branch already stopped — is asserted on stdout's one line and on the
@@ -283,6 +283,27 @@ test('branch deleted: the marker rides GitHub\'s default branch and the issue is
   const lines = f.calls().map((call) => call.line);
   assert.ok(lines.some((line) => line.startsWith(`api repos/${REPOSITORY}/contents/`) && line.includes(`?ref=${HEAD_SHA}`)), JSON.stringify(lines));
   assert.ok(!lines.some((line) => /\/collaborators\//.test(line)), JSON.stringify(lines));
+});
+
+test('branch deleted with its unmerged pull request still labelled running: #9 is commented and labelled stopped beside the issue', async (t) => {
+  const f = await closeFixture(t);
+  const result = await f.control('delete', deleted(), {
+    STUB_RUN_LIST: JSON.stringify([{ databaseId: 501, displayTitle: 'harness run feat_x', status: 'in_progress', headSha: HEAD_SHA, createdAt: '2026-01-01T00:00:00Z', url: 'https://example.test/runs/501' }]),
+    STUB_PRS: JSON.stringify([{ number: 9, isCrossRepository: false, mergedAt: null, labels: [{ name: 'sdlc-harness: running' }] }]),
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  const calls = f.calls();
+  const lines = calls.map((call) => call.line);
+  assert.ok(lines.includes(`pr list --repo ${REPOSITORY} --head feat_x --state all --json number,isCrossRepository,mergedAt,labels --limit 10`), JSON.stringify(lines));
+  assert.equal(comments(calls).length, 2, JSON.stringify(lines));
+  for (const n of [7, 9]) {
+    const [posted] = commentsOn(calls, n);
+    assert.ok(posted, `no comment on #${n}: ${JSON.stringify(lines)}`);
+    assert.match(posted.body, /Stopped because @alice deleted the branch `feat_x`\./);
+    assert.ok(posted.body.endsWith(`${MARKER('stopped', 'feat_x')}\n`), posted.body);
+    assert.ok(stoppedLabelOn(calls, n), JSON.stringify(lines));
+  }
+  assert.match(result.stdout, /stopped on feat_x reported on #7, #9/);
 });
 
 test('a close by a read user is one line naming the login and the reason, with no write', async (t) => {

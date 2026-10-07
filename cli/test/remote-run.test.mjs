@@ -56,12 +56,15 @@
  * run's issue as a comment naming no slash command, plus the state label, while a partial stop and a
  * coupling that is off post nothing**: every pre-existing case runs with `forge` unset and keeps its
  * exact call list. The stub answers `pr list` with `STUB_PRS` (`[]` when unset), a paginated comment
- * list with `STUB_ITEM_COMMENTS` (item number to comments) when set, an issue's label read with `STUB_LABELS`
+ * list with `STUB_ITEM_COMMENTS` (item number to comments, each comment's `id` passed through when it
+ * has one) when set, an issue's label read with `STUB_LABELS`
  * (`[]` when unset), a `contents/` read
  * with `STUB_CONTENTS` (a 404 when unset), and logs each `body=@<path>` call with that file's content
  * to `<log>.bodies`. A `stop --pr <n>` reports on #<n> though no open pull request is listed, and a
  * `stop --branch-gone` on a branch origin no longer has marks on GitHub's default branch, reads its
- * issue at the newest run's `headSha` and never offers `resume`.
+ * issue at the newest run's `headSha` and never offers `resume`; it also reports on each pull request
+ * of the branch, from its `pr list --state all`, that is same-repository, unmerged and still labelled
+ * running, parked or paused, and on no settled one.
  *
  * **For an expired state bundle, the rule is that it is told from an absent one and never read as a
  * first job**: a `STUB_ARTIFACTS` entry is a name (listed unexpired) or a whole `{name, expired,
@@ -144,7 +147,7 @@ if (line.startsWith('pr list')) process.stdout.write(process.env.STUB_PRS || '[]
 if (args[0] === 'api' && args[1] === '--paginate' && process.env.STUB_ITEM_COMMENTS !== undefined) {
   const item = /\\/issues\\/([0-9]+)\\/comments$/.exec(args[2] ?? '')?.[1];
   for (const c of JSON.parse(process.env.STUB_ITEM_COMMENTS)[item] ?? []) {
-    process.stdout.write(JSON.stringify({ login: c.user.login, at: c.created_at, body: c.body }) + '\\n');
+    process.stdout.write(JSON.stringify({ id: c.id, login: c.user.login, at: c.created_at, body: c.body }) + '\\n');
   }
 }
 else if (args[0] === 'api' && /^repos\\/[^/]+\\/[^/]+\\/issues\\/[0-9]+\\/labels$/.test(args[1])) process.stdout.write(process.env.STUB_LABELS || '[]');
@@ -1532,35 +1535,124 @@ test('stop --pr posts on that pull request although no open one is listed, and l
   assert.ok(sent.includes(`${LABEL_ON_7} -f labels[]=sdlc-harness: stopped`), sent.join('\n'));
 });
 
-test('stop --branch-gone marks on the default branch, reads the issue at the newest run\'s commit, and never offers resume', async (t) => {
+/** `forgeFixture` with `feat_x` deleted from origin and from the local refs. */
+async function goneFixture(t) {
   const fx = await forgeFixture(t);
   await runGit(fx.dir, ['push', '--quiet', '--no-verify', 'origin', '--delete', 'feat_x']);
   await runGit(fx.dir, ['branch', '--quiet', '-D', 'feat_x']);
   await runGit(fx.dir, ['update-ref', '-d', 'refs/remotes/origin/feat_x']);
   const remote = await runGit(fx.dir, ['ls-remote', '--heads', 'origin', 'feat_x']);
   assert.equal(remote.stdout.trim(), '', 'the fixture origin still carries feat_x');
+  return fx;
+}
 
-  const prompt = '# A task\n\nStarted from https://github.com/o/r/issues/7 by @alice, who applied the label `sdlc-harness`.\n';
-  const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', 'alice', '--branch-gone'], {
-    ...LOCAL_STOP,
-    STUB_REPO_VIEW: '{"nameWithOwner":"o/r","defaultBranchRef":{"name":"trunk"}}',
-    STUB_RUN_LIST: JSON.stringify([
-      { databaseId: 21, displayTitle: 'harness run feat_x', status: 'completed', headSha: 'aaaaaaa', createdAt: '2026-01-01T00:00:00Z' },
-      { databaseId: 22, displayTitle: 'harness run feat_x', status: 'completed', headSha: 'bbbbbbb', createdAt: '2026-01-02T00:00:00Z' },
-    ]),
-    STUB_CONTENTS: prompt,
-  });
+const GONE_PROMPT = '# A task\n\nStarted from https://github.com/o/r/issues/7 by @alice, who applied the label `sdlc-harness`.\n';
+/** A local `stop --branch-gone`: GitHub's default branch `trunk`, the newest run at `bbbbbbb`, the prompt served there. */
+const GONE_STOP = {
+  ...LOCAL_STOP,
+  STUB_REPO_VIEW: '{"nameWithOwner":"o/r","defaultBranchRef":{"name":"trunk"}}',
+  STUB_RUN_LIST: JSON.stringify([
+    { databaseId: 21, displayTitle: 'harness run feat_x', status: 'completed', headSha: 'aaaaaaa', createdAt: '2026-01-01T00:00:00Z' },
+    { databaseId: 22, displayTitle: 'harness run feat_x', status: 'completed', headSha: 'bbbbbbb', createdAt: '2026-01-02T00:00:00Z' },
+  ]),
+  STUB_CONTENTS: GONE_PROMPT,
+};
+const GONE_PR_LIST = 'pr list --repo o/r --head feat_x --state all --json number,isCrossRepository,mergedAt,labels --limit 10';
+/** Round 9's shape: #19 unfinished, #18 settled by an earlier stop, #13 merged, #21 a fork's. */
+const GONE_PRS = JSON.stringify([
+  { number: 19, isCrossRepository: false, mergedAt: null, labels: [{ name: 'sdlc-harness: running' }] },
+  { number: 18, isCrossRepository: false, mergedAt: null, labels: [{ name: 'sdlc-harness: stopped' }] },
+  { number: 13, isCrossRepository: false, mergedAt: '2026-01-01T00:00:00Z', labels: [{ name: 'sdlc-harness: running' }] },
+  { number: 21, isCrossRepository: true, mergedAt: null, labels: [{ name: 'sdlc-harness: running' }] },
+]);
+const PROGRESS_ON_19 = JSON.stringify({
+  19: [{
+    id: 501, user: { login: 'github-actions[bot]' }, created_at: '2026-01-02T00:00:00Z',
+    body: 'Progress of the harness run on `feat_x`:\n\n- Planning: done\n- Implementation: in progress\n- Branch review: not started\n- Done: not started\n\n<!-- sdlc-harness event=progress branch=feat_x -->\n',
+  }],
+});
+/** The item numbers every write the stub logged went to, comments and labels alike. */
+function writtenItems(fx) {
+  return joined(fx)
+    .map((line) => /^api --method (?:POST|DELETE) repos\/o\/r\/issues\/([0-9]+)\//.exec(line)?.[1])
+    .filter(Boolean);
+}
+
+test('stop --branch-gone marks on the default branch, reads the issue at the newest run\'s commit, and never offers resume', async (t) => {
+  const fx = await goneFixture(t);
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', 'alice', '--branch-gone'], GONE_STOP);
   assert.equal(result.status, 0, result.stderr);
   const sent = joined(fx);
   assert.equal(sent.filter((line) => line.startsWith('workflow run'))[0],
     'workflow run harness-run.yml --ref trunk -f action=stop -f branch=feat_x');
   assert.ok(sent.some((line) => line.startsWith(`api repos/o/r/contents/${LINEAGE_PROMPT}?ref=bbbbbbb`)), sent.join('\n'));
-  const [comment] = posted(fx);
+  assert.ok(sent.includes(GONE_PR_LIST), sent.join('\n'));
+  const comments = posted(fx);
+  assert.equal(comments.length, 1, sent.join('\n'));
+  const [comment] = comments;
   assert.match(comment.args.join(' '), new RegExp(`^${COMMENT_ON_7}`));
   assert.match(comment.body, /its branch was deleted, so the run cannot be resumed/);
   assert.match(comment.body, /workflow runs and their artifacts are kept/);
   assert.doesNotMatch(comment.body, /resume`/);
   assert.ok(sent.includes(`${LABEL_ON_7} -f labels[]=sdlc-harness: stopped`), sent.join('\n'));
+  assert.deepEqual([...new Set(writtenItems(fx))], ['7'], sent.join('\n'));
+  assert.match(result.stdout, /report: stopped on feat_x reported on #7\n/);
+});
+
+test('stop --branch-gone reports on the unfinished pull request of the branch and on no settled, merged or fork one', async (t) => {
+  const fx = await goneFixture(t);
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', 'alice', '--branch-gone'], {
+    ...GONE_STOP, STUB_PRS: GONE_PRS, STUB_ITEM_COMMENTS: PROGRESS_ON_19,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const sent = joined(fx);
+  const comments = posted(fx).filter((call) => call.args[1] === '--method' && call.args[2] === 'POST');
+  assert.deepEqual(comments.map((call) => call.args[3]), ['repos/o/r/issues/7/comments', 'repos/o/r/issues/19/comments']);
+  for (const { body } of comments) {
+    assert.match(body, /its branch was deleted, so the run cannot be resumed/);
+    assert.match(body, /Stopped by @alice\./);
+    assert.match(body, /event=stopped branch=feat_x/);
+  }
+  assert.deepEqual(sent.filter((line) => line.endsWith('-f labels[]=sdlc-harness: stopped')), [
+    `${LABEL_ON_7} -f labels[]=sdlc-harness: stopped`,
+    'api --method POST repos/o/r/issues/19/labels -f labels[]=sdlc-harness: stopped',
+  ]);
+  assert.ok(sent.some((line) => line.startsWith('api --paginate repos/o/r/issues/19/comments')), sent.join('\n'));
+  const patches = posted(fx).filter((call) => call.args.join(' ').startsWith('api --method PATCH repos/o/r/issues/comments/501'));
+  assert.equal(patches.length, 1, sent.join('\n'));
+  assert.match(patches[0].body, /- Implementation: stopped\n/);
+  assert.doesNotMatch(patches[0].body, /in progress/);
+  assert.deepEqual([...new Set(writtenItems(fx))].sort(), ['19', '7'], sent.join('\n'));
+  for (const n of ['18', '13', '21']) {
+    assert.ok(!sent.some((line) => line.includes(`/issues/${n}/`)), `#${n} was touched:\n${sent.join('\n')}`);
+  }
+  assert.match(result.stdout, /report: stopped on feat_x reported on #7, #19\n/);
+});
+
+test('stop --branch-gone with no issue known still reports on the unfinished pull request', async (t) => {
+  const fx = await goneFixture(t);
+  const { STUB_CONTENTS: _unread, ...env } = GONE_STOP;
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', 'alice', '--branch-gone'], { ...env, STUB_PRS: GONE_PRS });
+  assert.equal(result.status, 0, result.stderr);
+  const sent = joined(fx);
+  assert.deepEqual(posted(fx).map((call) => call.args[3]), ['repos/o/r/issues/19/comments']);
+  assert.ok(sent.includes('api --method POST repos/o/r/issues/19/labels -f labels[]=sdlc-harness: stopped'), sent.join('\n'));
+  assert.deepEqual([...new Set(writtenItems(fx))], ['19'], sent.join('\n'));
+  assert.match(result.stdout, /report: stopped on feat_x reported on #19\n/);
+});
+
+test('stop --branch-gone whose pull request listing fails still reports on the issue, with one line naming the listing', async (t) => {
+  const fx = await goneFixture(t);
+  const result = await remoteRun(fx, ['stop', 'feat_x', '--actor', 'alice', '--branch-gone'], {
+    ...GONE_STOP, STUB_PRS: GONE_PRS, STUB_FAIL_ON: 'pr list',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const sent = joined(fx);
+  assert.deepEqual(posted(fx).map((call) => call.args[3]), ['repos/o/r/issues/7/comments']);
+  assert.ok(sent.includes(`${LABEL_ON_7} -f labels[]=sdlc-harness: stopped`), sent.join('\n'));
+  assert.deepEqual([...new Set(writtenItems(fx))], ['7'], sent.join('\n'));
+  assert.equal(result.stderr.split('\n').filter((line) => line.includes('listing the pull requests of feat_x in every state failed')).length,
+    1, result.stderr);
 });
 
 test('--branch-gone and --pr on another verb are usage errors that call nothing', async (t) => {

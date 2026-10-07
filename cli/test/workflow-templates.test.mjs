@@ -62,7 +62,13 @@
  * deleted ref only when it is a branch; the checkout's `ref` the default branch, never the pull
  * request's merge commit; `remote-run.sh control` its only call into the script family, its step
  * ending `|| [ $? -eq 2 ]` so that, run under `bash -e -o pipefail`, a replied refusal (exit 2)
- * passes and 1, 3 and 4 fail; no `secrets.` reference; one `concurrency:` group on the job,
+ * passes and 1, 3 and 4 fail; `secrets.` on exactly two lines, the act step's `IN_OAUTH` and
+ * `IN_API`, each the empty string unless the event is `issue_comment` and neither at job level;
+ * `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin` before the act
+ * step, each `if: github.event_name == 'issue_comment'` and `continue-on-error: true`, the last
+ * reading `CLI_VERSION_VARIABLE` from `harness-run.yml`, cloning the release-tag prefix that file's
+ * `Install the pinned plugin` step clones, and writing `HARNESS_MENTION_PLUGIN_DIR` to
+ * `$GITHUB_ENV`; one `concurrency:` group on the job,
  * `harness-review-` plus the head ref for a review and the run's own id for a comment, with
  * `cancel-in-progress: false`, so review jobs on one branch run one at a time and no comment job is
  * ever replaced; no template token; every expression spaced, and none inside a `run:` block; the
@@ -86,9 +92,12 @@ import test from 'node:test';
 
 import { PACKAGE_ROOT } from './helpers/fixture.mjs';
 import {
+  API_KEY_SECRET,
+  CLI_VERSION_VARIABLE,
   COMMAND_HANDLE,
   COMMENT_MARKER,
   DEFAULT_TRIGGER_LABEL,
+  OAUTH_TOKEN_SECRET,
   POLL_STATE_ARTIFACT_NAME,
   REVIEW_ROUND_STATE,
   RUN_ACTORS_VARIABLE,
@@ -747,8 +756,44 @@ test('control: under bash -e -o pipefail the step passes on exit 0 and 2 and fai
   }
 });
 
-test('control references no secret, and serializes review jobs per head branch but never comment jobs', () => {
-  assert.doesNotMatch(CONTROL_TEXT, /secrets\./);
+/** Every step of the control job, as `{ name, text }` in file order. */
+function controlSteps() {
+  const out = [];
+  CONTROL_LINES.forEach((line, i) => {
+    const m = /^\s*- name: (.*)$/.exec(line);
+    if (m !== null) out.push({ name: m[1], text: [line, ...blockUnder(i, CONTROL_LINES)].join('\n') });
+  });
+  return out;
+}
+
+const ACT_STEP = 'Act on the comment, review, close or deletion';
+const COMMENT_STEPS = ['Set up Node', 'Install the claude CLI when absent', 'Fetch the pinned plugin'];
+
+/** The release-tag prefix a step's `tag=` line clones, the version variable stripped. */
+function tagPrefix(stepText) {
+  const m = /^\s*tag="([^"$]+)\$/m.exec(stepText);
+  assert.ok(m !== null, `a tag= line in ${stepText.split('\n')[0]}`);
+  return m[1];
+}
+
+test('control passes the credential to the act step of a comment job alone, and serializes review jobs per head branch but never comment jobs', () => {
+  const secretLines = CONTROL_LINES.filter((l) => !/^\s*#/.test(l) && l.includes('secrets.'));
+  assert.deepEqual(
+    secretLines.map((l) => l.trim()),
+    [
+      `IN_OAUTH: \${{ github.event_name == 'issue_comment' && secrets.${OAUTH_TOKEN_SECRET} || '' }}`,
+      `IN_API: \${{ github.event_name == 'issue_comment' && secrets.${API_KEY_SECRET} || '' }}`,
+    ],
+  );
+  assert.ok(!CONTROL_LINES.some((l) => /^ {6}IN_(OAUTH|API):/.test(l)), 'a credential at job level');
+  const act = controlSteps().find((s) => s.name === ACT_STEP);
+  assert.ok(act !== undefined);
+  const actEnv = blockUnder(
+    act.text.split('\n').findIndex((l) => /^\s*env:$/.test(l)),
+    act.text.split('\n'),
+  ).map((l) => l.trim());
+  assert.deepEqual(actEnv, secretLines.map((l) => l.trim()));
+
   const at = CONTROL_LINES.findIndex((l) => /^ {4}concurrency:$/.test(l));
   assert.notEqual(at, -1, 'the control job declares a concurrency group');
   assert.equal(CONTROL_LINES.filter((l) => /^\s*concurrency:/.test(l)).length, 1);
@@ -757,6 +802,42 @@ test('control references no secret, and serializes review jobs per head branch b
     "group: ${{ github.event_name == 'pull_request_review' && format('harness-review-{0}', github.event.pull_request.head.ref) || format('harness-control-{0}', github.run_id) }}",
     'cancel-in-progress: false',
   ]);
+});
+
+test('control: the comment-only steps run before the act step, on a comment alone, never failing the job', () => {
+  const names = controlSteps().map((s) => s.name);
+  const act = names.indexOf(ACT_STEP);
+  assert.notEqual(act, -1);
+  for (const name of COMMENT_STEPS) {
+    const i = names.indexOf(name);
+    assert.ok(i !== -1 && i < act, `${name} comes before the act step`);
+    const { text } = controlSteps()[i];
+    assert.match(text, /^\s*if: github\.event_name == 'issue_comment'$/m, `${name}'s if:`);
+    assert.match(text, /^\s*continue-on-error: true$/m, `${name} is continue-on-error`);
+  }
+  assert.ok(names.indexOf('Fetch the pinned plugin') > names.indexOf('Install the claude CLI when absent'));
+});
+
+test("control: Fetch the pinned plugin reads harness-run.yml's pin, clones its release tag and hands the directory on", () => {
+  const fetch = controlSteps().find((s) => s.name === 'Fetch the pinned plugin').text;
+  const [body] = runBodies(fetch.split('\n'));
+  assert.ok(body.includes(`${CLI_VERSION_VARIABLE}:`), 'reads the pin variable');
+  assert.ok(body.includes(`.github/workflows/${WORKFLOW_RUN_FILE}`), 'reads it from harness-run.yml');
+  assert.ok(body.includes('autonomous-sdlc-harness--v'), 'clones the release tag');
+  assert.match(body, /^\s*echo "HARNESS_MENTION_PLUGIN_DIR=\$plugin_dir" >> "\$GITHUB_ENV"$/m);
+  assert.ok(!body.includes('claude plugin install'), 'installs nothing');
+  const install = stepCarrying('claude plugin install');
+  assert.equal(tagPrefix(fetch), tagPrefix(install));
+});
+
+test('control: the claude CLI install mirrors harness-run.yml', () => {
+  const body = (lines, name) => {
+    const at = lines.findIndex((l) => l.trim() === `- name: ${name}`);
+    assert.notEqual(at, -1);
+    return runBodies([lines[at], ...blockUnder(at, lines)]).join('\n').trim().split('\n').map((l) => l.trim());
+  };
+  const name = 'Install the claude CLI when absent';
+  assert.deepEqual(body(CONTROL_LINES, name), body(LINES, name));
 });
 
 test('control carries no template token, and every expression is spaced and outside run blocks', () => {

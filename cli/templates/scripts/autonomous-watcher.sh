@@ -1357,7 +1357,10 @@ job_report() {
 #                       API-overload self-pause. `user` and `budget` are written
 #                       before the PAUSE is dropped, while still `running`;
 #                       classify_run_exit settles the reason as the run pauses,
-#                       `user` first, then `usage`, then `budget`. Cleared when
+#                       `user` first, then `usage`, then `budget`. A `user` still
+#                       set when the run exits `parked` or `park_loop` is read by
+#                       `remote-run.sh report` for that park's comment, and
+#                       run_job clears it at the job's end. Cleared when
 #                       job mode relaunches the run — plus `killed`, a registry-only
 #                       value `remote-run.sh sync` derives when a finished run's
 #                       bundle still says `running`, or a finished run left no
