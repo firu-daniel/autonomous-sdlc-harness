@@ -24,7 +24,7 @@ Top risks: The likeliest regression is Task 1's move of `control`'s gates into a
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12_round10_findings/task_<K>_plan.md`. The entries are ordered bottom-up by ship sequence in the configured layer order: `cli` first, with the catch-all `general` layer last. No task is in `plugin`.
 
-1. [ ] **Task 1** — `remote-run.sh control --needs-agent`: the actor and mention check, run alone, posting nothing _(layer: cli)_ _(points: 18)_
+1. [x] **Task 1** — `remote-run.sh control --needs-agent`: the actor and mention check, run alone, posting nothing _(layer: cli)_ _(points: 18)_
 2. [ ] **Task 2** — `harness-control.yml` installs `claude` and fetches the plugin only when the comment needs the agent _(layer: cli)_ _(points: 14)_
 3. [ ] **Task 3** — `docs/github-run-control.md`: the install gated on the agent check, and the `--restricted` row repointed _(layer: general)_ _(points: 10)_
 4. [ ] **Task 4** — `docs/development.md` Gate 12: step 11 drives `claude --restricted` directly, and the skipped install in (j) and (xv) _(layer: general)_ _(points: 12)_

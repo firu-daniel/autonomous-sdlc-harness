@@ -69,3 +69,8 @@
 - `bash -n cli/templates/scripts/remote-run.sh` reports nothing, and the script stays bash 3.2-clean: no `${var,,}`, no `declare -A`, no `mapfile`.
 - Grep `verb_control` and the new gate function: `HARNESS_REMOTE_STOP`, `rerun_actor_listed` and `authorise_actor` each appear in exactly one gate call site. That confirms the gates have one home.
 - Walk the header's `REPRO` `needs-agent` cases by hand against a throwaway fixture with the `gh` stub, as the `REPRO` block prescribes. The exits and the `"$s.log"` lines read as written.
+
+**Deviations from plan:**
+
+- The `REPRO` hand walk was not run separately: its three `needs-agent` cases rest on the new suite's equivalent executed cases (the admitted writer's mention, the exact form, `HARNESS_RUN_ACTORS=bob`), which drive the same script with a logging `gh` stub.
+- The existing control suites (`remote-control*.test.mjs`) that would execute plain `control`'s byte-identity were not run by this unit — deferred to the Run gates phase; the identity rests on reading the refactor (`control_gates` sets the same three strings `control_refuse` took, and `verb_control` passes them unchanged) and on the new suite's tie case.
