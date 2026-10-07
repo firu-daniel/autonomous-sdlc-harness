@@ -27,7 +27,7 @@
 
 1. [x] **Finding 2** — Add the `gh run view <run id> --log` command to Gate 12 (xv)(d), whose pass condition reads the `needs-agent:` log line. _(layer: general)_
 2. [x] **Finding 3** — Narrow (xiv)(j)'s **What it settles** to the first clause of the new `$GITHUB_OUTPUT` row. _(layer: general)_
-3. [ ] **Finding 1** — Make Gate 12 (xiv)(j) step 11 fail a `Grep` or `Glob` result that names `outside.txt`, and pass a confined result that is not a refusal. _(layer: general)_
+3. [x] **Finding 1** — Make Gate 12 (xiv)(j) step 11 fail a `Grep` or `Glob` result that names `outside.txt`, and pass a confined result that is not a refusal. _(layer: general)_
 
 ---
 
