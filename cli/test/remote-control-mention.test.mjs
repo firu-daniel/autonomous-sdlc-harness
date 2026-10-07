@@ -345,6 +345,25 @@ test('each gate refuses a mention with today\'s text and no agent call', async (
     /no harness run was started from this issue/);
 });
 
+test('a writer HARNESS_RUN_ACTORS does not admit is refused before the agent, as are its unset default and an unlisted re-runner', async (t) => {
+  const mention = "@sdlc-harness what's the status on this?";
+
+  const unlisted = await controlFixture(t);
+  assertRefusedBeforeAgent(unlisted, await unlisted.control(mention, {}, { HARNESS_RUN_ACTORS: 'bob' }), 2,
+    /^@alice: `@sdlc-harness` was not run: @alice is not on the repository variable HARNESS_RUN_ACTORS/);
+
+  const unset = await controlFixture(t);
+  assertRefusedBeforeAgent(unset, await unset.control(mention, {}, { HARNESS_RUN_ACTORS: '' }), 2,
+    /^@alice: `@sdlc-harness` was not run: the repository variable HARNESS_RUN_ACTORS is unset/);
+
+  const rerun = await controlFixture(t);
+  assertRefusedBeforeAgent(rerun, await rerun.control(mention, {}, {
+    HARNESS_RUN_ACTORS: 'alice',
+    GITHUB_RUN_ATTEMPT: '2',
+    GITHUB_TRIGGERING_ACTOR: 'mallory',
+  }), 2, /^@alice: `@sdlc-harness` was not run: this job is a re-run by @mallory, .*@mallory is not on the repository variable HARNESS_RUN_ACTORS/);
+});
+
 test('no credential is one reply listing the commands, exit 2, and no agent call', async (t) => {
   const f = await controlFixture(t);
   const body = assertRefusedBeforeAgent(f, await f.control("Let's @sdlc-harness pause", {}, { IN_OAUTH: '' }), 2,
