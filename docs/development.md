@@ -1976,6 +1976,10 @@ gh issue view <issue number> --repo <owner>/<scratch-repo> --comments
 ```
 
 ```
+gh run view <run id> --repo <owner>/<scratch-repo> --log
+```
+
+```
 gh run view <run id> --repo <owner>/<scratch-repo> --json jobs --jq '.jobs[].steps[] | [.name, .conclusion] | @tsv'
 ```
 
