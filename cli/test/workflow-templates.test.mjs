@@ -60,12 +60,16 @@
  * `COMMAND_HANDLE`, `COMMENT_MARKER`, `REVIEW_ROUND_STATE` and `STATE_LABEL_PREFIX`, comparing the head repository with
  * `github.repository` for a review and a closed pull request, so a fork's is skipped, and admitting a
  * deleted ref only when it is a branch; the checkout's `ref` the default branch, never the pull
- * request's merge commit; `remote-run.sh control` its only call into the script family, its step
- * ending `|| [ $? -eq 2 ]` so that, run under `bash -e -o pipefail`, a replied refusal (exit 2)
+ * request's merge commit; `remote-run.sh control` its only call into the script family, made twice:
+ * once as `control --needs-agent` by the `needs` step, whose body, run under `bash -e -o pipefail`,
+ * passes on every exit and writes `agent=no` to `$GITHUB_OUTPUT` for exit 2 alone, and once by the
+ * act step, ending `|| [ $? -eq 2 ]` so that, run under `bash -e -o pipefail`, a replied refusal (exit 2)
  * passes and 1, 3 and 4 fail; `secrets.` on exactly two lines, the act step's `IN_OAUTH` and
  * `IN_API`, each the empty string unless the event is `issue_comment` and neither at job level;
- * `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin` before the act
- * step, each `if: github.event_name == 'issue_comment'` and `continue-on-error: true`, the last
+ * the `needs` step, `if: github.event_name == 'issue_comment'` and `continue-on-error: true`, before
+ * `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin`, which come before
+ * the act step, each `if: github.event_name == 'issue_comment' && steps.needs.outputs.agent != 'no'`
+ * and `continue-on-error: true`, the last
  * reading `CLI_VERSION_VARIABLE` from `harness-run.yml`, cloning the release-tag prefix that file's
  * `Install the pinned plugin` step clones, and writing `HARNESS_MENTION_PLUGIN_DIR` to
  * `$GITHUB_ENV`; one `concurrency:` group on the job,
@@ -717,19 +721,40 @@ test('control: the checkout is the default branch', () => {
   assert.deepEqual(refs, ['ref: ${{ github.event.repository.default_branch }}']);
 });
 
+/** Every step of the control job, as `{ name, text }` in file order. */
+function controlSteps() {
+  const out = [];
+  CONTROL_LINES.forEach((line, i) => {
+    const m = /^\s*- name: (.*)$/.exec(line);
+    if (m !== null) out.push({ name: m[1], text: [line, ...blockUnder(i, CONTROL_LINES)].join('\n') });
+  });
+  return out;
+}
+
+const NEEDS_STEP = 'Decide whether the comment needs the agent';
+const ACT_STEP = 'Act on the comment, review, close or deletion';
+const COMMENT_STEPS = ['Set up Node', 'Install the claude CLI when absent', 'Fetch the pinned plugin'];
+
 test('control runs remote-run.sh control and nothing else of the family', () => {
-  const calls = runBodies(CONTROL_LINES).flatMap((body) =>
+  const bodies = runBodies(CONTROL_LINES);
+  const calls = bodies.flatMap((body) =>
     [...body.matchAll(/([A-Za-z0-9_-]+\.sh)"?\s+(\S*)/g)].map((m) => `${m[1]} ${m[2]}`),
   );
-  assert.deepEqual(calls, ['remote-run.sh control']);
+  assert.deepEqual(calls, ['remote-run.sh control', 'remote-run.sh control']);
+  assert.equal(bodies.filter((b) => b.includes('remote-run.sh" control --needs-agent')).length, 1);
 });
 
-/** The control step's inline `run:` value. */
-function controlStepRun() {
-  const bodies = runBodies(CONTROL_LINES).filter((b) => b.includes('remote-run.sh" control'));
+/** The `run:` body of one control step, selected by its name. */
+function controlStepBody(name) {
+  const step = controlSteps().find((s) => s.name === name);
+  assert.ok(step !== undefined, `a control step is named ${name}`);
+  const bodies = runBodies(step.text.split('\n'));
   assert.equal(bodies.length, 1);
   return bodies[0];
 }
+
+/** The act step's inline `run:` value. */
+const controlStepRun = () => controlStepBody(ACT_STEP);
 
 test('control: the step maps a replied refusal to success and nothing else', () => {
   assert.equal(controlStepRun(), 'bash "$SCRIPTS_DIR/remote-run.sh" control || [ $? -eq 2 ]');
@@ -756,18 +781,31 @@ test('control: under bash -e -o pipefail the step passes on exit 0 and 2 and fai
   }
 });
 
-/** Every step of the control job, as `{ name, text }` in file order. */
-function controlSteps() {
-  const out = [];
-  CONTROL_LINES.forEach((line, i) => {
-    const m = /^\s*- name: (.*)$/.exec(line);
-    if (m !== null) out.push({ name: m[1], text: [line, ...blockUnder(i, CONTROL_LINES)].join('\n') });
-  });
-  return out;
-}
-
-const ACT_STEP = 'Act on the comment, review, close or deletion';
-const COMMENT_STEPS = ['Set up Node', 'Install the claude CLI when absent', 'Fetch the pinned plugin'];
+test('control: under bash -e -o pipefail the agent check passes on every exit and answers no on exit 2 alone', () => {
+  const body = controlStepBody(NEEDS_STEP);
+  const root = mkdtempSync(join(tmpdir(), 'harness-control-needs-'));
+  try {
+    for (const [code, agent] of [[0, 'yes'], [1, 'yes'], [2, 'no'], [3, 'yes']]) {
+      const dir = join(root, String(code));
+      mkdirSync(dir);
+      writeFileSync(
+        join(dir, 'remote-run.sh'),
+        `[ "$#" -eq 2 ] && [ "$1" = control ] && [ "$2" = --needs-agent ] || exit 99\nexit ${code}\n`,
+      );
+      const output = join(dir, 'github-output');
+      writeFileSync(output, '');
+      const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', body], {
+        env: { ...process.env, SCRIPTS_DIR: dir, GITHUB_OUTPUT: output },
+        encoding: 'utf8',
+      });
+      assert.equal(r.error, undefined);
+      assert.equal(r.status, 0, `exit ${code} passes the step: ${r.stdout}${r.stderr}`);
+      assert.equal(readFileSync(output, 'utf8'), `agent=${agent}\n`, `exit ${code} writes agent=${agent}`);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 /** The release-tag prefix a step's `tag=` line clones, the version variable stripped. */
 function tagPrefix(stepText) {
@@ -804,15 +842,25 @@ test('control passes the credential to the act step of a comment job alone, and 
   ]);
 });
 
-test('control: the comment-only steps run before the act step, on a comment alone, never failing the job', () => {
+test('control: the comment-only steps run after the agent check and before the act step, on a comment the check did not answer no, never failing the job', () => {
   const names = controlSteps().map((s) => s.name);
   const act = names.indexOf(ACT_STEP);
   assert.notEqual(act, -1);
+  const needs = names.indexOf(NEEDS_STEP);
+  assert.ok(needs !== -1 && needs < names.indexOf('Set up Node'), `${NEEDS_STEP} comes before Set up Node`);
+  const needsText = controlSteps()[needs].text;
+  assert.match(needsText, /^\s*id: needs$/m);
+  assert.match(needsText, /^\s*if: github\.event_name == 'issue_comment'$/m, `${NEEDS_STEP}'s if:`);
+  assert.match(needsText, /^\s*continue-on-error: true$/m, `${NEEDS_STEP} is continue-on-error`);
   for (const name of COMMENT_STEPS) {
     const i = names.indexOf(name);
     assert.ok(i !== -1 && i < act, `${name} comes before the act step`);
     const { text } = controlSteps()[i];
-    assert.match(text, /^\s*if: github\.event_name == 'issue_comment'$/m, `${name}'s if:`);
+    assert.match(
+      text,
+      /^\s*if: github\.event_name == 'issue_comment' && steps\.needs\.outputs\.agent != 'no'$/m,
+      `${name}'s if:`,
+    );
     assert.match(text, /^\s*continue-on-error: true$/m, `${name} is continue-on-error`);
   }
   assert.ok(names.indexOf('Fetch the pinned plugin') > names.indexOf('Install the claude CLI when absent'));

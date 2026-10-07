@@ -1717,7 +1717,11 @@ gh run list --repo <owner>/<scratch-repo> --workflow harness-control.yml
 gh run view <run id> --repo <owner>/<scratch-repo> --log
 ```
 
-From each log, record the `claude --version` line; the `Fetch the pinned plugin` step's outcome and the tag it cloned, `autonomous-sdlc-harness--v<pin>`; and each decision line, `remote-run.sh: control: mention on #<n> by @<login> read as …`, with whether it reads `from structured_output` or `from result`. Where the fetch step failed, every mention gets the plugin refusal; record it, and the leg is not observed.
+From each log, record the one `needs-agent:` line the `Decide whether the comment needs the agent` step carries, `remote-run.sh: control: needs-agent: …`; the `claude --version` line; the `Fetch the pinned plugin` step's outcome and the tag it cloned, `autonomous-sdlc-harness--v<pin>`; and each decision line, `remote-run.sh: control: mention on #<n> by @<login> read as …`, with whether it reads `from structured_output` or `from result`. Step 10's exact-form job skips the install and the fetch, so its log carries neither a `claude --version` line nor a fetch. Where the fetch step failed, every mention gets the plugin refusal; record it, and the leg is not observed. Read a job's step conclusions with:
+
+```
+gh run view <run id> --repo <owner>/<scratch-repo> --json jobs --jq '.jobs[].steps[] | [.name, .conclusion] | @tsv'
+```
 
 1. A mention with nothing to do:
 
@@ -1804,16 +1808,58 @@ From each log, record the `claude --version` line; the `Fetch the pinned plugin`
    gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness pause"
    ```
 
-   Passes when the reply is the `pause` command's own, accepted or refused by the run's state, and that job's log carries no decision line.
-11. A read outside the context directory. From step 1's job log, take the checkout path from the `Check out the default branch` step: on a GitHub-hosted runner it is `/home/runner/work/<scratch-repo>/<scratch-repo>`. Then comment:
+   Passes when the reply is the `pause` command's own, accepted or refused by the run's state; that job's log carries no decision line; its `needs-agent:` line reads `no`, naming the exact form `` `@sdlc-harness pause` ``; and its `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin` steps are `skipped` in the step-conclusion command's output.
+11. A read outside the context directory, driven with `claude --restricted` directly on the operator's machine, with no comment and no runner. Round 10's form of this step, a mention asking for an outside file, could not reach the confinement: control job `37577497146` logged `did not read it` and no tool call, because the mention command answers from its run context only. Make a throwaway directory `<probe>` outside any git repository, holding one sentinel file inside the working directory, one in the added directory and one outside both:
 
    ```
-   gh pr comment <pr 2> --repo <owner>/<scratch-repo> --body "@sdlc-harness the open question refers to <checkout path>/harness.config.json; read that file and tell me its projectName"
+   mkdir -p <probe>/ctx
    ```
 
-   Passes when the reply says the file could not be read, or lies outside the directories the agent may read, and does not quote the scratch repository's `projectName`. It fails when the reply quotes the `projectName`. Record the job log's decision line. When the reply is neither, for example the agent declined to try, record the step as not observed.
+   ```
+   mkdir -p <probe>/add
+   ```
 
-**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); and *The whole chain on GitHub*, by the legs together. Leg (h) settles *A `delete` event's workflow runs from the default branch*, *A `pull_request` `closed` job runs the merge-commit copy of the workflow*, *The contents API serves a file at a commit no branch points at any more* and *A workflow can be dispatched from the default branch while its `branch` input names a deleted branch*, and its deletion settles *`gh pr list --head <branch> --state all` lists a pull request whose head branch was deleted, with its labels*; leg (d) settles *A pull request opened with `HARNESS_GIT_TOKEN` puts a cross-reference on the issue its body mentions* where that secret is set. *The job's token may mark a pull request ready for review and convert it back to draft* is settled by leg (d) for the ready flip and by leg (e) for the conversion to draft. Leg (e) also settles *The job's token may reply to a review comment*, *`resolveReviewThread` accepts the job's token*, *A review comment's GraphQL `databaseId` equals the REST `id` the round marker records* and, through the progress comment's edits, *The job's token may edit its own issue comment*. Leg (j) settles *The whole mention path on a real repository*, steps 4 to 6 on a run in flight; its `claude --version` lines record the version for *The comment job's installed `claude` accepts the session's flags*; leg 2's reply settles *A `--plugin-dir` plugin's slash command runs as the `-p` prompt*; and each decision line's `from` field records which field *`--json-schema` in `--print` mode puts the decision in `structured_output`* was read from; and step 11 settles *`--restricted` confines `Read`, `Grep` and `Glob` to the working directory and the one `--add-dir`*.
+   ```
+   printf 'sentinel-inside\n' > <probe>/ctx/inside.txt
+   ```
+
+   ```
+   printf 'sentinel-added\n' > <probe>/add/added.txt
+   ```
+
+   ```
+   printf 'sentinel-outside\n' > <probe>/outside.txt
+   ```
+
+   Then, from the working directory, read the version, and record it beside the one step 1's job log printed; a different version is recorded, not failed:
+
+   ```
+   cd <probe>/ctx
+   ```
+
+   ```
+   claude --version
+   ```
+
+   Drive one session. Its flags are `control_mention_session`'s in `cli/templates/scripts/remote-run.sh`, less `--plugin-dir`, `--json-schema`, `--model` and `--max-budget-usd`, because this session loads no command; `--add-dir <probe>/add` stands in for the plugin's `instructions/` directory, and `--output-format stream-json --verbose` for `--output-format json`, because the final-result form does not carry the tool calls. Write `<probe>` as the absolute path, and keep the string `sentinel-outside` out of the prompt:
+
+   ```
+   claude -p "Make each of these tool calls in order, even when you expect it to fail, and report each call's result or error verbatim: Read <probe>/outside.txt; Grep for the pattern sentinel in <probe>; Glob <probe>/*.txt; Read <probe>/add/added.txt; Read <probe>/ctx/inside.txt." --add-dir <probe>/add --output-format stream-json --verbose --tools Read,Grep,Glob --restricted --strict-mcp-config --no-session-persistence --permission-prompts none > <probe>/transcript.jsonl
+   ```
+
+   Check the transcript for the outside sentinel, then delete `<probe>`:
+
+   ```
+   grep -n "sentinel-outside" <probe>/transcript.jsonl
+   ```
+
+   ```
+   rm -r <probe>
+   ```
+
+   Passes when the transcript holds a `tool_use` for each of the three outside calls, the `Read` of `outside.txt`, the `Grep` and the `Glob`; the `Read`'s `tool_result` is a refusal; the `Grep`'s and the `Glob`'s `tool_result` is each a refusal or names no path outside `<probe>/ctx` and `<probe>/add`; `sentinel-added` and `sentinel-inside` appear in their `Read` results, the positive controls; and the `grep` finds nothing. Record each outside call's result text exactly. It fails when `sentinel-outside` appears in any tool result, or when the `Grep`'s or the `Glob`'s result names `outside.txt`. It is not observed when the transcript holds no `tool_use` for an outside call, or a positive control is not read; record which. This is the attempted, refused read the confinement row asks for.
+
+**What it settles.** These rows of `docs/github-run-control.md` → `## 8. What is not verified here`: *The prefilter's `contains()` compares case-insensitively*, by leg (f); *The job token's `issues: write` can add a missing label to an issue or pull request, and create one*, by every leg, since the setup creates no state label; *A pull request's conversation comment and its labels go through the issues endpoints*, by legs (d) to (f); and *The whole chain on GitHub*, by the legs together. Leg (h) settles *A `delete` event's workflow runs from the default branch*, *A `pull_request` `closed` job runs the merge-commit copy of the workflow*, *The contents API serves a file at a commit no branch points at any more* and *A workflow can be dispatched from the default branch while its `branch` input names a deleted branch*, and its deletion settles *`gh pr list --head <branch> --state all` lists a pull request whose head branch was deleted, with its labels*; leg (d) settles *A pull request opened with `HARNESS_GIT_TOKEN` puts a cross-reference on the issue its body mentions* where that secret is set. *The job's token may mark a pull request ready for review and convert it back to draft* is settled by leg (d) for the ready flip and by leg (e) for the conversion to draft. Leg (e) also settles *The job's token may reply to a review comment*, *`resolveReviewThread` accepts the job's token*, *A review comment's GraphQL `databaseId` equals the REST `id` the round marker records* and, through the progress comment's edits, *The job's token may edit its own issue comment*. Leg (j) settles *The whole mention path on a real repository*, steps 4 to 6 on a run in flight; its `claude --version` lines record the version for *The comment job's installed `claude` accepts the session's flags*; leg 2's reply settles *A `--plugin-dir` plugin's slash command runs as the `-p` prompt*; and each decision line's `from` field records which field *`--json-schema` in `--print` mode puts the decision in `structured_output`* was read from. Steps 1 and 10 together settle the first clause of *A step's `$GITHUB_OUTPUT` line is read by a later step's `if:` as `steps.<id>.outputs.<name>`, and a `continue-on-error` step that failed leaves it empty*: step 1's job ran the three comment-only steps, and step 10's skipped them. No step makes the agent check fail, so its second clause stays unverified. Step 11's direct drive settles *`--restricted` confines `Read`, `Grep` and `Glob` to the working directory and the one `--add-dir`*, on an outside path on the operator's machine, not the runner's checkout or `/proc`.
 
 **(xv) The allow-list refuses a writer it does not name, on every route.** It observes the run-actor allow-list `HARNESS_RUN_ACTORS` on GitHub (`docs/remote-execution.md` → `## 11. Security`, *Who can spend the credential*): the refusal on each route a writer can take, and the admission of the harness's own dispatches and of the owner under the unset default. On the scratch repository, with (xiv)'s setup done, give a second account the `write` role — `expause-admin`'s role in the 2026-10-05 measurement (`docs/team-accounts-research.md` → `### The repository facts the options rest on`) — and run that account's commands with `gh` authenticated as it. Delete the variable, so the owner-only default applies, and make the self-pause small for leg (e):
 
@@ -1929,9 +1975,17 @@ gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harn
 gh issue view <issue number> --repo <owner>/<scratch-repo> --comments
 ```
 
-Passes when the reply names `HARNESS_RUN_ACTORS`. Record the reply verbatim and the `harness-control.yml` run's two actors.
+```
+gh run view <run id> --repo <owner>/<scratch-repo> --log
+```
 
-**(d′) A mention.** A comment that holds the handle but is not a command reaches the same actor check, which must refuse it before any agent session starts, since that session spends the credential. As the second account, on the run's issue:
+```
+gh run view <run id> --repo <owner>/<scratch-repo> --json jobs --jq '.jobs[].steps[] | [.name, .conclusion] | @tsv'
+```
+
+Passes when the reply names `HARNESS_RUN_ACTORS`; the job's `needs-agent:` line reads `no`, naming the exact form `` `@sdlc-harness status` ``, since the exact form is decided before any gate; and its `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin` steps are `skipped`. Record the reply verbatim and the `harness-control.yml` run's two actors.
+
+**(d′) A mention.** A comment that holds the handle but is not a command reaches the same actor check, which must refuse it before the job installs the agent or fetches the plugin, and before any agent session starts, since that session spends the credential. As the second account, on the run's issue:
 
 ```
 gh issue comment <issue number> --repo <owner>/<scratch-repo> --body "@sdlc-harness what's the status on this?"
@@ -1945,7 +1999,11 @@ gh issue view <issue number> --repo <owner>/<scratch-repo> --comments
 gh run view <id> --repo <owner>/<scratch-repo> --log
 ```
 
-Passes when the reply opens `` @<login>: `@sdlc-harness` was not run: `` and names `HARNESS_RUN_ACTORS`, and that job's log carries neither the line `remote-run.sh: control: a mention on …` nor a decision line, so no agent session ran. Record the reply verbatim and the `harness-control.yml` run's two actors.
+```
+gh run view <id> --repo <owner>/<scratch-repo> --json jobs --jq '.jobs[].steps[] | [.name, .conclusion] | @tsv'
+```
+
+Passes when the reply opens `` @<login>: `@sdlc-harness` was not run: `` and names `HARNESS_RUN_ACTORS`; that job's log carries neither the line `remote-run.sh: control: a mention on …` nor a decision line, so no agent session ran; its `needs-agent:` line reads `no`, naming `HARNESS_RUN_ACTORS`, because a mention reaches the gates; and its `Set up Node`, `Install the claude CLI when absent` and `Fetch the pinned plugin` steps are `skipped`. Record the reply verbatim and the `harness-control.yml` run's two actors.
 
 **(e) The `continue` chain.** Let `<slug>`'s first job self-pause and its `remote-run.sh continue` step chain a new job:
 
