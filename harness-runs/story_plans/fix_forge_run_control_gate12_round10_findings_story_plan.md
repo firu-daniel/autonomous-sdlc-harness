@@ -26,7 +26,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_forge_run_control_gate12
 
 1. [x] **Task 1** — `remote-run.sh control --needs-agent`: the actor and mention check, run alone, posting nothing _(layer: cli)_ _(points: 18)_
 2. [x] **Task 2** — `harness-control.yml` installs `claude` and fetches the plugin only when the comment needs the agent _(layer: cli)_ _(points: 14)_
-3. [ ] **Task 3** — `docs/github-run-control.md`: the install gated on the agent check, and the `--restricted` row repointed _(layer: general)_ _(points: 10)_
+3. [x] **Task 3** — `docs/github-run-control.md`: the install gated on the agent check, and the `--restricted` row repointed _(layer: general)_ _(points: 10)_
 4. [ ] **Task 4** — `docs/development.md` Gate 12: step 11 drives `claude --restricted` directly, and the skipped install in (j) and (xv) _(layer: general)_ _(points: 12)_
 
 ## Scope register
