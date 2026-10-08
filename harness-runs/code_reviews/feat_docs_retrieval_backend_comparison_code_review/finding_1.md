@@ -20,3 +20,8 @@ The bullet gives the result and the per-query scores. It does not give the comma
 - [ ] Add one sentence saying the probe was a scratch launcher run in a session and is deterministic, as the bullet **What was taken in a session.** in `### What was compared, and through what` already says.
 
 Do not change any figure or the conclusions in the bullets around it. This is a documentation-only fix, so no test runs.
+
+**Deviations from plan:**
+- The setup lines were added after the bullet's nested two-state list rather than between "in two states:" and that list, so the colon still introduces the states.
+- The second-state sentence adds "after a `DROP DATABASE IF EXISTS <name>`": `t10-bm25-probe.mjs` drops the name before `CREATE DATABASE` as well as afterwards.
+- **What was taken in a session.** says "not a wall-clock figure", not "deterministic"; the closing sentence cites the bullet for the session fact and scopes the determinism to a given database state, since the first state's scores depend on database history.

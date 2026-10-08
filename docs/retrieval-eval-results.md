@@ -27774,6 +27774,33 @@ Calling the second case would claim more than was measured.
        −9.200331. The table's serial ids started at 705.
      - **A database created empty for the probe.** Here every chunk listed on both sides scores the same
        to six decimals, and the top five ordered refs agree on 10 of 12 queries.
+
+     Each query of `evals/docs-retrieval/queries/fixture-catalog.jsonl` was run as the statement below,
+     with the query text in place of `<query>`. On the first query the same statement was also run under
+     `EXPLAIN`, beside `SELECT extversion FROM pg_extension WHERE extname='pg_textsearch'` and
+     `SELECT version()`:
+
+     ```
+     SELECT id, key, round((text <@> to_bm25query($q$<query>$q$, 'chunks_bm25'))::numeric, 6) AS s FROM chunks ORDER BY text <@> to_bm25query($q$<query>$q$, 'chunks_bm25') LIMIT 8
+     ```
+
+     TypeScript: `evals/docs-retrieval/index-build.mjs` → `buildIndex` over `fixture-catalog` into a
+     temporary data directory, closed, then reopened with
+     `PGlite.create({ dataDir, extensions: { vector, pg_textsearch } })` (each extension loaded through
+     `cli/dist/retrieval/runtime.js` → `loadRetrievalModule`), and the statements run on it.
+
+     Python: `evals/docs-retrieval/python-backend.mjs` → `indexPythonCorpus` over an
+     `evals/docs-retrieval/mirror-fixture.mjs` mirror of `fixture-catalog`, and the statements run through
+     `docker compose exec -T postgres psql -At -F ' ' -c <statement>` from `docs-retrieval-service/`, with
+     the user and database of `PYTHON_DEFAULT_DATABASE_URL`. For the first state, that was the compose
+     database as the hand run left it. For the second, a database was made with `CREATE DATABASE <name>`
+     on the same server, after a `DROP DATABASE IF EXISTS <name>`, selected for the index run and the
+     statements by setting `HARNESS_DOCS_RETRIEVAL_DATABASE_URL` to the compose URL with that database
+     name, and dropped with `DROP DATABASE IF EXISTS <name>` afterwards.
+
+     The probe was a scratch launcher run in a session, as **What was taken in a session.** in
+     `### What was compared, and through what` already says. Its scores are not a wall-clock figure: the
+     statement returns the same scores whenever it runs against the same database state.
    - **What it shows.** The recorded arm B divergence comes from the Python database's history: its BM25
      statistics are not those of the live rows alone. The measured fact is that the scores depend on
      the history. That the statistics still count rows a refresh deleted is inferred from the refresh's
