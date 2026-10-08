@@ -29,13 +29,17 @@ export interface RefreshResult {
   readonly warnings: readonly string[];
 }
 
-const EMBED_BATCH_SIZE = 32;
+/**
+ * Exported for `evals/docs-retrieval/vector-agreement.mjs`, which must embed in the same batches a
+ * cold refresh uses.
+ */
+export const EMBED_BATCH_SIZE = 32;
 
 /**
  * Refreshes `store` from the corpus of `config`: (1) an embedder id differing from the stored one,
  * or none stored, clears the index and records the new id; (2) every corpus file is chunked; (3) every
  * stored key not in that set is deleted; (4) chunks whose key is new or whose hash moved are embedded
- * in batches of 32 and upserted; (5) the rest count as unchanged.
+ * in batches of {@link EMBED_BATCH_SIZE} and upserted; (5) the rest count as unchanged.
  *
  * Expected cost: a document whose title changed re-embeds every one of its chunks, because the title
  * is part of each chunk's embedded `text`.

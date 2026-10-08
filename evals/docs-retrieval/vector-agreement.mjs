@@ -48,6 +48,7 @@ import {
   PYTHON_DEFAULT_DATABASE_URL,
   pythonDatabaseUrl,
 } from '../../cli/dist/retrieval/pythonBackend.js';
+import { EMBED_BATCH_SIZE } from '../../cli/dist/retrieval/refresh.js';
 import { corpusConfig } from './corpora.mjs';
 import { assertRealModelsAreAvailable } from './index-build.mjs';
 import { percentile } from './metrics.mjs';
@@ -59,9 +60,6 @@ import {
   indexPythonCorpus,
   scrub,
 } from './python-backend.mjs';
-
-/** `cli/src/retrieval/refresh.ts` → `EMBED_BATCH_SIZE`, which that module does not export. */
-const EMBED_BATCH_SIZE = 32;
 
 /** `docs-retrieval-service/src/harness_docs_retrieval/store.py` → `EMBEDDER_META_KEY`. */
 const EMBEDDER_META_KEY = 'embedder';

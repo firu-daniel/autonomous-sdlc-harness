@@ -8,7 +8,7 @@ Branch `feat_docs_retrieval_backend_comparison`, reviewed 2026-10-08. Reviewed: 
 
 1. [x] **Finding 3** — State the vector read-back exception in `python-backend.mjs`'s boundary rule _(layer: general)_
 2. [x] **Finding 2** — Declare the Python wrapper route, compose directory and service, and CLI entry once, and import them _(layer: general)_
-3. [ ] **Finding 1** — Export `EMBED_BATCH_SIZE` from `refresh.ts` and import it in `vector-agreement.mjs` instead of retyping it _(layer: cli, general)_
+3. [x] **Finding 1** — Export `EMBED_BATCH_SIZE` from `refresh.ts` and import it in `vector-agreement.mjs` instead of retyping it _(layer: cli, general)_
 
 ## Must Fix
 
