@@ -170,7 +170,7 @@ function compareAbstention(pairs, threshold) {
     pairs
       .map((pair) => pair[backend])
       .filter(
-        (entry) => entry.abstained !== (entry.bestRerankScore !== null && entry.bestRerankScore < threshold),
+        (entry) => entry.abstained !== (entry.bestRerankScore === null || entry.bestRerankScore < threshold),
       )
       .map((entry) => ({ backend, id: entry.id, abstained: entry.abstained, bestRerankScore: entry.bestRerankScore })),
   );
