@@ -27742,7 +27742,7 @@ Calling the second case would claim more than was measured.
 ### Divergence sources, in the order checked
 
 1. **Quantization — TypeScript q8 against Python fp32.** This covers both models.
-   - **Embedder.** Measured by the cosine between the two sides' stored document vectors per chunk key
+   - **Embedder.** Measured by the cosine between the two sides' document vectors per chunk key
      (`### Vector agreement, and the embedder id`). `fixture-catalog`: min 0.997938, p50 0.998644 over
      41 pairs. `self-docs`: min 0.988583, p50 0.995867 over 331 pairs.
    - **Reranker.** Measured by `|typescript − python|` of arm E's `bestRerankScore` per query.
@@ -27804,8 +27804,9 @@ the same way, carries the same dependence. That was not measured here.
 
 ### Vector agreement, and the embedder id
 
-The figures are the cosines between the two embedders' **stored document vectors**, per chunk key, from
-`renderVectorAgreement`. They cover **document vectors only**: bge embeds a query with its instruction
+The figures are the cosines between the two embedders' **document vectors**, per chunk key, from
+`renderVectorAgreement`: the Python side's read back from its index, the TypeScript side's embedded in the
+same session from the same chunk text and in the same batches a cold refresh embeds them. They cover **document vectors only**: bge embeds a query with its instruction
 prefix, and no query vector was compared. Both sides stored the same text for every chunk, with no text
 mismatch on either corpus. The leg is q8 ONNX against fp32 PyTorch, with quantization and export measured
 together, as divergence source (2) records.
