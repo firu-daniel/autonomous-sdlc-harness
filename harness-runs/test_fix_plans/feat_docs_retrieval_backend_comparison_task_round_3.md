@@ -13,7 +13,7 @@
 
 **This section is the single source of truth for the fix loop.** The loop walks the `[ ]` entries below from top to bottom, and the committing role flips each one to `[x]` when that fix's commit lands. `[ ]` markers anywhere else, such as the sub-step bullets inside a per-finding file, are informational only.
 
-1. [ ] **Finding 1** — Add `follow_imports_for_stubs = true` to the numpy/torch/sentence_transformers mypy override in `docs-retrieval-service/pyproject.toml`, so the existing skip also reaches `.pyi` stubs. _(layer: general)_
+1. [x] **Finding 1** — Add `follow_imports_for_stubs = true` to the numpy/torch/sentence_transformers mypy override in `docs-retrieval-service/pyproject.toml`, so the existing skip also reaches `.pyi` stubs. _(layer: general)_
 
 ---
 

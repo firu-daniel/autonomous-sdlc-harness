@@ -57,11 +57,14 @@ mypy_path = "src"
 # has it installed, and with it numpy, whose stubs use 3.12-only syntax. Skipping these modules
 # keeps the typecheck the same either way: they type as `Any`, as they do when absent. numpy is
 # listed as well as the two entry points because psycopg imports it under `TYPE_CHECKING`, which
-# mypy would otherwise follow into those stubs.
+# mypy would otherwise follow into those stubs. `follow_imports_for_stubs` is what makes the skip
+# reach them at all: mypy follows a `.pyi` stub as `normal` regardless of `follow_imports` unless
+# it is set.
 [[tool.mypy.overrides]]
 module = ["sentence_transformers.*", "torch.*", "numpy", "numpy.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
+follow_imports_for_stubs = true
 
 [tool.ruff]
 target-version = "py311"
