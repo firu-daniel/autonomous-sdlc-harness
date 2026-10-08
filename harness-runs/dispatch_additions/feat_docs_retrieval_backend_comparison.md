@@ -12,3 +12,8 @@
 - **added:** outside the sanctioned form
 - **verbatim:** Do not commit; the orchestrator dispatches the committer.
 - **why the agent could not derive it:** n/a — a restatement of the implementer's own contract, which the unit loop already gives it; added without need.
+
+## [A2 · Item 2 · general · iter 0] → layer-implementer  (#49)
+- **added:** `context_notes:`
+- **verbatim:** context_notes: Finding 3's fix (commit ae39230) left out finding_3.md's conditional clause naming `python-backend.mjs` as the owner of `COMPOSE_DIR`/`POSTGRES_SERVICE`, because Finding 2 had not landed; its implementer reported the clause as still owed once it does (source: ae39230's diff of evals/docs-retrieval/python-backend.mjs against finding_3.md).
+- **why the agent could not derive it:** the omission was reported only in the Finding 3 implementer's return to the orchestrator; neither finding_2.md nor the architecture-review index records that a clause of finding_3.md was deferred to Finding 2.
