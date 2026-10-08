@@ -16,7 +16,7 @@
 Each entry resolves to a self-contained `finding_<K>.md` in this plan's per-finding folder. Sorted lowest blast radius first. The two findings are independent: neither depends on the other.
 
 1. [x] **Finding 1** — Add `numpy` / `numpy.*` to the skipped mypy override in `docs-retrieval-service/pyproject.toml`, so psycopg's type-only numpy import no longer leads mypy into numpy's 3.12-syntax stubs. _(layer: general)_
-2. [ ] **Finding 2** — Stop the launcher e2e test from writing bytecode into the source tree, and exclude `__pycache__` from gate 6a's `$HOME` grep. _(layer: general)_
+2. [x] **Finding 2** — Stop the launcher e2e test from writing bytecode into the source tree, and exclude `__pycache__` from gate 6a's `$HOME` grep. _(layer: general)_
 
 ---
 
