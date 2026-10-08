@@ -223,20 +223,7 @@ export async function runArm({ session, arm, queries, k, repeat = 1 }) {
   const embedder = countingEmbedder(session.embedder, counter);
   const reranker = countingReranker(session.reranker, counter);
 
-  const records = new Map(
-    queries.map((query) => [
-      query.id,
-      {
-        id: query.id,
-        arm: arm.letter,
-        hits: [],
-        abstained: false,
-        bestRerankScore: null,
-        durationMs: [],
-        warnings: [],
-      },
-    ]),
-  );
+  const records = new Map(queries.map((query) => [query.id, emptyRecord(query, arm)]));
 
   for (let repetition = 0; repetition < repeat; repetition += 1) {
     for (const query of queries) {
@@ -251,18 +238,7 @@ export async function runArm({ session, arm, queries, k, repeat = 1 }) {
         mode: arm.mode,
       });
       record.durationMs.push(performance.now() - started);
-
-      const refs = refsOf(result);
-      if (repetition === 0) {
-        record.hits = result.hits.map((hit) => ({ ref: hit.ref, score: hit.score }));
-        record.abstained = result.abstained;
-        record.bestRerankScore = result.bestRerankScore ?? null;
-      } else if (refs.join('\u0000') !== record.hits.map((hit) => hit.ref).join('\u0000')) {
-        record.warnings.push(
-          `repetition ${repetition + 1} returned [${refs.join(', ')}], ` +
-            `which differs from repetition 1's [${record.hits.map((hit) => hit.ref).join(', ')}]`,
-        );
-      }
+      recordRepetition(record, result, repetition);
     }
   }
 
