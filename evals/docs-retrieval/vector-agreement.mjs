@@ -361,15 +361,9 @@ export function renderVectorAgreement(result) {
     `- Python embedder \`${result.ids.python}\``,
     `- ${LEG_LINE}`,
     '',
-    '| Pairs | min | p5 | p50 | mean | max |',
-    '| --- | --- | --- | --- | --- | --- |',
-    `| ${summary.count} | ${six(summary.min)} | ${six(summary.p5)} | ${six(summary.p50)} | ${six(summary.mean)} | ${six(summary.max)} |`,
+    ...summaryTable('Pairs', summary),
     '',
-    `The ${result.lowest.length} lowest cosines:`,
-    '',
-    '| Chunk key | Cosine |',
-    '| --- | --- |',
-    ...result.lowest.map(({ key, cosine: value }) => `| \`${key}\` | ${six(value)} |`),
+    ...lowestTable('The <n> lowest cosines:', result.lowest),
     '',
     result.textMismatches.length === 0
       ? 'Text mismatches: none.'

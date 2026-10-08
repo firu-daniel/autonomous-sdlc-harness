@@ -19,7 +19,7 @@ The findings below are what is left. The one Must Fix is a measured fact with no
 Each entry resolves to `harness-runs/code_reviews/feat_docs_retrieval_backend_comparison_code_review/finding_<K>.md` via its `**Finding K**` reference. The leading `N.` is the fix order. `K` is the finding's stable number.
 
 1. [x] **Finding 9** — Drop the `export` from `WRAPPER_PATH` in `python-backend.mjs` and from `cosine` in `vector-agreement.mjs` _(layer: general)_
-2. [ ] **Finding 8** — Render `renderVectorAgreement`'s main summary and lowest-cosine tables through `summaryTable` and `lowestTable` _(layer: general)_
+2. [x] **Finding 8** — Render `renderVectorAgreement`'s main summary and lowest-cosine tables through `summaryTable` and `lowestTable` _(layer: general)_
 3. [ ] **Finding 7** — Count a no-candidates abstention as consistent with the threshold in `compareAbstention` _(layer: general)_
 4. [ ] **Finding 6** — Check `backend-comparison.mjs`'s `SIDES` against `BACKENDS` at load _(layer: general)_
 5. [ ] **Finding 3** — Remove the unconsumed `packageVersion` from `python-backend.mjs` _(layer: general)_
