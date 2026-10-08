@@ -64,7 +64,7 @@ const INDEX_LINE = /^index: (\d+) files, (\d+) chunks; embedded (\d+), unchanged
 const WRAPPER_NOT_PROVISIONED_EXIT = 3;
 
 /** The wrapper, repo-relative to the checkout. */
-export const WRAPPER_PATH = ['scripts', 'python-service.sh'];
+const WRAPPER_PATH = ['scripts', 'python-service.sh'];
 
 /** `docs-retrieval-service/compose.yaml` → `services.postgres`. */
 export const POSTGRES_SERVICE = 'postgres';

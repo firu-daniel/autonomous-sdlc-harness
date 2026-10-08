@@ -198,7 +198,7 @@ function pythonVectors(checkout) {
 }
 
 /** The full cosine — dot over the product of norms — so an unnormalised vector cannot pass as agreeing. */
-export function cosine(a, b) {
+function cosine(a, b) {
   if (a.length !== b.length) refuse(`two vectors of different widths, ${a.length} and ${b.length}, cannot be compared`);
   let dot = 0;
   let normA = 0;
