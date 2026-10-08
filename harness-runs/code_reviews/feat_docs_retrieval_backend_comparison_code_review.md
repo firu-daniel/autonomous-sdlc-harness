@@ -25,7 +25,7 @@ Each entry resolves to `harness-runs/code_reviews/feat_docs_retrieval_backend_co
 5. [x] **Finding 3** — Remove the unconsumed `packageVersion` from `python-backend.mjs` _(layer: general)_
 6. [x] **Finding 2** — Make the TypeScript `runArm` use `emptyRecord` and `recordRepetition` instead of inline copies _(layer: general)_
 7. [x] **Finding 10** — Say in the write-up that the TypeScript document vectors were embedded in session, not read back from an index _(layer: general)_
-8. [ ] **Finding 4** — Tell the operator in the hand-run protocol that the Python blocks carry the compose database's history _(layer: general)_
+8. [x] **Finding 4** — Tell the operator in the hand-run protocol that the Python blocks carry the compose database's history _(layer: general)_
 9. [ ] **Finding 5** — Give step 7's TypeScript leg the workaround for a machine-wide runtime that predates `docs.retrievalBackend` _(layer: general)_
 10. [ ] **Finding 1** — Record the BM25 probe's statements and setup in the write-up, so the identified arm B cause can be reproduced _(layer: general)_
 

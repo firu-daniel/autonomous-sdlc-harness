@@ -346,6 +346,15 @@ bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --b
 bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --backend python --repeat 1 --out harness-runs/scratch/backend-comparison/results.md
 ```
 
+The Python runs index into the one persistent compose database, and the Python backend's lexical
+scores depend on what that database held before (`docs/retrieval-eval-results.md` →
+`## The Python backend against the TypeScript one` → `### Divergence sources, in the order checked`,
+source (3)). So a `@python` block's arm B figures, and arms D and E through the fusion, describe the
+corpus *and* the database's history. A Python run over a database that has held other corpora is not
+a re-measurement of an earlier block's state. Record in `host.txt` whether the database was emptied
+(`docker compose down -v`, then `docker compose up -d --wait postgres`, from `docs-retrieval-service/`)
+before these runs.
+
 **4. The MCP pass**, for each backend over `self-docs`: cold start, each `search_docs` round trip and
 resident memory of the shipped stdio server. Create `harness-runs/scratch/mcp-backend-pass.mjs`:
 
