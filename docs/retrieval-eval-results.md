@@ -16617,6 +16617,9209 @@ within a row.
 ```
 <!-- eval:corpus:gate10-catalog:end -->
 
+<!-- eval:corpus:fixture-catalog@typescript:start -->
+### Corpus `fixture-catalog` — backend `typescript`
+
+| Arm | Mode | recall@1 | recall@3 | recall@5 | MRR | strict recall@5 | strict MRR | p50 ms | p95 ms | cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A | — | — | — | — | — | — | — | — | — | awaiting hand run |
+| B | `lexical` | 0.444 | 0.889 | 1.000 | 0.657 | 1.000 | 0.606 | 0.4 | 3.2 | local — no billed tokens (0 embed calls, 0 rerank calls) |
+| C | `vector` | 0.778 | 1.000 | 1.000 | 0.889 | 1.000 | 0.806 | 3.5 | 4.5 | local — no billed tokens (12 embed calls, 0 rerank calls) |
+| D | `fused` | 0.556 | 1.000 | 1.000 | 0.759 | 1.000 | 0.685 | 3.6 | 8.6 | local — no billed tokens (12 embed calls, 0 rerank calls) |
+| E | `fused-rerank` | 0.444 | 0.667 | 0.667 | 0.556 | 0.667 | 0.556 | 372.8 | 415.5 | local — no billed tokens (12 embed calls, 12 rerank calls) |
+
+Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its rows are
+filled by re-running the eval with one `--transcript` per variant against a hand-run transcript, per the
+procedure in `docs/retrieval-eval.md` → `## Running arm A by hand`. The arm A rows, when present, are each
+scored from the **first repetition's** transcript of that variant; the spread across repetitions is
+hand-written below the end marker.
+
+The `cost` column is not a score, and **the arms' scores are not comparable across rows**: the non-reranking
+modes report rank-derived reciprocal-rank-fusion values in the `0.004`–`0.033` range, while the reranking mode
+reports calibrated `[0, 1]` cross-encoder scores. Compare recall, MRR and latency across rows; compare scores only
+within a row.
+
+**Provenance.**
+
+- Corpus `fixture-catalog` — snapshot `{ files: 9, chunks: 41 }`,
+  as the index build of this run reported it. A figure over `fixture-catalog` is read with this stamp beside it;
+  two figures carrying different stamps are not a before/after pair.
+- `docs.root`: `docs`, as the runner set it (the eval owns the retrieval gate and
+  `docs.root` alone).
+- The corpus is *every* `*.md` under that `docs.root`, with no file filtered out, so a document added
+  under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
+  file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
+  taken before such a document existed is therefore a different corpus.
+- `layers[]`: none — this corpus is read as a repository of its own and carries no conventions documents.
+- Backend `typescript`: this checkout's `cli/dist` driven in process — the same path as the unlabelled
+  block, run again in this session.
+- Query set: `evals/docs-retrieval/queries/fixture-catalog.jsonl` — 9 positive, 3 negative.
+- `k`: 5; repetitions per query: 1.
+- Embedder: `Xenova/bge-small-en-v1.5:q8:cls:384:v1`. Reranker: `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` — loaded and run outside the stub.
+- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
+- The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
+  pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
+  calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —
+  so both variables that moved between the two readings, the threshold and the corpus, are named.
+- Host `darwin 24.6.0`, Node `v22.23.2`, 2026-10-08T05:31:22.516Z.
+
+```json
+{
+  "corpus": "fixture-catalog",
+  "backend": "typescript",
+  "snapshot": {
+    "files": 9,
+    "chunks": 41
+  },
+  "abstainScoreThreshold": 0.32,
+  "embedder": "Xenova/bge-small-en-v1.5:q8:cls:384:v1",
+  "reranker": "Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1",
+  "k": 5,
+  "repeat": 1,
+  "queries": {
+    "path": "evals/docs-retrieval/queries/fixture-catalog.jsonl",
+    "positives": 9,
+    "negatives": 3
+  },
+  "generatedAt": "2026-10-08T05:31:22.516Z",
+  "host": "darwin 24.6.0",
+  "node": "v22.23.2",
+  "arms": [
+    {
+      "arm": "A",
+      "variant": null,
+      "mode": null,
+      "ran": false
+    },
+    {
+      "arm": "B",
+      "mode": "lexical",
+      "ran": true,
+      "embedCalls": 0,
+      "rerankCalls": 0,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 9,
+        "negatives": 3,
+        "recall": {
+          "1": 0.4444444444444444,
+          "3": 0.8888888888888888,
+          "5": 1
+        },
+        "mrr": 0.6574074074074074,
+        "strict": {
+          "recall": {
+            "1": 0.4444444444444444,
+            "3": 0.7777777777777778,
+            "5": 1
+          },
+          "mrr": 0.6055555555555556
+        },
+        "latency": {
+          "p50": 0.42508300000008603,
+          "p95": 3.2335830000001806
+        },
+        "samples": 12,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-fc-route-choice",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/depot-operations.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/labels.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/routing.md#how-a-route-is-chosen",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.2335830000001806
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 4,
+            "strictRank": 5
+          },
+          {
+            "id": "q-fc-late-handin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/routing.md#zone-graph",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/routing.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/depot-operations.md#sort-plans",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.6519160000002557
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-barcode-contents",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/labels.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.4286659999997937
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-unreadable-label",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.44012500000008004
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 3
+          },
+          {
+            "id": "q-fc-billable-weight",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/routing.md#zone-graph",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/routing.md#how-a-route-is-chosen",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.3933750000001055
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 3
+          },
+          {
+            "id": "q-fc-surcharge-compounding",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/rates.md#remote-area-surcharge",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/rates.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/rates.md#fuel-surcharge",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.3634580000002643
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 4
+          },
+          {
+            "id": "q-fc-webhook-retry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/tracking.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/labels.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.4886670000000777
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-verify-callback",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/routing.md#zone-graph",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/exceptions.md#exception-codes",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.42508300000008603
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 3
+          },
+          {
+            "id": "q-fc-token-lifetime",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/api-auth.md#scopes",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/api-auth.md#api-keys",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.4463749999999891
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-negative-recruitment",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/rates.md#fuel-surcharge",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/rates.md#remote-area-surcharge",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.40120900000010806
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-fc-negative-lattice",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              0.15433299999995143
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-fc-negative-datastore",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#api-keys",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/tracking.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/api-auth.md#scopes",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.3994999999999891
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          }
+        ]
+      }
+    },
+    {
+      "arm": "C",
+      "mode": "vector",
+      "ran": true,
+      "embedCalls": 12,
+      "rerankCalls": 0,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 9,
+        "negatives": 3,
+        "recall": {
+          "1": 0.7777777777777778,
+          "3": 1,
+          "5": 1
+        },
+        "mrr": 0.8888888888888888,
+        "strict": {
+          "recall": {
+            "1": 0.6666666666666666,
+            "3": 0.8888888888888888,
+            "5": 1
+          },
+          "mrr": 0.8055555555555556
+        },
+        "latency": {
+          "p50": 3.521874999999909,
+          "p95": 4.491457999999966
+        },
+        "samples": 12,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-fc-route-choice",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/routing.md#how-a-route-is-chosen",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/depot-operations.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/depot-operations.md#sort-plans",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              4.491457999999966
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-late-handin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/depot-operations.md#handover-to-a-courier",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/exceptions.md#claims-for-a-lost-parcel",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/depot-operations.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.9969999999998436
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-barcode-contents",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/tracking.md#status-codes",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.56966599999987
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-unreadable-label",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/labels.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/exceptions.md#exception-codes",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.328375000000051
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-billable-weight",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/rates.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/rates.md#remote-area-surcharge",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/rates.md#fuel-surcharge",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.6202919999996084
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-surcharge-compounding",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md#remote-area-surcharge",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/rates.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/rates.md#fuel-surcharge",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/tracking.md#event-ordering-and-duplicates",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.241417000000183
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 4
+          },
+          {
+            "id": "q-fc-webhook-retry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/exceptions.md#claims-for-a-lost-parcel",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.7188750000000255
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-verify-callback",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/tracking.md#event-ordering-and-duplicates",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.521874999999909
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-token-lifetime",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/api-auth.md#api-keys",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/exceptions.md#claims-for-a-lost-parcel",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.527125000000069
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-negative-recruitment",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/depot-operations.md#handover-to-a-courier",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/exceptions.md#claims-for-a-lost-parcel",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.204666999999972
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-fc-negative-lattice",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/depot-operations.md#bay-numbering",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.15695900000037
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-fc-negative-datastore",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/tracking.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/tracking.md#event-ordering-and-duplicates",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.9967499999997926
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          }
+        ]
+      }
+    },
+    {
+      "arm": "D",
+      "mode": "fused",
+      "ran": true,
+      "embedCalls": 12,
+      "rerankCalls": 0,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 9,
+        "negatives": 3,
+        "recall": {
+          "1": 0.5555555555555556,
+          "3": 1,
+          "5": 1
+        },
+        "mrr": 0.7592592592592592,
+        "strict": {
+          "recall": {
+            "1": 0.4444444444444444,
+            "3": 1,
+            "5": 1
+          },
+          "mrr": 0.6851851851851851
+        },
+        "latency": {
+          "p50": 3.6307920000003833,
+          "p95": 8.627332999999908
+        },
+        "samples": 12,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-fc-route-choice",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/depot-operations.md",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/routing.md#how-a-route-is-chosen",
+                "score": 0.0315136476426799
+              },
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.03125
+              },
+              {
+                "ref": "docs/labels.md",
+                "score": 0.02976190476190476
+              }
+            ],
+            "durationMs": [
+              3.3957500000001346
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 3,
+            "strictRank": 3
+          },
+          {
+            "id": "q-fc-late-handin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/depot-operations.md#handover-to-a-courier",
+                "score": 0.03128054740957967
+              },
+              {
+                "ref": "docs/depot-operations.md#sort-plans",
+                "score": 0.030309988518943745
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.02976190476190476
+              },
+              {
+                "ref": "docs/depot-operations.md",
+                "score": 0.029083245521601686
+              }
+            ],
+            "durationMs": [
+              5.917416999999659
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-barcode-contents",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.03125
+              },
+              {
+                "ref": "docs/labels.md",
+                "score": 0.030536130536130537
+              }
+            ],
+            "durationMs": [
+              3.71158400000013
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-unreadable-label",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md",
+                "score": 0.032266458495966696
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.032266458495966696
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.031754032258064516
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.031009615384615385
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.030621785881252923
+              }
+            ],
+            "durationMs": [
+              8.627332999999908
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032266458495966696,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-billable-weight",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md",
+                "score": 0.032266458495966696
+              },
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.032266458495966696
+              },
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.03225806451612903
+              },
+              {
+                "ref": "docs/rates.md#remote-area-surcharge",
+                "score": 0.03055037313432836
+              },
+              {
+                "ref": "docs/routing.md#how-a-route-is-chosen",
+                "score": 0.030536130536130537
+              }
+            ],
+            "durationMs": [
+              6.463624999999865
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032266458495966696,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-surcharge-compounding",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md#remote-area-surcharge",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/rates.md",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/rates.md#fuel-surcharge",
+                "score": 0.03125
+              },
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.031024531024531024
+              },
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.030536130536130537
+              }
+            ],
+            "durationMs": [
+              3.4364999999997963
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-fc-webhook-retry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.03225806451612903
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.03036576949620428
+              },
+              {
+                "ref": "docs/webhooks.md#subscribing-to-events",
+                "score": 0.029857397504456328
+              },
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.029850746268656716
+              }
+            ],
+            "durationMs": [
+              3.687915999999859
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-verify-callback",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.031754032258064516
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.03057889822595705
+              },
+              {
+                "ref": "docs/tracking.md#event-ordering-and-duplicates",
+                "score": 0.02967032967032967
+              }
+            ],
+            "durationMs": [
+              3.6307920000003833
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-token-lifetime",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.03225806451612903
+              },
+              {
+                "ref": "docs/api-auth.md#api-keys",
+                "score": 0.03149801587301587
+              },
+              {
+                "ref": "docs/api-auth.md#scopes",
+                "score": 0.030798389007344232
+              },
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.029857397504456328
+              }
+            ],
+            "durationMs": [
+              3.7485830000000533
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-negative-recruitment",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.03076923076923077
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.029437229437229435
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.029411764705882353
+              },
+              {
+                "ref": "docs/tracking.md#estimated-delivery-window",
+                "score": 0.029211087420042643
+              },
+              {
+                "ref": "docs/exceptions.md#claims-for-a-lost-parcel",
+                "score": 0.029138513513513514
+              }
+            ],
+            "durationMs": [
+              3.2455410000002303
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03076923076923077
+          },
+          {
+            "id": "q-fc-negative-lattice",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/depot-operations.md#bay-numbering",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.1269170000000486
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-fc-negative-datastore",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/tracking.md",
+                "score": 0.032266458495966696
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.0315136476426799
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.03125763125763126
+              },
+              {
+                "ref": "docs/api-auth.md#scopes",
+                "score": 0.029513888888888888
+              },
+              {
+                "ref": "docs/exceptions.md#returns-to-sender",
+                "score": 0.029211087420042643
+              }
+            ],
+            "durationMs": [
+              3.0590000000001965
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.032266458495966696
+          }
+        ]
+      }
+    },
+    {
+      "arm": "E",
+      "mode": "fused-rerank",
+      "ran": true,
+      "embedCalls": 12,
+      "rerankCalls": 12,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 9,
+        "negatives": 3,
+        "recall": {
+          "1": 0.4444444444444444,
+          "3": 0.6666666666666666,
+          "5": 0.6666666666666666
+        },
+        "mrr": 0.5555555555555556,
+        "strict": {
+          "recall": {
+            "1": 0.4444444444444444,
+            "3": 0.6666666666666666,
+            "5": 0.6666666666666666
+          },
+          "mrr": 0.5555555555555556
+        },
+        "latency": {
+          "p50": 372.78150000000005,
+          "p95": 415.48662500000046
+        },
+        "samples": 12,
+        "abstainedOnNegative": 3,
+        "perQuery": [
+          {
+            "id": "q-fc-route-choice",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9988245368003845,
+            "hits": [
+              {
+                "ref": "docs/routing.md",
+                "score": 0.9988245368003845
+              },
+              {
+                "ref": "docs/routing.md#how-a-route-is-chosen",
+                "score": 0.997146487236023
+              },
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.967546820640564
+              },
+              {
+                "ref": "docs/depot-operations.md",
+                "score": 0.9095854163169861
+              },
+              {
+                "ref": "docs/routing.md#zone-graph",
+                "score": 0.788049042224884
+              }
+            ],
+            "durationMs": [
+              398.52837499999987
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9988245368003845,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-late-handin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9811885952949524,
+            "hits": [
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.9811885952949524
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.7106814980506897
+              },
+              {
+                "ref": "docs/depot-operations.md#handover-to-a-courier",
+                "score": 0.3005616068840027
+              },
+              {
+                "ref": "docs/depot-operations.md#sort-plans",
+                "score": 0.109153151512146
+              },
+              {
+                "ref": "docs/exceptions.md#returns-to-sender",
+                "score": 0.05581606552004814
+              }
+            ],
+            "durationMs": [
+              372.78150000000005
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9811885952949524,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-barcode-contents",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.941379964351654,
+            "hits": [
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.941379964351654
+              },
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.9142329692840576
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.7656862139701843
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.5925036668777466
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.02494685910642147
+              }
+            ],
+            "durationMs": [
+              415.48662500000046
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.941379964351654,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-unreadable-label",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9988497495651245,
+            "hits": [
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.9988497495651245
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.995164155960083
+              },
+              {
+                "ref": "docs/labels.md",
+                "score": 0.9884990453720093
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.9212325215339661
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.8922458291053772
+              }
+            ],
+            "durationMs": [
+              366.98162500000035
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9988497495651245,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-billable-weight",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.00004109544534003362,
+            "hits": [],
+            "durationMs": [
+              376.98479099999986
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-fc-surcharge-compounding",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.0007010828121565282,
+            "hits": [],
+            "durationMs": [
+              361.860917
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-fc-webhook-retry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.5472269654273987,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.5472269654273987
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.017705265432596207
+              },
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.0010588211007416248
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.0004331582458689809
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.0001967466960195452
+              }
+            ],
+            "durationMs": [
+              383.44091599999956
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.5472269654273987,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-verify-callback",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.07702871412038803,
+            "hits": [],
+            "durationMs": [
+              369.21170900000016
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-fc-token-lifetime",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.983818769454956,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.983818769454956
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.4273105263710022
+              },
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.0005338062765076756
+              },
+              {
+                "ref": "docs/api-auth.md#api-keys",
+                "score": 0.00026457515195943415
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.00011346016981406137
+              }
+            ],
+            "durationMs": [
+              369.13683299999957
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.983818769454956,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-negative-recruitment",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.00018444025772623718,
+            "hits": [],
+            "durationMs": [
+              375.2044169999999
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-fc-negative-lattice",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.00001332825831923401,
+            "hits": [],
+            "durationMs": [
+              377.53200000000015
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-fc-negative-datastore",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.1376960277557373,
+            "hits": [],
+            "durationMs": [
+              140.50079200000073
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+<!-- eval:corpus:fixture-catalog@typescript:end -->
+
+<!-- eval:corpus:fixture-catalog@python:start -->
+### Corpus `fixture-catalog` — backend `python`
+
+| Arm | Mode | recall@1 | recall@3 | recall@5 | MRR | strict recall@5 | strict MRR | p50 ms | p95 ms | cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A | — | — | — | — | — | — | — | — | — | awaiting hand run |
+| B | `lexical` | 0.556 | 1.000 | 1.000 | 0.741 | 1.000 | 0.565 | 1.9 | 6.2 | local — no billed tokens (Python backend; embed and rerank call counts are not exposed over HTTP) |
+| C | `vector` | 0.778 | 1.000 | 1.000 | 0.889 | 1.000 | 0.806 | 10.7 | 17.3 | local — no billed tokens (Python backend; embed and rerank call counts are not exposed over HTTP) |
+| D | `fused` | 0.556 | 1.000 | 1.000 | 0.778 | 1.000 | 0.648 | 12.1 | 12.8 | local — no billed tokens (Python backend; embed and rerank call counts are not exposed over HTTP) |
+| E | `fused-rerank` | 0.444 | 0.667 | 0.667 | 0.556 | 0.667 | 0.556 | 322.1 | 437.8 | local — no billed tokens (Python backend; embed and rerank call counts are not exposed over HTTP) |
+
+Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its rows are
+filled by re-running the eval with one `--transcript` per variant against a hand-run transcript, per the
+procedure in `docs/retrieval-eval.md` → `## Running arm A by hand`. The arm A rows, when present, are each
+scored from the **first repetition's** transcript of that variant; the spread across repetitions is
+hand-written below the end marker.
+
+The `cost` column is not a score, and **the arms' scores are not comparable across rows**: the non-reranking
+modes report rank-derived reciprocal-rank-fusion values in the `0.004`–`0.033` range, while the reranking mode
+reports calibrated `[0, 1]` cross-encoder scores. Compare recall, MRR and latency across rows; compare scores only
+within a row.
+
+**Provenance.**
+
+- Corpus `fixture-catalog` — snapshot `{ files: 9, chunks: 41 }`,
+  as the index build of this run reported it. A figure over `fixture-catalog` is read with this stamp beside it;
+  two figures carrying different stamps are not a before/after pair.
+- `docs.root`: `docs`, as the runner set it (the eval owns the retrieval gate and
+  `docs.root` alone).
+- The corpus is *every* `*.md` under that `docs.root`, with no file filtered out, so a document added
+  under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
+  file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
+  taken before such a document existed is therefore a different corpus.
+- `layers[]`: none — this corpus is read as a repository of its own and carries no conventions documents.
+- Backend `python`: `harness-docs-retrieval serve-http` over a throwaway mirror of the corpus, each arm
+  through `POST /search` with its `mode`; latency is the server's own `search_ms` — `search_docs` alone,
+  timed inside the Python process, excluding the per-call refresh and the HTTP hop; the connection string
+  is not recorded.
+- Query set: `evals/docs-retrieval/queries/fixture-catalog.jsonl` — 9 positive, 3 negative.
+- `k`: 5; repetitions per query: 1.
+- Embedder: `py-st/BAAI/bge-small-en-v1.5:fp32:cls:384:v1`. Reranker: `py-st/cross-encoder/ms-marco-MiniLM-L-6-v2:fp32:sigmoid:v1` — loaded and run outside the stub.
+- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
+- The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
+  pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
+  calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —
+  so both variables that moved between the two readings, the threshold and the corpus, are named.
+- Host `darwin 24.6.0`, Node `v22.23.2`, 2026-10-08T05:31:53.564Z.
+
+```json
+{
+  "corpus": "fixture-catalog",
+  "backend": "python",
+  "snapshot": {
+    "files": 9,
+    "chunks": 41
+  },
+  "abstainScoreThreshold": 0.32,
+  "embedder": "py-st/BAAI/bge-small-en-v1.5:fp32:cls:384:v1",
+  "reranker": "py-st/cross-encoder/ms-marco-MiniLM-L-6-v2:fp32:sigmoid:v1",
+  "k": 5,
+  "repeat": 1,
+  "queries": {
+    "path": "evals/docs-retrieval/queries/fixture-catalog.jsonl",
+    "positives": 9,
+    "negatives": 3
+  },
+  "generatedAt": "2026-10-08T05:31:53.564Z",
+  "host": "darwin 24.6.0",
+  "node": "v22.23.2",
+  "arms": [
+    {
+      "arm": "A",
+      "variant": null,
+      "mode": null,
+      "ran": false
+    },
+    {
+      "arm": "B",
+      "mode": "lexical",
+      "ran": true,
+      "embedCalls": null,
+      "rerankCalls": null,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 9,
+        "negatives": 3,
+        "recall": {
+          "1": 0.5555555555555556,
+          "3": 1,
+          "5": 1
+        },
+        "mrr": 0.7407407407407408,
+        "strict": {
+          "recall": {
+            "1": 0.3333333333333333,
+            "3": 0.8888888888888888,
+            "5": 1
+          },
+          "mrr": 0.5648148148148148
+        },
+        "latency": {
+          "p50": 1.8870829953812063,
+          "p95": 6.2203339766711
+        },
+        "samples": 12,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-fc-route-choice",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/routing.md#how-a-route-is-chosen",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/routing.md#zone-graph",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/labels.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              6.2203339766711
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 3
+          },
+          {
+            "id": "q-fc-late-handin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/depot-operations.md#sort-plans",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/routing.md#zone-graph",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/depot-operations.md#handover-to-a-courier",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.3604579619131982
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-barcode-contents",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.4632920501753688
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-unreadable-label",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.5840829582884908
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 4
+          },
+          {
+            "id": "q-fc-billable-weight",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/rates.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/exceptions.md#returns-to-sender",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.4756660093553364
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-fc-surcharge-compounding",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md#remote-area-surcharge",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/rates.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/rates.md#fuel-surcharge",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.6376250423491001
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-fc-webhook-retry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/webhooks.md#subscribing-to-events",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.1908340277150273
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-verify-callback",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/routing.md#zone-graph",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.490833983756602
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 3
+          },
+          {
+            "id": "q-fc-token-lifetime",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/api-auth.md#scopes",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/api-auth.md#api-keys",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.5755829992704093
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-negative-recruitment",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/exceptions.md#exception-codes",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.8870829953812063
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-fc-negative-lattice",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [],
+            "durationMs": [
+              0.3969579702243209
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-fc-negative-datastore",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#scopes",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/tracking.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.1792080369777977
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          }
+        ]
+      }
+    },
+    {
+      "arm": "C",
+      "mode": "vector",
+      "ran": true,
+      "embedCalls": null,
+      "rerankCalls": null,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 9,
+        "negatives": 3,
+        "recall": {
+          "1": 0.7777777777777778,
+          "3": 1,
+          "5": 1
+        },
+        "mrr": 0.8888888888888888,
+        "strict": {
+          "recall": {
+            "1": 0.6666666666666666,
+            "3": 0.8888888888888888,
+            "5": 1
+          },
+          "mrr": 0.8055555555555556
+        },
+        "latency": {
+          "p50": 10.662583983503282,
+          "p95": 17.344958032481372
+        },
+        "samples": 12,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-fc-route-choice",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/routing.md#how-a-route-is-chosen",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/depot-operations.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/depot-operations.md#sort-plans",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              17.344958032481372
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-late-handin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/depot-operations.md#handover-to-a-courier",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/exceptions.md#claims-for-a-lost-parcel",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/depot-operations.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.34604199230671
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-barcode-contents",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/tracking.md#status-codes",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.704000014811754
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-unreadable-label",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/labels.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/exceptions.md#claims-for-a-lost-parcel",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.100207990035415
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-billable-weight",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/rates.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/rates.md#remote-area-surcharge",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/rates.md#fuel-surcharge",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.41312498273328
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-surcharge-compounding",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md#remote-area-surcharge",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/rates.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/rates.md#fuel-surcharge",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/tracking.md#event-ordering-and-duplicates",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.687790974974632
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 4
+          },
+          {
+            "id": "q-fc-webhook-retry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/exceptions.md#claims-for-a-lost-parcel",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.662583983503282
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-verify-callback",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/tracking.md#event-ordering-and-duplicates",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.578583984170109
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-token-lifetime",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/api-auth.md#api-keys",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/exceptions.md#claims-for-a-lost-parcel",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.525042016524822
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-negative-recruitment",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/depot-operations.md#handover-to-a-courier",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/routing.md#how-a-route-is-chosen",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/exceptions.md#claims-for-a-lost-parcel",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.029999994207174
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-fc-negative-lattice",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/depot-operations.md#bay-numbering",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/api-auth.md#scopes",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.653083958663046
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-fc-negative-datastore",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/tracking.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/tracking.md#event-ordering-and-duplicates",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              10.972667019814253
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          }
+        ]
+      }
+    },
+    {
+      "arm": "D",
+      "mode": "fused",
+      "ran": true,
+      "embedCalls": null,
+      "rerankCalls": null,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 9,
+        "negatives": 3,
+        "recall": {
+          "1": 0.5555555555555556,
+          "3": 1,
+          "5": 1
+        },
+        "mrr": 0.7777777777777778,
+        "strict": {
+          "recall": {
+            "1": 0.3333333333333333,
+            "3": 1,
+            "5": 1
+          },
+          "mrr": 0.6481481481481483
+        },
+        "latency": {
+          "p50": 12.101750005967915,
+          "p95": 12.788499996531755
+        },
+        "samples": 12,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-fc-route-choice",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/routing.md#how-a-route-is-chosen",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.031754032258064516
+              },
+              {
+                "ref": "docs/depot-operations.md",
+                "score": 0.031024531024531024
+              },
+              {
+                "ref": "docs/routing.md#zone-graph",
+                "score": 0.030117753623188408
+              }
+            ],
+            "durationMs": [
+              12.788499996531755
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-late-handin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/depot-operations.md#handover-to-a-courier",
+                "score": 0.031754032258064516
+              },
+              {
+                "ref": "docs/depot-operations.md#sort-plans",
+                "score": 0.031054405392392875
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.030158730158730156
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.02946912242686891
+              }
+            ],
+            "durationMs": [
+              12.432208051905036
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-barcode-contents",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.03149801587301587
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.031054405392392875
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.031009615384615385
+              }
+            ],
+            "durationMs": [
+              11.21537497965619
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-unreadable-label",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md",
+                "score": 0.032266458495966696
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.032018442622950824
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.031009615384615385
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.030621785881252923
+              }
+            ],
+            "durationMs": [
+              12.125916953664273
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.032266458495966696,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-billable-weight",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.032266458495966696
+              },
+              {
+                "ref": "docs/rates.md",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.03055037313432836
+              },
+              {
+                "ref": "docs/rates.md#remote-area-surcharge",
+                "score": 0.03055037313432836
+              }
+            ],
+            "durationMs": [
+              11.318709002807736
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-surcharge-compounding",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/rates.md#remote-area-surcharge",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/rates.md",
+                "score": 0.03225806451612903
+              },
+              {
+                "ref": "docs/rates.md#fuel-surcharge",
+                "score": 0.03149801587301587
+              },
+              {
+                "ref": "docs/rates.md#rate-cards",
+                "score": 0.03125763125763126
+              },
+              {
+                "ref": "docs/rates.md#volumetric-weight",
+                "score": 0.030776515151515152
+              }
+            ],
+            "durationMs": [
+              12.122999993152916
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-fc-webhook-retry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.03225806451612903
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.030776515151515152
+              },
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.030309988518943745
+              },
+              {
+                "ref": "docs/webhooks.md#subscribing-to-events",
+                "score": 0.030117753623188408
+              }
+            ],
+            "durationMs": [
+              11.49841700680554
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-verify-callback",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.031754032258064516
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.03036576949620428
+              },
+              {
+                "ref": "docs/tracking.md#event-ordering-and-duplicates",
+                "score": 0.02967032967032967
+              }
+            ],
+            "durationMs": [
+              11.662417033221573
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-token-lifetime",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/api-auth.md#api-keys",
+                "score": 0.03125763125763126
+              },
+              {
+                "ref": "docs/api-auth.md#scopes",
+                "score": 0.030798389007344232
+              },
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.029857397504456328
+              }
+            ],
+            "durationMs": [
+              12.101750005967915
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-negative-recruitment",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.031054405392392875
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.030158730158730156
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.030117753623188408
+              },
+              {
+                "ref": "docs/tracking.md#estimated-delivery-window",
+                "score": 0.03007688828584351
+              },
+              {
+                "ref": "docs/exceptions.md#claims-for-a-lost-parcel",
+                "score": 0.029877369007803793
+              }
+            ],
+            "durationMs": [
+              12.186790991108865
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.031054405392392875
+          },
+          {
+            "id": "q-fc-negative-lattice",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/depot-operations.md#bay-numbering",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/api-auth.md#scopes",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.00412500090897
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-fc-negative-datastore",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.031754032258064516
+              },
+              {
+                "ref": "docs/tracking.md",
+                "score": 0.0315136476426799
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.031024531024531024
+              },
+              {
+                "ref": "docs/api-auth.md#scopes",
+                "score": 0.029906956136464335
+              },
+              {
+                "ref": "docs/exceptions.md#returns-to-sender",
+                "score": 0.029411764705882353
+              }
+            ],
+            "durationMs": [
+              12.573125015478581
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.031754032258064516
+          }
+        ]
+      }
+    },
+    {
+      "arm": "E",
+      "mode": "fused-rerank",
+      "ran": true,
+      "embedCalls": null,
+      "rerankCalls": null,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 9,
+        "negatives": 3,
+        "recall": {
+          "1": 0.4444444444444444,
+          "3": 0.6666666666666666,
+          "5": 0.6666666666666666
+        },
+        "mrr": 0.5555555555555556,
+        "strict": {
+          "recall": {
+            "1": 0.4444444444444444,
+            "3": 0.6666666666666666,
+            "5": 0.6666666666666666
+          },
+          "mrr": 0.5555555555555556
+        },
+        "latency": {
+          "p50": 322.0823329756968,
+          "p95": 437.8024580073543
+        },
+        "samples": 12,
+        "abstainedOnNegative": 3,
+        "perQuery": [
+          {
+            "id": "q-fc-route-choice",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9988631010055542,
+            "hits": [
+              {
+                "ref": "docs/routing.md",
+                "score": 0.9988631010055542
+              },
+              {
+                "ref": "docs/routing.md#how-a-route-is-chosen",
+                "score": 0.9973241090774536
+              },
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.9651141166687012
+              },
+              {
+                "ref": "docs/depot-operations.md",
+                "score": 0.9212621450424194
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.7978474497795105
+              }
+            ],
+            "durationMs": [
+              437.8024580073543
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9988631010055542,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-late-handin",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9826201796531677,
+            "hits": [
+              {
+                "ref": "docs/routing.md#cut-off-times",
+                "score": 0.9826201796531677
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.7108510136604309
+              },
+              {
+                "ref": "docs/depot-operations.md#handover-to-a-courier",
+                "score": 0.2780119776725769
+              },
+              {
+                "ref": "docs/depot-operations.md#sort-plans",
+                "score": 0.11194062978029251
+              },
+              {
+                "ref": "docs/exceptions.md#returns-to-sender",
+                "score": 0.05006678029894829
+              }
+            ],
+            "durationMs": [
+              328.8272089557722
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9826201796531677,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-barcode-contents",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9506157636642456,
+            "hits": [
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.9506157636642456
+              },
+              {
+                "ref": "docs/labels.md#label-anatomy",
+                "score": 0.9251925349235535
+              },
+              {
+                "ref": "docs/labels.md#printing-and-label-stock",
+                "score": 0.7847296595573425
+              },
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.6484175324440002
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.026382077485322952
+              }
+            ],
+            "durationMs": [
+              324.30420798482373
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9506157636642456,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-unreadable-label",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9986984729766846,
+            "hits": [
+              {
+                "ref": "docs/labels.md#when-a-label-is-rejected",
+                "score": 0.9986984729766846
+              },
+              {
+                "ref": "docs/depot-operations.md#inbound-scanning",
+                "score": 0.994971513748169
+              },
+              {
+                "ref": "docs/labels.md",
+                "score": 0.9889156818389893
+              },
+              {
+                "ref": "docs/labels.md#the-routing-barcode",
+                "score": 0.9096108078956604
+              },
+              {
+                "ref": "docs/INDEX.md",
+                "score": 0.8760932683944702
+              }
+            ],
+            "durationMs": [
+              319.8585420032032
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9986984729766846,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-billable-weight",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.0000418541458202526,
+            "hits": [],
+            "durationMs": [
+              322.9063340113498
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-fc-surcharge-compounding",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.0006077482830733061,
+            "hits": [],
+            "durationMs": [
+              315.5857920064591
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-fc-webhook-retry",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.5779462456703186,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.5779462456703186
+              },
+              {
+                "ref": "docs/webhooks.md#delivery-and-retries",
+                "score": 0.027225645259022713
+              },
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.0011239097220823169
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.00048003793926909566
+              },
+              {
+                "ref": "docs/exceptions.md#redelivery-attempts",
+                "score": 0.0001914267340907827
+              }
+            ],
+            "durationMs": [
+              340.35137499449775
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.5779462456703186,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-fc-verify-callback",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.07975812256336212,
+            "hits": [],
+            "durationMs": [
+              324.5120419887826
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-fc-token-lifetime",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9835885763168335,
+            "hits": [
+              {
+                "ref": "docs/api-auth.md#token-exchange",
+                "score": 0.9835885763168335
+              },
+              {
+                "ref": "docs/api-auth.md#rotating-a-key",
+                "score": 0.44368594884872437
+              },
+              {
+                "ref": "docs/webhooks.md#replaying-missed-events",
+                "score": 0.0005380948423407972
+              },
+              {
+                "ref": "docs/api-auth.md#api-keys",
+                "score": 0.00024275512259919196
+              },
+              {
+                "ref": "docs/webhooks.md#signature-verification",
+                "score": 0.00011720231123035774
+              }
+            ],
+            "durationMs": [
+              322.0823329756968
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9835885763168335,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-fc-negative-recruitment",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.0001894959423225373,
+            "hits": [],
+            "durationMs": [
+              322.0062080072239
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-fc-negative-lattice",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.000013054699593340047,
+            "hits": [],
+            "durationMs": [
+              319.28487500408664
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-fc-negative-datastore",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.1303105354309082,
+            "hits": [],
+            "durationMs": [
+              129.65974997496232
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+<!-- eval:corpus:fixture-catalog@python:end -->
+
+<!-- eval:corpus:self-docs@typescript:start -->
+### Corpus `self-docs` — backend `typescript`
+
+| Arm | Mode | recall@1 | recall@3 | recall@5 | MRR | strict recall@5 | strict MRR | p50 ms | p95 ms | cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A | — | — | — | — | — | — | — | — | — | awaiting hand run |
+| B | `lexical` | 0.467 | 0.600 | 0.800 | 0.577 | 0.533 | 0.352 | 1.1 | 4.6 | local — no billed tokens (0 embed calls, 0 rerank calls) |
+| C | `vector` | 0.533 | 0.600 | 0.667 | 0.569 | 0.333 | 0.247 | 4.5 | 7.5 | local — no billed tokens (20 embed calls, 0 rerank calls) |
+| D | `fused` | 0.533 | 0.667 | 0.733 | 0.606 | 0.667 | 0.347 | 7.4 | 9.3 | local — no billed tokens (20 embed calls, 0 rerank calls) |
+| E | `fused-rerank` | 0.400 | 0.533 | 0.600 | 0.483 | 0.533 | 0.367 | 551.0 | 735.3 | local — no billed tokens (20 embed calls, 20 rerank calls) |
+
+Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its rows are
+filled by re-running the eval with one `--transcript` per variant against a hand-run transcript, per the
+procedure in `docs/retrieval-eval.md` → `## Running arm A by hand`. The arm A rows, when present, are each
+scored from the **first repetition's** transcript of that variant; the spread across repetitions is
+hand-written below the end marker.
+
+The `cost` column is not a score, and **the arms' scores are not comparable across rows**: the non-reranking
+modes report rank-derived reciprocal-rank-fusion values in the `0.004`–`0.033` range, while the reranking mode
+reports calibrated `[0, 1]` cross-encoder scores. Compare recall, MRR and latency across rows; compare scores only
+within a row.
+
+**Provenance.**
+
+- Corpus `self-docs` — snapshot `{ files: 20, chunks: 331 }`,
+  as the index build of this run reported it. A figure over `self-docs` is read with this stamp beside it;
+  two figures carrying different stamps are not a before/after pair.
+- `docs.root`: `docs`, as the runner set it (the eval owns the retrieval gate and
+  `docs.root` alone).
+- The corpus is *every* `*.md` under that `docs.root`, with no file filtered out, so a document added
+  under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
+  file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
+  taken before such a document existed is therefore a different corpus.
+- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
+  - `cli` (path `cli`) → `.claude/context/cli.md`
+  - `plugin` (path `plugin`) → `.claude/context/plugin.md`
+  - `general` (path `.`) → `.claude/context/conventions.md`
+- Backend `typescript`: this checkout's `cli/dist` driven in process — the same path as the unlabelled
+  block, run again in this session.
+- Query set: `evals/docs-retrieval/queries/self-docs.jsonl` — 15 positive, 5 negative.
+- `k`: 5; repetitions per query: 1.
+- Embedder: `Xenova/bge-small-en-v1.5:q8:cls:384:v1`. Reranker: `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1` — loaded and run outside the stub.
+- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
+- The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
+  pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
+  calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —
+  so both variables that moved between the two readings, the threshold and the corpus, are named.
+- Host `darwin 24.6.0`, Node `v22.23.2`, 2026-10-08T05:32:40.365Z.
+
+```json
+{
+  "corpus": "self-docs",
+  "backend": "typescript",
+  "snapshot": {
+    "files": 20,
+    "chunks": 331
+  },
+  "abstainScoreThreshold": 0.32,
+  "embedder": "Xenova/bge-small-en-v1.5:q8:cls:384:v1",
+  "reranker": "Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1",
+  "k": 5,
+  "repeat": 1,
+  "queries": {
+    "path": "evals/docs-retrieval/queries/self-docs.jsonl",
+    "positives": 15,
+    "negatives": 5
+  },
+  "generatedAt": "2026-10-08T05:32:40.365Z",
+  "host": "darwin 24.6.0",
+  "node": "v22.23.2",
+  "arms": [
+    {
+      "arm": "A",
+      "variant": null,
+      "mode": null,
+      "ran": false
+    },
+    {
+      "arm": "B",
+      "mode": "lexical",
+      "ran": true,
+      "embedCalls": 0,
+      "rerankCalls": 0,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 15,
+        "negatives": 5,
+        "recall": {
+          "1": 0.4666666666666667,
+          "3": 0.6,
+          "5": 0.8
+        },
+        "mrr": 0.5766666666666667,
+        "strict": {
+          "recall": {
+            "1": 0.26666666666666666,
+            "3": 0.4,
+            "5": 0.5333333333333333
+          },
+          "mrr": 0.3522222222222222
+        },
+        "latency": {
+          "p50": 1.0619999999980791,
+          "p95": 4.552332999999635
+        },
+        "samples": 20,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-sd-new-config-key",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/typecheck-key-decision.md#3-can-another-family-reach-this-state",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md#10-how-this-is-tested",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#4-stack-detection",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#6-option-c--a-composer-family-fallback",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              9.991249999999127
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 5,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-deny-guard",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": ".claude/context/conventions.md#output-logging-and-errors",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/guard-verification.md#14-two-preconditions-the-whole-set-inherits-from-the-configuration-load",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/watcher.md#2-the-scripts",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#3-the-allowdeny-surface",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.3927919999987353
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-sd-new-subcommand",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": ".claude/context/cli.md#naming-and-file-layout",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/cli.md#what-done-means-here",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/cli.md#one-example--the-shape-a-rule-takes-here",
+                "score": 0.015625
+              },
+              {
+                "ref": ".claude/context/cli.md#not-determined",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.7324579999985872
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-run-gates",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#the-testing-bar",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#1-the-bind",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#6-option-c--a-composer-family-fallback",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.2486669999998412
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-state-dir",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#1-the-three-resolution-classes",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/conventions.md#plugin-asset-authoring",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#7-doctor",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.7842909999999392
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-commit-prefix",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/guard-verification.md#31-narrowed--allow--silent",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-real-catalog-query-set",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/conventions.md#where-a-new-responsibility-goes",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/development.md#5-verifying-a-change",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              4.552332999999635
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-guard-shell-options",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#shell-assets",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/development.md#3-manifest-facts-a-contributor-must-not-rediscover",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/plugin.md#registries--a-name-routed-to-an-implementation",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/cli.md#8-config",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/guard-verification.md#24-disclosed-residuals-re-confirmed",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.6536249999990105
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-cross-asset-reference",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": ".claude/context/conventions.md#plugin-asset-authoring",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/plugin.md#citation",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/development.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/development.md#4-userconfig-reserved",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.7874999999985448
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-sd-daemon-lifecycle",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/cli.md#what-done-means-here",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#17-the-generated-wrappers-arguments-anchor-detached-start",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#23-the-recorded-pid-and-what-signalling-it-actually-does",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/cli.md#5-the-wrapper-script-contract",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/remote-execution.md#5-the-seam-and-what-stays-open",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.8424579999991693
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-usage-limit",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/watcher.md#5-machine-level-usage-lane",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/remote-execution.md#9-credentials-and-billing",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval.md#running-arm-a-by-hand",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/remote-execution.md#what-differs-on-a-self-hosted-runner",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.0619999999980791
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-search-abstains",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval.md#switching-back-and-what-stays",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval.md#measuring-the-python-backend-against-the-typescript-one",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#arm-a--the-real-catalog-hand-run",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval-eval.md#what-to-do-with-the-result",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.8395830000008573
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-retrieval-network",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#10-how-this-is-tested",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/cli.md#offline-by-construction",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval.md#turning-on-the-python-backend",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.6573750000025029
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 4,
+            "strictRank": 4
+          },
+          {
+            "id": "q-sd-analyze-writes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/conventions.md#the-testing-bar",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/analyze.md#1-the-target-vocabulary",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/analyze.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.8002090000009048
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-stack-detection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-maintainers-decision",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#7-recommendation",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#4-stack-detection",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.692084000002069
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 5,
+            "strictRank": 5
+          },
+          {
+            "id": "q-sd-second-init",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#6-option-c--a-composer-family-fallback",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#7-doctor",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/development.md#5-verifying-a-change",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#5-the-wrapper-script-contract",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.8820420000010927
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-negative-ingress",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/remote-execution.md#setting-up-a-self-hosted-runner",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/guard-verification.md#37-the-sweep-behind-the-verdict",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.2976659999985714
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-tungsten",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-observed-distributions-quoted",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "score": 0.015625
+              },
+              {
+                "ref": ".claude/context/plugin.md#the-commit-message-policy",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.0032920000012382
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-blog",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval.md#what-it-costs",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/cli.md#naming-and-file-layout",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval.md#measured-and-how",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.1528330000001006
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-grpc",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-python-backend",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval.md#turning-on-the-python-backend",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval-eval.md#measuring-the-python-backend-against-the-typescript-one",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.9318749999983993
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-migration",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/conventions.md#the-stack-in-the-words-the-rules-below-use",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/analyze.md#6-what-it-could-not-determine",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval.md#its-database",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              0.8641250000000582
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          }
+        ]
+      }
+    },
+    {
+      "arm": "C",
+      "mode": "vector",
+      "ran": true,
+      "embedCalls": 20,
+      "rerankCalls": 0,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 15,
+        "negatives": 5,
+        "recall": {
+          "1": 0.5333333333333333,
+          "3": 0.6,
+          "5": 0.6666666666666666
+        },
+        "mrr": 0.5688888888888889,
+        "strict": {
+          "recall": {
+            "1": 0.2,
+            "3": 0.26666666666666666,
+            "5": 0.3333333333333333
+          },
+          "mrr": 0.24666666666666667
+        },
+        "latency": {
+          "p50": 4.474582999999257,
+          "p95": 7.494332999998733
+        },
+        "samples": 20,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-sd-new-config-key",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/config.md#2-where-configuration-lives",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/development.md#4-userconfig-reserved",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#7-recommendation",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/config.md#4-token--class--home",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              4.474582999999257
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-deny-guard",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/guard-verification.md#21-helper-call-order-composition",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/guard-verification.md#22-expansion-bypass-rows",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/guard-verification.md#33-widened--silent--allow",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/guard-verification.md#35-jurisdiction-and-defaults",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.8924999999981083
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-new-subcommand",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md#1-global-flags-and-exit-codes",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/cli.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/cli.md#what-this-layer-owns-and-what-it-is-not",
+                "score": 0.015625
+              },
+              {
+                "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.7079999999987194
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 5,
+            "strictRank": 5
+          },
+          {
+            "id": "q-sd-run-gates",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/development.md#5-verifying-a-change",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#4-option-a--make-the-key-optional",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/github-run-control.md#8-what-is-not-verified-here",
+                "score": 0.015625
+              },
+              {
+                "ref": ".claude/context/plugin.md#verifying-a-change-in-this-layer",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              5.509791000000405
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-state-dir",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#3-statedir",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval.md#how-to-run-it",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/watcher.md#the-path",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.015625
+              },
+              {
+                "ref": ".claude/context/plugin.md#a-worked-example",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.718290999997407
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-commit-prefix",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/github-integration-research.md#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/plugin.md#the-commit-message-policy",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/github-integration-research.md#t5-gits-and-githubs-rules-on-branch-names-that-matter-for-a-derived-slug-git-check-ref-format-length-limits-case-sensitivity",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/github-integration-research.md#s6-the-maximum-length-of-an-issue-or-pr-comment-body",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.579708000001119
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-guard-shell-options",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/guard-verification.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/guard-verification.md#12-per-guard-and-composite-latency-ms-per-call",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/guard-verification.md#0-method",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/guard-verification.md#15-costs-measured-and-not-addressed",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.3837920000005397
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-cross-asset-reference",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#plugin-asset-authoring",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": ".claude/context/plugin.md#citation",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/plugin.md#what-this-layer-is",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.015625
+              },
+              {
+                "ref": ".claude/context/plugin.md#verifying-a-change-in-this-layer",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.3385420000013255
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-sd-daemon-lifecycle",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/outer-loop-verification.md#21-exit-classification",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/github-run-control.md#1-commands-in-a-comment",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/github-run-control.md#5-lifecycle-comments-and-state-labels",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/second-runtime-port-decision.md#1-the-planning-loop-is-already-a-graph",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.539874999998574
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-usage-limit",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/watcher.md#5-machine-level-usage-lane",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/remote-execution.md#the-usage-gate",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/remote-execution.md#what-differs-on-a-self-hosted-runner",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/watcher.md#the-policy-a-coordinating-record-and-an-opt-in-lock",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#25-the-usage-gate",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              7.494332999998733
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-search-abstains",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#11-docs",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-maintainers-decision",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval.md#still-open",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-verdict",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#docs-serve",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              5.023499999999331
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-retrieval-network",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#docs-index",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#arm-a--the-real-catalog-hand-run",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.776292000002286
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-analyze-writes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/analyze.md#8-how-this-is-verified",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/analyze.md#2-mode-greenfield-or-existing",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/analyze.md#12-the-corpus-passs-own-decisions",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/analyze.md#6-what-it-could-not-determine",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              3.5585839999985183
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-stack-detection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#10-how-this-is-tested",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/config.md#1-the-three-resolution-classes",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              7.0022920000010345
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-second-init",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/outer-loop-verification.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              8.003375000000233
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-negative-ingress",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#1-the-three-resolution-classes",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/config.md#2-where-configuration-lives",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/config.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/config.md#4-token--class--home",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/development.md#4-userconfig-reserved",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              6.944583000000421
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-tungsten",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#threshold-calibration",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/watcher.md#for-a-consumer-written-in-typescript",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-177-chunk-build--this-repositorys-own-docs-2026-09-21",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-observed-distributions-quoted",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-value-this-replaces",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              4.626333000000159
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-blog",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/github-integration-research.md#a2-github-marketplace-can-a-reusable-workflow-be-listed-or-only-an-action",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/github-integration-research.md#c1-pull_request_review-submitted-pull_request_review_comment-and-issue_comment-on-a-pr-which-review-states-exist-in-the-payload-and-how-to-fetch-every-inline-comment-of-one-review-with-its-file-and-line",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/development.md#7-releasing",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/github-run-control.md#3-answering-a-park-in-a-comment",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/github-integration-research.md#a8-the-claude-github-app-what-it-installs-its-permissions-its-credentials",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              6.301250000000437
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-grpc",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#how-arm-a-navigated-a-156-file-catalog",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval.md#when-to-turn-it-on",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-command",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              6.399624999998196
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-migration",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/second-runtime-port-decision.md#3-a-checkpointer-would-be-a-second-source-of-truth",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval.md#what-this-buys-you",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/second-runtime-port-decision.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/development.md#7-releasing",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              6.309666999997717
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          }
+        ]
+      }
+    },
+    {
+      "arm": "D",
+      "mode": "fused",
+      "ran": true,
+      "embedCalls": 20,
+      "rerankCalls": 0,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 15,
+        "negatives": 5,
+        "recall": {
+          "1": 0.5333333333333333,
+          "3": 0.6666666666666666,
+          "5": 0.7333333333333333
+        },
+        "mrr": 0.6055555555555555,
+        "strict": {
+          "recall": {
+            "1": 0.2,
+            "3": 0.4666666666666667,
+            "5": 0.6666666666666666
+          },
+          "mrr": 0.3466666666666667
+        },
+        "latency": {
+          "p50": 7.433958000001439,
+          "p95": 9.349207999999635
+        },
+        "samples": 20,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-sd-new-config-key",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.03177805800756621
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#7-recommendation",
+                "score": 0.030330882352941176
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#3-can-another-family-reach-this-state",
+                "score": 0.03028233151183971
+              },
+              {
+                "ref": "docs/cli.md#8-config",
+                "score": 0.028309409888357256
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
+                "score": 0.027809742999616416
+              }
+            ],
+            "durationMs": [
+              7.933249999998225
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03177805800756621,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-deny-guard",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/guard-verification.md#35-jurisdiction-and-defaults",
+                "score": 0.030536130536130537
+              },
+              {
+                "ref": "docs/guard-verification.md#25-directory-de-quoting-the-widening-and-its-paired-refusal",
+                "score": 0.029850746268656716
+              },
+              {
+                "ref": "docs/guard-verification.md#14-two-preconditions-the-whole-set-inherits-from-the-configuration-load",
+                "score": 0.02976190476190476
+              },
+              {
+                "ref": "docs/guard-verification.md#32-tightened--silent--deny",
+                "score": 0.028594771241830064
+              }
+            ],
+            "durationMs": [
+              8.294957999998587
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-new-subcommand",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
+                "score": 0.03177805800756621
+              },
+              {
+                "ref": ".claude/context/cli.md#what-done-means-here",
+                "score": 0.03057889822595705
+              },
+              {
+                "ref": "docs/cli.md#1-global-flags-and-exit-codes",
+                "score": 0.0304147465437788
+              },
+              {
+                "ref": ".claude/context/cli.md#what-this-layer-owns-and-what-it-is-not",
+                "score": 0.029138513513513514
+              },
+              {
+                "ref": ".claude/context/cli.md#not-determined",
+                "score": 0.0288981288981289
+              }
+            ],
+            "durationMs": [
+              7.433958000001439
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03177805800756621,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-run-gates",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/typecheck-key-decision.md#1-the-bind",
+                "score": 0.03128054740957967
+              },
+              {
+                "ref": "docs/development.md#5-verifying-a-change",
+                "score": 0.030679156908665108
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#4-option-a--make-the-key-optional",
+                "score": 0.03021353930031804
+              },
+              {
+                "ref": ".claude/context/conventions.md#the-testing-bar",
+                "score": 0.02938045560996381
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
+                "score": 0.029273504273504274
+              }
+            ],
+            "durationMs": [
+              8.11041699999987
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03128054740957967,
+            "rank": 2,
+            "strictRank": 4
+          },
+          {
+            "id": "q-sd-state-dir",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#3-statedir",
+                "score": 0.031099324975891997
+              },
+              {
+                "ref": "docs/watcher.md#for-a-consumer-written-in-typescript",
+                "score": 0.03007688828584351
+              },
+              {
+                "ref": ".claude/context/plugin.md#a-worked-example",
+                "score": 0.027884615384615386
+              },
+              {
+                "ref": "docs/watcher.md#the-path",
+                "score": 0.026289682539682536
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.026263297872340427
+              }
+            ],
+            "durationMs": [
+              7.116915999999037
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.031099324975891997,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-commit-prefix",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": ".claude/context/plugin.md#the-commit-message-policy",
+                "score": 0.029957522915269395
+              },
+              {
+                "ref": "docs/github-integration-research.md#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length",
+                "score": 0.02964254577157803
+              },
+              {
+                "ref": ".claude/context/plugin.md#what-this-layer-is",
+                "score": 0.028991596638655463
+              },
+              {
+                "ref": "docs/github-integration-research.md#6-leads-this-research-refutes",
+                "score": 0.027799227799227798
+              }
+            ],
+            "durationMs": [
+              5.243749999997817
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-guard-shell-options",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
+                "score": 0.031024531024531024
+              },
+              {
+                "ref": "docs/development.md#3-manifest-facts-a-contributor-must-not-rediscover",
+                "score": 0.0304147465437788
+              },
+              {
+                "ref": ".claude/context/conventions.md#shell-assets",
+                "score": 0.029551337359792925
+              },
+              {
+                "ref": "docs/guard-verification.md",
+                "score": 0.02921395544346364
+              },
+              {
+                "ref": "docs/guard-verification.md#15-costs-measured-and-not-addressed",
+                "score": 0.027579737335834898
+              }
+            ],
+            "durationMs": [
+              4.043750000000728
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.031024531024531024,
+            "rank": 3,
+            "strictRank": 3
+          },
+          {
+            "id": "q-sd-cross-asset-reference",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#plugin-asset-authoring",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.032018442622950824
+              },
+              {
+                "ref": ".claude/context/plugin.md#citation",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": ".claude/context/plugin.md#what-this-layer-is",
+                "score": 0.029386529386529386
+              },
+              {
+                "ref": "docs/development.md",
+                "score": 0.029138513513513514
+              }
+            ],
+            "durationMs": [
+              6.600625000002765
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-sd-daemon-lifecycle",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/outer-loop-verification.md#23-the-recorded-pid-and-what-signalling-it-actually-does",
+                "score": 0.031024531024531024
+              },
+              {
+                "ref": "docs/github-run-control.md#1-commands-in-a-comment",
+                "score": 0.031024531024531024
+              },
+              {
+                "ref": "docs/github-run-control.md#5-lifecycle-comments-and-state-labels",
+                "score": 0.030330882352941176
+              },
+              {
+                "ref": "docs/cli.md#9-daemon",
+                "score": 0.026547116736990152
+              },
+              {
+                "ref": "docs/remote-execution.md#5-the-seam-and-what-stays-open",
+                "score": 0.026373626373626377
+              }
+            ],
+            "durationMs": [
+              7.477208000000246
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.031024531024531024,
+            "rank": 4,
+            "strictRank": 4
+          },
+          {
+            "id": "q-sd-usage-limit",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/watcher.md#5-machine-level-usage-lane",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/remote-execution.md#what-differs-on-a-self-hosted-runner",
+                "score": 0.03125763125763126
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#25-the-usage-gate",
+                "score": 0.030090497737556562
+              },
+              {
+                "ref": "docs/remote-execution.md#the-usage-gate",
+                "score": 0.029827662395050816
+              },
+              {
+                "ref": "docs/watcher.md#the-policy-a-coordinating-record-and-an-opt-in-lock",
+                "score": 0.028612012987012988
+              }
+            ],
+            "durationMs": [
+              7.792291000001569
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-search-abstains",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict",
+                "score": 0.031024531024531024
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.02964426877470356
+              },
+              {
+                "ref": "docs/retrieval.md#switching-back-and-what-stays",
+                "score": 0.029551337359792925
+              },
+              {
+                "ref": "docs/cli.md#docs-serve",
+                "score": 0.029083245521601686
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-maintainers-decision",
+                "score": 0.028177225029148854
+              }
+            ],
+            "durationMs": [
+              6.92987500000163
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.031024531024531024,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-retrieval-network",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/cli.md#11-docs",
+                "score": 0.029211087420042643
+              },
+              {
+                "ref": "docs/retrieval-eval.md#running-arm-a-by-hand",
+                "score": 0.027479766610201392
+              },
+              {
+                "ref": "docs/cli.md#docs-index",
+                "score": 0.027236652236652236
+              },
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.02712049508554787
+              }
+            ],
+            "durationMs": [
+              6.975750000001426
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-analyze-writes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/analyze.md",
+                "score": 0.030309988518943745
+              },
+              {
+                "ref": "docs/analyze.md#1-the-target-vocabulary",
+                "score": 0.030117753623188408
+              },
+              {
+                "ref": "docs/analyze.md#10-what-the-skeletons-say-now-the-offer-exists",
+                "score": 0.029857397504456328
+              },
+              {
+                "ref": "docs/analyze.md#3-what-it-may-write",
+                "score": 0.028577260665441927
+              }
+            ],
+            "durationMs": [
+              7.841000000000349
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 5
+          },
+          {
+            "id": "q-sd-stack-detection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.031544957774465976
+              },
+              {
+                "ref": "docs/cli.md#4-stack-detection",
+                "score": 0.030536130536130537
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#7-recommendation",
+                "score": 0.027673192771084338
+              },
+              {
+                "ref": "docs/config.md#1-the-three-resolution-classes",
+                "score": 0.02661401098901099
+              },
+              {
+                "ref": ".claude/context/cli.md#how-a-module-in-this-layer-is-written",
+                "score": 0.02628900949796472
+              }
+            ],
+            "durationMs": [
+              9.349207999999635
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.031544957774465976,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-sd-second-init",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/outer-loop-verification.md",
+                "score": 0.030798389007344232
+              },
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.03009207275993712
+              },
+              {
+                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
+                "score": 0.028665028665028666
+              },
+              {
+                "ref": "docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind",
+                "score": 0.027119252873563218
+              }
+            ],
+            "durationMs": [
+              9.070874999997613
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-sd-negative-ingress",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/remote-execution.md#setting-up-a-self-hosted-runner",
+                "score": 0.031054405392392875
+              },
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.02664576802507837
+              },
+              {
+                "ref": "docs/guard-verification.md#14-two-preconditions-the-whole-set-inherits-from-the-configuration-load",
+                "score": 0.02606951871657754
+              },
+              {
+                "ref": "docs/github-integration-research.md#a6-github-apps-what-one-needs-hosted-the-workflows-permission-a-thin-relay-and-hosting-cost",
+                "score": 0.02191142191142191
+              },
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.020410288451525566
+              }
+            ],
+            "durationMs": [
+              9.377042000000074
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.031054405392392875
+          },
+          {
+            "id": "q-sd-negative-tungsten",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-observed-distributions-quoted",
+                "score": 0.031754032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#threshold-calibration",
+                "score": 0.030886196246139225
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.03009207275993712
+              },
+              {
+                "ref": ".claude/context/plugin.md#sample-fixtures",
+                "score": 0.02758751902587519
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#0-method-and-fixtures",
+                "score": 0.025003906860446942
+              }
+            ],
+            "durationMs": [
+              7.6897920000010345
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.031754032258064516
+          },
+          {
+            "id": "q-sd-negative-blog",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/github-run-control.md#5-lifecycle-comments-and-state-labels",
+                "score": 0.028309409888357256
+              },
+              {
+                "ref": "docs/github-integration-research.md#a2-github-marketplace-can-a-reusable-workflow-be-listed-or-only-an-action",
+                "score": 0.028298204527712725
+              },
+              {
+                "ref": "docs/github-integration-research.md#t6-jira-automation--github-repository_dispatch-whether-it-works-as-described-and-what-a-jira-rule-needs-gitlabs-equivalent-route",
+                "score": 0.02821939586645469
+              },
+              {
+                "ref": "docs/github-integration-research.md#c1-pull_request_review-submitted-pull_request_review_comment-and-issue_comment-on-a-pr-which-review-states-exist-in-the-payload-and-how-to-fetch-every-inline-comment-of-one-review-with-its-file-and-line",
+                "score": 0.028177225029148854
+              },
+              {
+                "ref": "docs/development.md#7-releasing",
+                "score": 0.027236652236652236
+              }
+            ],
+            "durationMs": [
+              7.2074589999974705
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.028309409888357256
+          },
+          {
+            "id": "q-sd-negative-grpc",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.03149801587301587
+              },
+              {
+                "ref": "docs/cli.md#docs-serve",
+                "score": 0.028577260665441927
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.02803379416282642
+              },
+              {
+                "ref": "docs/retrieval.md#when-to-turn-it-on",
+                "score": 0.02738970588235294
+              },
+              {
+                "ref": "docs/retrieval.md#what-it-costs",
+                "score": 0.027272727272727275
+              }
+            ],
+            "durationMs": [
+              7.005250000001979
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03149801587301587
+          },
+          {
+            "id": "q-sd-negative-migration",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval.md#what-this-buys-you",
+                "score": 0.03036576949620428
+              },
+              {
+                "ref": "docs/retrieval.md#turning-on-the-python-backend",
+                "score": 0.02821939586645469
+              },
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.026655348047538198
+              },
+              {
+                "ref": ".claude/context/conventions.md#the-stack-in-the-words-the-rules-below-use",
+                "score": 0.026625704045058884
+              },
+              {
+                "ref": "docs/retrieval.md#its-database",
+                "score": 0.025588697017268444
+              }
+            ],
+            "durationMs": [
+              7.055707999999868
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03036576949620428
+          }
+        ]
+      }
+    },
+    {
+      "arm": "E",
+      "mode": "fused-rerank",
+      "ran": true,
+      "embedCalls": 20,
+      "rerankCalls": 20,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 15,
+        "negatives": 5,
+        "recall": {
+          "1": 0.4,
+          "3": 0.5333333333333333,
+          "5": 0.6
+        },
+        "mrr": 0.48333333333333334,
+        "strict": {
+          "recall": {
+            "1": 0.26666666666666666,
+            "3": 0.4,
+            "5": 0.5333333333333333
+          },
+          "mrr": 0.36666666666666664
+        },
+        "latency": {
+          "p50": 551.0106670000023,
+          "p95": 735.3233749999999
+        },
+        "samples": 20,
+        "abstainedOnNegative": 4,
+        "perQuery": [
+          {
+            "id": "q-sd-new-config-key",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.28313547372817993,
+            "hits": [],
+            "durationMs": [
+              874.8825419999994
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-deny-guard",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.8057302832603455,
+            "hits": [
+              {
+                "ref": "docs/outer-loop-verification.md#3-the-allowdeny-surface",
+                "score": 0.8057302832603455
+              },
+              {
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "score": 0.7180002927780151
+              },
+              {
+                "ref": "docs/guard-verification.md#32-tightened--silent--deny",
+                "score": 0.6071503162384033
+              },
+              {
+                "ref": "docs/guard-verification.md#37-the-sweep-behind-the-verdict",
+                "score": 0.518258273601532
+              },
+              {
+                "ref": "docs/guard-verification.md#24-disclosed-residuals-re-confirmed",
+                "score": 0.3597424030303955
+              }
+            ],
+            "durationMs": [
+              735.3233749999999
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.8057302832603455,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-new-subcommand",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9983572363853455,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
+                "score": 0.9983572363853455
+              },
+              {
+                "ref": ".claude/context/cli.md#naming-and-file-layout",
+                "score": 0.9501073360443115
+              },
+              {
+                "ref": ".claude/context/cli.md#not-determined",
+                "score": 0.8473964333534241
+              },
+              {
+                "ref": ".claude/context/cli.md#what-done-means-here",
+                "score": 0.6877986192703247
+              },
+              {
+                "ref": ".claude/context/plugin.md#what-accompanies-a-new-unit-of-each-kind",
+                "score": 0.650257408618927
+              }
+            ],
+            "durationMs": [
+              532.5877089999994
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9983572363853455,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-run-gates",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.12861837446689606,
+            "hits": [],
+            "durationMs": [
+              604.8329999999987
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-state-dir",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9111862778663635,
+            "hits": [
+              {
+                "ref": "docs/config.md#3-statedir",
+                "score": 0.9111862778663635
+              },
+              {
+                "ref": ".claude/context/plugin.md#a-worked-example",
+                "score": 0.8781256675720215
+              },
+              {
+                "ref": "docs/retrieval-eval.md#how-to-run-it",
+                "score": 0.5213450193405151
+              },
+              {
+                "ref": "docs/config.md#1-the-three-resolution-classes",
+                "score": 0.4460771083831787
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.30296963453292847
+              }
+            ],
+            "durationMs": [
+              550.4494580000028
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9111862778663635,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-commit-prefix",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.713011622428894,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "score": 0.713011622428894
+              },
+              {
+                "ref": ".claude/context/plugin.md#the-commit-message-policy",
+                "score": 0.002779914764687419
+              },
+              {
+                "ref": "docs/github-integration-research.md#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length",
+                "score": 0.0010913428850471973
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-real-catalog-query-set",
+                "score": 0.00034904005588032305
+              },
+              {
+                "ref": "docs/github-integration-research.md#s2-which-tokens-can-write-workflow-files--a-fine-grained-pat-a-classic-pat-a-github-app-installation-token-a-codespaces-token-how-does-each-expire-and-how-is-each-created",
+                "score": 0.0001335195411229506
+              }
+            ],
+            "durationMs": [
+              595.6437919999989
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.713011622428894,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-guard-shell-options",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9802550673484802,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#shell-assets",
+                "score": 0.9802550673484802
+              },
+              {
+                "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
+                "score": 0.9800029397010803
+              },
+              {
+                "ref": "docs/guard-verification.md",
+                "score": 0.6808557510375977
+              },
+              {
+                "ref": "docs/guard-verification.md#3-decision-changes-across-the-port",
+                "score": 0.037905894219875336
+              },
+              {
+                "ref": "docs/development.md#3-manifest-facts-a-contributor-must-not-rediscover",
+                "score": 0.03591351956129074
+              }
+            ],
+            "durationMs": [
+              561.312249999999
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9802550673484802,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-cross-asset-reference",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9991918206214905,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#plugin-asset-authoring",
+                "score": 0.9991918206214905
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.9958314895629883
+              },
+              {
+                "ref": "docs/development.md",
+                "score": 0.9907257556915283
+              },
+              {
+                "ref": ".claude/context/plugin.md#citation",
+                "score": 0.9663372039794922
+              },
+              {
+                "ref": "docs/development.md#4-userconfig-reserved",
+                "score": 0.728519856929779
+              }
+            ],
+            "durationMs": [
+              518.9182089999995
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9991918206214905,
+            "rank": 1,
+            "strictRank": 4
+          },
+          {
+            "id": "q-sd-daemon-lifecycle",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9859087467193604,
+            "hits": [
+              {
+                "ref": "docs/remote-execution.md#5-the-seam-and-what-stays-open",
+                "score": 0.9859087467193604
+              },
+              {
+                "ref": "docs/github-run-control.md#5-lifecycle-comments-and-state-labels",
+                "score": 0.8471465110778809
+              },
+              {
+                "ref": "docs/remote-execution.md#the-kill-switch-and-stopping",
+                "score": 0.6773092150688171
+              },
+              {
+                "ref": "docs/cli.md#9-daemon",
+                "score": 0.45786428451538086
+              },
+              {
+                "ref": "docs/github-run-control.md#7-working-a-run-from-both-sides",
+                "score": 0.39502233266830444
+              }
+            ],
+            "durationMs": [
+              516.6807920000028
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9859087467193604,
+            "rank": 4,
+            "strictRank": 4
+          },
+          {
+            "id": "q-sd-usage-limit",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9861061573028564,
+            "hits": [
+              {
+                "ref": "docs/watcher.md#5-machine-level-usage-lane",
+                "score": 0.9861061573028564
+              },
+              {
+                "ref": "docs/remote-execution.md#what-differs-on-a-self-hosted-runner",
+                "score": 0.7263330221176147
+              },
+              {
+                "ref": "docs/retrieval-eval.md#running-arm-a-by-hand",
+                "score": 0.2815016210079193
+              },
+              {
+                "ref": "docs/remote-execution.md#the-usage-gate",
+                "score": 0.08875177800655365
+              },
+              {
+                "ref": "docs/remote-execution.md",
+                "score": 0.07995282858610153
+              }
+            ],
+            "durationMs": [
+              552.5571670000027
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9861061573028564,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-search-abstains",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.8890093564987183,
+            "hits": [
+              {
+                "ref": "docs/retrieval.md#switching-back-and-what-stays",
+                "score": 0.8890093564987183
+              },
+              {
+                "ref": "docs/cli.md#docs-search",
+                "score": 0.761002779006958
+              },
+              {
+                "ref": "docs/cli.md#docs-serve",
+                "score": 0.7385357618331909
+              },
+              {
+                "ref": "docs/retrieval.md#a-lost-connection",
+                "score": 0.6835046410560608
+              },
+              {
+                "ref": "docs/retrieval.md#turning-on-the-python-backend",
+                "score": 0.47250184416770935
+              }
+            ],
+            "durationMs": [
+              534.778542
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.8890093564987183,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-retrieval-network",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.8707547783851624,
+            "hits": [
+              {
+                "ref": "docs/cli.md#11-docs",
+                "score": 0.8707547783851624
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
+                "score": 0.6632113456726074
+              },
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.5279513597488403
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-decision-rule",
+                "score": 0.45116138458251953
+              },
+              {
+                "ref": "docs/cli.md#docs-index",
+                "score": 0.36798784136772156
+              }
+            ],
+            "durationMs": [
+              514.5697079999991
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.8707547783851624,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-analyze-writes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.33320415019989014,
+            "hits": [
+              {
+                "ref": ".claude/context/cli.md#how-a-module-in-this-layer-is-written",
+                "score": 0.33320415019989014
+              },
+              {
+                "ref": "docs/analyze.md",
+                "score": 0.28331273794174194
+              },
+              {
+                "ref": "docs/analyze.md#9-how-the-offer-reaches-the-command-and-the-naming-hazard",
+                "score": 0.23789410293102264
+              },
+              {
+                "ref": "docs/cli.md#1-global-flags-and-exit-codes",
+                "score": 0.10599876940250397
+              },
+              {
+                "ref": "docs/analyze.md#10-what-the-skeletons-say-now-the-offer-exists",
+                "score": 0.04544805735349655
+              }
+            ],
+            "durationMs": [
+              539.5080419999977
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.33320415019989014,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-stack-detection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9920403361320496,
+            "hits": [
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.9920403361320496
+              },
+              {
+                "ref": "docs/cli.md#4-stack-detection",
+                "score": 0.9585756659507751
+              },
+              {
+                "ref": "docs/cli.md#10-how-this-is-tested",
+                "score": 0.9167366027832031
+              },
+              {
+                "ref": ".claude/context/cli.md#how-a-module-in-this-layer-is-written",
+                "score": 0.8476577997207642
+              },
+              {
+                "ref": "docs/cli.md",
+                "score": 0.8247222304344177
+              }
+            ],
+            "durationMs": [
+              551.0106670000023
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9920403361320496,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-sd-second-init",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9717655181884766,
+            "hits": [
+              {
+                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
+                "score": 0.9717655181884766
+              },
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.9600407481193542
+              },
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.4534471035003662
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#0-method-and-fixtures",
+                "score": 0.062028076499700546
+              },
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.05175038054585457
+              }
+            ],
+            "durationMs": [
+              586.0157080000026
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9717655181884766,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-sd-negative-ingress",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.10507340729236603,
+            "hits": [],
+            "durationMs": [
+              552.3437909999993
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-sd-negative-tungsten",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.000015658861229894683,
+            "hits": [],
+            "durationMs": [
+              535.7554999999993
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-sd-negative-blog",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.0011540184495970607,
+            "hits": [],
+            "durationMs": [
+              558.4004160000004
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-sd-negative-grpc",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": 0.36742886900901794,
+            "hits": [
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.36742886900901794
+              },
+              {
+                "ref": "docs/cli.md#docs-serve",
+                "score": 0.23684826493263245
+              },
+              {
+                "ref": "docs/cli.md#11-docs",
+                "score": 0.2240566909313202
+              },
+              {
+                "ref": "docs/retrieval.md#when-to-turn-it-on",
+                "score": 0.1442127823829651
+              },
+              {
+                "ref": "docs/retrieval.md",
+                "score": 0.0448894165456295
+              }
+            ],
+            "durationMs": [
+              554.9367500000008
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.36742886900901794
+          },
+          {
+            "id": "q-sd-negative-migration",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.0029449358116835356,
+            "hits": [],
+            "durationMs": [
+              521.4258750000008
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+<!-- eval:corpus:self-docs@typescript:end -->
+
+<!-- eval:corpus:self-docs@python:start -->
+### Corpus `self-docs` — backend `python`
+
+| Arm | Mode | recall@1 | recall@3 | recall@5 | MRR | strict recall@5 | strict MRR | p50 ms | p95 ms | cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A | — | — | — | — | — | — | — | — | — | awaiting hand run |
+| B | `lexical` | 0.400 | 0.600 | 0.733 | 0.530 | 0.533 | 0.352 | 33.1 | 64.9 | local — no billed tokens (Python backend; embed and rerank call counts are not exposed over HTTP) |
+| C | `vector` | 0.600 | 0.667 | 0.667 | 0.622 | 0.333 | 0.300 | 12.5 | 16.0 | local — no billed tokens (Python backend; embed and rerank call counts are not exposed over HTTP) |
+| D | `fused` | 0.533 | 0.600 | 0.733 | 0.597 | 0.667 | 0.349 | 60.9 | 77.6 | local — no billed tokens (Python backend; embed and rerank call counts are not exposed over HTTP) |
+| E | `fused-rerank` | 0.400 | 0.533 | 0.533 | 0.467 | 0.467 | 0.350 | 499.4 | 568.4 | local — no billed tokens (Python backend; embed and rerank call counts are not exposed over HTTP) |
+
+Arm A is index-first navigation by an agent. It is built and deliberately not run by this eval; its rows are
+filled by re-running the eval with one `--transcript` per variant against a hand-run transcript, per the
+procedure in `docs/retrieval-eval.md` → `## Running arm A by hand`. The arm A rows, when present, are each
+scored from the **first repetition's** transcript of that variant; the spread across repetitions is
+hand-written below the end marker.
+
+The `cost` column is not a score, and **the arms' scores are not comparable across rows**: the non-reranking
+modes report rank-derived reciprocal-rank-fusion values in the `0.004`–`0.033` range, while the reranking mode
+reports calibrated `[0, 1]` cross-encoder scores. Compare recall, MRR and latency across rows; compare scores only
+within a row.
+
+**Provenance.**
+
+- Corpus `self-docs` — snapshot `{ files: 20, chunks: 331 }`,
+  as the index build of this run reported it. A figure over `self-docs` is read with this stamp beside it;
+  two figures carrying different stamps are not a before/after pair.
+- `docs.root`: `docs`, as the runner set it (the eval owns the retrieval gate and
+  `docs.root` alone).
+- The corpus is *every* `*.md` under that `docs.root`, with no file filtered out, so a document added
+  under it joins the corpus that measures it — and where that root is this checkout's own `docs/`, this
+  file, `docs/retrieval-eval-results.md`, is one of its members and is counted in the stamp above. A stamp
+  taken before such a document existed is therefore a different corpus.
+- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:
+  - `cli` (path `cli`) → `.claude/context/cli.md`
+  - `plugin` (path `plugin`) → `.claude/context/plugin.md`
+  - `general` (path `.`) → `.claude/context/conventions.md`
+- Backend `python`: `harness-docs-retrieval serve-http` over a throwaway mirror of the corpus, each arm
+  through `POST /search` with its `mode`; latency is the server's own `search_ms` — `search_docs` alone,
+  timed inside the Python process, excluding the per-call refresh and the HTTP hop; the connection string
+  is not recorded.
+- Query set: `evals/docs-retrieval/queries/self-docs.jsonl` — 15 positive, 5 negative.
+- `k`: 5; repetitions per query: 1.
+- Embedder: `py-st/BAAI/bge-small-en-v1.5:fp32:cls:384:v1`. Reranker: `py-st/cross-encoder/ms-marco-MiniLM-L-6-v2:fp32:sigmoid:v1` — loaded and run outside the stub.
+- `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` was unset for this run, which the index build refuses to proceed without.
+- Abstention threshold in force: `0.32`, read off the `search.js` this run loaded.
+- The figures above are the **post-calibration** ones for the one arm that threshold applies to. The
+  pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold
+  calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —
+  so both variables that moved between the two readings, the threshold and the corpus, are named.
+- Host `darwin 24.6.0`, Node `v22.23.2`, 2026-10-08T05:33:31.360Z.
+
+```json
+{
+  "corpus": "self-docs",
+  "backend": "python",
+  "snapshot": {
+    "files": 20,
+    "chunks": 331
+  },
+  "abstainScoreThreshold": 0.32,
+  "embedder": "py-st/BAAI/bge-small-en-v1.5:fp32:cls:384:v1",
+  "reranker": "py-st/cross-encoder/ms-marco-MiniLM-L-6-v2:fp32:sigmoid:v1",
+  "k": 5,
+  "repeat": 1,
+  "queries": {
+    "path": "evals/docs-retrieval/queries/self-docs.jsonl",
+    "positives": 15,
+    "negatives": 5
+  },
+  "generatedAt": "2026-10-08T05:33:31.360Z",
+  "host": "darwin 24.6.0",
+  "node": "v22.23.2",
+  "arms": [
+    {
+      "arm": "A",
+      "variant": null,
+      "mode": null,
+      "ran": false
+    },
+    {
+      "arm": "B",
+      "mode": "lexical",
+      "ran": true,
+      "embedCalls": null,
+      "rerankCalls": null,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 15,
+        "negatives": 5,
+        "recall": {
+          "1": 0.4,
+          "3": 0.6,
+          "5": 0.7333333333333333
+        },
+        "mrr": 0.53,
+        "strict": {
+          "recall": {
+            "1": 0.26666666666666666,
+            "3": 0.4,
+            "5": 0.5333333333333333
+          },
+          "mrr": 0.3522222222222222
+        },
+        "latency": {
+          "p50": 33.05420797551051,
+          "p95": 64.86258399672806
+        },
+        "samples": 20,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-sd-new-config-key",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/typecheck-key-decision.md#3-can-another-family-reach-this-state",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md#10-how-this-is-tested",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#4-stack-detection",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#6-option-c--a-composer-family-fallback",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              5.5017920094542205
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-deny-guard",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": ".claude/context/conventions.md#output-logging-and-errors",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/guard-verification.md#14-two-preconditions-the-whole-set-inherits-from-the-configuration-load",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/watcher.md#2-the-scripts",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#3-the-allowdeny-surface",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.1035829558968544
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-sd-new-subcommand",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": ".claude/context/cli.md#naming-and-file-layout",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/cli.md#what-done-means-here",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/cli.md#one-example--the-shape-a-rule-takes-here",
+                "score": 0.015625
+              },
+              {
+                "ref": ".claude/context/cli.md#not-determined",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.3122920063324273
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-run-gates",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#the-testing-bar",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#1-the-bind",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#6-option-c--a-composer-family-fallback",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              2.428791020065546
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-state-dir",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#1-the-three-resolution-classes",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/conventions.md#plugin-asset-authoring",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/watcher.md#for-a-consumer-written-in-typescript",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              1.7757920431904495
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-commit-prefix",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/guard-verification.md#31-narrowed--allow--silent",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-real-catalog-query-set",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/conventions.md#where-a-new-responsibility-goes",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/development.md#5-verifying-a-change",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              7.876082963775843
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-guard-shell-options",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#shell-assets",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/development.md#3-manifest-facts-a-contributor-must-not-rediscover",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/plugin.md#registries--a-name-routed-to-an-implementation",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/cli.md#8-config",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/guard-verification.md#24-disclosed-residuals-re-confirmed",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              54.82337501598522
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-cross-asset-reference",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": ".claude/context/conventions.md#plugin-asset-authoring",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/plugin.md#citation",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/development.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/development.md#4-userconfig-reserved",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              20.93737496761605
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-sd-daemon-lifecycle",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/cli.md#what-done-means-here",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#17-the-generated-wrappers-arguments-anchor-detached-start",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#23-the-recorded-pid-and-what-signalling-it-actually-does",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/cli.md#5-the-wrapper-script-contract",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/remote-execution.md#5-the-seam-and-what-stays-open",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              27.661917032673955
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-usage-limit",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/watcher.md#5-machine-level-usage-lane",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/remote-execution.md#9-credentials-and-billing",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval.md#running-arm-a-by-hand",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/remote-execution.md#what-differs-on-a-self-hosted-runner",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              59.05504198744893
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-search-abstains",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval.md#switching-back-and-what-stays",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval.md#measuring-the-python-backend-against-the-typescript-one",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval.md#what-to-do-with-the-result",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              34.38512503635138
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-retrieval-network",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#10-how-this-is-tested",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/cli.md#offline-by-construction",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval.md#turning-on-the-python-backend",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              38.72079198481515
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 4,
+            "strictRank": 4
+          },
+          {
+            "id": "q-sd-analyze-writes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/conventions.md#the-testing-bar",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/analyze.md",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/analyze.md#1-the-target-vocabulary",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              47.639124968554825
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-stack-detection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-maintainers-decision",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#7-recommendation",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#4-stack-detection",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              57.07237496972084
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 5,
+            "strictRank": 5
+          },
+          {
+            "id": "q-sd-second-init",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/typecheck-key-decision.md#6-option-c--a-composer-family-fallback",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#7-doctor",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/development.md#5-verifying-a-change",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#5-the-wrapper-script-contract",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              64.86258399672806
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-negative-ingress",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/remote-execution.md#setting-up-a-self-hosted-runner",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/guard-verification.md#2-standing-decision-matrices",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              36.635583033785224
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-tungsten",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-observed-distributions-quoted",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#corpus-self-docs",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "score": 0.015625
+              },
+              {
+                "ref": ".claude/context/plugin.md#the-commit-message-policy",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              20.063582982402295
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-blog",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval.md#what-it-costs",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/cli.md#naming-and-file-layout",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval.md#measured-and-how",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              42.557291977573186
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-grpc",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-python-backend",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval.md#turning-on-the-python-backend",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval-eval.md#measuring-the-python-backend-against-the-typescript-one",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              33.05420797551051
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-migration",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval.md#its-database",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval.md#measuring-the-python-backend-against-the-typescript-one",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval.md#turning-on-the-python-backend",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              65.28216699371114
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          }
+        ]
+      }
+    },
+    {
+      "arm": "C",
+      "mode": "vector",
+      "ran": true,
+      "embedCalls": null,
+      "rerankCalls": null,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 15,
+        "negatives": 5,
+        "recall": {
+          "1": 0.6,
+          "3": 0.6666666666666666,
+          "5": 0.6666666666666666
+        },
+        "mrr": 0.6222222222222221,
+        "strict": {
+          "recall": {
+            "1": 0.26666666666666666,
+            "3": 0.3333333333333333,
+            "5": 0.3333333333333333
+          },
+          "mrr": 0.3
+        },
+        "latency": {
+          "p50": 12.455040996428579,
+          "p95": 16.033084015361965
+        },
+        "samples": 20,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-sd-new-config-key",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/config.md#2-where-configuration-lives",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/development.md#4-userconfig-reserved",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#7-recommendation",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#8-config",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              19.609333015978336
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-deny-guard",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/guard-verification.md#22-expansion-bypass-rows",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/guard-verification.md#37-the-sweep-behind-the-verdict",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/guard-verification.md#33-widened--silent--allow",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/guard-verification.md#21-helper-call-order-composition",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              14.56608297303319
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-new-subcommand",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#1-global-flags-and-exit-codes",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/conventions.md#where-a-new-responsibility-goes",
+                "score": 0.015625
+              },
+              {
+                "ref": ".claude/context/cli.md#what-this-layer-owns-and-what-it-is-not",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.039624969474971
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-run-gates",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/development.md#5-verifying-a-change",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/github-run-control.md#8-what-is-not-verified-here",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#4-option-a--make-the-key-optional",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval-eval.md#preconditions",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              16.033084015361965
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-state-dir",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#3-statedir",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval.md#how-to-run-it",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/plugin.md#a-worked-example",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/watcher.md#the-path",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.051791010890156
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-commit-prefix",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/github-integration-research.md#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/github-integration-research.md#t5-gits-and-githubs-rules-on-branch-names-that-matter-for-a-derived-slug-git-check-ref-format-length-limits-case-sensitivity",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#7-recommendation",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.595166976097971
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-guard-shell-options",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/guard-verification.md",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/guard-verification.md#12-per-guard-and-composite-latency-ms-per-call",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/guard-verification.md#14-two-preconditions-the-whole-set-inherits-from-the-configuration-load",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/guard-verification.md#what-a-later-change-owes-this-section-2",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.448624998796731
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-cross-asset-reference",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#plugin-asset-authoring",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": ".claude/context/plugin.md#citation",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": ".claude/context/plugin.md#what-this-layer-is",
+                "score": 0.015625
+              },
+              {
+                "ref": ".claude/context/plugin.md#where-a-new-asset-goes",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.290582992136478
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-sd-daemon-lifecycle",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/outer-loop-verification.md#21-exit-classification",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#24-resume-guards-and-the-machine-lane",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#26-the-stall-watchdog",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/github-run-control.md#5-lifecycle-comments-and-state-labels",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/github-run-control.md#1-commands-in-a-comment",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.966750015038997
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-usage-limit",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/watcher.md#5-machine-level-usage-lane",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/remote-execution.md#the-usage-gate",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/remote-execution.md#what-differs-on-a-self-hosted-runner",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/watcher.md#the-policy-a-coordinating-record-and-an-opt-in-lock",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#25-the-usage-gate",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.451166006736457
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-search-abstains",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#11-docs",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-maintainers-decision",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval.md#still-open",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/cli.md#docs-serve",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-verdict",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.115875026211143
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 3,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-retrieval-network",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#arm-a--the-real-catalog-hand-run",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#docs-index",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.794917041901499
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-analyze-writes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/analyze.md#8-how-this-is-verified",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/analyze.md#2-mode-greenfield-or-existing",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/analyze.md#12-the-corpus-passs-own-decisions",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/analyze.md#6-what-it-could-not-determine",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.450165988411754
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-stack-detection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#10-how-this-is-tested",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/config.md#1-the-three-resolution-classes",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              13.444040960166603
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-second-init",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/outer-loop-verification.md",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              14.672000019345433
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.01639344262295082,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-negative-ingress",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#1-the-three-resolution-classes",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/config.md#2-where-configuration-lives",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/config.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/config.md#4-token--class--home",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/development.md#4-userconfig-reserved",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              11.82308397255838
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-tungsten",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/watcher.md#for-a-consumer-written-in-typescript",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#threshold-calibration",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-177-chunk-build--this-repositorys-own-docs-2026-09-21",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-observed-distributions-quoted",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#cold-build-and-index-size",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.51654198858887
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-blog",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/github-integration-research.md#c1-pull_request_review-submitted-pull_request_review_comment-and-issue_comment-on-a-pr-which-review-states-exist-in-the-payload-and-how-to-fetch-every-inline-comment-of-one-review-with-its-file-and-line",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/github-integration-research.md#a2-github-marketplace-can-a-reusable-workflow-be-listed-or-only-an-action",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/development.md#7-releasing",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/github-run-control.md#3-answering-a-park-in-a-comment",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/github-run-control.md#5-lifecycle-comments-and-state-labels",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.455040996428579
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-grpc",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#how-arm-a-navigated-a-156-file-catalog",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval.md#when-to-turn-it-on",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#cost",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.160166050307453
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          },
+          {
+            "id": "q-sd-negative-migration",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.01639344262295082
+              },
+              {
+                "ref": "docs/second-runtime-port-decision.md#3-a-checkpointer-would-be-a-second-source-of-truth",
+                "score": 0.016129032258064516
+              },
+              {
+                "ref": "docs/second-runtime-port-decision.md",
+                "score": 0.015873015873015872
+              },
+              {
+                "ref": "docs/retrieval.md#what-this-buys-you",
+                "score": 0.015625
+              },
+              {
+                "ref": "docs/development.md#7-releasing",
+                "score": 0.015384615384615385
+              }
+            ],
+            "durationMs": [
+              12.76866701664403
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.01639344262295082
+          }
+        ]
+      }
+    },
+    {
+      "arm": "D",
+      "mode": "fused",
+      "ran": true,
+      "embedCalls": null,
+      "rerankCalls": null,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 15,
+        "negatives": 5,
+        "recall": {
+          "1": 0.5333333333333333,
+          "3": 0.6,
+          "5": 0.7333333333333333
+        },
+        "mrr": 0.5966666666666666,
+        "strict": {
+          "recall": {
+            "1": 0.2,
+            "3": 0.4,
+            "5": 0.6666666666666666
+          },
+          "mrr": 0.34888888888888897
+        },
+        "latency": {
+          "p50": 60.86512497859076,
+          "p95": 77.5917079881765
+        },
+        "samples": 20,
+        "abstainedOnNegative": 0,
+        "perQuery": [
+          {
+            "id": "q-sd-new-config-key",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.031099324975891997
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#7-recommendation",
+                "score": 0.030776515151515152
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#3-can-another-family-reach-this-state",
+                "score": 0.03028233151183971
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
+                "score": 0.02871794871794872
+              },
+              {
+                "ref": "docs/cli.md#8-config",
+                "score": 0.02854251012145749
+              }
+            ],
+            "durationMs": [
+              74.94383299490437
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.031099324975891997,
+            "rank": 1,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-deny-guard",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/guard-verification.md#35-jurisdiction-and-defaults",
+                "score": 0.03007688828584351
+              },
+              {
+                "ref": "docs/guard-verification.md#14-two-preconditions-the-whole-set-inherits-from-the-configuration-load",
+                "score": 0.029957522915269395
+              },
+              {
+                "ref": "docs/guard-verification.md#25-directory-de-quoting-the-widening-and-its-paired-refusal",
+                "score": 0.029631255487269532
+              },
+              {
+                "ref": "docs/guard-verification.md#37-the-sweep-behind-the-verdict",
+                "score": 0.029386529386529386
+              }
+            ],
+            "durationMs": [
+              68.32720898091793
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-new-subcommand",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/cli.md#1-global-flags-and-exit-codes",
+                "score": 0.030158730158730156
+              },
+              {
+                "ref": ".claude/context/cli.md#what-done-means-here",
+                "score": 0.029957522915269395
+              },
+              {
+                "ref": ".claude/context/cli.md#not-determined",
+                "score": 0.029083245521601686
+              },
+              {
+                "ref": ".claude/context/conventions.md#registries-and-dispatch-tables",
+                "score": 0.02904040404040404
+              }
+            ],
+            "durationMs": [
+              60.86512497859076
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-run-gates",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/typecheck-key-decision.md#1-the-bind",
+                "score": 0.03128054740957967
+              },
+              {
+                "ref": "docs/development.md#5-verifying-a-change",
+                "score": 0.03028233151183971
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#4-option-a--make-the-key-optional",
+                "score": 0.029910714285714284
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#5-option-b--an-explicit-none-sentinel",
+                "score": 0.029877369007803793
+              },
+              {
+                "ref": ".claude/context/conventions.md#the-testing-bar",
+                "score": 0.029551337359792925
+              }
+            ],
+            "durationMs": [
+              85.12866700766608
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03128054740957967,
+            "rank": 2,
+            "strictRank": 5
+          },
+          {
+            "id": "q-sd-state-dir",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/config.md#3-statedir",
+                "score": 0.031099324975891997
+              },
+              {
+                "ref": "docs/watcher.md#for-a-consumer-written-in-typescript",
+                "score": 0.030536130536130537
+              },
+              {
+                "ref": ".claude/context/plugin.md#a-worked-example",
+                "score": 0.028373015873015873
+              },
+              {
+                "ref": "docs/config.md#4-token--class--home",
+                "score": 0.027783137179239824
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.026736111111111113
+              }
+            ],
+            "durationMs": [
+              71.27829099772498
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.031099324975891997,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-commit-prefix",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/github-integration-research.md#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length",
+                "score": 0.030017921146953404
+              },
+              {
+                "ref": ".claude/context/plugin.md#the-commit-message-policy",
+                "score": 0.029418126757516764
+              },
+              {
+                "ref": ".claude/context/plugin.md#what-this-layer-is",
+                "score": 0.02862400327131466
+              },
+              {
+                "ref": "docs/github-integration-research.md#6-leads-this-research-refutes",
+                "score": 0.02797339593114241
+              }
+            ],
+            "durationMs": [
+              65.56637497851625
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-guard-shell-options",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
+                "score": 0.031024531024531024
+              },
+              {
+                "ref": "docs/development.md#3-manifest-facts-a-contributor-must-not-rediscover",
+                "score": 0.030621785881252923
+              },
+              {
+                "ref": "docs/guard-verification.md",
+                "score": 0.02938045560996381
+              },
+              {
+                "ref": ".claude/context/conventions.md#shell-assets",
+                "score": 0.02921395544346364
+              },
+              {
+                "ref": "docs/guard-verification.md#15-costs-measured-and-not-addressed",
+                "score": 0.027425373134328357
+              }
+            ],
+            "durationMs": [
+              70.65329200122505
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.031024531024531024,
+            "rank": 4,
+            "strictRank": 4
+          },
+          {
+            "id": "q-sd-cross-asset-reference",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#plugin-asset-authoring",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.032266458495966696
+              },
+              {
+                "ref": ".claude/context/plugin.md#citation",
+                "score": 0.03200204813108039
+              },
+              {
+                "ref": ".claude/context/plugin.md#what-this-layer-is",
+                "score": 0.0293236301369863
+              },
+              {
+                "ref": "docs/development.md",
+                "score": 0.028958333333333336
+              }
+            ],
+            "durationMs": [
+              47.83683305140585
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 3
+          },
+          {
+            "id": "q-sd-daemon-lifecycle",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/outer-loop-verification.md#23-the-recorded-pid-and-what-signalling-it-actually-does",
+                "score": 0.030798389007344232
+              },
+              {
+                "ref": "docs/github-run-control.md#5-lifecycle-comments-and-state-labels",
+                "score": 0.03055037313432836
+              },
+              {
+                "ref": "docs/github-run-control.md#1-commands-in-a-comment",
+                "score": 0.030536130536130537
+              },
+              {
+                "ref": "docs/remote-execution.md#5-the-seam-and-what-stays-open",
+                "score": 0.02662057044079516
+              },
+              {
+                "ref": "docs/cli.md#9-daemon",
+                "score": 0.026234567901234566
+              }
+            ],
+            "durationMs": [
+              40.46804195968434
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.030798389007344232,
+            "rank": 5,
+            "strictRank": 5
+          },
+          {
+            "id": "q-sd-usage-limit",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/watcher.md#5-machine-level-usage-lane",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/remote-execution.md#what-differs-on-a-self-hosted-runner",
+                "score": 0.03125763125763126
+              },
+              {
+                "ref": "docs/outer-loop-verification.md#25-the-usage-gate",
+                "score": 0.030090497737556562
+              },
+              {
+                "ref": "docs/remote-execution.md#the-usage-gate",
+                "score": 0.029827662395050816
+              },
+              {
+                "ref": "docs/watcher.md#the-policy-a-coordinating-record-and-an-opt-in-lock",
+                "score": 0.028612012987012988
+              }
+            ],
+            "durationMs": [
+              70.28924999758601
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-search-abstains",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.030536130536130537
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict",
+                "score": 0.02976190476190476
+              },
+              {
+                "ref": "docs/retrieval.md#switching-back-and-what-stays",
+                "score": 0.029551337359792925
+              },
+              {
+                "ref": "docs/cli.md#docs-serve",
+                "score": 0.029513888888888888
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-maintainers-decision",
+                "score": 0.02878726010616578
+              }
+            ],
+            "durationMs": [
+              46.57008399954066
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.030536130536130537,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-retrieval-network",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
+                "score": 0.03278688524590164
+              },
+              {
+                "ref": "docs/cli.md#11-docs",
+                "score": 0.029411764705882353
+              },
+              {
+                "ref": "docs/retrieval-eval.md#running-arm-a-by-hand",
+                "score": 0.02761904761904762
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-limits-stated-with-the-verdict",
+                "score": 0.02736498731424429
+              },
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.027272727272727275
+              }
+            ],
+            "durationMs": [
+              50.98808294860646
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03278688524590164,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-analyze-writes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/analyze.md#4-re-run-and-what-an-interrupted-run-leaves-behind",
+                "score": 0.03252247488101534
+              },
+              {
+                "ref": "docs/analyze.md",
+                "score": 0.030117753623188408
+              },
+              {
+                "ref": "docs/analyze.md#10-what-the-skeletons-say-now-the-offer-exists",
+                "score": 0.03007688828584351
+              },
+              {
+                "ref": "docs/analyze.md#3-what-it-may-write",
+                "score": 0.029857397504456328
+              },
+              {
+                "ref": "docs/analyze.md#1-the-target-vocabulary",
+                "score": 0.02967032967032967
+              }
+            ],
+            "durationMs": [
+              59.36304101487622
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03252247488101534,
+            "rank": 1,
+            "strictRank": 4
+          },
+          {
+            "id": "q-sd-stack-detection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.031544957774465976
+              },
+              {
+                "ref": "docs/cli.md#4-stack-detection",
+                "score": 0.030309988518943745
+              },
+              {
+                "ref": "docs/typecheck-key-decision.md#7-recommendation",
+                "score": 0.027820121951219513
+              },
+              {
+                "ref": "docs/watcher.md#2-the-scripts",
+                "score": 0.026992753623188405
+              },
+              {
+                "ref": "docs/config.md#1-the-three-resolution-classes",
+                "score": 0.026988636363636364
+              }
+            ],
+            "durationMs": [
+              68.8192910165526
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.031544957774465976,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-sd-second-init",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.03225806451612903
+              },
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.03047794966520434
+              },
+              {
+                "ref": "docs/outer-loop-verification.md",
+                "score": 0.030309988518943745
+              },
+              {
+                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
+                "score": 0.029386529386529386
+              },
+              {
+                "ref": "docs/cli.md#the-interaction-rule",
+                "score": 0.02786377708978328
+              }
+            ],
+            "durationMs": [
+              68.60474997665733
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.03225806451612903,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-sd-negative-ingress",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/remote-execution.md#setting-up-a-self-hosted-runner",
+                "score": 0.03128054740957967
+              },
+              {
+                "ref": "docs/guard-verification.md#14-two-preconditions-the-whole-set-inherits-from-the-configuration-load",
+                "score": 0.02690100430416069
+              },
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.02628900949796472
+              },
+              {
+                "ref": "docs/config.md",
+                "score": 0.025047327799621377
+              },
+              {
+                "ref": "docs/github-integration-research.md#summary",
+                "score": 0.022833419823559936
+              }
+            ],
+            "durationMs": [
+              46.82604200206697
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.03128054740957967
+          },
+          {
+            "id": "q-sd-negative-tungsten",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval-eval-results.md#the-observed-distributions-quoted",
+                "score": 0.031754032258064516
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#threshold-calibration",
+                "score": 0.030621785881252923
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-re-calibration-method-fixed-before-the-real-catalog-run",
+                "score": 0.02921395544346364
+              },
+              {
+                "ref": ".claude/context/plugin.md#sample-fixtures",
+                "score": 0.02857142857142857
+              },
+              {
+                "ref": ".claude/context/plugin.md#the-commit-message-policy",
+                "score": 0.025588697017268444
+              }
+            ],
+            "durationMs": [
+              30.513041012454778
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.031754032258064516
+          },
+          {
+            "id": "q-sd-negative-blog",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/github-integration-research.md#t6-jira-automation--github-repository_dispatch-whether-it-works-as-described-and-what-a-jira-rule-needs-gitlabs-equivalent-route",
+                "score": 0.029437229437229435
+              },
+              {
+                "ref": "docs/github-run-control.md#5-lifecycle-comments-and-state-labels",
+                "score": 0.029083245521601686
+              },
+              {
+                "ref": "docs/github-integration-research.md#a2-github-marketplace-can-a-reusable-workflow-be-listed-or-only-an-action",
+                "score": 0.02832415420928403
+              },
+              {
+                "ref": "docs/github-integration-research.md#c1-pull_request_review-submitted-pull_request_review_comment-and-issue_comment-on-a-pr-which-review-states-exist-in-the-payload-and-how-to-fetch-every-inline-comment-of-one-review-with-its-file-and-line",
+                "score": 0.028298204527712725
+              },
+              {
+                "ref": "docs/github-integration-research.md#s6-the-maximum-length-of-an-issue-or-pr-comment-body",
+                "score": 0.027402402402402402
+              }
+            ],
+            "durationMs": [
+              54.176334000658244
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.029437229437229435
+          },
+          {
+            "id": "q-sd-negative-grpc",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.031754032258064516
+              },
+              {
+                "ref": "docs/cli.md#docs-serve",
+                "score": 0.028083267871170464
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-query-log-pass",
+                "score": 0.028068137824235385
+              },
+              {
+                "ref": "docs/retrieval.md#when-to-turn-it-on",
+                "score": 0.027673192771084338
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-python-backend",
+                "score": 0.026655348047538198
+              }
+            ],
+            "durationMs": [
+              45.56658398360014
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.031754032258064516
+          },
+          {
+            "id": "q-sd-negative-migration",
+            "negative": true,
+            "abstained": false,
+            "bestRerankScore": null,
+            "hits": [
+              {
+                "ref": "docs/retrieval.md#what-this-buys-you",
+                "score": 0.030776515151515152
+              },
+              {
+                "ref": "docs/retrieval.md#turning-on-the-python-backend",
+                "score": 0.029083245521601686
+              },
+              {
+                "ref": "docs/retrieval.md#its-database",
+                "score": 0.02803379416282642
+              },
+              {
+                "ref": "docs/config.md#5-key-reference",
+                "score": 0.02736726874657909
+              },
+              {
+                "ref": ".claude/context/conventions.md#the-stack-in-the-words-the-rules-below-use",
+                "score": 0.026161328190508135
+              }
+            ],
+            "durationMs": [
+              77.5917079881765
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": 0.030776515151515152
+          }
+        ]
+      }
+    },
+    {
+      "arm": "E",
+      "mode": "fused-rerank",
+      "ran": true,
+      "embedCalls": null,
+      "rerankCalls": null,
+      "metrics": {
+        "kValues": [
+          1,
+          3,
+          5
+        ],
+        "positives": 15,
+        "negatives": 5,
+        "recall": {
+          "1": 0.4,
+          "3": 0.5333333333333333,
+          "5": 0.5333333333333333
+        },
+        "mrr": 0.4666666666666667,
+        "strict": {
+          "recall": {
+            "1": 0.26666666666666666,
+            "3": 0.4,
+            "5": 0.4666666666666667
+          },
+          "mrr": 0.35
+        },
+        "latency": {
+          "p50": 499.38450002809986,
+          "p95": 568.3974580024369
+        },
+        "samples": 20,
+        "abstainedOnNegative": 5,
+        "perQuery": [
+          {
+            "id": "q-sd-new-config-key",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.24264934659004211,
+            "hits": [],
+            "durationMs": [
+              638.5939589818008
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-deny-guard",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.712925136089325,
+            "hits": [
+              {
+                "ref": "docs/outer-loop-verification.md#3-the-allowdeny-surface",
+                "score": 0.712925136089325
+              },
+              {
+                "ref": "docs/guard-verification.md#23-fail-closed-matrix-with-positive-controls",
+                "score": 0.5861433148384094
+              },
+              {
+                "ref": "docs/guard-verification.md#32-tightened--silent--deny",
+                "score": 0.47832366824150085
+              },
+              {
+                "ref": "docs/guard-verification.md#37-the-sweep-behind-the-verdict",
+                "score": 0.4414598047733307
+              },
+              {
+                "ref": "docs/guard-verification.md#24-disclosed-residuals-re-confirmed",
+                "score": 0.24028462171554565
+              }
+            ],
+            "durationMs": [
+              490.1312500005588
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.712925136089325,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-new-subcommand",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9978654980659485,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#what-accompanies-a-new-unit-of-each-kind",
+                "score": 0.9978654980659485
+              },
+              {
+                "ref": ".claude/context/cli.md#naming-and-file-layout",
+                "score": 0.922520101070404
+              },
+              {
+                "ref": ".claude/context/cli.md#not-determined",
+                "score": 0.7800443768501282
+              },
+              {
+                "ref": ".claude/context/cli.md#what-done-means-here",
+                "score": 0.7663043737411499
+              },
+              {
+                "ref": ".claude/context/conventions.md#registries-and-dispatch-tables",
+                "score": 0.5293340682983398
+              }
+            ],
+            "durationMs": [
+              499.38450002809986
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9978654980659485,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-run-gates",
+            "negative": false,
+            "abstained": true,
+            "bestRerankScore": 0.11955832690000534,
+            "hits": [],
+            "durationMs": [
+              498.01987496903166
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": null,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-state-dir",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.8825696110725403,
+            "hits": [
+              {
+                "ref": "docs/config.md#3-statedir",
+                "score": 0.8825696110725403
+              },
+              {
+                "ref": ".claude/context/plugin.md#a-worked-example",
+                "score": 0.8782752752304077
+              },
+              {
+                "ref": "docs/config.md#1-the-three-resolution-classes",
+                "score": 0.456678181886673
+              },
+              {
+                "ref": "docs/retrieval-eval.md#how-to-run-it",
+                "score": 0.41505104303359985
+              },
+              {
+                "ref": ".claude/context/plugin.md#the-placeholder-vocabulary",
+                "score": 0.40608254075050354
+              }
+            ],
+            "durationMs": [
+              536.40133299632
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.8825696110725403,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-commit-prefix",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.6390553712844849,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#commit-message-policy",
+                "score": 0.6390553712844849
+              },
+              {
+                "ref": ".claude/context/plugin.md#the-commit-message-policy",
+                "score": 0.0026423188392072916
+              },
+              {
+                "ref": "docs/github-integration-research.md#a4-does-githubs-newbranchfilenamevalue-link-prefill-a-new-file-and-up-to-what-length",
+                "score": 0.0010364939225837588
+              },
+              {
+                "ref": "docs/retrieval-eval-results.md#the-real-catalog-query-set",
+                "score": 0.0003067623474635184
+              },
+              {
+                "ref": "docs/github-integration-research.md#s2-which-tokens-can-write-workflow-files--a-fine-grained-pat-a-classic-pat-a-github-app-installation-token-a-codespaces-token-how-does-each-expire-and-how-is-each-created",
+                "score": 0.00011427375284256414
+              }
+            ],
+            "durationMs": [
+              541.4205419947393
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.6390553712844849,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-guard-shell-options",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9779617786407471,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#shell-assets",
+                "score": 0.9779617786407471
+              },
+              {
+                "ref": ".claude/context/plugin.md#guards-the-shared-library-and-the-helper-scripts",
+                "score": 0.9744870662689209
+              },
+              {
+                "ref": "docs/guard-verification.md",
+                "score": 0.6686347126960754
+              },
+              {
+                "ref": "docs/development.md#3-manifest-facts-a-contributor-must-not-rediscover",
+                "score": 0.029824253171682358
+              },
+              {
+                "ref": "docs/guard-verification.md#3-decision-changes-across-the-port",
+                "score": 0.02691003307700157
+              }
+            ],
+            "durationMs": [
+              525.3422919777222
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9779617786407471,
+            "rank": 1,
+            "strictRank": 1
+          },
+          {
+            "id": "q-sd-cross-asset-reference",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9990333318710327,
+            "hits": [
+              {
+                "ref": ".claude/context/conventions.md#plugin-asset-authoring",
+                "score": 0.9990333318710327
+              },
+              {
+                "ref": "docs/development.md#2-the-one-authoring-rule-that-follows",
+                "score": 0.9957577586174011
+              },
+              {
+                "ref": "docs/development.md",
+                "score": 0.9922824501991272
+              },
+              {
+                "ref": ".claude/context/plugin.md#citation",
+                "score": 0.9554484486579895
+              },
+              {
+                "ref": "docs/development.md#4-userconfig-reserved",
+                "score": 0.6403493881225586
+              }
+            ],
+            "durationMs": [
+              502.81437498051673
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9990333318710327,
+            "rank": 1,
+            "strictRank": 4
+          },
+          {
+            "id": "q-sd-daemon-lifecycle",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9801748394966125,
+            "hits": [
+              {
+                "ref": "docs/remote-execution.md#5-the-seam-and-what-stays-open",
+                "score": 0.9801748394966125
+              },
+              {
+                "ref": "docs/watcher.md#1-the-loop-in-one-page",
+                "score": 0.8671702742576599
+              },
+              {
+                "ref": "docs/github-run-control.md#5-lifecycle-comments-and-state-labels",
+                "score": 0.7941908240318298
+              },
+              {
+                "ref": "docs/remote-execution.md#the-kill-switch-and-stopping",
+                "score": 0.5981323719024658
+              },
+              {
+                "ref": "docs/remote-execution.md#working-a-run-from-github-alone",
+                "score": 0.4079938530921936
+              }
+            ],
+            "durationMs": [
+              448.8132919650525
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9801748394966125,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-usage-limit",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9858004450798035,
+            "hits": [
+              {
+                "ref": "docs/watcher.md#5-machine-level-usage-lane",
+                "score": 0.9858004450798035
+              },
+              {
+                "ref": "docs/remote-execution.md#what-differs-on-a-self-hosted-runner",
+                "score": 0.6569963097572327
+              },
+              {
+                "ref": "docs/retrieval-eval.md#running-arm-a-by-hand",
+                "score": 0.19589851796627045
+              },
+              {
+                "ref": "docs/remote-execution.md#the-usage-gate",
+                "score": 0.07513836771249771
+              },
+              {
+                "ref": "docs/remote-execution.md",
+                "score": 0.07321595400571823
+              }
+            ],
+            "durationMs": [
+              513.7452500057407
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9858004450798035,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-search-abstains",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.8928043246269226,
+            "hits": [
+              {
+                "ref": "docs/retrieval.md#switching-back-and-what-stays",
+                "score": 0.8928043246269226
+              },
+              {
+                "ref": "docs/cli.md#docs-search",
+                "score": 0.7780132293701172
+              },
+              {
+                "ref": "docs/retrieval.md#a-lost-connection",
+                "score": 0.7111207842826843
+              },
+              {
+                "ref": "docs/cli.md#docs-serve",
+                "score": 0.7048519253730774
+              },
+              {
+                "ref": "docs/cli.md#11-docs",
+                "score": 0.47014349699020386
+              }
+            ],
+            "durationMs": [
+              513.9433749718592
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.8928043246269226,
+            "rank": 2,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-retrieval-network",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.8469347357749939,
+            "hits": [
+              {
+                "ref": "docs/cli.md#11-docs",
+                "score": 0.8469347357749939
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-tool-set-and-the-network",
+                "score": 0.6362067461013794
+              },
+              {
+                "ref": "docs/retrieval.md#how-it-fits-together",
+                "score": 0.3845137357711792
+              },
+              {
+                "ref": "docs/cli.md#docs-index",
+                "score": 0.3646866977214813
+              },
+              {
+                "ref": "docs/retrieval-eval.md#the-decision-rule",
+                "score": 0.3261820077896118
+              }
+            ],
+            "durationMs": [
+              530.0494999974035
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.8469347357749939,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-analyze-writes",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.3224860727787018,
+            "hits": [
+              {
+                "ref": "docs/analyze.md",
+                "score": 0.3224860727787018
+              },
+              {
+                "ref": ".claude/context/cli.md#how-a-module-in-this-layer-is-written",
+                "score": 0.25000178813934326
+              },
+              {
+                "ref": "docs/analyze.md#9-how-the-offer-reaches-the-command-and-the-naming-hazard",
+                "score": 0.17413736879825592
+              },
+              {
+                "ref": "docs/cli.md#1-global-flags-and-exit-codes",
+                "score": 0.06671939045190811
+              },
+              {
+                "ref": "docs/analyze.md#10-what-the-skeletons-say-now-the-offer-exists",
+                "score": 0.04771456867456436
+              }
+            ],
+            "durationMs": [
+              473.48554100608453
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.3224860727787018,
+            "rank": 0,
+            "strictRank": 0
+          },
+          {
+            "id": "q-sd-stack-detection",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9902282953262329,
+            "hits": [
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.9902282953262329
+              },
+              {
+                "ref": "docs/cli.md#4-stack-detection",
+                "score": 0.9415146112442017
+              },
+              {
+                "ref": "docs/cli.md#10-how-this-is-tested",
+                "score": 0.8786191940307617
+              },
+              {
+                "ref": ".claude/context/cli.md#how-a-module-in-this-layer-is-written",
+                "score": 0.7587382197380066
+              },
+              {
+                "ref": "docs/retrieval.md#turning-on-the-python-backend",
+                "score": 0.6199536919593811
+              }
+            ],
+            "durationMs": [
+              487.65525000635535
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9902282953262329,
+            "rank": 1,
+            "strictRank": 2
+          },
+          {
+            "id": "q-sd-second-init",
+            "negative": false,
+            "abstained": false,
+            "bestRerankScore": 0.9674235582351685,
+            "hits": [
+              {
+                "ref": "docs/cli.md#generator-order-and-why-it-is-load-bearing",
+                "score": 0.9674235582351685
+              },
+              {
+                "ref": "docs/cli.md#3-the-re-run-contract",
+                "score": 0.9482845664024353
+              },
+              {
+                "ref": "docs/cli.md#2-init",
+                "score": 0.4073532223701477
+              },
+              {
+                "ref": "docs/watcher.md#6-what-a-human-must-do-and-what-ships-unexercised",
+                "score": 0.3340969979763031
+              },
+              {
+                "ref": "docs/analyze.md#9-how-the-offer-reaches-the-command-and-the-naming-hazard",
+                "score": 0.0783606767654419
+              }
+            ],
+            "durationMs": [
+              568.3974580024369
+            ],
+            "warnings": [],
+            "bestScoreOnPositive": 0.9674235582351685,
+            "rank": 2,
+            "strictRank": 2
+          },
+          {
+            "id": "q-sd-negative-ingress",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.10132745653390884,
+            "hits": [],
+            "durationMs": [
+              497.02812504256144
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-sd-negative-tungsten",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.000014871049643261358,
+            "hits": [],
+            "durationMs": [
+              463.4262920008041
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-sd-negative-blog",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.0009630136773921549,
+            "hits": [],
+            "durationMs": [
+              478.46779198152944
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-sd-negative-grpc",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.2926323711872101,
+            "hits": [],
+            "durationMs": [
+              458.9529999648221
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          },
+          {
+            "id": "q-sd-negative-migration",
+            "negative": true,
+            "abstained": true,
+            "bestRerankScore": 0.0019377596909180284,
+            "hits": [],
+            "durationMs": [
+              549.2280829930678
+            ],
+            "warnings": [],
+            "bestScoreOnNegative": null
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+<!-- eval:corpus:self-docs@python:end -->
+
 <!-- eval:generated:end -->
 
 ## Threshold calibration
@@ -18435,3 +27638,217 @@ those situations has been measured — is `docs/retrieval.md` → `## When to tu
   looks. What would measure it: the query log switched on in a repository that has both code and a
   catalog, over real branches, counting `search_docs` calls per planning and review dispatch. This
   branch does not take that measurement.
+
+## The Python backend against the TypeScript one
+
+**Who reads this, and what it decides.** A maintainer deciding whether the Python backend
+(`docs-retrieval-service/`) retrieves what the TypeScript one (`cli/src/retrieval/`) retrieves over the
+same corpora and query sets, and whether the two may share an embedder id. The subsections up to
+`### Abstention, query by query` cover relevance. Cost, latency beyond the arm tables, cold start,
+footprint and the agent session follow them.
+
+### What was compared, and through what
+
+- **The four blocks** are in the generated region above, each between its own markers:
+  `eval:corpus:fixture-catalog@typescript`, `eval:corpus:fixture-catalog@python`,
+  `eval:corpus:self-docs@typescript` and `eval:corpus:self-docs@python`. Their tables, provenance and
+  machine halves are the record. This section cites them and does not restate them.
+- **The corpora.** `fixture-catalog` at `{ files: 9, chunks: 41 }` and `self-docs` at
+  `{ files: 20, chunks: 331 }`. Both blocks of each pair carry the same stamp, and
+  `evals/docs-retrieval/backend-comparison.mjs` refuses a pair whose stamps differ. The `self-docs` stamp
+  is older than the four blocks. This file is a `self-docs` member, so the blocks were written into a
+  scratch copy and moved here afterwards through `results.mjs` → `transplantCorpusBlock`
+  (`docs/retrieval-eval.md` → `### Measuring the Python backend against the TypeScript one`, step 2).
+- **The routes.** TypeScript is this checkout's `cli/dist` driven in process, the same path the
+  unlabelled blocks were taken through. Python is the package `harness-docs-retrieval` 0.1.0
+  (`docs-retrieval-service/pyproject.toml`), run as `serve-http` over a throwaway mirror of the corpus,
+  with each arm sent through `POST /search` with its `mode`. Its latency is the server's own `search_ms`:
+  `search_docs` alone, timed inside the Python process, with the HTTP hop untimed.
+- **The models.** TypeScript: embedder `Xenova/bge-small-en-v1.5:q8:cls:384:v1`, reranker
+  `Xenova/ms-marco-MiniLM-L-6-v2:q8:sigmoid:v1`. Python: embedder
+  `py-st/BAAI/bge-small-en-v1.5:fp32:cls:384:v1`, reranker
+  `py-st/cross-encoder/ms-marco-MiniLM-L-6-v2:fp32:sigmoid:v1`. All four blocks record `k` 5,
+  1 repetition and the abstention threshold `0.32`.
+- **The host and the date.** The blocks record host `darwin 24.6.0` and Node `v22.23.2`. The host
+  capture adds uv 0.12.21, Docker server 29.5.2, and load averages of 1.69 / 1.88 / 1.84 when it was
+  stamped. The operator took the figures by hand at a terminal on 2026-10-08, between 05:31 and 05:33 UTC
+  by the blocks' own `generatedAt`, following
+  `docs/retrieval-eval.md` → `### Measuring the Python backend against the TypeScript one`.
+- **What was taken in a session.** Two kinds of figure were taken in a session, because neither is a
+  wall-clock figure: the comparison and the vector agreement below, through the launchers in
+  `docs/retrieval-eval.md` → `### Writing the comparison up`, and the BM25 probe in divergence source (3).
+
+### Relevance, side by side
+
+Every figure is copied from `renderBackendComparison` over the four blocks. The `fixture-catalog` floor is
+`evals/docs-retrieval/floor.json`, recorded 2026-09-21. It is graded `>=`, as gate 11 grades it, and
+shown as `met` or `short` per backend. `self-docs` has no floor. The p50 and p95 latencies are measured at
+different boundaries on the two sides, as `### What was compared, and through what` states.
+
+**`fixture-catalog`**
+
+| Arm | Backend | recall@1 | recall@3 | recall@5 | MRR | p50 ms | p95 ms | Floor recall@5 | Floor MRR |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| B `lexical` | TypeScript | 0.444 | 0.889 | 1.000 | 0.657 | 0.4 | 3.2 | >= 0.95: met | >= 0.6: met |
+| B `lexical` | Python | 0.556 | 1.000 | 1.000 | 0.741 | 1.9 | 6.2 | >= 0.95: met | >= 0.6: met |
+| C `vector` | TypeScript | 0.778 | 1.000 | 1.000 | 0.889 | 3.5 | 4.5 | >= 0.95: met | >= 0.83: met |
+| C `vector` | Python | 0.778 | 1.000 | 1.000 | 0.889 | 10.7 | 17.3 | >= 0.95: met | >= 0.83: met |
+| D `fused` | TypeScript | 0.556 | 1.000 | 1.000 | 0.759 | 3.6 | 8.6 | >= 0.95: met | >= 0.7: met |
+| D `fused` | Python | 0.556 | 1.000 | 1.000 | 0.778 | 12.1 | 12.8 | >= 0.95: met | >= 0.7: met |
+| E `fused-rerank` | TypeScript | 0.444 | 0.667 | 0.667 | 0.556 | 372.8 | 415.5 | >= 0.61: met | >= 0.5: met |
+| E `fused-rerank` | Python | 0.444 | 0.667 | 0.667 | 0.556 | 322.1 | 437.8 | >= 0.61: met | >= 0.5: met |
+
+**`self-docs`**
+
+| Arm | Backend | recall@1 | recall@3 | recall@5 | MRR | p50 ms | p95 ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| B `lexical` | TypeScript | 0.467 | 0.600 | 0.800 | 0.577 | 1.1 | 4.6 |
+| B `lexical` | Python | 0.400 | 0.600 | 0.733 | 0.530 | 33.1 | 64.9 |
+| C `vector` | TypeScript | 0.533 | 0.600 | 0.667 | 0.569 | 4.5 | 7.5 |
+| C `vector` | Python | 0.600 | 0.667 | 0.667 | 0.622 | 12.5 | 16.0 |
+| D `fused` | TypeScript | 0.533 | 0.667 | 0.733 | 0.606 | 7.4 | 9.3 |
+| D `fused` | Python | 0.533 | 0.600 | 0.733 | 0.597 | 60.9 | 77.6 |
+| E `fused-rerank` | TypeScript | 0.400 | 0.533 | 0.600 | 0.483 | 551.0 | 735.3 |
+| E `fused-rerank` | Python | 0.400 | 0.533 | 0.533 | 0.467 | 499.4 | 568.4 |
+
+**Per-query agreement.** Below, *same order* counts the queries whose five ordered refs are identical on
+both sides, negatives included. The rank changes are those a positive's first relevant hit makes, read
+as TypeScript → Python, where rank 0 means no relevant hit. Both come from the rendered per-query tables.
+
+| Arm | `fixture-catalog` same order | `fixture-catalog` rank changes | `self-docs` same order | `self-docs` rank changes |
+| --- | --- | --- | --- | --- |
+| B | 1 of 12 | `q-fc-route-choice` 4 → 2, `q-fc-billable-weight` 2 → 1, `q-fc-surcharge-compounding` 2 → 1, `q-fc-token-lifetime` 1 → 2 | 13 of 20 | `q-sd-new-config-key` 5 → 0, `q-sd-second-init` 1 → 2 |
+| C | 6 of 12 | none | 4 of 20 | `q-sd-new-subcommand` 5 → 1 |
+| D | 4 of 12 | `q-fc-route-choice` 3 → 2, `q-fc-billable-weight` 2 → 1, `q-fc-token-lifetime` 1 → 2 | 2 of 20 | `q-sd-guard-shell-options` 3 → 4, `q-sd-daemon-lifecycle` 4 → 5 |
+| E | 11 of 12 | none | 10 of 20 | `q-sd-daemon-lifecycle` 4 → 0 |
+
+### Which case this is
+
+**They disagree, and the reason is not yet identified.**
+
+No arm returns the same ordered refs on every query of either corpus, so *within noise* cannot be
+claimed. Two differences are identified, each by a measurement below. The first is arm B's divergence,
+which is the Python index's history in its database (divergence source (3)). The second is the one
+abstention mismatch, which is the reranker scoring one identical pair differently (sources (1) and (2)
+together). Four differences are not identified:
+
+- arm C's ref-order changes;
+- how arms D and E split between the index's history and model precision;
+- two near-tie swaps in arm B that remain on a fresh database;
+- `q-sd-daemon-lifecycle` dropping out of arm E's top five on the Python side.
+
+Calling the second case would claim more than was measured.
+
+### Divergence sources, in the order checked
+
+1. **Quantization — TypeScript q8 against Python fp32.** This covers both models.
+   - **Embedder.** Measured by the cosine between the two sides' stored document vectors per chunk key
+     (`### Vector agreement, and the embedder id`). `fixture-catalog`: min 0.997938, p50 0.998644 over
+     41 pairs. `self-docs`: min 0.988583, p50 0.995867 over 331 pairs.
+   - **Reranker.** Measured by `|typescript − python|` of arm E's `bestRerankScore` per query.
+     `fixture-catalog`: p50 0.0002, max 0.0307. `self-docs`: p50 0.0038, max 0.0928, largest on
+     `q-sd-deny-guard` (0.8057 / 0.7129) and `q-sd-negative-grpc` (0.3674 / 0.2926).
+2. **ONNX against PyTorch at matched precision — not arranged.** The fp32 ONNX export was not placed.
+   The matched-precision leg reported *"not arranged: the fp32 ONNX cache lacks
+   Xenova/bge-small-en-v1.5/config.json, Xenova/bge-small-en-v1.5/tokenizer.json,
+   Xenova/bge-small-en-v1.5/tokenizer_config.json, Xenova/bge-small-en-v1.5/onnx/model.onnx"* on both
+   corpora. Sources (1) and (2) are therefore measured together: every figure under (1) is quantization
+   and export at once, for the embedder and for the reranker.
+3. **BM25 tokenization — not the cause; the index's state is.** Arm B runs no model. Its same-order count
+   is 1 of 12 on `fixture-catalog` and 13 of 20 on `self-docs`, with every differing query's two ref
+   lists in the rendered comparison.
+   - **The configuration is the same on both sides.** Both stores issue the same statements: the index
+     `USING bm25 (text) WITH (text_config='english')` and the order `text <@> to_bm25query($1,
+     'chunks_bm25')` (`cli/src/retrieval/store.ts` and `docs-retrieval-service/src/harness_docs_retrieval/store.py`
+     → `BM25_INDEX_DEFINITION`, `BM25_ORDER_CLAUSE`). `pg_extension.extversion` reads `pg_textsearch`
+     1.3.1 on both. The servers are PGlite 0.5.8's PostgreSQL 18.3 and the compose image's
+     PostgreSQL 18.2, and `EXPLAIN` shows both choosing the `chunks_bm25` index scan.
+   - **The probe.** It ran that `ORDER BY` with the score selected, top 8 per query, over
+     `fixture-catalog`'s 12 queries. One side was a freshly built TypeScript index; the TypeScript runner
+     builds a fresh in-memory index on every run, as it did for its block. The other side was the Python
+     index, built through `indexPythonCorpus`, in two states:
+     - **The compose database, after it had held other corpora.** This is the state the Python blocks
+       were taken in, because the Python route indexes every corpus into the one persistent database.
+       Here the Python scores differ from the TypeScript ones on every query that returns hits. On
+       `q-fc-route-choice`, for example, the top hit `docs/routing.md` scores −17.528924 against
+       −9.200331. The table's serial ids started at 705.
+     - **A database created empty for the probe.** Here every chunk listed on both sides scores the same
+       to six decimals, and the top five ordered refs agree on 10 of 12 queries.
+   - **What it shows.** The recorded arm B divergence comes from the Python database's history: its BM25
+     statistics are not those of the live rows alone. The measured fact is that the scores depend on
+     the history. That the statistics still count rows a refresh deleted is inferred from the refresh's
+     delete-and-insert path, and was not measured.
+   - **What stays unexplained.** On the empty database, two queries order a near-tie pair against the
+     score the operator itself returns, while TypeScript orders both by score. On
+     `q-fc-token-lifetime`, `docs/api-auth.md#rotating-a-key` scores −8.307983 and
+     `#token-exchange` scores −8.281486. On `q-fc-unreadable-label`,
+     `docs/depot-operations.md#inbound-scanning` scores −5.534851 and
+     `docs/labels.md#when-a-label-is-rejected` scores −5.514854.
+4. **Anything else the per-query lists show.**
+   - **Arms D and E** fuse arm B's lexical ranking, so their Python sides carry the database's history
+     as well as (1) and (2). The blocks cannot separate the two, so the split is unexplained.
+   - **Arm C** changes order on 6 `fixture-catalog` queries, none of which moves a positive's rank, and
+     on 16 `self-docs` queries, one of which moves a positive's rank (`q-sd-new-subcommand`, 5 → 1).
+     Source (1) together with (2) is the measured candidate for those changes, but only for document
+     vectors. The query vectors and the state of the Python side's HNSW graph, built in the same
+     persistent database, were not measured, so these changes are listed as unexplained.
+   - **`q-sd-daemon-lifecycle`** drops out of arm E's top five on the Python side, rank 4 → 0. This is
+     unexplained for the same reason as the arm D and E split.
+
+**Finding — a defect, recorded and not acted on.** The Python backend's lexical scores depend on what its
+database held before, so the same corpus can rank differently after a re-index. A fresh database removes
+the effect on this corpus. It is named here as work for its own branch, and this branch fixes nothing.
+That branch would decide whether a refresh should rebuild the BM25 index or the eval should index into an
+empty database, and would measure whether the TypeScript backend's persistent index, which is refreshed
+the same way, carries the same dependence. That was not measured here.
+
+### Vector agreement, and the embedder id
+
+The figures are the cosines between the two embedders' **stored document vectors**, per chunk key, from
+`renderVectorAgreement`. They cover **document vectors only**: bge embeds a query with its instruction
+prefix, and no query vector was compared. Both sides stored the same text for every chunk, with no text
+mismatch on either corpus. The leg is q8 ONNX against fp32 PyTorch, with quantization and export measured
+together, as divergence source (2) records.
+
+| Corpus | Pairs | min | p5 | p50 | mean | max |
+| --- | --- | --- | --- | --- | --- | --- |
+| `fixture-catalog` `{ files: 9, chunks: 41 }` | 41 | 0.997938 | 0.998208 | 0.998644 | 0.998611 | 0.999022 |
+| `self-docs` `{ files: 20, chunks: 331 }` | 331 | 0.988583 | 0.992971 | 0.995867 | 0.996243 | 0.999022 |
+
+The lowest cosines:
+
+- `fixture-catalog`: `docs/exceptions.md#exception-codes` 0.997938, `docs/api-auth.md` 0.998114,
+  `docs/INDEX.md` 0.998208, `docs/depot-operations.md` 0.998247, `docs/exceptions.md` 0.998267.
+- `self-docs`: `docs/outer-loop-verification.md#26-the-stall-watchdog` 0.988583,
+  `docs/guard-verification.md#31-narrowed--allow--silent` 0.988899,
+  `docs/outer-loop-verification.md#25-the-usage-gate` 0.990757,
+  `docs/development.md#6-the-roadmap-this-tree-defers-to` 0.991317,
+  `docs/guard-verification.md#33-widened--silent--allow` 0.991542.
+
+**The decision: the id stays namespaced** (`py-st/…`). Both committed corpora are fixture-sized, so their
+figures cannot justify sharing an id. The figures do not support sharing either. The document cosines are
+high, but arm C, the arm a shared id would serve, returns the same ordered refs on only 6 of 12
+`fixture-catalog` queries and 4 of 20 `self-docs` queries. **No proposal to share is made.**
+
+### Abstention, query by query
+
+The threshold is `ABSTAIN_SCORE_THRESHOLD`, `0.32`, as both blocks of each pair record it and as
+`## Threshold calibration` set it. It is not retuned here. Neither corpus has an entry whose abstention
+disagrees with that threshold on either side.
+
+- **`fixture-catalog`: the sets match.** Both sides abstain on `q-fc-billable-weight`,
+  `q-fc-surcharge-compounding`, `q-fc-verify-callback`, `q-fc-negative-recruitment`,
+  `q-fc-negative-lattice` and `q-fc-negative-datastore`.
+- **`self-docs`: the sets do not match.** Both sides abstain on `q-sd-new-config-key`, `q-sd-run-gates`,
+  `q-sd-negative-ingress`, `q-sd-negative-tungsten`, `q-sd-negative-blog` and `q-sd-negative-migration`.
+  Python alone abstains on one more query, and TypeScript alone abstains on none.
+
+| Query | Negative | TypeScript best rerank score | Python best rerank score | Cause |
+| --- | --- | --- | --- | --- |
+| `q-sd-negative-grpc` | yes | 0.3674 | 0.2926 | The reranker scores one identical pair differently: divergence sources (1) and (2) together, for the reranker. |
+
+The pair is identical on both sides. Arm D's first candidate is `docs/retrieval.md#how-it-fits-together`
+on both, and it is TypeScript's arm E top hit, so 0.3674 is that pair's TypeScript score. Python's best
+score is 0.2926, over its own candidates, and that pair is first among them. So Python scores that
+pair at least 0.0748 lower. The chunk's
+stored text is the same on both sides. For a negative query, Python's abstention is the correct outcome.
