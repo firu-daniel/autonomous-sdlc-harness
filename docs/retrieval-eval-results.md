@@ -27862,7 +27862,10 @@ high, but arm C, the arm a shared id would serve, returns the same ordered refs 
 
 The threshold is `ABSTAIN_SCORE_THRESHOLD`, `0.32`, as both blocks of each pair record it and as
 `## Threshold calibration` set it. It is not retuned here. Neither corpus has an entry whose abstention
-disagrees with that threshold on either side.
+disagrees with that threshold on either side. The Python blocks record the value read off the TypeScript
+`search.js`, not the Python server's own `docs-retrieval-service/src/harness_docs_retrieval/search.py` →
+`ABSTAIN_SCORE_THRESHOLD`, which no endpoint exposes. So that no Python entry disagrees with it is the
+evidence that the server's abstentions are consistent with `0.32` on these queries.
 
 - **`fixture-catalog`: the sets match.** Both sides abstain on `q-fc-billable-weight`,
   `q-fc-surcharge-compounding`, `q-fc-verify-callback`, `q-fc-negative-recruitment`,

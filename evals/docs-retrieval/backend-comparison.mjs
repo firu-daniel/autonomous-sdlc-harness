@@ -8,6 +8,10 @@
  * `readCorpusMachineHalf`, keyed by `evals/docs-retrieval/backends.mjs` → `corpusBlockId`; nothing is
  * recomputed from another source. A pair whose `snapshot`, `k`, `repeat` or `abstainScoreThreshold`
  * differ is refused by name, quoting both values.
+ * A `@python` block's `abstainScoreThreshold` is the TypeScript `search.js` constant
+ * `evals/docs-retrieval/results.mjs` renders, not the Python server's, so that field's equality does not
+ * test the Python side; {@link compareAbstention}'s `inconsistent` list, which tests each side's
+ * abstentions against the recorded value, does.
  *
  * The arm set is walked from `evals/docs-retrieval/arms.mjs` → `ARMS` for the entries with a `mode`.
  * Two arms are found by mode rather than by letter — {@link LEXICAL_MODE}, which runs no model, and

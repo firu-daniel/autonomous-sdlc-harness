@@ -238,7 +238,13 @@ function provenanceSection(corpus) {
     `- \`k\`: ${corpus.k}; repetitions per query: ${corpus.repeat}.`,
     `- Embedder: \`${corpus.embedderId}\`. Reranker: \`${corpus.rerankerId}\` — loaded and run outside the stub.`,
     `- \`${RETRIEVAL_STUB_ENV}\` was unset for this run, which the index build refuses to proceed without.`,
-    `- Abstention threshold in force: \`${ABSTAIN_SCORE_THRESHOLD}\`, read off the \`search.js\` this run loaded.`,
+    ...(corpus.backend === 'python'
+      ? [
+          `- Abstention threshold recorded: \`${ABSTAIN_SCORE_THRESHOLD}\`, read off the \`search.js\` this run loaded. The`,
+          "  Python server applies its own `docs-retrieval-service/src/harness_docs_retrieval/search.py` →",
+          '  `ABSTAIN_SCORE_THRESHOLD`, which this run does not read.',
+        ]
+      : [`- Abstention threshold in force: \`${ABSTAIN_SCORE_THRESHOLD}\`, read off the \`search.js\` this run loaded.`]),
     '- The figures above are the **post-calibration** ones for the one arm that threshold applies to. The',
     '  pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold',
     '  calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —',

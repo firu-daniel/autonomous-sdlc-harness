@@ -27,7 +27,7 @@
 
 Each entry resolves to `harness-runs/skeptic_reviews/feat_docs_retrieval_backend_comparison_skeptic_review/finding_<K>.md` via its `**Finding K**` reference. The leading `N.` is the fix order. `K` is the finding's stable number.
 
-1. [ ] **Finding 1** — Say in a `@python` block's provenance, in `backend-comparison.mjs`'s header and in the write-up that the recorded threshold is the TypeScript constant, not the Python server's _(layer: general)_
+1. [x] **Finding 1** — Say in a `@python` block's provenance, in `backend-comparison.mjs`'s header and in the write-up that the recorded threshold is the TypeScript constant, not the Python server's _(layer: general)_
 
 ---
 
