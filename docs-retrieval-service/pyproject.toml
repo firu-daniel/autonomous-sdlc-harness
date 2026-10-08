@@ -54,10 +54,12 @@ mypy_path = "src"
 
 # The gate environment does not install the `models` extra, but a checkout whose environment was
 # provisioned with `sync --with-models` (the backend-comparison protocol in docs/retrieval-eval.md)
-# has it installed. Skipping these modules keeps the typecheck the same either way: they type as
-# `Any`, as they do when absent, and mypy never parses their sources or the numpy stubs behind them.
+# has it installed, and with it numpy, whose stubs use 3.12-only syntax. Skipping these modules
+# keeps the typecheck the same either way: they type as `Any`, as they do when absent. numpy is
+# listed as well as the two entry points because psycopg imports it under `TYPE_CHECKING`, which
+# mypy would otherwise follow into those stubs.
 [[tool.mypy.overrides]]
-module = ["sentence_transformers.*", "torch.*"]
+module = ["sentence_transformers.*", "torch.*", "numpy", "numpy.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 
