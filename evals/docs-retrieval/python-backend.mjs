@@ -72,9 +72,6 @@ export const POSTGRES_SERVICE = 'postgres';
 /** The directory whose `compose.yaml` declares {@link POSTGRES_SERVICE}, repo-relative. */
 export const COMPOSE_DIR = 'docs-retrieval-service';
 
-/** The Python package's manifest, whose `[project]` `version` is `packageVersion`. */
-const PYPROJECT_PATH = ['docs-retrieval-service', 'pyproject.toml'];
-
 const LOOPBACK_HOST = '127.0.0.1';
 
 /** Generous because the first start loads both models before the server binds. */
@@ -182,17 +179,6 @@ function freeLoopbackPort() {
   });
 }
 
-function packageVersion(checkout) {
-  let section = '';
-  for (const line of readFileSync(join(checkout, ...PYPROJECT_PATH), 'utf8').split(/\r?\n/)) {
-    const header = /^\[([^\]]+)\]\s*$/.exec(line);
-    if (header !== null) section = header[1];
-    const version = /^version\s*=\s*"([^"]+)"\s*$/.exec(line);
-    if (section === 'project' && version !== null) return version[1];
-  }
-  return refuse(`${PYPROJECT_PATH.join('/')} carries no [project] version`);
-}
-
 function groupAlive(pid) {
   try {
     process.kill(-pid, 0);
@@ -276,7 +262,6 @@ export async function openPythonSession({ checkout, resolved }) {
         chunkMarkdown(path, readFileSync(join(fixture.dir, path), 'utf8')).map((chunk) => chunk.key),
       ),
     );
-    const version = packageVersion(checkout);
 
     const port = await freeLoopbackPort();
     const baseUrl = `http://${LOOPBACK_HOST}:${port}`;
@@ -334,7 +319,6 @@ export async function openPythonSession({ checkout, resolved }) {
       warnings: index.warnings,
       embedder: { id: health.embedder },
       reranker: { id: health.reranker },
-      packageVersion: version,
       search,
       close,
     };
