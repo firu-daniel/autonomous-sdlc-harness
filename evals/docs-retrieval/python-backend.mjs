@@ -4,7 +4,11 @@
  *
  * **The rule this module exists to enforce: the eval reaches the Python backend only through the
  * package's own entry points, `bash scripts/python-service.sh run <sub-command>`** — the one route
- * `docs-retrieval-service/README.md` → `## Standing it up` makes — **and every figure is scored by the
+ * `docs-retrieval-service/README.md` → `## Standing it up` makes — with one stated exception:
+ * `evals/docs-retrieval/vector-agreement.mjs` reads stored document vectors back from the compose
+ * database through `psql`, because no entry point exposes them, and depends on
+ * `docs-retrieval-service/src/harness_docs_retrieval/store.py`'s `chunks` and `meta` schema in doing
+ * so — **and every figure is scored by the
  * eval's own `evals/docs-retrieval/metrics.mjs`.** Nothing here re-implements a search, a chunker or a
  * fusion; latency is the server's own `search_ms`.
  *
