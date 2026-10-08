@@ -25,21 +25,18 @@
  *
  * **Why a throwaway fixture repository.** `docs serve` refuses unless `retrievalApplies` — `phases.docs`
  * and `docs.retrieval` both true — and this repository's configuration has neither and is deliberately
- * left alone. The fixture mirrors the resolved corpus under the system temp directory, never inside this
- * checkout, and is removed on the way out including on failure.
+ * left alone. The fixture is `evals/docs-retrieval/mirror-fixture.mjs`'s, which owns its shape; this pass
+ * removes it on the way out including on failure.
  */
 
-import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { platform, release, tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { platform, release } from 'node:os';
+import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
-import { CONFIG_FILENAME } from '../../cli/dist/config/model.js';
-import { corpusFiles } from '../../cli/dist/retrieval/corpus.js';
 import { EMBEDDING_MODEL, RERANK_MODEL, RETRIEVAL_STUB_ENV } from '../../cli/dist/retrieval/models.js';
 import { RETRIEVAL_LOG_ENV } from '../../cli/dist/retrieval/queryLog.js';
 import { SEARCH_TOOL_NAME } from '../../cli/dist/retrieval/server.js';
@@ -47,8 +44,9 @@ import { DEFAULT_RESULTS } from '../../cli/dist/retrieval/search.js';
 import { corpusConfig } from './corpora.mjs';
 import { assertRealModelsAreAvailable } from './index-build.mjs';
 import { percentile } from './metrics.mjs';
+import { buildMirrorFixture, removeMirrorFixture } from './mirror-fixture.mjs';
 import { loadQueries } from './queries.mjs';
-import { GENERATED_END, GENERATED_START } from './results.mjs';
+import { readCorpusMachineHalf } from './results.mjs';
 
 /** The corpus this pass mirrors: the larger committed one, whose library-level arm E it is compared against. */
 const PASS_CORPUS = 'self-docs';
@@ -57,7 +55,7 @@ const PASS_CORPUS = 'self-docs';
 const COMPARED_ARM = 'E';
 
 /** The compiled entry point the fixture's server is spawned from, repo-relative. */
-const CLI_ENTRY = 'cli/dist/cli.js';
+export const CLI_ENTRY = 'cli/dist/cli.js';
 
 /** The file of record the compared arm E figures are read out of, repo-relative. */
 const RESULTS_FILE = 'docs/retrieval-eval-results.md';
@@ -117,53 +115,6 @@ function fileListing(dir, prefix = '', out = []) {
     else out.push(path);
   }
   return out;
-}
-
-function git(dir, args) {
-  execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-}
-
-/**
- * A git-initialized fixture repository under the system temp directory, holding exactly the files the
- * resolved corpus names, at the same repo-relative paths.
- *
- * The configuration it carries is the checkout's own, with the resolved corpus's own keys layered over
- * it — so the layer entries are the resolved ones mapped onto their copied paths, one for one, and no
- * layer count and no rules-document path is written here. The only values the fixture adds are its own:
- * the two `retrievalApplies` keys and the documentation root, which this repository's configuration
- * deliberately does not satisfy.
- */
-function buildFixture(repoRoot, resolved) {
-  const corpus = corpusFiles(resolved.repoRoot, resolved.config);
-  if (corpus.files.length === 0) refuse(`corpus ${resolved.id} resolved to no files, so there is nothing to mirror`);
-
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'harness-query-log-pass-')));
-  for (const file of corpus.files) {
-    const target = join(dir, file);
-    mkdirSync(dirname(target), { recursive: true });
-    copyFileSync(join(resolved.repoRoot, file), target);
-  }
-
-  const adopted = JSON.parse(readFileSync(join(repoRoot, CONFIG_FILENAME), 'utf8'));
-  const config = { ...adopted, ...resolved.config };
-  writeFileSync(join(dir, CONFIG_FILENAME), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
-
-  git(dir, ['init', '-q', '-b', config.defaultBranch]);
-  git(dir, ['add', '--', ...corpus.files, CONFIG_FILENAME]);
-  git(dir, ['-c', 'user.name=query log pass', '-c', 'user.email=query-log-pass@invalid', 'commit', '-q', '-m', 'Fixture corpus']);
-
-  // The fixture cannot drift from the corpus it mirrors: what it resolves for itself is what was copied.
-  const mirrored = corpusFiles(dir, config);
-  if (mirrored.files.length !== corpus.files.length) {
-    refuse(
-      `the fixture resolves ${mirrored.files.length} corpus files and ${resolved.id} resolves ` +
-        `${corpus.files.length}; the two must be equal or a document has not been mirrored`,
-    );
-  }
-  const missing = corpus.files.filter((file) => !mirrored.files.includes(file));
-  if (missing.length > 0) refuse(`the fixture is missing ${missing.join(', ')} of corpus ${resolved.id}`);
-
-  return { dir, config, files: corpus.files, warnings: [...corpus.warnings, ...mirrored.warnings] };
 }
 
 /**
@@ -265,13 +216,12 @@ function assertRecords(records, calls, contract) {
 function comparedArm(repoRoot) {
   const path = join(repoRoot, RESULTS_FILE);
   const text = readFileSync(path, 'utf8');
-  const start = text.indexOf(GENERATED_START);
-  const end = text.indexOf(GENERATED_END);
-  if (start === -1 || end === -1) refuse(`${path} carries no generated region to read arm ${COMPARED_ARM} out of`);
-
-  const fences = [...text.slice(start, end).matchAll(/```json\n([\s\S]*?)\n```/g)].map((match) => JSON.parse(match[1]));
-  const published = fences.find((fence) => fence.corpus === PASS_CORPUS);
-  if (published === undefined) refuse(`${path}'s generated region carries no machine half for corpus ${PASS_CORPUS}`);
+  let published;
+  try {
+    published = readCorpusMachineHalf(text, PASS_CORPUS);
+  } catch (error) {
+    refuse(`${path}: ${error.message}`);
+  }
   const arm = published.arms.find((entry) => entry.arm === COMPARED_ARM);
   if (arm?.metrics?.latency === undefined) refuse(`${path} carries no arm ${COMPARED_ARM} latency for corpus ${PASS_CORPUS}`);
 
@@ -308,7 +258,7 @@ export async function runQueryLogPass({ repo, corpus, queries: queriesPath }) {
   const contract = recordContract(repo);
   const queries = loadQueries(queriesPath);
   const resolved = corpusConfig({ repoRoot: repo, corpus });
-  const fixture = buildFixture(repo, resolved);
+  const fixture = buildMirrorFixture(repo, resolved);
 
   try {
     const logPath = join(fixture.dir, LOG_BASENAME);
@@ -373,7 +323,7 @@ export async function runQueryLogPass({ repo, corpus, queries: queriesPath }) {
       compared: comparedArm(repo),
     };
   } finally {
-    rmSync(fixture.dir, { recursive: true, force: true });
+    removeMirrorFixture(fixture.dir);
   }
 }
 

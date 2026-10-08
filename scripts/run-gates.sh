@@ -130,8 +130,14 @@ echo "== gate 6 — self-containment"
 # begin `./.git:` and still reach the log.
 # `test_run_logs` holds the Run gates phase's logs: they carry machine paths by construction, are
 # gitignored, and include the log of the run in progress, so 6a would fail on its own output.
+# `scratch` holds throwaway probes and the backend-comparison captures `docs/retrieval-eval.md`
+# writes there: gitignored and machine-local by construction (a `du` of the model caches, a
+# stream-json session's init line), so 6a would otherwise fail on files that can never be committed.
+# `__pycache__` holds Python bytecode, which records each source's absolute path: gitignored, never
+# committed, and written by any Python run against the editable install that does not carry
+# `PYTHONDONTWRITEBYTECODE`.
 machine_path_hits() {
-  grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs | grep -v '^\./\.git:[0-9][0-9]*:'
+  grep -rn "$HOME" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=test_run_logs --exclude-dir=scratch --exclude-dir=__pycache__ | grep -v '^\./\.git:[0-9][0-9]*:'
 }
 gate_silent "6a no machine paths" machine_path_hits
 # Two exclusions, not one. `examples/notes-app/.claude` is an adopted repository's own generated
