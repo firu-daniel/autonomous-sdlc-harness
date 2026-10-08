@@ -15,7 +15,7 @@
 Each entry resolves to a self-contained `finding_<K>.md` in this plan's per-finding folder. Sorted lowest blast radius first. The two findings are independent: neither depends on the other.
 
 1. [x] **Finding 1** — Stop mypy following imports into the optional `models` extra (`follow_imports = "skip"` on the existing `sentence_transformers.*` / `torch.*` override in `docs-retrieval-service/pyproject.toml`). _(layer: general)_
-2. [ ] **Finding 2** — Exclude the gitignored `scratch` directory from gate 6a's `$HOME` grep, in `scripts/run-gates.sh` and in the gate's stated command in `docs/development.md` §5. _(layer: general)_
+2. [x] **Finding 2** — Exclude the gitignored `scratch` directory from gate 6a's `$HOME` grep, in `scripts/run-gates.sh` and in the gate's stated command in `docs/development.md` §5. _(layer: general)_
 
 ---
 
