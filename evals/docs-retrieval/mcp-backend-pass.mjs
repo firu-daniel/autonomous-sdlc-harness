@@ -10,7 +10,8 @@
  * `p95`, so the write-up reports the two apart.
  *
  * `evals/docs-retrieval/query-log-pass.mjs` is the TypeScript-only precedent for driving a server over
- * MCP. It is not reused: it grades the query log, and this pass compares two servers.
+ * MCP. It is not reused beyond its `CLI_ENTRY`: it grades the query log, and this pass compares two
+ * servers.
  *
  * **The backend label is resolved first, by `evals/docs-retrieval/backends.mjs` → `backendFor`, the one
  * owner of the backend set,** before any corpus is resolved, fixture built or process spawned; every
@@ -49,18 +50,16 @@ import { corpusConfig } from './corpora.mjs';
 import { assertRealModelsAreAvailable } from './index-build.mjs';
 import { percentile } from './metrics.mjs';
 import { buildMirrorFixture, removeMirrorFixture } from './mirror-fixture.mjs';
-import { assertPythonBackendAvailable, indexPythonCorpus, scrub } from './python-backend.mjs';
+import {
+  COMPOSE_DIR,
+  POSTGRES_SERVICE,
+  assertPythonBackendAvailable,
+  indexPythonCorpus,
+  scrub,
+  wrapperArgs,
+} from './python-backend.mjs';
 import { loadQueries } from './queries.mjs';
-
-/** The compiled entry point the TypeScript server is spawned from, repo-relative. */
-const CLI_ENTRY = ['cli', 'dist', 'cli.js'];
-
-/** The wrapper the Python server is spawned through, repo-relative. */
-const WRAPPER_PATH = ['scripts', 'python-service.sh'];
-
-/** The directory whose `compose.yaml` declares the `postgres` service. */
-const COMPOSE_DIR = 'docs-retrieval-service';
-const POSTGRES_SERVICE = 'postgres';
+import { CLI_ENTRY } from './query-log-pass.mjs';
 
 /** `mcp_server.py` → `TIMING_LINE_PREFIX`. */
 const TIMING_LINE_PREFIX = `${DOCS_SERVER_NAME}: search_ms=`;
@@ -92,7 +91,7 @@ async function warmIndex(backend, checkout, fixtureDir) {
   }
   let stdout;
   try {
-    stdout = execFileSync(process.execPath, [join(checkout, ...CLI_ENTRY), 'docs', 'index', '--cwd', fixtureDir], {
+    stdout = execFileSync(process.execPath, [join(checkout, CLI_ENTRY), 'docs', 'index', '--cwd', fixtureDir], {
       env: childEnv(backend),
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -107,9 +106,9 @@ async function warmIndex(backend, checkout, fixtureDir) {
 
 function serverCommand(backend, checkout, fixtureDir) {
   if (backend === 'python') {
-    return { command: 'bash', args: [join(checkout, ...WRAPPER_PATH), 'run', PYTHON_SERVE_SUB_COMMAND, '--repo', fixtureDir] };
+    return { command: 'bash', args: wrapperArgs(checkout, PYTHON_SERVE_SUB_COMMAND, ['--repo', fixtureDir]) };
   }
-  return { command: process.execPath, args: [join(checkout, ...CLI_ENTRY), 'docs', 'serve', '--cwd', fixtureDir] };
+  return { command: process.execPath, args: [join(checkout, CLI_ENTRY), 'docs', 'serve', '--cwd', fixtureDir] };
 }
 
 /** Every process's `{ pid, ppid, rssKb }`, from one `ps` read. */

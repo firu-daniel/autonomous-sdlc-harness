@@ -23,10 +23,11 @@
  * the shared model cache, and restores the transformers `env` it changed.
  *
  * The Python index is read through `docker compose exec -T postgres psql`, run in
- * `docs-retrieval-service/`, whose `compose.yaml` → `services.postgres` owns the service name kept
- * below as {@link POSTGRES_SERVICE}. That route reaches only the compose database, so the measurement
- * refuses before anything is built unless `pythonDatabaseUrl(process.env)` — the same owner the index
- * write goes through — is `PYTHON_DEFAULT_DATABASE_URL`. The psql user and database are read off that
+ * `docs-retrieval-service/`, whose `compose.yaml` → `services.postgres` owns the service name
+ * `evals/docs-retrieval/python-backend.mjs` keeps as {@link POSTGRES_SERVICE}. That route reaches only
+ * the compose database, so the measurement refuses before anything is built unless
+ * `pythonDatabaseUrl(process.env)` — the same owner the index write goes through — is
+ * `PYTHON_DEFAULT_DATABASE_URL`. The psql user and database are read off that
  * constant; the URL itself is never printed.
  */
 
@@ -51,13 +52,13 @@ import { corpusConfig } from './corpora.mjs';
 import { assertRealModelsAreAvailable } from './index-build.mjs';
 import { percentile } from './metrics.mjs';
 import { buildMirrorFixture, removeMirrorFixture } from './mirror-fixture.mjs';
-import { assertPythonBackendAvailable, indexPythonCorpus, scrub } from './python-backend.mjs';
-
-/** `docs-retrieval-service/compose.yaml` → `services.postgres`. */
-const POSTGRES_SERVICE = 'postgres';
-
-/** The directory whose `compose.yaml` declares {@link POSTGRES_SERVICE}, repo-relative. */
-const COMPOSE_DIR = 'docs-retrieval-service';
+import {
+  COMPOSE_DIR,
+  POSTGRES_SERVICE,
+  assertPythonBackendAvailable,
+  indexPythonCorpus,
+  scrub,
+} from './python-backend.mjs';
 
 /** `cli/src/retrieval/refresh.ts` → `EMBED_BATCH_SIZE`, which that module does not export. */
 const EMBED_BATCH_SIZE = 32;

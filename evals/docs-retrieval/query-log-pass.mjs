@@ -55,7 +55,7 @@ const PASS_CORPUS = 'self-docs';
 const COMPARED_ARM = 'E';
 
 /** The compiled entry point the fixture's server is spawned from, repo-relative. */
-const CLI_ENTRY = 'cli/dist/cli.js';
+export const CLI_ENTRY = 'cli/dist/cli.js';
 
 /** The file of record the compared arm E figures are read out of, repo-relative. */
 const RESULTS_FILE = 'docs/retrieval-eval-results.md';

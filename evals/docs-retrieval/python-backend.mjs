@@ -8,8 +8,9 @@
  * `evals/docs-retrieval/vector-agreement.mjs` reads stored document vectors back from the compose
  * database through `psql`, because no entry point exposes them, and depends on
  * `docs-retrieval-service/src/harness_docs_retrieval/store.py`'s `chunks` and `meta` schema in doing
- * so — **and every figure is scored by the
- * eval's own `evals/docs-retrieval/metrics.mjs`.** Nothing here re-implements a search, a chunker or a
+ * so; this module owns the {@link COMPOSE_DIR} and {@link POSTGRES_SERVICE} that read-back route uses,
+ * as it owns {@link WRAPPER_PATH} and {@link wrapperArgs} for the entry points — **and every figure is
+ * scored by the eval's own `evals/docs-retrieval/metrics.mjs`.** Nothing here re-implements a search, a chunker or a
  * fusion; latency is the server's own `search_ms`.
  *
  * Every name the CLI already owns is imported from `cli/dist/retrieval/pythonBackend.js` and
@@ -63,7 +64,13 @@ const INDEX_LINE = /^index: (\d+) files, (\d+) chunks; embedded (\d+), unchanged
 const WRAPPER_NOT_PROVISIONED_EXIT = 3;
 
 /** The wrapper, repo-relative to the checkout. */
-const WRAPPER_PATH = ['scripts', 'python-service.sh'];
+export const WRAPPER_PATH = ['scripts', 'python-service.sh'];
+
+/** `docs-retrieval-service/compose.yaml` → `services.postgres`. */
+export const POSTGRES_SERVICE = 'postgres';
+
+/** The directory whose `compose.yaml` declares {@link POSTGRES_SERVICE}, repo-relative. */
+export const COMPOSE_DIR = 'docs-retrieval-service';
 
 /** The Python package's manifest, whose `[project]` `version` is `packageVersion`. */
 const PYPROJECT_PATH = ['docs-retrieval-service', 'pyproject.toml'];
@@ -96,7 +103,8 @@ function childEnv() {
   return { ...process.env, [PYTHON_DATABASE_URL_VARIABLE]: pythonDatabaseUrl(process.env) };
 }
 
-function wrapperArgs(checkout, subCommand, rest) {
+/** The `bash` argv for `python-service.sh run <subCommand> ...rest` in `checkout`. */
+export function wrapperArgs(checkout, subCommand, rest) {
   return [join(checkout, ...WRAPPER_PATH), 'run', subCommand, ...rest];
 }
 
