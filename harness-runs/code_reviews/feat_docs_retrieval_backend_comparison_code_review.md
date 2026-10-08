@@ -21,7 +21,7 @@ Each entry resolves to `harness-runs/code_reviews/feat_docs_retrieval_backend_co
 1. [x] **Finding 9** — Drop the `export` from `WRAPPER_PATH` in `python-backend.mjs` and from `cosine` in `vector-agreement.mjs` _(layer: general)_
 2. [x] **Finding 8** — Render `renderVectorAgreement`'s main summary and lowest-cosine tables through `summaryTable` and `lowestTable` _(layer: general)_
 3. [x] **Finding 7** — Count a no-candidates abstention as consistent with the threshold in `compareAbstention` _(layer: general)_
-4. [ ] **Finding 6** — Check `backend-comparison.mjs`'s `SIDES` against `BACKENDS` at load _(layer: general)_
+4. [x] **Finding 6** — Check `backend-comparison.mjs`'s `SIDES` against `BACKENDS` at load _(layer: general)_
 5. [ ] **Finding 3** — Remove the unconsumed `packageVersion` from `python-backend.mjs` _(layer: general)_
 6. [ ] **Finding 2** — Make the TypeScript `runArm` use `emptyRecord` and `recordRepetition` instead of inline copies _(layer: general)_
 7. [ ] **Finding 10** — Say in the write-up that the TypeScript document vectors were embedded in session, not read back from an index _(layer: general)_

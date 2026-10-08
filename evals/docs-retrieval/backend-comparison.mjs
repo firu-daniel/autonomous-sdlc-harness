@@ -20,13 +20,18 @@
  */
 
 import { ARMS } from './arms.mjs';
-import { corpusBlockId } from './backends.mjs';
+import { backendFor, corpusBlockId } from './backends.mjs';
 import { FLOOR_CORPUS, FLOOR_PATH, METRICS, loadFloor } from './check-floor.mjs';
 import { percentile } from './metrics.mjs';
 import { readCorpusMachineHalf } from './results.mjs';
 
-/** The two sides, in the order every table prints them. */
+/**
+ * The two sides, in the order every table prints them. Each is checked against
+ * `evals/docs-retrieval/backends.mjs` → `BACKENDS` at load.
+ */
 const SIDES = Object.freeze(['typescript', 'python']);
+// Each side is a BACKENDS entry, refused by name at load if the vocabulary moves (`backends.mjs` → `backendFor`).
+for (const side of SIDES) backendFor(side);
 
 /** The arm that runs no model, so any difference there is the store's. */
 const LEXICAL_MODE = 'lexical';
