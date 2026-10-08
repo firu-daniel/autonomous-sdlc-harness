@@ -1,23 +1,24 @@
-### Task 8 — Re-take the refresh-level measurement after the fix and correct the behaviour documents
+### Task 8 — Pin the Python fix with a container test beside the package's own
 
-**Goal:** Show, with the same sequence Task 2 ran before the fix, that a refresh of each backend now scores exactly as a fresh index of the same corpus does. Correct the two behaviour documents whose prose the fix makes stale (story index → `## Scope register`, rows 6 and 7).
+**Goal:** Meet goal 4 for the Python backend. Add a test, beside the package's own tests and needing the compose Postgres like the other container tests, that builds an index, removes and changes documents, refreshes, and compares the BM25 scores with those of a fresh index of the final corpus, exactly. It must fail with Task 7's rebuild call removed and pass with it. Where no test database is configured, it is skipped like the existing container tests, so `scripts/run-gates.sh` still passes with no Docker (task prompt → `## Constraints`, fourth bullet).
 
-**Depends on:** Task 2, which committed the refresh-level sequence in `evals/docs-retrieval/bm25-history.mjs`, with its edit set fixed in the module, and recorded `#### Through the refresh, before the fix`. It also depends on Tasks 4 and 6, which ship the rebuild in `refreshIndex` and `refresh_index` under the rule *a refresh that cleared the table, deleted a key or re-embedded a stored key ends with `REINDEX INDEX chunks_bm25`*.
+**Depends on:** Task 7, which adds `DocStore.rebuild_lexical_index()` and `BM25_REINDEX` to `store.py`, and calls it from `refresh_index` exactly once when the refresh cleared the table, deleted a key, or re-embedded a stored key. This test drives `refresh_index` as shipped and never calls `rebuild_lexical_index` itself.
 
 ### Targets
 
-- `docs/retrieval-eval-results.md` → `### The index's history, measured`: a `#### Through the refresh, after the fix` part, beside Task 2's.
-- `docs/retrieval.md` → the **Incremental refresh.** paragraph (scope register row 7).
-- `docs/retrieval-eval.md` → `### Measuring the Python backend against the TypeScript one`, step 3's paragraph beginning "The Python runs index into the one persistent compose database" (scope register row 6).
+- `docs-retrieval-service/tests/test_refresh_bm25_history.py` (new).
+- `docs-retrieval-service/tests/conftest.py`, only if a second throwaway database is needed in one test: a fixture beside `fresh_database_url` that creates and drops a second database by the same mechanism, rather than a copy of it inside the test file.
 
 **Work:**
 
-- [ ] Re-run Task 2's refresh-level function for `typescript` and `python` on the fixed tree, with the same edit set, capturing under `harness-runs/scratch/bm25-history/`. Record the same columns Task 2 recorded, under `#### Through the refresh, after the fix`: `total_docs` against the live row count, hits differing between the refreshed and the fresh index, and the refresh summary line. Zero differing hits on both backends is goal 2 and goal 3 met. Anything else stops the branch and is reported.
-- [ ] `docs/retrieval.md` → **Incremental refresh.**: add the rule in one sentence, saying when the refresh rebuilds the lexical index and why, and cite `docs/retrieval-eval-results.md` → `### The index's history, measured` for the measurement. Say that both backends follow it.
-- [ ] `docs/retrieval-eval.md` → step 3's paragraph: replace the statement that a `@python` block's arms B, D and E describe the database's history with what holds after the fix. Keep the instruction to record in `host.txt` whether the database was emptied, because it still documents the sitting.
+- [ ] Header: the rule the file enforces, carried over from Task 6's TypeScript test, with a citation of `docs/retrieval-eval-results.md` → `### The index's history, measured`. `pytestmark = pytest.mark.container`, as `tests/test_store_postgres.py` sets it, so the module is skipped loudly with `HARNESS_DOCS_RETRIEVAL_TEST_DATABASE_URL` unset (`tests/conftest.py` → `CONTAINER_SKIP_REASON`).
+- [ ] Fixture: a throwaway corpus under `tmp_path`, built as `tests/test_refresh.py` builds its corpus and config, and the `hash-v1` stub through `stubs.resolve_models`, exactly as `tests/test_store_postgres.py` takes it, so no weights are read. Database X, from `fresh_database_url`, is refreshed incrementally. Database Y, a second throwaway database, is refreshed once from the final corpus.
+- [ ] Scoring helper: on each store's database, run Task 1's score statement shape, through the index scan and never with it disabled: `SELECT key, <BM25_ORDER_CLAUSE> AS scan, round((<BM25_ORDER_CLAUSE>)::numeric, 6) AS operator FROM <CHUNKS_TABLE> ORDER BY <BM25_ORDER_CLAUSE> LIMIT $2`, composed from `store.py`'s `CHUNKS_TABLE`, `BM25_INDEX` and `BM25_ORDER_CLAUSE`, bound and never spliced, for a fixed set of queries. Return key → (`scan`, `operator`), the `scan` value rounded to six decimals on the client. If Task 2 recorded a different column shape as the fix for the stray score, use that shape instead, as Task 2's record states it.
+- [ ] Three cases, the same as Task 6's: **(a) delete**, which removes a corpus file; **(b) update**, which changes a section body; **(c) embedder change**, `hash-v1` then `hash-v2`. Each asserts that X's score map equals Y's in both columns, and that the `RefreshResult` shows the deletion or re-embedding it exercised.
+- [ ] Show it failing: with the `rebuild_lexical_index()` call in `refresh.py` temporarily removed, run the package's container tests with the compose Postgres up and confirm that cases (a), (b) and (c) fail on the score comparison. Restore the call and confirm all pass. Nothing of the removal is committed.
 
 **Verification:**
 
-- The after-fix part reads zero differing hits on both backends, from a capture of this run.
-- The scope-register derivation command, re-run, still reaches rows 6 and 7. Each row's sentence now describes the fixed behaviour, and no sentence in either file still says the scores depend on the database's history.
-- `bash scripts/run-gates.sh` passes.
+- `bash scripts/python-service.sh container-test`, with the compose `postgres` service up, passes with the call in place. The failing run with it removed is reported in the task's completion note, with its failure count.
+- `bash scripts/run-gates.sh` without `HARNESS_GATES_CONTAINERS=1` reports gate 13d `SKIPPED`, as before, and passes (`scripts/run-gates.sh` → the 13d leg).
+- `ruff` and `mypy`, as gate 13 runs them, pass on the new file.

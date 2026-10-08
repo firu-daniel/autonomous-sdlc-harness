@@ -1,23 +1,25 @@
-### Task 5 — Pin the TypeScript fix with a refresh-against-fresh-index score test
+### Task 5 — Rebuild the BM25 index after a refresh that leaves a dead row, in the TypeScript store and refresh
 
-**Goal:** Meet goal 4 for the TypeScript backend. Add a test that builds a persistent index, removes and changes documents, refreshes, and compares the BM25 scores with those of a fresh index of the final corpus, exactly. It must fail with Task 4's rebuild call removed and pass with it, and it runs where the CLI's existing tests run, which is `node --test` under `scripts/run-gates.sh`, needing no Docker and no weights.
+**Goal:** Make a refresh of the TypeScript persistent index (`<repoRoot>/<stateDir>/docs_index`) give the same BM25 scores as a fresh index of the same corpus, whatever the index held before. Do it by rebuilding the BM25 index at the end of any refresh that left a dead heap tuple behind. That is goal 3's fix, under the rule the story index's `## Context` states. Do not change search behaviour in any other way (task prompt → `## Constraints`, first bullet).
 
-**Depends on:** Task 4, which adds `DocStore.rebuildLexicalIndex()` and calls it from `refreshIndex` when the refresh cleared the table, deleted a key, or re-embedded a stored key. It also exports `BM25_REINDEX` from `cli/src/retrieval/store.ts`. This test drives the refresh as shipped. It does not call `rebuildLexicalIndex` itself, so it would catch a refresh that stopped calling it.
+**Depends on:** Task 4, whose recorded `#### Through the refresh, before the fix` part shows the TypeScript persistent index carrying the dependence. If it shows none, this task does not run (Task 4's verification).
+
+**Where this layer stops.** This task changes `cli/src/retrieval/store.ts` and `cli/src/retrieval/refresh.ts` only. The test that pins it is **Task 6's**. The Python port of the same rule is **Task 7's**, and it reads the constant this task exports. The documents describing refresh are **Task 9's**. `RefreshResult` keeps its shape: no field is added, so `docs index`'s summary line, the query log's refresh counts and the Python wire stay as they are.
 
 ### Targets
 
-- `cli/test/docs-retrieval-bm25-history.test.mjs` (new).
+- `cli/src/retrieval/store.ts`: the exported statement constant and the new `DocStore` member.
+- `cli/src/retrieval/refresh.ts`: the call, under the rule.
 
 **Work:**
 
-- [ ] Header: the rule the file enforces, *"a refresh of a persistent docs index scores every query exactly as a fresh index of the same corpus does"*, with a citation of `docs/retrieval-eval-results.md` → `### The index's history, measured` (`.claude/context/conventions.md` → `## The testing bar`, second bullet).
-- [ ] Fixture: a throwaway repository under `os.tmpdir()`, built with `cli/test/helpers/fixture.mjs` and torn down in process, with retrieval on and a small corpus whose chunks share query terms. Use the `hash-v1` stub through `retrievalEnv`, exactly as `cli/test/docs-retrieval.test.mjs` does, so no model is downloaded. Build the index by running the compiled CLI's `docs index` into the fixture's own `<stateDir>/docs_index`.
-- [ ] Scoring helper: reopen the data directory with PGlite through `cli/dist/retrieval/runtime.js` → `loadRetrievalModule`, as `cli/test/docs-retrieval-store.test.mjs` opens its own. Run `SELECT key, (text <@> to_bm25query($1, '<BM25_INDEX>'))::float8 …` composed from the exported `CHUNKS_TABLE`, `BM25_INDEX` and `BM25_ORDER_CLAUSE`, never retyped, for each of a fixed set of queries. Return key → score.
-- [ ] Three cases, each refreshing fixture X with `docs index`, then building fixture Y, which holds X's final corpus, fresh, and asserting the two score maps are `deepEqual`: **(a) delete**, which removes a corpus file; **(b) update**, which changes a section body so a stored key is re-embedded; **(c) embedder change**, which refreshes once under `hash-v1` and again under `hash-v2` so `clear()` runs. In each case also assert the refresh's summary line reports the deletion or re-embedding, so a case cannot pass by not exercising its condition.
-- [ ] Show it failing: with Task 4's `rebuildLexicalIndex()` call in `refresh.ts` temporarily removed and the CLI rebuilt, run this file and confirm that cases (a), (b) and (c) each fail on the score comparison. Restore the call, rebuild, and confirm all pass. The final tree has the call in place, and nothing of the removal is committed.
+- [ ] `store.ts`: export `BM25_REINDEX`, composed from `BM25_INDEX` as `` `REINDEX INDEX ${BM25_INDEX}` ``. Add it to the module header's list of exported shapes a caller composes rather than retypes, because Task 7's statement-parity test reads it through the bridge.
+- [ ] `store.ts`: add `rebuildLexicalIndex(): Promise<void>` to `DocStore`. Its doc comment states what it is for: `pg_textsearch` keeps corpus statistics that a `DELETE` or an `UPDATE` does not decrement, and `VACUUM` does not fully restore. It cites `docs/retrieval-eval-results.md` → `### The index's history, measured`. Implement it in `openPgliteStore` as `db.exec(BM25_REINDEX)`.
+- [ ] `refresh.ts`: track whether this refresh left a dead tuple, which is true when **any** of these holds: `store.clear()` ran; `gone.length > 0`; or some chunk in `changed` has a key already in `stored`. Then, after the last upsert batch, call `store.rebuildLexicalIndex()` exactly once if it is true. An insert-only or no-op refresh does not call it.
+- [ ] `refresh.ts` header and `refreshIndex`'s doc comment: add the step to the numbered list, (6), and state the rule and why in one place. Amend `store.ts`'s header where it states what the module guarantees, so the header still describes the code (`.claude/context/cli.md` → `## What "done" means here`, last bullet).
 
 **Verification:**
 
-- `npm test --workspace cli -- test/docs-retrieval-bm25-history.test.mjs` exits zero with the call in place. The failing run with the call removed is reported in the task's completion note, with its `# fail` count.
-- The test passes under `bash scripts/run-gates.sh`, on this machine and under the gate's no-Docker condition, because it touches neither.
-- The file names no absolute path, and no fixture is created inside this checkout (`.claude/context/conventions.md` → `## The testing bar`, first bullet).
+- `npm run build` passes under `strict` and `noUnusedLocals`, and `DocStore` has no other implementer that now fails to compile (`grep -rn 'listChunkHashes' cli/src` finds only `store.ts` and `refresh.ts`).
+- `npm test --workspace cli -- test/docs-retrieval.test.mjs` and `npm test --workspace cli -- test/docs-retrieval-store.test.mjs` pass unchanged. Case (a)–(e)'s refresh summary lines are untouched, which is evidence that `RefreshResult` did not move.
+- Grep `refresh.ts` for the three trigger conditions, and find each stated once, in code, with the rule in the doc comment.
