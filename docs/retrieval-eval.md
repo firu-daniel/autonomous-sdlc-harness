@@ -466,6 +466,16 @@ answers:
 claude -p "<a question one known section of docs/ answers; call search_docs>" --settings .claude/settings.autonomous.json --permission-mode acceptEdits --output-format stream-json --verbose > <checkout>/harness-runs/scratch/backend-comparison/agent-session-python.jsonl
 ```
 
+The TypeScript server the launcher starts is the runtime `init` installed machine-wide, not this
+checkout's build. When that runtime predates the `docs.retrievalBackend` key, it refuses
+`harness.config.json` with *"docs.retrievalBackend: unknown key"*, and the session's `system/init`
+shows `harness-docs` as `failed` (`docs/retrieval-eval-results.md` → `## The Python backend against the
+TypeScript one` → `### One agent session through .mcp.json`). In that case, skip the
+`config set … typescript` line below. Delete the `docs.retrievalBackend` key from `<repo>`'s
+`harness.config.json` by hand instead, because an absent key selects the TypeScript backend. Then run
+`doctor` and the session as below, and record in `agent-session.md` that the key was deleted rather
+than set.
+
 Then the same for the TypeScript backend, with the same question:
 
 ```
