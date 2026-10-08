@@ -27852,3 +27852,287 @@ on both, and it is TypeScript's arm E top hit, so 0.3674 is that pair's TypeScri
 score is 0.2926, over its own candidates, and that pair is first among them. So Python scores that
 pair at least 0.0748 lower. The chunk's
 stored text is the same on both sides. For a negative query, Python's abstention is the correct outcome.
+
+### Latency: the library call and the MCP round trip
+
+**When and where.** The operator took every figure in this section and the two after it by hand, in one
+sitting on 2026-10-08, on the host that `harness-runs/scratch/backend-comparison/host.txt` stamps:
+`Darwin 24.6.0`, Node `v22.23.2`, uv 0.12.21 and Docker server 29.5.2. The order was the four blocks
+(05:31 to 05:33 UTC by their `generatedAt`), the MCP passes (stamped 05:34:18Z and 05:34:52Z), then the
+footprint, the cold starts and the TypeScript cold build (`ranAt` 05:35:19.813Z). So the TypeScript side
+is a re-run from the same sitting, not a figure cited from another day. The protocol asks for an idle
+machine. `host.txt`'s `uptime` line reads `load averages: 1.69 1.88 1.84` at the start of the sitting,
+so the host was not idle.
+
+**The library call, arm E** (`fused-rerank`, the mode the server runs), copied from the recorded blocks'
+arm E rows:
+
+| Corpus | Backend | p50 ms | p95 ms | Block |
+| --- | --- | --- | --- | --- |
+| `fixture-catalog` | TypeScript | 372.8 | 415.5 | `eval:corpus:fixture-catalog@typescript` |
+| `fixture-catalog` | Python | 322.1 | 437.8 | `eval:corpus:fixture-catalog@python` |
+| `self-docs` | TypeScript | 551.0 | 735.3 | `eval:corpus:self-docs@typescript` |
+| `self-docs` | Python | 499.4 | 568.4 | `eval:corpus:self-docs@python` |
+
+The two sides time different spans. TypeScript times the `searchDocs` call in process
+(`evals/docs-retrieval/arms.mjs`). Python's figure is the server's own `search_ms`, which times
+`search_docs` alone inside the Python process and leaves the HTTP hop untimed
+(`docs-retrieval-service/src/harness_docs_retrieval/service.py` → `Answer`). **Neither includes the
+per-call index refresh.** Each block took one repetition per query, so run-to-run spread was not measured
+and is not available to set beside the Python-minus-TypeScript gap.
+
+**The MCP round trip over `self-docs`**, from `mcp-typescript.txt` and `mcp-python.txt`. Each pass drove
+the shipped stdio server over the same mirror fixture with a warm index, 20 calls at the server's default
+`k`, and included the first call in the percentiles:
+
+| Backend | Server | Client-side round trip p50 / p95 ms | Server-side `search_ms` p50 / p95 ms |
+| --- | --- | --- | --- |
+| TypeScript | `harness-docs` `0.5.0` | 567.8 / 620.6 | not exposed (`— / —`) |
+| Python | `harness-docs` `0.1.0` | 499.4 / 553.7 | 470.8 / 525.1 |
+
+**The client-side figure includes the per-call refresh and the stdio hop.** It is what an agent waits for.
+Python's server-side figure is the same `search_ms` span as its library figure, read from the server's
+stderr timing line (`docs-retrieval-service/src/harness_docs_retrieval/mcp_server.py` →
+`TIMING_LINE_PREFIX`), so it also excludes the refresh. TypeScript
+exposes no server-side time. The earlier TypeScript-only MCP figure is in `## The query-log pass` and is
+not restated here.
+
+### Cold start
+
+**Two senses of *cold*, stated the way `evals/docs-retrieval/cold-build.mjs`'s header states them.**
+*Process cold* is the server process and its model load over an index that already exists. *Index cold*
+is a build into an empty index. Every figure below has a **warm model cache**: no figure includes a
+weight download.
+
+**Process and model load, warm index**, from `mcp-*.txt`. `connectMs` is the MCP `connect`. `firstCallMs`
+runs from the same start until the first `search_docs` call returns, so it contains `connectMs` and the
+first call's model load (`evals/docs-retrieval/mcp-backend-pass.mjs` → `runMcpBackendPass`).
+
+| Backend | `connectMs` | `firstCallMs` |
+| --- | --- | --- |
+| TypeScript | 527.3 | 1169.9 |
+| Python | 6157.7 | 6864.1 |
+
+The Python figure covers the `bash` wrapper, `uv` and the server's start, because the pass spawns the
+server through `scripts/python-service.sh`.
+
+**The container, Python only.** In an adopter's path the Python service runs on the host
+(`docs/retrieval.md` → `## Turning on the Python backend`, step 3), so Postgres is the only container.
+Its start was timed from a stopped container, with the image and the volume already present, from
+`docs-retrieval-service/`:
+
+```
+docker compose stop postgres
+/usr/bin/time -p docker compose up -d --wait postgres 2>> ../harness-runs/scratch/backend-comparison/footprint.txt
+```
+
+```
+ Container harness-docs-retrieval-postgres-1 Healthy 
+real 2.62
+```
+
+**The cold index build, index cold, model cache warm.**
+
+- **Python.** The database was emptied (`docker compose down -v`, then `up -d --wait postgres`), then
+  `self-docs` was indexed:
+
+  ```
+  /usr/bin/time -p bash scripts/python-service.sh run index --repo .. --docs-root docs >> harness-runs/scratch/backend-comparison/footprint.txt 2>&1
+  ```
+
+  ```
+  index: 20 files, 331 chunks; embedded 331, unchanged 0, deleted 0
+  real 21.48
+  user 34.80
+  sys 5.50
+  ```
+
+  The 21.48 s includes the process's own load of both models from the weight cache. The capture's two
+  `Loading weights` lines read `199/199` and `105/105`. It does not include a container start.
+- **TypeScript, same sitting**, through `bash scripts/scratch-run.sh harness-runs/scratch/cold-build.mjs`,
+  at snapshot `{ files: 20, chunks: 331 }`, with `"cold": { "index": true, "modelCache": false }`:
+
+  ```
+  "modelLoadMs": 180.19237500000003,
+  "storeOpenMs": 822.1098749999999,
+  "refreshMs": 18921.740665999998,
+  "totalMs": 19924.042916
+  ```
+
+  The earlier TypeScript cold builds in `## Cold build and index size` carry other corpus stamps
+  (`{ files: 13, chunks: 177 }` and the 1,960-chunk catalog), so they do not form a before/after pair
+  with this one.
+
+### Footprint
+
+**Resident memory**, read after the 20 calls of each MCP pass (`mcp-*.txt`). It is the `rss` sum over the
+spawned process subtree:
+
+| Backend | Process | rss KB |
+| --- | --- | --- |
+| TypeScript | the server (depth 0) | 2044608 |
+| Python | `bash` wrapper (depth 0) | 2368 |
+| Python | `uv` (depth 1) | 17904 |
+| Python | the server (depth 2) | 1027104 |
+| Python | a child of the server (depth 3) | 18880 |
+| Python | subtree total | 1066256 |
+
+**The Postgres container's memory, separately**, as `mcp-python.txt` records it from `docker stats`. This
+is the container's memory usage and its limit, which is a different measure from a process's `rss`:
+`Postgres container memory: 37.96MiB / 7.737GiB`. The TypeScript pass records `not applicable: this
+backend runs no database`.
+
+**Disk**, each command from `docs/retrieval-eval.md` → `### Measuring the Python backend against the
+TypeScript one`, step 5, with its line from `footprint.txt`. In the output lines, `<cache>` stands for the
+expanded `${XDG_CACHE_HOME:-$HOME/.cache}` and `<key>` for the checkout key the third command computes.
+
+- The Python weight cache, fp32:
+
+  ```
+  du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/models"
+  225M	<cache>/harness-docs-retrieval/models
+  ```
+
+- The TypeScript weight cache, q8:
+
+  ```
+  du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/models/Xenova"
+   56M	<cache>/autonomous-sdlc-harness/retrieval/models/Xenova
+  ```
+
+- The Python environment, with the `models` extra:
+
+  ```
+  du -sh "${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/venvs/$(printf '%s' "$(git rev-parse --show-toplevel)" | cksum | awk '{print $1}')"
+  929M	<cache>/harness-docs-retrieval/venvs/<key>
+  ```
+
+- The Postgres image. `docker system df -v`'s row for it splits the size into a shared part and a unique
+  part. The shared part is common with the `pgvector/pgvector` `0.8.1-pg18` base it builds on:
+
+  ```
+  docker image ls harness-docs-retrieval-postgres
+  harness-docs-retrieval-postgres:latest   13811c585780        657MB          159MB   U    
+  ```
+
+  ```
+  harness-docs-retrieval-postgres   latest       13811c585780   5 days ago     657MB     649.5MB       7.901MB       1
+  ```
+
+  The columns are `DISK USAGE` and `CONTENT SIZE` for the first, and `SIZE`, `SHARED SIZE`,
+  `UNIQUE SIZE` and `CONTAINERS` for the second.
+- The service image is not in an adopter's path and had not been built. `docker image ls
+  harness-docs-retrieval-service` printed its header line and no row.
+- The volume, from `docker system df -v`:
+
+  ```
+  fd17a40831aeabf48083b71cede0947cd782207dcacd81ee4804a486af0703ea   1         73.14MB
+  ```
+
+- The index in its database, which is the `chunks` table with its indexes:
+
+  ```
+  docker compose exec -T postgres psql -U harness -d docs_retrieval -c "SELECT pg_size_pretty(pg_total_relation_size('chunks'))"
+   6928 kB
+  ```
+
+- The TypeScript index on disk, for the same snapshot, from the same-sitting cold build's `size`:
+  `"apparentBytes": 45637933`, `"allocatedBytes": 47349760`, `"files": 985`.
+
+**Beside the TypeScript runtime.** `docs/retrieval.md` → `## What it costs` puts the TypeScript runtime at
+*"About 300 MB of runtime per machine."* That is a **disk** figure. It was cited here, not re-measured,
+and it does not include the 56M weight cache above (`docs/retrieval.md` → `## How it fits together`:
+*"the roughly 300 MB runtime and the model weights"*). Compare it with the disk lines in this subsection,
+never with the resident-memory table. The Python backend's disk cost comes **on top of** the TypeScript
+one, because `init` still installs the TypeScript runtime and models when `python` is selected (the same
+section).
+
+### One agent session through .mcp.json
+
+**What was run**, from `agent-session.md`. The operator ran one session per backend in a throwaway
+repository holding one commit, `docs/retrieval.md` copied from this checkout, initialised with this
+checkout's build (`node <checkout>/cli/dist/cli.js init --docs --docs-retrieval --non-interactive --cwd
+<repo>`). The Python package was installed with `uv tool install ".[models]"`. Versions:
+`2.1.294 (Claude Code)` and CLI `0.5.0`. Each session is one command line, at `<repo>`'s root:
+
+```
+claude -p "<question>" --settings .claude/settings.autonomous.json --permission-mode acceptEdits --output-format stream-json --verbose
+```
+
+The question, the same on both sides: *"What happens when the Python docs-retrieval backend loses its
+database connection? Answer using the search_docs tool."* `doctor` was run before each session. Its
+output was not captured.
+
+**`docs.retrievalBackend`, per session.**
+
+- Python: `config set docs.retrievalBackend python`.
+- TypeScript, first attempt (`agent-session-typescript.failed.jsonl`): `config set
+  docs.retrievalBackend typescript`.
+- TypeScript, second attempt (`agent-session-typescript.jsonl`): the key deleted from `<repo>`'s
+  `harness.config.json` by hand. An absent key selects the TypeScript backend.
+
+**What came back.** Each figure is from the stream's `system/init` and `result` events and its
+`tool_use` / `tool_result` blocks. Session and account identifiers are left out.
+
+| | Python | TypeScript, first attempt | TypeScript, second attempt |
+| --- | --- | --- | --- |
+| `harness-docs` in `system/init` | `"status":"connected"` | `"status":"failed"` | `"status":"connected"` |
+| `mcp__harness-docs__search_docs` calls | 1, `{"query":"Python docs-retrieval backend database connection lost","k":8}` | 0 | 1, the same input |
+| `permission_denials` | `[]` | `[]` | `[]` |
+| Tool result | 8 ranked hits, no error | none | 8 ranked hits, no error |
+| `result` | `success`, 5 turns | `success`, 1 turn, no answer from `search_docs` | `success`, 6 turns |
+
+**The failed first attempt is a finding, recorded and not acted on.** Its stream shows only that
+`harness-docs` was `failed` at `system/init`, and the agent answered without the tool. The stream does
+not record why. `agent-session.md` records the cause the operator found. The launcher's runtime is the
+published `autonomous-sdlc-harness@0.5.0` that `init` installed machine-wide, and it refused
+`harness.config.json` with *"docs.retrievalBackend: unknown key"*. So, on this machine, once the key was
+set to `typescript` the TypeScript server would not start. The Python session ran with the key set and
+connected. For the same reason, the second TypeScript session's server is that published runtime, not
+this checkout's `cli/dist`.
+
+**The tool result's shape matches.** Neither result carries a `note: ` line or `no confident match`. Both
+are eight ranked `path#heading` lines, each followed by an indented snippet. The first lines:
+
+- Python:
+
+  ```
+  1. docs/retrieval.md#turning-on-the-python-backend (score 0.998)
+     **Who reads this:** an operator selecting `docs.retrievalBackend: "python"` on a repository where retrieval is already on. `init` provisions nothing for this backend, so every step below is done by hand. The two decisions that come with...
+  2. docs/retrieval.md#how-it-fits-together (score 0.992)
+  3. docs/retrieval.md#a-lost-connection (score 0.990)
+  ```
+
+- TypeScript, second attempt:
+
+  ```
+  1. docs/retrieval.md#turning-on-the-python-backend (score 0.998)
+     **Who reads this:** an operator selecting `docs.retrievalBackend: "python"` on a repository where retrieval is already on. `init` provisions nothing for this backend, so every step below is done by hand. The two decisions that come with...
+  2. docs/retrieval.md#how-it-fits-together (score 0.992)
+  3. docs/retrieval.md#where-it-goes-next (score 0.989)
+  4. docs/retrieval.md#a-lost-connection (score 0.988)
+  ```
+
+Here the snippet lines of hits 2 to 4 are left out. The section that answers the question,
+`#a-lost-connection`, is third on the Python side and fourth on the TypeScript side. Both agents answered
+from it: the server never reconnects, and the next session's fresh server recovers.
+
+### The trade-off, stated
+
+The relevance case `### Which case this is` names is *"They disagree, and the reason is not yet
+identified."* The Python backend does not buy relevance. Arm E is identical on `fixture-catalog` and one
+recall@5 step lower on `self-docs` (0.533 against 0.600), and the lexical arm carries the
+database-history defect recorded above. On warm latency it is somewhat faster at arm E and over MCP: a
+`self-docs` p50 of 499.4 against 551.0 ms at the library and 499.4 against 567.8 ms at the client. That
+is one repetition on a loaded host, so the gap is not shown to exceed run-to-run variation. Its resident
+memory is about half: 1066256 KB for the subtree plus 37.96MiB of Postgres, against 2044608 KB.
+
+What it costs: process cold start rises from 1169.9 to 6864.1 ms. A Postgres container must be kept
+running, with a 2.62 s start. On disk it adds 929M of environment, 225M of weights, a 657MB image and a
+73.14MB volume, on top of the TypeScript runtime and weights it does not replace. In this sitting, a
+machine-wide runtime older than the key also stopped the TypeScript server once the key was set. The
+trade-off is a modest warm-latency and memory gain, with no relevance gain, against a much larger cold
+start, disk footprint and operational surface.
+
+**The TypeScript implementation stays the default whatever these numbers say.** Anything this section
+suggests is input to a later decision by the maintainer, not a change made or queued here.

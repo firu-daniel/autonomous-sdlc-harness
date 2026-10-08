@@ -30,3 +30,5 @@
 - Every figure in this task's subsections traces to one of the capture files or to a recorded block, and quoting is verbatim where a command's output is cited. A reader can find each source by the file or marker named beside it.
 - `grep -n -E "postgresql://|/Users/|/private/|/tmp/|session_id" docs/retrieval-eval-results.md` finds no line this task added. Agent-stream excerpts are quoted with any session or account identifier removed.
 - The section's subsections appear in the order Tasks 10 and 11 add them, all below `<!-- eval:generated:end -->`, and `### The trade-off, stated` carries both closing statements.
+
+- **Deviations from plan:** The `du -sh` output lines are quoted byte for byte except the expanded cache root, written `<cache>`, and the venv directory's checkout key, written `<key>`. The raw lines name the operator's home directory, which the Verification grep (`/Users/`) and the self-containment gate both forbid. The `docker image ls`, `docker system df -v`, `psql` and `/usr/bin/time` lines are verbatim, with their original spacing.
