@@ -38,3 +38,24 @@
 - Re-running the documented commands reproduces every recorded score, because the probe measures no time except under the opt-in flag.
 - `bash scripts/run-gates.sh` passes on this machine. `bash scripts/check-eval-artifacts.sh` passes, so the new module names no machine-local path and the recorded setup names none either (`.claude/context/conventions.md` → `## The testing bar`, the self-containment gate).
 - Grep the recorded subsection for a millisecond figure and find none.
+
+**Deviations from plan:**
+
+- **Stopped before recording, under this plan's own point-5 stop rule.** `evals/docs-retrieval/bm25-history.mjs` is written and was run, but neither document was edited. On the compose Postgres, the index-scan score statement does not return the same score every time. Over five runs of `self-docs` (A) against `fixture-catalog` (B), three runs each returned exactly one (query, key) score that no other run returned:
+  - `s0 q-sd-search-abstains docs/analyze.md#8-how-this-is-verified`: −0.221485 in one run, −0.735353 in the others. In that run, `s5` and `s7` each read **1 differing hit** against `s0`: that key, s0 −0.221485, s5 −0.735353.
+  - `s1 q-sd-cross-asset-reference docs/github-run-control.md#5-lifecycle-comments-and-state-labels`: −0.341426 against −1.891997.
+  - `s2 q-sd-analyze-writes docs/development.md#7-releasing`: −1.629181 against −4.567675.
+  - **The four runs of record.** These are the first run of each corpus × engine pair. All four read 0 differing hits at `s5` and at `s7`, but the Postgres `self-docs` run is one of the runs above that carries a stray value, at `s2`. So *"re-running reproduces every recorded score"* does not hold on Postgres.
+- **What the scratch checks showed, and how.**
+  - **The scan is the source.** The same probe was run with `SET enable_indexscan = off` before the score statements, through a scratch copy of the module. Three runs per engine on `self-docs` gave byte-identical score sets within each engine. The Postgres score set equals the modal index-scan one, and the PGlite score set equals the PGlite index-scan run's. Separately, 15 repeats of all 20 `self-docs` queries against one fixed Postgres table returned one stray line under the index scan and none with `enable_indexscan = off`.
+  - **Point 5 under that scoring.** With the index scan disabled, `s5` and `s7` read 0 differing hits on every run.
+  - **Who decides.** Whether the probe should score through the index scan, as item 3's statement and the store do, or with it disabled, is the maintainer's call. That stray score may also be Task 3's near-tie lead.
+- **Postgres statements go to psql on stdin, not through `-c`.** The largest `self-docs` chunk is 410221 bytes, larger than Linux's 131072-byte limit on one argument. `-c` also cannot carry a `\bind` beside its SQL. Values are bound through `\bind`, and the flags stay `-At -F ' '`.
+- **Point 2's expectation is not what was measured.** After `DELETE` of B, A's scores **equal** the A ∪ B ones: 0 hits differ from `s1` on all four runs, apart from the stray Postgres value above. They do not "equal neither".
+- **What the four runs of record show, for the eventual record.** Captures are under `harness-runs/scratch/bm25-history/`.
+  - **`s2`.** `total_docs` and `total_len` are unchanged by the `DELETE`.
+  - **`s3`, PGlite only.** The reopen spills the memtable to a second segment, and the statistics are unchanged.
+  - **`s4`, `VACUUM`.** It drops a segment only when every document in it is dead. With A = `fixture-catalog`, `total_docs` falls from 429 to 273 against 41 live rows. With A = `self-docs`, it stays 429 against 388.
+  - **`s5` and `s7`, `REINDEX`.** `total_docs` equals the live rows.
+  - **`s6`.** The two upserts add 2 to `total_docs`.
+  - **`autovacuum_count`.** It read 0 at every Postgres step.
