@@ -957,6 +957,72 @@ What still owes a first recording:
 - From (xv): leg (f)'s poller dispatch.
 - The rest of `docs/github-run-control.md` → `## 8.`.
 
+**Round 12 — 2026-10-09, the hardened workflows before their release.** Scoped to the four workflow templates this branch hardened, job by job. Each template now pins every action to a full commit sha, sets `permissions: {}` at the workflow level and grants each job its own: `wrong-ref` none; `run` and `collect` `contents`, `actions`, `issues` and `pull-requests: write`; `warm` `contents: read`; `poll` `contents: read` with `actions`, `issues` and `pull-requests: write`; `trigger` `contents`, `actions` and `issues: write`; `control` all four `write`. Only `warm`'s checkout sets `persist-credentials: false`. The risk the round looked for is a permission now too narrow, which shows only on GitHub, as a failed step. A leg passed only when every job it reached finished with no `403`, no `Resource not accessible by integration`, no refused push and no refused dispatch, read from each job's full `gh run view <id> --log`, because `open`, `deliver`, `collect` and the cancel notice are `continue-on-error` and a refusal there leaves the step green.
+
+Run by hand against `firu-daniel/harness-gate12` from its seed commit `2fb082a` (a GitHub-hosted runner, `phases.qa`, `docs` and `parity` off). The round ran before the branch's release, as round 4 did: the local `init`, `config`, `doctor` and `remote-run.sh` calls ran the branch build, which reports 0.6.5, so the jobs installed the published 0.6.5 CLI and cloned `autonomous-sdlc-harness--v0.6.5`. The hardening is all in the rendered YAML, so a 0.6.5 job exercises it. Each job installed Claude Code `2.1.295`.
+
+The setup **passed**:
+- **Adoption.** `init --non-interactive`, `config set execution.target github-actions`, `config set forge github` and `init` reported `4 created, 63 kept, 35 ensured`. `init --force` replaced all four workflows; `--upgrade-workflows` re-renders only two.
+- **`scriptsDir`.** The first `init` wrote `"scriptsDir": "harness-scripts"`, and both later runs kept it as written, so `doctor`'s warning for a config with no `scriptsDir` did not apply.
+- **Lint and pins.** `actionlint 1.7.12 -shellcheck= -pyflakes=` reported nothing. Parsed, each file read `permissions: {}` and the grants above. All 14 `uses:` were `@<40 hex>`, and each sha was its comment's tag: `actions/checkout` v5.1.0, `setup-node` v5.0.0, `cache` and `cache/restore` v5.1.0, `upload-artifact` v6.0.0. `persist-credentials: false` appeared once, on `warm`.
+- **Observation (i).** `doctor --check-github` answered `PASS remote-execution` (rendered for 0.6.5) and `PASS forge`, and `remote-github` warned only that `HARNESS_PUSH_URL` is not set and that `expause-admin` can write without being on `HARNESS_RUN_ACTORS`. `gh workflow list --all` listed all four by name, `active`.
+
+Each job logged its token's grant under `GITHUB_TOKEN Permissions`, and each matched the template. **No job the round reached met a permission refusal:**
+- **`run`** pushed its branch, also from a cancelled job's post-steps. It opened the draft pull request, created and added the state labels, and posted and edited the question, progress and lifecycle comments. It marked the pull request ready for review, dispatched its own `continue` with `GITHUB_TOKEN`, and uploaded the state bundle.
+- **`collect`**, after round 1 of a review round, pushed `chore: add user review` with `<branch>_review_2.md`, dispatched round 2 as `github-actions[bot]`, posted the started-round comment and converted the pull request back to draft. That collect was reached by (xiv) leg (f)'s second review, submitted while round 1 ran.
+- **`warm`**, under `contents: read`, checked out without a persisted credential and succeeded. With docs retrieval off it logged `docs retrieval does not apply to this configuration: there is no cache to warm.` and skipped the cache and install steps, so **saving the cache was not observed**.
+- **`poll`**, under `contents: read`, ran `git ls-remote --heads origin` on the private repository. It reported `feat_invoices_7 no longer exists on origin; skipped`, a line only a no-such-head answer gives, then `gh workflow disable`d itself: `no branch is waiting; disabled harness-resume.yml`, state `disabled_manually`.
+- **`trigger`** pushed the task-prompt commit, dispatched the run (its `headSha` that commit), commented and removed the label.
+- **`control`** pushed a review's round file, dispatched `answer`, `pause`, `resume`, `stop` and `user_review`, cancelled a running job on `stop`, and posted replies, labels and the progress edit.
+- **`wrong-ref`**, with a token reading `Metadata: read` alone, failed with `this run was dispatched from 'main', but its branch input is 'feat_invoices_hardening': …`, and the other three jobs were skipped.
+
+The observations, on two runs: `feat_invoices_hardening` (the invoices task with its open decision, dropped by hand into the inbox and dispatched by one `tick`) and `feat_money_clamp` (issue #39, a small task with one open decision):
+- **(ii) passed.** Run `37916267582` ran on `ubuntu-24.04`, and its preflight printed `PASS profile-paths`, `PASS profile-tracked` and `PASS plugin-permissions`. It opened #38 and parked on the security limits after 2.5 min, before the five-minute self-pause.
+- **(xi) passed.** `/autonomous-sdlc-harness:branch-answer` sent `dispatched action=run engine=task resume=answer` with no tick. Run `37916672831` logged `restored the bundle of run 37916267582`, `wrote answer_1.md for feat_invoices_hardening` and `resuming parked run 'feat_invoices_hardening' (answers 1)`, and did not re-park. P1 flipped `[x]`, and `chore: Add task plan for feat_invoices_hardening` landed.
+- **(iii) passed.**
+  - The same job dropped `PAUSE` at 300 s (`reason budget`), and `continue` logged `dispatched action=run engine=task resume=pause`.
+  - Run `37917550853`, both actors `github-actions[bot]`, logged `restored the bundle of run 37916672831` and `placed 9 planning file(s)`.
+  - `push-probe.yml` ran for the operator's two pushes and for none of the job's.
+  - The `harness-state` artifact's `expires_at` fell 90 days after creation, with the annotation `Retention days cannot be greater than the maximum allowed retention … Using 90 instead.`. That is `upload-artifact` v6, which the run template's header still records as not yet observed.
+- **(viii) passed.**
+  - `remote-run.sh stop` dispatched the marker, cancelled `37917550853` and reported `stopped` on #38. The `harness stop` run was `skipped`, and `sync` recorded `paused (killed)`.
+  - `/autonomous-sdlc-harness:branch-resume` sent `resume=pause`. Run `37917758234` restored the cancelled job's bundle and logged `— no pause note`.
+- **Completion and the review round passed.** Run `37918454083` completed: `deliver: marked pull request #38 ready for review`. Then two reviews from `expause-admin`, the `collect` path above. Round 2 completed and left #38 ready and `sdlc-harness: done`.
+- **(xiii) passed** on its token. Issue #39, labelled at 10:29:48Z, got the trigger's comment naming `feat_money_clamp` and run `37917976567`, whose `headSha` was the `chore: add task prompt for feat_money_clamp` commit. The label was removed. The committed prompt carried the provenance line, and a body edit after the comment did not reach it. The machine stayed on and the commands ran from it, but no daemon of this checkout was installed, so nothing local took part. The run did not reach "branch ready for review", because (xiv) stopped it.
+- **(xiv) passed** on the legs it ran, on #39 and draft pull request #40:
+  - (a) the `opened` comment, `isDraft` `true`, `Started from #39.`, and the park on #40.
+  - (j) step 2, an owner's mention, read `as reply from structured_output`, and the reply was drawn from the question.
+  - (b) `expause-admin`'s `@sdlc-harness answer 1` on the issue resumed it.
+  - (c) the owner's `pause` gave a `skipped` `harness pause` run and `paused (reason: user)`.
+  - (j) step 5, `expause-admin`'s "you can now resume", read as `command resume` and dispatched `resume=pause`.
+  - (f) `status` named `running`, the next ledger entry and the latest run.
+  - (g) `stop` cancelled the job and moved both items to `stopped`.
+- **(v) passed** on its disable, from one hand-started tick. Its enable is **not observed**: no usage pause occurred.
+- **(xv) passed** on legs (a), (b) and (d′), with `HARNESS_RUN_ACTORS` deleted:
+  - `expause-admin`'s label on issue #41 got `No run started: @expause-admin is not the repository owner, …` and lost the label.
+  - Its dispatch failed at `Refuse an actor not on HARNESS_RUN_ACTORS`, as did `collect`'s gate.
+  - Its mention logged `needs-agent: no, @expause-admin is not the repository owner, …`, with Node, the install and the fetch `skipped`.
+  - Leg (e)'s chain is (iii)'s.
+
+`harness-resume.yml`, `active` on its record reused since round 8, again took no `schedule` tick in the 68 minutes between the adoption push and the hand tick that disabled it.
+
+**The online audit**, run on 2026-10-09: `zizmor 1.30.1 --no-config` with a GitHub token over the four templates gave 7 findings, 5 `artipacked` and 2 `adhoc-packages`, and none high. The online-only audits found nothing: no `impostor-commit`, no `ref-confusion` and no `known-vulnerable-actions`. These are the seven unsuppressed findings gate 14's 14d holds as its residual set offline.
+
+The finding:
+
+1. `init --force` leaves 53 `.bak` files untracked and not ignored, `harness-trigger.yml.bak` and `harness-control.yml.bak` among them, while `harness-run.yml.bak` and `harness-resume.yml.bak` are ignored. Round 4's finding 4 was fixed for the two files `--upgrade-workflows` writes, and `--force` is now the route that re-renders all four. A `git add -A` after it commits the backups.
+
+What the round leaves open:
+- `warm` saving its cache under `contents: read`, which needs `phases.docs` and `docs.retrieval` on.
+- (v)'s enable, by the `run` token on a usage pause.
+- The `run` token replying to and resolving review threads, because both reviews were body-only.
+- (xiv)(h)'s close and deletion jobs.
+- (xv)'s re-run legs.
+
+The repository's actions setting reads `sha_pinning_required: false`; with every action now pinned, a later round could turn it on and check that the four workflows still start.
+
+The round's teardown kept its GitHub evidence: issues #39 and #41, pull requests #38 and #40, branches `feat_invoices_hardening` and `feat_money_clamp`, and every run with its artifact until retention expires. It closed the issues and pull requests before the seed reset, so each close job still found `harness.config.json`, deleted the round's variables and reset `main` to the seed. `harness-resume.yml` was left `disabled_manually` by the hand tick.
+
 **Setup.**
 
 ```
