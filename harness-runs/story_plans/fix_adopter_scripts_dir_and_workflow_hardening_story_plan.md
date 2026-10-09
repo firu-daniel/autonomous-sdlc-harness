@@ -116,7 +116,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_adopter_scripts_dir_and_
 3. [x] **Task 3** — Cover the new `init` behaviour in `init.test.mjs` and move its fresh-init paths to `INIT_SCRIPTS_DIR` _(layer: cli)_ _(points: 20)_
 4. [x] **Task 4** — Move the `doctor`, `config`, profile, daemon and stack-preset suites to the fresh-init scripts directory _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — Move the watcher and walker helpers, and the outer-loop suites built on them, to the fresh-init scripts directory _(layer: cli)_ _(points: 20)_
-6. [ ] **Task 6** — Move the `remote-run.sh`, `push-branch.sh` and workflow-render suites to the fresh-init scripts directory _(layer: cli)_ _(points: 15)_
+6. [x] **Task 6** — Move the `remote-run.sh`, `push-branch.sh` and workflow-render suites to the fresh-init scripts directory _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — Harden `harness-run.yml`: SHA pins, per-job permissions, unpersisted credentials where no push, justified residuals _(layer: cli)_ _(points: 20)_
 8. [ ] **Task 8** — Harden `harness-resume.yml` and `harness-trigger.yml` the same way _(layer: cli)_ _(points: 15)_
 9. [ ] **Task 9** — Harden `harness-control.yml` the same way, and fix its spelling _(layer: cli)_ _(points: 15)_
