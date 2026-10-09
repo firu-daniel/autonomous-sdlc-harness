@@ -47,3 +47,8 @@ Task 14's legs:
 - **The after figures are real.** Every figure in the new text traces to a command shown beside it, and the after figures match the probe output this task's return quotes.
 - **The guard record matches the diff.** `git diff -U0 main -- plugin/hooks` shows only lines starting with `#`, and every changed comment it shows is named in the new §3.8 row, and the row names nothing the diff does not show. `git diff main -- docs/guard-verification.md` shows only the one added table row.
 - **Each leg's sets match the scripts.** `grep -n "6f\|14d" docs/development.md`, read against `scripts/run-gates.sh`: the leg names match byte for byte. The residual set and the deliberate set match the allow-lists in `scripts/check-rendered-workflows.mjs` and `scripts/check-typos.sh`.
+
+**Deviations from plan:**
+- The after figures were measured by `harness-runs/scratch/task17_after.py` (run through `bash scripts/scratch-run.sh`) over a copy of this branch's four templates, the same method as the before baseline, not over the `init` render 14d grades; 14d itself (`--zizmor`) is a gate script and is deferred to the Run gates phase.
+- §5's opening now reads "Two members of that eight are conditional, and three legs are `SKIPPED`…", matching `scripts/run-gates.sh`'s header (gates 11 and 13 conditional; 6f, 14c, 14d SKIPPED), where it previously counted gate 14 among three conditional members.
+- The `zizmor` install commands are pinned (`uv tool install zizmor@1.30.1`, `pipx install zizmor==1.30.1`) rather than Homebrew's latest, because the script passes over a `PATH` `zizmor` at any other version.

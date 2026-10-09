@@ -127,7 +127,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_adopter_scripts_dir_and_
 14. [x] **Task 14** — Add gate 14d (`zizmor` over the rendered workflows) and gate 6f (`typos` over the shipped trees) _(layer: general)_ _(points: 20)_
 15. [x] **Task 15** — State the new default in the schema description, `docs/config.md` and `docs/cli.md` _(layer: general)_ _(points: 15)_
 16. [x] **Task 16** — Update `docs/remote-execution.md` and `docs/retrieval.md` for `harness-scripts` and the hardened workflows _(layer: general)_ _(points: 15)_
-17. [ ] **Task 17** — Document gates 6f and 14d and record the audit figures in `docs/development.md`, and record the hook comment edits in `docs/guard-verification.md` _(layer: general)_ _(points: 12)_
+17. [x] **Task 17** — Document gates 6f and 14d and record the audit figures in `docs/development.md`, and record the hook comment edits in `docs/guard-verification.md` _(layer: general)_ _(points: 12)_
 18. [ ] **Task 18** — Name the change in `README.md`, `llms.txt` and `ROADMAP.md` _(layer: general)_ _(points: 10)_
 
 ## Scope register
