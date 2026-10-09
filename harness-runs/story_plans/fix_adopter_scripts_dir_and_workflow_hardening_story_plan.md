@@ -111,7 +111,7 @@ Both are SKIPPED where neither the tool nor `uvx` resolves, as 14c is (Task 14).
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_adopter_scripts_dir_and_workflow_hardening/task_<K>_plan.md`. They are ordered bottom-up in the configured layer order — `cli`, `plugin`, then `general`, the catch-all — and in ship sequence within each layer.
 
-1. [ ] **Task 1** — Write `harness-scripts` into a generated config, add `init --scripts-dir`, and keep the directory on a rebuild _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Write `harness-scripts` into a generated config, add `init --scripts-dir`, and keep the directory on a rebuild _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Warn when `scriptsDir` is absent, share `INIT_SCRIPTS_DIR` with the suites, and prove both directories end to end in `scripts-dir.test.mjs` _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Cover the new `init` behaviour in `init.test.mjs` and move its fresh-init paths to `INIT_SCRIPTS_DIR` _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Move the `doctor`, `config`, profile, daemon and stack-preset suites to the fresh-init scripts directory _(layer: cli)_ _(points: 20)_
