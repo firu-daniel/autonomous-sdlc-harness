@@ -1079,6 +1079,20 @@ function assertUsableStateDir(value: string | undefined): void {
   );
 }
 
+/** Why `value` cannot be a `scriptsDir` the script-allowlist guard grants anything under, or `undefined`. */
+function unusableScriptsDirReason(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed === ''
+    ? 'is empty'
+    : isAbsolute(trimmed)
+      ? 'is absolute'
+      : trimmed.split(/[\\/]/).includes('..')
+        ? "carries a '..' segment"
+        : posix.normalize(trimmed).replace(/\/+$/, '') === '.'
+          ? "normalises to '.'"
+          : undefined;
+}
+
 /**
  * Refuse a `--scripts-dir` the plugin's script-allowlist guard would grant nothing under — empty,
  * absolute, `..`-bearing, or normalising to `.` (`plugin/hooks/autonomous-script-allowlist-guard.sh`,
@@ -1087,17 +1101,7 @@ function assertUsableStateDir(value: string | undefined): void {
  */
 function assertUsableScriptsDir(value: string | undefined): void {
   if (value === undefined) return;
-  const trimmed = value.trim();
-  const reason =
-    trimmed === ''
-      ? 'is empty'
-      : isAbsolute(trimmed)
-        ? 'is absolute'
-        : trimmed.split(/[\\/]/).includes('..')
-          ? "carries a '..' segment"
-          : posix.normalize(trimmed).replace(/\/+$/, '') === '.'
-            ? "normalises to '.'"
-            : undefined;
+  const reason = unusableScriptsDirReason(value);
   if (reason === undefined) return;
 
   throw new HarnessError(
@@ -2282,8 +2286,9 @@ async function run(ctx: CommandContext): Promise<number> {
   const plan = new WritePlan();
 
   // A rebuild keeps the scripts directory the file being rebuilt names, an absent key read as the
-  // absent-key meaning; `--scripts-dir` wins over it. An unreadable file answers nothing, so the
-  // rebuild writes the generated value, and this invocation says so whichever config lands.
+  // absent-key meaning; `--scripts-dir` wins over it. An unreadable file answers nothing, and so does
+  // a value that is not a string or that `--scripts-dir` would refuse: the rebuild writes the
+  // generated value, and this invocation says so whichever config lands.
   let rebuiltScriptsDir: string | undefined;
   if (flags.resetConfig && flags.scriptsDir === undefined && configExists(repoRoot)) {
     const loaded = loadConfig(repoRoot);
@@ -2292,7 +2297,16 @@ async function run(ctx: CommandContext): Promise<number> {
         `${CONFIG_FILENAME} could not be read, so the rebuilt file writes scriptsDir as ${INIT_SCRIPTS_DIR}; pass ${SCRIPTS_DIR_FLAG} <dir> to keep the directory your scripts are in.`,
       );
     } else {
-      rebuiltScriptsDir = loaded.config.scriptsDir ?? DEFAULTS.scriptsDir;
+      const kept: unknown = loaded.config.scriptsDir ?? DEFAULTS.scriptsDir;
+      const reason =
+        typeof kept !== 'string' ? `is not a string (${JSON.stringify(kept)})` : unusableScriptsDirReason(kept);
+      if (reason === undefined && typeof kept === 'string') {
+        rebuiltScriptsDir = kept;
+      } else {
+        warnings.push(
+          `${CONFIG_FILENAME}'s scriptsDir ${reason}, so the rebuilt file writes scriptsDir as ${INIT_SCRIPTS_DIR}; pass ${SCRIPTS_DIR_FLAG} <dir> to name the directory your scripts are in.`,
+        );
+      }
     }
   }
 

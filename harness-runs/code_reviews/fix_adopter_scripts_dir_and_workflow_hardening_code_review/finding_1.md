@@ -62,3 +62,7 @@ No test covers either case. The new subtests seed only `"scripts"`, an absent ke
   - a `harness.config.json` that does not parse as JSON (the existing unreadable-file arm).
 
   Run only that file: `npm test --workspace cli -- test/init.test.mjs`.
+
+**Deviations from plan:**
+- The `docs/cli.md` sub-step was not done on this dispatch: `docs/` is outside the `cli` layer's path scope (`cli`), so it needs a catch-all (`general`) dispatch. Done on the `general` dispatch, wording as specified.
+- The rebuild screen narrows with `reason === undefined && typeof kept === 'string'` and types the re-read value as `unknown`, so no cast is needed; behaviour as specified.

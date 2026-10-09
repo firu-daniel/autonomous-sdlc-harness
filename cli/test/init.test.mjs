@@ -2654,6 +2654,27 @@ test('init writes scriptsDir fresh, keeps it on a kept config, and re-reads it o
     assert.equal(readJson(join(dir, CONFIG_FILE)).scriptsDir, 'y');
     assert.doesNotMatch(stdout, /scriptsDir is re-read/, `the note claims a re-read the flag overrode:\n${stdout}`);
   });
+
+  // An unusable re-read value answers nothing, the same as an unreadable file: the rebuild writes
+  // the generated value and warns, rather than aborting as a CLI fault or carrying the shape back.
+  for (const [label, files] of [
+    ['an empty scriptsDir', seededScriptsDirFiles('')],
+    ['an absolute scriptsDir', seededScriptsDirFiles('/abs')],
+    ['a config that does not parse', { ...nodeProjectFiles(), [CONFIG_FILE]: '{ not json\n' }],
+  ]) {
+    await t.test(`--reset-config over ${label} writes ${INIT_SCRIPTS_DIR} and names --scripts-dir`, async (subtest) => {
+      const dir = await fixtureFor(subtest, { files });
+
+      const { stderr } = await initOk(dir, ['--reset-config']);
+
+      assert.equal(readJson(join(dir, CONFIG_FILE)).scriptsDir, INIT_SCRIPTS_DIR);
+      assert.match(
+        stderr,
+        new RegExp(`scriptsDir as ${INIT_SCRIPTS_DIR}; pass --scripts-dir <dir>`),
+        `no warning names --scripts-dir:\n${stderr}`,
+      );
+    });
+  }
 });
 
 /**

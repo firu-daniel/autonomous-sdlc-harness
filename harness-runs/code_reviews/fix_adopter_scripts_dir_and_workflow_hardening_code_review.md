@@ -33,7 +33,7 @@ One finding remains.
 - The committing role flips each one to `[x]` as that fix's commit lands.
 - `[ ]` markers anywhere else, such as sub-step bullets inside a per-finding file, are informational and are never the iteration source.
 
-1. [ ] **Finding 1** — Screen the `scriptsDir` that `init --reset-config` re-reads; write `harness-scripts` with a warning when it is unusable _(layer: cli, general)_
+1. [x] **Finding 1** — Screen the `scriptsDir` that `init --reset-config` re-reads; write `harness-scripts` with a warning when it is unusable _(layer: cli, general)_
 
 ---
 
