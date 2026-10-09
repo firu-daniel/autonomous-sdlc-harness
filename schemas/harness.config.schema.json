@@ -66,7 +66,7 @@
       "type": "string",
       "minLength": 1,
       "default": "scripts",
-      "description": "Repo-relative directory the generated wrapper scripts are written to. These wrappers are what an automated run is permitted to execute, so the location has to be stable and committed."
+      "description": "Repo-relative directory the generated wrapper scripts are written to. These wrappers are what an automated run is permitted to execute, so the location has to be stable and committed. `init` writes `harness-scripts` into a configuration it generates; the default below is what an absent key means — `scripts`, where releases before 0.6.6 wrote — kept so a configuration that omits the key never silently moves."
     },
     "githooksDir": {
       "type": "string",
