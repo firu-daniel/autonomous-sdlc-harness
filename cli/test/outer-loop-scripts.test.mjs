@@ -76,16 +76,31 @@ import {
   PYTHON_RETRIEVAL_COMMAND,
   PYTHON_SERVE_SUB_COMMAND,
 } from '../dist/retrieval/pythonBackend.js';
-import { createFixture, plantRetrievalRuntime, runBash, runCli, runGit, snapshotTree, PACKAGE_ROOT } from './helpers/fixture.mjs';
+import {
+  createFixture,
+  INIT_SCRIPTS_DIR,
+  plantRetrievalRuntime,
+  runBash,
+  runCli,
+  runGit,
+  snapshotTree,
+  PACKAGE_ROOT,
+} from './helpers/fixture.mjs';
 
-/** The default `scriptsDir`, and the library's path under it — the contract, spelled out once. */
-const SCRIPTS_DIR = 'scripts';
+/** The `scriptsDir` a configless `init` writes, and the library's path under it — the contract, spelled out once. */
+const SCRIPTS_DIR = INIT_SCRIPTS_DIR;
 const LIB_SUBDIR = 'lib';
 const LIB_FILE = 'harness-run-lib.sh';
 const LIB_PATH = `${SCRIPTS_DIR}/${LIB_SUBDIR}/${LIB_FILE}`;
 
 /** A `scriptsDir` that is neither the default nor a single segment, so a naive join would show. */
 const RELOCATED_SCRIPTS_DIR = 'tools/harness';
+
+/** Stays `scripts` on purpose: the absent key's value, where `init` writes for a `seededConfig()` that omits `scriptsDir`. */
+const SEEDED_SCRIPTS_DIR = 'scripts';
+
+/** The package's own template tree, which no `scriptsDir` moves. */
+const TEMPLATE_SCRIPTS = join(PACKAGE_ROOT, 'templates', 'scripts');
 
 /** Sourced, never executed: an executable bit here invites a caller to run it instead. */
 const LIB_MODE = 0o644;
@@ -104,7 +119,7 @@ const SCRATCH_MODE = 0o755;
  */
 const LAUNCHER_FILE = 'docs-search-server.sh';
 const LAUNCHER_PATH = `${SCRIPTS_DIR}/${LAUNCHER_FILE}`;
-const LAUNCHER_TEMPLATE = join(PACKAGE_ROOT, 'templates', SCRIPTS_DIR, LAUNCHER_FILE);
+const LAUNCHER_TEMPLATE = join(TEMPLATE_SCRIPTS, LAUNCHER_FILE);
 const RUNTIME_ENTRY = [
   'autonomous-sdlc-harness',
   'retrieval',
@@ -120,7 +135,7 @@ const STATE_DIR = 'sdlc-harness';
 const SCRATCH_DIR = `${STATE_DIR}/scratch`;
 
 /** The shipped template the written copy must equal byte for byte. */
-const LIB_TEMPLATE = join(PACKAGE_ROOT, 'templates', SCRIPTS_DIR, LIB_SUBDIR, LIB_FILE);
+const LIB_TEMPLATE = join(TEMPLATE_SCRIPTS, LIB_SUBDIR, LIB_FILE);
 
 /** A repository whose stack detection resolves every command — the seed `init`'s own tests use. */
 function nodeProjectFiles() {
@@ -177,11 +192,11 @@ function copiesOf(snapshot, name) {
   return Object.keys(snapshot).filter((key) => key === name || key.endsWith(`/${name}`));
 }
 
-/** Source the written library and call one of its readers against the fixture, in one shell. */
-function sourceAndCall(dir, reader) {
+/** Source the library written under `scriptsDir` and call one of its readers against the fixture, in one shell. */
+function sourceAndCall(dir, reader, scriptsDir = SCRIPTS_DIR) {
   return new Promise((resolve, reject) => {
     const script = `. "$1"; ${reader} "$2"`;
-    execFile('bash', ['-c', script, '_', join(dir, LIB_PATH), dir], { cwd: dir, encoding: 'utf8' }, (error, out, err) => {
+    execFile('bash', ['-c', script, '_', join(dir, scriptsDir, LIB_SUBDIR, LIB_FILE), dir], { cwd: dir, encoding: 'utf8' }, (error, out, err) => {
       if (error !== null && typeof error.code !== 'number') reject(error);
       else resolve({ status: error === null ? 0 : error.code, stdout: out, stderr: err });
     });
@@ -265,7 +280,7 @@ test("the library's typed reader answers from the configured file", async (t) =>
   });
   await initOk(set);
 
-  const configured = await sourceAndCall(set, 'hr_agent_effort');
+  const configured = await sourceAndCall(set, 'hr_agent_effort', SEEDED_SCRIPTS_DIR);
   // Exit 2 is the reader's "could not reach the configuration at all", which it reports with an empty
   // stderr — distinguish it first, or a missing `jq` reads as a wrong answer rather than a missing tool.
   assert.notEqual(
@@ -284,7 +299,7 @@ test("the library's typed reader answers from the configured file", async (t) =>
   });
   await initOk(unset);
 
-  const absent = await sourceAndCall(unset, 'hr_agent_effort');
+  const absent = await sourceAndCall(unset, 'hr_agent_effort', SEEDED_SCRIPTS_DIR);
   assert.equal(absent.status, 1, `hr_agent_effort exited ${absent.status} for an unset key: ${absent.stderr}`);
   assert.equal(absent.stdout, '', 'hr_agent_effort printed a value for an unset key with no default');
 });
@@ -303,18 +318,18 @@ test('hr_execution_target applies the schema default, reads the enum and refuses
     );
 
   withExecution(undefined);
-  const absent = await sourceAndCall(dir, 'hr_execution_target');
+  const absent = await sourceAndCall(dir, 'hr_execution_target', SEEDED_SCRIPTS_DIR);
   assert.notEqual(absent.status, 2, 'hr_execution_target could not resolve the configuration — `jq` 1.5+ must be on PATH');
   assert.equal(absent.status, 0, `hr_execution_target exited ${absent.status} with the key absent: ${absent.stderr}`);
   assert.equal(absent.stdout, 'local\n', 'hr_execution_target did not apply the schema default');
 
   withExecution({ target: 'github-actions' });
-  const remote = await sourceAndCall(dir, 'hr_execution_target');
+  const remote = await sourceAndCall(dir, 'hr_execution_target', SEEDED_SCRIPTS_DIR);
   assert.equal(remote.status, 0, `hr_execution_target exited ${remote.status}: ${remote.stderr}`);
   assert.equal(remote.stdout, 'github-actions\n', 'hr_execution_target did not print the configured target');
 
   withExecution({ target: 'gitlab' });
-  const unknown = await sourceAndCall(dir, 'hr_execution_target');
+  const unknown = await sourceAndCall(dir, 'hr_execution_target', SEEDED_SCRIPTS_DIR);
   assert.equal(unknown.status, 2, `hr_execution_target exited ${unknown.status} for a value outside the enum`);
   assert.equal(unknown.stdout, '', 'hr_execution_target printed a value for a target outside the enum');
 });
@@ -333,18 +348,18 @@ test('hr_forge reads the enum, reports an absent key as undecided and refuses a 
     );
 
   withForge(undefined);
-  const absent = await sourceAndCall(dir, 'hr_forge');
+  const absent = await sourceAndCall(dir, 'hr_forge', SEEDED_SCRIPTS_DIR);
   assert.notEqual(absent.status, 2, 'hr_forge could not resolve the configuration — `jq` 1.5+ must be on PATH');
   assert.equal(absent.status, 1, `hr_forge exited ${absent.status} with the key absent: ${absent.stderr}`);
   assert.equal(absent.stdout, '', 'hr_forge printed a value for an absent key, which has no default');
 
   withForge('github');
-  const github = await sourceAndCall(dir, 'hr_forge');
+  const github = await sourceAndCall(dir, 'hr_forge', SEEDED_SCRIPTS_DIR);
   assert.equal(github.status, 0, `hr_forge exited ${github.status}: ${github.stderr}`);
   assert.equal(github.stdout, 'github\n', 'hr_forge did not print the configured forge');
 
   withForge('bitbucket');
-  const unknown = await sourceAndCall(dir, 'hr_forge');
+  const unknown = await sourceAndCall(dir, 'hr_forge', SEEDED_SCRIPTS_DIR);
   assert.equal(unknown.status, 2, `hr_forge exited ${unknown.status} for a value outside the enum`);
   assert.equal(unknown.stdout, '', 'hr_forge printed a value for a forge outside the enum');
 });
@@ -363,29 +378,29 @@ test('hr_docs_retrieval_backend applies the schema default, reads the enum and r
     );
 
   withDocs(undefined);
-  const absent = await sourceAndCall(dir, 'hr_docs_retrieval_backend');
+  const absent = await sourceAndCall(dir, 'hr_docs_retrieval_backend', SEEDED_SCRIPTS_DIR);
   assert.notEqual(absent.status, 2, 'hr_docs_retrieval_backend could not resolve the configuration — `jq` 1.5+ must be on PATH');
   assert.equal(absent.status, 0, `hr_docs_retrieval_backend exited ${absent.status} with the key absent: ${absent.stderr}`);
   assert.equal(absent.stdout, 'typescript\n', 'hr_docs_retrieval_backend did not apply the schema default');
 
   withDocs({ retrievalBackend: 'python' });
-  const python = await sourceAndCall(dir, 'hr_docs_retrieval_backend');
+  const python = await sourceAndCall(dir, 'hr_docs_retrieval_backend', SEEDED_SCRIPTS_DIR);
   assert.equal(python.status, 0, `hr_docs_retrieval_backend exited ${python.status}: ${python.stderr}`);
   assert.equal(python.stdout, 'python\n', 'hr_docs_retrieval_backend did not print the configured backend');
 
   withDocs({ retrievalBackend: 'java' });
-  const unknown = await sourceAndCall(dir, 'hr_docs_retrieval_backend');
+  const unknown = await sourceAndCall(dir, 'hr_docs_retrieval_backend', SEEDED_SCRIPTS_DIR);
   assert.equal(unknown.status, 2, `hr_docs_retrieval_backend exited ${unknown.status} for a value outside the enum`);
   assert.equal(unknown.stdout, '', 'hr_docs_retrieval_backend printed a value for a backend outside the enum');
 
   // A wrong-typed `docs` parent nulls the key alone in `hr_config_load`, so it reads as absent.
   withDocs('x');
-  const wrongParent = await sourceAndCall(dir, 'hr_docs_retrieval_backend');
+  const wrongParent = await sourceAndCall(dir, 'hr_docs_retrieval_backend', SEEDED_SCRIPTS_DIR);
   assert.equal(wrongParent.status, 0, `hr_docs_retrieval_backend exited ${wrongParent.status} for a string \`docs\`: ${wrongParent.stderr}`);
   assert.equal(wrongParent.stdout, 'typescript\n', 'hr_docs_retrieval_backend did not read a string `docs` as an absent key');
 
   writeFileSync(join(dir, 'harness.config.json'), '{ not json\n');
-  const unparsable = await sourceAndCall(dir, 'hr_docs_retrieval_backend');
+  const unparsable = await sourceAndCall(dir, 'hr_docs_retrieval_backend', SEEDED_SCRIPTS_DIR);
   assert.equal(unparsable.status, 2, `hr_docs_retrieval_backend exited ${unparsable.status} for a config jq cannot parse`);
   assert.equal(unparsable.stdout, '', 'hr_docs_retrieval_backend printed a value for a config jq cannot parse');
 });
@@ -406,13 +421,13 @@ test('hr_docs_retrieval_applies answers through its status alone, mirroring retr
   ];
   for (const row of rows) {
     writeFileSync(join(dir, 'harness.config.json'), `${JSON.stringify(seededConfig(row.overrides))}\n`);
-    const result = await sourceAndCall(dir, 'hr_docs_retrieval_applies');
+    const result = await sourceAndCall(dir, 'hr_docs_retrieval_applies', SEEDED_SCRIPTS_DIR);
     assert.equal(result.status, row.status, `hr_docs_retrieval_applies exited ${result.status} for ${row.name}: ${result.stderr}`);
     assert.equal(result.stdout, '', `hr_docs_retrieval_applies printed to stdout for ${row.name}`);
   }
 
   writeFileSync(join(dir, 'harness.config.json'), '{ not json\n');
-  const unparsable = await sourceAndCall(dir, 'hr_docs_retrieval_applies');
+  const unparsable = await sourceAndCall(dir, 'hr_docs_retrieval_applies', SEEDED_SCRIPTS_DIR);
   assert.equal(unparsable.status, 2, `hr_docs_retrieval_applies exited ${unparsable.status} for a config jq cannot parse`);
   assert.equal(unparsable.stdout, '', 'hr_docs_retrieval_applies printed to stdout for a config jq cannot parse');
 });
@@ -477,7 +492,7 @@ test('the artifact placement commits one path once, skips an identical re-drop a
   assert.equal(rel, `${STATE_DIR}/task_prompts/feat_x_task_prompt.md`);
   const place = [
     'hr_place_artifact "$PWD" watcher-test/prompt.md "$1" || exit 10',
-    'hr_commit_placed "$PWD/scripts/commit-on-branch.sh" "$PWD" "$1" "$(hr_task_prompt_subject feat_x)"',
+    `hr_commit_placed "$PWD/${SCRIPTS_DIR}/commit-on-branch.sh" "$PWD" "$1" "$(hr_task_prompt_subject feat_x)"`,
   ].join('; ');
 
   const before = await commits();
@@ -907,7 +922,7 @@ const WALKER_FILES = [
 
 test('the flow walker, its gate library and its graph land verbatim under scriptsDir, and a re-run keeps them', async (t) => {
   for (const [name, scriptsDir, config] of [
-    ['the default scriptsDir', SCRIPTS_DIR, undefined],
+    ["a generated config's scriptsDir", SCRIPTS_DIR, undefined],
     ['a relocated scriptsDir', RELOCATED_SCRIPTS_DIR, seededConfig({ scriptsDir: RELOCATED_SCRIPTS_DIR })],
   ]) {
     await t.test(name, async (subtest) => {
@@ -919,7 +934,7 @@ test('the flow walker, its gate library and its graph land verbatim under script
 
       for (const [relative, expectedMode] of WALKER_FILES) {
         const path = `${scriptsDir}/${relative}`;
-        const template = readFileSync(join(PACKAGE_ROOT, 'templates', SCRIPTS_DIR, ...relative.split('/')), 'utf8');
+        const template = readFileSync(join(TEMPLATE_SCRIPTS, ...relative.split('/')), 'utf8');
         assert.equal(text(dir, path), template, `${path} is not the template's bytes`);
         assert.deepEqual(
           copiesOf(first, relative.split('/').pop()),
@@ -947,7 +962,7 @@ const TEST_SUITE_RUNNER_MODE = 0o755;
 
 test('the test-suite runner lands verbatim under scriptsDir, and a re-run keeps it', async (t) => {
   for (const [name, scriptsDir, config] of [
-    ['the default scriptsDir', SCRIPTS_DIR, undefined],
+    ["a generated config's scriptsDir", SCRIPTS_DIR, undefined],
     ['a relocated scriptsDir', RELOCATED_SCRIPTS_DIR, seededConfig({ scriptsDir: RELOCATED_SCRIPTS_DIR })],
   ]) {
     await t.test(name, async (subtest) => {
@@ -958,7 +973,7 @@ test('the test-suite runner lands verbatim under scriptsDir, and a re-run keeps 
       await initOk(dir);
       const first = await snapshotTree(dir);
 
-      const template = readFileSync(join(PACKAGE_ROOT, 'templates', SCRIPTS_DIR, TEST_SUITE_RUNNER), 'utf8');
+      const template = readFileSync(join(TEMPLATE_SCRIPTS, TEST_SUITE_RUNNER), 'utf8');
       assert.equal(text(dir, path), template, `${path} is not the template's bytes`);
       assert.deepEqual(copiesOf(first, TEST_SUITE_RUNNER), [path], `${TEST_SUITE_RUNNER} was written somewhere other than ${scriptsDir}/`);
       const mode = (await lstat(join(dir, path))).mode & 0o777;
@@ -1368,7 +1383,7 @@ test('remote-run.sh is written verbatim and executable under scriptsDir', async 
 
   await initOk(dir);
 
-  assert.equal(text(dir, path), readFileSync(join(PACKAGE_ROOT, 'templates', SCRIPTS_DIR, 'remote-run.sh'), 'utf8'), `${path} is not the template's bytes`);
+  assert.equal(text(dir, path), readFileSync(join(TEMPLATE_SCRIPTS, 'remote-run.sh'), 'utf8'), `${path} is not the template's bytes`);
   const mode = (await lstat(join(dir, path))).mode & 0o777;
   assert.equal(mode, 0o755, `${path} is mode ${mode.toString(8)}, not 755`);
 });

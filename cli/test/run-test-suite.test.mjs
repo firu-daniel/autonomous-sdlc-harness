@@ -25,6 +25,7 @@ import test from 'node:test';
 import { createFixture, runBash, runCli, runGit, snapshotTree } from './helpers/fixture.mjs';
 
 const STATE_DIR = 'sdlc-harness';
+/** Stays `scripts` on purpose: `seededConfig()` omits `scriptsDir`, so `init` writes there, the absent key's value. */
 const WRAPPER = 'scripts/run-test-suite.sh';
 
 /** The branch every fixture is put on; its `/` is what the log directory's sanitizing turns to `-`. */

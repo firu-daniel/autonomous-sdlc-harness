@@ -28,16 +28,16 @@
 
 **Work:**
 
-- [ ] **The two helpers.**
+- [x] **The two helpers.**
   - **`helpers/watcher.mjs`.** `createWatcherFixture` runs a configless `init`, so its `WATCHER_PATH` and `NOTIFY_PATH` become `` `${INIT_SCRIPTS_DIR}/autonomous-watcher.sh` `` and `` `${INIT_SCRIPTS_DIR}/autonomous-notify.sh` ``.
   - **`helpers/walker.mjs`.** `WALKER_PATH` and the exported `WALKER_GRAPH_PATH` follow the rule against that helper's own fixture: it seeds a `package.json`, so read whether it seeds a config.
-- [ ] **The watcher-driven suites.** `watcher-remote-job` (`join(w.dir, 'scripts', …)`, `join(j.dir, 'scripts')`), `watcher-remote-park-sequence`, `watcher-usage-resume`, `restart-watcher-remote` (`SCRIPT_PATH`) and `registry-writer` (`LIB_PATH` and the watcher and `remote-run.sh stop` paths) all move by the rule.
-- [ ] **The walker and ledger suites.** `flow-walker-resume` (the `commit-on-branch.sh` flip), `flow-walker-ui-and-reentry` (the library path), `branch-naming` (`LIB_PATH`) and `ledger-phases` (`LIB_PATH`). Each of the last two seeds a config, so check whether it carries `scriptsDir` before moving anything.
-- [ ] **The script-family suites.**
+- [x] **The watcher-driven suites.** `watcher-remote-job` (`join(w.dir, 'scripts', …)`, `join(j.dir, 'scripts')`), `watcher-remote-park-sequence`, `watcher-usage-resume`, `restart-watcher-remote` (`SCRIPT_PATH`) and `registry-writer` (`LIB_PATH` and the watcher and `remote-run.sh stop` paths) all move by the rule.
+- [x] **The walker and ledger suites.** `flow-walker-resume` (the `commit-on-branch.sh` flip), `flow-walker-ui-and-reentry` (the library path), `branch-naming` (`LIB_PATH`) and `ledger-phases` (`LIB_PATH`). Each of the last two seeds a config, so check whether it carries `scriptsDir` before moving anything.
+- [x] **The script-family suites.**
   - **`outer-loop-scripts.test.mjs`.** Its `SCRIPTS_DIR` and the `hr_commit_placed "$PWD/scripts/commit-on-branch.sh"` line follow the rule. Its byte-for-byte template comparison is unchanged, since it compares the written copy to the template wherever the copy landed.
   - **`run-test-suite.test.mjs`.** Its `WRAPPER` follows the rule.
   - **`create-worktree.test.mjs`.** Its own `scripts/` copy stays if its seeded config is consistent with it.
-- [ ] **List what stays.** Record, in one comment line per suite, every reference left at `scripts` on purpose and the seeded config that justifies it. In this task's return, name each listed suite that needed no edit and why.
+- [x] **List what stays.** Record, in one comment line per suite, every reference left at `scripts` on purpose and the seeded config that justifies it. In this task's return, name each listed suite that needed no edit and why.
 
 **Verification:**
 
@@ -45,3 +45,7 @@
 - A suite reached only through an edited helper and not itself edited — for example one built on `createWatcherFixture` — is not run here, per the test-run rule. It runs at Run gates.
 - Every run passes, with its counts read back.
 - Grep the edited files for `'scripts'` and `scripts/`. Every remaining hit is a `templates/scripts` package path, a seeded config's own value, or a site carrying the stay comment.
+
+**Deviations from plan:**
+- `outer-loop-scripts.test.mjs` serves two regimes, so `SCRIPTS_DIR` moved to `INIT_SCRIPTS_DIR` for the configless fixtures, a new `SEEDED_SCRIPTS_DIR = 'scripts'` (stay comment) is passed to `sourceAndCall` by the five reader cases built on `seededConfig()`, which omits `scriptsDir`, and template reads go through a `TEMPLATE_SCRIPTS` constant so no `templates/scripts` path follows `SCRIPTS_DIR`. The two `'the default scriptsDir'` subtest names became `"a generated config's scriptsDir"`.
+- `run-test-suite.test.mjs` and `create-worktree.test.mjs` move nothing (each seeds a config without `scriptsDir`); each carries one stay-comment line, per "List what stays", so neither is a no-edit suite.
