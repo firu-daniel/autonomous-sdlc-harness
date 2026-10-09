@@ -48,3 +48,5 @@ Separately, the two `## Resolved values` rows that say "Default `scripts/`" stat
 - **The hooks are comment-only.** `git diff -U0 -- plugin/hooks` shows only lines starting with `#`, so each guard's decision bytes are unchanged.
 - **The two rows.** `git grep -n 'Default \`scripts/\`' -- plugin` returns nothing, and the two rows carry the new sentence.
 - **The manifest gate** (`docs/development.md` → `## 5. Verifying a change`, **Gate 1**) runs at Run gates. The frontmatter edit is inside the `description:` value, and the frontmatter's keys are unchanged.
+
+**Deviations from plan:** "mis-seeded" in `plugin/instructions/autonomous_pause_and_ledger.md` became "wrongly seeded" rather than "misseeded", under the plan's own rephrase-if-it-reads-badly clause. The manifest gate (Gate 1) is deferred to the Run gates phase.

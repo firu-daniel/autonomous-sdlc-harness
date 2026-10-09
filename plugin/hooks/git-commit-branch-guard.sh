@@ -46,7 +46,7 @@
 #   detached HEAD, or a branch in the protected set -> ask
 #   configuration unresolvable          -> ask   (invalid JSON, more than one
 #     (within jurisdiction)                       document, no `defaultBranch`)
-#   payload unparseable, or `jq` absent -> SILENT (no command to judge)
+#   payload unparsable, or `jq` absent -> SILENT (no command to judge)
 #   no config, or one that cannot be read -> SILENT (both out of jurisdiction)
 #   anything else                       -> allow
 #

@@ -261,7 +261,7 @@
 # THE WORD-SPLITTING CAVEAT, CARRIED OVER. The token walk expands `$piece`
 # unquoted and relies on `$IFS` splitting. That is acceptable specifically
 # because allowed script paths do not contain whitespace and the guard is
-# allow-only and fail-safe: a path that got mis-split into fragments fails the
+# allow-only and fail-safe: a path that got split wrongly into fragments fails the
 # `*.sh` and membership checks and falls through (exit 0), it can never produce a
 # wrong `allow`. If space-bearing script paths ever become possible, switch to a
 # whitespace-safe tokenizer (e.g. `read -ra` after a controlled split).
