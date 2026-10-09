@@ -21,10 +21,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 
-import { createFixture, runBash, runCli } from './helpers/fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './helpers/fixture.mjs';
 
-/** The library's path under the default `scriptsDir`. */
-const LIB_PATH = 'scripts/lib/harness-run-lib.sh';
+/** The library's path under the `scriptsDir` a configless `init` writes. */
+const LIB_PATH = `${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh`;
 
 /** A `protectedBranches` glob the suite adds, so a title folding into it is never returned. */
 const PROTECTED_GLOB = 'release_v*';

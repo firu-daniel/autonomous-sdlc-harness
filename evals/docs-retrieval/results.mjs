@@ -21,12 +21,16 @@
  * only bytes {@link rewriteGeneratedRegion} touches; everything outside them — the hand-written
  * sections later tasks fill — survives byte for byte, and a target carrying anything but exactly one
  * of each marker is refused by name. Inside the region each corpus owns its own block, so running
- * one corpus does not erase another's figures.
+ * one corpus does not erase another's figures — one block per corpus and backend, keyed by
+ * `evals/docs-retrieval/backends.mjs` → `corpusBlockId`, so a run naming a backend writes beside the
+ * unlabelled block rather than over it. A block {@link transplantCorpusBlock} moves between results
+ * files is bytes this module rendered in an earlier pass, so the region still has exactly one writer.
  */
 
 import { ABSTAIN_SCORE_THRESHOLD } from '../../cli/dist/retrieval/search.js';
 import { RETRIEVAL_STUB_ENV } from '../../cli/dist/retrieval/models.js';
 import { ARMS } from './arms.mjs';
+import { BACKENDS, corpusBlockId } from './backends.mjs';
 
 /** The literal markers fencing the generated region. Nothing outside them is ever written. */
 export const GENERATED_START = '<!-- eval:generated:start -->';
@@ -58,12 +62,52 @@ const COLUMNS = Object.freeze([
   'cost',
 ]);
 
-/** One corpus's block inside the region, so a single-corpus run leaves the other corpus alone. */
-function corpusStart(id) {
-  return `<!-- eval:corpus:${id}:start -->`;
+/**
+ * The provenance bullet a run naming a backend gains, per {@link BACKENDS} entry: the route its figures
+ * were measured through. Checked against {@link BACKENDS} at load, so a backend added there without a
+ * route here is refused by name rather than rendered with no provenance.
+ */
+const BACKEND_ROUTES = Object.freeze({
+  typescript: [
+    "- Backend `typescript`: this checkout's `cli/dist` driven in process — the same path as the unlabelled",
+    '  block, run again in this session.',
+  ],
+  python: [
+    '- Backend `python`: `harness-docs-retrieval serve-http` over a throwaway mirror of the corpus, each arm',
+    "  through `POST /search` with its `mode`; latency is the server's own `search_ms` — `search_docs` alone,",
+    '  timed inside the Python process, excluding the per-call refresh and the HTTP hop; the connection string',
+    '  is not recorded.',
+  ],
+});
+for (const backend of BACKENDS) {
+  if (BACKEND_ROUTES[backend] === undefined) {
+    throw new Error(
+      `eval: backend ${backend} has no provenance route in evals/docs-retrieval/results.mjs → BACKEND_ROUTES`,
+    );
+  }
 }
-function corpusEnd(id) {
-  return `<!-- eval:corpus:${id}:end -->`;
+
+/**
+ * One block inside the region, keyed by block id — the corpus id for a run naming no backend,
+ * `<corpus>@<backend>` otherwise — so a single-corpus run leaves every other block alone.
+ */
+function corpusStart(blockId) {
+  return `<!-- eval:corpus:${blockId}:start -->`;
+}
+function corpusEnd(blockId) {
+  return `<!-- eval:corpus:${blockId}:end -->`;
+}
+
+/** The block id `corpus`'s figures are written under. */
+function blockIdOf(corpus) {
+  return corpusBlockId(corpus.id, corpus.backend);
+}
+
+/** The block's heading; a run naming no backend renders today's heading byte for byte. */
+function heading(corpus) {
+  return corpus.backend === undefined
+    ? `### Corpus \`${corpus.id}\``
+    : `### Corpus \`${corpus.id}\` — backend \`${corpus.backend}\``;
 }
 
 /** Exactly-one-occurrence test, without counting: the first and last occurrence are the same one. */
@@ -189,11 +233,18 @@ function provenanceSection(corpus) {
       ? '- `layers[]`: none — this corpus is read as a repository of its own and carries no conventions documents.'
       : "- `layers[]`, read out of the resolved checkout's `harness.config.json` and never composed here:",
     ...layers.map(layerLine),
+    ...(corpus.backend === undefined ? [] : BACKEND_ROUTES[corpus.backend]),
     `- Query set: \`${corpus.queries.path}\` — ${corpus.queries.positives} positive, ${corpus.queries.negatives} negative.`,
     `- \`k\`: ${corpus.k}; repetitions per query: ${corpus.repeat}.`,
     `- Embedder: \`${corpus.embedderId}\`. Reranker: \`${corpus.rerankerId}\` — loaded and run outside the stub.`,
     `- \`${RETRIEVAL_STUB_ENV}\` was unset for this run, which the index build refuses to proceed without.`,
-    `- Abstention threshold in force: \`${ABSTAIN_SCORE_THRESHOLD}\`, read off the \`search.js\` this run loaded.`,
+    ...(corpus.backend === 'python'
+      ? [
+          `- Abstention threshold recorded: \`${ABSTAIN_SCORE_THRESHOLD}\`, read off the \`search.js\` this run loaded. The`,
+          "  Python server applies its own `docs-retrieval-service/src/harness_docs_retrieval/search.py` →",
+          '  `ABSTAIN_SCORE_THRESHOLD`, which this run does not read.',
+        ]
+      : [`- Abstention threshold in force: \`${ABSTAIN_SCORE_THRESHOLD}\`, read off the \`search.js\` this run loaded.`]),
     '- The figures above are the **post-calibration** ones for the one arm that threshold applies to. The',
     '  pre-calibration per-query distributions the value was chosen from are quoted in `## Threshold',
     '  calibration` below, taken at the earlier snapshot that section records by corpus name and chunk count —',
@@ -213,6 +264,7 @@ const JSON_FENCE_CLOSE = '\n```';
 function machineSection(corpus) {
   const payload = {
     corpus: corpus.id,
+    ...(corpus.backend === undefined ? {} : { backend: corpus.backend }),
     snapshot: corpus.snapshot,
     abstainScoreThreshold: ABSTAIN_SCORE_THRESHOLD,
     embedder: corpus.embedderId,
@@ -245,21 +297,21 @@ function machineSection(corpus) {
 /** One corpus's whole block: heading, table, provenance, machine half, between its own markers. */
 export function renderCorpusBlock(corpus) {
   return [
-    corpusStart(corpus.id),
-    `### Corpus \`${corpus.id}\``,
+    corpusStart(blockIdOf(corpus)),
+    heading(corpus),
     '',
     tableSection(corpus),
     '',
     provenanceSection(corpus),
     '',
     machineSection(corpus),
-    corpusEnd(corpus.id),
+    corpusEnd(blockIdOf(corpus)),
   ].join('\n');
 }
 
 /** The table and its heading alone — what a run given no `--out` prints to stdout. */
 export function renderCorpusTable(corpus) {
-  return [`### Corpus \`${corpus.id}\``, '', tableSection(corpus)].join('\n');
+  return [heading(corpus), '', tableSection(corpus)].join('\n');
 }
 
 /**
@@ -268,6 +320,14 @@ export function renderCorpusTable(corpus) {
  * are not each present exactly once.
  */
 export function rewriteGeneratedRegion(text, corpus) {
+  return spliceBlock(text, blockIdOf(corpus), renderCorpusBlock(corpus));
+}
+
+/**
+ * `text` with `block` in place of `blockId`'s block inside the generated region, or appended to the
+ * region when it carries none. Refuses by name when the region markers are not each present exactly once.
+ */
+function spliceBlock(text, blockId, block) {
   for (const marker of [GENERATED_START, GENERATED_END]) {
     if (!occursExactlyOnce(text, marker)) {
       throw new Error(
@@ -285,10 +345,9 @@ export function rewriteGeneratedRegion(text, corpus) {
   const before = text.slice(0, openAt);
   const region = text.slice(openAt, closeAt);
   const after = text.slice(closeAt);
-  const block = renderCorpusBlock(corpus);
 
-  const start = corpusStart(corpus.id);
-  const end = corpusEnd(corpus.id);
+  const start = corpusStart(blockId);
+  const end = corpusEnd(blockId);
   const blockAt = region.indexOf(start);
   const blockEnd = region.indexOf(end);
   const rewritten =
@@ -300,12 +359,15 @@ export function rewriteGeneratedRegion(text, corpus) {
 }
 
 /**
- * The parsed fenced-`json` machine half of `corpusId`'s block inside `text`'s generated region — the
+ * The parsed fenced-`json` machine half of one block inside `text`'s generated region — the
  * payload {@link machineSection} rendered. The one reader of the block {@link renderCorpusBlock}
  * writes, so the marker spelling and the block layout stay this module's alone.
  *
+ * `corpusId` is the **block id** (`evals/docs-retrieval/backends.mjs` → `corpusBlockId`), which equals
+ * the corpus id for an unlabelled block; `<corpus>@<backend>` reads a backend's block.
+ *
  * Refuses, naming `corpusId`, when the region markers are not each present exactly once, when the
- * corpus's start or end marker is missing from the region, and when the block carries no fenced
+ * block's start or end marker is missing from the region, and when the block carries no fenced
  * `json` or one that does not parse.
  */
 export function readCorpusMachineHalf(text, corpusId) {
@@ -338,4 +400,44 @@ export function readCorpusMachineHalf(text, corpusId) {
   } catch (error) {
     throw new Error(`eval: the fenced json machine half of corpus ${corpusId} does not parse: ${error.message}`);
   }
+}
+
+/**
+ * `targetText` with `blockId`'s block copied in from `sourceText`'s generated region — start marker
+ * through end marker, byte for byte — replacing a same-id block there or appended as
+ * {@link rewriteGeneratedRegion} appends one. This is how a hand run moves a finished block from its
+ * scratch copy into the document of record without a second writer of the region.
+ *
+ * Refuses, naming `blockId`, when either file's region markers are not each present exactly once, when
+ * the source carries no such block, and when the source block's fenced `json` does not parse.
+ */
+export function transplantCorpusBlock(targetText, sourceText, blockId) {
+  for (const [role, text] of [
+    ['target', targetText],
+    ['source', sourceText],
+  ]) {
+    for (const marker of [GENERATED_START, GENERATED_END]) {
+      if (!occursExactlyOnce(text, marker)) {
+        throw new Error(
+          `eval: cannot transplant block ${blockId}: the ${role} results file must carry exactly one ${marker}, ` +
+            'and it is missing or repeated',
+        );
+      }
+    }
+  }
+  const region = sourceText.slice(
+    sourceText.indexOf(GENERATED_START) + GENERATED_START.length,
+    sourceText.indexOf(GENERATED_END),
+  );
+  const start = corpusStart(blockId);
+  const end = corpusEnd(blockId);
+  const blockAt = region.indexOf(start);
+  const blockEnd = region.indexOf(end);
+  if (blockAt === -1 || blockEnd === -1 || blockEnd < blockAt) {
+    throw new Error(
+      `eval: cannot transplant block ${blockId}: the source's generated region carries no such block (${start} … ${end})`,
+    );
+  }
+  readCorpusMachineHalf(sourceText, blockId);
+  return spliceBlock(targetText, blockId, region.slice(blockAt, blockEnd + end.length));
 }

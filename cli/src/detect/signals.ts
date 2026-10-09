@@ -392,7 +392,7 @@ export class DetectContext {
    * @param appDir `harness.config.json`'s `appDir` (or `--app-dir`): repo-relative, or absolute.
    *
    * An `appDir` outside the repository is refused rather than clamped: it is a typo or a
-   * mis-scoped invocation, and detecting the wrong tree would wire the repository against a stack
+   * wrongly scoped invocation, and detecting the wrong tree would wire the repository against a stack
    * it does not contain.
    */
   constructor(repoRoot: string, appDir: string = '.') {

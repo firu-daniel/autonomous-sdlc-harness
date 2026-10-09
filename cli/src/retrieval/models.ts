@@ -40,10 +40,18 @@ export interface Reranker {
 
 /**
  * ONNX port of `BAAI/bge-small-en-v1.5`, MIT; about 33M parameters, per the upstream model card.
- * Loaded with `dtype: 'q8'`, CLS pooling and `normalize: true`, yielding {@link EMBEDDING_DIMENSIONS}
- * dimensions.
+ * Loaded with `dtype: 'q8'` and extracted with {@link EMBEDDING_EXTRACT_OPTIONS}, yielding
+ * {@link EMBEDDING_DIMENSIONS} dimensions.
  */
 export const EMBEDDING_MODEL = 'Xenova/bge-small-en-v1.5';
+
+/**
+ * The embedder's extraction options. Part of the embedder's identity, so a change to them bumps
+ * {@link MODEL_VERSION}. Exported for the eval's matched-precision leg
+ * (`evals/docs-retrieval/vector-agreement.mjs`), which loads the same model at fp32 and must extract
+ * exactly as this module does.
+ */
+export const EMBEDDING_EXTRACT_OPTIONS = { pooling: 'cls', normalize: true } as const;
 
 /** bge-v1.5's retrieval instruction, prepended to queries only. */
 const EMBEDDING_QUERY_PREFIX = 'Represent this sentence for searching relevant passages: ';
@@ -104,7 +112,7 @@ async function loadModels(options: { allowRemote: boolean }): Promise<{ embedder
 
   const extractor = await transformers.pipeline('feature-extraction', EMBEDDING_MODEL, { dtype: MODEL_DTYPE });
   const embed = async (texts: string[]): Promise<number[][]> => {
-    const output = (await extractor(texts, { pooling: 'cls', normalize: true })) as unknown as ListTensor;
+    const output = (await extractor(texts, EMBEDDING_EXTRACT_OPTIONS)) as unknown as ListTensor;
     return output.tolist() as number[][];
   };
   const embedder: Embedder = {

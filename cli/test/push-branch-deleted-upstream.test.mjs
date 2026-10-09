@@ -12,9 +12,9 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createFixture, runBash, runCli, runGit } from './helpers/fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
-const SCRIPT = join('scripts', 'push-branch.sh');
+const SCRIPT = join(INIT_SCRIPTS_DIR, 'push-branch.sh');
 const BRANCH = 'feat_x';
 const NO_DELAY = { PUSH_RETRY_DELAY_SECS: '0' };
 const SKIPPED = /push-branch\.sh: origin no longer has feat_x, which this checkout tracks; not pushing it back \(a branch deleted on its remote stays deleted\)\. To publish it again on purpose: git push --set-upstream origin feat_x$/m;

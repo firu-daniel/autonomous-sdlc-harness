@@ -99,6 +99,7 @@ def _launcher_env(model_cache: Path, database_url: str) -> Iterator[dict[str, st
         yield {
             "HOME": home,
             "PATH": _launcher_path(),
+            "PYTHONDONTWRITEBYTECODE": "1",
             RETRIEVAL_STUB_ENV: "hash-v1",
             MODEL_CACHE_ENV: str(model_cache),
             DATABASE_URL_ENV: database_url,

@@ -34,7 +34,7 @@
   "harness-docs": {
     "type": "stdio",
     "command": "bash",
-    "args": ["scripts/docs-search-server.sh"],
+    "args": ["harness-scripts/docs-search-server.sh"],
     "env": { "AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG": "/absolute/path/to/docs-queries.jsonl" }
   }
   ```
@@ -136,7 +136,7 @@ A re-run on this branch (same date, macOS, Node v20.19.5; `@electric-sql/pglite`
 - **Whether any of this holds on Linux.** Every measurement above is macOS. Settled by Gate 10 run on a Linux host.
 - **Whether the agent runner resolves `.mcp.json`'s relative launcher path against the checkout root or against the session's own working directory.** Narrowed, not closed. Gate 10's leg (v) started its session at the checkout root, where the two are the same directory, and the server started and answered; a session started from a subdirectory has not been run, and under the second reading it would find no `scripts/docs-search-server.sh` and get no `harness-docs` server at all. Settled by one leg (v) repeated from a subdirectory of the same checkout.
 - **Whether the lexical arm filters to matching chunks on every index.** Narrowed, not closed. `cli/test/docs-retrieval-store.test.mjs` case (a) measures that `lexicalSearch` returns the matching chunk alone — and nothing at all for a term no chunk carries — at 40, 166 and 1024 synthetic rows, which bracket both committed corpora's recorded sizes — 41 and 177 chunks — and reach far above them; it holds there because `openPgliteStore` creates the BM25 index before any row exists, so the planner has no statistics for `chunks` and takes the index scan at every size. What stays open is the other plan: case (b) bisects the crossover on a stats-informed plan, with the index built after the rows, to **63 rows**, so an index whose statistics do describe its rows — after a `REINDEX`, or a dump restore — can sit below that crossover and return non-matching rows at score `0`. The number is a planner decision rather than a contract, and a PGlite or `pg_textsearch` bump can move it, which is why that case asserts it in a band and fails when it moves instead of trusting it.
-- **Whether `## Turning on the Python backend` works end to end on a real machine with real weights.** Not walked. The container case `docs-retrieval-service/tests/test_launcher_e2e.py` covers the launcher, the server and the database under the stub models only. Settled by `feat_docs_retrieval_backend_comparison`'s real-model run.
+- **Whether `## Turning on the Python backend` works end to end on a real machine with real weights.** Settled: one agent session, with real weights and the Python backend selected, reached `search_docs` through `.mcp.json` and got a result of the same shape as the TypeScript backend's (`docs/retrieval-eval-results.md` → `## The Python backend against the TypeScript one` → `### One agent session through .mcp.json`). That subsection also records a TypeScript session whose server did not start once the key was set, which it files as a finding.
 
 ---
 
@@ -251,7 +251,7 @@ npx autonomous-sdlc-harness config set docs.retrievalBackend typescript
 
 ## Where it goes next
 
-The move the adapter seam was kept open for — a real Postgres with the same two extensions, `pgvector` and `pg_textsearch`, behind the same `DocStore` interface, reached by connection string — is now built, as `docs-retrieval-service/`, and selectable through `docs.retrievalBackend` (`## Turning on the Python backend`). What comes next is the side-by-side comparison of the two backends, `feat_docs_retrieval_backend_comparison`; what it finds, and what follows from it, is not decided here.
+The move the adapter seam was kept open for — a real Postgres with the same two extensions, `pgvector` and `pg_textsearch`, behind the same `DocStore` interface, reached by connection string — is now built, as `docs-retrieval-service/`, and selectable through `docs.retrievalBackend` (`## Turning on the Python backend`). The side-by-side comparison of the two backends has run, and it found that they disagree for reasons not all identified (`docs/retrieval-eval-results.md` → `## The Python backend against the TypeScript one` → `### Which case this is`). What follows from it is the maintainer's decision.
 
 ---
 
@@ -263,9 +263,9 @@ The move the adapter seam was kept open for — a real Postgres with the same tw
 - A PGlite version pinned exactly, because the two extension packages dictate it.
 - An index that is a second representation of the docs, **per checkout**. Its size is measured at two corpus sizes, this repository's own 177 chunks and a real catalog's 1,960, in `docs/retrieval-eval-results.md` → `## Cold build and index size`, whose two-point fit over those anchors shows the index is **fixed-cost dominated**: most of it is overhead that does not scale with the corpus, and no projection beyond the two anchors is published. It is never committed and always rebuildable, which is why deleting it loses nothing.
 
-**The Python backend**, on top of those, because `init` still installs the TypeScript runtime and models when `python` is selected. No figure is published for any of these yet:
+**The Python backend**, on top of those, because `init` still installs the TypeScript runtime and models when `python` is selected. Each figure was measured by hand, on the date and host `docs/retrieval-eval-results.md` → `## The Python backend against the TypeScript one` → `### What was compared, and through what` names:
 
-- A second weight cache, at `${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/models`, holding the same two models at fp32 rather than q8. Its size: **pending — measured by `feat_docs_retrieval_backend_comparison`**.
-- The Postgres container, built from `docs-retrieval-service/postgres/`, and the volume its data lives on. Their size and running cost: **pending — measured by `feat_docs_retrieval_backend_comparison`**.
-- The Python environment `harness-docs-retrieval` runs from, with the `models` extra (`sentence-transformers`, `torch`) for real models. Its size: **pending — measured by `feat_docs_retrieval_backend_comparison`**.
-- An index that is a second representation of the docs, scoped **per database** rather than per checkout. Its size and build time: **pending — measured by `feat_docs_retrieval_backend_comparison`**.
+- A second weight cache, at `${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/models`, holding the same two models at fp32 rather than q8. Its size: `docs/retrieval-eval-results.md` → `## The Python backend against the TypeScript one` → `### Footprint`.
+- The Postgres container, built from `docs-retrieval-service/postgres/`, and the volume its data lives on. Their size and resident memory: `docs/retrieval-eval-results.md` → `## The Python backend against the TypeScript one` → `### Footprint`; the container's start: `### Cold start` in the same section.
+- The Python environment `harness-docs-retrieval` runs from, with the `models` extra (`sentence-transformers`, `torch`) for real models. Its size: `docs/retrieval-eval-results.md` → `## The Python backend against the TypeScript one` → `### Footprint`.
+- An index that is a second representation of the docs, scoped **per database** rather than per checkout. Its size: `docs/retrieval-eval-results.md` → `## The Python backend against the TypeScript one` → `### Footprint`; its build time: `### Cold start` in the same section.

@@ -18,13 +18,13 @@ import { accessSync, constants as fsConstants, readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 
-import { createFixture, runBash, runCli } from './fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './fixture.mjs';
 
-const WALKER_PATH = 'scripts/flow-walker.sh';
+const WALKER_PATH = `${INIT_SCRIPTS_DIR}/flow-walker.sh`;
 const FLOW = 'task_plan_writing';
 
 /** The fixture's own copy of the graph — the one a mutation check edits, never the template. */
-export const WALKER_GRAPH_PATH = `scripts/flows/${FLOW}.graph.json`;
+export const WALKER_GRAPH_PATH = `${INIT_SCRIPTS_DIR}/flows/${FLOW}.graph.json`;
 
 const CONFIG_PATH = 'harness.config.json';
 

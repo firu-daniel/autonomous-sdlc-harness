@@ -17,10 +17,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 
-import { createFixture, runBash, runCli } from './helpers/fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './helpers/fixture.mjs';
 
-/** The library's path under the default `scriptsDir`. */
-const LIB_PATH = 'scripts/lib/harness-run-lib.sh';
+/** The library's path under the `scriptsDir` a configless `init` writes. */
+const LIB_PATH = `${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh`;
 
 const TASK_IDS = ['P1', 'P2', 'P3', 'A', 'A1.5g', 'A1.5f', 'A2g', 'A2f', 'Bg', 'Bm', 'C', 'C2g', 'C2m', 'C2f', 'E', 'G', 'D'];
 const REVIEW_IDS = ['R1', 'R2', 'R3', 'R4', 'RG', 'R5'];

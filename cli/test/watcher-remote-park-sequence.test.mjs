@@ -35,7 +35,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
-import { runBash, runGit } from './helpers/fixture.mjs';
+import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
@@ -156,9 +156,9 @@ async function createSequenceFixture(t) {
   const state = join(w.dir, STATE_DIR);
   const logs = join(state, 'autonomous_logs');
   const remoteStatus = join(logs, 'remote_status.json');
-  const watcher = join(w.dir, 'scripts', 'autonomous-watcher.sh');
-  const remoteRun = join(w.dir, 'scripts', 'remote-run.sh');
-  const lib = join(w.dir, 'scripts', 'lib', 'harness-run-lib.sh');
+  const watcher = join(w.dir, INIT_SCRIPTS_DIR, 'autonomous-watcher.sh');
+  const remoteRun = join(w.dir, INIT_SCRIPTS_DIR, 'remote-run.sh');
+  const lib = join(w.dir, INIT_SCRIPTS_DIR, 'lib', 'harness-run-lib.sh');
 
   await mkdir(runnerTemp, { recursive: true });
   await mkdir(xdgState, { recursive: true });

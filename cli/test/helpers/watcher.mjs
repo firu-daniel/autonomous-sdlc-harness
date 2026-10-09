@@ -34,11 +34,11 @@ import { accessSync, constants as fsConstants, existsSync, readFileSync } from '
 import { chmod, mkdir, readdir, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 
-import { createFixture, runBash, runCli } from './fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './fixture.mjs';
 
 const STATE_DIR = 'sdlc-harness';
-const WATCHER_PATH = 'scripts/autonomous-watcher.sh';
-const NOTIFY_PATH = 'scripts/autonomous-notify.sh';
+const WATCHER_PATH = `${INIT_SCRIPTS_DIR}/autonomous-watcher.sh`;
+const NOTIFY_PATH = `${INIT_SCRIPTS_DIR}/autonomous-notify.sh`;
 const REGISTRY_PATH = `${STATE_DIR}/autonomous_logs/registry.json`;
 const WATCHER_LOG_PATH = `${STATE_DIR}/autonomous_logs/watcher.log`;
 

@@ -31,7 +31,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 
-import { runBash, runGit } from './helpers/fixture.mjs';
+import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { run, stateDirOf, walk, walkerFixture, walkerStatePath, walkerUnavailable, WALKER_FLOW } from './helpers/walker.mjs';
 
 const SKIP = walkerUnavailable();
@@ -194,7 +194,7 @@ test('(3) a ledger line printed again flips nothing twice', { skip: SKIP }, asyn
   const ledger = `${stateDirOf(dir)}/flow_progress/${BRANCH}_progress.md`;
   await mkdir(join(dir, dirname(ledger)), { recursive: true });
   await writeFile(join(dir, ledger), '- [x] P1.\n', 'utf8');
-  const flip = ['scripts/commit-on-branch.sh', '--repo', dir, ledger, '--', `chore: Flow progress P1 for ${BRANCH}`];
+  const flip = [`${INIT_SCRIPTS_DIR}/commit-on-branch.sh`, '--repo', dir, ledger, '--', `chore: Flow progress P1 for ${BRANCH}`];
 
   const landed = await runBash(dir, flip);
   assert.equal(landed.status, 0, landed.stderr);

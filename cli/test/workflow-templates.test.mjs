@@ -10,8 +10,9 @@
  * in the `harness-review-<branch>` group with `cancel-in-progress: false`, checking out the default
  * branch rather than `inputs.branch`, reading no secret and running
  * `remote-run.sh collect` alone; the `run-name` title the pause poll and
- * `continue` / `poll` match runs by; the `runs-on` line and the permissions exactly `contents`,
- * `actions`, `issues` and `pull-requests`, each `write`; the `Open the pull request and report`
+ * `continue` / `poll` match runs by; the `runs-on` line; `permissions: {}` at workflow level and
+ * each job's own grants exactly — `wrong-ref` none, `run` and `collect` `contents`, `actions`,
+ * `issues` and `pull-requests`, each `write`, and `warm` `contents: read`; the `Open the pull request and report`
  * step running `remote-run.sh deliver` after `Upload the state bundle` and before `Continue, wait
  * or stop`, `continue-on-error: true`, with `HARNESS_PR_TOKEN` drawn from `secrets.HARNESS_GIT_TOKEN`
  * through `env:`; the `run` job's `Open the draft pull request` step running `remote-run.sh open`
@@ -33,14 +34,16 @@
  * owner of a user-owned repository under an empty list, and refusing every other actor with an
  * `::error::` line naming `RUN_ACTORS_VARIABLE`.
  *
- * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; the permissions exactly
- * `contents: read`, `actions: write`, `issues: write` and `pull-requests: write`;`remote-run.sh poll` its only call into the script family;
+ * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; `permissions: {}` at workflow
+ * level and the `poll` job's grants exactly `contents: read`, `actions: write`, `issues: write` and
+ * `pull-requests: write`; `remote-run.sh poll` its only call into the script family;
  * `HARNESS_PUSH_URL` passed through `env:`; no template token at all; every GitHub expression spaced; none inside a `run:` block;
  * its state upload under `always()` named `POLL_STATE_ARTIFACT_NAME`, as `remote-run.sh` spells it.
  *
  * For `harness-trigger.yml`: the `issues` and `repository_dispatch` triggers, `labeled` the only
  * `issues` type so `opened` never starts a second run, and `TRIGGER_DISPATCH_EVENT_TYPE` the only
- * dispatch type; the permissions exactly `contents: write`, `actions: write` and `issues: write`; the
+ * dispatch type; `permissions: {}` at workflow level and the `trigger` job's grants exactly
+ * `contents: write`, `actions: write` and `issues: write`; the
  * job's `if:` and its `TRIGGER_LABEL_VARIABLE` env line each naming `TRIGGER_LABEL_VARIABLE` with
  * `DEFAULT_TRIGGER_LABEL` as its fallback;
  * `remote-run.sh trigger` its only call into the script family; no `secrets.` reference, so the
@@ -52,8 +55,8 @@
  * For `harness-control.yml`: the `issue_comment`, `pull_request_review`, `issues`, `pull_request` and
  * `delete` triggers, `created`, `submitted`, `closed` and `closed` their only types, and neither
  * `pull_request_target` nor `pull_request_review_comment` outside a comment line; the `run-name`
- * falling back to the deleted ref; the permissions exactly `contents`, `actions`, `issues` and
- * `pull-requests`, each `write`; the job's `if:` exactly `if: >-`, its condition on the one
+ * falling back to the deleted ref; `permissions: {}` at workflow level and the `control` job's grants
+ * exactly `contents`, `actions`, `issues` and `pull-requests`, each `write`; the job's `if:` exactly `if: >-`, its condition on the one
  * continuation line beneath, because the condition carries `: ` and a plain scalar would read that
  * as a mapping indicator and leave the file unparseable; no plain-scalar mapping value carrying `: `
  * or ` #` (the header's third rule, checked in all four files below); the condition carrying
@@ -79,9 +82,15 @@
  * job's `env:` passing `RUN_ACTORS_VARIABLE` from `vars.` on the line after
  * `HARNESS_TRIGGER_ALLOWED_BOTS`, and the `# DECLARED MIRRORS` block naming it.
  *
- * For all four: the `# ACTION PINS.` header names exactly the set of `uses:` values the file carries, so a
- * pin the file dropped or a bumped `uses:` the header forgot fails; and every `uses:` value is a major
- * tag of a GitHub `actions/` action, never a sha or a branch — the pinning decision that header states.
+ * For all four: every `uses:` value names `<owner>/<repo>[/<path>]@` a 40-hex commit, never a tag or a
+ * branch, with `# <action> v<major>.<minor>.<patch>` on the line directly above it, naming the same
+ * action; the `# ACTION PINS.` header names exactly the set of those action-and-version pairs, so a pin
+ * the file dropped or a bump the header forgot fails. The checkout credential: `persist-credentials:
+ * false` on the `warm` checkout alone, every other checkout keeping it because its job pushes or, for
+ * `poll`, runs `git ls-remote` against origin, and a `# THE CHECKOUT CREDENTIAL.` block
+ * (`# THE CHECKOUT.` in `harness-trigger.yml`) naming why; and no `actions/upload-artifact` step
+ * carrying `.git/config` off the runner — `harness-run.yml`'s path under `${{ runner.temp }}`,
+ * `harness-resume.yml`'s exactly `POLL_STATE_DIR`, a state-directory subpath, and none in the other two.
  * And outside a `|` / `>` block body, no mapping value that opens as a plain scalar carries `: ` or
  * ` #`: the first breaks the parse, the second silently truncates the value as a comment. These are
  * text-level readings; no YAML parser is loaded.
@@ -240,10 +249,39 @@ test('the collect job follows run unless cancelled, shares the review group, rea
 });
 
 /** The line of one job's key under `jobs:`; `defaults:` carries a `  run:` key of its own above it. */
-function jobStart(job) {
-  const start = LINES.indexOf(`  ${job}:`, LINES.indexOf('jobs:'));
-  assert.notEqual(start, -1, `harness-run.yml carries a ${job} job`);
+function jobStart(job, lines = LINES) {
+  const start = lines.indexOf(`  ${job}:`, lines.indexOf('jobs:'));
+  assert.notEqual(start, -1, `the workflow carries a ${job} job`);
   return start;
+}
+
+/** The job names under `jobs:`, in file order. */
+function jobNames(lines) {
+  return lines
+    .slice(lines.indexOf('jobs:') + 1)
+    .flatMap((l) => /^ {2}([a-z][a-z0-9_-]*):$/.exec(l)?.slice(1) ?? []);
+}
+
+/** One job's `permissions:` grants, trimmed; an inline value, `{}`, as its one entry. */
+function jobPermissions(job, lines) {
+  const block = blockUnder(jobStart(job, lines), lines);
+  const at = block.findIndex((l) => /^ {4}permissions:/.test(l));
+  assert.notEqual(at, -1, `the ${job} job declares permissions:`);
+  const inline = /^ {4}permissions: (.+)$/.exec(block[at]);
+  if (inline !== null) return [inline[1]];
+  return blockUnder(at, block).filter((l) => l.trim() !== '').map((l) => l.trim());
+}
+
+/**
+ * Asserts `permissions: {}` is the file's only workflow-level permissions line, that `expected`
+ * names every job in file order, and that each job's grants are exactly its entry.
+ */
+function assertPermissions(lines, expected) {
+  assert.deepEqual(lines.filter((l) => /^permissions:/.test(l)), ['permissions: {}']);
+  assert.deepEqual(jobNames(lines), Object.keys(expected));
+  for (const [job, grants] of Object.entries(expected)) {
+    assert.deepEqual(jobPermissions(job, lines), grants, `the ${job} job's permissions`);
+  }
 }
 
 /** The `- name:` steps of one job, as line blocks, in order. */
@@ -374,13 +412,13 @@ test('the run-name title, the runner line and the permissions', () => {
   for (const line of LINES.filter((l) => /^\s*runs-on:/.test(l))) {
     assert.equal(line.trim(), "runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}");
   }
-  const i = LINES.indexOf('permissions:');
-  assert.deepEqual(blockUnder(i).filter((l) => l.trim() !== '').map((l) => l.trim()), [
-    'contents: write',
-    'actions: write',
-    'issues: write',
-    'pull-requests: write',
-  ]);
+  const pushing = ['contents: write', 'actions: write', 'issues: write', 'pull-requests: write'];
+  assertPermissions(LINES, {
+    'wrong-ref': ['{}'],
+    run: pushing,
+    collect: pushing,
+    warm: ['contents: read'],
+  });
 });
 
 test('deliver opens the pull request and reports, after the upload and before continue, never failing the job', () => {
@@ -496,11 +534,9 @@ test('the poller: a schedule, a hand trigger, and exactly its four permissions',
   const triggers = under.filter((l) => /^ {2}[a-z_]+:/.test(l)).map((l) => l.trim().replace(/:.*$/, ''));
   assert.deepEqual(triggers, ['schedule', 'workflow_dispatch']);
   assert.match(under.join('\n'), /^\s*- cron: '[^']+'$/m);
-  const perms = RESUME_LINES.indexOf('permissions:');
-  assert.deepEqual(
-    blockUnder(perms, RESUME_LINES).filter((l) => l.trim() !== '').map((l) => l.trim()),
-    ['contents: read', 'actions: write', 'issues: write', 'pull-requests: write'],
-  );
+  assertPermissions(RESUME_LINES, {
+    poll: ['contents: read', 'actions: write', 'issues: write', 'pull-requests: write'],
+  });
 });
 
 test('the poller runs remote-run.sh poll and nothing else of the family', () => {
@@ -514,21 +550,27 @@ test('the poller passes the push secret through env, so its failed notice can be
   assert.match(RESUME_TEXT, /^ {6}HARNESS_PUSH_URL: \$\{\{ secrets\.HARNESS_PUSH_URL \}\}$/m);
 });
 
-/** The `#   actions/…@…` lines under `# ACTION PINS.`, up to a bare `#` or the next upper-case heading. */
+/** The `#   <action>   v<x.y.z>` lines under `# ACTION PINS.`, as `<action> v<x.y.z>`, up to a bare `#` or a line of prose. */
 function actionPins(lines) {
   const start = lines.indexOf('# ACTION PINS.');
   assert.notEqual(start, -1, 'the header carries an ACTION PINS block');
   const pins = [];
   for (let i = start + 1; i < lines.length; i++) {
-    if (lines[i] === '#' || /^# [A-Z][A-Z_]+[ .]/.test(lines[i])) break;
-    const m = /^# {3}(actions\/\S+@\S+)$/.exec(lines[i]);
-    if (m !== null) pins.push(m[1]);
+    const m = /^# {3}(\S+) +(v\d+\.\d+\.\d+)$/.exec(lines[i]);
+    if (m === null) break;
+    pins.push(`${m[1]} ${m[2]}`);
   }
   return pins;
 }
 
-const usesValues = (lines) =>
-  lines.map((l) => /^\s*(?:- )?uses:\s*(\S+)\s*$/.exec(l)?.[1]).filter((v) => v !== undefined);
+/** Every `uses:` line, as `{ at, value, above }`: its index, its value and the line directly above it. */
+const usesLines = (lines) =>
+  lines.flatMap((l, at) => {
+    const m = /^\s*(?:- )?uses:\s*(\S+)\s*$/.exec(l);
+    return m === null ? [] : [{ at, value: m[1], above: lines[at - 1] }];
+  });
+
+const VERSION_COMMENT = /^\s*# (\S+) (v\d+\.\d+\.\d+)$/;
 
 for (const [file, lines] of [
   [WORKFLOW_RUN_FILE, LINES],
@@ -536,11 +578,125 @@ for (const [file, lines] of [
   [WORKFLOW_TRIGGER_FILE, TRIGGER_LINES],
   [WORKFLOW_CONTROL_FILE, CONTROL_LINES],
 ]) {
-  test(`${file}: the ACTION PINS header names exactly the uses: values, each a major tag of an actions/ action`, () => {
-    const uses = usesValues(lines);
+  test(`${file}: every action is pinned to a commit, its release version on the line above`, () => {
+    const uses = usesLines(lines);
     assert.ok(uses.length > 0, 'the file carries a uses: line');
-    assert.deepEqual(new Set(actionPins(lines)), new Set(uses));
-    for (const value of uses) assert.match(value, /^actions\/[a-z-]+(\/[a-z-]+)?@v[0-9]+$/);
+    for (const { at, value, above } of uses) {
+      assert.match(value, /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_./-]+)?@[0-9a-f]{40}$/, `line ${at + 1}`);
+      const m = VERSION_COMMENT.exec(above);
+      assert.ok(m !== null, `line ${at} is not a "# <action> v<x.y.z>" comment: ${above}`);
+      assert.equal(m[1], value.slice(0, value.indexOf('@')), `line ${at} names the action line ${at + 1} pins`);
+    }
+  });
+
+  test(`${file}: the ACTION PINS header names exactly the pinned actions and their versions`, () => {
+    const pinned = usesLines(lines).map(({ above }) => VERSION_COMMENT.exec(above)?.slice(1).join(' '));
+    assert.ok(pinned.length > 0, 'the file carries a uses: line');
+    assert.deepEqual(new Set(actionPins(lines)), new Set(pinned));
+  });
+}
+
+/** The job a line sits in: the nearest `  <job>:` key above it, under `jobs:`. */
+function jobOf(at, lines) {
+  const jobs = lines.indexOf('jobs:');
+  for (let i = at; i > jobs; i--) {
+    const m = /^ {2}([a-z][a-z0-9_-]*):$/.exec(lines[i]);
+    if (m !== null) return m[1];
+  }
+  assert.fail(`line ${at + 1} sits under no job`);
+}
+
+/** The step a line sits in, as lines from its `- name:` line. */
+function stepAt(at, lines) {
+  let start = at;
+  while (start >= 0 && !/^\s*- name:/.test(lines[start])) start--;
+  assert.ok(start >= 0, `line ${at + 1} sits inside a named step`);
+  return [lines[start], ...blockUnder(start, lines)];
+}
+
+/** The index of every `uses:` line naming `action`. */
+const usesOf = (action, lines) => usesLines(lines).filter(({ value }) => value.startsWith(`${action}@`)).map(({ at }) => at);
+
+/** The `# <heading> …` comment block, up to a bare `#` or the header's end. */
+function headerBlock(heading, lines) {
+  const start = lines.findIndex((l) => l.startsWith(`# ${heading} `));
+  assert.notEqual(start, -1, `the header carries a ${heading} block`);
+  const end = lines.findIndex((l, i) => i > start && (l === '#' || !l.startsWith('#')));
+  return lines.slice(start, end).join('\n');
+}
+
+/**
+ * Per file: each checkout's job and whether it keeps its credential; the header block naming why and
+ * what it must name; and which upload shape keeps `.git/config` off every artifact.
+ */
+const CREDENTIAL_SHAPES = [
+  {
+    file: WORKFLOW_RUN_FILE,
+    lines: LINES,
+    persists: { run: true, collect: true, warm: false },
+    heading: 'THE CHECKOUT CREDENTIAL.',
+    names: ['`run`', '`collect`', '`warm`', 'push-branch.sh', 'persist-credentials: false'],
+    uploads: 'runner-temp',
+  },
+  {
+    file: WORKFLOW_RESUME_FILE,
+    lines: RESUME_LINES,
+    persists: { poll: true },
+    heading: 'THE CHECKOUT CREDENTIAL.',
+    names: ['`poll`', 'git ls-remote'],
+    uploads: 'poll-state',
+  },
+  {
+    file: WORKFLOW_TRIGGER_FILE,
+    lines: TRIGGER_LINES,
+    persists: { trigger: true },
+    heading: 'THE CHECKOUT.',
+    names: ['push-branch.sh'],
+    uploads: 'none',
+  },
+  {
+    file: WORKFLOW_CONTROL_FILE,
+    lines: CONTROL_LINES,
+    persists: { control: true },
+    heading: 'THE CHECKOUT CREDENTIAL.',
+    names: ['push-branch.sh'],
+    uploads: 'none',
+  },
+];
+
+for (const { file, lines, persists, heading, names, uploads } of CREDENTIAL_SHAPES) {
+  test(`${file}: persist-credentials: false on the warm checkout alone, each persisted one argued, no upload carrying .git/config`, () => {
+    const checkouts = usesOf('actions/checkout', lines);
+    assert.deepEqual(checkouts.map((at) => jobOf(at, lines)), Object.keys(persists), 'one checkout per listed job');
+    for (const at of checkouts) {
+      const job = jobOf(at, lines);
+      const settings = stepAt(at, lines).filter((l) => /^\s*persist-credentials:/.test(l)).map((l) => l.trim());
+      assert.deepEqual(settings, persists[job] ? [] : ['persist-credentials: false'], `the ${job} checkout`);
+    }
+    const code = lines.filter((l) => !/^\s*#/.test(l));
+    const unpersisted = Object.values(persists).filter((p) => !p).length;
+    assert.equal(code.filter((l) => l.includes('persist-credentials')).length, unpersisted, 'no persist-credentials outside a listed checkout');
+
+    const block = headerBlock(heading, lines);
+    for (const name of names) assert.ok(block.includes(name), `the ${heading} block names ${name}`);
+
+    const paths = usesOf('actions/upload-artifact', lines).map((at) =>
+      stepAt(at, lines).filter((l) => /^\s*path:/.test(l)).map((l) => l.trim()),
+    );
+    if (uploads === 'none') {
+      assert.deepEqual(paths, [], 'no actions/upload-artifact step');
+    } else if (uploads === 'runner-temp') {
+      assert.ok(paths.length > 0, 'an actions/upload-artifact step');
+      for (const p of paths) {
+        assert.ok(p.length > 0 && p.every((l) => l.startsWith('path: ${{ runner.temp }}')), `an upload outside the workspace: ${p}`);
+      }
+    } else {
+      // POLL_STATE_DIR is inside the workspace, but a state-directory subpath, which holds no .git/.
+      assert.deepEqual(paths, [['path: ${{ env.POLL_STATE_DIR }}']]);
+      const setters = code.filter((l) => l.includes('POLL_STATE_DIR='));
+      assert.equal(setters.length, 1, 'one line sets POLL_STATE_DIR');
+      assert.match(setters[0], /\/autonomous_logs\/poll_state\/current"$/, 'POLL_STATE_DIR is a state-directory subpath, never one reaching .git/');
+    }
   });
 }
 
@@ -611,11 +767,7 @@ test('the trigger: a labelled issue or a harness-task dispatch, and never opened
 });
 
 test('the trigger: exactly its three permissions', () => {
-  const i = TRIGGER_LINES.indexOf('permissions:');
-  assert.deepEqual(
-    blockUnder(i, TRIGGER_LINES).filter((l) => l.trim() !== '').map((l) => l.trim()),
-    ['contents: write', 'actions: write', 'issues: write'],
-  );
+  assertPermissions(TRIGGER_LINES, { trigger: ['contents: write', 'actions: write', 'issues: write'] });
 });
 
 test('the trigger job runs for a dispatch or the configured label, defaulting to DEFAULT_TRIGGER_LABEL', () => {
@@ -674,11 +826,9 @@ test('control: a created comment, a submitted review, a close or a deletion, nev
 });
 
 test('control: exactly its four permissions', () => {
-  const i = CONTROL_LINES.indexOf('permissions:');
-  assert.deepEqual(
-    blockUnder(i, CONTROL_LINES).filter((l) => l.trim() !== '').map((l) => l.trim()),
-    ['contents: write', 'actions: write', 'issues: write', 'pull-requests: write'],
-  );
+  assertPermissions(CONTROL_LINES, {
+    control: ['contents: write', 'actions: write', 'issues: write', 'pull-requests: write'],
+  });
 });
 
 test("control: the job's if: prefilters on the handle, the marker and the review state, and skips a fork's review", () => {

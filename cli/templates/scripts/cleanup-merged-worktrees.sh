@@ -325,7 +325,7 @@ run_bounded() {
 # string `0`, and `[ 0 -ge 00 ]` is true on the first iteration, so every sweep
 # kills its own fetch before it starts, blames the network, and never cleans up
 # another branch. Comparing the VALUE closes both: `[ ]` returns non-zero for an
-# unparseable or out-of-range string as readily as for a number that fails the
+# unparsable or out-of-range string as readily as for a number that fails the
 # test, and the default is what survives either way. The upper clamp is what keeps
 # a fat-fingered value from expressing "wait forever" in seconds.
 fetch_timeout="${HARNESS_FETCH_TIMEOUT:-60}"

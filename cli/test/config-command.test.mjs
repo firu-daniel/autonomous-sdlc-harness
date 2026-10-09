@@ -34,14 +34,14 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createFixture, ignoredAmong, readJson, runCli, snapshotTree } from './helpers/fixture.mjs';
+import { createFixture, ignoredAmong, INIT_SCRIPTS_DIR, readJson, runCli, snapshotTree } from './helpers/fixture.mjs';
 
 /** The file every verb reads, and the sibling a real `set` leaves the previous values in. */
 const CONFIG_FILE = 'harness.config.json';
 const BACKUP_FILE = `${CONFIG_FILE}.bak`;
 
 /** The wrapper invocation `init` writes into `commands.test`, spelled out rather than imported. */
-const TEST_COMMAND = 'bash scripts/test.sh';
+const TEST_COMMAND = `bash ${INIT_SCRIPTS_DIR}/test.sh`;
 
 /** A plausible typo of a declared key: the case the unknown-key refusal exists for. */
 const TYPO_KEY = 'commands.tset';
@@ -75,10 +75,10 @@ const RAW_TYPECHECK_COMMAND = 'npm --prefix packages/storefront run typecheck';
 const RAW_TEST_COMMAND = 'npm --prefix packages/storefront test';
 
 /** The wrapper `commands.typecheck` is allow-listed as, spelled out rather than imported. */
-const TYPECHECK_WRAPPER = 'bash scripts/typecheck.sh';
+const TYPECHECK_WRAPPER = `bash ${INIT_SCRIPTS_DIR}/typecheck.sh`;
 
 /** The wrapper file that invocation runs, as a path under the fixture. */
-const TYPECHECK_WRAPPER_FILE = join('scripts', 'typecheck.sh');
+const TYPECHECK_WRAPPER_FILE = join(INIT_SCRIPTS_DIR, 'typecheck.sh');
 
 /** The nested application whose hand-fill path reaches `set` with no wrapper on disk yet. */
 const NESTED_APP_DIR = 'packages/storefront';
@@ -616,7 +616,7 @@ test('set commands as an object reports every wrapped key the object filled with
  * A repository the hand-fill path is actually reached from: the command is declared by a **nested**
  * manifest, so `init` detected none, wrote the placeholder into `commands.typecheck`, and wrote **no
  * wrapper for it at all**. Every case above starts from `wiredFixture`, where `typecheck` was
- * detected and `scripts/typecheck.sh` therefore exists — which is the one state in which the retired
+ * detected and `typecheck.sh` therefore exists under the scripts directory — which is the one state in which the retired
  * clause was true.
  */
 async function nestedAppFixture(t) {

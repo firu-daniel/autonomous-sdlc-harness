@@ -46,7 +46,7 @@
  *
  * ## The refusals, and why they come before the plan is built
  *
- * `init` is a writer aimed at a repository, so a mis-scoped run is destructive rather than merely
+ * `init` is a writer aimed at a repository, so a wrongly scoped run is destructive rather than merely
  * wrong. All three preconditions are **settled** before a single generator is called — two by a
  * check the flags alone answer, the third by an answer (the flag, a prompt on a terminal, or the
  * non-interactive default) — and that is the property the ordering exists for: a plan that is never
@@ -89,7 +89,7 @@
  */
 
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { isAbsolute, join, posix, relative, resolve } from 'node:path';
 
 import { formatProblem } from '../config/check.js';
 import { configExists, loadConfig } from '../config/io.js';
@@ -100,6 +100,7 @@ import {
   remoteExecutionApplies,
   CONFIG_FILENAME,
   DEFAULTS,
+  INIT_SCRIPTS_DIR,
   isPlaceholder,
   qaDriverChoices,
   retrievalApplies,
@@ -361,6 +362,9 @@ const SELF_ADOPT_ENV = 'HARNESS_SELF_ADOPT';
 /** The flag whose value the dot-directory refusal is raised against. */
 const STATE_DIR_FLAG = '--state-dir';
 
+/** The flag that sets a generated config's `scriptsDir`, and the one its refusal and warning name. */
+const SCRIPTS_DIR_FLAG = '--scripts-dir';
+
 /** The flag that answers the git gate — named in the prompt, in the refusal, and in the note. */
 const GIT_INIT_FLAG = '--git-init';
 
@@ -434,10 +438,10 @@ export interface InitFlags extends HarnessConfigFlags, ProjectSettingsFlags {
    *
    * **A flag on `init` rather than a verb of its own**, because the rebuild needs stack detection,
    * the preset and the *whole* config-flag surface this interface already carries — `--preset`,
-   * `--app-dir`, `--project-name`, `--default-branch`, `--state-dir`, the three phase toggles and
-   * their inputs. A `config reset` verb would have to re-declare every one of them, which is the
-   * second flag surface the `extends` above exists to prevent; `config` keeps what it owns, which
-   * is per-*key* writes.
+   * `--app-dir`, `--project-name`, `--default-branch`, `--state-dir`, `--scripts-dir`, the three
+   * phase toggles and their inputs. A `config reset` verb would have to re-declare every one of
+   * them, which is the second flag surface the `extends` above exists to prevent; `config` keeps
+   * what it owns, which is per-*key* writes.
    *
    * **It re-derives; it does not restore.** Detection is deterministic and the command line is the
    * other input, so re-deriving needs no state persisted anywhere — while a `.bak` is not a promise
@@ -668,6 +672,14 @@ const INIT_OPTIONS: readonly InitOption[] = initOptions([
     placeholder: '<dir>',
     summary: 'Repo-relative run-artifact directory; must not be dot-named',
     configValue: 'stateDir',
+  },
+  {
+    key: 'scriptsDir',
+    flag: SCRIPTS_DIR_FLAG,
+    kind: 'value',
+    placeholder: '<dir>',
+    summary: `Repo-relative directory the wrapper and outer-loop scripts are written to (default: ${INIT_SCRIPTS_DIR})`,
+    configValue: 'scriptsDir',
   },
   { key: 'qa', flag: '--qa', kind: 'switch', summary: 'Turn the interactive test phase on', configValue: 'phases.qa' },
   {
@@ -1064,6 +1076,36 @@ function assertUsableStateDir(value: string | undefined): void {
 
   throw new HarnessError(
     `${STATE_DIR_FLAG} ${JSON.stringify(value)} has a path segment starting with '.', and the run-artifact tree must not be dot-named or reach through a dot segment: it has to be writable by an unattended run, and a dot-path is where a host reserves directories an unattended run may not write to — measured for .claude/**, where such a run completes with exit 0 having written nothing. Pass a name without a leading dot; do not "fix" it back to a dot-name`,
+  );
+}
+
+/** Why `value` cannot be a `scriptsDir` the script-allowlist guard grants anything under, or `undefined`. */
+function unusableScriptsDirReason(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed === ''
+    ? 'is empty'
+    : isAbsolute(trimmed)
+      ? 'is absolute'
+      : trimmed.split(/[\\/]/).includes('..')
+        ? "carries a '..' segment"
+        : posix.normalize(trimmed).replace(/\/+$/, '') === '.'
+          ? "normalises to '.'"
+          : undefined;
+}
+
+/**
+ * Refuse a `--scripts-dir` the plugin's script-allowlist guard would grant nothing under — empty,
+ * absolute, `..`-bearing, or normalising to `.` (`plugin/hooks/autonomous-script-allowlist-guard.sh`,
+ * the header's outcome table) — before anything is assembled from it, so the shape is an
+ * adopter-fixable usage error rather than an unattended run that stalls on every wrapper.
+ */
+function assertUsableScriptsDir(value: string | undefined): void {
+  if (value === undefined) return;
+  const reason = unusableScriptsDirReason(value);
+  if (reason === undefined) return;
+
+  throw new HarnessError(
+    `${SCRIPTS_DIR_FLAG} ${JSON.stringify(value)} ${reason}, and scriptsDir has to be a repo-relative directory below the repository root: the plugin's script-allowlist guard grants nothing for a scriptsDir that is empty, absolute, '.' or '..'-bearing, so an unattended run would stall on every wrapper. Pass a repo-relative directory name`,
   );
 }
 
@@ -1982,7 +2024,7 @@ function isDirectory(path: string): boolean {
  *
  * **The two bad-value arms are deliberately asymmetric, and that asymmetry is the point.** A
  * flag-sourced value outside the repository keeps `DetectContext`'s hard refusal — it is a typo
- * or a mis-scoped invocation, and this function does not screen it. Anything **config**-sourced —
+ * or a wrongly scoped invocation, and this function does not screen it. Anything **config**-sourced —
  * a value that cannot be used, and equally a file that cannot be read at all — falls back to `.`
  * with a warning instead: `--reset-config` is the documented route to repair a broken configuration,
  * so a refusal sourced from the very file being rebuilt would make a repository with a bad `appDir`
@@ -2117,6 +2159,7 @@ async function run(ctx: CommandContext): Promise<number> {
   // create a repository, and a refusal raised after it would leave one behind in a directory this run
   // then declined to wire — the harm {@link parseQaDriver} is checked inside the parser to avoid.
   assertUsableStateDir(flags.stateDir);
+  assertUsableScriptsDir(flags.scriptsDir);
   const forcedPreset = flags.preset === undefined ? undefined : parsePresetName(flags.preset);
 
   // Every precondition that needs the repository is settled here, before a generator is called and
@@ -2242,11 +2285,37 @@ async function run(ctx: CommandContext): Promise<number> {
 
   const plan = new WritePlan();
 
+  // A rebuild keeps the scripts directory the file being rebuilt names, an absent key read as the
+  // absent-key meaning; `--scripts-dir` wins over it. An unreadable file answers nothing, and so does
+  // a value that is not a string or that `--scripts-dir` would refuse: the rebuild writes the
+  // generated value, and this invocation says so whichever config lands.
+  let rebuiltScriptsDir: string | undefined;
+  if (flags.resetConfig && flags.scriptsDir === undefined && configExists(repoRoot)) {
+    const loaded = loadConfig(repoRoot);
+    if (loaded.config === undefined) {
+      warnings.push(
+        `${CONFIG_FILENAME} could not be read, so the rebuilt file writes scriptsDir as ${INIT_SCRIPTS_DIR}; pass ${SCRIPTS_DIR_FLAG} <dir> to keep the directory your scripts are in.`,
+      );
+    } else {
+      const kept: unknown = loaded.config.scriptsDir ?? DEFAULTS.scriptsDir;
+      const reason =
+        typeof kept !== 'string' ? `is not a string (${JSON.stringify(kept)})` : unusableScriptsDirReason(kept);
+      if (reason === undefined && typeof kept === 'string') {
+        rebuiltScriptsDir = kept;
+      } else {
+        warnings.push(
+          `${CONFIG_FILENAME}'s scriptsDir ${reason}, so the rebuilt file writes scriptsDir as ${INIT_SCRIPTS_DIR}; pass ${SCRIPTS_DIR_FLAG} <dir> to name the directory your scripts are in.`,
+        );
+      }
+    }
+  }
+
   const config = writeHarnessConfig({
     repoRoot,
     detection,
     preset: profile,
     flags,
+    ...(rebuiltScriptsDir === undefined ? {} : { rebuiltScriptsDir }),
     plan,
     // No `force:` — the run's `--force` is not an input to this generator (`harnessConfig.ts`).
     // `plan.apply` below still passes it, so it governs every other create-if-absent artifact.
@@ -2614,7 +2683,7 @@ function reportWorkflowUpgrade(
 }
 
 /**
- * What `init` did about a `harness-control.yml` a release wrote unparseable; which copy is replaced,
+ * What `init` did about a `harness-control.yml` a release wrote unparsable; which copy is replaced,
  * and when, is the generator's decision (`generators/githubWorkflows.ts`, choice 6), and this only
  * reports it.
  *

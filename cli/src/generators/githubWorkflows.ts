@@ -49,7 +49,7 @@
  *    for. A copy still carrying {@link UNPARSEABLE_CONTROL_IF_LINE} but otherwise edited is kept and
  *    reported as `controlRepair: { kind: 'edited' }`. It runs on every `init`, not only under
  *    {@link UPGRADE_WORKFLOWS_FLAG}, because the file carries no pin for that mode to key on and an
- *    unparseable copy disables comment control whichever command the adopter reaches for. It is a
+ *    unparsable copy disables comment control whichever command the adopter reaches for. It is a
  *    per-request `forceOverride: 'always'`, not a new `WritePolicy`, on choice 4's precedent: the
  *    engine's `.bak`-then-replace is the operation, and the re-run contract stays `create-if-absent`.
  *    The repair's `.bak` is deliberately not in the managed `.gitignore` block: the repair happens
@@ -124,12 +124,12 @@ export const UNPARSEABLE_CONTROL_RELEASES: Readonly<Record<string, string>> = {
   '0.6.1': 'dd014dc14bf19947182f4c95fa0bf011aba04fda354d9a6fa94242e86082bfa5',
 };
 
-/** The job-level `if:` line, trimmed, that made 0.6.1's `harness-control.yml` unparseable. */
+/** The job-level `if:` line, trimmed, that made 0.6.1's `harness-control.yml` unparsable. */
 const UNPARSEABLE_CONTROL_IF_LINE =
   "if: (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@sdlc-harness') && !contains(github.event.comment.body, '<!-- sdlc-harness')) || (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'sdlc-harness: ')) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'delete' && github.event.ref_type == 'branch')";
 
 /**
- * The one producer of the route from an unparseable `harness-control.yml` to the fixed one. Complete
+ * The one producer of the route from an unparsable `harness-control.yml` to the fixed one. Complete
  * sentences ending in one `.`, ASCII only, no line break.
  */
 export function unparseableControlRoute(version: string): string {
@@ -143,7 +143,7 @@ export function unparseableControlRoute(version: string): string {
   );
 }
 
-/** What `init` decided about an existing `harness-control.yml` a release wrote unparseable (choice 6). */
+/** What `init` decided about an existing `harness-control.yml` a release wrote unparsable (choice 6). */
 export type ControlRepair =
   | { readonly kind: 'replaced'; readonly release: string }
   | { readonly kind: 'edited' }
@@ -201,7 +201,7 @@ export interface GithubWorkflowsResult {
   /** Present exactly when `upgrade` was set, remote execution applied and `harness-run.yml` existed. */
   readonly upgrade?: WorkflowUpgrade;
   /**
-   * `'replaced'` when the plan replaces a byte-identical copy of `release`'s unparseable control
+   * `'replaced'` when the plan replaces a byte-identical copy of `release`'s unparsable control
    * workflow; `'edited'` when the copy carries {@link UNPARSEABLE_CONTROL_IF_LINE} and is kept; absent
    * otherwise and whenever the forge workflows are not enqueued (choice 6).
    */

@@ -11,7 +11,8 @@
  *
  * The tests these helpers serve run against the **compiled** CLI at `dist/cli.js`, so
  * `npm run build` precedes `npm test`. {@link runCli} says so in its own refusal rather than
- * leaving a module-resolution error to explain it.
+ * leaving a module-resolution error to explain it — except for {@link INIT_SCRIPTS_DIR}, a static
+ * re-export from `dist/`, so a suite importing this module without a build fails at import instead.
  *
  * `node --test test` treats every file beneath a directory named `test` as a test file, so this one
  * is loaded as a test file of its own and reported as a passing file with no tests in it. That is
@@ -64,6 +65,13 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readdir, readFile, lstat, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
+
+/**
+ * The directory a fresh `init` writes its scripts into. A suite addressing scripts that an `init`
+ * with no seeded config wrote reads it from here, never as a literal; a suite that seeds its own
+ * config keeps that config's own value.
+ */
+export { INIT_SCRIPTS_DIR } from '../../dist/config/model.js';
 
 /** The CLI package root — this file compiles nowhere, so it is two levels above `test/helpers/`. */
 export const PACKAGE_ROOT = resolve(import.meta.dirname, '..', '..');

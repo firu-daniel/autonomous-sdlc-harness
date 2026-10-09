@@ -14,7 +14,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { runBash } from './helpers/fixture.mjs';
+import { INIT_SCRIPTS_DIR, runBash } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
@@ -28,7 +28,7 @@ async function createUsageFixture(t) {
   if (w === null) return null;
   const state = join(w.dir, STATE_DIR);
   const registry = join(state, 'autonomous_logs', 'registry.json');
-  const lib = join(w.dir, 'scripts', 'lib', 'harness-run-lib.sh');
+  const lib = join(w.dir, INIT_SCRIPTS_DIR, 'lib', 'harness-run-lib.sh');
   return {
     ...w,
     state,

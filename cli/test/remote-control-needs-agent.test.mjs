@@ -20,9 +20,9 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { createFixture, runBash, runCli } from './helpers/fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './helpers/fixture.mjs';
 
-const SCRIPT = 'scripts/remote-run.sh';
+const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
 const STATE_DIR = 'sdlc-harness';
 const REPOSITORY = 'octo/fixture';
 const MENTION = "Let's @sdlc-harness pause";

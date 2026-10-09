@@ -690,7 +690,7 @@ const UNRESOLVED_HEAD = 'harness_fail';
  * - the indentation test is **defensive rather than template-driven**: no wrapper template renders an
  *   indented forwarding line, so it buys nothing today and exists so that an adopter-edited wrapper
  *   that forwards from inside a conditional or a function is reported `unrecognised` rather than
- *   mis-read.
+ *   misread.
  *
  * {@link unresolvedBody} is substituted into `{{command}}` like any other body, so that wrapper's
  * rendered line *is* a line this rule matches. It is classified by its first token rather than

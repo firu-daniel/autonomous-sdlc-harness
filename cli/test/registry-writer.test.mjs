@@ -34,11 +34,11 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { before, after, test } from 'node:test';
 
-import { createFixture, runBash, runCli } from './helpers/fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
-/** The library's path under the default `scriptsDir` — the contract, spelled out once. */
-const LIB_PATH = 'scripts/lib/harness-run-lib.sh';
+/** The library's path under the `scriptsDir` a configless `init` writes — the contract, spelled out once. */
+const LIB_PATH = `${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh`;
 
 /** Case (a)'s writer count — the task's floor of 24 separate processes. */
 const WRITERS = 24;
@@ -241,7 +241,7 @@ test('an odd count of key/value arguments, or none, writes nothing', async () =>
 test("the usage gate's paired write and a local pause classification both survive, every round", async (t) => {
   const fixture = await createWatcherFixture(t);
   if (fixture === null) return;
-  const watcher = join(fixture.dir, 'scripts/autonomous-watcher.sh');
+  const watcher = join(fixture.dir, INIT_SCRIPTS_DIR, 'autonomous-watcher.sh');
   const logPath = join(fixture.dir, 'sdlc-harness', 'autonomous_logs', `${fixture.branch}.log`);
   writeFileSync(join(fixture.dir, 'sdlc-harness', 'PAUSE_ACK'), '');
   const env = {
@@ -298,12 +298,12 @@ test("a remote-run.sh stop racing the watcher's writes loses neither, every roun
     XDG_CONFIG_HOME: join(dir, 'home', '.config'),
     XDG_STATE_HOME: join(dir, 'home', '.local', 'state'),
   };
-  const watcher = join(dir, 'scripts/autonomous-watcher.sh');
+  const watcher = join(dir, INIT_SCRIPTS_DIR, 'autonomous-watcher.sh');
 
   for (let round = 0; round < STOP_RACE_ROUNDS; round += 1) {
     writeFileSync(registry, `${JSON.stringify({ runs: { feat_x: { branch: 'feat_x', status: 'running' } } })}\n`);
     const [stop, ...writes] = await Promise.all([
-      runBash(dir, ['scripts/remote-run.sh', 'stop', 'feat_x'], env),
+      runBash(dir, [`${INIT_SCRIPTS_DIR}/remote-run.sh`, 'stop', 'feat_x'], env),
       ...Array.from({ length: STOP_RACE_WRITERS }, (_, i) =>
         runBash(dir, ['-c', '. "$1" status >/dev/null; registry_set feat_x "$2" "$3"', '_', watcher, `key_${i}`, `v_${i}`], env)),
     ]);

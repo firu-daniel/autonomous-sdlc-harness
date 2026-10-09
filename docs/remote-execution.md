@@ -88,10 +88,10 @@ The thick arrows are the only edges from this machine to GitHub, and each is a u
 
 Each command's dispatch is `chain: 0`, takes no cap slot and consults no lane. A refusal or a `gh` failure is reported by the command, and nothing retries it. A chain-0 `resume: answer` or `resume: pause` sets an existing remote record `running`; the next `sync` remains the record's authority. The local kill switch `AUTONOMOUS_STOP` gates none of these dispatches; the job-side brake is `HARNESS_REMOTE_STOP` (§3, *The kill switch and stopping*).
 
-To stop a run, with the default `scriptsDir` of `scripts`:
+To stop a run, with `scriptsDir` `harness-scripts` — what a fresh `init` writes; substitute yours:
 
 ```
-bash scripts/remote-run.sh stop <branch>
+bash harness-scripts/remote-run.sh stop <branch>
 ```
 
 ### Working a run from GitHub alone
@@ -544,10 +544,10 @@ gh variable set HARNESS_RUNNER --body <runner label>
 npx autonomous-sdlc-harness doctor --check-github
 ```
 
-**7. Only where docs retrieval is on: warm the cache** on the default branch, so the first job does not provision the retrieval runtime from nothing (§4). With the default `scriptsDir` of `scripts`:
+**7. Only where docs retrieval is on: warm the cache** on the default branch, so the first job does not provision the retrieval runtime from nothing (§4). With `scriptsDir` `harness-scripts` — what a fresh `init` writes; substitute yours:
 
 ```
-bash scripts/remote-run.sh warm
+bash harness-scripts/remote-run.sh warm
 ```
 
 The first drop after that runs remotely.
@@ -633,6 +633,17 @@ The last two are needed for the reason step 3 above gives: the `workflow` scope,
 **What it carries, and what it does not.**
 
 - **It carries** the resume poller's schedule: the `- cron:` lines of your `harness-resume.yml` go into the re-render.
+- **It carries 0.6.6's action pins and workflow hardening (§11) to two of the four workflows.** `--upgrade-workflows` re-renders `harness-run.yml` and `harness-resume.yml` at the new pins, each after a `.bak`:
+
+  ```
+  npx autonomous-sdlc-harness@<version> init --upgrade-workflows
+  ```
+
+  `harness-trigger.yml` and `harness-control.yml` take them only from the forced re-run, which regenerates every generated file after a `.bak`, as the bullet on those two files below says:
+
+  ```
+  npx autonomous-sdlc-harness@<version> init --force
+  ```
 - **It adds the `Open the draft pull request` step** to `harness-run.yml`, which opens the run's draft pull request when the run starts ([`github-run-control.md`](github-run-control.md) → `## 4. The draft pull request`). The step calls `remote-run.sh open`, a script verb this upgrade does not write: until the outer-loop scripts are re-rendered too, with `init --force` (below), the verb is missing, the `continue-on-error` step does nothing, and the pull request opens at completion as before. The step arrives with:
 
   ```
@@ -875,6 +886,17 @@ Light use fits inside a private repository's included minutes: the Free plan's 2
 **What a reader of the repository's Actions runs can see.** The `harness-state` artifact — the clarification questions and answers, `PAUSE_PROGRESS.md`, the readable run log, which quotes the code and commands the agents worked with, and the unconverged planning drafts and plan-review findings (§3, *Runs longer than a job*) — the job logs, the step summary and each run's inputs, including the `answers` a `/autonomous-sdlc-harness:branch-answer` dispatch carries, are readable by anyone who can read the repository's Actions runs. On a public repository that is everyone. With `forge` set to `github`, park questions, answers and review text also become comments on the issue or the pull request, public on a public repository.
 
 **Workflow inputs never become shell source.** Every input, variable and secret reaches a shell line through `env:`, never through a GitHub expression interpolated into `run:`, so an input shaped like a command is data (`harness-run.yml` → the header's `TWO RULES EVERY EDIT KEEPS`). Keep that rule in any edit you make to your copy.
+
+**The workflows are hardened against a moved tag, an over-broad token and a leaked checkout credential.** Each template's header holds the detail; the block it is in is named below.
+
+- **Every `uses:` names a commit SHA, not a tag**, with the release on the comment line above it. A tag is mutable, and these jobs hold write tokens, and some of them the Claude credential (`# ACTION PINS.`).
+- **Each job is granted only what its own steps run.** `permissions: {}` at workflow level grants nothing, and each job's own block sets every permission it does not list to `none`, so a job added later inherits nothing. `harness-run.yml`'s `wrong-ref` job gets no grant at all (`# THE PERMISSIONS.`).
+- **A checkout persists its credential only where its job uses it.** The `warm` checkout sets `persist-credentials: false`, because that job pushes nothing. The `run`, `collect`, `trigger` and `control` checkouts keep it, because those jobs push through `push-branch.sh` with it. The `poll` checkout keeps it, because `remote-run.sh`'s `remote_branch_exists` runs `git ls-remote … origin` through it, which a private repository refuses without it. No artifact carries a checkout's `.git/config`: `harness-run.yml`'s one upload sits under the runner's temp directory, `harness-resume.yml`'s `harness-poll-state` upload is `<stateDir>/autonomous_logs/poll_state/current`, and the other two files upload nothing (`# THE CHECKOUT CREDENTIAL.`, and `# THE CHECKOUT.` in `harness-trigger.yml`).
+- **What `zizmor --offline --no-config` still reports, and why each stands:**
+  - `artipacked` five times, once on each of the five checkouts above that keep their credential: each job pushes, or reads origin, through it.
+  - `adhoc-packages` twice, on `Install the claude CLI when absent` in `harness-run.yml` and in `harness-control.yml`: the latest CLI is wanted because the agent runner tracks the model API and `harness-control.yml` is never re-rendered by pin, and pinning a version does not clear the finding (`# THE CLAUDE CLI.`).
+
+  The templates carry no `zizmor` ignore comment and ship no `zizmor.yml`, deliberately: an audit run with `--no-config` reports these residuals, and the reason each stands is in the header beside it rather than in a suppression.
 
 **Who can spend the credential.** Only the people the allow-list `HARNESS_RUN_ACTORS` admits (§7 step 4). The comment commands, the issue trigger and a review round's collection check it in `remote-run.sh`, but the **Run workflow** form, `gh workflow run` and a re-run reach none of those checks, so the first step of `harness-run.yml`'s `run` job holds `github.triggering_actor` to the list and refuses anyone else before any credential step; `github-actions[bot]`, which every harness dispatch names, passes. A re-run of a trigger or control job replays the original event, whose sender the list already admitted, so `remote-run.sh` also holds that job's `GITHUB_TRIGGERING_ACTOR` to the list on any attempt after the first. The `collect` job opens with the same step. The gate is a step in each job rather than a job of its own because a partial re-run does not repeat an upstream job that succeeded, so a gate job would never see the re-runner ([`team-accounts-research.md`](team-accounts-research.md) → G2; `harness-run.yml` → the header's `THE RUN-ACTOR GATE`). The job-level `HARNESS_PUSH_URL` secret is resolved when the job starts, before the gate; it spends no credential. What the list cannot close is §9, *The residual risk, in both set-ups*.
 

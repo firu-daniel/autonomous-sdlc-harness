@@ -135,6 +135,12 @@ claude plugin install autonomous-sdlc-harness@autonomous-sdlc-harness
 npx autonomous-sdlc-harness init
 ```
 
+`init` writes its scripts into `harness-scripts/`, leaving a `scripts/` you already have untouched; a repository adopted by an earlier release keeps its scripts where they are. To pick another directory, run this instead ([`docs/cli.md`](docs/cli.md) §2):
+
+```bash
+npx autonomous-sdlc-harness init --scripts-dir tools/harness
+```
+
 **C. Teach it the codebase — once per repo, LLM-assisted (checklist step 3).** It fills the conventions documents from the repository's real code. It *proposes* a layer-profile revision and never writes `harness.config.json` itself. To run one target at a time, type this instead:
 
 ```
