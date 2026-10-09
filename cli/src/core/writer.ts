@@ -73,7 +73,7 @@
  * re-renders it; and `generators/githubWorkflows.ts` sets `'always'` on both workflows under
  * `init --upgrade-workflows` when `harness-run.yml`'s rendered CLI-version pin differs from this CLI's
  * (on `harness-resume.yml` only when its bytes differ from the re-render), and on
- * `harness-control.yml` on any `init` when its bytes are a release's unparseable copy. None of them is a further
+ * `harness-control.yml` on any `init` when its bytes are a release's unparsable copy. None of them is a further
  * row above — all keep `create-if-absent`, and every other forced run over them still replaces after
  * a `.bak`.
  *

@@ -189,12 +189,12 @@ function parseEntry(value: JsonValue | undefined): RegistryEntry | undefined {
  * The registry as it is on disk, or an empty one.
  *
  * **It fails open in every failure mode there is**: absent, unreadable (a permission bit, a bad
- * mount), unparseable, not a JSON object, `repos` not an object, or a `schema` this release does not
+ * mount), unparsable, not a JSON object, `repos` not an object, or a `schema` this release does not
  * recognise all read as "no repositories are registered" rather than throwing. A machine-scoped file
  * must not be able to stop a repository-scoped command, and this one is not consulted before
  * starting a run, so there is nothing a fault here could correctly block.
  *
- * That is the opposite of `readJsonFile`'s own contract, which throws on unparseable JSON so a later
+ * That is the opposite of `readJsonFile`'s own contract, which throws on unparsable JSON so a later
  * create-if-absent write cannot clobber a file the adopter merely mistyped. The trade is different
  * here and worth stating: an unreadable registry **is** rewritten by the next
  * {@link upsertRepository}, and that is acceptable because this file is *derived* state — every

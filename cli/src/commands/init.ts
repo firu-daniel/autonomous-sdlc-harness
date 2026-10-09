@@ -46,7 +46,7 @@
  *
  * ## The refusals, and why they come before the plan is built
  *
- * `init` is a writer aimed at a repository, so a mis-scoped run is destructive rather than merely
+ * `init` is a writer aimed at a repository, so a wrongly scoped run is destructive rather than merely
  * wrong. All three preconditions are **settled** before a single generator is called — two by a
  * check the flags alone answer, the third by an answer (the flag, a prompt on a terminal, or the
  * non-interactive default) — and that is the property the ordering exists for: a plan that is never
@@ -2020,7 +2020,7 @@ function isDirectory(path: string): boolean {
  *
  * **The two bad-value arms are deliberately asymmetric, and that asymmetry is the point.** A
  * flag-sourced value outside the repository keeps `DetectContext`'s hard refusal — it is a typo
- * or a mis-scoped invocation, and this function does not screen it. Anything **config**-sourced —
+ * or a wrongly scoped invocation, and this function does not screen it. Anything **config**-sourced —
  * a value that cannot be used, and equally a file that cannot be read at all — falls back to `.`
  * with a warning instead: `--reset-config` is the documented route to repair a broken configuration,
  * so a refusal sourced from the very file being rebuilt would make a repository with a bad `appDir`
@@ -2669,7 +2669,7 @@ function reportWorkflowUpgrade(
 }
 
 /**
- * What `init` did about a `harness-control.yml` a release wrote unparseable; which copy is replaced,
+ * What `init` did about a `harness-control.yml` a release wrote unparsable; which copy is replaced,
  * and when, is the generator's decision (`generators/githubWorkflows.ts`, choice 6), and this only
  * reports it.
  *
