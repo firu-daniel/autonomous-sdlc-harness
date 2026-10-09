@@ -53,7 +53,7 @@
  *    and nothing else in the package enforces it: `doctor` reads installed units with regular
  *    expressions by deliberate choice, and Apple's own linters accept a comment holding a `--`.
  * 4. **The shell half of that derivation is compared against this one, in a subprocess.**
- *    `hr_repo_slug` in the generated `scripts/lib/harness-run-lib.sh` keys the watcher, the notifier
+ *    `hr_repo_slug` in the generated `<scriptsDir>/lib/harness-run-lib.sh` keys the watcher, the notifier
  *    and the machine-level usage lane on the same slug this daemon's label carries, and nothing but
  *    a test that runs both can stop the two implementations drifting apart. It is the reason the
  *    table above is a table: every row is put through both halves.
@@ -79,7 +79,7 @@ import { delimiter, dirname, join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 
-import { createFixture, readJson, runCli, snapshotTree, PACKAGE_ROOT } from './helpers/fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, readJson, runCli, snapshotTree, PACKAGE_ROOT } from './helpers/fixture.mjs';
 
 /** A compiled module of the CLI, imported for the answers a subprocess cannot be asked for. */
 async function loadCompiled(relativePath) {
@@ -105,14 +105,15 @@ const NO_BACKEND = BACKEND.kind === 'none' ? `this host has no service manager: 
 const FIXTURE_WATCHER = 'tools/fixture-watcher.sh';
 
 /**
- * Where `init` writes the run watcher, spelled as a literal for the reason in the module header:
- * the schema's default `scriptsDir` and the watcher's file name are the contract the daemon resolves,
- * and re-deriving them from the CLI's own tables would prove only that it agrees with itself.
+ * Where a configless `init` writes the run watcher. The file name is a literal for the reason in the
+ * module header: it is the contract the daemon resolves, and re-deriving it from the CLI's own
+ * tables would prove only that it agrees with itself. The directory is `INIT_SCRIPTS_DIR`, the
+ * `scriptsDir` that `init` writes into a config it generated: no wired fixture here seeds one.
  */
-const WATCHER_IN_REPO = 'scripts/autonomous-watcher.sh';
+const WATCHER_IN_REPO = `${INIT_SCRIPTS_DIR}/autonomous-watcher.sh`;
 
-/** Where `init` writes the shell half of the slug derivation, under the default `scriptsDir`. */
-const LIB_IN_REPO = 'scripts/lib/harness-run-lib.sh';
+/** Where a configless `init` writes the shell half of the slug derivation. */
+const LIB_IN_REPO = `${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh`;
 
 /** The fixed halves of the two identities — everything about them that is not the repository. */
 const LAUNCHD_LABEL_PREFIX = 'com.autonomous-sdlc-harness.watcher.';
@@ -531,7 +532,7 @@ test('a checkout path with a space, a % or a quote is escaped for the directive 
   const systemd = unitFor('systemd', repoRoot, { unitDir: '/home/ada/.config/systemd/user' });
   const directive = (name) => systemd.text.split('\n').find((line) => line.startsWith(`${name}=`));
 
-  assert.equal(directive('ExecStart'), 'ExecStart=/bin/bash "/home/ada/100%% mine/my \\"repo\\"/scripts/autonomous-watcher.sh"');
+  assert.equal(directive('ExecStart'), `ExecStart=/bin/bash "/home/ada/100%% mine/my \\"repo\\"/${WATCHER_IN_REPO}"`);
   assert.equal(directive('WorkingDirectory'), 'WorkingDirectory=/home/ada/100%% mine/my "repo"');
   assert.equal(directive('StandardOutput'), 'StandardOutput=append:/home/ada/100%% mine/my "repo"/sdlc-harness/autonomous_logs/watcher.out.log');
 
