@@ -20,7 +20,7 @@
 
 **Work:**
 
-- [ ] **`docs/remote-execution.md` → the two script commands** (story index → `## Scope register`, rows 2, 3, 9 and 13). "To stop a run, with the default `scriptsDir` of `scripts`:" and step 7's "With the default `scriptsDir` of `scripts`" become "with `scriptsDir` `harness-scripts` — what a fresh `init` writes; substitute yours". Their fenced commands become:
+- [x] **`docs/remote-execution.md` → the two script commands** (story index → `## Scope register`, rows 2, 3, 9 and 13). "To stop a run, with the default `scriptsDir` of `scripts`:" and step 7's "With the default `scriptsDir` of `scripts`" become "with `scriptsDir` `harness-scripts` — what a fresh `init` writes; substitute yours". Their fenced commands become:
 
   ```
   bash harness-scripts/remote-run.sh stop <branch>
@@ -31,20 +31,20 @@
   ```
 
   Each stays one command in its own fenced block (`harness-runs/lessons.md` → `## Adopter-facing documentation`).
-- [ ] **`docs/remote-execution.md` → `### Upgrading`.** Add what reaches an already-wired repository in 0.6.6:
+- [x] **`docs/remote-execution.md` → `### Upgrading`.** Add what reaches an already-wired repository in 0.6.6:
   - `--upgrade-workflows` re-renders `harness-run.yml` and `harness-resume.yml` at the new pins, after a `.bak`;
   - `harness-trigger.yml` and `harness-control.yml` take them only from `init --force`, which regenerates every generated file after a `.bak`, as the section already says.
 
   Give each command in its own fenced block.
-- [ ] **`docs/remote-execution.md` → `## 11. Security`.** Add a paragraph, or a short list, on the workflow hardening, citing the headers rather than restating each grant:
+- [x] **`docs/remote-execution.md` → `## 11. Security`.** Add a paragraph, or a short list, on the workflow hardening, citing the headers rather than restating each grant:
   - why a SHA rather than a tag;
   - least-privilege grants per job;
   - which checkouts persist a credential and why;
   - the residual findings an adopter's `zizmor --offline --no-config` will report, with the one-line reason each stands.
 
   State plainly that the templates carry no `zizmor` ignore comment, because an adopter runs the audit with `--no-config`.
-- [ ] **`docs/retrieval.md`.** Change the `.mcp.json` example's `"args": ["scripts/docs-search-server.sh"]` to `"args": ["harness-scripts/docs-search-server.sh"]` (row 14). The sentence after it, "`command`, `args` and `type` are `init`'s and already correct for your configured `scriptsDir`", stays.
-- [ ] **Leave the recorded measurements alone.** Rows 10–12, 15 and 16 of the register are this repository's own scripts or recorded Gate 10 measurements, and stay byte-identical: the `scripts/probe-plugin-cli.sh` citations, the `scripts/tag-release.sh` sentence, "Two environment faults the run hit" and the `## Still open` item.
+- [x] **`docs/retrieval.md`.** Change the `.mcp.json` example's `"args": ["scripts/docs-search-server.sh"]` to `"args": ["harness-scripts/docs-search-server.sh"]` (row 14). The sentence after it, "`command`, `args` and `type` are `init`'s and already correct for your configured `scriptsDir`", stays.
+- [x] **Leave the recorded measurements alone.** Rows 10–12, 15 and 16 of the register are this repository's own scripts or recorded Gate 10 measurements, and stay byte-identical: the `scripts/probe-plugin-cli.sh` citations, the `scripts/tag-release.sh` sentence, "Two environment faults the run hit" and the `## Still open` item.
 
 **Verification:**
 

@@ -34,7 +34,7 @@
   "harness-docs": {
     "type": "stdio",
     "command": "bash",
-    "args": ["scripts/docs-search-server.sh"],
+    "args": ["harness-scripts/docs-search-server.sh"],
     "env": { "AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_LOG": "/absolute/path/to/docs-queries.jsonl" }
   }
   ```
