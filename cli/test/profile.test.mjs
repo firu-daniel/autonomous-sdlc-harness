@@ -60,6 +60,7 @@ import { pathToFileURL } from 'node:url';
 
 import {
   createFixture,
+  INIT_SCRIPTS_DIR,
   plantModelFiles,
   plantRetrievalRuntime,
   readJson,
@@ -95,7 +96,11 @@ const { pluginScriptsDir } = await built('machine/plugins.js');
 const PROFILE_FILE = '.claude/settings.autonomous.json';
 const PROFILE_TEMPLATE = join(PACKAGE_ROOT, 'templates', 'claude', 'settings.autonomous.json');
 
-/** The configured directories, at their documented defaults. */
+/**
+ * The absent-key `scriptsDir`. Stays `scripts` on purpose: every case using it either hands the value
+ * to `renderProfile` itself or seeds it in `harness.config.json`. A configless `init` writes
+ * `INIT_SCRIPTS_DIR` instead.
+ */
 const SCRIPTS_DIR = 'scripts';
 
 /** A `scriptsDir` that is neither the default nor a single segment, so a naive join would show. */
@@ -261,9 +266,9 @@ function worktreeGlobFor(dir) {
  * to have an allow entry, which is the opposite of what the table says about the rows that mutate
  * checkouts. Their pairing is the table-driven test below; this one is about wrappers.
  */
-async function writtenWrappers(dir) {
+async function writtenWrappers(dir, scriptsDir = INIT_SCRIPTS_DIR) {
   const outerLoop = OUTER_LOOP_SCRIPTS.map((script) => script.file);
-  const found = await readdir(join(dir, SCRIPTS_DIR), { withFileTypes: true });
+  const found = await readdir(join(dir, scriptsDir), { withFileTypes: true });
   return found
     .filter((entry) => entry.isFile() && entry.name.endsWith('.sh'))
     .map((entry) => entry.name)
@@ -326,7 +331,7 @@ test('every wrapper that was written is allow-listed for this checkout and for a
   for (const name of written) {
     // A run executing in a second working copy that matches neither form does not fail loudly: it
     // silently skips whatever phase needed the path.
-    for (const form of [join(dir, SCRIPTS_DIR, name), join(worktreeGlob, SCRIPTS_DIR, name)]) {
+    for (const form of [join(dir, INIT_SCRIPTS_DIR, name), join(worktreeGlob, INIT_SCRIPTS_DIR, name)]) {
       assert.ok(
         allow.some((entry) => entry.includes(form)),
         `no allow entry names ${form}`,
@@ -345,12 +350,12 @@ function expectedForms({ repoRoot, worktreeGlob, scriptsDir, relative }) {
 }
 
 test('an outer-loop script an agent runs is allow-listed in three forms, and every other one is named nowhere', async (t) => {
-  // Both a default `scriptsDir` and a relocated multi-segment one: the second is where a naive join
-  // or a hand-formatted invocation would show, and it is the case an adopter who moved the directory
-  // has.
-  for (const scriptsDir of [SCRIPTS_DIR, RELOCATED_SCRIPTS_DIR]) {
+  // Both the directory a configless `init` writes and a relocated multi-segment one: the second is
+  // where a naive join or a hand-formatted invocation would show, and it is the case an adopter who
+  // moved the directory has.
+  for (const scriptsDir of [INIT_SCRIPTS_DIR, RELOCATED_SCRIPTS_DIR]) {
     await t.test(`scriptsDir ${scriptsDir}`, async (subtest) => {
-      const seeded = scriptsDir === SCRIPTS_DIR ? {} : { 'harness.config.json': seededConfig({ scriptsDir }) };
+      const seeded = scriptsDir === INIT_SCRIPTS_DIR ? {} : { 'harness.config.json': seededConfig({ scriptsDir }) };
       const { dir, profile } = await profileFor(subtest, [], seeded);
       const worktreeGlob = worktreeGlobFor(dir);
       const everyEntry = allEntries(profile);
@@ -412,7 +417,7 @@ test('the scratch runner is allow-listed in exactly its three forms, and asked a
     expectedForms({
       repoRoot: dir,
       worktreeGlob: worktreeGlobFor(dir),
-      scriptsDir: SCRIPTS_DIR,
+      scriptsDir: INIT_SCRIPTS_DIR,
       relative: SCRATCH_FILE,
     }).sort(),
     `${SCRATCH_FILE} is not allow-listed in the repo-relative, repo-root-absolute and sibling-worktree forms`,
@@ -834,12 +839,14 @@ test('a plugin root reads back out of either entry form, and an entry naming no 
     }
   });
 
-  const { dir, profile } = await profileFor(t);
+  // Seeded at `scripts`, the absent-key value: only there does a wrapper's repo-root-absolute entry
+  // collide with the plugin-helper form, which is the collision the read-back below pins.
+  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
   const allow = entries(profile, 'allow');
   const worktreeGlob = worktreeGlobFor(dir);
 
   await t.test('the repository root, out of the two entries init really wrote', async () => {
-    const [wrapper] = await writtenWrappers(dir);
+    const [wrapper] = await writtenWrappers(dir, SCRIPTS_DIR);
     assert.ok(wrapper !== undefined, 'this fixture wrote no wrapper, so there is no generated entry to read back');
 
     for (const entry of [readRule(dir), bashScriptRule(join(dir, SCRIPTS_DIR, wrapper))]) {

@@ -1311,6 +1311,7 @@ The extraction also produced corrections that changed only what a shipped file *
 | two guards' published **FAIL-CLOSED headers** and one `deny` reason string, which listed an absent `jq` as `ask` and an unreadable configuration as the unresolvable-configuration arm | same matrix, same run; comment and reason text at constant line count |
 | `docs/development.md`'s contributor-facing "must never produce an `allow`" invariant, which listed four conditions of which three measure otherwise | same matrix; the two near neighbours are now named rather than folded in |
 | §1.4's multi-document row for the rewrite guard, which read SILENT in all three columns because its probe carried the `rm -r-f` stand-in that guard refuses outright | re-driven with the plain `rm <tracked>` §0 asks for; the row moves and the prose count moves with it |
+| the spellings `typos` flagged in three guards' header comments — "payload unparseable" → "payload unparsable" in the outcome tables of `git-commit-branch-guard.sh` and `autonomous-protected-branch-guard.sh`, and "got mis-split into fragments" → "got split wrongly into fragments" in `autonomous-script-allowlist-guard.sh` | comment text only, at constant line count; `git diff -U0 -- plugin/hooks` against the branch base shows only `#` lines, so no arm and no cell of any matrix moves |
 
 None of these is a row of §3.1–§3.6, and none may be turned into one by a later reading. A correction that *would* move a cell is not a documentation correction.
 

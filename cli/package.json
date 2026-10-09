@@ -1,6 +1,6 @@
 {
   "name": "autonomous-sdlc-harness",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "The outer loop of the autonomous SDLC harness: init, doctor, config and daemon management for the harness Claude Code plugin, plus opt-in local docs retrieval.",
   "license": "Apache-2.0",
   "author": "firu-daniel",

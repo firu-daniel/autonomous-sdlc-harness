@@ -52,6 +52,7 @@ async function reproFixture(t) {
   await runGit(d, ['config', 'user.name', 'fixture']);
   await runGit(d, ['remote', 'add', 'origin', b]);
   await writeFile(join(d, 'harness.config.json'), JSON.stringify(CONFIG), 'utf8');
+  // `scripts` stays on purpose: `CONFIG` omits `scriptsDir`, whose absent-key value this copy matches.
   await mkdir(join(d, 'scripts', 'lib'), { recursive: true });
   for (const name of ['create-worktree.sh', 'setup-worktree.sh', 'lib/harness-run-lib.sh']) {
     await cp(join(TEMPLATE_SCRIPTS, name), join(d, 'scripts', name));

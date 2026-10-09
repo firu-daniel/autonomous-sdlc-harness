@@ -165,7 +165,7 @@ export function readTemplate(relativePath: string): string {
 /**
  * Whether `candidate` resolves to the repository root or somewhere beneath it.
  *
- * The write engine asks this before every write, so a mis-scoped run cannot escape the
+ * The write engine asks this before every write, so a wrongly scoped run cannot escape the
  * repository it was aimed at, and `doctor` asks it of the configured directories. The check is
  * **lexical** — it compares resolved paths and does not follow symlinks — so it answers "does
  * this path name a location inside the repo", not "does this file physically live there".

@@ -21,6 +21,12 @@
  * the flag's contract exists before its producer does, and a run given `--transcript` before that
  * module lands is refused by name rather than assumed away.
  *
+ * `--backend python` opens its session through `evals/docs-retrieval/python-backend.mjs` →
+ * `openPythonSession`, loaded by a **dynamic** `import()` on that branch alone: a run naming no
+ * backend, or `typescript`, never loads it, so a machine with no Docker and no Python weights runs
+ * gate 11 exactly as it did before that module existed. Every other backend label builds the
+ * in-process index through `buildIndex`, and both sessions are scored by the same `scoreArm`.
+ *
  * Nothing here is reached by a bare `node evals/…` tool call, which matches no entry in the
  * unattended permission profile and stalls the run. The two routes are
  * `bash scripts/scratch-run.sh <file under harness-runs/scratch/>` and a command inside
@@ -33,6 +39,7 @@ import { basename, isAbsolute, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ARMS, NAVIGATION_VARIANTS, navigationVariant, runArm, selectArms } from './arms.mjs';
+import { backendFor } from './backends.mjs';
 import { corpusConfig } from './corpora.mjs';
 import { buildIndex } from './index-build.mjs';
 import { scoreArm } from './metrics.mjs';
@@ -101,14 +108,19 @@ function queriesProvenancePath({ checkout, repo, queries }) {
  * One eval pass. `options` is `evals/docs-retrieval/args.mjs` → `parseArgs`'s shape.
  *
  * Returns the corpus result object every downstream reader takes its figures from — the arms with
- * their metrics and per-query records, and **`snapshot`, set from the `{ files, chunks }` object
- * `buildIndex` returned and passed through unchanged**, so a caller gets the corpus stamp with the
+ * their metrics and per-query records, `backend` (the checked `--backend` label, or `undefined`), and
+ * **`snapshot`, set from the `{ files, chunks }` object the session — `buildIndex`'s or
+ * `openPythonSession`'s — returned and passed through unchanged**, so a caller gets the corpus stamp with the
  * figures rather than deriving one of its own.
  *
  * With `out` it rewrites that file's marked region and writes nothing else. With no `out` it writes
  * nothing at all and prints the arm table and the labelled snapshot stamp to stdout.
  */
 export async function runEval(options) {
+  const backend = options.backend === undefined ? undefined : backendFor(options.backend);
+  if (backend === 'python' && options.dataDir !== undefined) {
+    throw new Error('eval: --data-dir refused with --backend python: the Python index lives in its Postgres database, not in a directory');
+  }
   const transcripts = orderedTranscripts(options.transcripts);
   const queriesPath = queriesProvenancePath(options);
   if (queriesPath === undefined && options.out !== undefined) {
@@ -127,7 +139,13 @@ export async function runEval(options) {
     corpusId: options.corpusId,
   });
 
-  const session = await buildIndex({ repoRoot, config, dataDir: options.dataDir });
+  let session;
+  if (backend === 'python') {
+    const { openPythonSession } = await import('./python-backend.mjs');
+    session = await openPythonSession({ checkout: options.checkout, resolved: { id, config, repoRoot } });
+  } else {
+    session = await buildIndex({ repoRoot, config, dataDir: options.dataDir });
+  }
   try {
     const queries = loadQueries(options.queries);
     assertLabelsResolve(queries, session.chunkKeys, id);
@@ -158,6 +176,7 @@ export async function runEval(options) {
 
     const corpus = {
       id,
+      backend,
       config,
       repoRoot,
       snapshot: session.snapshot,

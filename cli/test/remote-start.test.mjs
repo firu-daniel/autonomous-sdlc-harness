@@ -21,9 +21,9 @@ import { rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 
-import { createFixture, runBash, runCli, runGit } from './helpers/fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
-const SCRIPT = 'scripts/remote-run.sh';
+const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
 const STATE_DIR = 'sdlc-harness';
 const REGISTRY = `${STATE_DIR}/autonomous_logs/registry.json`;
 const PROMPT_REL = `${STATE_DIR}/task_prompts/feat_x_task_prompt.md`;
@@ -254,7 +254,7 @@ test('a push that lands while refs/remotes/origin/feat_x stays behind is a landi
   // Pushes by origin's path, so the push lands without updating the tracking ref, as a push the
   // server committed but reported as failed would leave it.
   writeFileSync(
-    join(f.dir, 'scripts', 'push-branch.sh'),
+    join(f.dir, INIT_SCRIPTS_DIR, 'push-branch.sh'),
     `#!/bin/sh
 git -C "$1" push --quiet --no-verify '${f.origin}' HEAD:refs/heads/feat_x
 exit 0

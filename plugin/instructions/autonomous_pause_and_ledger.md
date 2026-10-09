@@ -404,7 +404,7 @@ prescribes — edit the recorded block and the markers it seeded, then resume; a
 mid-branch, so the operator restores the recorded `phases:` line and its markers, or re-seeds the ledger
 deliberately; or the entry is stale for a fourth reason the operator names. **The fork never edits a marker to clear its own check**, which would make
 the check self-satisfying; §1.5 already bars writing `[x]` over a phase that never ran, and correcting a
-mis-seeded entry is a seeding fix, not a flip.
+wrongly seeded entry is a seeding fix, not a flip.
 
 **Cost, and interaction with the invariants.** The check is a read of one short committed file the fork
 already opens on every (re-)entry (§1.7), plus `harness.config.json`. It dispatches nothing, so it touches no `MAX_TOTAL_DISPATCHES`

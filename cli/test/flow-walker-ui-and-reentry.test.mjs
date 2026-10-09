@@ -26,6 +26,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { INIT_SCRIPTS_DIR } from './helpers/fixture.mjs';
 import { run, walk, walkerFixture, walkerStatePath, walkerUnavailable, WALKER_FLOW } from './helpers/walker.mjs';
 
 const SKIP = walkerUnavailable();
@@ -346,7 +347,7 @@ test('(12) a lib/harness-run-lib.sh older than the walker is refused at start, n
   const dir = await fixture(t, { parity: false, qa: false });
   // `init` writes the library create-if-absent, so an adoption from before the walker keeps a copy
   // with no `hr_phase_enabled`.
-  const lib = join(dir, 'scripts', 'lib', 'harness-run-lib.sh');
+  const lib = join(dir, INIT_SCRIPTS_DIR, 'lib', 'harness-run-lib.sh');
   await writeFile(lib, readFileSync(lib, 'utf8').replace('hr_phase_enabled() {', 'hr_phase_enabled_absent() {'));
 
   const result = await walk(dir, ['start', ...flags('--skipped', 'none')]);

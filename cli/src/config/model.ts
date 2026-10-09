@@ -226,6 +226,10 @@ export interface HarnessConfig {
  * key, so a fresh `init` file is unchanged, and {@link remoteExecutionApplies} falls back to
  * `execution.target` below instead.
  *
+ * `scriptsDir` is the one key whose generated value differs from its default: `init` writes
+ * {@link INIT_SCRIPTS_DIR}, while the value here stays the absent-key meaning every reader falls
+ * back to, so a configuration that omits the key keeps finding its scripts where they already are.
+ *
  * `as const` makes these literals, so a caller copies rather than aliases them —
  * `[...DEFAULTS.protectedBranches]`, `{ ...DEFAULTS.phases }` — and no generator can mutate the
  * defaults out from under the next one.
@@ -244,6 +248,16 @@ export const DEFAULTS = {
   qa: { driver: 'web-playwright', portSeed: 3001 },
   execution: { target: 'local', progressComments: true },
 } as const;
+
+/**
+ * The `scriptsDir` `init` writes into a configuration it generates.
+ *
+ * Deliberately not {@link DEFAULTS}`.scriptsDir`, which mirrors the schema `default` and so is the
+ * **absent-key** meaning: the directory every release before 0.6.6 wrote into, and still where a
+ * configuration that omits the key keeps its scripts. Changing that meaning would strand those
+ * scripts silently.
+ */
+export const INIT_SCRIPTS_DIR = 'harness-scripts';
 
 /**
  * The schema's `forge` `enum`, mirrored verbatim: the code-hosting platforms the flow knows.

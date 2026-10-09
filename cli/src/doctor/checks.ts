@@ -1766,7 +1766,7 @@ function pidIsAlive(pid: JsonValue | undefined): boolean {
  * bare pid walk there would count a `parked`, `paused` or `failed` record whose pid happens to have
  * been reused.
  *
- * An absent, unreadable or unparseable registry counts `0`: this is a report, and a repository whose
+ * An absent, unreadable or unparsable registry counts `0`: this is a report, and a repository whose
  * artifact tree cannot be read is better described as "none observed" than as a fault. It reads one
  * file and writes nothing.
  */
@@ -4317,23 +4317,23 @@ const IGNORE_RULES_CHECK: Check = {
     // Hidden with its negation still in the block, hidden with no negation left at all, and not
     // answered — three states with three different sentences to write.
     const shadowed: string[] = [];
-    const unexcepted: string[] = [];
+    const unlisted: string[] = [];
     const untested: string[] = [];
     for (const readme of contractFiles) {
       const verdict = pathIsIgnored(ctx.repoRoot, readme);
       if (verdict === undefined) untested.push(readme);
-      else if (verdict) (negated.has(readme) ? shadowed : unexcepted).push(readme);
+      else if (verdict) (negated.has(readme) ? shadowed : unlisted).push(readme);
     }
 
-    const hidden = [...shadowed, ...unexcepted];
+    const hidden = [...shadowed, ...unlisted];
     if (hidden.length > 0) {
       const one = hidden.length === 1;
       const remedies = [
         shadowed.length > 0
           ? `${nameList(shadowed)} ${shadowed.length === 1 ? 'is' : 'are'} excepted by a \`!\` negation the block still carries, and some rule in force matches the path *after* it — git resolves a path by the **last** pattern that matches, so the exception is inert: put the directory's contents rule — \`<dir>/*\` — back **above** its negation inside the managed block in ${path}, or delete the superseded rule that shadows it. No re-run removes or moves a line, so that edit is by hand`
           : '',
-        unexcepted.length > 0
-          ? `the managed block carries no \`!<path>\` negation for ${nameList(unexcepted)} at all: the line that excepts ${unexcepted.length === 1 ? "this directory's" : "these directories'"} committed contract file is missing from ${path}. Re-run \`${CLI} init\`, which merges it back in at its position inside the block`
+        unlisted.length > 0
+          ? `the managed block carries no \`!<path>\` negation for ${nameList(unlisted)} at all: the line that excepts ${unlisted.length === 1 ? "this directory's" : "these directories'"} committed contract file is missing from ${path}. Re-run \`${CLI} init\`, which merges it back in at its position inside the block`
           : '',
       ].filter((part) => part !== '');
       return fail(
@@ -5214,7 +5214,7 @@ function lastNonEmptyLine(output: string): string | undefined {
  *
  * **`spawnSync` rather than `execFileSync`**, for the reason `cli/src/commands/doctor.ts` →
  * `runNotifier` states: `execFileSync` returns stdout and surfaces a child's stderr on the error path
- * only, and the child's corpus-coverage warnings — an unset or mis-spelled `docs.root`, a missing
+ * only, and the child's corpus-coverage warnings — an unset or misspelled `docs.root`, a missing
  * conventions document — are printed on stderr by a run that **succeeds**. This is the one check an
  * adopter runs to answer "is retrieval set up correctly?", so a build over a corpus missing the whole
  * documentation catalog must not read as an unqualified pass.

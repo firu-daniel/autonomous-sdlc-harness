@@ -106,9 +106,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 
-import { createFixture, runBash, runCli, runGit, snapshotTree } from './helpers/fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit, snapshotTree } from './helpers/fixture.mjs';
 
-const SCRIPT = 'scripts/remote-run.sh';
+const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
 const STATE_DIR = 'sdlc-harness';
 const REGISTRY = `${STATE_DIR}/autonomous_logs/registry.json`;
 const CLARIFY_DIR = `${STATE_DIR}/clarifications/feat_x`;
@@ -1012,7 +1012,7 @@ test('save after a job-mode status write produces the full layout and a job-summ
   const fx = await remoteFixture(t);
   remoteRecord(fx, { status: 'parked', engine: 'task' });
   const wrote = await runBash(fx.dir, ['-c',
-    '. scripts/lib/harness-run-lib.sh && hr_remote_status_write "$1" feat_x "$2" stop "parked | on a question"',
+    `. ${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh && hr_remote_status_write "$1" feat_x "$2" stop "parked | on a question"`,
     '_', REGISTRY, REMOTE_STATUS]);
   assert.equal(wrote.status, 0, wrote.stderr);
   mkdirSync(join(fx.dir, CLARIFY_DIR), { recursive: true });
@@ -1088,7 +1088,7 @@ function pendingNode(stdout) {
 async function saveJob(fx) {
   remoteRecord(fx, { status: 'paused', engine: 'task' });
   const wrote = await runBash(fx.dir, ['-c',
-    '. scripts/lib/harness-run-lib.sh && hr_remote_status_write "$1" feat_x "$2" stop "paused mid-planning"',
+    `. ${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh && hr_remote_status_write "$1" feat_x "$2" stop "paused mid-planning"`,
     '_', REGISTRY, REMOTE_STATUS]);
   assert.equal(wrote.status, 0, wrote.stderr);
   const out = join(fx.dir, STATE_DIR, 'stub', 'out');
@@ -1107,9 +1107,9 @@ function restoreFrom(fx, out, headSha = undefined) {
 
 test('a walk paused mid-planning in one checkout continues in a fresh one, its pending reviewer\'s story index on disk', async (t) => {
   const a = await remoteFixture(t);
-  const started = await runBash(a.dir, ['scripts/flow-walker.sh', 'start', ...WALK, '--skipped', 'none']);
+  const started = await runBash(a.dir, [`${INIT_SCRIPTS_DIR}/flow-walker.sh`, 'start', ...WALK, '--skipped', 'none']);
   assert.equal(started.status, 0, started.stderr);
-  const advanced = await runBash(a.dir, ['scripts/flow-walker.sh', 'next', ...WALK, '--outcome', 'returned', '--skipped', 'none']);
+  const advanced = await runBash(a.dir, [`${INIT_SCRIPTS_DIR}/flow-walker.sh`, 'next', ...WALK, '--outcome', 'returned', '--skipped', 'none']);
   assert.equal(advanced.status, 0, advanced.stderr);
   const pending = pendingNode(advanced.stdout);
   assert.equal(pending, 'architecture_review');
@@ -1126,7 +1126,7 @@ test('a walk paused mid-planning in one checkout continues in a fresh one, its p
   for (const draft of [STORY_INDEX, TASK_DRAFT]) {
     assert.deepEqual(readFileSync(join(b.dir, draft)), readFileSync(join(a.dir, draft)));
   }
-  const current = await runBash(b.dir, ['scripts/flow-walker.sh', 'current', ...WALK]);
+  const current = await runBash(b.dir, [`${INIT_SCRIPTS_DIR}/flow-walker.sh`, 'current', ...WALK]);
   assert.equal(current.status, 0, current.stderr);
   assert.match(current.stdout, /^action: dispatch$/m);
   assert.equal(pendingNode(current.stdout), pending);
@@ -1140,7 +1140,7 @@ test('a walk paused mid-planning in one checkout continues in a fresh one, its p
   const control = await restoreFrom(c, bare);
   assert.equal(control.status, 0, control.stderr);
   assert.doesNotMatch(control.stdout, /planning file/);
-  const controlCurrent = await runBash(c.dir, ['scripts/flow-walker.sh', 'current', ...WALK]);
+  const controlCurrent = await runBash(c.dir, [`${INIT_SCRIPTS_DIR}/flow-walker.sh`, 'current', ...WALK]);
   assert.equal(controlCurrent.status, 0, controlCurrent.stderr);
   assert.equal(pendingNode(controlCurrent.stdout), pending);
   assert.equal(existsSync(join(c.dir, STORY_INDEX)), false);
@@ -1171,7 +1171,7 @@ test('restore keeps a planning file the fresh checkout already carries, and repo
 // continue and poll — closing the loop without the local machine.
 // ---------------------------------------------------------------------------
 
-const NOTIFY = 'scripts/autonomous-notify.sh';
+const NOTIFY = `${INIT_SCRIPTS_DIR}/autonomous-notify.sh`;
 const THIS_RUN = { GITHUB_RUN_ID: '900', GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'o/r' };
 /** The job running `continue`: run 900, still in progress, the newest `harness run feat_x`. */
 const CURRENT_RUN = ghRun(900, 'in_progress', 5);

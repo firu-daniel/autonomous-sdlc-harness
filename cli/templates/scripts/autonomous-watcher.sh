@@ -249,7 +249,7 @@
 # would watch a directory nobody drops files into, log where nobody tails, and
 # honor a kill switch nobody can reach — silently, for as long as it runs. So an
 # unreadable library, a location outside a repository, or a `harness.config.json`
-# that is absent, unparseable, multi-document, missing `defaultBranch` or beyond
+# that is absent, unparsable, multi-document, missing `defaultBranch` or beyond
 # the `jq` floor ends the process with ONE line on stderr and a non-zero status,
 # before anything is created. Those lines go to stderr rather than to the watcher
 # log, because the log's location is exactly what could not be resolved; the
@@ -1574,7 +1574,7 @@ EOF
 
 # The report itself: every registered repository with its state, model, effort,
 # live-run count and per-repository cap, then one summary. Reading fails open in
-# §7's sense — absent, unreadable, unparseable, non-object or unrecognised-schema
+# §7's sense — absent, unreadable, unparsable, non-object or unrecognised-schema
 # reads as "no repositories are registered", and a malformed entry is dropped
 # rather than hiding the rest. Never a shell error, never a non-zero status,
 # never a write.
@@ -2001,7 +2001,7 @@ ${GLOBAL_STOP}. End at 'branch ready for review' — never merge, never push to 
   # an --add-dir, because a job session was refused reads under a root the profile
   # file already granted. `init` stays the one producer of the list. File order;
   # an empty entry and one equal to the two directories already passed are
-  # skipped. An absent, unparseable or keyless profile adds nothing and never
+  # skipped. An absent, unparsable or keyless profile adds nothing and never
   # blocks the launch — `doctor --remote-job` refuses an unusable profile earlier.
   local extra_dir_args extra_dirs_logged
   extra_dir_args=()
@@ -3106,7 +3106,7 @@ remote_commit_and_push() {
 #   ^(.+)_docs\.md$              -> docs        engine, a fresh working copy
 #
 # The library owns these patterns and their order: `hr_inbox_route_var` in
-# lib/harness-run-lib.sh, whose comment states why they cannot mis-route.
+# lib/harness-run-lib.sh, whose comment states why they cannot misroute.
 #
 # A filename matching none of the three is logged and ARCHIVED rather than left
 # where it is, so it is not re-logged on every pass for as long as the watcher
@@ -3583,14 +3583,14 @@ usage_read_run() {
   sf="${lp%.log}.stream.jsonl"
   [ -f "$sf" ] || return 0
   tail -n 8000 "$sf" 2>/dev/null | grep '"type":"rate_limit_event"' |
-    jq -rs --argjson thr "$USAGE_SEVEN_DAY_PAUSE_PCT" '
+    jq -rs --argjson threshold "$USAGE_SEVEN_DAY_PAUSE_PCT" '
       [ .[] | select(.rate_limit_info) | .rate_limit_info ] as $ev
       | [ ($ev | map(select(.rateLimitType == "five_hour"))  | last),
           ($ev | map(select(.rateLimitType == "seven_day")) | last),
           ($ev | map(select(.rateLimitType != "five_hour" and .rateLimitType != "seven_day")) | last) ]
       | map(select(. != null))[]
       | (.status // "unknown") as $st0
-      | (if (.rateLimitType == "seven_day") and ($st0 == "allowed_warning") and (((.utilization // 0)) < $thr)
+      | (if (.rateLimitType == "seven_day") and ($st0 == "allowed_warning") and (((.utilization // 0)) < $threshold)
            then "allowed" else $st0 end) as $st
       | "\($st) \(.isUsingOverage // false) \(.resetsAt // 0) \(.overageResetsAt // 0)"' 2>/dev/null
 }

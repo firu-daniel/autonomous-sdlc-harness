@@ -98,14 +98,14 @@ docker compose up -d --wait postgres
 
 **The presence check runs even under the stub.** Before anything loads, every sub-command that opens the index checks that each manifest file is on disk. So a stub run still needs a fetched cache, the same way the TypeScript session checks its own cache. The tests plant a fake one.
 
-**Precision.** Both models run at **fp32 on CPU** through `sentence-transformers`, against the TypeScript side's q8. fp32 is the normal Python path, and pinning CPU rules out GPU nondeterminism. No measured figure justifies this choice. It is a decision, and it is open to the comparison that follows.
+**Precision.** Both models run at **fp32 on CPU** through `sentence-transformers`, against the TypeScript side's q8. fp32 is the normal Python path, and pinning CPU rules out GPU nondeterminism. The comparison measured its effect together with the ONNX-against-PyTorch difference, because the matched-precision leg was not arranged: [`docs/retrieval-eval-results.md`](../docs/retrieval-eval-results.md) → `## The Python backend against the TypeScript one` → `### Divergence sources, in the order checked`.
 
 **Ids.**
 
 - `py-st/BAAI/bge-small-en-v1.5:fp32:cls:384:v1`
 - `py-st/cross-encoder/ms-marco-MiniLM-L-6-v2:fp32:sigmoid:v1`
 
-They are namespaced under `py-st` because nothing measured here shows the two backends' vectors are interchangeable, and a shared id would claim they are. They encode the precision, so a later comparison can attribute a relevance difference to it. Whether ids may ever be shared is that comparison's decision. The embedder id is stored in the index, and a change to it forces a rebuild.
+They are namespaced under `py-st` because nothing measured here shows the two backends' vectors are interchangeable, and a shared id would claim they are. They encode the precision, so a relevance difference can be attributed to it. The comparison decided that the embedder id stays namespaced, and made no proposal to share: [`docs/retrieval-eval-results.md`](../docs/retrieval-eval-results.md) → `## The Python backend against the TypeScript one` → `### Vector agreement, and the embedder id`. The embedder id is stored in the index, and a change to it forces a rebuild.
 
 **The stub** reuses `AUTONOMOUS_SDLC_HARNESS_RETRIEVAL_STUB` because its semantics are identical to the TypeScript side's. Its ids, vectors and scores equal the TypeScript stubs' bit for bit, which `tests/test_stubs.py` asserts against the running TypeScript code.
 
