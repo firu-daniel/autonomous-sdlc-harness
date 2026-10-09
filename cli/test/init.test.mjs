@@ -42,11 +42,13 @@
  *    rather than by resolving the entry to a file, because the sibling-worktree form is a glob and
  *    resolves to no file in a single-checkout fixture by construction.
  * 3. **Assertions name the contract literally** — `sdlc-harness/`, `version: 1`,
- *    `bash scripts/typecheck.sh`, `.claude/settings.autonomous.json` — rather than importing the
- *    constants the generators wrote them from. Comparing generated output against the constant that
- *    generated it proves only that the CLI is self-consistent. The identity of the plugin is the one
- *    exception, and it is derived from the two shipped manifests rather than spelled out here,
- *    because those manifests are what a rename has to reach.
+ *    `bash harness-scripts/typecheck.sh`, `.claude/settings.autonomous.json` — rather than importing
+ *    the constants the generators wrote them from. Comparing generated output against the constant
+ *    that generated it proves only that the CLI is self-consistent. Two exceptions. The identity of
+ *    the plugin is derived from the two shipped manifests rather than spelled out here, because
+ *    those manifests are what a rename has to reach. The directory a configless `init` writes its
+ *    scripts into is spelled literally in the one case about it, and every other case reads it as
+ *    `INIT_SCRIPTS_DIR` (`helpers/fixture.mjs`).
  * 4. **The wrappers are run, not only written — two of the three.** `test.sh` and
  *    `start-dev-server.sh` are driven against stubs that record where they were run from and what
  *    they were handed, because each does something no inspection of the file reaches: anchoring to
@@ -88,6 +90,7 @@ import {
   runCliFrom,
   runGit,
   snapshotTree,
+  INIT_SCRIPTS_DIR,
   PACKAGE_ROOT,
   WORKSPACE_ROOT,
 } from './helpers/fixture.mjs';
@@ -105,10 +108,20 @@ const TASK_OFFER_FILE = '.claude/harness-task-offer.md';
 const MCP_FILE = '.mcp.json';
 const GITIGNORE_FILE = '.gitignore';
 
-/** The three configured directories, at their documented defaults. */
+/**
+ * Two of the three configured directories, at their documented defaults. The third is
+ * `INIT_SCRIPTS_DIR`, imported rather than spelled: it is what a configless `init` writes, which is
+ * not the schema default an absent key means.
+ */
 const STATE_DIR = 'sdlc-harness';
-const SCRIPTS_DIR = 'scripts';
 const GITHOOKS_DIR = 'githooks';
+
+/**
+ * The `scriptsDir` every config this file seeds by hand carries explicitly. A seeded config's scripts
+ * are addressed through it, never through `INIT_SCRIPTS_DIR`; it is spelled out so the seed is not
+ * also a case about the absent-key warning.
+ */
+const SEEDED_SCRIPTS_DIR = 'scripts';
 
 /** A second protected branch, added to the config by hand after `init` wrote the hook from the first. */
 const ADDED_BRANCH = 'release';
@@ -502,6 +515,7 @@ function recordingFixtureFiles() {
       version: 1,
       defaultBranch: 'main',
       stateDir: STATE_DIR_VALUE,
+      scriptsDir: SEEDED_SCRIPTS_DIR,
       layers: [{ name: 'general', path: '.', conventions: SHARED_STUB }],
       commands: {
         typecheck: 'echo typecheck',
@@ -623,7 +637,7 @@ async function commitCount(dir) {
 
 /** The `.sh` files the wrapper generator actually wrote, sorted — the outer-loop family excluded. */
 async function writtenWrappers(dir) {
-  const entries = await readdir(join(dir, SCRIPTS_DIR), { withFileTypes: true });
+  const entries = await readdir(join(dir, INIT_SCRIPTS_DIR), { withFileTypes: true });
   return entries
     .filter((entry) => entry.isFile() && entry.name.endsWith('.sh'))
     .map((entry) => entry.name)
@@ -678,9 +692,9 @@ async function assertWrapperPairing(dir, config, profile) {
 
   for (const name of written) {
     const expected = [
-      `Bash(bash ${SCRIPTS_DIR}/${name}:*)`,
-      `Bash(bash ${join(dir, SCRIPTS_DIR, name)}:*)`,
-      `Bash(bash ${join(worktreeGlob, SCRIPTS_DIR, name)}:*)`,
+      `Bash(bash ${INIT_SCRIPTS_DIR}/${name}:*)`,
+      `Bash(bash ${join(dir, INIT_SCRIPTS_DIR, name)}:*)`,
+      `Bash(bash ${join(worktreeGlob, INIT_SCRIPTS_DIR, name)}:*)`,
     ];
     for (const entry of expected) {
       assert.ok(allow.includes(entry), `the profile does not allow-list ${name} as ${entry}`);
@@ -692,7 +706,7 @@ async function assertWrapperPairing(dir, config, profile) {
   for (const path of scriptPaths(profile, 'allow')) {
     const name = basename(path);
     assert.ok(written.includes(name), `the profile allow-lists ${path}, which init wrote no wrapper for`);
-    assert.ok(path.endsWith(`${SCRIPTS_DIR}/${name}`), `${path} does not sit under the configured scriptsDir`);
+    assert.ok(path.endsWith(`${INIT_SCRIPTS_DIR}/${name}`), `${path} does not sit under the configured scriptsDir`);
   }
 
   return written;
@@ -753,8 +767,8 @@ test('a first init exits 0 and writes a schema-shaped harness.config.json', asyn
     config.layers.some((layer) => layer.name === 'general'),
     'the generated config has no general layer, so work belonging to no layer has nowhere to go',
   );
-  assert.equal(config.commands.typecheck, `bash ${SCRIPTS_DIR}/typecheck.sh`);
-  assert.equal(config.commands.test, `bash ${SCRIPTS_DIR}/test.sh`);
+  assert.equal(config.commands.typecheck, `bash ${INIT_SCRIPTS_DIR}/typecheck.sh`);
+  assert.equal(config.commands.test, `bash ${INIT_SCRIPTS_DIR}/test.sh`);
   // `build` and `depInstall` are deliberately unwrapped: they are human- or orchestrator-run.
   assert.equal(config.commands.build, 'npm run build');
 
@@ -966,9 +980,9 @@ test('the wrappers init wrote and the profile that allow-lists them agree in bot
   // The two verifiers always, and the dev server because this fixture's manifest resolves one.
   assert.deepEqual(written, ['start-dev-server.sh', 'test.sh', 'typecheck.sh']);
   for (const name of written) {
-    assertRendered(dir, `${SCRIPTS_DIR}/${name}`);
-    const mode = (await stat(join(dir, SCRIPTS_DIR, name))).mode & 0o111;
-    assert.notEqual(mode, 0, `${SCRIPTS_DIR}/${name} is not executable`);
+    assertRendered(dir, `${INIT_SCRIPTS_DIR}/${name}`);
+    const mode = (await stat(join(dir, INIT_SCRIPTS_DIR, name))).mode & 0o111;
+    assert.notEqual(mode, 0, `${INIT_SCRIPTS_DIR}/${name} is not executable`);
   }
 
   // The literal `commands.typecheck` holds is itself an allow entry — the property the three
@@ -1019,7 +1033,7 @@ test('init reports every command line it put in effect, with the wrapper invocat
     // The invocation the key holds, then the raw line the wrapper this run wrote actually carries.
     assert.ok(row.includes(config.commands[key]), `the commands.${key} row omits its invocation: ${row}`);
     assert.ok(
-      text(dir, `${SCRIPTS_DIR}/${key === 'typecheck' ? 'typecheck.sh' : 'test.sh'}`).includes(
+      text(dir, `${INIT_SCRIPTS_DIR}/${key === 'typecheck' ? 'typecheck.sh' : 'test.sh'}`).includes(
         row.slice(row.lastIndexOf('-> ') + 3, row.lastIndexOf(` — ${RESOLVED_PROVENANCE}`)),
       ),
       `the commands.${key} row prints a line the wrapper does not carry: ${row}`,
@@ -1090,7 +1104,7 @@ test('a re-run over an edited wrapper reports the line that file carries, and --
   // `writeWrapperScripts` test below gives: that binding is declared past several top-level `await`s,
   // which a queued test can run ahead of.
   const { wrapperCommandLine } = await loadCompiled('generators/scripts.js');
-  const wrapperPath = `${SCRIPTS_DIR}/typecheck.sh`;
+  const wrapperPath = `${INIT_SCRIPTS_DIR}/typecheck.sh`;
   const resolved = wrapperCommandLine(text(dir, wrapperPath)).command;
   // Not a superstring of the detected line, so `indexOf` below distinguishes the two rather than
   // finding one inside the other.
@@ -1135,7 +1149,7 @@ test('a raw command line over a wrapper already on disk reports the line that fi
   await initOk(dir);
 
   const { wrapperCommandLine } = await loadCompiled('generators/scripts.js');
-  const wrapperPath = `${SCRIPTS_DIR}/typecheck.sh`;
+  const wrapperPath = `${INIT_SCRIPTS_DIR}/typecheck.sh`;
   const onDisk = wrapperCommandLine(text(dir, wrapperPath)).command;
 
   // Not a superstring of the detected line, so the assertions below distinguish the two.
@@ -1167,7 +1181,7 @@ test('a wrapper whose body cannot be read is reported as unreadable rather than 
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(dir);
 
-  const wrapperPath = `${SCRIPTS_DIR}/typecheck.sh`;
+  const wrapperPath = `${INIT_SCRIPTS_DIR}/typecheck.sh`;
   const { wrapperCommandLine } = await loadCompiled('generators/scripts.js');
   const resolved = wrapperCommandLine(text(dir, wrapperPath)).command;
   writeFileSync(join(dir, wrapperPath), text(dir, wrapperPath).replace(`${resolved} "$@"`, resolved), 'utf8');
@@ -1198,7 +1212,7 @@ test('a key still holding the placeholder prints the placeholder and no invented
     assert.match(row, /configure this/);
     assert.ok(row.includes('no wrapper was written for it'), `the commands.${key} row claims a wrapper: ${row}`);
     // Nothing was written for it, so no row may name a wrapper invocation or a second command line.
-    assert.ok(!row.includes(`bash ${SCRIPTS_DIR}/`), `the commands.${key} row invented a command: ${row}`);
+    assert.ok(!row.includes(`bash ${INIT_SCRIPTS_DIR}/`), `the commands.${key} row invented a command: ${row}`);
   }
   assert.deepEqual(await writtenWrappers(dir), []);
 });
@@ -1218,7 +1232,7 @@ test('an unresolvable deploy command at the repository root gets the failing wra
   const config = readJson(join(dir, CONFIG_FILE));
   config.scriptsDir = '.';
   for (const [key, value] of Object.entries(config.commands)) {
-    config.commands[key] = value.replace(`bash ${SCRIPTS_DIR}/`, 'bash ');
+    config.commands[key] = value.replace(`bash ${INIT_SCRIPTS_DIR}/`, 'bash ');
   }
   config.deploy = { command: 'bash deploy.sh' };
   writeFileSync(join(dir, CONFIG_FILE), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
@@ -1234,23 +1248,23 @@ test('an unresolvable deploy command at the repository root gets the failing wra
 /**
  * The other half of the same assertion: it has to ask whether the resolved body *runs* this
  * wrapper, not whether it contains its path as text. At `scriptsDir: "."` a wrapper's path is its
- * bare file name, so an adopter whose command line runs a different `scripts/typecheck.sh`
+ * bare file name, so an adopter whose command line runs a different `<dir>/typecheck.sh`
  * contains that name while recursing into nothing.
  */
 test('a command line that merely names the wrapper file is written into it, not refused', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
 
   await initOk(dir);
-  // The wrappers move to the repository root; the command line they run stays under scripts/.
+  // The wrappers move to the repository root; the command line they run stays under INIT_SCRIPTS_DIR.
   const config = readJson(join(dir, CONFIG_FILE));
   config.scriptsDir = '.';
-  config.commands.typecheck = `bash ${SCRIPTS_DIR}/typecheck.sh`;
+  config.commands.typecheck = `bash ${INIT_SCRIPTS_DIR}/typecheck.sh`;
   writeFileSync(join(dir, CONFIG_FILE), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 
   const { stderr } = await initOk(dir);
 
   assertRendered(dir, 'typecheck.sh');
-  assert.match(text(dir, 'typecheck.sh'), new RegExp(`bash ${SCRIPTS_DIR}/typecheck\\.sh`));
+  assert.match(text(dir, 'typecheck.sh'), new RegExp(`bash ${INIT_SCRIPTS_DIR}/typecheck\\.sh`));
   assert.doesNotMatch(stderr, /recurse forever/);
 });
 
@@ -1282,7 +1296,7 @@ test('the raw command line init wrote into a wrapper is the one a reader gets ba
     ['devServer', 'start-dev-server.sh', 'npm run dev'],
   ]) {
     const wrapper = configuredWrapperFile(config, key);
-    assert.deepEqual(wrapper, { file, path: `${SCRIPTS_DIR}/${file}` });
+    assert.deepEqual(wrapper, { file, path: `${INIT_SCRIPTS_DIR}/${file}` });
     assert.deepEqual(wrapperCommandLine(text(dir, wrapper.path)), { kind: 'command', command });
   }
 
@@ -1294,7 +1308,7 @@ test('the raw command line init wrote into a wrapper is the one a reader gets ba
   const rootConfig = readJson(join(root, CONFIG_FILE));
   rootConfig.scriptsDir = '.';
   for (const [key, value] of Object.entries(rootConfig.commands)) {
-    rootConfig.commands[key] = value.replace(`bash ${SCRIPTS_DIR}/`, 'bash ');
+    rootConfig.commands[key] = value.replace(`bash ${INIT_SCRIPTS_DIR}/`, 'bash ');
   }
   rootConfig.deploy = { command: 'bash deploy.sh' };
   writeFileSync(join(root, CONFIG_FILE), `${JSON.stringify(rootConfig, null, 2)}\n`, 'utf8');
@@ -1304,12 +1318,12 @@ test('the raw command line init wrote into a wrapper is the one a reader gets ba
   assert.deepEqual(wrapperCommandLine(text(root, 'deploy.sh')), { kind: 'unresolved' });
 
   // (c) An adopter's edit that forwards nothing: reported, not guessed at.
-  const edited = text(dir, `${SCRIPTS_DIR}/typecheck.sh`).replace(
+  const edited = text(dir, `${INIT_SCRIPTS_DIR}/typecheck.sh`).replace(
     'npm run typecheck "$@"',
     'npm run typecheck\nnpm run lint\n',
   );
-  writeFileSync(join(dir, SCRIPTS_DIR, 'typecheck.sh'), edited, 'utf8');
-  assert.deepEqual(wrapperCommandLine(text(dir, `${SCRIPTS_DIR}/typecheck.sh`)), { kind: 'unrecognised' });
+  writeFileSync(join(dir, INIT_SCRIPTS_DIR, 'typecheck.sh'), edited, 'utf8');
+  assert.deepEqual(wrapperCommandLine(text(dir, `${INIT_SCRIPTS_DIR}/typecheck.sh`)), { kind: 'unrecognised' });
 
   // The byte-equality half: a raw line in the key is not the wrapper invocation, so it names no file.
   const raw = { ...config, commands: { ...config.commands, typecheck: 'npm run typecheck' } };
@@ -1352,7 +1366,7 @@ test('the dev-server wrapper builds before it launches, and only where the deriv
     const dir = await fixtureFor(t, { files: { ...nodeProjectFiles(), 'package.json': manifest(scripts) } });
     await initOk(dir);
 
-    const wrapper = text(dir, `${SCRIPTS_DIR}/start-dev-server.sh`);
+    const wrapper = text(dir, `${INIT_SCRIPTS_DIR}/start-dev-server.sh`);
     const lines = wrapper.split('\n');
     const prestartAt = lines.indexOf(
       `${prestart} || harness_fail "devServer: the pre-start step failed, so the server was not launched"`,
@@ -1381,7 +1395,7 @@ test('the command line writeWrapperScripts returns is the one it inlined into th
   await initOk(dir);
 
   const config = readJson(join(dir, CONFIG_FILE));
-  config.deploy = { command: `bash ${SCRIPTS_DIR}/deploy.sh` };
+  config.deploy = { command: `bash ${INIT_SCRIPTS_DIR}/deploy.sh` };
 
   // Loaded here rather than through the module-level binding of the same name: that one is declared
   // past several top-level `await`s, which a queued test can run ahead of.
@@ -1396,7 +1410,7 @@ test('the command line writeWrapperScripts returns is the one it inlined into th
 
   /** The body this run enqueued for one wrapper — never the file on disk, which a re-run keeps. */
   const enqueuedBody = (file) => {
-    const request = plan.requests.find((entry) => entry.path === join(dir, SCRIPTS_DIR, file));
+    const request = plan.requests.find((entry) => entry.path === join(dir, INIT_SCRIPTS_DIR, file));
     assert.ok(request !== undefined, `the generator enqueued no write for ${file}`);
     return request.content;
   };
@@ -1413,14 +1427,14 @@ test('the command line writeWrapperScripts returns is the one it inlined into th
   assert.deepEqual(byKey.typecheck, {
     key: 'typecheck',
     file: 'typecheck.sh',
-    invocation: `bash ${SCRIPTS_DIR}/typecheck.sh`,
+    invocation: `bash ${INIT_SCRIPTS_DIR}/typecheck.sh`,
     command: 'npm run typecheck',
     unresolved: false,
   });
   assert.deepEqual(byKey.deploy, {
     key: 'deploy',
     file: 'deploy.sh',
-    invocation: `bash ${SCRIPTS_DIR}/deploy.sh`,
+    invocation: `bash ${INIT_SCRIPTS_DIR}/deploy.sh`,
     command: 'harness_fail "harness: put the deploy command line in deploy.sh"',
     unresolved: true,
   });
@@ -1438,7 +1452,7 @@ test('a wrapper runs its command at the repository root and forwards the argumen
   await initOk(dir);
 
   const fromNested = join(dir, 'from-nested.txt');
-  const absolute = await runBash(join(dir, NESTED_DIR), [join(dir, SCRIPTS_DIR, 'test.sh'), 'alpha', 'beta'], {
+  const absolute = await runBash(join(dir, NESTED_DIR), [join(dir, SEEDED_SCRIPTS_DIR, 'test.sh'), 'alpha', 'beta'], {
     HARNESS_TEST_RECORD: fromNested,
   });
 
@@ -1449,7 +1463,7 @@ test('a wrapper runs its command at the repository root and forwards the argumen
   // The same command from the root, which is what makes the row above about the anchor rather
   // than about a subdirectory that happened to work.
   const fromRoot = join(dir, 'from-root.txt');
-  const relative = await runBash(dir, [`${SCRIPTS_DIR}/test.sh`], { HARNESS_TEST_RECORD: fromRoot });
+  const relative = await runBash(dir, [`${SEEDED_SCRIPTS_DIR}/test.sh`], { HARNESS_TEST_RECORD: fromRoot });
 
   assert.equal(relative.status, 0, relative.stderr);
   assert.deepEqual(recorded(fromRoot), { cwd: dir, args: '' });
@@ -1461,7 +1475,7 @@ test("a wrapper reports its command's failure as one verdict line and exits with
   await initOk(dir);
 
   const record = join(dir, 'record.txt');
-  const failed = await runBash(dir, [`${SCRIPTS_DIR}/test.sh`], {
+  const failed = await runBash(dir, [`${SEEDED_SCRIPTS_DIR}/test.sh`], {
     HARNESS_TEST_RECORD: record,
     HARNESS_TEST_EXIT: '3',
   });
@@ -1699,7 +1713,10 @@ test("the mobile note's remedy wires both halves, where a plain re-run wires onl
 
 /** The docs-retrieval server `.mcp.json` declares when retrieval is on, spelled as the contract. */
 const DOCS_SERVER = 'harness-docs';
-const DOCS_SERVER_ENTRY = { type: 'stdio', command: 'bash', args: ['scripts/docs-search-server.sh'], env: {} };
+/** The `.mcp.json` entry for that server, whose script sits under the config's `scriptsDir`. */
+function docsServerEntry(scriptsDir) {
+  return { type: 'stdio', command: 'bash', args: [`${scriptsDir}/docs-search-server.sh`], env: {} };
+}
 const DOCS_INDEX_RULE = `${STATE_DIR}/docs_index/`;
 
 /**
@@ -1714,6 +1731,7 @@ async function retrievalFixture(t, { retrieval, qaDriver } = {}) {
     projectName: 'fixture-project',
     defaultBranch: 'main',
     stateDir: STATE_DIR,
+    scriptsDir: SEEDED_SCRIPTS_DIR,
     layers: [{ name: 'general', path: '.', conventions: SHARED_STUB }],
     commands: { typecheck: 'echo typecheck', test: 'echo test' },
     phases: { docs: true, ...(qaDriver === undefined ? {} : { qa: true }) },
@@ -1744,7 +1762,7 @@ test('retrieval on declares the docs server in .mcp.json and ignores the index, 
 
   const mcp = readJson(join(dir, MCP_FILE));
   assert.deepEqual(Object.keys(mcp.mcpServers), [DOCS_SERVER], `${MCP_FILE} declares a server beyond the docs one`);
-  assert.deepEqual(mcp.mcpServers[DOCS_SERVER], DOCS_SERVER_ENTRY);
+  assert.deepEqual(mcp.mcpServers[DOCS_SERVER], docsServerEntry(SEEDED_SCRIPTS_DIR));
   assert.ok(ignoreLines(dir).includes(DOCS_INDEX_RULE), `${GITIGNORE_FILE} carries no ${DOCS_INDEX_RULE} rule`);
 
   const mcpBefore = text(dir, MCP_FILE);
@@ -1895,7 +1913,7 @@ test('with docs.retrievalBackend absent, init writes and says exactly what it di
 
   const { docs } = readJson(join(dir, CONFIG_FILE));
   assert.deepEqual(Object.keys(docs).sort(), ['retrieval', 'root'], `docs carries a key beyond root and retrieval: ${JSON.stringify(docs)}`);
-  assert.deepEqual(readJson(join(dir, MCP_FILE)).mcpServers[DOCS_SERVER], DOCS_SERVER_ENTRY);
+  assert.deepEqual(readJson(join(dir, MCP_FILE)).mcpServers[DOCS_SERVER], docsServerEntry(INIT_SCRIPTS_DIR));
   const output = `${stdout}\n${stderr}`;
   assert.ok(!output.includes('retrievalBackend'), `a key-absent run mentions retrievalBackend:\n${output}`);
   assert.ok(!output.includes('Python backend'), `a key-absent run mentions the Python backend:\n${output}`);
@@ -2502,6 +2520,140 @@ test('init --reset-config rebuilds the config from detection and the flags, afte
   const afterReset = await snapshotTree(dir);
   await initOk(dir);
   assert.deepEqual(await snapshotTree(dir), afterReset, 'a plain re-run after --reset-config rebuilt the config again');
+});
+
+/**
+ * A repository already wired by hand, its config carrying `scriptsDir` only when one is given and
+ * its wrapper invocations under whichever directory that config means.
+ */
+function seededScriptsDirFiles(scriptsDir) {
+  const wrapperDir = scriptsDir ?? SEEDED_SCRIPTS_DIR;
+  return {
+    ...nodeProjectFiles(),
+    [CONFIG_FILE]: {
+      version: 1,
+      defaultBranch: 'main',
+      stateDir: STATE_DIR_VALUE,
+      ...(scriptsDir === undefined ? {} : { scriptsDir }),
+      layers: [{ name: 'general', path: '.', conventions: SHARED_STUB }],
+      commands: { typecheck: `bash ${wrapperDir}/typecheck.sh`, test: `bash ${wrapperDir}/test.sh` },
+    },
+  };
+}
+
+/**
+ * `scriptsDir` is the one key whose generated value is not its absent-key meaning: a fresh `init`
+ * writes `harness-scripts`, while an existing adoption — kept, forced or rebuilt — stays where its
+ * scripts already are. The kept and rebuild cases are graded on the bytes on disk.
+ */
+test('init writes scriptsDir fresh, keeps it on a kept config, and re-reads it on a rebuild', async (t) => {
+  await t.test('a configless init writes harness-scripts, wires both commands to it, and allow-lists it', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    await initOk(dir);
+
+    const config = readJson(join(dir, CONFIG_FILE));
+    assert.equal(config.scriptsDir, 'harness-scripts');
+    assert.equal(config.commands.typecheck, 'bash harness-scripts/typecheck.sh');
+    assert.equal(config.commands.test, 'bash harness-scripts/test.sh');
+    const allow = readJson(join(dir, PROFILE_FILE)).permissions.allow;
+    const worktreeGlob = join(dirname(dir), `${config.projectName}-*`);
+    for (const name of ['typecheck.sh', 'test.sh']) {
+      for (const entry of [
+        `Bash(bash harness-scripts/${name}:*)`,
+        `Bash(bash ${join(dir, 'harness-scripts', name)}:*)`,
+        `Bash(bash ${join(worktreeGlob, 'harness-scripts', name)}:*)`,
+      ]) {
+        assert.ok(allow.includes(entry), `the profile does not allow-list ${name} as ${entry}`);
+      }
+    }
+    assert.equal(await exists(dir, SEEDED_SCRIPTS_DIR), false, `a fresh init created ${SEEDED_SCRIPTS_DIR}/`);
+  });
+
+  await t.test('init --scripts-dir writes that value and puts the wrappers there', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+    const chosen = 'tools/harness';
+
+    await initOk(dir, ['--scripts-dir', chosen]);
+
+    const config = readJson(join(dir, CONFIG_FILE));
+    assert.equal(config.scriptsDir, chosen);
+    assert.equal(config.commands.typecheck, `bash ${chosen}/typecheck.sh`);
+    for (const name of ['typecheck.sh', 'test.sh']) {
+      assertRendered(dir, `${chosen}/${name}`);
+    }
+    assert.equal(await exists(dir, INIT_SCRIPTS_DIR), false, `--scripts-dir still created ${INIT_SCRIPTS_DIR}/`);
+  });
+
+  await t.test('--help lists --scripts-dir with its placeholder', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+
+    const { status, stdout } = await runCli(dir, ['init', '--help']);
+
+    assert.equal(status, 0);
+    assert.ok(stdout.includes('--scripts-dir <dir>'), `--help does not list --scripts-dir <dir>:\n${stdout}`);
+  });
+
+  await t.test('a seeded scriptsDir "scripts" config is byte-identical after init and init --force', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: seededScriptsDirFiles(SEEDED_SCRIPTS_DIR) });
+    const seeded = readFileSync(join(dir, CONFIG_FILE));
+
+    await initOk(dir);
+    assert.deepEqual(readFileSync(join(dir, CONFIG_FILE)), seeded, 'init rewrote the seeded config');
+    assertRendered(dir, `${SEEDED_SCRIPTS_DIR}/typecheck.sh`);
+
+    await initOk(dir, ['--force']);
+    assert.deepEqual(readFileSync(join(dir, CONFIG_FILE)), seeded, 'init --force rewrote the seeded config');
+    assert.equal(await exists(dir, INIT_SCRIPTS_DIR), false, `a kept config's run created ${INIT_SCRIPTS_DIR}/`);
+  });
+
+  await t.test('--scripts-dir over a kept config is dropped, named, and changes no byte of it', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: seededScriptsDirFiles(SEEDED_SCRIPTS_DIR) });
+    const seeded = readFileSync(join(dir, CONFIG_FILE));
+
+    const { stderr } = await initOk(dir, ['--scripts-dir', 'x']);
+
+    assert.deepEqual(readFileSync(join(dir, CONFIG_FILE)), seeded, 'a kept config was rewritten from --scripts-dir');
+    assert.equal(await exists(dir, 'x'), false, 'the dropped --scripts-dir still received the scripts');
+    const reported = discardedFlagWarnings(stderr);
+    assert.equal(reported.length, 1, `the dropped flag was reported ${reported.length} times:\n${stderr}`);
+    assert.ok(reported[0].includes('--scripts-dir'), `the warning names no flag:\n${reported[0]}`);
+    assert.ok(
+      reported[0].includes('config set scriptsDir <value>'),
+      `the warning names no per-key route:\n${reported[0]}`,
+    );
+  });
+
+  await t.test('--reset-config over scriptsDir "scripts" keeps it, and the note says it was re-read', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: seededScriptsDirFiles(SEEDED_SCRIPTS_DIR) });
+
+    const { stdout } = await initOk(dir, ['--reset-config']);
+
+    assert.equal(readJson(join(dir, CONFIG_FILE)).scriptsDir, SEEDED_SCRIPTS_DIR);
+    assert.ok(
+      stdout.includes(`scriptsDir is re-read from the file being rebuilt as "${SEEDED_SCRIPTS_DIR}"`),
+      `the start-over note does not name scriptsDir as re-read:\n${stdout}`,
+    );
+  });
+
+  await t.test('--reset-config over a config with no scriptsDir writes the absent-key meaning explicitly', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: seededScriptsDirFiles(undefined) });
+
+    await initOk(dir, ['--reset-config']);
+
+    const rebuilt = text(dir, CONFIG_FILE);
+    assert.equal(JSON.parse(rebuilt).scriptsDir, SEEDED_SCRIPTS_DIR);
+    assert.match(rebuilt, /"scriptsDir": "scripts"/);
+  });
+
+  await t.test('--reset-config --scripts-dir writes the flag value over the re-read one', async (subtest) => {
+    const dir = await fixtureFor(subtest, { files: seededScriptsDirFiles(SEEDED_SCRIPTS_DIR) });
+
+    const { stdout } = await initOk(dir, ['--reset-config', '--scripts-dir', 'y']);
+
+    assert.equal(readJson(join(dir, CONFIG_FILE)).scriptsDir, 'y');
+    assert.doesNotMatch(stdout, /scriptsDir is re-read/, `the note claims a re-read the flag overrode:\n${stdout}`);
+  });
 });
 
 /**
@@ -4156,10 +4308,10 @@ test('init names a direct subdirectory that looks like the application, and --ap
  * would assert the wrapper spelling and never the anchoring under test.
  */
 function wrapperCommand(dir, file) {
-  const line = text(dir, `${SCRIPTS_DIR}/${file}`)
+  const line = text(dir, `${INIT_SCRIPTS_DIR}/${file}`)
     .split('\n')
     .find((candidate) => candidate.endsWith(' "$@"'));
-  assert.ok(line !== undefined, `${SCRIPTS_DIR}/${file} carries no command line to read`);
+  assert.ok(line !== undefined, `${INIT_SCRIPTS_DIR}/${file} carries no command line to read`);
   return line.slice(0, -' "$@"'.length);
 }
 
@@ -4452,15 +4604,15 @@ test('a wrapped commands key holding a raw command line is reported by the init 
     assert.equal(named.length, 1, `init did not name the mismatch it just created:\n${stderr}`);
     // Both halves in one line: the raw string it inlined, and the wrapper form to set instead.
     assert.ok(named[0].includes(rawLine), `the warning did not name the configured value:\n${named[0]}`);
-    assert.ok(named[0].includes(`${SCRIPTS_DIR}/typecheck.sh`), `the warning named no wrapper:\n${named[0]}`);
+    assert.ok(named[0].includes(`${INIT_SCRIPTS_DIR}/typecheck.sh`), `the warning named no wrapper:\n${named[0]}`);
     assert.ok(
-      named[0].includes(`bash ${SCRIPTS_DIR}/typecheck.sh`),
+      named[0].includes(`bash ${INIT_SCRIPTS_DIR}/typecheck.sh`),
       `the warning did not name the value to set:\n${named[0]}`,
     );
 
     // The wrapper was written from that line — the other half `init` holds at this moment.
     assert.ok(
-      text(dir, `${SCRIPTS_DIR}/typecheck.sh`).includes(rawLine),
+      text(dir, `${INIT_SCRIPTS_DIR}/typecheck.sh`).includes(rawLine),
       'the raw line was not inlined into the wrapper the warning names',
     );
 
@@ -4493,7 +4645,7 @@ test('a wrapped commands key holding a raw command line is reported by the init 
   await t.test('a wrapper already on disk keeps its body on a plain re-run, and the warning names what does not', async (subtest) => {
     const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
     await initOk(dir);
-    const wrapper = `${SCRIPTS_DIR}/typecheck.sh`;
+    const wrapper = `${INIT_SCRIPTS_DIR}/typecheck.sh`;
     const detected = text(dir, wrapper);
 
     // The correction an adopter makes on a repository whose detected line checks the wrong tree —
@@ -4574,7 +4726,7 @@ test('a wrapped commands key holding a raw command line is reported by the init 
     assert.equal(named.length, 1, `the deploy command line was not reported once:\n${stderr}`);
     assert.ok(named[0].startsWith('! deploy.command '), `the deploy row was not named deploy.command:\n${named[0]}`);
     assert.ok(!named[0].includes('commands.deploy'), `the deploy row was named as a commands key:\n${named[0]}`);
-    assert.ok(named[0].includes(`bash ${SCRIPTS_DIR}/deploy.sh`), `the warning named no wrapper:\n${named[0]}`);
+    assert.ok(named[0].includes(`bash ${INIT_SCRIPTS_DIR}/deploy.sh`), `the warning named no wrapper:\n${named[0]}`);
   });
 });
 
@@ -4628,7 +4780,7 @@ test('a commands key answered <none> writes no wrapper, allow-lists none, and sa
     editConfig(dir, (config) => {
       config.commands.typecheck = NONE_SENTINEL;
     });
-    await rm(join(dir, SCRIPTS_DIR, 'typecheck.sh'));
+    await rm(join(dir, INIT_SCRIPTS_DIR, 'typecheck.sh'));
 
     const { stdout } = await initOk(dir, ['--force']);
 
@@ -4648,7 +4800,7 @@ test('a commands key answered <none> writes no wrapper, allow-lists none, and sa
     assert.ok(row.includes(NONE_SENTINEL), `the row omits the value the key holds: ${row}`);
     assert.ok(row.includes(ANSWERED_NONE_ROW), `the row does not state the answered-none state: ${row}`);
     assert.ok(!row.includes(RUN_AS_CONFIGURED_ROW), `the answered key is reported as a line that runs: ${row}`);
-    assert.ok(!row.includes(`bash ${SCRIPTS_DIR}/typecheck.sh`), `the row names a wrapper this run did not write: ${row}`);
+    assert.ok(!row.includes(`bash ${INIT_SCRIPTS_DIR}/typecheck.sh`), `the row names a wrapper this run did not write: ${row}`);
     assert.ok(!row.includes(RETIRED_NONE_STATE_CLAIM), `the row states the profile's contents rather than what this run did: ${row}`);
     // The deleted wrapper is the no-residue half of the pair: nothing is on disk to name.
     assert.ok(!row.includes(ANSWERED_NONE_RESIDUE), `the row names a residue this repository does not have: ${row}`);
@@ -4668,7 +4820,7 @@ test('a commands key answered <none> writes no wrapper, allow-lists none, and sa
     const { stdout } = await initOk(dir, ['--force']);
 
     assert.ok(
-      existsSync(join(dir, SCRIPTS_DIR, 'typecheck.sh')),
+      existsSync(join(dir, INIT_SCRIPTS_DIR, 'typecheck.sh')),
       'the answered key deleted a wrapper on disk, which is not option (b)\'s behaviour',
     );
 
@@ -4676,7 +4828,7 @@ test('a commands key answered <none> writes no wrapper, allow-lists none, and sa
     assert.ok(row !== undefined, `no commands.typecheck row:\n${stdout}`);
     assert.ok(row.includes(ANSWERED_NONE_ROW), `the row does not state the answered-none state: ${row}`);
     assert.ok(row.includes(ANSWERED_NONE_RESIDUE), `the row does not name the wrapper left on disk: ${row}`);
-    assert.ok(row.includes(`${SCRIPTS_DIR}/typecheck.sh`), `the residue clause does not name the file: ${row}`);
+    assert.ok(row.includes(`${INIT_SCRIPTS_DIR}/typecheck.sh`), `the residue clause does not name the file: ${row}`);
     assert.ok(!row.includes(RETIRED_NONE_STATE_CLAIM), `the row denies a residue this repository has: ${row}`);
   });
 
@@ -4688,7 +4840,7 @@ test('a commands key answered <none> writes no wrapper, allow-lists none, and sa
     const config = editConfig(dir, (edited) => {
       edited.commands.test = NONE_SENTINEL;
     });
-    await rm(join(dir, SCRIPTS_DIR, 'test.sh'));
+    await rm(join(dir, INIT_SCRIPTS_DIR, 'test.sh'));
 
     const { stdout } = await initOk(dir, ['--force']);
 
@@ -4886,7 +5038,7 @@ test('the undetected-command warning names what was looked for and what is there
     const mismatch = mismatchWarnings(rerun.stderr).filter((line) => line.includes('commands.typecheck'));
     assert.equal(mismatch.length, 1, `the re-run did not name the mismatch this warning promised:\n${rerun.stderr}`);
     assert.ok(
-      mismatch[0].includes(`bash ${SCRIPTS_DIR}/typecheck.sh`),
+      mismatch[0].includes(`bash ${INIT_SCRIPTS_DIR}/typecheck.sh`),
       `the re-run named a value other than the wrapper invocation:\n${mismatch[0]}`,
     );
   });
@@ -5042,7 +5194,7 @@ test('an optional command the nested manifest declares is named rather than drop
 
     const { commands } = readJson(join(dir, CONFIG_FILE));
     assert.equal(commands.build, 'npm run build');
-    assert.equal(commands.devServer, `bash ${SCRIPTS_DIR}/start-dev-server.sh`);
+    assert.equal(commands.devServer, `bash ${INIT_SCRIPTS_DIR}/start-dev-server.sh`);
     assert.deepEqual(optionalCommandNotes(stdout), [], `a flat repository gained an optional-command note:\n${stdout}`);
   });
 });
@@ -5214,6 +5366,7 @@ test('a layer named for a reserved analyze target loses the bare word, and the r
         version: 1,
         defaultBranch: 'main',
         stateDir: STATE_DIR_VALUE,
+        scriptsDir: SEEDED_SCRIPTS_DIR,
         layers: [
           { name: 'project', path: 'src/project', conventions: layerStub },
           { name: 'general', path: '.', conventions: SHARED_STUB },
@@ -6625,6 +6778,14 @@ test('--force --dry-run over an identical project file writes nothing and report
   assert.ok(!line.includes(PROJECT_FILE_KEPT), `the dry run claims it kept a file:\n${line}`);
 });
 
+/** The `--scripts-dir` values `init` refuses before the git gate: each is one the script guard grants nothing under. */
+const SCRIPTS_DIR_REFUSALS = [
+  { name: 'an empty --scripts-dir', value: '' },
+  { name: 'an absolute --scripts-dir', value: '/abs' },
+  { name: "a '..'-bearing --scripts-dir", value: '../out' },
+  { name: "a --scripts-dir of '.'", value: '.' },
+];
+
 test('init refuses a run it cannot safely aim, and says which one it refused', async (t) => {
   await t.test('a directory that is not a git repository', async (subtest) => {
     const dir = await fixtureFor(subtest, { git: false, files: nodeProjectFiles() });
@@ -6662,6 +6823,20 @@ test('init refuses a run it cannot safely aim, and says which one it refused', a
     assert.match(result.stderr, /path segment starting with '\.'/);
     assert.equal(await exists(dir, CONFIG_FILE), false);
   });
+
+  for (const refusal of SCRIPTS_DIR_REFUSALS) {
+    await t.test(refusal.name, async (subtest) => {
+      const dir = await fixtureFor(subtest, { files: nodeProjectFiles() });
+      const before = await snapshotTree(dir);
+
+      const result = await runCli(dir, ['init', '--scripts-dir', refusal.value]);
+
+      assert.equal(result.status, 1, `init exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+      assert.match(result.stderr, /--scripts-dir/);
+      assert.deepEqual(await snapshotTree(dir), before, 'a refused run changed the tree');
+      assert.equal(await exists(dir, `${CONFIG_FILE}.bak`), false, 'a refused run wrote a .bak');
+    });
+  }
 });
 
 /**
@@ -6729,6 +6904,7 @@ test('a refusal the flags alone answer is raised before --git-init creates anyth
   for (const testCase of [
     { name: 'a dot-named --state-dir', argv: ['--state-dir', '.artifacts'], stderr: /path segment starting with '\.'/ },
     { name: 'an unknown --preset', argv: ['--preset', 'no-such-preset'], stderr: /unknown preset/ },
+    ...SCRIPTS_DIR_REFUSALS.map(({ name, value }) => ({ name, argv: ['--scripts-dir', value], stderr: /--scripts-dir/ })),
   ]) {
     await t.test(testCase.name, async (subtest) => {
       const dir = await fixtureFor(subtest, { git: false, files: nodeProjectFiles() });
@@ -8808,7 +8984,7 @@ test('the dev-server wrapper starts the server detached and prints a live pid an
 
   const startedAt = Date.now();
   const result = await runBash(join(dir, NESTED_DIR), [
-    join(dir, SCRIPTS_DIR, 'start-dev-server.sh'),
+    join(dir, SEEDED_SCRIPTS_DIR, 'start-dev-server.sh'),
     DEV_SERVER_PORT,
     '--extra',
   ]);

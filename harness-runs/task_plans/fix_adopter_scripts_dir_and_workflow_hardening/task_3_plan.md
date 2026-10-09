@@ -39,3 +39,9 @@
 - `npm test --workspace cli -- test/init.test.mjs`, run from the repository root as one foreground command. This is the file this task edits. It passes, and its `# tests` / `# pass` counts include the new subtests.
 - Grep `init.test.mjs` for `'scripts'` and `scripts/` after the edit. Every remaining hit is one of two things: a path into the package's own `templates/scripts/`, or a seeded config's own value.
 - The kept and rebuild cases are the story index's first `Top risks:` entry, asserted on the bytes on disk rather than on the message.
+
+**Deviations from plan:**
+
+- The grep check leaves two hit families outside its two named classes, neither of them the adopter's `scriptsDir`: `initUnresolvedSlug` symlinks the package's own `cli/scripts/` (`for (const asset of ['templates', 'scripts'])`), and the plugin-root fixture beside `PLUGIN_HELPER` plants the plugin's own `scripts/`. Both left unchanged.
+- `--scripts-dir ''` is refused by the argument parser (`--scripts-dir requires <dir>`, exit 1) before `assertUsableScriptsDir` sees it; the case asserts exit 1, `--scripts-dir` named and a byte-identical tree, which that refusal meets.
+- Seeded configs that omitted `scriptsDir` (`recordingFixtureFiles`, `retrievalFixture`, the reserved-analyze-target case) gained `scriptsDir: SEEDED_SCRIPTS_DIR` rather than warning assertions: none of them is about that key. `DOCS_SERVER_ENTRY` became `docsServerEntry(scriptsDir)`, since its two users are one seeded and one configless fixture.
