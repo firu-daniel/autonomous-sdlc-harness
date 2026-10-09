@@ -7,7 +7,7 @@ Source: harness-runs/task_prompts/fix_adopter_scripts_dir_and_workflow_hardening
 - remote-skipped: none
 
 ## Planning
-- [ ] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
+- [x] P1. Task plan converged (business_parity + architecture + task-plan-reviewer all PASS)
 - [-] P2. UI-test plan converged (ui-tests-plan-reviewer PASS) — or no_ui
 - [ ] P3. Plans committed & pushed (story index + per-task dir + UI-test plan)
 
