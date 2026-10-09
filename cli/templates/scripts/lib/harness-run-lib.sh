@@ -1100,7 +1100,7 @@ hr_docs_retrieval_backend() {
 # anchored SUFFIX regexes are mutually exclusive by construction: a filename
 # cannot end in more than one of `_task_prompt.md` / `_review[_<n>].md` /
 # `_docs.md`, so a branch whose own name contains `review` or `task_prompt`
-# cannot be mis-routed — `foo_review_task_prompt.md` is the task engine on branch
+# cannot be misrouted — `foo_review_task_prompt.md` is the task engine on branch
 # `foo_review`, and `foo_task_prompt_review.md` is the review engine on branch
 # `foo_task_prompt`. POSIX leftmost-longest matching of the greedy `(.+)` derives
 # the right branch from a round-suffixed name: `foo_review_2.md` -> branch `foo`
@@ -2501,7 +2501,7 @@ EOF
 # reset would pin the file for the life of the machine.
 #
 # FAIL OPEN ON THE STATE, CLOSED ON THE LANE. An absent, unreadable or
-# unparseable `usage-state.json` reads as `unknown 0`, which defers nobody:
+# unparsable `usage-state.json` reads as `unknown 0`, which defers nobody:
 # pausing on an unreadable file would put a machine-level fault in charge of run
 # state, and each repository's own gate is what pauses its runs. A lock directory
 # that cannot be read or created is NOT assumed free: `hr_lane_acquire` returns
