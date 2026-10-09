@@ -4,8 +4,9 @@
 # `docs/development.md` §5 defines fourteen gates. This script runs the eight a process can run
 # unattended — gates 1, 2, 3, 4, 6, 11, 13 and 14 — and reports the six it cannot, so that a
 # reviewer — human or agent — reading a green result has read the whole automatable half rather than
-# one suite of it. Gate 14 depends on gate 2a's build, and its `actionlint` leg 14c is SKIPPED where
-# `actionlint` is not on PATH. Two of the eight are conditional. Gate 11 runs where the retrieval model cache is
+# one suite of it. Gate 14 depends on gate 2a's build. Three legs are SKIPPED where their tool cannot
+# be resolved: 6f where neither PATH nor `uvx` provides `typos` 1.51.1, 14c where `actionlint` is not
+# on PATH, and 14d where neither provides `zizmor` 1.30.1. Two of the eight are conditional. Gate 11 runs where the retrieval model cache is
 # provisioned and the workspace's retrieval packages are installed, and is reported BLOCKED with the
 # hand-run gates where they are not. Gate 13 (the Python docs-retrieval service) reports a leg
 # BLOCKED where `uv` or its synced environment is missing, and its container leg 13d SKIPPED unless
@@ -155,6 +156,22 @@ gate "6d plugin command spellings carry the prefix" bash scripts/check-command-s
 # another user's home, a `..`-climbing path, or a credential passes it; and 6a is red in a
 # self-adopted checkout by design, so a new hit there is invisible to a "no new failure" reading.
 gate_silent "6e no machine-local or credential material in eval artifacts" bash scripts/check-eval-artifacts.sh
+# Hand-written as 14c is: status 4 is `check-typos.sh`'s no-typos skip, pushed onto neither array.
+typos_skip_reason=""
+bash scripts/check-typos.sh >"$log" 2>&1
+typos_status=$?
+if [ "$typos_status" -eq 0 ]; then
+  passed+=("6f shipped files pass typos")
+  echo "  ok    6f shipped files pass typos"
+elif [ "$typos_status" -eq 4 ]; then
+  typos_skip_reason="typos 1.51.1 is available neither on PATH nor through uvx"
+  echo "  SKIPPED 6f shipped files pass typos — ${typos_skip_reason}"
+  sed 's/^/        /' "$log" | tail -25
+else
+  failed+=("6f shipped files pass typos")
+  echo "  FAIL  6f shipped files pass typos (exit $typos_status)"
+  sed 's/^/        /' "$log" | tail -25
+fi
 
 echo "== gate 11 — docs-retrieval relevance floor"
 # Written by hand rather than handed to `gate`, the way gate 2e is, because this gate has THREE
@@ -236,10 +253,11 @@ if [ ${#python_blocked[@]} -gt 0 ]; then
 fi
 
 echo "== gate 14 — rendered workflows parse"
-# 14a and 14c render through `cli/dist`, so they depend on gate 2a. 14c is hand-written as
-# `python_gate` is: status 4 is `check-rendered-workflows.mjs --actionlint`'s no-actionlint skip,
-# pushed onto neither array.
+# 14a, 14c and 14d render through `cli/dist`, so they depend on gate 2a. 14c and 14d are
+# hand-written as `python_gate` is: status 4 is `check-rendered-workflows.mjs`'s no-tool skip under
+# --actionlint and --zizmor, pushed onto neither array.
 actionlint_skip_reason=""
+zizmor_skip_reason=""
 gate "14a rendered workflows parse as YAML" node scripts/check-rendered-workflows.mjs
 gate "14b 0.6.1's harness-control.yml is refused" node scripts/check-rendered-workflows.mjs --negatives
 node scripts/check-rendered-workflows.mjs --actionlint >"$log" 2>&1
@@ -253,6 +271,20 @@ elif [ "$actionlint_status" -eq 4 ]; then
 else
   failed+=("14c actionlint over the rendered workflows")
   echo "  FAIL  14c actionlint over the rendered workflows (exit $actionlint_status)"
+  sed 's/^/        /' "$log" | tail -25
+fi
+node scripts/check-rendered-workflows.mjs --zizmor >"$log" 2>&1
+zizmor_status=$?
+if [ "$zizmor_status" -eq 0 ]; then
+  passed+=("14d zizmor over the rendered workflows")
+  echo "  ok    14d zizmor over the rendered workflows"
+elif [ "$zizmor_status" -eq 4 ]; then
+  zizmor_skip_reason="zizmor 1.30.1 is available neither on PATH nor through uvx"
+  echo "  SKIPPED 14d zizmor over the rendered workflows — ${zizmor_skip_reason}"
+  sed 's/^/        /' "$log" | tail -25
+else
+  failed+=("14d zizmor over the rendered workflows")
+  echo "  FAIL  14d zizmor over the rendered workflows (exit $zizmor_status)"
   sed 's/^/        /' "$log" | tail -25
 fi
 
@@ -274,11 +306,17 @@ if [ -n "$python_blocked_list" ]; then
   echo "     unattended once bash scripts/python-service.sh sync has provisioned its environment, and is"
   echo "     listed here until then"
 fi
+if [ -n "$typos_skip_reason" ]; then
+  echo "  6f typos over the shipped files, reported SKIPPED above: ${typos_skip_reason}"
+fi
 if [ -n "$python_skip_reason" ]; then
   echo "  13d the Python service's container tests, reported SKIPPED above: ${python_skip_reason}"
 fi
 if [ -n "$actionlint_skip_reason" ]; then
   echo "  14c actionlint over the rendered workflows, reported SKIPPED above: ${actionlint_skip_reason}"
+fi
+if [ -n "$zizmor_skip_reason" ]; then
+  echo "  14d zizmor over the rendered workflows, reported SKIPPED above: ${zizmor_skip_reason}"
 fi
 echo "     -> docs/development.md §5"
 
@@ -290,11 +328,17 @@ fi
 if [ -n "$python_blocked_list" ]; then
   hand_run="$hand_run; gate 13 was BLOCKED (${python_blocked_list}) — those legs ran no Python; provision it with bash scripts/python-service.sh sync"
 fi
+if [ -n "$typos_skip_reason" ]; then
+  hand_run="$hand_run; 6f was SKIPPED — ${typos_skip_reason}"
+fi
 if [ -n "$python_skip_reason" ]; then
   hand_run="$hand_run; 13d was SKIPPED — ${python_skip_reason}"
 fi
 if [ -n "$actionlint_skip_reason" ]; then
   hand_run="$hand_run; 14c was SKIPPED — ${actionlint_skip_reason}"
+fi
+if [ -n "$zizmor_skip_reason" ]; then
+  hand_run="$hand_run; 14d was SKIPPED — ${zizmor_skip_reason}"
 fi
 
 echo

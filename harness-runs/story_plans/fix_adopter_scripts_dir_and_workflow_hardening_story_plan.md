@@ -124,7 +124,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_adopter_scripts_dir_and_
 11. [x] **Task 11** — Fix the `typos` hits in the outer-loop script templates and the inbox README template _(layer: cli)_ _(points: 10)_
 12. [x] **Task 12** — Fix the `typos` hits in `cli/src` prose and messages, keeping every matched identifier _(layer: cli)_ _(points: 10)_
 13. [x] **Task 13** — Fix the `typos` hits in the plugin corpus and restate the `<scripts_dir>` default rows _(layer: plugin)_ _(points: 15)_
-14. [ ] **Task 14** — Add gate 14d (`zizmor` over the rendered workflows) and gate 6f (`typos` over the shipped trees) _(layer: general)_ _(points: 20)_
+14. [x] **Task 14** — Add gate 14d (`zizmor` over the rendered workflows) and gate 6f (`typos` over the shipped trees) _(layer: general)_ _(points: 20)_
 15. [ ] **Task 15** — State the new default in the schema description, `docs/config.md` and `docs/cli.md` _(layer: general)_ _(points: 15)_
 16. [ ] **Task 16** — Update `docs/remote-execution.md` and `docs/retrieval.md` for `harness-scripts` and the hardened workflows _(layer: general)_ _(points: 15)_
 17. [ ] **Task 17** — Document gates 6f and 14d and record the audit figures in `docs/development.md`, and record the hook comment edits in `docs/guard-verification.md` _(layer: general)_ _(points: 12)_
