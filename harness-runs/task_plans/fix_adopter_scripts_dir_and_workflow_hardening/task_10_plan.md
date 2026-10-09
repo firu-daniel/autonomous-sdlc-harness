@@ -37,3 +37,8 @@
 
 - `npm test --workspace cli -- test/workflow-templates.test.mjs`, from the repository root, as one foreground command — the file this task edits. It passes, with its counts read back.
 - **A scratch mutation check.** In a copy under `harness-runs/scratch/`, revert one SHA to `@v5`, then delete the `warm` checkout's `persist-credentials: false`, then add one under the `poll` checkout. Run each new test's assertion against the copy through `bash scripts/scratch-run.sh <probe>`, and confirm each fails. Record the three outcomes in the return.
+
+**Deviations from plan:**
+- The existing per-file test `the ACTION PINS header names exactly the uses: values, each a major tag of an actions/ action` failed on all four files after Tasks 7–9 (it read `#   actions/<name>@v<major>` header lines and required `@v[0-9]+`). The plan does not name it; it is rewritten as `the ACTION PINS header names exactly the pinned actions and their versions`, comparing the header's `#   <action>   v<x.y.z>` lines with the `# <action> v<x.y.z>` comments above the `uses:` lines. The `actions/` owner restriction it carried is dropped, matching the plan's `<owner>/<repo>[/<path>]` pin shape.
+- The pin test additionally asserts the version comment names the same action its `uses:` line pins.
+- The credential test additionally asserts each file's checkouts sit in exactly the jobs listed, and that no non-comment `persist-credentials` line exists outside them.
