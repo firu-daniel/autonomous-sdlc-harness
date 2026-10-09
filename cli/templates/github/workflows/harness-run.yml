@@ -113,20 +113,23 @@
 #     The credential secrets and HARNESS_GIT_TOKEN are read only by later steps.
 #
 # ACTION PINS.
-#   actions/checkout@v5
-#   actions/setup-node@v5
-#   actions/cache/restore@v5
-#   actions/cache@v5
-#   actions/upload-artifact@v6
-# Each is the lowest major whose own action.yml declares `runs.using: node24`,
-# per a maintainer's lookups of each action's action.yml and release notes on
-# 2026-09-29T08:21Z (UTC). Each of those majors' release notes requires Actions
-# Runner 2.327.1 or newer; a GitHub-hosted runner already has it, and a
-# self-hosted one must run it (docs/remote-execution.md, section 8). A major
-# tag, not a commit sha: every action here is GitHub's own `actions/`
-# organisation, the owner of the runner and GITHUB_TOKEN this job already
-# trusts, and a major tag takes the action's own patch and security releases
-# where a sha would freeze your copy. Pin shas in your copy if you want them.
+#   actions/checkout          v5.1.0
+#   actions/setup-node        v5.0.0
+#   actions/cache/restore     v5.1.0
+#   actions/cache             v5.1.0
+#   actions/upload-artifact   v6.0.0
+# Each `uses:` names the full commit sha of the release on the comment line
+# above it. Each release is in the lowest major whose own action.yml declares
+# `runs.using: node24`, per a maintainer's lookups of each action's action.yml
+# and release notes on 2026-09-29T08:21Z (UTC). Each of those majors' release
+# notes requires Actions Runner 2.327.1 or newer; a GitHub-hosted runner already
+# has it, and a self-hosted one must run it (docs/remote-execution.md, section
+# 8). A sha, not a tag: a tag is mutable, and this job holds the Claude
+# credential and write tokens. A pin moves when
+# `npx autonomous-sdlc-harness@<version> init --upgrade-workflows` re-renders
+# this file at a newer release's pins; a hand bump replaces the sha and its
+# comment line together. The version stays on its own line, never trailing the
+# `uses:` value: a value carrying ` #` is never a plain scalar.
 #
 # WHAT IT READS.
 #   Secrets: CLAUDE_CODE_OAUTH_TOKEN and/or ANTHROPIC_API_KEY (one is required;
@@ -145,13 +148,52 @@
 #   harness.config.json, at run time: `scriptsDir` and whether docs retrieval
 #     applies. No configured value is frozen into this file.
 #
-# THE PERMISSIONS. A workflow-level `permissions:` block sets every permission
-# it does not list to `none`, so each one the job uses is listed:
-#   contents       to push the branch
-#   actions        to dispatch, poll and enable the poller
-#   issues         to comment and set labels on the issue and the pull request,
-#                  which both use the issues API
-#   pull-requests  to open the run's pull request, update it and label it
+# THE PERMISSIONS. `permissions: {}` at workflow level grants nothing, and each
+# job's own block sets every permission it does not list to `none`. Each grant
+# is what that job's own steps run:
+#   wrong-ref  none           it fails the dispatch from its step's `env:` alone
+#   run        contents       push-branch.sh pushes the branch
+#              actions        remote-run.sh `restore` downloads the previous
+#                             bundle, `continue` dispatches and enables the poller
+#              issues         lifecycle comments and state labels, on the issue
+#                             and the pull request, which both use the issues API
+#              pull-requests  remote-run.sh `open` and `deliver` open, update and
+#                             label the run's pull request
+#   collect    contents       `collect` runs `review`, whose hr_push_landed
+#                             pushes the round through push-branch.sh
+#              actions        the settledness read lists runs and downloads the
+#                             bundle; `review` dispatches the round (verb_dispatch)
+#              issues         forge_report's `round` and `not_started` comments
+#                             and labels, collect_notify's comment, and the label
+#                             create forge_set_state retries with
+#              pull-requests  forge_pr_var and round_collect read the pull
+#                             request's reviews and comments, and `round` runs
+#                             `gh pr ready --undo` on a ready pull request
+#   warm       contents read  the checkout. Its actions/cache restore and save
+#                             use the runner's cache token, not GITHUB_TOKEN, and
+#                             its `init` calls no GitHub API
+# A grant narrower than a job's need fails only on GitHub, never locally.
+#
+# THE CHECKOUT CREDENTIAL. The `warm` checkout sets `persist-credentials: false`:
+# that job pushes nothing. The `run` and `collect` checkouts keep the credential
+# persisted, because both push through push-branch.sh with it (`run` with
+# HARNESS_GIT_TOKEN or the job token, `collect` with the job token), so
+# zizmor's `artipacked` finding stands on those two. The one upload, `Upload
+# the state bundle`, takes its path from the runner's temp directory, outside
+# GITHUB_WORKSPACE, so no artifact carries the checkout's .git/config. An edit
+# keeps it so: never point an upload-artifact `path:` inside the workspace while
+# a checkout persists its credential.
+#
+# THE CLAUDE CLI. `Install the claude CLI when absent` installs
+# @anthropic-ai/claude-code unpinned, and only when the runner has no `claude`.
+# The latest is wanted: the agent runner tracks the model API, and
+# harness-control.yml installs it the same way but is never re-rendered by
+# `--upgrade-workflows` (cli/src/generators/githubWorkflows.ts, choice 5), so a
+# version frozen into the templates would stay frozen there. zizmor's
+# `adhoc-packages` finding stands on it, and pinning does not clear it: it flags
+# `npm install -g @anthropic-ai/claude-code@2.1.284` too, measured 2026-10-09.
+# The audit-silent alternatives, `npx --yes` and `curl | bash`, are the same
+# install with less integrity checking.
 #
 # WHY THE REPORT STEP MAY FAIL. `Open the pull request and report` runs
 # `remote-run.sh deliver` after the push, so the pull request's head carries the
@@ -279,11 +321,7 @@ on:
         type: number
         default: 0
 
-permissions:
-  contents: write
-  actions: write
-  issues: write
-  pull-requests: write
+permissions: {}
 
 defaults:
   run:
@@ -293,6 +331,7 @@ jobs:
   wrong-ref:
     if: (inputs.action == 'run' || inputs.action == 'pause') && github.ref_name != inputs.branch
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    permissions: {}
     steps:
       - name: Refuse a dispatch from another ref
         env:
@@ -305,6 +344,11 @@ jobs:
   run:
     if: inputs.action == 'run' && github.ref_name == inputs.branch
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: write
+      actions: write
+      issues: write
+      pull-requests: write
     # The self-hosted job limit, 5 days; a hosted job stops at its own limit.
     timeout-minutes: 7200
     concurrency:
@@ -434,7 +478,8 @@ jobs:
 
       - name: Check out the run's branch
         if: env.HARNESS_STOPPED != '1'
-        uses: actions/checkout@v5
+        # actions/checkout v5.1.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
@@ -466,7 +511,8 @@ jobs:
 
       - name: Set up Node
         if: env.HARNESS_STOPPED != '1'
-        uses: actions/setup-node@v5
+        # actions/setup-node v5.0.0
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '22'
           # v5 caches by package.json's packageManager; the job installs nothing through npm's cache, and a lockfile-less repository must not fail this step.
@@ -522,7 +568,8 @@ jobs:
 
       - name: Restore the docs-retrieval cache
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        uses: actions/cache/restore@v5
+        # actions/cache/restore v5.1.0
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
           key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}
@@ -582,7 +629,8 @@ jobs:
 
       - name: Upload the state bundle
         if: always() && env.SCRIPTS_DIR != ''
-        uses: actions/upload-artifact@v6
+        # actions/upload-artifact v6.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: harness-state
           path: ${{ runner.temp }}/harness-state
@@ -612,6 +660,11 @@ jobs:
     needs: run
     if: ${{ inputs.action == 'run' && !cancelled() && github.ref_name == inputs.branch }}
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: write
+      actions: write
+      issues: write
+      pull-requests: write
     concurrency:
       group: harness-review-${{ inputs.branch }}
       cancel-in-progress: false
@@ -669,7 +722,8 @@ jobs:
           exit 1
 
       - name: Check out the default branch for collecting
-        uses: actions/checkout@v5
+        # actions/checkout v5.1.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           ref: ${{ github.event.repository.default_branch }}
           token: ${{ github.token }}
@@ -703,6 +757,8 @@ jobs:
   warm:
     if: inputs.action == 'warm'
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: read
     env:
       HARNESS_CLI_VERSION: '{{cliVersion}}'
       HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
@@ -716,7 +772,10 @@ jobs:
 
       - name: Check out the dispatched ref
         if: env.HARNESS_STOPPED != '1'
-        uses: actions/checkout@v5
+        # actions/checkout v5.1.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
 
       - name: Read the configuration
         id: config
@@ -735,7 +794,8 @@ jobs:
 
       - name: Set up Node
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        uses: actions/setup-node@v5
+        # actions/setup-node v5.0.0
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '22'
           # As in the run job: no npm cache is used, and a lockfile-less repository must not fail this step.
@@ -743,7 +803,8 @@ jobs:
 
       - name: Restore and save the docs-retrieval cache
         if: env.HARNESS_STOPPED != '1' && steps.config.outputs.retrieval == 'true'
-        uses: actions/cache@v5
+        # actions/cache v5.1.0
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ${{ env.HARNESS_RETRIEVAL_CACHE }}
           key: harness-retrieval-${{ runner.os }}-${{ env.HARNESS_CLI_VERSION }}
