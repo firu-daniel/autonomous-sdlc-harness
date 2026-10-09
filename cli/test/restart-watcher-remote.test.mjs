@@ -14,11 +14,11 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import test from 'node:test';
 
-import { runBash } from './helpers/fixture.mjs';
+import { INIT_SCRIPTS_DIR, runBash } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
 const REGISTRY_PATH = 'sdlc-harness/autonomous_logs/registry.json';
-const SCRIPT_PATH = 'scripts/restart-watcher.sh';
+const SCRIPT_PATH = `${INIT_SCRIPTS_DIR}/restart-watcher.sh`;
 const REMOTE_LINE = 'remote (not affected by a restart): feat_r running';
 
 /**

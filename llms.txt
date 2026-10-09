@@ -19,6 +19,8 @@ The quick start, in five steps:
    npx autonomous-sdlc-harness init
    ```
 
+   The scripts land in `harness-scripts/`, and `--scripts-dir <dir>` picks another directory.
+
 3. Teach it the codebase: type this in an interactive Claude Code session opened on the repository, not in the terminal:
 
    ```

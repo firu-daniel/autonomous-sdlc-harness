@@ -33,7 +33,7 @@
  *    CLI's own and a version it does not know means a newer CLI wrote it, while these belong to
  *    another program that may change them at any release.
  *
- * **Every failure is `undefined`, never a throw** — file absent, unreadable, unparseable, key
+ * **Every failure is `undefined`, never a throw** — file absent, unreadable, unparsable, key
  * absent, no usable row. A machine where the plugin is not installed is an answer a caller has
  * something correct to do with, which is the discipline `core/git.ts`'s `hasCommits` states for the
  * same reason: the one consumer is a `doctor` check, and "not installed" is a state it reports. It

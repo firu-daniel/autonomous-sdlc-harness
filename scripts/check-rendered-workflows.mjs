@@ -15,10 +15,17 @@
 //          render as above and run `actionlint -shellcheck= -pyflakes=` over each rendered file,
 //          which must report nothing, and over the 0.6.1 fixture, which must report `syntax-check`.
 //          No `-ignore` is set: no shipped-template finding has been argued as a deliberate shape.
+//        node scripts/check-rendered-workflows.mjs --zizmor
+//          render as above and run `zizmor 1.30.1 --offline --no-config --format=json` over the
+//          render's `.github/`. Every finding outside RESIDUAL is a finding here, and so is a
+//          RESIDUAL entry that no longer fires. zizmor is taken from PATH when it reports 1.30.1,
+//          else from `uvx zizmor@1.30.1`; another version's audit set is not the one RESIDUAL was
+//          measured against. The online `--gh-token` audit is a hand-run step, never this mode.
 // Exit: 0 clean · 1 one or more findings, each on stderr as
 //       `check-rendered-workflows: <file> — <reason>`, all reported · 2 bad usage ·
-//       4 only under --actionlint, when actionlint is not on PATH
-// Depends on gate 2a's build: the default and --actionlint modes run `cli/dist/cli.js`.
+//       4 only under --actionlint, when actionlint is not on PATH, and under --zizmor, when
+//       neither PATH nor uvx provides zizmor 1.30.1
+// Depends on gate 2a's build: the default, --actionlint and --zizmor modes run `cli/dist/cli.js`.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -29,6 +36,22 @@ import { fileURLToPath } from 'node:url';
 const NAME = 'check-rendered-workflows';
 const EXPECTED = ['harness-control.yml', 'harness-resume.yml', 'harness-run.yml', 'harness-trigger.yml'];
 const NEGATIVE = 'cli/test/fixtures/harness-control-0.6.1.yml';
+const ZIZMOR_VERSION = '1.30.1';
+/**
+ * The zizmor findings the shipped workflows keep, as `<file> <audit> <job>`, each justified in its
+ * template's header. `artipacked`: the job pushes, or runs `git ls-remote`, through the checkout's
+ * credential. `adhoc-packages`: the latest Claude Code CLI is installed on purpose, and a pinned
+ * install is flagged too.
+ */
+const RESIDUAL = [
+  'harness-run.yml artipacked run',
+  'harness-run.yml artipacked collect',
+  'harness-run.yml adhoc-packages run',
+  'harness-resume.yml artipacked poll',
+  'harness-trigger.yml artipacked trigger',
+  'harness-control.yml artipacked control',
+  'harness-control.yml adhoc-packages control',
+];
 
 const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
   cwd: dirname(fileURLToPath(import.meta.url)),
@@ -43,7 +66,7 @@ const finding = (file, reason) => findings.push(`${NAME}: ${file} — ${reason}`
 
 function usage(message) {
   console.error(`${NAME}: ${message}`);
-  console.error('  usage: node scripts/check-rendered-workflows.mjs [--negatives | --actionlint]');
+  console.error('  usage: node scripts/check-rendered-workflows.mjs [--negatives | --actionlint | --zizmor]');
   process.exit(2);
 }
 
@@ -151,10 +174,75 @@ function actionlint(path) {
   }
 }
 
+/** The zizmor command line that reports {@link ZIZMOR_VERSION}, or a reason none does. */
+function resolveZizmor() {
+  const reports = (file, args) => {
+    try {
+      const out = execFileSync(file, [...args, '--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      return out.trim() === `zizmor ${ZIZMOR_VERSION}`;
+    } catch {
+      return false;
+    }
+  };
+  if (onPath('zizmor') && reports('zizmor', [])) return { file: 'zizmor', args: [] };
+  if (onPath('uvx') && reports('uvx', [`zizmor@${ZIZMOR_VERSION}`])) {
+    return { file: 'uvx', args: [`zizmor@${ZIZMOR_VERSION}`] };
+  }
+  return {
+    reason: `zizmor ${ZIZMOR_VERSION} is not available: not on PATH at that version, and uvx is ${
+      onPath('uvx') ? 'on PATH but did not provide it' : 'not on PATH'
+    }`,
+  };
+}
+
+/** Grades one zizmor run over `<render>/.github` against {@link RESIDUAL}. */
+function zizmorFindings(tool, githubDir) {
+  let out;
+  let err = '';
+  try {
+    out = execFileSync(tool.file, [...tool.args, '--offline', '--no-config', '--format=json', githubDir], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch (error) {
+    // zizmor exits non-zero when it reports a finding; only output that is not JSON is a failure.
+    if (typeof error.status !== 'number') throw error;
+    out = error.stdout ?? '';
+    err = `exit ${error.status}: ${String(error.stderr ?? '').trim().split('\n').slice(-5).join(' | ')}`;
+  }
+  let results;
+  try {
+    results = JSON.parse(out);
+    if (!Array.isArray(results)) throw new Error('not an array');
+  } catch (error) {
+    finding('.github/', `zizmor printed no JSON findings list (${error.message}) ${err}`.trim());
+    return;
+  }
+  const seen = new Set();
+  for (const result of results) {
+    const primary = (result.locations ?? []).find((loc) => loc.symbolic?.kind === 'Primary');
+    const path = primary?.symbolic?.key?.Local?.verbatim_path ?? '';
+    const file = path.split(/[\\/]/).pop() || '<unknown file>';
+    const route = primary?.symbolic?.route?.route ?? [];
+    const job = route[0]?.Key === 'jobs' && typeof route[1]?.Key === 'string' ? route[1].Key : '<no job>';
+    const key = `${file} ${result.ident} ${job}`;
+    seen.add(key);
+    if (!RESIDUAL.includes(key)) {
+      finding(`.github/workflows/${file}`, `zizmor ${result.ident} in job ${job}: ${result.desc}`);
+    }
+  }
+  for (const key of RESIDUAL) {
+    if (seen.has(key)) continue;
+    const [file, ident, job] = key.split(' ');
+    finding(`.github/workflows/${file}`, `RESIDUAL lists zizmor ${ident} in job ${job}, which no longer fires`);
+  }
+}
+
 const args = process.argv.slice(2);
 if (args.length > 1) usage('expected at most one argument');
 const mode = args[0] ?? 'render';
-if (!['render', '--negatives', '--actionlint'].includes(mode)) usage(`unknown argument '${mode}'`);
+if (!['render', '--negatives', '--actionlint', '--zizmor'].includes(mode)) usage(`unknown argument '${mode}'`);
 
 if (mode === 'render') {
   withRendered((dir) => {
@@ -168,6 +256,13 @@ if (mode === 'render') {
   if (path !== undefined && parseError(path) === undefined) {
     finding(NEGATIVE, 'parses as YAML; the gate can no longer see a workflow GitHub refuses');
   }
+} else if (mode === '--zizmor') {
+  const tool = resolveZizmor();
+  if (tool.reason !== undefined) {
+    console.error(`${NAME}: ${tool.reason}`);
+    process.exit(4);
+  }
+  withRendered((dir) => zizmorFindings(tool, dirname(dir)));
 } else {
   if (!onPath('actionlint')) {
     console.error(`${NAME}: actionlint is not on PATH`);

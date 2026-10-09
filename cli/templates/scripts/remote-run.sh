@@ -3565,7 +3565,7 @@ verb_poll() {
 verb_pause_requested() {
   local found
   list_runs
-  # An unparseable createdAt is no match rather than a failed read.
+  # An unparsable createdAt is no match rather than a failed read.
   found=$(printf '%s' "$GH_OUT" | jq -r --arg t "harness pause $branch" --argjson since "$since_arg" '
     [.[] | select(.displayTitle == $t)
       | ((.createdAt // "") | try fromdateiso8601 catch null)

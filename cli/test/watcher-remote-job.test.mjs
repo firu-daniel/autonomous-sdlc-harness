@@ -52,7 +52,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 
-import { runBash, runGit } from './helpers/fixture.mjs';
+import { INIT_SCRIPTS_DIR, runBash, runGit } from './helpers/fixture.mjs';
 import { createWatcherFixture } from './helpers/watcher.mjs';
 
 const STATE_DIR = 'sdlc-harness';
@@ -151,7 +151,7 @@ async function createJobFixture(t) {
   const promptsPath = join(recorder, 'prompts.txt');
   const xdgState = join(w.dir, 'xdg-state');
   const remoteStatus = join(w.dir, STATE_DIR, 'autonomous_logs', 'remote_status.json');
-  const watcher = join(w.dir, 'scripts', 'autonomous-watcher.sh');
+  const watcher = join(w.dir, INIT_SCRIPTS_DIR, 'autonomous-watcher.sh');
 
   await mkdir(recorder, { recursive: true });
   await mkdir(xdgState, { recursive: true });
@@ -610,7 +610,7 @@ test('control poll: a usage refusal is a failed poll', async (t) => {
   const j = await createJobFixture(t);
   if (j === null) return;
 
-  const scripts = join(j.dir, 'scripts');
+  const scripts = join(j.dir, INIT_SCRIPTS_DIR);
   await writeFile(join(scripts, 'remote-run-real.sh'), readFileSync(join(scripts, 'remote-run.sh')), { mode: 0o755 });
   await writeFile(
     join(scripts, 'remote-run.sh'),
@@ -780,7 +780,7 @@ test('usage: a short reset is waited out in the job, a reset past the deadline g
   await t.test('a usage_resume_at lost after the gate paused -> repaired to the fallback, wait-poller', async (t) => {
     const j = await createJobFixture(t);
     if (j === null) return;
-    const lib = join(j.dir, 'scripts', 'lib', 'harness-run-lib.sh');
+    const lib = join(j.dir, INIT_SCRIPTS_DIR, 'lib', 'harness-run-lib.sh');
     // The exact stranded record: tagged `usage`, PAUSE and PAUSE_ACK present, no reset time.
     const loseResumeAt =
       `. ${shellQuote(lib)}; ` +

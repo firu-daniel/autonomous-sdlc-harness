@@ -46,7 +46,7 @@ import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 
 import { CASE_CONCURRENCY, concurrentSuite } from './helpers/concurrency.mjs';
-import { createFixture, readJson, runCli, PACKAGE_ROOT, WORKSPACE_ROOT } from './helpers/fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, readJson, runCli, PACKAGE_ROOT, WORKSPACE_ROOT } from './helpers/fixture.mjs';
 
 /** The generated configuration every assertion here reads, relative to the fixture root. */
 const CONFIG_FILE = 'harness.config.json';
@@ -133,8 +133,8 @@ function warningLines(stderr) {
   return stderr.split('\n').filter((line) => line.startsWith('! '));
 }
 
-/** The generated wrapper directory, as `init` writes it under the schema default. */
-const SCRIPTS_DIR = 'scripts';
+/** The generated wrapper directory, as a configless `init` writes it: no case here seeds a config. */
+const SCRIPTS_DIR = INIT_SCRIPTS_DIR;
 
 /**
  * The raw command line a generated wrapper runs, read off the wrapper on disk.

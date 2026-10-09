@@ -128,7 +128,7 @@
 #     (within jurisdiction)                             one document, absent
 #                                                       `jq`-readable `defaultBranch`)
 #   no config, or one `[ -r ]` cannot read     -> SILENT (out of jurisdiction)
-#   payload unparseable, or `jq` absent        -> SILENT (no command to judge)
+#   payload unparsable, or `jq` absent        -> SILENT (no command to judge)
 #   path is not inside a git repository        -> SILENT
 #   detached HEAD with nothing else proven     -> SILENT (no branch to name)
 #   anything else                              -> SILENT

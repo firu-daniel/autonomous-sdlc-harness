@@ -33,6 +33,12 @@
  * among them; and a legal `docs.retrievalBackend` with docs retrieval off is a warning, since it
  * selects nothing.
  *
+ * **An absent `scriptsDir` is a warning, and it is the one optional key reported for absence
+ * alone.** Every other absent optional key means what `init` would write for it; this one means
+ * `DEFAULTS.scriptsDir` while `init` now writes `INIT_SCRIPTS_DIR`, so an omitted key is the only
+ * value whose meaning differs from a freshly generated one. A generated config always carries the
+ * key, so the warning never reaches a fresh `init`.
+ *
  * ## What it deliberately does not re-implement
  *
  * - **`uniqueItems`** on `protectedBranches` and `parity.toolchainCommands`. A duplicate entry is
@@ -49,6 +55,7 @@ import {
   COMMAND_NONE_SENTINEL,
   CONFIG_VERSION,
   DESIGN_SOURCES,
+  DEFAULTS,
   DETECTION_PRESET_NAMES,
   EXECUTION_TARGETS,
   FORGE_KINDS,
@@ -584,6 +591,12 @@ export function checkConfigShape(value: unknown): ConfigProblem[] {
   }
 
   for (const key of TOP_LEVEL_STRING_KEYS) checkString(value, key, '', problems);
+  if (value['scriptsDir'] === undefined) {
+    problems.warn(
+      'scriptsDir',
+      `is not set, so every reader falls back to ${DEFAULTS.scriptsDir} — the directory releases before 0.6.6 wrote into, which a fresh init no longer writes. Set it explicitly to the directory your scripts are in, with npx autonomous-sdlc-harness config set scriptsDir <dir>, so its meaning cannot change under you.`,
+    );
+  }
   checkStringArray(value, 'protectedBranches', '', problems);
   checkEnum(
     value,

@@ -39,10 +39,10 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 
-import { createFixture, runBash, runCli, runGit } from './helpers/fixture.mjs';
+import { createFixture, INIT_SCRIPTS_DIR, runBash, runCli, runGit } from './helpers/fixture.mjs';
 
-const SCRIPT = 'scripts/remote-run.sh';
-const NOTIFY = 'scripts/autonomous-notify.sh';
+const SCRIPT = `${INIT_SCRIPTS_DIR}/remote-run.sh`;
+const NOTIFY = `${INIT_SCRIPTS_DIR}/autonomous-notify.sh`;
 const STATE_DIR = 'sdlc-harness';
 const REPOSITORY = 'octo/fixture';
 const ISSUE_URL = `https://github.com/${REPOSITORY}/issues/7`;

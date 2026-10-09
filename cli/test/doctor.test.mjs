@@ -63,6 +63,7 @@ import { pathToFileURL } from 'node:url';
 import { CASE_CONCURRENCY, concurrentSuite } from './helpers/concurrency.mjs';
 import {
   createFixture,
+  INIT_SCRIPTS_DIR,
   plantModelFiles,
   plantRetrievalRuntime,
   readJson,
@@ -122,6 +123,13 @@ const NO_BACKEND = BACKEND.kind === 'none' ? `this host has no service manager: 
 const CONFIG_FILE = 'harness.config.json';
 const PROFILE_FILE = '.claude/settings.autonomous.json';
 const SETTINGS_FILE = '.claude/settings.json';
+
+/**
+ * Where a configless `init` writes the wrappers and outer-loop scripts — every `wiredFixture`. Kept
+ * at `scripts` on purpose: `writeDocsServerEnv` (a seeded config without the key) and the
+ * hand-written wrapper entry in the plugin-permissions case (the `scripts` collision it pins).
+ */
+const SCRIPTS_DIR = INIT_SCRIPTS_DIR;
 
 /** The script the daemon runs, written by `init` into the configured `scriptsDir`. */
 const WATCHER_FILE = 'autonomous-watcher.sh';
@@ -325,7 +333,7 @@ test('the run-watcher check follows a custom scriptsDir', async (t) => {
 
 test('a deleted run watcher warns and leaves the exit status at 0', async (t) => {
   const dir = await wiredFixture(t);
-  await rm(join(dir, 'scripts', WATCHER_FILE));
+  await rm(join(dir, SCRIPTS_DIR, WATCHER_FILE));
 
   const { status, stdout, stderr } = await runCli(dir, ['doctor']);
 
@@ -504,7 +512,7 @@ test('doctor grades a wrapped commands key holding a raw command line', async (t
     const line = stderr.split('\n').find((entry) => entry.includes(WRAPPED_KEY_MISMATCH));
     assert.ok(line, `the report named no mismatch:\n${stderr}`);
     assert.ok(line.includes(rawLine), `the warning did not name the configured value:\n${line}`);
-    assert.ok(line.includes('bash scripts/typecheck.sh'), `the warning did not name the value to set:\n${line}`);
+    assert.ok(line.includes(`bash ${SCRIPTS_DIR}/typecheck.sh`), `the warning did not name the value to set:\n${line}`);
     // The neighbouring question this check is not: the file is still structurally valid, and the
     // config line says so on the same report.
     assert.match(stdout, passLine('config'));
@@ -555,7 +563,7 @@ test('doctor grades a wrapped commands key holding a raw command line', async (t
     // `deploy` is the one wrapped key whose command line is not under `commands`, so a message
     // spelling the key family would name a `commands.deploy` no config has.
     assert.ok(line.includes('deploy.command'), `the warning named the wrong key:\n${line}`);
-    assert.ok(line.includes('bash scripts/deploy.sh'), `the warning did not name the deploy wrapper:\n${line}`);
+    assert.ok(line.includes(`bash ${SCRIPTS_DIR}/deploy.sh`), `the warning did not name the deploy wrapper:\n${line}`);
   });
 });
 
@@ -677,9 +685,6 @@ test('doctor grades commands.typecheck answered <none> as answered rather than a
     assert.ok(line.includes('commands.test'), `command-resolves passed over commands.test silently:\n${line}`);
   });
 });
-
-/** Where `init` writes the wrappers at the configured default, as the other suites spell it. */
-const SCRIPTS_DIR = 'scripts';
 
 /** The two verification keys a run that `init` detected nothing for fills in, and their wrappers. */
 const HAND_FILLED = Object.freeze([
@@ -2479,7 +2484,7 @@ async function stubNotifier(t, dir) {
   t.after(() => rm(outside, { recursive: true, force: true }));
 
   const sentinel = join(outside, 'the-notifier-ran');
-  const script = join(dir, 'scripts', NOTIFY_FILE);
+  const script = join(dir, SCRIPTS_DIR, NOTIFY_FILE);
   writeFileSync(script, `#!/usr/bin/env bash\nprintf '%s\\n' "$@" > ${JSON.stringify(sentinel)}\n`, 'utf8');
   return { script, sentinel };
 }
@@ -2624,14 +2629,14 @@ test('the notifications check reports which settings file is in effect, and neve
   await t.test('--test-notification with no notifier warns, sends nothing and moves no exit status', async (subtest) => {
     const dir = await wiredFixture(subtest);
     const machine = await machineHome(subtest);
-    await rm(join(dir, 'scripts', NOTIFY_FILE));
+    await rm(join(dir, SCRIPTS_DIR, NOTIFY_FILE));
     const before = await snapshotTree(dir);
 
     const { status, stdout, stderr } = await runCli(dir, ['doctor', '--test-notification'], machine.env);
 
     assert.equal(status, 0, `--test-notification moved the exit status to ${status}\n${stdout}\n${stderr}`);
     assert.match(stderr, /--test-notification sent nothing/);
-    assert.ok(stderr.includes(join(dir, 'scripts', NOTIFY_FILE)), `the warning does not name the notifier:\n${stderr}`);
+    assert.ok(stderr.includes(join(dir, SCRIPTS_DIR, NOTIFY_FILE)), `the warning does not name the notifier:\n${stderr}`);
     assert.deepEqual(await snapshotTree(dir), before, '--test-notification wrote to the repository');
   });
 
@@ -3221,7 +3226,7 @@ async function installUnitCarrying(t, dir, envPath) {
     backend: { kind: BACKEND.kind, reason: 'this host, with its unit directory redirected', unitPath: unitDir },
     config: readJson(join(dir, CONFIG_FILE)),
     repoRoot: dir,
-    watcherPath: join(dir, 'scripts', WATCHER_FILE),
+    watcherPath: join(dir, SCRIPTS_DIR, WATCHER_FILE),
     envPath,
   });
   mkdirSync(unitDir, { recursive: true });
@@ -3249,7 +3254,7 @@ async function installUnitCarrying(t, dir, envPath) {
  * derived from the fixture's `package.json`.
  */
 function rewriteWrapperCommand(dir, file, command) {
-  const path = join(dir, 'scripts', file);
+  const path = join(dir, SCRIPTS_DIR, file);
   const lines = readFileSync(path, 'utf8').split('\n');
   const forwarding = lines
     .map((line, index) => ({ line, index }))
@@ -3409,7 +3414,7 @@ test('the daemon-path check grades the installed unit, and never above a warning
     const line = reportLine(stderr, 'warn', 'daemon-path');
     assert.ok(line.includes(FIXTURE_TOOLCHAIN_BINARY), `the warning does not name the binary the wrapper runs:\n${line}`);
     assert.ok(
-      line.includes(`${FIXTURE_TOOLCHAIN_BINARY} (commands.test → scripts/test.sh`),
+      line.includes(`${FIXTURE_TOOLCHAIN_BINARY} (commands.test → ${SCRIPTS_DIR}/test.sh`),
       `the warning does not say which wrapper the binary was derived from:\n${line}`,
     );
     // Naming where it does resolve is what shows an operator that their shell and their daemon
@@ -3438,7 +3443,7 @@ test('the daemon-path check grades the installed unit, and never above a warning
     assert.match(stdout, CLEAN_SUMMARY);
     const line = reportLine(stdout, 'pass', 'daemon-path');
     assert.ok(
-      line.includes(`${FIXTURE_TOOLCHAIN_BINARY} (commands.test → scripts/test.sh)`),
+      line.includes(`${FIXTURE_TOOLCHAIN_BINARY} (commands.test → ${SCRIPTS_DIR}/test.sh)`),
       `the pass does not name the binary it graded with the wrapper it came from:\n${line}`,
     );
     // This branch adds reads under `scriptsDir`, and a `readFileSync` on a missing path is the one
@@ -3455,11 +3460,11 @@ test('the daemon-path check grades the installed unit, and never above a warning
     // `init` clears it. Asserting merely that both are named is what let one remedy ship over both.
     const dir = await wiredFixture(subtest);
     writeFileSync(
-      join(dir, 'scripts', 'test.sh'),
+      join(dir, SCRIPTS_DIR, 'test.sh'),
       '#!/usr/bin/env bash\nset -uo pipefail\necho "an adopter rewrote this and forwards nothing"\n',
       'utf8',
     );
-    await rm(join(dir, 'scripts', 'typecheck.sh'), { force: true });
+    await rm(join(dir, SCRIPTS_DIR, 'typecheck.sh'), { force: true });
 
     const toolchain = await toolchainDir(subtest, [DEFAULT_AGENT_CLI]);
     const { home } = await installUnitCarrying(subtest, dir, `${toolchain}${delimiter}${process.env.PATH ?? ''}`);
@@ -3470,8 +3475,8 @@ test('the daemon-path check grades the installed unit, and never above a warning
     assert.match(stdout, passLine('daemon-path'));
     assert.match(stdout, CLEAN_SUMMARY);
     const line = reportLine(stdout, 'pass', 'daemon-path');
-    const edited = line.indexOf('commands.test (scripts/test.sh)');
-    const deleted = line.indexOf('commands.typecheck (scripts/typecheck.sh)');
+    const edited = line.indexOf(`commands.test (${SCRIPTS_DIR}/test.sh)`);
+    const deleted = line.indexOf(`commands.typecheck (${SCRIPTS_DIR}/typecheck.sh)`);
     assert.ok(edited >= 0, `the unreadable body is not named as ungraded:\n${line}`);
     assert.ok(deleted >= 0, `the missing wrapper is not named as ungraded:\n${line}`);
     // The parenthesised form is unique to these clauses — a binary's source list spells the same key
@@ -3518,7 +3523,7 @@ test('the daemon-path check grades the installed unit, and never above a warning
     assert.match(stdout, passLine('daemon-path'));
     const line = reportLine(stdout, 'pass', 'daemon-path');
     assert.ok(
-      line.includes(`${FIXTURE_TOOLCHAIN_BINARY} (commands.test → scripts/test.sh)`),
+      line.includes(`${FIXTURE_TOOLCHAIN_BINARY} (commands.test → ${SCRIPTS_DIR}/test.sh)`),
       `the pass does not grade the binary behind the assignment, with the wrapper it came from:\n${line}`,
     );
     assert.ok(!line.includes(assignment), `the assignment prefix is graded as though it were a binary:\n${line}`);
@@ -3541,7 +3546,7 @@ test('the daemon-path check grades the installed unit, and never above a warning
     assert.match(stdout, passLine('daemon-path'));
     assert.match(stdout, CLEAN_SUMMARY);
     const line = reportLine(stdout, 'pass', 'daemon-path');
-    assert.ok(line.includes('commands.test (scripts/test.sh)'), `the compound line is not named as ungraded:\n${line}`);
+    assert.ok(line.includes(`commands.test (${SCRIPTS_DIR}/test.sh)`), `the compound line is not named as ungraded:\n${line}`);
     assert.ok(!/\bcd \(/.test(line), `the shell builtin heading the line is graded as a binary:\n${line}`);
     assert.ok(
       line.includes('that could be derived here'),
@@ -3572,11 +3577,11 @@ test('the daemon-path check grades the installed unit, and never above a warning
     assert.match(stdout, CLEAN_SUMMARY);
     const line = reportLine(stderr, 'warn', 'daemon-path');
     assert.ok(
-      line.includes(`${FIXTURE_TOOLCHAIN_BINARY} (commands.test → scripts/test.sh`),
+      line.includes(`${FIXTURE_TOOLCHAIN_BINARY} (commands.test → ${SCRIPTS_DIR}/test.sh`),
       `the warning does not name the binary commands.test reaches through its wrapper:\n${line}`,
     );
     assert.ok(
-      line.includes(`${FIXTURE_LINTER_BINARY} (commands.typecheck → scripts/typecheck.sh`),
+      line.includes(`${FIXTURE_LINTER_BINARY} (commands.typecheck → ${SCRIPTS_DIR}/typecheck.sh`),
       `the warning does not name the binary commands.typecheck reaches through its wrapper:\n${line}`,
     );
   }));
@@ -3638,7 +3643,7 @@ test('the command-resolves check grades what each configured line runs, and neve
     assert.match(stdout, CLEAN_SUMMARY);
     const line = reportLine(stderr, 'warn', 'command-resolves');
     assert.ok(
-      line.includes(`${FIXTURE_TOOLCHAIN_BINARY} (commands.test → scripts/test.sh)`),
+      line.includes(`${FIXTURE_TOOLCHAIN_BINARY} (commands.test → ${SCRIPTS_DIR}/test.sh)`),
       `the warning does not name the head with the line it came from:\n${line}`,
     );
     // What it costs and what to do about it, both on the line: a warning an operator cannot act on is
@@ -3685,7 +3690,7 @@ test('the command-resolves check grades what each configured line runs, and neve
     assert.match(stdout, passLine('command-resolves'));
     assert.doesNotMatch(stderr, warnLine('command-resolves'));
     const line = reportLine(stdout, 'pass', 'command-resolves');
-    assert.ok(line.includes('commands.test (scripts/test.sh)'), `the compound line is not named as ungraded:\n${line}`);
+    assert.ok(line.includes(`commands.test (${SCRIPTS_DIR}/test.sh)`), `the compound line is not named as ungraded:\n${line}`);
     assert.ok(line.includes(NOT_GRADED_HERE_ONE), `the compound line is not reported as not graded:\n${line}`);
     assert.ok(!/\bcd \(/.test(line), `the builtin heading the line is graded as a binary:\n${line}`);
   });
@@ -3704,7 +3709,7 @@ test('the command-resolves check grades what each configured line runs, and neve
     assert.doesNotMatch(stderr, warnLine('command-resolves'));
     const line = reportLine(stdout, 'pass', 'command-resolves');
     assert.ok(
-      line.includes('./mvnw (commands.test → scripts/test.sh)'),
+      line.includes(`./mvnw (commands.test → ${SCRIPTS_DIR}/test.sh)`),
       `the relative head is not named with the line it came from:\n${line}`,
     );
     assert.ok(line.includes(NOT_GRADED_HERE_ONE), `the relative head is not reported as not graded:\n${line}`);
@@ -3771,7 +3776,7 @@ test('the PATH parsed out of a unit is the PATH that was rendered into it, for b
       backend: { kind, reason: `${kind}, as this test asked for`, unitPath: join('/unit-dir', kind) },
       config: { projectName: 'fixture-project', stateDir: STATE_DIR },
       repoRoot,
-      watcherPath: join(repoRoot, 'scripts', WATCHER_FILE),
+      watcherPath: join(repoRoot, SCRIPTS_DIR, WATCHER_FILE),
       envPath,
     });
 
@@ -4621,7 +4626,10 @@ const NOT_A_HELPER = 'helpers.txt';
 /** The relative `source` a marketplace manifest gives this plugin — the committed manifest's own value. */
 const PLUGIN_SOURCE = './plugin';
 
-/** Fill a plugin root's `scripts/` directory with the named helpers, and one file that is not one. */
+/**
+ * Fill a plugin root's `scripts/` directory with the named helpers, and one file that is not one.
+ * That `scripts` is the plugin's own (`machine/plugins.ts` → `pluginScriptsDir`), never `scriptsDir`.
+ */
 function writeHelperScripts(root, scriptNames) {
   const scripts = join(root, 'scripts');
   mkdirSync(scripts, { recursive: true });
@@ -4902,7 +4910,8 @@ test('the plugin-permissions check prints the entries to paste, and never above 
     const stale = await pluginInstallRootFixture(subtest, HELPERS);
     const home = await claudeConfigHome(subtest, [{ scope: 'user', installPath: root }]);
     const staleEntry = pluginEntries(stale, [HELPERS[0]])[0];
-    // A wrapper's own entry: repo-root-absolute, and byte-shaped exactly like a plugin helper's.
+    // A wrapper's own entry: repo-root-absolute, and byte-shaped exactly like a plugin helper's. Kept
+    // at `scripts`, the absent-key `scriptsDir`, because only there does that collision exist.
     const wrapperEntry = `Bash(bash ${dir}/scripts/test.sh:*)`;
     allowInProfile(dir, [pluginReadEntry(root), ...pluginEntries(root, HELPERS), staleEntry, wrapperEntry]);
 
@@ -5487,7 +5496,7 @@ function readRecord(record) {
     });
 }
 
-/** Write `.mcp.json` with a `harness-docs` server carrying `env`. */
+/** Write `.mcp.json` with a `harness-docs` server carrying `env`; `scripts/` is the absent key's, as `writeRetrievalConfig` seeds none. */
 function writeDocsServerEnv(dir, env) {
   const mcp = { mcpServers: { 'harness-docs': { command: 'bash', args: ['scripts/docs-search-server.sh'], env } } };
   writeFileSync(join(dir, MCP_FILE), `${JSON.stringify(mcp, null, 2)}\n`, 'utf8');

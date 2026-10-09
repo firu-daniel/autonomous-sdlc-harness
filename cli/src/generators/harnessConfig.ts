@@ -54,6 +54,7 @@ import {
   CONFIG_FILENAME,
   CONFIG_VERSION,
   DEFAULTS,
+  INIT_SCRIPTS_DIR,
   isPlaceholder,
   QA_DRIVER_IMPLEMENTED,
   qaDriverChoices,
@@ -146,6 +147,8 @@ export interface HarnessConfigFlags {
   readonly defaultBranch?: string;
   /** `--state-dir`. Defaults to the schema's `sdlc-harness/`. */
   readonly stateDir?: string;
+  /** `--scripts-dir`. Defaults to {@link INIT_SCRIPTS_DIR}. */
+  readonly scriptsDir?: string;
   /** `--qa`, `--docs`, `--parity`: the three phase toggles, each off unless given. */
   readonly qa?: boolean;
   readonly docs?: boolean;
@@ -187,6 +190,13 @@ export interface BuildConfigOptions {
    */
   readonly preset?: PresetProfile;
   readonly flags: HarnessConfigFlags;
+  /**
+   * The `scriptsDir` the file being rebuilt carried, an absent key read as {@link DEFAULTS}'s.
+   * Set only on a `--reset-config` run with no `--scripts-dir`, so a rebuild leaves the scripts
+   * already on disk where every reader looks for them; {@link HarnessConfigFlags.scriptsDir} wins
+   * over it.
+   */
+  readonly rebuiltScriptsDir?: string;
   /**
    * Sink for a line the adopter should see. Called rather than printed, so this stays a pure
    * assembler: {@link writeHarnessConfig} collects into {@link HarnessConfigResult.warnings} and
@@ -714,6 +724,7 @@ export function buildConfig({
   detection,
   preset,
   flags,
+  rebuiltScriptsDir,
   warn,
   noteIfWritten,
   warnIfWritten,
@@ -724,7 +735,7 @@ export function buildConfig({
   const informIfWritten = noteIfWritten ?? ((): void => {});
   const defer = warnIfWritten ?? ((): void => {});
   const profile = preset ?? buildPreset(detection);
-  const scriptsDir = DEFAULTS.scriptsDir;
+  const scriptsDir = flags.scriptsDir ?? rebuiltScriptsDir ?? INIT_SCRIPTS_DIR;
   const defaultBranch = resolveDefaultBranch(repoRoot, flags.defaultBranch, defer, informIfWritten);
   const phases = { qa: flags.qa ?? false, docs: flags.docs ?? false, parity: flags.parity ?? false };
 
@@ -841,6 +852,7 @@ export function writeHarnessConfig({
   detection,
   preset,
   flags,
+  rebuiltScriptsDir,
   plan,
   resetConfig = false,
   dryRun = false,
@@ -861,6 +873,7 @@ export function writeHarnessConfig({
     ...(preset === undefined ? {} : { preset }),
     ...(askDriver === undefined ? {} : { askDriver }),
     ...(askRetrieval === undefined ? {} : { askRetrieval }),
+    ...(rebuiltScriptsDir === undefined ? {} : { rebuiltScriptsDir }),
     flags,
     warn: (message) => warnings.push(message),
     warnIfWritten: (message) => ifWritten.push(message),
@@ -951,7 +964,12 @@ export function writeHarnessConfig({
       appDirSource === 'config'
         ? `appDir is re-read from the file being rebuilt, so every layer scope is re-derived under the same application directory`
         : `appDir is ${JSON.stringify(detection.context.appDir)} — ${appDirSource === 'flag' ? 'the directory --app-dir named on this command line' : 'the repository root, because the file being rebuilt supplied no appDir this run could use'} — so every layer scope is re-derived under that directory`;
-    const consequence = `It is re-derived rather than restored: ${appDirClause}, but any value that lived only in the edited file — a phase toggle, an added protectedBranches entry, a corrected command line — becomes whatever detection and the flags say, so anything you meant to keep has to be given as a flag on this run or set again afterwards with \`config set\`.`;
+    // Conditioned on the flag too: a `--scripts-dir` on the same run wins over the re-read value.
+    const scriptsDirClause =
+      rebuiltScriptsDir !== undefined && flags.scriptsDir === undefined
+        ? `; scriptsDir is re-read from the file being rebuilt as ${JSON.stringify(rebuiltScriptsDir)}, so the scripts already on disk stay where every reader looks for them; pass --scripts-dir <dir> to move it`
+        : '';
+    const consequence = `It is re-derived rather than restored: ${appDirClause}${scriptsDirClause}, but any value that lived only in the edited file — a phase toggle, an added protectedBranches entry, a corrected command line — becomes whatever detection and the flags say, so anything you meant to keep has to be given as a flag on this run or set again afterwards with \`config set\`.`;
     // The closing clause carries one exception, and it is stated here because this note is the
     // enumeration of what a rebuild costs. A guard still enforcing the pre-rebuild set is a state
     // the rebuild itself creates, so the run that creates it is the run that clears it
