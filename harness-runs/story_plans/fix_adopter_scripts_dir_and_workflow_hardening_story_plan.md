@@ -118,7 +118,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_adopter_scripts_dir_and_
 5. [x] **Task 5** — Move the watcher and walker helpers, and the outer-loop suites built on them, to the fresh-init scripts directory _(layer: cli)_ _(points: 20)_
 6. [x] **Task 6** — Move the `remote-run.sh`, `push-branch.sh` and workflow-render suites to the fresh-init scripts directory _(layer: cli)_ _(points: 15)_
 7. [x] **Task 7** — Harden `harness-run.yml`: SHA pins, per-job permissions, unpersisted credentials where no push, justified residuals _(layer: cli)_ _(points: 20)_
-8. [ ] **Task 8** — Harden `harness-resume.yml` and `harness-trigger.yml` the same way _(layer: cli)_ _(points: 15)_
+8. [x] **Task 8** — Harden `harness-resume.yml` and `harness-trigger.yml` the same way _(layer: cli)_ _(points: 15)_
 9. [ ] **Task 9** — Harden `harness-control.yml` the same way, and fix its spelling _(layer: cli)_ _(points: 15)_
 10. [ ] **Task 10** — Pin the hardened workflow shapes in `workflow-templates.test.mjs` _(layer: cli)_ _(points: 15)_
 11. [ ] **Task 11** — Fix the `typos` hits in the outer-loop script templates and the inbox README template _(layer: cli)_ _(points: 10)_

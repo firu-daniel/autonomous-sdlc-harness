@@ -37,3 +37,5 @@
 - **YAML and lint.** The same probe parses both files as YAML, and runs `actionlint -shellcheck= -pyflakes=` where it is on `PATH`.
 - **No token.** `grep -n "{{"` on both files finds no template token.
 - **Byte-stable lines.** `git diff` touches no `run:` body, `if:` or trigger key.
+
+**Deviations from plan:** `harness-trigger.yml`'s `# WHO WRITES IT.` said the file "carries no version pin", which the new sha pin made false; reworded to "no CLI version pin" (no `run:`, `if:` or trigger key touched). The zizmor probe reported 2 findings shown (`artipacked` on both checkouts, as planned) and 6 suppressed by zizmor's default persona; the suppressed ones were not listed.

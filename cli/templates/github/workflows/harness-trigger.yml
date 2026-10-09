@@ -5,7 +5,7 @@
 # `forge` is `github` and its `execution.target` is `github-actions`. Written
 # create-if-absent: from then on it is yours to tune, and a re-run of `init`
 # keeps your copy. `init --upgrade-workflows` does NOT re-render it: it carries
-# no version pin and calls the scripts on the default branch, so it shares
+# no CLI version pin and calls the scripts on the default branch, so it shares
 # their re-run contract — `init --force` replaces it after a `.bak`.
 #
 # WHAT IT DOES. One job runs `remote-run.sh trigger`, which does everything
@@ -38,7 +38,9 @@
 # and the order its refusals are made in. Nothing here pre-filters on it.
 #
 # THE PERMISSIONS, declared because the default token may be read-only
-# (docs/github-integration-research.md, T2):
+# (docs/github-integration-research.md, T2). `permissions: {}` at workflow
+# level grants nothing, and the `trigger` job's own block sets every permission
+# it does not list to `none`, so a job added later inherits nothing:
 #   contents: write   push the new branch carrying the task prompt
 #   actions: write    dispatch harness-run.yml and look up the run it created
 #   issues: write     comment on the issue and remove the trigger label
@@ -49,7 +51,13 @@
 # HARNESS_GIT_TOKEN: a branch pushed with GITHUB_TOKEN starts no workflow
 # (docs/remote-execution.md, `### Verified in Gate 12 round 3`), so the prompt
 # commit does not run your CI. A full fetch, because pushing a new branch from
-# a shallow clone has not been measured anywhere.
+# a shallow clone has not been measured anywhere. The checkout keeps the
+# credential persisted, so zizmor's `artipacked` finding stands on it:
+# `remote-run.sh trigger` runs `start`, whose `hr_push_landed` pushes the new
+# branch through push-branch.sh with that credential. The job uploads no
+# artifact, so nothing carries the checkout's .git/config off the runner; an
+# edit adding an upload never points its `path:` at the workspace root or at
+# `.git/`.
 #
 # NO CONCURRENCY GROUP. A group keeps at most one pending run and cancels an
 # earlier pending one, which would drop a trigger. Two starts that race for one
@@ -75,16 +83,19 @@
 #   cli/src/config/model.ts           DEFAULTS.scriptsDir
 #
 # ACTION PINS.
-#   actions/checkout@v5
-# The lowest major whose own action.yml declares `runs.using: node24`, per a
-# maintainer's lookups of its action.yml and release notes on
-# 2026-09-29T08:21Z (UTC). That major's release notes require Actions Runner
-# 2.327.1 or newer; a GitHub-hosted runner already has it, and a self-hosted
-# one must run it (docs/remote-execution.md, section 8). A major tag, not a
-# commit sha: it is GitHub's own `actions/` organisation, the owner of the
-# runner and GITHUB_TOKEN this job already trusts, and a major tag takes the
-# action's own patch and security releases where a sha would freeze your copy.
-# Pin a sha in your copy if you want one.
+#   actions/checkout          v5.1.0
+# The `uses:` names the full commit sha of the release on the comment line
+# above it. The release is in the lowest major whose own action.yml declares
+# `runs.using: node24`, per a maintainer's lookups of its action.yml and release
+# notes on 2026-09-29T08:21Z (UTC). That major's release notes require Actions
+# Runner 2.327.1 or newer; a GitHub-hosted runner already has it, and a
+# self-hosted one must run it (docs/remote-execution.md, section 8). A sha, not
+# a tag: a tag is mutable, and this job holds a write token while it reads
+# untrusted issue text. `init --upgrade-workflows` does not re-render this file
+# (see WHO WRITES IT), so its pin moves only when `init --force` replaces it
+# after a `.bak`, or by a hand bump, which replaces the sha and its comment line
+# together. The version stays on its own line, never trailing the `uses:` value:
+# a value carrying ` #` is never a plain scalar.
 
 name: harness-trigger
 run-name: harness trigger ${{ github.event.issue.number || github.event.action }}
@@ -95,10 +106,7 @@ on:
   repository_dispatch:
     types: [harness-task]
 
-permissions:
-  contents: write
-  actions: write
-  issues: write
+permissions: {}
 
 defaults:
   run:
@@ -108,6 +116,10 @@ jobs:
   trigger:
     if: github.event_name == 'repository_dispatch' || github.event.label.name == (vars.HARNESS_TRIGGER_LABEL || 'sdlc-harness')
     runs-on: ${{ vars.HARNESS_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: write
+      actions: write
+      issues: write
     env:
       GH_TOKEN: ${{ github.token }}
       HARNESS_REMOTE_STOP: ${{ vars.HARNESS_REMOTE_STOP }}
@@ -117,7 +129,8 @@ jobs:
       HARNESS_RUN_ACTORS: ${{ vars.HARNESS_RUN_ACTORS }}
     steps:
       - name: Check out the default branch
-        uses: actions/checkout@v5
+        # actions/checkout v5.1.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           token: ${{ github.token }}
           fetch-depth: 0
