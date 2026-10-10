@@ -409,6 +409,19 @@ for (const [name, stubExit, expectedStdout, expectedStatus] of [
   });
 }
 
+test('commands.typecheck `<none>` padded with whitespace is still the sentinel, as isNoneSentinel reads it', async (t) => {
+  const dir = await wiredFixture(t, { typecheck: '  <none> ' });
+
+  const result = await wrapper(dir, ['task_round_1']);
+
+  assert.equal(result.stdout, 'pass\n');
+  assert.equal(result.status, 0);
+  assert.equal(result.stderr, '');
+  const lines = text(dir, `${LOG_DIR}/task_round_1.log`).split('\n');
+  assert.ok(lines.includes(GATE_MARKER.typecheckNotRun), 'the padded sentinel was not recognised');
+  assert.deepEqual(counterLines(dir), ['ran'], 'the test did not run exactly once');
+});
+
 test('commands.typecheck unset refuses with exit 2, its own stderr line and nothing written', async (t) => {
   const dir = await wiredFixture(t, { typecheck: TC_STUB_COMMAND });
   const configPath = join(dir, 'harness.config.json');
