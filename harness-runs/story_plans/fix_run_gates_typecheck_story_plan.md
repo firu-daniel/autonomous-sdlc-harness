@@ -37,7 +37,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_gates_typecheck/task
 5. [x] **Task 5** — The user-review fix core describes and reports the two-gate Phase G _(layer: plugin)_ _(points: 8)_
 6. [x] **Task 6** — The implementer contract and the test-run rule say what a failing whole-tree type check means _(layer: plugin)_ _(points: 15)_
 7. [x] **Task 7** — Autonomous forks and ledger templates: new `G` / `RG` wording and the verification-gate sentence _(layer: plugin)_ _(points: 10)_
-8. [ ] **Task 8** — `test-fix-plan-writer` reads the per-gate log sections and tells a static failure from a test failure _(layer: plugin)_ _(points: 8)_
+8. [x] **Task 8** — `test-fix-plan-writer` reads the per-gate log sections and tells a static failure from a test failure _(layer: plugin)_ _(points: 8)_
 9. [ ] **Task 9** — The supervised flows' single wrapper run names both gates _(layer: plugin)_ _(points: 8)_
 10. [ ] **Task 10** — Flow documents and the semi-autonomous command docs describe the two-gate Phase G _(layer: plugin)_ _(points: 8)_
 11. [ ] **Task 11** — `docs/config.md`, `docs/watcher.md` and `docs/cli.md` describe the two-gate wrapper _(layer: general)_ _(points: 10)_
