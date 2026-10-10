@@ -33,7 +33,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_gates_typecheck/task
 1. [x] **Task 1** — `run-test-suite.sh` runs the whole-tree `commands.typecheck` then `commands.test` under one verdict _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — Pin the two-gate wrapper in `cli/test/run-test-suite.test.mjs` _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Update the CLI-side descriptions of the wrapper and its log _(layer: cli)_ _(points: 10)_
-4. [ ] **Task 4** — Phase G in the task orchestration core runs and reports both gates _(layer: plugin)_ _(points: 15)_
+4. [x] **Task 4** — Phase G in the task orchestration core runs and reports both gates _(layer: plugin)_ _(points: 15)_
 5. [ ] **Task 5** — The user-review fix core describes and reports the two-gate Phase G _(layer: plugin)_ _(points: 8)_
 6. [ ] **Task 6** — The implementer contract and the test-run rule say what a failing whole-tree type check means _(layer: plugin)_ _(points: 15)_
 7. [ ] **Task 7** — Autonomous forks and ledger templates: new `G` / `RG` wording and the verification-gate sentence _(layer: plugin)_ _(points: 10)_
