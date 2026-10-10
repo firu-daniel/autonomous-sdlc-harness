@@ -31,7 +31,7 @@ Today the Run gates phase (Phase G) runs only `commands.test`, through `run-test
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_gates_typecheck/task_<K>_plan.md`. The entries are ordered bottom-up in the configured layer order (`cli`, `plugin`, then the catch-all `general`).
 
 1. [x] **Task 1** — `run-test-suite.sh` runs the whole-tree `commands.typecheck` then `commands.test` under one verdict _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Pin the two-gate wrapper in `cli/test/run-test-suite.test.mjs` _(layer: cli)_ _(points: 15)_
+2. [x] **Task 2** — Pin the two-gate wrapper in `cli/test/run-test-suite.test.mjs` _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Update the CLI-side descriptions of the wrapper and its log _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Phase G in the task orchestration core runs and reports both gates _(layer: plugin)_ _(points: 15)_
 5. [ ] **Task 5** — The user-review fix core describes and reports the two-gate Phase G _(layer: plugin)_ _(points: 8)_

@@ -3,11 +3,15 @@
  * test builds and throws away.
  *
  * **The rule these tests exist to enforce: the wrapper hands the orchestrator one line and nothing
- * else, runs the configured command at most once per invocation, and never while a run of the same
- * label is live, and versions its log per round.**
+ * else, runs `commands.typecheck` and then `commands.test` exactly once each per invocation, decides
+ * one verdict for the pair, never runs while a run of the same label is live, and versions its log
+ * per round.**
  * Every case seeds `commands.test` with a stub that counts its own runs, so "exactly once" is an
  * assertion on a counter file rather than an inference from the verdict, and "nothing else" is an
- * assertion that the stub's own output reached the log and neither of the wrapper's streams.
+ * assertion that the stub's own output reached the log and neither of the wrapper's streams. The
+ * two-gate cases wire `commands.typecheck` to a second counting stub the same way. A
+ * `commands.typecheck` of `<none>` is asserted as not run — a marker line and no counter — and
+ * never as a pass: a failing test still fails the round.
  *
  * Not covered here: the Run gates phase's own sequencing — which gate runs when, and what a `fail`
  * dispatches — is instruction prose, and Task 23's walk of that prose covers it.
@@ -59,26 +63,51 @@ const STUB = [
   '',
 ].join('\n');
 
+const TC_COUNTER = 'typecheck-stub-counter.txt';
+const TC_STDOUT_MARKER = 'TC-STUB-STDOUT-MARKER';
+const TC_STDERR_MARKER = 'TC-STUB-STDERR-MARKER';
+const TC_STUB_COMMAND = 'bash typecheck-stub.sh';
+
+/** The stub the two-gate cases wire as `commands.typecheck`; its exit status comes from `TC_STUB_EXIT`. */
+const TC_STUB = [
+  '#!/usr/bin/env bash',
+  `printf 'ran\\n' >> ${TC_COUNTER}`,
+  `echo "${TC_STDOUT_MARKER}"`,
+  `echo "${TC_STDERR_MARKER}" >&2`,
+  'exit "${TC_STUB_EXIT:-0}"',
+  '',
+].join('\n');
+
+/** The wrapper's per-gate log marker lines, byte-exact. */
+const GATE_MARKER = Object.freeze({
+  typecheckHeader: '== run-test-suite.sh: gate typecheck (commands.typecheck) ==',
+  typecheckExited: (status) => `== run-test-suite.sh: gate typecheck exited ${status} ==`,
+  typecheckNotRun: '== run-test-suite.sh: gate typecheck not run: commands.typecheck is <none> ==',
+  testHeader: '== run-test-suite.sh: gate test (commands.test) ==',
+  testExited: (status) => `== run-test-suite.sh: gate test exited ${status} ==`,
+});
+
 /** How many times a case re-checks for a state the wrapper is expected to reach, before failing. */
 const POLL_LIMIT = 600;
 
-function seededConfig() {
+function seededConfig({ typecheck = 'echo typecheck' } = {}) {
   return {
     version: 1,
     defaultBranch: 'main',
     stateDir: STATE_DIR,
     layers: [{ name: 'general', path: '.', conventions: '.claude/context/conventions.md' }],
-    commands: { typecheck: 'echo typecheck', test: 'bash stub.sh' },
+    commands: { typecheck, test: 'bash stub.sh' },
   };
 }
 
 /** A fixture on {@link BRANCH} with the stub wired as `commands.test` and `init` already run. */
-async function wiredFixture(t) {
+async function wiredFixture(t, { typecheck } = {}) {
   const fixture = await createFixture({
     files: {
       'package.json': { name: 'fixture-project', private: true, version: '0.0.0' },
-      'harness.config.json': seededConfig(),
+      'harness.config.json': seededConfig({ typecheck }),
       'stub.sh': STUB,
+      'typecheck-stub.sh': TC_STUB,
     },
   });
   t.after(fixture.cleanup);
@@ -98,8 +127,8 @@ function text(dir, relativePath) {
   return readFileSync(join(dir, relativePath), 'utf8');
 }
 
-function counterLines(dir) {
-  return existsSync(join(dir, COUNTER)) ? text(dir, COUNTER).split('\n').filter((line) => line !== '') : [];
+function counterLines(dir, counter = COUNTER) {
+  return existsSync(join(dir, counter)) ? text(dir, counter).split('\n').filter((line) => line !== '') : [];
 }
 
 function logFiles(dir) {
@@ -309,4 +338,105 @@ test('invoked from a subdirectory, the command still runs from the repository ro
   assert.equal(result.stdout, 'pass\n');
   assert.equal(text(dir, PWD_RECORD), `${dir}\n`);
   assert.equal(existsSync(join(nested, COUNTER)), false, 'the command ran in the caller\'s directory');
+});
+
+for (const [name, tcExit, stubExit, expectedStdout, expectedStatus] of [
+  ['typecheck fails, test passes: `fail`, and the test still ran', '1', '0', `fail ${LOG_DIR}/task_round_1.log\n`, 1],
+  ['typecheck passes, test fails: `fail`', '0', '1', `fail ${LOG_DIR}/task_round_1.log\n`, 1],
+  ['both gates fail: `fail`, and the test still ran', '1', '1', `fail ${LOG_DIR}/task_round_1.log\n`, 1],
+  ['both gates pass: `pass`', '0', '0', 'pass\n', 0],
+]) {
+  test(`two gates — ${name}`, async (t) => {
+    const dir = await wiredFixture(t, { typecheck: TC_STUB_COMMAND });
+
+    const result = await wrapper(dir, ['task_round_1'], { TC_STUB_EXIT: tcExit, STUB_EXIT: stubExit });
+
+    assert.equal(result.stdout, expectedStdout);
+    assert.equal(result.status, expectedStatus);
+    assert.equal(result.stderr, '', 'a gate\'s output reached the wrapper\'s stderr');
+    assert.deepEqual(counterLines(dir, TC_COUNTER), ['ran'], 'the typecheck did not run exactly once');
+    assert.deepEqual(counterLines(dir), ['ran'], 'the test did not run exactly once');
+    const log = text(dir, `${LOG_DIR}/task_round_1.log`);
+    for (const marker of [TC_STDOUT_MARKER, TC_STDERR_MARKER, STDOUT_MARKER, STDERR_MARKER]) {
+      assert.match(log, new RegExp(marker), `${marker} is missing from the log`);
+    }
+  });
+}
+
+for (const [name, tcExit, stubExit] of [
+  ['both pass', '0', '0'],
+  ['typecheck fails', '1', '0'],
+]) {
+  test(`two gates — the log carries each gate's marker lines, typecheck first (${name})`, async (t) => {
+    const dir = await wiredFixture(t, { typecheck: TC_STUB_COMMAND });
+
+    await wrapper(dir, ['task_round_1'], { TC_STUB_EXIT: tcExit, STUB_EXIT: stubExit });
+
+    const lines = text(dir, `${LOG_DIR}/task_round_1.log`).split('\n');
+    for (const marker of [
+      GATE_MARKER.typecheckHeader,
+      GATE_MARKER.typecheckExited(tcExit),
+      GATE_MARKER.testHeader,
+      GATE_MARKER.testExited(stubExit),
+    ]) {
+      assert.ok(lines.includes(marker), `the log has no line ${marker}`);
+    }
+    assert.ok(
+      lines.indexOf(GATE_MARKER.typecheckHeader) < lines.indexOf(GATE_MARKER.testHeader),
+      'the test gate ran before the typecheck gate',
+    );
+  });
+}
+
+for (const [name, stubExit, expectedStdout, expectedStatus] of [
+  ['with the test passing, the round passes on the test alone', '0', 'pass\n', 0],
+  ['with the test failing, the round fails: `<none>` masks nothing', '1', `fail ${LOG_DIR}/task_round_1.log\n`, 1],
+]) {
+  test(`commands.typecheck \`<none>\` runs nothing and is logged as not run — ${name}`, async (t) => {
+    const dir = await wiredFixture(t, { typecheck: '<none>' });
+    assert.equal(existsSync(join(dir, 'scripts', 'typecheck.sh')), false, 'init wrote typecheck.sh for `<none>`');
+
+    const result = await wrapper(dir, ['task_round_1'], { STUB_EXIT: stubExit });
+
+    assert.equal(result.stdout, expectedStdout);
+    assert.equal(result.status, expectedStatus);
+    assert.equal(result.stderr, '');
+    const lines = text(dir, `${LOG_DIR}/task_round_1.log`).split('\n');
+    assert.ok(lines.includes(GATE_MARKER.typecheckHeader), 'the log has no typecheck header');
+    assert.ok(lines.includes(GATE_MARKER.typecheckNotRun), 'the log has no not-run line');
+    assert.equal(existsSync(join(dir, TC_COUNTER)), false, 'a typecheck stub ran');
+    assert.deepEqual(counterLines(dir), ['ran'], 'the test did not run exactly once');
+  });
+}
+
+test('commands.typecheck unset refuses with exit 2, its own stderr line and nothing written', async (t) => {
+  const dir = await wiredFixture(t, { typecheck: TC_STUB_COMMAND });
+  const configPath = join(dir, 'harness.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  delete config.commands.typecheck;
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  const before = await snapshotTree(dir);
+
+  const result = await wrapper(dir, ['task_round_1']);
+
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  assert.equal(result.stderr, 'run-test-suite.sh: commands.typecheck is not set in harness.config.json\n');
+  assert.deepEqual(counterLines(dir, TC_COUNTER), [], 'the refusal ran the typecheck');
+  assert.deepEqual(counterLines(dir), [], 'the refusal ran the test');
+  assert.deepEqual(await snapshotTree(dir), before, 'the refusal wrote a file');
+});
+
+test('--wait after a run that failed on typecheck alone reprints its `fail` and runs neither gate again', async (t) => {
+  const dir = await wiredFixture(t, { typecheck: TC_STUB_COMMAND });
+  const line = `fail ${LOG_DIR}/task_round_1.log\n`;
+
+  assert.equal((await wrapper(dir, ['task_round_1'], { TC_STUB_EXIT: '1' })).stdout, line);
+
+  const waited = await wrapper(dir, ['--wait', 'task_round_1']);
+  assert.equal(waited.stdout, line);
+  assert.equal(waited.status, 1);
+  assert.equal(waited.stderr, '');
+  assert.deepEqual(counterLines(dir, TC_COUNTER), ['ran'], 'the wait form ran the typecheck');
+  assert.deepEqual(counterLines(dir), ['ran'], 'the wait form ran the test');
 });
