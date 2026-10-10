@@ -23,7 +23,7 @@ Check 3 confirmed every claim in the diff that cites another source: the shell m
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below from top to bottom. The committing role flips each one to `[x]` as that fix's commit lands. `[ ]` markers anywhere else, such as sub-step bullets inside per-finding files, are informational only, and the committer never touches them. Each entry resolves to `harness-runs/skeptic_reviews/fix_run_gates_typecheck_skeptic_review/finding_<K>.md`.
 
-1. [ ] **Finding 1** — Make the `G` / `RG` ledger row text and both flip rules true when `commands.typecheck` is `<none>` _(layer: plugin)_
+1. [x] **Finding 1** — Make the `G` / `RG` ledger row text and both flip rules true when `commands.typecheck` is `<none>` _(layer: plugin)_
 
 ---
 
