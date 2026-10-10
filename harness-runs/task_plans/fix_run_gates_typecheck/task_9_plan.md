@@ -22,3 +22,5 @@
 - `git grep -nE 'no (whole-tree )?type check' -- <the same three files>` prints no line attributing "no type check" to the implementers.
 - `git grep -n 'run-test-suite.sh' -- <the same three files>` still shows the labels `task_supervised` and `review_<n>_supervised`, unchanged.
 - All three files remain on `## The test-run rule`'s roster and only point at it.
+
+**Deviations from plan:** The Work bullet names the implementers' "whole-tree `<typecheck_cmd>` runs". None of the three files declares `<typecheck_cmd>` in its `## Resolved values` table, and `.claude/context/plugin.md` → `## The sections an asset carries` requires every token to be declared there. So the text reads "their own whole-tree type-check runs", which is the Verification bullet's own wording, and no token row was added.
