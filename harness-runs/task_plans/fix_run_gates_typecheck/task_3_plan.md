@@ -42,3 +42,8 @@ This task describes that behaviour and changes none of it.
 - The wording matches Task 1's header contract word for word on the marker-line shape and the `<none>` line.
 - `git grep -n 'test-gate' -- cli/templates/state-dir/README-root.md` prints nothing, and `git grep -n 'each Run gates round, the whole-tree type check and then the test suite' -- cli/templates/state-dir/README-root.md` prints the one replaced clause. `git diff -- cli/templates/state-dir/README-root.md` touches only that clause.
 - Every command an adopter is meant to run that these edits add (here, `npx autonomous-sdlc-harness init --force` in `cli/templates/scripts/README.md`) sits in a fenced block, one command per line, per the lessons ledger's adopter-facing documentation rule. An inline mention of the `--force` flag that is not an instruction to run is fine.
+
+**Deviations from plan:**
+
+- `cli/templates/scripts/README.md`: the family list's "the test-suite runner `run-test-suite.sh`" also matched the verification grep's `test-suite runner` pattern; renamed it "the Run gates wrapper `run-test-suite.sh`" to match the `cli/README.md` wording, so the grep prints nothing in the three files.
+- The `create-if-absent` / `--force` sentence and its fenced command are appended at the end of the outer-loop family paragraph rather than directly after the `run-test-suite.sh` clause, because a fenced block cannot sit mid-paragraph.
