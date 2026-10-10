@@ -39,7 +39,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_run_gates_typecheck/task
 7. [x] **Task 7** — Autonomous forks and ledger templates: new `G` / `RG` wording and the verification-gate sentence _(layer: plugin)_ _(points: 10)_
 8. [x] **Task 8** — `test-fix-plan-writer` reads the per-gate log sections and tells a static failure from a test failure _(layer: plugin)_ _(points: 8)_
 9. [x] **Task 9** — The supervised flows' single wrapper run names both gates _(layer: plugin)_ _(points: 8)_
-10. [ ] **Task 10** — Flow documents and the semi-autonomous command docs describe the two-gate Phase G _(layer: plugin)_ _(points: 8)_
+10. [x] **Task 10** — Flow documents and the semi-autonomous command docs describe the two-gate Phase G _(layer: plugin)_ _(points: 8)_
 11. [ ] **Task 11** — `docs/config.md`, `docs/watcher.md` and `docs/cli.md` describe the two-gate wrapper _(layer: general)_ _(points: 10)_
 12. [ ] **Task 12** — Bring the repository's own copies of the wrapper and the state-directory READMEs in line with their templates _(layer: general)_ _(points: 10)_
 
