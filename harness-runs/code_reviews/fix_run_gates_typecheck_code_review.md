@@ -14,7 +14,7 @@ The wrapper does what the story plan decided. It makes one call per round and ru
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom, and the committing role flips each one to `[x]` as that fix's commit lands. `[ ]` markers anywhere else, such as the sub-step bullets inside per-finding files, are informational only, and the committer never touches them. Each entry resolves to `harness-runs/code_reviews/fix_run_gates_typecheck_code_review/finding_<K>.md`.
 
-1. [ ] **Finding 4** — Rename the residual "test-suite wrapper" in the log README pair and say "once per Run gates round" in `docs/watcher.md` _(layer: cli, general)_
+1. [x] **Finding 4** — Rename the residual "test-suite wrapper" in the log README pair and say "once per Run gates round" in `docs/watcher.md` _(layer: cli, general)_
 2. [ ] **Finding 2** — Replace the bare `G` placeholder in both cores' Done-summary Run gates bullet with `<gates_covered>` _(layer: plugin)_
 3. [ ] **Finding 1** — Count a gate script that `<test_cmd>` or `<typecheck_cmd>` invokes as deferred to the Run gates phase, not as "no phase runs it" _(layer: plugin)_
 4. [ ] **Finding 3** — Pin the wrapper's whitespace trim on the `<none>` sentinel with a padded-sentinel case _(layer: cli)_
