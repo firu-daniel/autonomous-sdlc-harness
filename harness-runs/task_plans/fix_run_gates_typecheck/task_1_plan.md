@@ -38,3 +38,7 @@
 - `grep -n 'TYPECHECK_NONE_SENTINEL' cli/templates/scripts/run-test-suite.sh cli/src/config/model.ts` finds the constant in the template and its mirror declaration in the doc comment.
 - Reading the template: no path in which the typecheck line is `eval`-ed with arguments, no early exit between the two runs, and no write before both command lines resolve.
 - The behaviour is exercised end to end by Task 2's cases, which run this wrapper in throwaway fixtures. That task, not this one, owns the behavioural evidence: this task neither creates nor edits a test file, so it runs none.
+
+**Deviations from plan:**
+
+- Evidence downgrade: the `bash -n cli/templates/scripts/run-test-suite.sh` verification was refused by the permission layer ("This command requires approval"). The syntax claim rests on reading the edited template, not on running it. Task 2's fixture cases, which execute the wrapper, are the first executed evidence.
