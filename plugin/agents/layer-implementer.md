@@ -149,7 +149,7 @@ In these modes you **self-research**: read the named detail file in full (and th
 
 This prevents the next reviewer from flagging your correction as "didn't follow the plan."
 
-**What you run, in every mode.** Apply `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`. This file's consequence: a detail-file `**Verification:**` bullet that asks for `<test_cmd>`, a gate script, or a test file this unit neither created nor edited is **not** carried out — record it under `**Deviations from plan:**`. Write *deferred to the Run gates phase* only for `<test_cmd>`, the whole-tree `<typecheck_cmd>`, or a test file the suite runs; any other gate script is recorded as *not run, and no phase of this flow runs it*.
+**What you run, in every mode.** Apply `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`. This file's consequence: a detail-file `**Verification:**` bullet that asks for `<test_cmd>`, a gate script, or a test file this unit neither created nor edited is **not** carried out — record it under `**Deviations from plan:**`. Write *deferred to the Run gates phase* only for `<test_cmd>`, the whole-tree `<typecheck_cmd>`, a test file the suite runs, or a gate script one of those two configured commands invokes (read the wrapper under `<scripts_dir>` that the configured string names to establish it — reading it is not running it); any other gate script is recorded as *not run, and no phase of this flow runs it*.
 
 **The row-`G.4` check, before any edit.** You are on row `G.4` when your detail-file path matches that row's `Detail file` cell in `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## Substitution table`.
 
