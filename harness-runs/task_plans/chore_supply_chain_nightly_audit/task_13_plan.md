@@ -1,0 +1,41 @@
+### Task 13 — Record the final-tree audit runs and each finding's disposition in `docs/development.md` §8
+
+**Goal:** Meet the acceptance line *"`npm audit --audit-level=high` (full tree), `uv audit` and the online zizmor leg all pass on the branch's final tree, run locally, with the commands and outputs recorded"*, as far as a unit may. Record, under §8, each audit the flow may run, once on the final tree, with its command and exact summary line, and a disposition for every finding the task prompt raised, each with its reason. The online zizmor leg over the rendered set runs through `scripts/check-rendered-workflows.mjs`, a gate script (gates 14a–14d) that no unit runs (`plugin/instructions/unit_loop_core.md` → `## The test-run rule`, points 1 and 4). So that half of the acceptance line is met by a hand-run before merge, listed in the story index's `**Manual setup required:**`, and this task records it as not run by the flow, never as a pass. The own-repository half is measured here, by running zizmor directly over `.github`.
+
+**Depends on:** Task 12, which creates `docs/development.md` → `## 8. The nightly supply-chain audit`, the section this task appends two subsections to. It also depends on every fix task: 1 (SDK floor `^1.31.0`), 2 (CLI pins), 3 (lock refresh), 4 (`schemas/validate.mjs`, `ajv-cli` removed), 5 (`js-yaml ^4.3.2`), 6 (Python pins), 7 (own-workflow zizmor fixes), 8 (`--zizmor-online`), 9 (`scripts/check-model-revisions.mjs`) and 10 (the workflow). The commands below are the workflow's own, so this record is what the first nightly will run.
+
+**Where this task stops.** It runs audits and records them; it changes no code, lockfile or workflow. If a run is red, report a blocker naming the command and its output rather than editing a fix in. It does not restate the four model SHAs (their home is `docs/retrieval.md`, **Task 14**).
+
+### Targets
+
+- `docs/development.md` → `## 8.` → two new subsections, `### Measured on the branch's final tree` and `### The findings it was built against, and what became of each` (scope register row 8).
+
+**Work:**
+
+- [ ] Run each command from the repository root as one foreground command without a pipe, and keep its summary line and exit status:
+  - `npm audit --audit-level=moderate`. Run plain `npm audit` too; its summary line is the record.
+  - `uv audit --preview-features audit-command --frozen --directory docs-retrieval-service`. This is the workflow step's command, spelled with uv's global `--directory` in place of the step's `working-directory`.
+  - `test -n "${GH_TOKEN}"`, to learn whether a token is already in the environment without printing it. When it exits 0, run `uvx zizmor@1.30.1 --no-config --format=plain .github`: the online audit of this repository's own `.github`, the same command shape as the offline line below without `--offline`. It is not a gate script. When `GH_TOKEN` is not set, do not run it and do not build a token inline (no `$(…)`, no `gh auth token` on the command line). Record it as not run, with that reason.
+  - `node scripts/check-model-revisions.mjs`.
+  - `actionlint .github/workflows/supply-chain.yml`.
+  - `uvx zizmor@1.30.1 --offline --no-config --format=plain .github`.
+  If a command cannot run (no network, no token, no zizmor), record it in the subsection as not run, with the reason, never as a pass. Report it in this task's return. Do **not** run `npm run build` (gate 2a) or `node scripts/check-rendered-workflows.mjs` in any mode (gates 14a–14d).
+- [ ] `### Measured on the branch's final tree`: one dated paragraph, using the run's date, the `node --version`, `npm --version` and `uv --version` answers, and the commit the runs were taken at. Then one fenced block per command with the summary line it printed and its exit status, in the "what was measured, the command and the exact message" form (`.claude/context/conventions.md` → `## Documents of record`). Add one more fenced block for the rendered-set online leg, holding `node scripts/check-rendered-workflows.mjs --zizmor-online` and, in place of an output, the line *not run by the flow — hand-run step, see the story index's Manual setup*. Never record it as a pass. For contrast, add the base measurement from 2026-10-11 on commit `9615afb5`: plain `npm audit` printed `9 vulnerabilities (2 moderate, 7 high)`, `npm audit --omit=dev` reported none, `uv audit` printed `Found no known vulnerabilities and no adverse project statuses in 84 packages`, and zizmor 1.30.1 over this repository's `.github` printed `10 findings (7 suppressed, 2 unsafe fixes): 0 informational, 0 low, 2 medium, 1 high`.
+- [ ] `### The findings it was built against, and what became of each`: one row per finding, with columns finding, advisory or audit, disposition, reason.
+  - **A1** `@modelcontextprotocol/sdk` 1.30.0, GHSA-6qxp-vccf-f47h: fixed, peer and dev floor `^1.31.0`, lock at the resolved version. Add the reason the floor rose even though the path is unused: the harness imports only `server/index.js`, `server/stdio.js` and `types.js` (`cli/src/retrieval/server.ts`), and nothing imports the OAuth client `client/auth.js`, but the peer range is what an adopter's `init` resolves.
+  - **A2** `sharp` 0.35.4, GHSA-wq5f-xc86-pv6w: fixed by the lock refresh. `@huggingface/transformers` stays 4.3.0, which admits `^0.35.4`, so `cli/src/retrieval/models.ts`'s 4.3.0 file paths needed no re-verification.
+  - **B1** `ajv-cli` → `fast-json-patch`: fixed by replacing `ajv-cli` with `schemas/validate.mjs`, keeping gate 3's messages and exit codes.
+  - **B2** `fast-uri`: fixed by the lock refresh.
+  - **B3** `js-yaml` 3 → `argparse` → `sprintf-js`, and the merge-key advisory: fixed by `js-yaml ^4.3.2`. `sprintf-js` has no patched release, so removing the chain was the only fix.
+  - **B4** `brace-expansion`: gone with `ajv-cli`'s `glob`.
+  - **C** `uv.lock`: clean, and audited nightly.
+  - **D** unpinned weights: fixed on both paths. Point to `docs/retrieval.md` for the pins.
+  - **Own-workflow zizmor findings**: `release-npm.yml` `artipacked` and `cache-poisoning` fixed, `publish-main.yml` `artipacked` an inline ignore with its reason.
+- [ ] Under the D row, a short **Gate 10, and why it was not re-run in full** paragraph. For both CLI models, each `MODEL_FILES` entry in the gate-10 cache fetched on 2026-09-22 is byte-identical to that file at the pinned revision. The planner measured this on 2026-10-11 with `shasum -a 256` against the Hub's LFS `sha256` for `onnx/model_quantized.onnx` (`6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4` and `e9d8ebf845c413e981c175bfe49a3bfa9b3dcce2a3ba54875ee5df5a58639fbe`), and with `git hash-object` against the Hub's `blobId` for `config.json`, `tokenizer.json` and `tokenizer_config.json`. So the weights gate 10 measured are the pinned weights, and the embedder and reranker ids do not move. What did move is the cache layout, `<model id>/<revision>/<file>`, which gate 4's planted-cache cases and gate 11's real-model floor exercise. State whether Phase G's gate 11 ran or reported `BLOCKED`, as read off this branch's Phase G log if one exists, else "not yet run".
+
+**Verification:**
+
+- Every fenced block in the two subsections holds a command that appears verbatim in `.github/workflows/supply-chain.yml` or in this task's work list, followed by the summary line that command printed on this run or by a *not run* line with its reason. The one exception is the rendered-set online leg's block: it holds `node scripts/check-rendered-workflows.mjs --zizmor-online` followed by *not run by the flow — hand-run step, see the story index's Manual setup*, and never a pass.
+- No command this task ran is `npm run build` or `node scripts/check-rendered-workflows.mjs`, both gate scripts, and the online zizmor run over `.github` was run only when `GH_TOKEN` was already in the environment.
+- No figure in the subsections is a wall-clock timing (lessons ledger → *Evidence and measurement*, the wall-clock lesson); only counts, versions, hashes and exit codes are recorded.
+- Every finding the task prompt lists (A, both bullets; B, all four; C; D) has exactly one row, and each row's disposition is either *fixed by …* or *narrow ignore …*. None reads as a lowered threshold.
