@@ -29,14 +29,19 @@ jobs:
     steps:
       # Pinned to full commit shas, not tags: a tag is mutable, and this job can publish the
       # package. fbc6f39 is actions/checkout v5.1.0, the pin publish-main.yml carries; 8207627 is
-      # actions/setup-node v7.0.0. Bump them deliberately, never by moving a tag.
+      # actions/setup-node v7.0.0. Bump them deliberately, never by moving a tag. The publish
+      # authenticates by OIDC and pushes nothing with git, so the checkout persists no credential.
+      # A publishing job restores no cache, so setup-node's package-manager cache is off.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
       # Node 24 because trusted publishing needs npm >= 11.5.1 and Node >= 22.14.0; the package's
       # own engines floor (>=20.11.0) is about where it runs, not where it is published from.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
 
       # The tag is the version claim; refuse to publish a tree that disagrees with it, and an npm
       # too old to speak OIDC (it would fall back to a token that does not exist and fail late).
