@@ -1,0 +1,114 @@
+# Re-audit the supply chain every night, after changes have merged, and fail loudly on a finding.
+# Four jobs: npm-audit (every moderate-or-higher advisory in the full npm tree), uv-audit (known
+# vulnerabilities in docs-retrieval-service/uv.lock), zizmor-online (the rendered adopter workflows
+# and this repository's own .github, with zizmor's online audits) and model-revisions (the
+# retrieval model pins: drift is a notice, an unreadable or unresolvable pin fails).
+#
+# Policy:
+# - Never a required check: a new upstream advisory must not block unrelated merges.
+# - Fails on findings, and no step or job is allowed to continue past an error: the mail GitHub
+#   sends for a red scheduled run is the alert.
+# - Online zizmor runs here and in no merge gate: an API outage or a new advisory would fail
+#   unrelated pull requests.
+# - The npm threshold is moderate, not high: the one moderate advisory found so far (sprintf-js) had
+#   no patched release and was cleared only by dropping the chain that carried it, which is what a
+#   nightly exists to surface. npm audit never omits dev dependencies: the CLI's runtime packages
+#   are optional peerDependencies, so a production-only audit reports 0 over what an adopter installs.
+#
+# Placement:
+# - This file travels to main: schedule fires only from the default branch's copy, the default
+#   branch is main, and scripts/publish-main.sh → removed_paths does not name it (the placement
+#   release-npm.yml records).
+# - Every job checks out dev, under workflow_dispatch too: main's tree has no scripts/, so neither
+#   check script exists there, and the trunk is what is audited.
+#
+# Residual and ignore sets: RESIDUAL in scripts/check-rendered-workflows.mjs; inline
+# `# zizmor: ignore[…]` comments in the audited workflow; `uv audit --ignore-until-fixed <ID>` on the
+# uv-audit step; npm has no ignore mechanism. A finding is fixed, or narrowly ignored with the
+# ignore documented in docs/development.md §8 — never answered by lowering a threshold.
+#
+# Every action is pinned to a full commit sha, its version in the trailing comment; bump a pin
+# deliberately, never by moving a tag. No job pushes, so no checkout persists a credential.
+name: Supply chain
+
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain
+  cancel-in-progress: false
+
+jobs:
+  npm-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: dev
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=moderate
+
+  uv-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: dev
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: '0.12.23'
+          enable-cache: false
+      - working-directory: docs-retrieval-service
+        run: uv audit --preview-features audit-command --frozen
+
+  zizmor-online:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: dev
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: '0.12.23'
+          enable-cache: false
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      # Exit 4 (zizmor or the token unavailable) fails the job like a finding does.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-rendered-workflows.mjs --zizmor-online
+
+  model-revisions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: dev
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: node scripts/check-model-revisions.mjs
