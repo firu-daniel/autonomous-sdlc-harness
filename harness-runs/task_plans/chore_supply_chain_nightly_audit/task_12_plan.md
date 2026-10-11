@@ -24,3 +24,9 @@
 - Every job name, command, flag and exit code in the section appears verbatim in `.github/workflows/supply-chain.yml`, `scripts/check-rendered-workflows.mjs` or `scripts/check-model-revisions.mjs`. Grep each one.
 - The section restates none of the four model SHAs: `grep -n 'ea104dac\|a0914435\|5c38ec7c\|233902d2' docs/development.md` finds nothing. Their single home is `docs/retrieval.md`, and Task 13's record cites file hashes, never the revision SHAs.
 - The section writes the Dependabot change as a recommendation, never as scheduled work (lessons ledger → *Evidence and measurement*, the decision-rule lesson).
+
+**Deviations from plan:**
+- The job table carries no command column: a table cell is inline, and the verification requires every command in a fenced block, one per line. The table is job / what it audits / what fails it, followed by one fenced block per job.
+- The Dependabot paragraph re-measured on 2026-10-11 rather than citing the planner: `gh api .../vulnerability-alerts` printed `Vulnerability alerts are disabled. (HTTP 404)`, and `gh api .../automated-security-fixes` printed `{"enabled":false,"paused":false}`; both commands sit in a fenced block.
+- The `--omit=dev` figures (`0` against `9 vulnerabilities (2 moderate, 7 high)`) are attributed to the planner's base commit `9615afb5` and were not re-run by this unit: the tree has since changed, and the figure records why the rule exists.
+- The `model-revisions` paragraph also states the `::warning::` outcome for a network failure, which `scripts/check-model-revisions.mjs` → `THE RULE` gives and the plan's bullet omits.

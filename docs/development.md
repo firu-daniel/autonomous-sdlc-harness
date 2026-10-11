@@ -1,6 +1,6 @@
 # Development
 
-**Who reads this:** anyone changing a file in this repository, and the maintainer cutting a release. It answers how to run the plugin from your working copy instead of from an installed copy, what that choice forces on the way references between plugin assets are written, which commands decide whether a change is good, what the roadmap item numbers cited throughout the tree mean, and which steps a release takes, in which order.
+**Who reads this:** anyone changing a file in this repository, and the maintainer cutting a release. It answers how to run the plugin from your working copy instead of from an installed copy, what that choice forces on the way references between plugin assets are written, which commands decide whether a change is good, what the roadmap item numbers cited throughout the tree mean, which steps a release takes, in which order, and what the nightly supply-chain audit checks.
 
 Everything below was measured against the shipped `claude` CLI at version 2.1.226, except where a fact names its own version. Where a fact is a measurement, the command and the exact message are given, so a later version that behaves differently is detectable rather than merely surprising.
 
@@ -2304,3 +2304,69 @@ It cuts and squash-merges the bump pull request, waits for `publish-main.yml` to
 **Why the push needs a terminal.** Without `--dry-run` the script refuses unless stdin is a terminal. A release tag is pushed by a person. An unattended run's Bash tool has no terminal, so this refusal stops such a run where the script-allowlist guard would otherwise permit the call.
 
 **Backfilled tags.** The decision is to backfill 0.2.0, 0.4.0, 0.4.1 and 0.4.2 with the same script, for the record. No workflow rendered before this fix reads a tag, so the backfill changes no existing adopter's run. 0.3.0 has no tag and cannot get one: it was bumped on `dev` (`908d822`) and was never published to `main` as its own commit, so the script refuses it.
+
+---
+
+## 8. The nightly supply-chain audit
+
+**What runs, and where.** `.github/workflows/supply-chain.yml` re-audits the supply chain on `schedule`, nightly, and on `workflow_dispatch`. Every job checks out `dev`, under `workflow_dispatch` too, because `scripts/` never reaches `main` and two of the jobs run scripts from it; `dev` is the trunk, so the trunk is what is audited. The file itself reaches `main` with every publication, because `scripts/publish-main.sh` → `removed_paths` does not name it, and it has to: `schedule` fires only from the default branch's copy of a workflow, and the default branch is `main`. The workflow sets `permissions: contents: read`, and no job pushes. Four jobs run in parallel:
+
+| Job | What it audits | What fails it |
+|---|---|---|
+| `npm-audit` | Every installed package in the workspace's full npm tree, from `package-lock.json` | Any advisory at moderate or higher |
+| `uv-audit` | Every package `docs-retrieval-service/uv.lock` pins, under uv 0.12.23 | Any known vulnerability not ignored on the step |
+| `zizmor-online` | The four workflows `init` renders for an adopter, and this repository's own `.github`, under zizmor 1.30.1 with its online audits | A finding outside the set kept for it, a `RESIDUAL` entry that no longer fires, or exit `4`: zizmor or the token unavailable |
+| `model-revisions` | The four pinned Hugging Face model revisions, against upstream `main` | A pin that cannot be read from the tree, or one upstream no longer resolves |
+
+The commands each job runs, from the repository root of a checkout of `dev`. `npm-audit`:
+
+```
+npm ci --ignore-scripts
+npm audit --audit-level=moderate
+```
+
+`uv-audit`, from `docs-retrieval-service/`:
+
+```
+uv audit --preview-features audit-command --frozen
+```
+
+`zizmor-online`, with `GH_TOKEN` set from `github.token`:
+
+```
+npm ci --ignore-scripts
+npm run build
+node scripts/check-rendered-workflows.mjs --zizmor-online
+```
+
+`model-revisions`:
+
+```
+npm ci --ignore-scripts
+npm run build
+node scripts/check-model-revisions.mjs
+```
+
+**`npm audit` runs over the full tree, never with `--omit=dev`.** The CLI's runtime packages are optional `peerDependencies`, which a production-only audit hides. On the planner's base commit, `9615afb5`, on 2026-10-11, the production-only audit reported `0` while the full tree reported `9 vulnerabilities (2 moderate, 7 high)`.
+
+**`--zizmor-online` runs two passes**, and the second runs even when the first found something. Pass 1 renders the adopter workflows in a throwaway repository and grades them against `RESIDUAL`, as 14d does offline. Pass 2 grades this repository's own `.github` against no residual set. The token is `GH_TOKEN` when it is set and non-empty, else the token the logged-in `gh` holds, and it reaches zizmor only through the child process's environment, never on its command line. The script's header is the full contract, exit codes included.
+
+**Not a merge gate, and it fails anyway.** The workflow is never a required check, because a new upstream advisory must not block unrelated merges. Every job still fails on a finding, and no step or job carries `continue-on-error`: GitHub emails the maintainer when a scheduled run goes red, and that email is the alert. Online zizmor runs here and not in gate 14, because an API outage or a new advisory would otherwise fail unrelated changes; 14d stays offline. The npm threshold is moderate, not high, because of `sprintf-js`. Its advisory, GHSA-hp3w-g68c-fv3c, is moderate and covers every `sprintf-js` release, with no patched version, so it was cleared only by dropping the `argparse` 1 chain that carried it, which meant replacing `ajv-cli`. A high threshold would never have surfaced it. This audit adds no gate and changes none of `scripts/run-gates.sh`'s fourteen. Running the gates on pull requests is not part of it.
+
+**How each set is kept.** A finding is disposed of by a fix or by a narrow, documented ignore, never by lowering a threshold. Each set below is empty or justified entry by entry:
+
+- **zizmor, the rendered adopter workflows.** `RESIDUAL` in `scripts/check-rendered-workflows.mjs`, the same set 14d grades offline. Each entry's reason is in its template's header and in §5's gate 14 list. An entry that stops firing is itself a finding, so the set cannot outlive its reasons.
+- **zizmor, this repository's `.github`.** No residual set. The only allowance is an inline `# zizmor: ignore[<audit>]` on the line zizmor flags, with its reason in a comment beside it. There is exactly one today: `artipacked` in `publish-main.yml`, whose checkout keeps its persisted credential because `scripts/publish-main.sh` pushes the `publish` branch through it.
+- **`uv audit`.** An `--ignore-until-fixed <ID>` added to the `uv-audit` step, with a sentence here naming the advisory and why it cannot be fixed yet. The set is empty today.
+- **npm.** `npm audit` has no per-advisory ignore. An advisory with no patched release in range is disposed of by an `overrides` entry in the root `package.json` that pins a patched release, or by replacing the dependency, as `ajv-cli` was replaced by `schemas/validate.mjs`, and the disposition is recorded here. The set is empty today.
+
+**Model pins and the drift notice.** Both retrieval paths load a fixed commit of each of their two models. The four pins have one table, `docs/retrieval.md` → `**Models.**`. The `model-revisions` job prints upstream drift as a `::notice::`, because a pin behind upstream `main` is a deliberate choice, and leaves the exit at `0`. It prints a pin that cannot be read from the tree, or that upstream answers `404` for, as an `::error::` and exits `1`, because such a pin breaks every adopter's fresh `fetch-models`. A network failure is a `::warning::` and leaves the exit alone. A bump is a deliberate edit to the pin constants together with `MODEL_VERSION`, on both paths where both move: `cli/src/retrieval/models.ts` and `docs-retrieval-service/src/harness_docs_retrieval/models.py`.
+
+**Dependabot is off, and turning it on is recommended.** On 2026-10-11 the alerts endpoint answered `Vulnerability alerts are disabled. (HTTP 404)` and the security-updates endpoint answered `{"enabled":false,"paused":false}`, to these two commands:
+
+```
+gh api /repos/firu-daniel/autonomous-sdlc-harness/vulnerability-alerts
+gh api /repos/firu-daniel/autonomous-sdlc-harness/automated-security-fixes
+```
+
+Turning on Dependabot alerts and security updates, under the repository's *Settings* → *Code security*, is the maintainer's setting to flip. This is a recommendation, not pending work. No `dependabot.yml` ships: security updates need none, version updates are not wanted here, and zizmor's `dependabot-cooldown` audit applies only where such a file exists.
