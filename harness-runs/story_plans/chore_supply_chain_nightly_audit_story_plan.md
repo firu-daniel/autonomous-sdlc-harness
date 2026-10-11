@@ -59,7 +59,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_supply_chain_nightly_a
 6. [x] **Task 6** — Pin the Python service's two models to immutable revisions in `models.py` _(layer: general)_ _(points: 15)_
 7. [x] **Task 7** — Clear zizmor's findings on this repository's own `release-npm.yml` and `publish-main.yml` _(layer: general)_ _(points: 8)_
 8. [x] **Task 8** — Add an online zizmor mode, `--zizmor-online`, to `scripts/check-rendered-workflows.mjs` _(layer: general)_ _(points: 15)_
-9. [ ] **Task 9** — Add `scripts/check-model-revisions.mjs`, a drift notice for the four pinned model revisions _(layer: general)_ _(points: 12)_
+9. [x] **Task 9** — Add `scripts/check-model-revisions.mjs`, a drift notice for the four pinned model revisions _(layer: general)_ _(points: 12)_
 10. [ ] **Task 10** — Add `.github/workflows/supply-chain.yml`, the nightly supply-chain workflow _(layer: general)_ _(points: 15)_
 11. [ ] **Task 11** — Bring `docs/development.md` gates 3 and 14 in line with the new validator, `js-yaml` 4 and the online mode _(layer: general)_ _(points: 10)_
 12. [ ] **Task 12** — Add `docs/development.md` → `## 8. The nightly supply-chain audit`: what runs where and how its sets are kept _(layer: general)_ _(points: 15)_
