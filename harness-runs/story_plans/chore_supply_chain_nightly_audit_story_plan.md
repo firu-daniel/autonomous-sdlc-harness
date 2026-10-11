@@ -55,7 +55,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_supply_chain_nightly_a
 2. [x] **Task 2** — Pin the CLI's two retrieval models to immutable revisions in `cli/src/retrieval/models.ts` _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Refresh `package-lock.json` for the SDK floor and the transitive `sharp` / `fast-uri` advisories _(layer: general)_ _(points: 8)_
 4. [x] **Task 4** — Replace `ajv-cli` with a hand-written `schemas/validate.mjs` that keeps its output contract _(layer: general)_ _(points: 15)_
-5. [ ] **Task 5** — Move the root `js-yaml` to 4.x and switch `scripts/check-rendered-workflows.mjs` to `yaml.load` _(layer: general)_ _(points: 8)_
+5. [x] **Task 5** — Move the root `js-yaml` to 4.x and switch `scripts/check-rendered-workflows.mjs` to `yaml.load` _(layer: general)_ _(points: 8)_
 6. [ ] **Task 6** — Pin the Python service's two models to immutable revisions in `models.py` _(layer: general)_ _(points: 15)_
 7. [ ] **Task 7** — Clear zizmor's findings on this repository's own `release-npm.yml` and `publish-main.yml` _(layer: general)_ _(points: 8)_
 8. [ ] **Task 8** — Add an online zizmor mode, `--zizmor-online`, to `scripts/check-rendered-workflows.mjs` _(layer: general)_ _(points: 15)_

@@ -57,7 +57,7 @@ const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
   cwd: dirname(fileURLToPath(import.meta.url)),
   encoding: 'utf8',
 }).trim();
-// Resolved from the workspace root, where `package.json` declares it as a devDependency.
+// Resolved from the workspace root, where `package.json` declares it as a direct devDependency at 4.x.
 const yaml = createRequire(join(repoRoot, 'package.json'))('js-yaml');
 const cliPath = join(repoRoot, 'cli', 'dist', 'cli.js');
 
@@ -153,7 +153,8 @@ function withRendered(fn) {
 
 function parseError(path) {
   try {
-    yaml.safeLoad(readFileSync(path, 'utf8'), { filename: path });
+    // js-yaml 4 removed `safeLoad`; `load` takes the default schema, which constructs no JS types.
+    yaml.load(readFileSync(path, 'utf8'), { filename: path });
     return undefined;
   } catch (error) {
     return error.message.split('\n')[0];
