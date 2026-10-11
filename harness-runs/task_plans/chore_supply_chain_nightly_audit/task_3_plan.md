@@ -20,3 +20,6 @@
 - `npm ls @modelcontextprotocol/sdk sharp fast-uri @huggingface/transformers` shows `@modelcontextprotocol/sdk` at `1.31.0` or later, `sharp` at `0.35.5` or later, `fast-uri` at `3.1.8` or later, and `@huggingface/transformers` at exactly `4.3.0`.
 - `npm audit` (full tree, no `--omit`). Every advisory it still lists must sit on a path through root `ajv-cli` (`fast-json-patch`, `ajv-cli`, and `brace-expansion` under `glob` → `minimatch`) or through root `js-yaml` 3 (`js-yaml`, `argparse`, `sprintf-js`). None may name `@modelcontextprotocol/sdk`, `sharp` or `fast-uri`. Tasks 4 and 5 remove what remains. Record the summary line in this task's return.
 - `npm ci --ignore-scripts --dry-run` exits 0. The lock is back in sync with both manifests.
+
+**Deviations from plan:**
+- `npm audit fix` also moved `brace-expansion` 1.1.18 → 1.1.21, an in-range fix, so it no longer appears in `npm audit`; the remaining advisories are `ajv-cli`, `fast-json-patch`, `js-yaml`, `argparse` and `sprintf-js` (`5 vulnerabilities (3 moderate, 2 high)`), all on the root `ajv-cli` / `js-yaml` 3 paths. The SDK resolved to `1.32.1`, inside `^1.31.0`.
