@@ -2,8 +2,11 @@
 
 The rule this module exists to enforce, carried over from `models.ts`: a model is downloaded only
 by `fetch_models`, at setup time. Every other load runs with remote loading disabled, so a run
-never reaches the network. `sentence_transformers` and `torch` are imported inside `load_models`
-alone, so importing this module loads neither — the Python twin of the CLI's dynamic-import rule.
+never reaches the network. Every load, remote or not, names the pinned commit in `MODEL_REVISIONS`,
+so the manifest records that pin rather than whatever `refs/main` named at fetch time, and a
+manifest recording any other revision reads as unfetched. `sentence_transformers` and `torch` are
+imported inside `load_models` alone, so importing this module loads neither — the Python twin of
+the CLI's dynamic-import rule.
 
 Precision and ids, decided here. Both models are the originals of the `Xenova/*` ONNX exports the
 TypeScript side runs, loaded at full precision (fp32) on CPU: that is the normal Python path, and it
@@ -49,6 +52,17 @@ class Reranker(Protocol):
 
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 RERANK_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+# Each repository's `main` on 2026-10-11. A pin bump bumps `MODEL_VERSION`. The supply-chain drift
+# notice reads these two lines by exact match, so each stays on one line in this form.
+EMBEDDING_REVISION = "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
+# The Hub redirects this id to `cross-encoder/ms-marco-MiniLM-L6-v2`; the pin resolves through it.
+RERANK_REVISION = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
+# The only revision each model is loaded at, and the only one a manifest entry may record.
+MODEL_REVISIONS: dict[str, str] = {
+    EMBEDDING_MODEL: EMBEDDING_REVISION,
+    RERANK_MODEL: RERANK_REVISION,
+}
 
 # Copied verbatim from `models.ts`; prepended to queries only.
 EMBEDDING_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
@@ -151,14 +165,16 @@ class ModelFiles:
 def model_files_present(cache_dir: Path) -> ModelFiles:
     """File existence only; loads nothing.
 
-    A model the manifest does not describe is missing as `<model id>/<MANIFEST_NAME>`, and a
-    listed snapshot file that does not exist as `<model id>/<file>`.
+    A model the manifest does not describe, or describes at a revision other than its pin in
+    `MODEL_REVISIONS`, is missing as `<model id>/<MANIFEST_NAME>` — the shape an unfetched model
+    takes, so no reader of `missing` needs a wording of its own for a stale pin. A listed snapshot
+    file that does not exist is missing as `<model id>/<file>`.
     """
     entries = read_manifest(cache_dir)
     missing: list[str] = []
     for model_id in MODEL_IDS:
         entry = entries.get(model_id)
-        if entry is None:
+        if entry is None or entry.revision != MODEL_REVISIONS[model_id]:
             missing.append(f"{model_id}/{MANIFEST_NAME}")
             continue
         snapshot = snapshot_dir(cache_dir, model_id, entry.revision)
@@ -225,19 +241,27 @@ def _require_cls_pooling(model: Any, pooling_type: Any) -> None:
         )
 
 
-def _manifest_revision(cache_dir: Path, model_id: str) -> str:
+def _require_fetched_pin(cache_dir: Path, model_id: str) -> None:
+    """Refuses a local-only load of a model the manifest does not record at its pin."""
     entry = read_manifest(cache_dir).get(model_id)
+    pin = MODEL_REVISIONS[model_id]
     if entry is None:
         raise ServiceError(
             f"the docs-retrieval model cache at {cache_dir} has no fetched weights for {model_id}: "
             "run harness-docs-retrieval fetch-models where an operator is present"
         )
-    return entry.revision
+    if entry.revision != pin:
+        raise ServiceError(
+            f"the docs-retrieval model cache at {cache_dir} records {model_id} at revision "
+            f"{entry.revision}, but the pinned revision is {pin}: "
+            "run harness-docs-retrieval fetch-models where an operator is present"
+        )
 
 
 def load_models(allow_remote: bool) -> tuple[Embedder, Reranker]:
-    """The real models, fp32 on CPU. Without `allow_remote` each loads the manifest's revision from
-    the local cache only."""
+    """The real models, fp32 on CPU, each at its pin in `MODEL_REVISIONS`, with remote code off.
+    Without `allow_remote` each loads from the local cache only, and only once the manifest records
+    that pin."""
     try:
         import torch
         from sentence_transformers import CrossEncoder, SentenceTransformer
@@ -247,26 +271,29 @@ def load_models(allow_remote: bool) -> tuple[Embedder, Reranker]:
 
     cache_dir = model_cache_dir()
     local_files_only = not allow_remote
+    if not allow_remote:
+        for model_id in MODEL_IDS:
+            _require_fetched_pin(cache_dir, model_id)
 
-    embedding_revision = None if allow_remote else _manifest_revision(cache_dir, EMBEDDING_MODEL)
     embedding_model = SentenceTransformer(
         EMBEDDING_MODEL,
         cache_folder=str(cache_dir),
         device="cpu",
-        revision=embedding_revision,
+        revision=MODEL_REVISIONS[EMBEDDING_MODEL],
         local_files_only=local_files_only,
+        trust_remote_code=False,
     )
     _require_cls_pooling(embedding_model, Pooling)
 
-    rerank_revision = None if allow_remote else _manifest_revision(cache_dir, RERANK_MODEL)
     # `activation_fn` is the sentence-transformers v4+ name; set explicitly because the id claims
     # sigmoid rather than leaning on the library's default for a one-label model.
     rerank_model = CrossEncoder(
         RERANK_MODEL,
         cache_folder=str(cache_dir),
         device="cpu",
-        revision=rerank_revision,
+        revision=MODEL_REVISIONS[RERANK_MODEL],
         local_files_only=local_files_only,
+        trust_remote_code=False,
         activation_fn=torch.nn.Sigmoid(),
     )
 
@@ -274,20 +301,17 @@ def load_models(allow_remote: bool) -> tuple[Embedder, Reranker]:
 
 
 def _fetched_entry(cache_dir: Path, model_id: str) -> ManifestEntry:
-    """The snapshot `refs/main` names, and every file under it, as `fetch_models` left them."""
-    model_dir = hub_model_dir(cache_dir, model_id)
-    try:
-        revision = (model_dir / "refs" / "main").read_text(encoding="utf-8").strip()
-    except OSError as error:
-        raise ServiceError(
-            f"fetch-models: {model_id} loaded but {model_dir}/refs/main is unreadable: {error}"
-        ) from error
+    """The pinned snapshot, and every file under it, as `fetch_models` left them.
+
+    Read at the pin directly: `huggingface_hub` writes no ref for a commit-hash revision.
+    """
+    revision = MODEL_REVISIONS[model_id]
     snapshot = snapshot_dir(cache_dir, model_id, revision)
     files = sorted(
         path.relative_to(snapshot).as_posix() for path in snapshot.rglob("*") if path.is_file()
     )
     if not files:
-        raise ServiceError(f"fetch-models: {model_id} snapshot {snapshot} holds no files")
+        raise ServiceError(f"fetch-models: {model_id} pinned snapshot {snapshot} holds no files")
     return ManifestEntry(revision=revision, files=tuple(files))
 
 

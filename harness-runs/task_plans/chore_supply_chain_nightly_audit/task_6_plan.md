@@ -38,3 +38,9 @@ It also matches the existing `EMBEDDING_MODEL = "…"` and `RERANK_MODEL = "…"
 - `grep -n 'refs' docs-retrieval-service/src/harness_docs_retrieval/models.py` finds no read of `refs/main`.
 - The test files this task edits. No conventions document states a single-file command for the Python suite, so under the test-run rule this unit skips the run and records the skip. Phase G's gate 13 (lint, mypy strict, the whole suite) grades these files, including every e2e and self-check case that plants through `plant_model_files`.
 - Where this machine's Python environment has the `models` extra synced (`bash scripts/python-service.sh sync --with-models` has been run), run `bash scripts/python-service.sh run fetch-models` once. The manifest it writes must then record exactly the two pins. If the extra is not synced, record this as not run; it downloads torch, which this task does not provision.
+
+**Deviations from plan:**
+
+- `load_models` checks both models' manifest pins before loading either (the old code checked each just before its own load), so a stale reranker pin is refused before the embedder is built.
+- Single-file run of `tests/test_models.py` (and the e2e/self-check cases that plant through `tests/model_cache.py`) not run: no conventions document states a single-file Python command. Deferred to the Run gates phase (gate 13: lint, mypy strict, whole suite). Line length (100) was checked with `awk 'length>100'`; ruff format and mypy were not run, so those rest on reading the code.
+- `bash scripts/python-service.sh run fetch-models` not run: this checkout has no synced environment (`printf '%s' <repo_root> | cksum` gives key `396012580`, and there is no such directory under `~/.cache/harness-docs-retrieval/venvs/`), so the `models` extra is not synced here. The claim that the manifest records exactly the two pins rests on reading `_fetched_entry`, not on running it.

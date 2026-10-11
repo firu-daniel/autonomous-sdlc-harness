@@ -12,6 +12,7 @@ fake of it; that case skips loudly where the extra is absent, as it is in the ga
 built under `tmp_path`, never inside this checkout.
 """
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -24,13 +25,18 @@ from harness_docs_retrieval.models import (
     EMBEDDING_MODEL,
     MANIFEST_NAME,
     MODEL_CACHE_ENV,
+    MODEL_IDS,
+    MODEL_REVISIONS,
     RERANK_MODEL,
     RERANKER_ID,
+    ManifestEntry,
     _require_cls_pooling,
     model_cache_dir,
     model_files_present,
+    snapshot_dir,
+    write_manifest,
 )
-from model_cache import FAKE_REVISION, plant_model_files
+from model_cache import PLANTED_FILES, plant_model_files
 
 
 def test_ids_are_namespaced_and_encode_the_precision() -> None:
@@ -91,10 +97,35 @@ def test_planted_cache_is_present(tmp_path: Path) -> None:
 def test_one_deleted_file_is_reported_alone(tmp_path: Path) -> None:
     plant_model_files(tmp_path)
     snapshot = tmp_path / "models--cross-encoder--ms-marco-MiniLM-L-6-v2" / "snapshots"
-    (snapshot / FAKE_REVISION / "tokenizer.json").unlink()
+    (snapshot / MODEL_REVISIONS[RERANK_MODEL] / "tokenizer.json").unlink()
     result = model_files_present(tmp_path)
     assert result.present is False
     assert result.missing == (f"{RERANK_MODEL}/tokenizer.json",)
+
+
+def test_manifest_at_another_revision_reads_as_unfetched(tmp_path: Path) -> None:
+    stale = "0" * 40
+    write_manifest(
+        tmp_path, {model_id: ManifestEntry(stale, PLANTED_FILES) for model_id in MODEL_IDS}
+    )
+    for model_id in MODEL_IDS:
+        snapshot = snapshot_dir(tmp_path, model_id, stale)
+        for file in PLANTED_FILES:
+            path = snapshot / file
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"")
+    result = model_files_present(tmp_path)
+    assert result.present is False
+    assert result.missing == (
+        f"{EMBEDDING_MODEL}/{MANIFEST_NAME}",
+        f"{RERANK_MODEL}/{MANIFEST_NAME}",
+    )
+
+
+def test_pins_are_full_commit_hashes() -> None:
+    assert tuple(MODEL_REVISIONS) == MODEL_IDS
+    for revision in MODEL_REVISIONS.values():
+        assert re.fullmatch(r"[0-9a-f]{40}", revision), revision
 
 
 def test_importing_the_module_loads_no_model_library() -> None:
