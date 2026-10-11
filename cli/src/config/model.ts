@@ -714,8 +714,9 @@ export const COMMAND_NONE_SENTINEL = '<none>';
  * and because a half-edited placeholder should still read as unfinished.
  *
  * The sides that must agree on this answer: `config/check.ts`'s grading of the key, the wrapper
- * generator's "write no wrapper for this key", `doctor`'s two command checks and `init`'s command
- * report.
+ * generator's "write no wrapper for this key", `doctor`'s two command checks, `init`'s command
+ * report, and the shell mirror `TYPECHECK_NONE_SENTINEL` in `cli/templates/scripts/run-test-suite.sh`
+ * — a template an adopter receives, which cannot import this constant, so it is declared here.
  *
  * **Value shape only.** Every consumer outside `config/check.ts` calls {@link answersNone} instead,
  * which adds the key gate.

@@ -9,18 +9,19 @@ from pathlib import Path
 
 from harness_docs_retrieval.models import (
     MODEL_IDS,
+    MODEL_REVISIONS,
     ManifestEntry,
     snapshot_dir,
     write_manifest,
 )
 
-FAKE_REVISION = "0000000000000000000000000000000000000000"
-
 PLANTED_FILES = ("config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json")
 
 
 def plant_model_files(cache_dir: Path) -> None:
-    entries = {model_id: ManifestEntry(FAKE_REVISION, PLANTED_FILES) for model_id in MODEL_IDS}
+    entries = {
+        model_id: ManifestEntry(MODEL_REVISIONS[model_id], PLANTED_FILES) for model_id in MODEL_IDS
+    }
     write_manifest(cache_dir, entries)
     for model_id, entry in entries.items():
         snapshot = snapshot_dir(cache_dir, model_id, entry.revision)

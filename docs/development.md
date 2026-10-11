@@ -1,6 +1,6 @@
 # Development
 
-**Who reads this:** anyone changing a file in this repository, and the maintainer cutting a release. It answers how to run the plugin from your working copy instead of from an installed copy, what that choice forces on the way references between plugin assets are written, which commands decide whether a change is good, what the roadmap item numbers cited throughout the tree mean, and which steps a release takes, in which order.
+**Who reads this:** anyone changing a file in this repository, and the maintainer cutting a release. It answers how to run the plugin from your working copy instead of from an installed copy, what that choice forces on the way references between plugin assets are written, which commands decide whether a change is good, what the roadmap item numbers cited throughout the tree mean, which steps a release takes, in which order, and what the nightly supply-chain audit checks.
 
 Everything below was measured against the shipped `claude` CLI at version 2.1.226, except where a fact names its own version. Where a fact is a measurement, the command and the exact message are given, so a later version that behaves differently is detectable rather than merely surprising.
 
@@ -227,9 +227,9 @@ bash scripts/check-flow-graph.sh
 bash scripts/check-flow-graph.sh --negatives
 ```
 
-The first validates the worked example against the schema. The second asserts the inverse case once per fixture, one chained assertion for each document `schemas/negative/` wires into it: `ajv test … --invalid` passes only when a fixture is read *and* rejected, so a green run means **every** wired fixture was still refused — not merely that something exited non-zero — and each assertion prints the keyword path that rejected its own fixture, naming the constraint that fixture proves. A red one means either the schema started accepting a fixture or a fixture could not be loaded, and the message says which: `<file> failed test` and exit 1 for the first, `Cannot find data file …` and exit 2 for the second. Neither red case prints a keyword path — do not go looking for one.
+The first validates the worked example against the schema. The second asserts the inverse case once per fixture, one chained assertion for each document `schemas/negative/` wires into it. Every `validate:*` script runs `node schemas/validate.mjs`, a hand-written driver on the `ajv` library that replaced `ajv-cli`, because `ajv-cli` 5 carries advisories that no 5.x release fixes (`## 8. The nightly supply-chain audit` has the detail); it kept `ajv-cli`'s messages and exit codes. `node schemas/validate.mjs test … --invalid` passes only when a fixture is read *and* rejected, so a green run means **every** wired fixture was still refused — not merely that something exited non-zero — and each assertion prints `<file> passed test` and the keyword path that rejected its own fixture, naming the constraint that fixture proves. A red one means either the schema started accepting a fixture or a fixture could not be loaded, and the message says which: `<file> failed test` and exit 1 for the first, `Cannot find data file …` and exit 2 for the second. Neither red case prints a keyword path — do not go looking for one.
 
-The last four lines cover the flow graph, `cli/templates/scripts/flows/task_plan_writing.graph.json`. `npm run validate:flow-graph` validates that graph and every check fixture against `schemas/flow-graph.schema.json`; `npm run validate:flow-graph:negative` asserts, with the same `ajv test … --invalid` form as above, that each schema negative is read and rejected. `bash scripts/check-flow-graph.sh` runs the checks the schema cannot express against the graph and exits 1 with one stderr line per finding; `--negatives` runs them against each check fixture and exits 1 when a fixture passes every check **or** fails only on another check's id, and when a check has no fixture. The check ids are that script's header block `THE CONTRACT` and are not restated here. The two fixture families live apart on purpose: the schema negatives are the `flow-graph-schema-*.json` files in `schemas/negative/`, which the schema rejects; the check fixtures are in `schemas/flow-graph-check/`, schema-valid by design and rejected by the checker, one check each. The checker reads the plugin documents it compares against at run time rather than copying any of them: the closed directive set in `plugin/instructions/run_mode_instructions.md`, the task-engine template in `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3 Templates`, and the planning core's `## Setup (once per session)` table and cap sentences.
+The last four lines cover the flow graph, `cli/templates/scripts/flows/task_plan_writing.graph.json`. `npm run validate:flow-graph` validates that graph and every check fixture against `schemas/flow-graph.schema.json`; `npm run validate:flow-graph:negative` asserts, with the same `node schemas/validate.mjs test … --invalid` form as above, that each schema negative is read and rejected. `bash scripts/check-flow-graph.sh` runs the checks the schema cannot express against the graph and exits 1 with one stderr line per finding; `--negatives` runs them against each check fixture and exits 1 when a fixture passes every check **or** fails only on another check's id, and when a check has no fixture. The check ids are that script's header block `THE CONTRACT` and are not restated here. The two fixture families live apart on purpose: the schema negatives are the `flow-graph-schema-*.json` files in `schemas/negative/`, which the schema rejects; the check fixtures are in `schemas/flow-graph-check/`, schema-valid by design and rejected by the checker, one check each. The checker reads the plugin documents it compares against at run time rather than copying any of them: the closed directive set in `plugin/instructions/run_mode_instructions.md`, the task-engine template in `plugin/instructions/autonomous_pause_and_ledger.md` → `### 1.3 Templates`, and the planning core's `## Setup (once per session)` table and cap sentences.
 
 **Gate 4 — `init` against a throwaway fixture.** From the repository root:
 
@@ -2164,7 +2164,7 @@ HARNESS_GATES_CONTAINERS=1 bash scripts/run-gates.sh
 
 Without the variable the script prints `SKIPPED 13d` with the variable to set; with it and no `docker` on `PATH` the wrapper exits `4` and the script prints `SKIPPED 13d` with that reason. Either way 13d is listed with the gates the script cannot run and counted among neither the passes nor the failures, so a green run that did not reach Postgres says so. When it does run, it starts only the compose file's `postgres` service, under a project name and a loopback port derived from this checkout so that two worktrees do not collide, runs the `container`-marked cases against it, and removes that project with `docker compose … down -v` on every exit path. **The Python environment lives outside the checkout**: the wrapper keeps the virtual environment and every tool cache under `${XDG_CACHE_HOME:-$HOME/.cache}/harness-docs-retrieval/`, keyed per checkout, which is why gate 6a's `$HOME` grep needs no exclusion for it. **Two things stay hand-run**: `docker compose up` of the full service stack from `docs-retrieval-service/`, and any run of the service with real models, whose weights only the operator-run `harness-docs-retrieval fetch-models` sub-command downloads.
 
-**Gate 14 — the rendered workflows parse.** Gate 12 round 7's finding 1 was a `harness-control.yml` that 0.6.1 rendered as invalid YAML, so GitHub ran none of it, and no suite parsed the files `init` renders. This gate parses them. Every leg runs one hand-written script, `scripts/check-rendered-workflows.mjs`, which `scripts/run-gates.sh` grades by its exit status. **14a** renders the workflows through `init`, with `forge: github` and `execution.target: github-actions`, into a throwaway repository outside this checkout, and parses each with `js-yaml`; it fails unless exactly the four harness workflows were written and each parses. **14b** must refuse `cli/test/fixtures/harness-control-0.6.1.yml`, the file 0.6.1 rendered, through the same parse. **14c** runs `actionlint -shellcheck= -pyflakes=` over the rendered files, which must report nothing, and over that fixture, which must report a syntax error. The throwaway repository is removed on every exit path. 14a, 14c and 14d run `cli/dist/cli.js`, so the gate depends on gate 2a's build. `js-yaml` is a dev-only root `devDependencies` entry, already in the lockfile through `ajv-cli`, and is not a dependency of the published package. Run each leg from the repository root:
+**Gate 14 — the rendered workflows parse.** Gate 12 round 7's finding 1 was a `harness-control.yml` that 0.6.1 rendered as invalid YAML, so GitHub ran none of it, and no suite parsed the files `init` renders. This gate parses them. Every leg runs one hand-written script, `scripts/check-rendered-workflows.mjs`, which `scripts/run-gates.sh` grades by its exit status. **14a** renders the workflows through `init`, with `forge: github` and `execution.target: github-actions`, into a throwaway repository outside this checkout, and parses each with `js-yaml` 4's `load`, which is safe by default and replaced 3.x's `safeLoad`; it fails unless exactly the four harness workflows were written and each parses. **14b** must refuse `cli/test/fixtures/harness-control-0.6.1.yml`, the file 0.6.1 rendered, through the same parse. **14c** runs `actionlint -shellcheck= -pyflakes=` over the rendered files, which must report nothing, and over that fixture, which must report a syntax error. The throwaway repository is removed on every exit path. 14a, 14c and 14d run `cli/dist/cli.js`, so the gate depends on gate 2a's build. `js-yaml` is a direct, dev-only root `devDependencies` entry at 4.x, and is not a dependency of the published package. Run each leg from the repository root:
 
 ```
 node scripts/check-rendered-workflows.mjs
@@ -2205,7 +2205,7 @@ node scripts/check-rendered-workflows.mjs --zizmor
 - `harness-control.yml` `artipacked` on `control`: a review round pushes through `push-branch.sh` with the checkout's credential.
 - `harness-control.yml` `adhoc-packages` on `control`: the same unpinned Claude Code CLI install as `harness-run.yml`.
 
-**It takes `zizmor` from `PATH` when that reports 1.30.1, else from `uvx zizmor@1.30.1`**, because another version's audit set is not the one the residual set was measured against. Where neither resolves it exits `4`, and `run-gates.sh` prints `SKIPPED 14d` on 14c's terms: a `SKIPPED` 14d is not a pass. The online audit, which needs a GitHub token, is hand-run and never this leg. A `zizmor` on `PATH` at any other version is passed over for `uvx`, so install that version where wanted, as a `uv` tool:
+**It takes `zizmor` from `PATH` when that reports 1.30.1, else from `uvx zizmor@1.30.1`**, because another version's audit set is not the one the residual set was measured against. Where neither resolves it exits `4`, and `run-gates.sh` prints `SKIPPED 14d` on 14c's terms: a `SKIPPED` 14d is not a pass. The online audit is `--zizmor-online`, which `.github/workflows/supply-chain.yml` runs nightly and `run-gates.sh` never runs, so 14d stays offline and an API outage never turns a gate red; `## 8. The nightly supply-chain audit` says what it grades and where its token comes from. A `zizmor` on `PATH` at any other version is passed over for `uvx`, so install that version where wanted, as a `uv` tool:
 
 ```
 uv tool install zizmor@1.30.1
@@ -2304,3 +2304,156 @@ It cuts and squash-merges the bump pull request, waits for `publish-main.yml` to
 **Why the push needs a terminal.** Without `--dry-run` the script refuses unless stdin is a terminal. A release tag is pushed by a person. An unattended run's Bash tool has no terminal, so this refusal stops such a run where the script-allowlist guard would otherwise permit the call.
 
 **Backfilled tags.** The decision is to backfill 0.2.0, 0.4.0, 0.4.1 and 0.4.2 with the same script, for the record. No workflow rendered before this fix reads a tag, so the backfill changes no existing adopter's run. 0.3.0 has no tag and cannot get one: it was bumped on `dev` (`908d822`) and was never published to `main` as its own commit, so the script refuses it.
+
+---
+
+## 8. The nightly supply-chain audit
+
+**What runs, and where.** `.github/workflows/supply-chain.yml` re-audits the supply chain on `schedule`, nightly, and on `workflow_dispatch`. Every job checks out `dev`, under `workflow_dispatch` too, because `scripts/` never reaches `main` and two of the jobs run scripts from it; `dev` is the trunk, so the trunk is what is audited. The file itself reaches `main` with every publication, because `scripts/publish-main.sh` → `removed_paths` does not name it, and it has to: `schedule` fires only from the default branch's copy of a workflow, and the default branch is `main`. The workflow sets `permissions: contents: read`, and no job pushes. Four jobs run in parallel:
+
+| Job | What it audits | What fails it |
+|---|---|---|
+| `npm-audit` | Every installed package in the workspace's full npm tree, from `package-lock.json` | Any advisory at moderate or higher |
+| `uv-audit` | Every package `docs-retrieval-service/uv.lock` pins, under uv 0.12.23 | Any known vulnerability not ignored on the step |
+| `zizmor-online` | The four workflows `init` renders for an adopter, and this repository's own `.github`, under zizmor 1.30.1 with its online audits | A finding outside the set kept for it, a `RESIDUAL` entry that no longer fires, or exit `4`: zizmor or the token unavailable |
+| `model-revisions` | The four pinned Hugging Face model revisions, against upstream `main` | A pin that cannot be read from the tree, or one upstream no longer resolves |
+
+The commands each job runs, from the repository root of a checkout of `dev`. `npm-audit`:
+
+```
+npm ci --ignore-scripts
+npm audit --audit-level=moderate
+```
+
+`uv-audit`, from `docs-retrieval-service/`:
+
+```
+uv audit --preview-features audit-command --frozen
+```
+
+`zizmor-online`, with `GH_TOKEN` set from `github.token`:
+
+```
+npm ci --ignore-scripts
+npm run build
+node scripts/check-rendered-workflows.mjs --zizmor-online
+```
+
+`model-revisions`:
+
+```
+npm ci --ignore-scripts
+npm run build
+node scripts/check-model-revisions.mjs
+```
+
+**`npm audit` runs over the full tree, never with `--omit=dev`.** The CLI's runtime packages are optional `peerDependencies`, which a production-only audit hides. On the planner's base commit, `9615afb5`, on 2026-10-11, the production-only audit reported `0` while the full tree reported `9 vulnerabilities (2 moderate, 7 high)`.
+
+**`--zizmor-online` runs two passes**, and the second runs even when the first found something. Pass 1 renders the adopter workflows in a throwaway repository and grades them against `RESIDUAL`, as 14d does offline. Pass 2 grades this repository's own `.github` against no residual set. The token is `GH_TOKEN` when it is set and non-empty, else the token the logged-in `gh` holds, and it reaches zizmor only through the child process's environment, never on its command line. The script's header is the full contract, exit codes included.
+
+**Not a merge gate, and it fails anyway.** The workflow is never a required check, because a new upstream advisory must not block unrelated merges. Every job still fails on a finding, and no step or job carries `continue-on-error`: GitHub emails the maintainer when a scheduled run goes red, and that email is the alert. Online zizmor runs here and not in gate 14, because an API outage or a new advisory would otherwise fail unrelated changes; 14d stays offline. The npm threshold is moderate, not high, because of `sprintf-js`. Its advisory, GHSA-hp3w-g68c-fv3c, is moderate and covers every `sprintf-js` release, with no patched version, so it was cleared only by dropping the `argparse` 1 chain that carried it, which meant replacing `ajv-cli`. A high threshold would never have surfaced it. This audit adds no gate and changes none of `scripts/run-gates.sh`'s fourteen. Running the gates on pull requests is not part of it.
+
+**How each set is kept.** A finding is disposed of by a fix or by a narrow, documented ignore, never by lowering a threshold. Each set below is empty or justified entry by entry:
+
+- **zizmor, the rendered adopter workflows.** `RESIDUAL` in `scripts/check-rendered-workflows.mjs`, the same set 14d grades offline. Each entry's reason is in its template's header and in §5's gate 14 list. An entry that stops firing is itself a finding, so the set cannot outlive its reasons.
+- **zizmor, this repository's `.github`.** No residual set. The only allowance is an inline `# zizmor: ignore[<audit>]` on the line zizmor flags, with its reason in a comment beside it. There is exactly one today: `artipacked` in `publish-main.yml`, whose checkout keeps its persisted credential because `scripts/publish-main.sh` pushes the `publish` branch through it.
+- **`uv audit`.** An `--ignore-until-fixed <ID>` added to the `uv-audit` step, with a sentence here naming the advisory and why it cannot be fixed yet. The set is empty today.
+- **npm.** `npm audit` has no per-advisory ignore. An advisory with no patched release in range is disposed of by an `overrides` entry in the root `package.json` that pins a patched release, or by replacing the dependency, as `ajv-cli` was replaced by `schemas/validate.mjs`, and the disposition is recorded here. The set is empty today.
+
+**Model pins and the drift notice.** Both retrieval paths load a fixed commit of each of their two models. The four pins have one table, `docs/retrieval.md` → `**Models.**`. The `model-revisions` job prints upstream drift as a `::notice::`, because a pin behind upstream `main` is a deliberate choice, and leaves the exit at `0`. It prints a pin that cannot be read from the tree, or that upstream answers `404` for, as an `::error::` and exits `1`, because such a pin breaks every adopter's fresh `fetch-models`. A network failure is a `::warning::` and leaves the exit alone. A bump is a deliberate edit to the pin constants together with `MODEL_VERSION`, on both paths where both move: `cli/src/retrieval/models.ts` and `docs-retrieval-service/src/harness_docs_retrieval/models.py`.
+
+**Dependabot alerts, security updates and malware alerts are on.** They were turned on on 2026-10-11. Before that, the alerts endpoint answered `Vulnerability alerts are disabled. (HTTP 404)` and the security-updates endpoint answered `{"enabled":false,"paused":false}`. After it, the first answered `204 No Content` and the second `{"enabled":true,"paused":false}`. Both are read with these two commands:
+
+```
+gh api /repos/firu-daniel/autonomous-sdlc-harness/vulnerability-alerts
+gh api /repos/firu-daniel/autonomous-sdlc-harness/automated-security-fixes
+```
+
+These settings live under the repository's *Settings* → *Security*, not in the tree. Dependabot raises an alert, and a security-update pull request, as soon as an advisory lands. The nightly audit is the independent check that fails the run. No `dependabot.yml` ships: security updates need none, version updates are not wanted here, and zizmor's `dependabot-cooldown` audit applies only where such a file exists.
+
+### Measured on the final tree, 2026-10-11
+
+On 2026-10-11, at commit `d81d81d7`, under Node `v22.23.2`, npm `10.9.8` and `uv 0.12.23`, each command below was run once from the repository root, or is recorded as not run with its reason. Each block holds the command, then the summary line it printed and its exit status, or why it did not run.
+
+```
+npm audit --audit-level=moderate
+found 0 vulnerabilities
+exit 0
+```
+
+```
+npm audit
+found 0 vulnerabilities
+exit 0
+```
+
+```
+uv audit --preview-features audit-command --frozen --directory docs-retrieval-service
+Found no known vulnerabilities and no adverse project statuses in 84 packages
+exit 0
+```
+
+This is the `uv-audit` step's command, with uv's global `--directory` in place of the step's `working-directory`.
+
+```
+test -n "${GH_TOKEN}"
+exit 1
+```
+
+The two online zizmor legs were therefore run afterwards, on 2026-10-11 at commit `0fdbf76a`, with `GH_TOKEN` taken from `gh auth token`. The two blocks below marked with that commit come from that run.
+
+```
+uvx zizmor@1.30.1 --no-config --format=plain .github    (at 0fdbf76a)
+No findings to report. Good job! (1 ignored, 11 suppressed)
+exit 0
+```
+
+```
+node scripts/check-model-revisions.mjs
+CLI Xenova/bge-small-en-v1.5 ea104dacec62c0de699686887e3f920caeb4f3e3 — resolves
+CLI Xenova/ms-marco-MiniLM-L-6-v2 a09144355adeed5f58c8ed011d209bf8ee5a1fec — resolves
+Python BAAI/bge-small-en-v1.5 5c38ec7c405ec4b44b94cc5a9bb96e735b38267a — resolves
+::notice title=model repository renamed::cross-encoder/ms-marco-MiniLM-L-6-v2 now answers as cross-encoder/ms-marco-MiniLM-L6-v2
+Python cross-encoder/ms-marco-MiniLM-L-6-v2 233902d25c440f23af6f7d6e94d2946bac0bee0a — resolves
+exit 0
+```
+
+```
+actionlint .github/workflows/supply-chain.yml
+(no output)
+exit 0
+```
+
+```
+uvx zizmor@1.30.1 --offline --no-config --format=plain .github
+No findings to report. Good job! (1 ignored, 11 suppressed)
+exit 0
+```
+
+The one ignored finding is the inline `artipacked` ignore in `publish-main.yml`.
+
+```
+node scripts/check-rendered-workflows.mjs --zizmor-online    (at 0fdbf76a, after npm run build)
+(no output)
+exit 0
+```
+
+Exit 0 means neither pass found anything outside its residual set. Pass 1 covers the four rendered adopter workflows, graded against `RESIDUAL`. Pass 2 covers this repository's own `.github`, with an empty residual. The `zizmor-online` job runs the same command nightly.
+
+**The base, for contrast.** On 2026-10-11, at commit `9615afb5`, plain `npm audit` printed `9 vulnerabilities (2 moderate, 7 high)`, `npm audit --omit=dev` reported none, `uv audit` printed `Found no known vulnerabilities and no adverse project statuses in 84 packages`, and zizmor 1.30.1 over this repository's `.github` printed `10 findings (7 suppressed, 2 unsafe fixes): 0 informational, 0 low, 2 medium, 1 high`.
+
+### The findings it was built against, and what became of each
+
+| Finding | Advisory or audit | Disposition | Reason |
+|---|---|---|---|
+| **A1** `@modelcontextprotocol/sdk` 1.30.0 | GHSA-6qxp-vccf-f47h | Fixed by raising the peer and dev floor to `^1.31.0`, with the lock at the resolved `1.32.1` | The harness imports only `server/index.js`, `server/stdio.js` and `types.js` (`cli/src/retrieval/server.ts`), and nothing imports the OAuth client `client/auth.js`. The floor rose anyway, because the peer range is what an adopter's `init` resolves. |
+| **A2** `sharp` 0.35.4 | GHSA-wq5f-xc86-pv6w | Fixed by the lock refresh, to `0.35.5` | `@huggingface/transformers` stays 4.3.0, which admits `^0.35.4`, so the 4.3.0 file paths in `cli/src/retrieval/models.ts` needed no re-verification. |
+| **B1** `ajv-cli` → `fast-json-patch` | `npm audit` | Fixed by replacing `ajv-cli` with `schemas/validate.mjs` | Gate 3's messages and exit codes are kept. |
+| **B2** `ajv` → `fast-uri` 3.1.5 | `npm audit`, six advisories over 3.0.0–3.1.7 | Fixed by the lock refresh | The lock resolves `fast-uri` 3.1.8, above the affected range. |
+| **B3** `js-yaml` 3 → `argparse` → `sprintf-js`, and the `js-yaml` merge-key advisory | `npm audit` | Fixed by `js-yaml ^4.3.2` | `sprintf-js` has no patched release, so removing the chain was the only fix. |
+| **B4** `brace-expansion` | `npm audit` | Fixed by removing `ajv-cli`, whose `glob` carried it | The package left the tree with its only parent chain. |
+| **C** `docs-retrieval-service/uv.lock` | `uv audit` | Clean; now audited nightly by the `uv-audit` job | No finding to dispose of. |
+| **D** unpinned model weights | Both retrieval paths fetched the `main` revision | Fixed on both paths by pinning each model to a revision | The pins are in `docs/retrieval.md` → `**Models.**`. |
+| Own-workflow findings | zizmor 1.30.1 over `.github` | `release-npm.yml` `artipacked` and `cache-poisoning` fixed; `publish-main.yml` `artipacked` a narrow inline ignore | That checkout keeps its persisted credential because `scripts/publish-main.sh` pushes the `publish` branch through it. |
+
+**Gate 10, and why it was not re-run in full.** For both CLI models, each `MODEL_FILES` entry in the gate-10 cache fetched on 2026-09-22 is byte-identical to that file at the pinned revision. This was measured on 2026-10-11 with `shasum -a 256` against the Hub's LFS `sha256` for `onnx/model_quantized.onnx` (`6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4` and `e9d8ebf845c413e981c175bfe49a3bfa9b3dcce2a3ba54875ee5df5a58639fbe`), and with `git hash-object` against the Hub's `blobId` for `config.json`, `tokenizer.json` and `tokenizer_config.json`. So the weights gate 10 measured are the pinned weights, and the embedder and reranker ids do not move. What moved is the cache layout, `<model id>/<revision>/<file>`, which gate 4's planted-cache cases and gate 11's real-model floor exercise.

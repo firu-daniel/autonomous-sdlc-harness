@@ -1,13 +1,37 @@
 #!/usr/bin/env bash
-# run-test-suite.sh — run the configured `commands.test` string once and decide
-# one verdict for it, `pass` or `fail`, so the Run gates phase's orchestrator
-# reads that verdict and never the suite's output.
+# run-test-suite.sh — run the configured `commands.typecheck` (whole tree, no
+# path argument) and `commands.test` strings once each and decide one verdict
+# for the pair, `pass` or `fail`, so the Run gates phase's orchestrator reads
+# that verdict and never either gate's output.
 #
-# OUTPUT CONTRACT — the run form prints exactly one stdout line: `pass` (exit 0),
-# `fail <log path>` (exit 1), or — when a run of the same label is already in
-# flight — `pending` (exit 3), the log path repo-relative. Nothing the command
-# prints reaches stdout or stderr; all of it goes to the log. The orchestrator
-# never reads the log — it hands the path on to whatever plans the fix.
+# OUTPUT CONTRACT — the run form prints exactly one stdout line: `pass` (exit 0)
+# only when the typecheck passed or was not run for `<none>` AND the test passed;
+# otherwise `fail <log path>` (exit 1); or — when a run of the same label is
+# already in flight — `pending` (exit 3). The log path is repo-relative. Nothing
+# either command prints reaches stdout or stderr; all of it goes to the one log.
+# The orchestrator never reads the log — it hands the path on to whatever plans
+# the fix.
+#
+# TWO GATES, ONE VERDICT. Typecheck first, then test, each from the repository
+# root with stdin from /dev/null, into the same log under these marker lines —
+# a wire `test-fix-plan-writer` reads, so they are byte-exact:
+#   == run-test-suite.sh: gate typecheck (commands.typecheck) ==
+#   == run-test-suite.sh: gate typecheck exited <status> ==
+#   == run-test-suite.sh: gate typecheck not run: commands.typecheck is <none> ==
+#   == run-test-suite.sh: gate test (commands.test) ==
+#   == run-test-suite.sh: gate test exited <status> ==
+#
+# RUN BOTH, REPORT BOTH. The test runs after a failing typecheck: MAX_GATE_ROUNDS
+# counts gate runs, so a branch broken both ways spends one run and gets one fix
+# plan, not two.
+#
+# `<none>` IS NOT A PASS. A `commands.typecheck` whose trimmed value is exactly
+# `<none>` writes the header and the not-run line and runs nothing; the verdict
+# then rests on the test alone. The sentinel is never `eval`-ed — it would parse
+# as a shell redirect.
+#
+# THE NAME IS KEPT although it now runs two gates: renaming would reach
+# `OUTER_LOOP_SCRIPTS`, two test pins and every adopter's permission profile.
 #
 # THE LOG IS VERSIONED PER ROUND, NOT OVERWRITTEN:
 #   <state_dir>/test_run_logs/<sanitized branch>/<label>.log
@@ -30,13 +54,13 @@
 # removes a `.running` file only while it still holds its own PID.
 #
 # BESIDE THE LOG, in the same directory:
-#   <label>.running  the run form's own PID, present while the command runs
-#   <label>.verdict  the verdict line, renamed into place whole once the command
-#                    exits, so a reader never sees half a line
+#   <label>.running  the run form's own PID, present while the gates run
+#   <label>.verdict  the verdict line, renamed into place whole once both gates
+#                    finished, so a reader never sees half a line
 # A refusal writes neither file, and no log.
 #
 # Usage:
-#   run-test-suite.sh <label>          run the suite; label ^[A-Za-z0-9][A-Za-z0-9._-]*$
+#   run-test-suite.sh <label>          run typecheck then test; label ^[A-Za-z0-9][A-Za-z0-9._-]*$
 #   run-test-suite.sh --wait <label>   read the verdict of a run of <label>; never runs anything
 #
 # Exit map:
@@ -44,7 +68,7 @@
 #   1  fail (likewise)
 #   2  refusal — one stderr line `run-test-suite.sh: <reason>`, nothing on stdout:
 #      bad arguments, a label outside the pattern, an unresolvable configuration,
-#      `commands.test` unset, no current branch, or (wait form) no run in flight
+#      `commands.typecheck` or `commands.test` unset, no current branch, or (wait form) no run in flight
 #   3  pending — the wait form, or the run form finding a run of the same label already in flight; issue the wait form
 
 # Deliberately no `-e`: this script has to outlive the command's failure long
@@ -60,6 +84,9 @@ fi
 
 LOG_SUBDIR='test_run_logs'
 LABEL_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+# Mirrors COMMAND_NONE_SENTINEL in the CLI's config model: exact and
+# case-sensitive on the whitespace-trimmed value.
+TYPECHECK_NONE_SENTINEL='<none>'
 
 refuse() {
   echo "run-test-suite.sh: $1" >&2
@@ -148,6 +175,19 @@ case $? in
 esac
 [ -n "$command_line" ] || refuse "commands.test is not set in harness.config.json"
 
+typecheck_line="$(hr_command "$root" typecheck)"
+case $? in
+  0) ;;
+  2) refuse "cannot resolve '$root/harness.config.json'" ;;
+  *) typecheck_line="" ;;
+esac
+[ -n "$typecheck_line" ] || refuse "commands.typecheck is not set in harness.config.json"
+
+typecheck_trimmed="${typecheck_line#"${typecheck_line%%[![:space:]]*}"}"
+typecheck_trimmed="${typecheck_trimmed%"${typecheck_trimmed##*[![:space:]]}"}"
+typecheck_is_none=0
+if [ "$typecheck_trimmed" = "$TYPECHECK_NONE_SENTINEL" ]; then typecheck_is_none=1; fi
+
 # ONE RUN PER LABEL. A live run of this label — a session that re-entered the
 # phase while its earlier, backgrounded run still runs — is never joined by a
 # second: collect that run's verdict instead, exactly as the wait form would.
@@ -160,13 +200,35 @@ rm -f "$verdict_file" "$verdict_file.tmp"
 printf '%s\n' "$$" > "$running_file"
 : > "$log_file"
 
-# `set +u +o pipefail` inside the subshell grades the command under the options
-# a plain `bash -c` would give it, not this script's.
+marker() {
+  printf '== run-test-suite.sh: %s ==\n' "$1" >> "$log_file"
+}
+
+# `set +u +o pipefail` inside each subshell grades the command under the
+# options a plain `bash -c` would give it, not this script's.
+marker "gate typecheck (commands.typecheck)"
+if [ "$typecheck_is_none" -eq 1 ]; then
+  typecheck_status=0
+  marker "gate typecheck not run: commands.typecheck is <none>"
+else
+  (
+    set +u +o pipefail
+    eval "$typecheck_line"
+  ) < /dev/null >> "$log_file" 2>&1
+  typecheck_status=$?
+  marker "gate typecheck exited $typecheck_status"
+fi
+
+marker "gate test (commands.test)"
 (
   set +u +o pipefail
   eval "$command_line"
-) < /dev/null > "$log_file" 2>&1
-status=$?
+) < /dev/null >> "$log_file" 2>&1
+test_status=$?
+marker "gate test exited $test_status"
+
+status=0
+if [ "$typecheck_status" -ne 0 ] || [ "$test_status" -ne 0 ]; then status=1; fi
 
 if [ "$status" -eq 0 ]; then
   verdict="pass"

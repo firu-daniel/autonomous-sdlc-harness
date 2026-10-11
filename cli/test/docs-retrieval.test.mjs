@@ -134,7 +134,7 @@ test('(h) docs index refuses with the model files removed, naming a missing file
   const result = await runCli(dir, ['docs', 'index'], env);
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Xenova\/bge-small-en-v1\.5\/config\.json/);
+  assert.match(result.stderr, /Xenova\/bge-small-en-v1\.5\/ea104dacec62c0de699686887e3f920caeb4f3e3\/config\.json/);
   assert.deepEqual(await snapshotTree(dir), before);
 });
 
