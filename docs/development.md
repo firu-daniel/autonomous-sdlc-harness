@@ -2362,14 +2362,14 @@ node scripts/check-model-revisions.mjs
 
 **Model pins and the drift notice.** Both retrieval paths load a fixed commit of each of their two models. The four pins have one table, `docs/retrieval.md` → `**Models.**`. The `model-revisions` job prints upstream drift as a `::notice::`, because a pin behind upstream `main` is a deliberate choice, and leaves the exit at `0`. It prints a pin that cannot be read from the tree, or that upstream answers `404` for, as an `::error::` and exits `1`, because such a pin breaks every adopter's fresh `fetch-models`. A network failure is a `::warning::` and leaves the exit alone. A bump is a deliberate edit to the pin constants together with `MODEL_VERSION`, on both paths where both move: `cli/src/retrieval/models.ts` and `docs-retrieval-service/src/harness_docs_retrieval/models.py`.
 
-**Dependabot is off, and turning it on is recommended.** On 2026-10-11 the alerts endpoint answered `Vulnerability alerts are disabled. (HTTP 404)` and the security-updates endpoint answered `{"enabled":false,"paused":false}`, to these two commands:
+**Dependabot alerts, security updates and malware alerts are on.** They were turned on on 2026-10-11. Before that, the alerts endpoint answered `Vulnerability alerts are disabled. (HTTP 404)` and the security-updates endpoint answered `{"enabled":false,"paused":false}`. After it, the first answered `204 No Content` and the second `{"enabled":true,"paused":false}`. Both are read with these two commands:
 
 ```
 gh api /repos/firu-daniel/autonomous-sdlc-harness/vulnerability-alerts
 gh api /repos/firu-daniel/autonomous-sdlc-harness/automated-security-fixes
 ```
 
-Turning on Dependabot alerts and security updates, under the repository's *Settings* → *Code security*, is the maintainer's setting to flip. This is a recommendation, not pending work. No `dependabot.yml` ships: security updates need none, version updates are not wanted here, and zizmor's `dependabot-cooldown` audit applies only where such a file exists.
+These settings live under the repository's *Settings* → *Security*, not in the tree. Dependabot raises an alert, and a security-update pull request, as soon as an advisory lands. The nightly audit is the independent check that fails the run. No `dependabot.yml` ships: security updates need none, version updates are not wanted here, and zizmor's `dependabot-cooldown` audit applies only where such a file exists.
 
 ### Measured on the final tree, 2026-10-11
 
