@@ -20,17 +20,32 @@
 //          render's `.github/`. Every finding outside RESIDUAL is a finding here, and so is a
 //          RESIDUAL entry that no longer fires. zizmor is taken from PATH when it reports 1.30.1,
 //          else from `uvx zizmor@1.30.1`; another version's audit set is not the one RESIDUAL was
-//          measured against. The online `--gh-token` audit is a hand-run step, never this mode.
+//          measured against. This mode is offline, so the audits that need the GitHub API do not
+//          run here; --zizmor-online runs them.
+//        node scripts/check-rendered-workflows.mjs --zizmor-online
+//          zizmor 1.30.1, resolved as under --zizmor, run online in two passes, the second reached
+//          even when the first found something. Pass 1 renders as above and grades
+//          `zizmor --no-config --format=json` over the render's `.github/` against RESIDUAL,
+//          exactly as --zizmor does. Pass 2 runs the same command over this repository's own
+//          `.github/` against an empty residual: every finding is one, reported by its
+//          repository-relative path, and the only allowance is an inline
+//          `# zizmor: ignore[<audit>]` comment, which zizmor drops from its output. The token is
+//          `GH_TOKEN` when set and non-empty, else the output of `gh auth token`; it reaches
+//          zizmor only as the child's `GH_TOKEN`, never as `--gh-token` on argv, where a process
+//          listing shows it. `.github/workflows/supply-chain.yml` runs this mode nightly;
+//          `scripts/run-gates.sh` never does, so an API outage or a new advisory cannot fail an
+//          unrelated change.
 // Exit: 0 clean · 1 one or more findings, each on stderr as
 //       `check-rendered-workflows: <file> — <reason>`, all reported · 2 bad usage ·
-//       4 only under --actionlint, when actionlint is not on PATH, and under --zizmor, when
-//       neither PATH nor uvx provides zizmor 1.30.1
-// Depends on gate 2a's build: the default, --actionlint and --zizmor modes run `cli/dist/cli.js`.
+//       4 only under --actionlint, when actionlint is not on PATH, under --zizmor and
+//       --zizmor-online, when neither PATH nor uvx provides zizmor 1.30.1, and under
+//       --zizmor-online, when neither `GH_TOKEN` nor `gh auth token` yields a token
+// Depends on gate 2a's build: every mode but --negatives runs `cli/dist/cli.js`.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, join } from 'node:path';
+import { delimiter, dirname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const NAME = 'check-rendered-workflows';
@@ -66,7 +81,7 @@ const finding = (file, reason) => findings.push(`${NAME}: ${file} — ${reason}`
 
 function usage(message) {
   console.error(`${NAME}: ${message}`);
-  console.error('  usage: node scripts/check-rendered-workflows.mjs [--negatives | --actionlint | --zizmor]');
+  console.error('  usage: node scripts/check-rendered-workflows.mjs [--negatives | --actionlint | --zizmor | --zizmor-online]');
   process.exit(2);
 }
 
@@ -196,15 +211,51 @@ function resolveZizmor() {
   };
 }
 
-/** Grades one zizmor run over `<render>/.github` against {@link RESIDUAL}. */
-function zizmorFindings(tool, githubDir) {
+/**
+ * `{ token }` from a non-empty `GH_TOKEN`, else from `gh auth token`, or `{ reason }` naming why
+ * neither yielded one. The reason never carries the token.
+ */
+function resolveGhToken() {
+  const fromEnv = (process.env.GH_TOKEN ?? '').trim();
+  if (fromEnv !== '') return { token: fromEnv };
+  let token = '';
+  try {
+    token = execFileSync('gh', ['auth', 'token'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  } catch (error) {
+    const why = error.code === 'ENOENT' ? 'gh is not on PATH' : `gh auth token failed (${error.status ?? error.code})`;
+    return { reason: `no GitHub token: GH_TOKEN is unset or empty, and ${why}` };
+  }
+  if (token === '') return { reason: 'no GitHub token: GH_TOKEN is unset or empty, and gh auth token printed nothing' };
+  return { token };
+}
+
+const renderedLabel = (_path, file) => `.github/workflows/${file}`;
+const repoLabel = (path, file) => {
+  if (path === '') return `.github/workflows/${file}`;
+  const rel = relative(repoRoot, isAbsolute(path) ? path : join(repoRoot, path));
+  return rel.split(/[\\/]/).join('/');
+};
+
+/**
+ * Grades one zizmor run over `githubDir`. `online` drops `--offline` and passes `token` only as the
+ * child's `GH_TOKEN`; `residual` is the `<file> <audit> <job>` set allowed to fire, each entry of it
+ * required to; `label(path, file)` names a finding's file from zizmor's path and its basename, and
+ * `scope` names the run when zizmor printed no findings list.
+ */
+function zizmorFindings(
+  tool,
+  githubDir,
+  { online = false, token, residual = RESIDUAL, label = renderedLabel, scope = '.github/' } = {},
+) {
   let out;
   let err = '';
   try {
-    out = execFileSync(tool.file, [...tool.args, '--offline', '--no-config', '--format=json', githubDir], {
+    const flags = online ? ['--no-config', '--format=json'] : ['--offline', '--no-config', '--format=json'];
+    out = execFileSync(tool.file, [...tool.args, ...flags, githubDir], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       maxBuffer: 64 * 1024 * 1024,
+      ...(online ? { env: { ...process.env, GH_TOKEN: token } } : {}),
     });
   } catch (error) {
     // zizmor exits non-zero when it reports a finding; only output that is not JSON is a failure.
@@ -217,7 +268,7 @@ function zizmorFindings(tool, githubDir) {
     results = JSON.parse(out);
     if (!Array.isArray(results)) throw new Error('not an array');
   } catch (error) {
-    finding('.github/', `zizmor printed no JSON findings list (${error.message}) ${err}`.trim());
+    finding(scope, `zizmor printed no JSON findings list (${error.message}) ${err}`.trim());
     return;
   }
   const seen = new Set();
@@ -229,21 +280,35 @@ function zizmorFindings(tool, githubDir) {
     const job = route[0]?.Key === 'jobs' && typeof route[1]?.Key === 'string' ? route[1].Key : '<no job>';
     const key = `${file} ${result.ident} ${job}`;
     seen.add(key);
-    if (!RESIDUAL.includes(key)) {
-      finding(`.github/workflows/${file}`, `zizmor ${result.ident} in job ${job}: ${result.desc}`);
+    if (!residual.includes(key)) {
+      finding(label(path, file), `zizmor ${result.ident} in job ${job}: ${result.desc}`);
     }
   }
-  for (const key of RESIDUAL) {
+  for (const key of residual) {
     if (seen.has(key)) continue;
     const [file, ident, job] = key.split(' ');
-    finding(`.github/workflows/${file}`, `RESIDUAL lists zizmor ${ident} in job ${job}, which no longer fires`);
+    finding(label('', file), `RESIDUAL lists zizmor ${ident} in job ${job}, which no longer fires`);
   }
+}
+
+/** Both online passes; pass 2 runs whatever pass 1 found. */
+function zizmorOnline(tool, token) {
+  withRendered((dir) => zizmorFindings(tool, dirname(dir), { online: true, token }));
+  zizmorFindings(tool, join(repoRoot, '.github'), {
+    online: true,
+    token,
+    residual: [],
+    label: repoLabel,
+    scope: '.github/ (this repository)',
+  });
 }
 
 const args = process.argv.slice(2);
 if (args.length > 1) usage('expected at most one argument');
 const mode = args[0] ?? 'render';
-if (!['render', '--negatives', '--actionlint', '--zizmor'].includes(mode)) usage(`unknown argument '${mode}'`);
+if (!['render', '--negatives', '--actionlint', '--zizmor', '--zizmor-online'].includes(mode)) {
+  usage(`unknown argument '${mode}'`);
+}
 
 if (mode === 'render') {
   withRendered((dir) => {
@@ -264,6 +329,18 @@ if (mode === 'render') {
     process.exit(4);
   }
   withRendered((dir) => zizmorFindings(tool, dirname(dir)));
+} else if (mode === '--zizmor-online') {
+  const tool = resolveZizmor();
+  if (tool.reason !== undefined) {
+    console.error(`${NAME}: ${tool.reason}`);
+    process.exit(4);
+  }
+  const gh = resolveGhToken();
+  if (gh.reason !== undefined) {
+    console.error(`${NAME}: ${gh.reason}`);
+    process.exit(4);
+  }
+  zizmorOnline(tool, gh.token);
 } else {
   if (!onPath('actionlint')) {
     console.error(`${NAME}: actionlint is not on PATH`);
