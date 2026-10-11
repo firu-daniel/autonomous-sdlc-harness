@@ -51,7 +51,7 @@ Half (b), the new-export caller check, covered every layer path:
 Each entry resolves to `harness-runs/code_reviews/chore_supply_chain_nightly_audit_code_review/finding_<K>.md` through its `**Finding K**` reference. The leading `N.` is the fix order. `K` is the finding's stable number.
 
 1. [x] **Finding 2** — Name all four parsed lines, and the parsing script, in the `models.py` pin comment _(layer: general)_
-2. [ ] **Finding 1** — Remove run-internal pointers and run-transient state from `docs/development.md` §8's final-tree record _(layer: general)_
+2. [x] **Finding 1** — Remove run-internal pointers and run-transient state from `docs/development.md` §8's final-tree record _(layer: general)_
 
 ---
 

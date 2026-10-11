@@ -2371,9 +2371,9 @@ gh api /repos/firu-daniel/autonomous-sdlc-harness/automated-security-fixes
 
 Turning on Dependabot alerts and security updates, under the repository's *Settings* → *Code security*, is the maintainer's setting to flip. This is a recommendation, not pending work. No `dependabot.yml` ships: security updates need none, version updates are not wanted here, and zizmor's `dependabot-cooldown` audit applies only where such a file exists.
 
-### Measured on the branch's final tree
+### Measured on the final tree, 2026-10-11
 
-On 2026-10-11, at commit `d81d81d7`, under Node `v22.23.2`, npm `10.9.8` and `uv 0.12.23`, each command below ran once from the repository root. Each block holds the command, then the summary line it printed and its exit status.
+On 2026-10-11, at commit `d81d81d7`, under Node `v22.23.2`, npm `10.9.8` and `uv 0.12.23`, each command below was run once from the repository root, or is recorded as not run with its reason. Each block holds the command, then the summary line it printed and its exit status, or why it did not run.
 
 ```
 npm audit --audit-level=moderate
@@ -2402,7 +2402,7 @@ exit 1
 
 ```
 uvx zizmor@1.30.1 --no-config --format=plain .github
-not run: GH_TOKEN was not set in the environment, and no token is built inline
+not run: no GitHub token was available (GH_TOKEN unset)
 ```
 
 ```
@@ -2431,10 +2431,10 @@ The one ignored finding is the inline `artipacked` ignore in `publish-main.yml`.
 
 ```
 node scripts/check-rendered-workflows.mjs --zizmor-online
-not run by the flow — hand-run step, see the story index's Manual setup
+not run: no GitHub token was available (GH_TOKEN unset)
 ```
 
-That script is a gate script (gates 14a–14d), so no unit of the flow runs it, and this record is not a pass for the rendered-set online leg.
+So this record is not a pass for either online pass, over the rendered adopter workflows or over this repository's own `.github`. The `zizmor-online` job runs both.
 
 **The base, for contrast.** On 2026-10-11, at commit `9615afb5`, plain `npm audit` printed `9 vulnerabilities (2 moderate, 7 high)`, `npm audit --omit=dev` reported none, `uv audit` printed `Found no known vulnerabilities and no adverse project statuses in 84 packages`, and zizmor 1.30.1 over this repository's `.github` printed `10 findings (7 suppressed, 2 unsafe fixes): 0 informational, 0 low, 2 medium, 1 high`.
 
@@ -2452,4 +2452,4 @@ That script is a gate script (gates 14a–14d), so no unit of the flow runs it, 
 | **D** unpinned model weights | Both retrieval paths fetched the `main` revision | Fixed on both paths by pinning each model to a revision | The pins are in `docs/retrieval.md` → `**Models.**`. |
 | Own-workflow findings | zizmor 1.30.1 over `.github` | `release-npm.yml` `artipacked` and `cache-poisoning` fixed; `publish-main.yml` `artipacked` a narrow inline ignore | That checkout keeps its persisted credential because `scripts/publish-main.sh` pushes the `publish` branch through it. |
 
-**Gate 10, and why it was not re-run in full.** For both CLI models, each `MODEL_FILES` entry in the gate-10 cache fetched on 2026-09-22 is byte-identical to that file at the pinned revision. This was measured on 2026-10-11 with `shasum -a 256` against the Hub's LFS `sha256` for `onnx/model_quantized.onnx` (`6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4` and `e9d8ebf845c413e981c175bfe49a3bfa9b3dcce2a3ba54875ee5df5a58639fbe`), and with `git hash-object` against the Hub's `blobId` for `config.json`, `tokenizer.json` and `tokenizer_config.json`. So the weights gate 10 measured are the pinned weights, and the embedder and reranker ids do not move. What moved is the cache layout, `<model id>/<revision>/<file>`, which gate 4's planted-cache cases and gate 11's real-model floor exercise. Gate 11 on this branch: not yet run, because no Phase G log exists for the branch.
+**Gate 10, and why it was not re-run in full.** For both CLI models, each `MODEL_FILES` entry in the gate-10 cache fetched on 2026-09-22 is byte-identical to that file at the pinned revision. This was measured on 2026-10-11 with `shasum -a 256` against the Hub's LFS `sha256` for `onnx/model_quantized.onnx` (`6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4` and `e9d8ebf845c413e981c175bfe49a3bfa9b3dcce2a3ba54875ee5df5a58639fbe`), and with `git hash-object` against the Hub's `blobId` for `config.json`, `tokenizer.json` and `tokenizer_config.json`. So the weights gate 10 measured are the pinned weights, and the embedder and reranker ids do not move. What moved is the cache layout, `<model id>/<revision>/<file>`, which gate 4's planted-cache cases and gate 11's real-model floor exercise.
