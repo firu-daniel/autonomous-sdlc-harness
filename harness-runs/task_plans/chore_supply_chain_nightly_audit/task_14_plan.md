@@ -30,3 +30,9 @@
 - `grep -n 'revision the manifest records\|refs/main' docs-retrieval-service/README.md docs/retrieval.md` finds nothing.
 - The `ROADMAP.md` row's link resolves: `docs/development.md` has a heading `## 8. The nightly supply-chain audit`.
 - Re-run the story index's scope-register derivation entry 1. Every line it prints is a register row, either `change` and now edited, or `no-change` with its reason. The invariant is that the output's sites are ⊆ the register rows.
+
+**Deviations from plan:**
+
+- Verification bullet 1 expects the four SHAs in `docs/retrieval.md` only. The grep also finds each once in `docs/development.md` → `## 8.` → `### Measured on the branch's final tree`, inside Task 13's verbatim `node scripts/check-model-revisions.mjs` output. That is a measured command record Task 13 owns and this task may not edit (`**Where this task stops.**`), so it is left as is. Under `docs-retrieval-service/README.md` and `ROADMAP.md` the grep finds nothing, and in `docs/retrieval.md` it finds each SHA once, in the pin table.
+- `docs-retrieval-service/README.md` → `**Provisioning**`: the plan says a manifest "written by an older `fetch-models`" reads as unfetched. The story `## Context` records that the two Python pins equal the revisions the planner's own provisioned manifest already records, so an older manifest is not always at another revision. The README says such a manifest reads as unfetched only when it records a revision other than the pin.
+- `ROADMAP.md` row: the plan says the workflow "fails on findings". The row adds that model drift is reported as a notice, because `docs/development.md` §8 says the `model-revisions` job leaves the exit at `0` on drift.
