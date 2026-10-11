@@ -39,3 +39,8 @@
 - No command this task ran is `npm run build` or `node scripts/check-rendered-workflows.mjs`, both gate scripts, and the online zizmor run over `.github` was run only when `GH_TOKEN` was already in the environment.
 - No figure in the subsections is a wall-clock timing (lessons ledger → *Evidence and measurement*, the wall-clock lesson); only counts, versions, hashes and exit codes are recorded.
 - Every finding the task prompt lists (A, both bullets; B, all four; C; D) has exactly one row, and each row's disposition is either *fixed by …* or *narrow ignore …*. None reads as a lowered threshold.
+
+- **Deviations from plan:**
+  - `GH_TOKEN` was not set (`test -n "${GH_TOKEN}"` exit 1), so `uvx zizmor@1.30.1 --no-config --format=plain .github` was not run; it is recorded as not run with that reason. The own-repository online half rests on the offline run only until the Manual-setup hand-run.
+  - Row C's disposition reads *clean; now audited nightly*, as this plan's C bullet specifies, rather than *fixed by …* / *narrow ignore …*: there was no finding to dispose of.
+  - `bash scripts/typecheck.sh` (the unit's mandated `<typecheck_cmd>`) invokes `npm run build` internally; `npm run build` was not run directly.
