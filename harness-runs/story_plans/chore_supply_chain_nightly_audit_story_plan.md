@@ -61,7 +61,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_supply_chain_nightly_a
 8. [x] **Task 8** — Add an online zizmor mode, `--zizmor-online`, to `scripts/check-rendered-workflows.mjs` _(layer: general)_ _(points: 15)_
 9. [x] **Task 9** — Add `scripts/check-model-revisions.mjs`, a drift notice for the four pinned model revisions _(layer: general)_ _(points: 12)_
 10. [x] **Task 10** — Add `.github/workflows/supply-chain.yml`, the nightly supply-chain workflow _(layer: general)_ _(points: 15)_
-11. [ ] **Task 11** — Bring `docs/development.md` gates 3 and 14 in line with the new validator, `js-yaml` 4 and the online mode _(layer: general)_ _(points: 10)_
+11. [x] **Task 11** — Bring `docs/development.md` gates 3 and 14 in line with the new validator, `js-yaml` 4 and the online mode _(layer: general)_ _(points: 10)_
 12. [ ] **Task 12** — Add `docs/development.md` → `## 8. The nightly supply-chain audit`: what runs where and how its sets are kept _(layer: general)_ _(points: 15)_
 13. [ ] **Task 13** — Record the final-tree audit runs and each finding's disposition in `docs/development.md` §8 _(layer: general)_ _(points: 15)_
 14. [ ] **Task 14** — Record the model pins in `docs/retrieval.md` and the service README, and add the `ROADMAP.md` row _(layer: general)_ _(points: 10)_
