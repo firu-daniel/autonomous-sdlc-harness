@@ -52,7 +52,7 @@ The two Python pins equal the revisions the planner's own provisioned manifest a
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_supply_chain_nightly_audit/task_<K>_plan.md`. Entries are ordered bottom-up by ship sequence, in the configured layer order `cli`, `plugin`, `general`, with the catch-all `general` last. No task touches `plugin/`.
 
 1. [x] **Task 1** — Raise the `@modelcontextprotocol/sdk` floor above GHSA-6qxp-vccf-f47h in `cli/package.json` _(layer: cli)_ _(points: 5)_
-2. [ ] **Task 2** — Pin the CLI's two retrieval models to immutable revisions in `cli/src/retrieval/models.ts` _(layer: cli)_ _(points: 15)_
+2. [x] **Task 2** — Pin the CLI's two retrieval models to immutable revisions in `cli/src/retrieval/models.ts` _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Refresh `package-lock.json` for the SDK floor and the transitive `sharp` / `fast-uri` advisories _(layer: general)_ _(points: 8)_
 4. [ ] **Task 4** — Replace `ajv-cli` with a hand-written `schemas/validate.mjs` that keeps its output contract _(layer: general)_ _(points: 15)_
 5. [ ] **Task 5** — Move the root `js-yaml` to 4.x and switch `scripts/check-rendered-workflows.mjs` to `yaml.load` _(layer: general)_ _(points: 8)_

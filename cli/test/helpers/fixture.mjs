@@ -598,6 +598,15 @@ const RETRIEVAL_MODEL_FILES = Object.freeze({
 });
 
 /**
+ * The revision each model is pinned to, restated from `cli/src/retrieval/models.ts` → `MODEL_REVISIONS`
+ * so the suites assert against the contract rather than the source.
+ */
+const RETRIEVAL_MODEL_REVISIONS = Object.freeze({
+  'Xenova/bge-small-en-v1.5': 'ea104dacec62c0de699686887e3f920caeb4f3e3',
+  'Xenova/ms-marco-MiniLM-L-6-v2': 'a09144355adeed5f58c8ed011d209bf8ee5a1fec',
+});
+
+/**
  * The environment a retrieval verb runs offline under: the machine cache under `cacheHome`, and the
  * `hash-v1` stub models.
  *
@@ -609,8 +618,9 @@ export function retrievalEnv(cacheHome) {
 }
 
 /**
- * Plant every model file as an empty file under `<cacheHome>/autonomous-sdlc-harness/retrieval/models`,
- * which the retrieval verbs check for even under the stub.
+ * Plant every model file as an empty file at
+ * `<cacheHome>/autonomous-sdlc-harness/retrieval/models/<model id>/<revision>/<file>`, which the
+ * retrieval verbs check for even under the stub.
  *
  * @param {string} cacheHome
  * @returns {Promise<string[]>} the planted paths.
@@ -619,7 +629,7 @@ export async function plantModelFiles(cacheHome) {
   const planted = [];
   for (const [modelId, files] of Object.entries(RETRIEVAL_MODEL_FILES)) {
     for (const file of files) {
-      const target = join(retrievalCacheDir(cacheHome), 'models', modelId, file);
+      const target = join(retrievalCacheDir(cacheHome), 'models', modelId, RETRIEVAL_MODEL_REVISIONS[modelId], file);
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, '');
       planted.push(target);

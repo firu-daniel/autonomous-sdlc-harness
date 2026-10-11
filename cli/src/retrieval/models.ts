@@ -7,7 +7,8 @@
  * time. Every other load runs with remote models disabled, so a run never reaches the network.**
  * `env.allowRemoteModels` is set in {@link loadModels} alone, from its caller's option, before any
  * `from_pretrained`; `@huggingface/transformers` is reached only through `loadRetrievalModule`
- * (`cli/src/retrieval/runtime.ts`), and this file takes its types with `import type`.
+ * (`cli/src/retrieval/runtime.ts`), and this file takes its types with `import type`. Every remote and
+ * offline load names its pinned revision ({@link MODEL_REVISIONS}), so a download fetches a fixed commit.
  *
  * **Why the stubs exist.** The suite drives the compiled CLI in a subprocess and has no mocking
  * framework (`.claude/context/conventions.md` → `## The testing bar`), so a test cannot substitute a
@@ -21,7 +22,7 @@ import { join } from 'node:path';
 
 import type * as Transformers from '@huggingface/transformers';
 
-import { HarnessError } from '../core/errors.js';
+import { HarnessError, internal } from '../core/errors.js';
 import { loadRetrievalModule, retrievalModelCacheDir } from './runtime.js';
 
 /** Turns text into vectors. `id` is stored in the index, and a change to it forces a full rebuild. */
@@ -62,7 +63,26 @@ const EMBEDDING_QUERY_PREFIX = 'Represent this sentence for searching relevant p
  */
 export const RERANK_MODEL = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
-/** Bumped by hand when any loading parameter above changes, so the embedder's `id` changes with it. */
+/**
+ * The Hugging Face commit {@link EMBEDDING_MODEL} is loaded at: its `main` on 2026-10-11. A revision is
+ * a loading parameter, so a pin bump bumps {@link MODEL_VERSION} in the same edit.
+ */
+export const EMBEDDING_REVISION = 'ea104dacec62c0de699686887e3f920caeb4f3e3';
+
+/** The Hugging Face commit {@link RERANK_MODEL} is loaded at: its `main` on 2026-10-11. Bumped as {@link EMBEDDING_REVISION} is. */
+export const RERANK_REVISION = 'a09144355adeed5f58c8ed011d209bf8ee5a1fec';
+
+/** Every model id this module loads, mapped to the revision it is pinned to. */
+export const MODEL_REVISIONS: Readonly<Record<string, string>> = {
+  [EMBEDDING_MODEL]: EMBEDDING_REVISION,
+  [RERANK_MODEL]: RERANK_REVISION,
+};
+
+/**
+ * Bumped by hand when any loading parameter above changes, revisions included, so both `id`s change
+ * and force a rebuild. The first pin left it at `1`: every {@link MODEL_FILES} entry at the pinned
+ * revisions is byte-identical to the unpinned `main` files it replaced, so no vector changed.
+ */
 const MODEL_VERSION = 1;
 
 /** The vector width of {@link EMBEDDING_MODEL}, which the stub embedder matches. */
@@ -73,10 +93,10 @@ const MODEL_DTYPE = 'q8';
 const TRANSFORMERS_SPECIFIER = '@huggingface/transformers';
 
 /**
- * The files, relative to `<retrievalModelCacheDir()>/<model id>/`, an offline load of each model
- * needs. Read off `@huggingface/transformers` 4.3.0: `utils/hub.js` → `buildResourcePaths` keys a
- * `FileCache` entry at `<model id>/<filename>` on the `main` revision, and `FileCache.match` joins that
- * onto `env.cacheDir`; `utils/model_registry/get_model_files.js` → `get_model_files` lists
+ * The files, relative to `<retrievalModelCacheDir()>/<model id>/<revision>/`, an offline load of each
+ * model needs. Read off `@huggingface/transformers` 4.3.0: `utils/hub.js` → `buildResourcePaths` →
+ * `proposedCacheKey` keys a pinned load's `FileCache` entry at `<model id>/<revision>/<filename>`, and
+ * `FileCache.match` joins that onto `env.cacheDir`; `utils/model_registry/get_model_files.js` → `get_model_files` lists
  * `config.json` plus `onnx/<session><dtype suffix>.onnx` (`q8` → `_quantized`, `utils/dtypes.js`),
  * with no external-data chunk for these configs; `get_tokenizer_files` lists `tokenizer.json` and
  * `tokenizer_config.json`.
@@ -86,12 +106,17 @@ export const MODEL_FILES: Readonly<Record<string, readonly string[]>> = {
   [RERANK_MODEL]: ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'onnx/model_quantized.onnx'],
 };
 
-/** File existence only: every {@link MODEL_FILES} entry under `cacheDir`, `missing` as `<model id>/<file>`. */
+/**
+ * File existence only: every {@link MODEL_FILES} entry under `cacheDir`, `missing` as
+ * `<model id>/<revision>/<file>`.
+ */
 export function modelFilesPresent(cacheDir: string): { present: boolean; missing: readonly string[] } {
   const missing: string[] = [];
   for (const [modelId, files] of Object.entries(MODEL_FILES)) {
+    const revision = MODEL_REVISIONS[modelId];
+    if (revision === undefined) throw internal(`retrieval model ${modelId} has no pinned revision in MODEL_REVISIONS`);
     for (const file of files) {
-      if (!existsSync(join(cacheDir, modelId, file))) missing.push(`${modelId}/${file}`);
+      if (!existsSync(join(cacheDir, modelId, revision, file))) missing.push(`${modelId}/${revision}/${file}`);
     }
   }
   return { present: missing.length === 0, missing };
@@ -110,7 +135,10 @@ async function loadModels(options: { allowRemote: boolean }): Promise<{ embedder
   env.cacheDir = retrievalModelCacheDir();
   env.allowRemoteModels = options.allowRemote;
 
-  const extractor = await transformers.pipeline('feature-extraction', EMBEDDING_MODEL, { dtype: MODEL_DTYPE });
+  const extractor = await transformers.pipeline('feature-extraction', EMBEDDING_MODEL, {
+    dtype: MODEL_DTYPE,
+    revision: EMBEDDING_REVISION,
+  });
   const embed = async (texts: string[]): Promise<number[][]> => {
     const output = (await extractor(texts, EMBEDDING_EXTRACT_OPTIONS)) as unknown as ListTensor;
     return output.tolist() as number[][];
@@ -127,9 +155,10 @@ async function loadModels(options: { allowRemote: boolean }): Promise<{ embedder
     },
   };
 
-  const tokenizer = await transformers.AutoTokenizer.from_pretrained(RERANK_MODEL);
+  const tokenizer = await transformers.AutoTokenizer.from_pretrained(RERANK_MODEL, { revision: RERANK_REVISION });
   const model = await transformers.AutoModelForSequenceClassification.from_pretrained(RERANK_MODEL, {
     dtype: MODEL_DTYPE,
+    revision: RERANK_REVISION,
   });
   const reranker: Reranker = {
     id: `${RERANK_MODEL}:${MODEL_DTYPE}:sigmoid:v${MODEL_VERSION}`,
