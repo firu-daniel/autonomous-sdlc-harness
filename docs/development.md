@@ -2400,9 +2400,12 @@ test -n "${GH_TOKEN}"
 exit 1
 ```
 
+The two online zizmor legs were therefore run afterwards, on 2026-10-11 at commit `0fdbf76a`, with `GH_TOKEN` taken from `gh auth token`. The two blocks below marked with that commit come from that run.
+
 ```
-uvx zizmor@1.30.1 --no-config --format=plain .github
-not run: no GitHub token was available (GH_TOKEN unset)
+uvx zizmor@1.30.1 --no-config --format=plain .github    (at 0fdbf76a)
+No findings to report. Good job! (1 ignored, 11 suppressed)
+exit 0
 ```
 
 ```
@@ -2430,11 +2433,12 @@ exit 0
 The one ignored finding is the inline `artipacked` ignore in `publish-main.yml`.
 
 ```
-node scripts/check-rendered-workflows.mjs --zizmor-online
-not run: no GitHub token was available (GH_TOKEN unset)
+node scripts/check-rendered-workflows.mjs --zizmor-online    (at 0fdbf76a, after npm run build)
+(no output)
+exit 0
 ```
 
-So this record is not a pass for either online pass, over the rendered adopter workflows or over this repository's own `.github`. The `zizmor-online` job runs both.
+Exit 0 means neither pass found anything outside its residual set. Pass 1 covers the four rendered adopter workflows, graded against `RESIDUAL`. Pass 2 covers this repository's own `.github`, with an empty residual. The `zizmor-online` job runs the same command nightly.
 
 **The base, for contrast.** On 2026-10-11, at commit `9615afb5`, plain `npm audit` printed `9 vulnerabilities (2 moderate, 7 high)`, `npm audit --omit=dev` reported none, `uv audit` printed `Found no known vulnerabilities and no adverse project statuses in 84 packages`, and zizmor 1.30.1 over this repository's `.github` printed `10 findings (7 suppressed, 2 unsafe fixes): 0 informational, 0 low, 2 medium, 1 high`.
 
