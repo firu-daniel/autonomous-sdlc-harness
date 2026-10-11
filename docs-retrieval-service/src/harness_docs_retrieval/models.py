@@ -54,7 +54,8 @@ EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 RERANK_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 # Each repository's `main` on 2026-10-11. A pin bump bumps `MODEL_VERSION`. The supply-chain drift
-# notice reads these two lines by exact match, so each stays on one line in this form.
+# notice (`scripts/check-model-revisions.mjs`) reads `EMBEDDING_MODEL`, `RERANK_MODEL` and these two
+# lines by exact match, so each of the four stays on one line in the form `NAME = "value"`.
 EMBEDDING_REVISION = "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
 # The Hub redirects this id to `cross-encoder/ms-marco-MiniLM-L6-v2`; the pin resolves through it.
 RERANK_REVISION = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
