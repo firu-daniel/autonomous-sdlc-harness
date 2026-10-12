@@ -54,7 +54,7 @@ Contract before consumer, always. The shapes this tree has:
 2. **A CLI subcommand** — the module under `cli/src/commands/` exporting its own `Subcommand`, then its row in `SUBCOMMANDS` (`cli/src/commands/registry.ts`). That table is the single source for usage text, per-command `--help` and dispatch, so nothing else has to change and nothing else may be edited to make the command appear.
 3. **A plugin contract** — the asset itself with valid frontmatter, then the instruction or command that dispatches it, then every file that cites it. A contract that nothing dispatches and a dispatch of a contract that does not exist are both defects; `plugin/agents/README.txt` gives the regeneration commands for the sample-pointer case under `Sample fixture pointers`.
 
-**The plugin corpus quotes its own literal wire strings across files, so a rename is an edit to every quoting file.** Before changing a field name, a dispatch key or a quoted literal in `plugin/`, `grep -rn` the exact string across `plugin/` and take the whole result set with you. A literal only one side knows about is a silent contract break (`plugin/agents/committer.md` → the **Fixed-form subjects** bullet).
+**The plugin corpus quotes its own literal wire strings across files, so a rename is an edit to every quoting file.** Before changing a field name, a dispatch key or a quoted literal in `plugin/`, `grep -rn` the exact string across `plugin/` and take the whole result set with you. A literal only one side knows about is a silent contract break (`## Commit-message policy` → **Changing any fixed subject is a multi-file edit.** below).
 
 ## Configuration is the source of truth, and it is read at run time
 
