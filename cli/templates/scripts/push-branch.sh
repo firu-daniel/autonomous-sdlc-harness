@@ -8,7 +8,7 @@
 # commit, the `committer` agent's opt-in push, and the task, user-review-fix and
 # planning orchestrators. It is invoked as a SEPARATE statement from the commit
 # (never `if commit-on-branch.sh …; then push-branch.sh; fi`: that compound is
-# not covered by the guards and stalls an unattended run), which works because a
+# not covered by the guards, and an unattended run refuses it), which works because a
 # push with nothing new to send is a harmless no-op — so callers may run it
 # unconditionally, including after a commit wrapper that made no commit.
 #
@@ -20,7 +20,7 @@
 # `${IDENT}`, or a `>` that is neither a descriptor duplication (`2>&1`, `>&2`,
 # `2>&-`) nor a redirection to the literal `/dev/null`), where a `git push`
 # command line assembled with a shell expansion is matched statically by
-# neither and draws a prompt an unattended run cannot answer.
+# neither and is refused in an unattended run.
 #
 # EVERY FAILURE PATH IS NON-FATAL (exit 0). A non-git directory, a detached
 # HEAD, a protected branch, a configuration that cannot be resolved, a target

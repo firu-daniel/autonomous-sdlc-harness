@@ -415,8 +415,8 @@ hr_have_jq() {
 #
 # The probe is issued BARE — the literal `rev-parse --show-toplevel`, with
 # nothing added — because an unattended run's permission profile allow-lists it
-# in that exact spelling, and a flag appended to it is a different string that
-# stalls on a prompt.
+# in that exact spelling, and a flag appended to it is a different string,
+# which an unattended run refuses.
 hr_repo_root() {
   local dir="${1-}" top
   [ -n "$dir" ] || dir="${PWD-}"

@@ -4,9 +4,8 @@
 # repository's own configuration protects, and commit with the message supplied
 # as ordinary positional arguments.
 #
-# WHY A WRAPPER EXISTS AT ALL. An unattended run cannot answer a permission
-# prompt, so a command that draws one is a silent stall rather than a refusal.
-# `git commit -m "$(…)"` draws one twice over: a command carrying a shell
+# WHY A WRAPPER EXISTS AT ALL. In an unattended run a command the profile does
+# not allow is refused, and `git commit -m "$(…)"` is refused twice over: a command carrying a shell
 # expansion (`$VAR` / `${…}` / `$(…)`) cannot be matched statically, so it
 # reaches the commit branch-guard (`plugin/hooks/git-commit-branch-guard.sh`),
 # which is fail-closed and answers `ask` for anything it could not read — and a
@@ -51,7 +50,7 @@
 #
 # WHAT IT NEVER DOES. It never pushes (that is push-branch.sh, called as a
 # SEPARATE statement — an `if …; then push; fi` block is a compound the guards
-# do not cover and stalls an unattended run). It never flips a plan checkbox:
+# do not cover, which an unattended run refuses). It never flips a plan checkbox:
 # callers own that. It never stages anything it was not given — no `git add -A`,
 # no `git add .`. It never passes `--no-verify` or any other hook-skip flag, and
 # it never retries a failed commit.
@@ -61,10 +60,10 @@
 # skip-with-warning rather than a hard error, and that tolerance is what lets
 # callers pass their paths UNCONDITIONALLY: an optional-but-absent one (an empty
 # per-finding folder, say) must not fail the commit, and a caller-side
-# `if [ -d … ]; then` existence check would reintroduce the stall described
+# `if [ -d … ]; then` existence check would reintroduce the refusal described
 # under WHY A WRAPPER EXISTS AT ALL — a shell conditional cannot be matched
-# statically, so it reaches the fail-closed guards and an unattended run cannot
-# answer the prompt it draws. Callers were deliberately stripped of those
+# statically, so it reaches the fail-closed guards and an unattended run
+# refuses it. Callers were deliberately stripped of those
 # checks; do not restore one. THE TRAP: a path that was DELETED does not
 # exist either, so passing the exact deleted path stages nothing and the
 # deletion is silently left out of the commit. Pass the PARENT DIRECTORY of a
@@ -86,8 +85,8 @@
 # scans the WHOLE command string for `$(…)`, a backtick, `|`, `<`, a braced form
 # other than a bare `${IDENT}`, and a `>` that is neither a descriptor
 # duplication (`2>&1`, `>&2`, `2>&-`) nor a redirection to the literal
-# `/dev/null`, and silences the invocation on a match, which is the permission
-# prompt described under WHY A WRAPPER EXISTS AT ALL and, unattended, a stall.
+# `/dev/null`, and silences the invocation on a match, which, unattended, is the
+# refusal described under WHY A WRAPPER EXISTS AT ALL.
 # That scanned set is the set above minus the two `>` shapes a MESSAGE cannot
 # be, which is why the rule here stays whole-byte for `>`. The guard reads the
 # raw string, so quoting and escaping rescue nothing: `|`, `<` and a prose `>`

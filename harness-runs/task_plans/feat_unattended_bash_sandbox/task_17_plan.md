@@ -58,3 +58,5 @@
 
   Comment edits cannot break the script, and this proves it.
 - These templates are copied byte for byte into an adopter. The existing byte-identity suite covers the copy, and runs in the Run gates phase; it is not run here.
+
+- **Deviations from plan:** Entry G's second command (`-n`) still hits `cli/scripts/README.md` line 5 on `neither .?allow.? nor .?deny`: the hit is the corrected sentence itself, whose plan-prescribed wording ("a command matching neither `allow` nor `deny` is refused") keeps that phrase; it now states the `dontAsk` outcome, so it is not a remaining stall statement. The byte-identity suite (part of `commands.test`) is deferred to the Run gates phase, as the plan states.

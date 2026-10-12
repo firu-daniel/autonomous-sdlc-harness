@@ -84,8 +84,8 @@
 # NEVER RUN BY A DISPATCHED AGENT. It has no entry in the generated permission
 # profile, and the script-allowlist guard withholds the permit rather than
 # granting one — its basename is on that guard's deny list, and being on it means
-# the guard stays silent — so an agent that tries it gets a prompt it cannot
-# answer, never a permit. The reason is indirection
+# the guard stays silent — so an agent that tries it is refused, never
+# permitted. The reason is indirection
 # rather than this script's own blast radius: restarting a watcher whose sweep
 # force-deletes merged branches has an agent trigger `git branch -D` at one
 # remove, through a service manager, on branches nobody asked it about. This is

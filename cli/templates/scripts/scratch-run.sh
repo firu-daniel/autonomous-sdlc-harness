@@ -18,8 +18,8 @@
 # `$(…)`, a backtick, `|`, `<`, a braced form other than a bare `${IDENT}`, or a
 # `>` that is neither a descriptor duplication (`2>&1`, `>&2`, `2>&-`) nor a
 # redirection to the literal `/dev/null`. A bare `python3 …` command line is
-# matched statically by neither and draws a prompt an unattended run cannot
-# answer. This basename is deliberately NOT on that deny list, and its absence
+# matched statically by neither and is refused in an unattended run. This
+# basename is deliberately NOT on that deny list, and its absence
 # there is the decision that makes the guard route cover this script from the
 # first run, whether or not the profile has been regenerated.
 #

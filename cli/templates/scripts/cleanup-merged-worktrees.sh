@@ -82,8 +82,8 @@
 # dispatched agent: the script-allowlist guard withholds the permit rather than
 # granting one (its basename is on that guard's deny list, and being on it means
 # the guard stays silent), and the generated permission profile emits no rule for
-# this script either — so an agent that tries to run it gets a prompt it cannot
-# answer, never a permit. Nothing about that is negotiable — an agent asked to
+# this script either — so an agent that tries to run it is refused, never
+# permitted. Nothing about that is negotiable — an agent asked to
 # change one file has no business deleting branches.
 #
 # Usage: cleanup-merged-worktrees.sh [--dry-run]

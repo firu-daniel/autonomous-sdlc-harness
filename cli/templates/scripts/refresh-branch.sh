@@ -5,8 +5,8 @@
 #
 # WHY IT EXISTS. The plugin's protected-branch guard denies a `git merge` or
 # `git rebase` whose target argument names a protected branch, and the generated
-# permission profile puts `Bash(git merge:*)` on `ask` — which an unattended run
-# cannot answer. Both fire on the SAFE direction too, because the safe direction
+# permission profile puts `Bash(git merge:*)` on `ask` — which an unattended run's
+# mode refuses. Both fire on the SAFE direction too, because the safe direction
 # still spells the protected branch as its argument. So a run cut from a stale
 # base had no permitted way to refresh it, and the only route left was evasion.
 # This wrapper is the sanctioned route: `bash <scripts_dir>/refresh-branch.sh` is
