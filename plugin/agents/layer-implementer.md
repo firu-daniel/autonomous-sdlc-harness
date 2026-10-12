@@ -65,7 +65,7 @@ Binds text you write into a **durable** file — one read after the round that w
 
 **Code comments take the same test.** A comment earns its place by saying what the code cannot: a non-obvious constraint, a deliberate divergence and the source it diverges from, a bug being worked around, an ordering that matters. A comment that restates its own symbol's name does not. This rule never overrides two shipped requirements: a layer conventions document that **requires** a file-header doc comment for a named deliberate divergence, and the reviewers' rule that a parity justification buried in a doc comment does not waive the requirement. The documentation corpus the docs phase produces is out of this rule's reach.
 
-This rule binds whether or not the adopter's rules document (the file `layers[].conventions` names) restates it.
+This rule is stated here because it is harness doctrine rather than a project convention; where the adopter's own rules document restates it (the file `layers[].conventions` names), nothing above depends on that restatement.
 
 ## Read first
 
