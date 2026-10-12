@@ -94,7 +94,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_plan
 4. [x] **Task 4** — Thin `architecture-reviewer`'s own `## Read first` bullet, sub-case (c) step, `## What to check` and justification rule _(layer: plugin)_ _(points: 15)_
 5. [x] **Task 5** — Thin `business-parity-reviewer`'s `## Read first`, `## Process` step 3 and parity checks (a)–(h) _(layer: plugin)_ _(points: 15)_
 6. [x] **Task 6** — Thin `business-parity-reviewer`'s checks (i)–(j), exclusion basis, obvious-reference-bug exception and dead-code carve-out _(layer: plugin)_ _(points: 10)_
-7. [ ] **Task 7** — Measure both definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
+7. [x] **Task 7** — Measure both definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
@@ -197,5 +197,5 @@ Up-front words are the agent definition plus every plugin file or section it rea
 
 | Agent | Reads counted besides the definition (unchanged) | Before — definition | After — definition | Δ |
 |---|---|---|---|---|
-| architecture-reviewer | `plugin/instructions/unit_loop_core.md` → `## The test-run rule` | 4915 | | |
-| business-parity-reviewer | `plugin/instructions/unit_loop_core.md` → `## The test-run rule` | 5922 | | |
+| architecture-reviewer | `plugin/instructions/unit_loop_core.md` → `## The test-run rule` | 4915 | 4101 | -814 |
+| business-parity-reviewer | `plugin/instructions/unit_loop_core.md` → `## The test-run rule` | 5922 | 4807 | -1115 |
