@@ -5134,10 +5134,15 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
     return { root, env: home.env };
   }
 
-  /** Add directories to the generated profile's `permissions.additionalDirectories`. */
+  /**
+   * Add directories to the generated profile's `permissions.additionalDirectories`, write-protected as
+   * `init --plugin-root-entries` writes them, so `profile-write-protection` passes the edit.
+   */
   function grantDirectories(dir, directories) {
     editJson(dir, PROFILE_FILE, (profile) => {
       profile.permissions.additionalDirectories = [...(profile.permissions.additionalDirectories ?? []), ...directories];
+      profile.sandbox.filesystem.denyWrite.push(...directories);
+      profile.permissions.deny.push(...directories.flatMap((root) => [`Edit(/${root}/**)`, `Write(/${root}/**)`]));
     });
   }
 
@@ -5401,8 +5406,8 @@ const PRE_BRANCH_CHECK_IDS = Object.freeze([
   'remote-execution', 'remote-github', 'forge', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
   'state-dir', 'artifact-tree', 'setup-analysis', 'task-offer-rules', 'layer-profile', 'layer-drift', 'ignore-rules',
   'plugin-wiring', 'permission-profile', 'profile-paths', 'profile-tracked', 'profile-browser-deny',
-  'profile-deny-floor', 'profile-sandbox', 'plugin-permissions', 'browser-wiring', 'retrieval-dependencies', 'retrieval-model-cache',
-  'retrieval-index',
+  'profile-deny-floor', 'profile-sandbox', 'profile-write-protection', 'plugin-permissions', 'browser-wiring',
+  'retrieval-dependencies', 'retrieval-model-cache', 'retrieval-index',
 ]);
 
 /** A real `harness-docs-retrieval` on a directory the check always searches, which no case may run. */

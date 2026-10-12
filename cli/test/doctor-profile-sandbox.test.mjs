@@ -1,11 +1,15 @@
 /**
- * `doctor`'s `profile-sandbox` line, against the compiled CLI on repositories `init` wired.
+ * `doctor`'s `profile-sandbox` and `profile-write-protection` lines, against the compiled CLI on
+ * repositories `init` wired.
  *
- * **The rule this suite enforces: a profile whose sandbox block is not what the configuration asks
+ * **The rules this suite enforces: a profile whose sandbox block is not what the configuration asks
  * for is reported, naming what differs — a `warn` in a default run, a `fail` under `--remote-job` —
- * and a taken opt-out is reported as a `warn` carrying its reason.** Every case is one edit to a
- * freshly wired repository, so the edit is what the line is about; case (a) is the end-to-end proof
- * that the generator and the check agree on a fresh profile. No case reaches the network.
+ * and a taken opt-out is reported as a `warn` carrying its reason; and a path that runs outside the
+ * sandbox but lacks its `denyWrite` entry or a file-tool deny rule is reported by path and side, with
+ * the same grades, `denyWrite` going ungraded under a taken opt-out.** Every case is one edit to a
+ * freshly wired repository, so the edit is what the line is about; each suite's case (a) is the
+ * end-to-end proof that the generator and the check agree on a fresh profile. No case reaches the
+ * network.
  */
 
 import assert from 'node:assert/strict';
@@ -19,6 +23,9 @@ import { createFixture, runCli } from './helpers/fixture.mjs';
 const CONFIG_FILE = 'harness.config.json';
 const PROFILE_FILE = '.claude/settings.autonomous.json';
 const CHECK_ID = 'profile-sandbox';
+const WRITE_CHECK_ID = 'profile-write-protection';
+const PUSH_SCRIPT = 'push-branch.sh';
+const DOCS_SERVER_SCRIPT = 'docs-search-server.sh';
 const DOMAIN = { domain: 'registry.npmjs.org', reason: 'npm install fetches packages from the public registry' };
 const OPT_OUT_REASON = 'the toolchain needs a socket the sandbox blocks';
 
@@ -61,18 +68,43 @@ async function configureSandbox(dir, sandbox) {
   assert.equal(init.status, 0, `init --force exited ${init.status}\n${init.stdout}\n${init.stderr}`);
 }
 
-/** The `profile-sandbox` line in `status`, from the stream the reporter puts it on, or `undefined`. */
-function checkLine({ stdout, stderr }, status) {
+/** The `id` line in `status`, from the stream the reporter puts it on, or `undefined`. */
+function checkLine({ stdout, stderr }, status, id) {
   const [stream, prefix] = { PASS: [stdout, ''], WARN: [stderr, '! '], FAIL: [stderr, '!! '] }[status];
-  return stream.split('\n').find((line) => new RegExp(`^${prefix}${status}\\s+${CHECK_ID}\\s`).test(line));
+  return stream.split('\n').find((line) => new RegExp(`^${prefix}${status}\\s+${id}\\s`).test(line));
 }
 
-/** Run `doctor` with `args` and return its `profile-sandbox` line in `status`, asserting there is one. */
-async function doctorLine(dir, status, args = []) {
+/** Run `doctor` with `args` and return its `id` line in `status`, asserting there is one. */
+async function doctorLine(dir, status, args = [], id = CHECK_ID) {
   const result = await runCli(dir, ['doctor', ...args]);
-  const line = checkLine(result, status);
-  assert.ok(line !== undefined, `no ${status} ${CHECK_ID} line\n${result.stdout}\n${result.stderr}`);
+  const line = checkLine(result, status, id);
+  assert.ok(line !== undefined, `no ${status} ${id} line\n${result.stdout}\n${result.stderr}`);
   return { line, status: result.status };
+}
+
+/** The main checkout's `denyWrite` entry ending in `/<file>`, read from the generated profile. */
+function mainCheckoutEntry(dir, file) {
+  const profile = JSON.parse(readFileSync(join(dir, PROFILE_FILE), 'utf8'));
+  const entry = profile.sandbox.filesystem.denyWrite.find((path) => path.endsWith(`/${file}`) && !path.includes('*'));
+  assert.ok(entry !== undefined, `no main-checkout denyWrite entry for ${file}`);
+  return entry;
+}
+
+/** Delete `path`'s `denyWrite` entry from the profile. */
+function dropDenyWrite(dir, path) {
+  editJson(dir, PROFILE_FILE, (profile) => {
+    profile.sandbox.filesystem.denyWrite = profile.sandbox.filesystem.denyWrite.filter((entry) => entry !== path);
+  });
+}
+
+/** Delete `path`'s `Edit` deny rule from the profile, returning the rule. */
+function dropEditRule(dir, path) {
+  const rule = `Edit(/${path})`;
+  editJson(dir, PROFILE_FILE, (profile) => {
+    assert.ok(profile.permissions.deny.includes(rule), `no ${rule} in the profile's deny list`);
+    profile.permissions.deny = profile.permissions.deny.filter((entry) => entry !== rule);
+  });
+  return rule;
 }
 
 concurrentSuite('doctor profile-sandbox', () => {
@@ -129,5 +161,68 @@ concurrentSuite('doctor profile-sandbox', () => {
     });
     const { line, status } = await doctorLine(dir, 'FAIL', ['--remote-job']);
     assert.equal(status, 1, line);
+  });
+});
+
+concurrentSuite('doctor profile-write-protection', () => {
+  it('(a) passes on a freshly generated profile, stating the Linux residual', async (t) => {
+    const dir = await wiredFixture(t);
+    const { line } = await doctorLine(dir, 'PASS', [], WRITE_CHECK_ID);
+    assert.ok(line.includes('Linux skips'), line);
+  });
+
+  it("(b) warns when the main checkout's push wrapper has no denyWrite entry, naming the path and the side", async (t) => {
+    const dir = await wiredFixture(t);
+    const path = mainCheckoutEntry(dir, PUSH_SCRIPT);
+    dropDenyWrite(dir, path);
+    const { line, status } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
+    assert.ok(line.includes(`${path} (`), line);
+    assert.ok(line.includes('has no sandbox.filesystem.denyWrite entry'), line);
+    assert.ok(line.includes('init --force'), line);
+    assert.equal(status, 0, line);
+  });
+
+  it('(c) warns when its Edit rule is missing, naming the file-tool side', async (t) => {
+    const dir = await wiredFixture(t);
+    const path = mainCheckoutEntry(dir, PUSH_SCRIPT);
+    const rule = dropEditRule(dir, path);
+    const { line } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
+    assert.ok(line.includes(`${path} (`), line);
+    assert.ok(line.includes(`lacks the file-tool deny rule ${rule}`), line);
+  });
+
+  it('(d) warns when docs retrieval is on and the docs-search-server entry is gone', async (t) => {
+    const dir = await wiredFixture(t);
+    editJson(dir, CONFIG_FILE, (config) => {
+      config.phases = { ...config.phases, docs: true };
+      config.docs = { ...config.docs, retrieval: true };
+    });
+    const init = await runCli(dir, ['init', '--force']);
+    assert.equal(init.status, 0, `init --force exited ${init.status}\n${init.stdout}\n${init.stderr}`);
+    await doctorLine(dir, 'PASS', [], WRITE_CHECK_ID);
+    const path = mainCheckoutEntry(dir, DOCS_SERVER_SCRIPT);
+    dropDenyWrite(dir, path);
+    const { line } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
+    assert.ok(line.includes(`${path} (`), line);
+  });
+
+  it('(e) fails case (b) under --remote-job', async (t) => {
+    const dir = await wiredFixture(t);
+    dropDenyWrite(dir, mainCheckoutEntry(dir, PUSH_SCRIPT));
+    const { line, status } = await doctorLine(dir, 'FAIL', ['--remote-job'], WRITE_CHECK_ID);
+    assert.equal(status, 1, line);
+  });
+
+  it('(f) under sandbox.optOut, grades only the file-tool rules', async (t) => {
+    const dir = await wiredFixture(t);
+    await configureSandbox(dir, { optOut: { reason: OPT_OUT_REASON } });
+    const path = mainCheckoutEntry(dir, PUSH_SCRIPT);
+    dropDenyWrite(dir, path);
+    const passed = await doctorLine(dir, 'PASS', [], WRITE_CHECK_ID);
+    assert.ok(passed.line.includes('not graded because the sandbox is off'), passed.line);
+    const rule = dropEditRule(dir, path);
+    const { line } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
+    assert.ok(line.includes(rule), line);
+    assert.ok(line.includes('not graded because the sandbox is off'), line);
   });
 });

@@ -105,6 +105,7 @@ import {
   pythonRetrievalApplies,
   remoteExecutionApplies,
   retrievalApplies,
+  sandboxOptedOut,
   STATE_DIR_DOT_PATTERN,
   STATE_DIR_PATTERN,
   type HarnessConfig,
@@ -208,6 +209,7 @@ import {
   SANDBOX_OPT_OUT_MARKER,
   shippedSandboxSettings,
 } from '../generators/sandboxProfile.js';
+import { fileToolDenyRules, protectedPaths } from '../generators/writeProtection.js';
 import {
   configKeyPath,
   configuredWrapperFile,
@@ -456,8 +458,8 @@ export interface CheckContext {
   readonly probeGithub: boolean;
   /**
    * Whether `doctor --remote-job` graded the profile for a remote job: {@link PROFILE_PATHS_CHECK},
-   * {@link PROFILE_TRACKED_CHECK}, {@link PROFILE_SANDBOX_CHECK} and {@link PLUGIN_PERMISSIONS_CHECK} fail where
-   * they otherwise warn, and the last also grades
+   * {@link PROFILE_TRACKED_CHECK}, {@link PROFILE_SANDBOX_CHECK}, {@link PROFILE_WRITE_PROTECTION_CHECK} and
+   * {@link PLUGIN_PERMISSIONS_CHECK} fail where they otherwise warn, and the last also grades
    * `permissions.additionalDirectories`. `false` in every default run.
    */
   readonly remoteJob: boolean;
@@ -4728,6 +4730,68 @@ const PROFILE_SANDBOX_CHECK: Check = {
 };
 
 /**
+ * Is every path that runs outside the sandbox write-protected on both sides — a
+ * `sandbox.filesystem.denyWrite` entry, and an `Edit` and a `Write` deny rule?
+ *
+ * The expected set is {@link protectedPaths} and {@link fileToolDenyRules}, the generator's own,
+ * computed for the main checkout's root as {@link buildCheckContext} resolves the profile's location
+ * and with the profile's own `permissions.additionalDirectories`, so this check and the generator
+ * cannot disagree on which paths are protected. Under a taken opt-out ({@link sandboxOptedOut}) only
+ * the file-tool rules are graded: with the sandbox off a `denyWrite` entry protects nothing.
+ *
+ * A `warn` rather than a `fail`, on {@link PROFILE_DENY_FLOOR_CHECK}'s terms: the profile is a file the
+ * adopter owns and may deliberately have restructured, a run missing an entry is worse-defended
+ * rather than unable to proceed, and a profile an earlier release generated is legitimately in that
+ * state. **Under `--remote-job`** ({@link CheckContext.remoteJob}) it is a `fail`, as
+ * {@link PROFILE_SANDBOX_CHECK}'s findings are. Every non-pass names `init --force` as the remedy.
+ */
+const PROFILE_WRITE_PROTECTION_CHECK: Check = {
+  id: 'profile-write-protection',
+  title: 'everything that runs outside the sandbox is write-protected on both sides',
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
+    if (ctx.profile === undefined) return unevaluated(`${PROFILE_PATH} could not be read (see the permission-profile check)`);
+
+    const profileRoot = mainWorktreeRoot(ctx.repoRoot) ?? ctx.repoRoot;
+    const expected = protectedPaths({
+      repoRoot: profileRoot,
+      workRoot: workRoot(profileRoot),
+      config: ctx.config,
+      additionalDirectories: permissionEntries(ctx.profile, 'additionalDirectories'),
+    });
+    const optedOut = sandboxOptedOut(ctx.config);
+    const denyWritePath = `${SANDBOX_KEY}.filesystem.denyWrite`;
+    const denyWrite = stringMembers(valueAtPath(ctx.profile, denyWritePath));
+    const denied = permissionEntries(ctx.profile, 'deny');
+    const notGraded = `; ${denyWritePath} is not graded because the sandbox is off (sandbox.optOut)`;
+
+    const findings: string[] = [];
+    for (const entry of expected) {
+      const subject = `${entry.path} (${entry.reason})`;
+      if (!optedOut && !denyWrite.includes(entry.path)) findings.push(`${subject} has no ${denyWritePath} entry`);
+      const missingRules = fileToolDenyRules(entry).filter((rule) => !denied.includes(rule));
+      if (missingRules.length > 0) {
+        findings.push(`${subject} lacks the file-tool deny ${missingRules.length === 1 ? 'rule' : 'rules'} ${nameList(missingRules)}`);
+      }
+    }
+
+    if (findings.length > 0) {
+      return (ctx.remoteJob ? fail : warn)(
+        `${PROFILE_PATH} leaves a path that runs outside the sandbox writable from inside it: ${findings.join('; ')}${optedOut ? notGraded : ''}. Regenerate it with \`${CLI} init --force\`, which writes a .bak sibling first`,
+      );
+    }
+    return optedOut
+      ? pass(
+          `${PROFILE_PATH} carries an Edit and a Write deny rule for each of the ${expected.length} paths that run outside the sandbox${notGraded}`,
+        )
+      : pass(
+          `${PROFILE_PATH} write-protects each of the ${expected.length} paths that run outside the sandbox on both sides: a ${denyWritePath} entry, and an Edit and a Write deny rule. Linux skips a ${denyWritePath} entry containing *, so there the worktree-glob paths hold on the file-tool side only`,
+        );
+  },
+};
+
+/**
  * A `permissions.allow` entry a run needs, paired with what it does when the profile does not carry
  * it. The symptom travels with the entry so a report describes the consequence of the entries that
  * are **actually** missing rather than one selected by the phase: a helper entry and a read entry
@@ -5677,6 +5741,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
   PROFILE_BROWSER_DENY_CHECK,
   PROFILE_DENY_FLOOR_CHECK,
   PROFILE_SANDBOX_CHECK,
+  PROFILE_WRITE_PROTECTION_CHECK,
   PLUGIN_PERMISSIONS_CHECK,
   BROWSER_WIRING_CHECK,
   RETRIEVAL_DEPENDENCIES_CHECK,
