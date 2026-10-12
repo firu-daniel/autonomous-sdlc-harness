@@ -34,7 +34,7 @@ Four findings remain, all in the plugin layer:
 
 Each entry resolves to `harness-runs/code_reviews/fix_findings_overwrites_and_commit_gaps_code_review/finding_<K>.md` via its `**Finding K**` token. The list is sorted with the smallest, safest single-site edits first. The leading `N.` is the fix order. `K` is the finding's stable identity.
 
-1. [ ] **Finding 4** — Correct the heading level of `Override L`'s three `Override D` / `Override E` citations. _(layer: plugin)_
+1. [x] **Finding 4** — Correct the heading level of `Override L`'s three `Override D` / `Override E` citations. _(layer: plugin)_
 2. [ ] **Finding 1** — Restate E.2's blocked-remainder Round PASS in the user-review core's `### QA.1+` closing paragraph. _(layer: plugin)_
 3. [ ] **Finding 3** — Make qa-tester's PASS priority turn on "no part blocked", and stop the setup sub-bullet asking for a note a PASS cannot carry. _(layer: plugin)_
 4. [ ] **Finding 2** — Let both D.2 QA bullets derive the blocked clause off `<ui_test_index>` when the session did not walk the passing round. _(layer: plugin)_

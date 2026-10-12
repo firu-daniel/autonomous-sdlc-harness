@@ -251,7 +251,7 @@ bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
 bash <scripts_dir>/push-branch.sh "$REPO_ROOT"
 ```
 
-Substitute the writer's returned `ui_test_index:` and `ui_test_files_dir:` values, repo-relative, for the two paths — the issued command carries no `<…>`, because a `<` withdraws the script-allowlist guard's permit (`## Override D` → **Exact staging + commit.**). The subject is the same fixed one the planning flow's UI-test plan commit uses, byte-for-byte: `chore: Add UI-test plan for <branch>`. No `if`, no existence guard, and the push is unconditional, as in `## Override E`. **Wrapper exit 3** (nothing to commit) is the normal outcome of a zero-test augment, which leaves every file byte-identical; the push is then a no-op. Any other non-zero exit is surfaced, as in `## Override D` → **Wrapper exit status (surface the error).**
+Substitute the writer's returned `ui_test_index:` and `ui_test_files_dir:` values, repo-relative, for the two paths — the issued command carries no `<…>`, because a `<` withdraws the script-allowlist guard's permit (`### Override D` → **Exact staging + commit.**). The subject is the same fixed one the planning flow's UI-test plan commit uses, byte-for-byte: `chore: Add UI-test plan for <branch>`. No `if`, no existence guard, and the push is unconditional, as in `### Override E`. **Wrapper exit 3** (nothing to commit) is the normal outcome of a zero-test augment, which leaves every file byte-identical; the push is then a no-op. Any other non-zero exit is surfaced, as in `### Override D` → **Wrapper exit status (surface the error).**
 
 **Why not a committer dispatch.** No mode fits: `ui_test_pass` stages only the index and flips a checkbox, and `review_plan_file` is locked to a different fixed subject.
 
