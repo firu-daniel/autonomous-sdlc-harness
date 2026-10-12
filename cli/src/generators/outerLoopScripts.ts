@@ -95,6 +95,11 @@ export interface OuterLoopScript {
    * path that resolves to nothing.
    */
   readonly agentInvocable: boolean;
+  /**
+   * The main checkout's copy of this script is a named `sandbox.excludedCommands` entry
+   * (`generators/sandboxProfile.ts`). Absent means it runs sandboxed in every spelling.
+   */
+  readonly runsUnsandboxed?: true;
 }
 
 /**
@@ -137,8 +142,8 @@ export const DOCS_SEARCH_SERVER_SCRIPT_NAME = 'docs-search-server.sh';
 export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze([
   Object.freeze({ file: 'harness-run-lib.sh', subdir: 'lib', mode: 0o644, agentInvocable: false }),
   Object.freeze({ file: 'commit-on-branch.sh', mode: 0o755, agentInvocable: true }),
-  Object.freeze({ file: 'push-branch.sh', mode: 0o755, agentInvocable: true }),
-  Object.freeze({ file: 'refresh-branch.sh', mode: 0o755, agentInvocable: true }),
+  Object.freeze({ file: 'push-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
+  Object.freeze({ file: 'refresh-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
   // The one row that executes an ARGUMENT, so its safety is in the script rather than in this flag:
   // it runs a file only from `<state_dir>/scratch/` and refuses every other path. It carries NO
   // `DENY_SCRIPT_BASENAMES` entry in the script-allowlist guard, and that omission is the decision —

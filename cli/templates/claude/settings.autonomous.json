@@ -15,7 +15,16 @@
     "EVERY FILE RULE MARKS AN ABSOLUTE PATH WITH A `//` PREFIX - `Read`, `Edit` AND `Write` ALIKE - AND THE PATH BRINGS ITS OWN LEADING SLASH: the entries `Read(/{{repoRoot}}/**)`, `Edit(/{{repoRoot}}/**)` and `Write(/{{repoRoot}}/**)` above are that prefix immediately followed by the absolute path {{repoRoot}}, which is why each carries two slashes and not three. One tool syntax governs all three: a rule content starting with `//` is anchored at the filesystem root, while a single leading `/` is resolved relative to the root of the settings file the rule came from, so a one-slash rule names a path nobody has and matches no file. Adding a slash of its own to a path that already starts with one gives the same silent nothing from the other side.",
     "NO `hooks` KEY, DELIBERATELY: the harness plugin ships its own guard hooks; they fire from the plugin, resolve their own root and append to whatever hooks you already have. Writing them here as well would run each guard twice and would replace your own hook configuration. This omission is a decision, not an oversight.",
     "`deny` IS A FLOOR, NOT A PREFERENCE: it is evaluated before `allow` and cannot be overridden by one, which is what makes a broad `allow` beside it safe - the destructive commands below stay refused however widely the rest is granted. Add to it freely; do not weaken it, and do not try to re-enable one of its entries by adding an allow rule, because the allow will not win. What a deny entry holds back is what its pattern literally matches: each is a PREFIX match anchored at the START of the command string, so `Bash(git branch -D:*)` refuses `git branch -D <x>` and does not fire on the same words inside a compound such as `git status && git branch -D <x>`. It does not fire on `git -C <dir> branch -D <x>` either - the directory sits ahead of the words the pattern anchors on. Both gaps are closed on the plugin side rather than here - the guard hooks that auto-allow a compound, or a single directory-scoped statement, refuse to vouch for a piece that deletes, renames or overwrites a branch ref, whichever safe prefix it otherwise matches, and they parse the `-C` form rather than matching it as a prefix - so keep the two in step when you add an entry that names one of those prefixes. It is also why no `Bash(git -C:*)` entry is added above: it would grant the `-C` spelling of every verb this floor refuses, with no deny entry able to fire on it.",
-    "NO BROWSER-NAMESPACE ENTRY IN `deny`: a deny is evaluated before any allow and cannot be overridden, so denying the browser-automation namespaces would revoke the interactive-test agent's own grant along with everyone else's. That closure is done per agent, by the `tools:` allowlist on each agent definition - the one agent that drives a browser lists those tools and no other agent does."
+    "NO BROWSER-NAMESPACE ENTRY IN `deny`: a deny is evaluated before any allow and cannot be overridden, so denying the browser-automation namespaces would revoke the interactive-test agent's own grant along with everyone else's. That closure is done per agent, by the `tools:` allowlist on each agent definition - the one agent that drives a browser lists those tools and no other agent does.",
+    "THE SANDBOX IS STRICT: every Bash command a run issues, and every process it starts, runs inside Claude Code's OS-level sandbox. `failIfUnavailable` makes a session whose sandbox cannot start exit at startup rather than run its commands unsandboxed, and with `allowUnsandboxedCommands` false the `dangerouslyDisableSandbox` parameter is ignored. A `false` there, set from `--settings`, also makes the sandbox admin-required on Claude Code v2.1.285 or later, which then ignores `excludedCommands`, `network.allowedDomains` and `filesystem.allowWrite` in the repository's own `.claude/settings.json` and `.claude/settings.local.json`: a sandbox setting an unattended run needs goes in this file.",
+    "`autoAllowBashIfSandboxed` IS false ON PURPOSE: the `allow` list above stays the grant surface for Bash, sandboxed or not, and the permission mode decides every call it does not list. Its default is true, and neither documentation page states how that default interacts with `dontAsk`; setting it explicitly takes that open point out of every outcome.",
+    "THE NETWORK ALLOWLIST IS EMPTY BUT FOR THIS REPOSITORY'S OWN PART: git's network traffic leaves through the two excluded wrappers named below, and Claude Code's own API traffic, `WebFetch`, `WebSearch` and local MCP servers run outside the sandbox, so none of them needs an entry. What a sandboxed command may reach is `sandbox.allowedDomains` in harness.config.json, each domain with its reason, repeated here as an ALLOWED DOMAIN line. Add one narrowly: the sandbox's proxy decides on the hostname the client supplies and does not inspect TLS, so a broad domain such as `github.com` is an exfiltration path.",
+    "`strictAllowlist` IS SET, AND WHETHER THIS FILE MAY SET IT IS UNRESOLVED: the settings reference scopes the key to user or managed settings, while the sandboxing page also admits CLI `--settings`, which is how this profile is loaded. Where it is not honoured, a host outside the allowlist is decided by the permission mode: under the `dontAsk` mode this profile ships with it is refused either way, and under the `PERMISSION_MODE=acceptEdits` override THE PERMISSION MODE IS dontAsk line names, it prompts, which an unattended run cannot answer.",
+    "WHETHER A HEADLESS `-p` SESSION HONOURS ALL OF THIS EXACTLY AS AN INTERACTIVE ONE DOES IS UNRESOLVED: neither documentation page says, and an unattended run is a `-p` session.",
+    "TWO COMMANDS RUN OUTSIDE THE SANDBOX, EACH IN ONE SPELLING: `sandbox.excludedCommands` names the main checkout's own `push-branch.sh` and `refresh-branch.sh` under {{scriptsDirAbs}}, because on macOS an SSH push or fetch fails inside the sandbox. An excluded command runs with full access and reaches any host, so the file it runs has to be one the sandbox cannot write - and the worktree's copy is not: a run's worktree is sandbox-writable, the only spelling a profile has for a sibling worktree is a glob, and Linux skips a `denyWrite` entry carrying one. The repo-relative and sibling-worktree spellings of both wrappers stay in `allow` above and stay sandboxed, as does a call that compounds the excluded spelling with anything else. The excluded rule's `:*` accepts any argument, so both wrappers refuse any target but the main checkout or a worktree it lists.",
+    "`allowLocalBinding` IS macOS ONLY: it is set so a test suite or dev server a sandboxed command starts can bind loopback. On Linux each sandboxed command has a private loopback and cannot reach a server another one started.",
+    "THE NETWORK-CLIENT DENIES ARE A SECOND LAYER: `WebFetch` and `WebSearch` are denied as tools, because they run outside the sandbox. The `Bash(<client>:*)` entries for `curl`, `wget`, `nc`, `ncat`, `socat`, `ssh`, `scp`, `sftp`, `ftp`, `telnet` and `rsync` are prefix matches on the start of the command string like every other deny entry, so a client reached any other way passes them: without the sandbox they are cosmetic.",
+    "TWO RESIDUALS, STATED RATHER THAN HIDDEN: on Linux the worktree-glob `denyWrite` entries are skipped, so the protection they add - the worktree's hooks directory, and the worktree's copy of `docs-search-server.sh` and its library when docs retrieval applies - holds on macOS only, while the `Edit` and `Write` deny rules carry the same globs and hold everywhere. And the interactive-test phase is unmeasured under the sandbox: on Linux each sandboxed command has a private loopback, so the dev server and the readiness poll cannot meet."
   ],
   "permissions": {
     "allow": [
@@ -64,7 +73,20 @@
       "Bash(git branch -D:*)",
       "Bash(git branch -d:*)",
       "Bash(git branch -M:*)",
-      "Bash(git branch -m:*)"
+      "Bash(git branch -m:*)",
+      "WebFetch",
+      "WebSearch",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(nc:*)",
+      "Bash(ncat:*)",
+      "Bash(socat:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(sftp:*)",
+      "Bash(ftp:*)",
+      "Bash(telnet:*)",
+      "Bash(rsync:*)"
     ],
     "ask": [
       "Bash(git checkout:*)",
@@ -90,5 +112,21 @@
     "defaultMode": "dontAsk",
     "additionalDirectories": ["{{stateDirAbs}}"]
   },
-  "model": "{{agentModel}}"
+  "model": "{{agentModel}}",
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "autoAllowBashIfSandboxed": false,
+    "excludedCommands": [],
+    "filesystem": {
+      "allowWrite": ["{{stateDirAbs}}"],
+      "denyWrite": []
+    },
+    "network": {
+      "strictAllowlist": true,
+      "allowLocalBinding": true,
+      "allowedDomains": []
+    }
+  }
 }

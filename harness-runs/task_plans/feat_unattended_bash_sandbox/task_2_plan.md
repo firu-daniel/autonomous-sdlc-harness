@@ -95,3 +95,10 @@ sandboxAllowedDomains(config: HarnessConfig): readonly HarnessSandboxDomain[]
 - `npm test --workspace cli -- test/profile.test.mjs` passes. Then run `commands.typecheck` as written.
 - The excluded command and the corpus spelling Tasks 8–10 write are the same string. For a fixture at `<root>` with `scriptsDir` `scripts`, `sandbox.excludedCommands` contains `Bash(bash <root>/scripts/push-branch.sh:*)`. `bash <root>/scripts/push-branch.sh "<worktree>"` starts with that prefix, and `bash scripts/push-branch.sh` does not.
 - Grep `sandboxProfile.ts` for a `.sh` literal and find none.
+
+**Deviations from plan:**
+
+- `permissionProfile.ts` also exports `appendReadme`, so `sandboxProfile.ts` appends its `_README` lines through the one existing appender rather than a second copy of it.
+- `shippedSandboxSettings` grades the five leaves the plan lists, named once in `sandboxProfile.ts` → `GRADED_SETTINGS` with their values read from the template; `network.allowLocalBinding`, also a boolean leaf, is deliberately not graded (a macOS loopback convenience whose removal weakens nothing).
+- The quoted-domain case: Task 1's configuration check refuses the domain first (`init` exits 1 naming `sandbox.allowedDomains`, profile not written). The case asserts that refusal end to end, then drives `renderProfile` directly past the check to assert `applySandbox`'s own screen also exits 1 naming the key.
+- `applySandbox` is called after the plugin-root carry-forward, immediately before `assertRunnable` — after the fragments merge, as the plan requires.

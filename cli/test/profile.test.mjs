@@ -91,6 +91,9 @@ const { bashScriptRule, pluginRootEntryTarget, readRule, renderProfile } = await
   'generators/permissionProfile.js',
 );
 const { pluginScriptsDir } = await built('machine/plugins.js');
+const { LOOPBACK_ALLOWED_HOST, SANDBOX_OPT_OUT_MARKER, shippedSandboxSettings } = await built(
+  'generators/sandboxProfile.js',
+);
 
 /** The generated profile, and the template it is generated from. */
 const PROFILE_FILE = '.claude/settings.autonomous.json';
@@ -884,4 +887,114 @@ test('a plugin root reads back out of either entry form, and an entry naming no 
       );
     }
   });
+});
+
+/** The value at a dotted path under an object, or `undefined`. */
+function valueAt(object, dotted) {
+  return dotted.split('.').reduce((node, key) => (node !== null && typeof node === 'object' ? node[key] : undefined), object);
+}
+
+/** The two outer-loop rows the table marks as running unsandboxed, read from the table. */
+const UNSANDBOXED_ROWS = OUTER_LOOP_SCRIPTS.filter((script) => script.runsUnsandboxed === true);
+
+/** A domain the adopter allows, with its reason. */
+const ALLOWED_DOMAIN = { domain: 'registry.example.org', reason: 'the fixture installs packages from it' };
+
+test('the sandbox block is strict, excludes only the main checkout\'s two git wrappers, and grants the state directory', async (t) => {
+  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
+
+  // Each graded leaf against the shipped template, never a restated value.
+  const template = JSON.parse(readFileSync(PROFILE_TEMPLATE, 'utf8'));
+  const settings = shippedSandboxSettings();
+  assert.ok(settings.length > 0, 'shippedSandboxSettings() names no leaf, so nothing is graded');
+  for (const { path, value } of settings) {
+    assert.equal(valueAt(template, path), value, `shippedSandboxSettings() reports ${path} unlike the template`);
+    assert.equal(valueAt(profile, path), value, `the generated ${path} is not the template's ${value}`);
+  }
+
+  assert.equal(UNSANDBOXED_ROWS.length, 2, 'the outer-loop table does not mark exactly two rows as running unsandboxed');
+  const excluded = profile.sandbox.excludedCommands;
+  const mainForms = UNSANDBOXED_ROWS.map((row) => bashScriptRule(join(dir, SCRIPTS_DIR, outerLoopRelativePath(row))));
+  assert.deepEqual(excluded, mainForms, 'sandbox.excludedCommands is not exactly the main checkout\'s two wrapper spellings');
+
+  // The sandbox-writable spellings never run unsandboxed.
+  const worktreeGlob = worktreeGlobFor(dir);
+  for (const row of UNSANDBOXED_ROWS) {
+    const relative = outerLoopRelativePath(row);
+    for (const form of [`Bash(${scriptInvocation(SCRIPTS_DIR, relative)}:*)`, bashScriptRule(join(worktreeGlob, SCRIPTS_DIR, relative))]) {
+      assert.ok(!excluded.includes(form), `${form} is excluded from the sandbox, and a sandboxed command can rewrite its file`);
+    }
+  }
+
+  // The excluded spelling and the allow-listed form (ii) are one string.
+  for (const entry of excluded) {
+    assert.ok(entries(profile, 'allow').includes(entry), `${entry} is excluded but not allow-listed`);
+  }
+
+  // The prefix the corpus push spelling has to start with, and the one it must not be.
+  const push = mainForms[0].slice('Bash('.length, -':*)'.length);
+  assert.ok(`${push} "${join(worktreeGlob, 'x')}"`.startsWith(push));
+  assert.ok(!`bash ${SCRIPTS_DIR}/${outerLoopRelativePath(UNSANDBOXED_ROWS[0])}`.startsWith(push));
+
+  const stateDirAbs = join(dir, 'sdlc-harness');
+  assert.deepEqual(profile.sandbox.filesystem.allowWrite, [stateDirAbs], 'allowWrite does not name the state directory');
+
+  for (const tool of ['WebFetch', 'WebSearch']) {
+    assert.ok(entries(profile, 'deny').includes(tool), `permissions.deny does not hold ${tool}`);
+  }
+  assert.deepEqual(profile.sandbox.network.allowedDomains, [], 'a profile with no configured domain allows one');
+});
+
+test('a configured domain is allowed with its reason, and the loopback host only with the browser wiring', async (t) => {
+  const sandbox = { allowedDomains: [ALLOWED_DOMAIN] };
+  const { profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ sandbox }) });
+  assert.deepEqual(profile.sandbox.network.allowedDomains, [ALLOWED_DOMAIN.domain]);
+  assert.ok(
+    profile._README.some((line) => line.includes(ALLOWED_DOMAIN.domain) && line.includes(ALLOWED_DOMAIN.reason)),
+    'no _README line repeats the configured domain with its reason',
+  );
+
+  const { profile: withPhase } = await profileFor(t, ['--qa']);
+  assert.ok(withPhase.sandbox.network.allowedDomains.includes(LOOPBACK_ALLOWED_HOST), 'the browser wiring lacks the loopback host');
+  const { profile: withoutPhase } = await profileFor(t);
+  assert.ok(!withoutPhase.sandbox.network.allowedDomains.includes(LOOPBACK_ALLOWED_HOST), 'the loopback host is allowed with the phase off');
+});
+
+test('the opt-out shows in the profile, and keeps every deny entry', async (t) => {
+  const sandbox = { optOut: { reason: 'the fixture runner has no sandbox support' } };
+  const { profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ sandbox }) });
+  assert.equal(profile.sandbox.enabled, false);
+  assert.ok(profile._README.some((line) => line.startsWith(SANDBOX_OPT_OUT_MARKER)), 'no _README line starts with the opt-out marker');
+  for (const tool of ['WebFetch', 'WebSearch']) {
+    assert.ok(entries(profile, 'deny').includes(tool), `the opt-out dropped the ${tool} deny`);
+  }
+});
+
+test('a domain carrying a quote is the adopter\'s to fix, never this CLI\'s fault', async (t) => {
+  const quoted = { domain: "evil'host", reason: 'a fixture' };
+
+  // End to end, the configuration check refuses it before the generator runs: that refusal is
+  // asserted here, and the generator's own screen is asserted below.
+  const dir = await fixtureFor(t, { 'harness.config.json': seededConfig({ sandbox: { allowedDomains: [quoted] } }) });
+  const result = await runCli(dir, ['init']);
+  assert.equal(result.status, 1, `init exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+  assert.match(`${result.stdout}${result.stderr}`, /sandbox\.allowedDomains/);
+  assert.ok(!existsSync(join(dir, PROFILE_FILE)), 'a refused init wrote the profile');
+
+  // Past the check, the generator's screen exits 1 too, naming the key.
+  assert.throws(
+    () =>
+      renderProfile({
+        repoRoot: join('/', 'fixture-work-root', 'fixture-project'),
+        workRoot: join('/', 'fixture-work-root'),
+        config: seededConfig({ scriptsDir: SCRIPTS_DIR, sandbox: { allowedDomains: [quoted] } }),
+        written: [],
+      }),
+    (error) => {
+      assert.equal(error.exitCode, 1, `a quoted domain exited ${error.exitCode}:\n${error.message}`);
+      assert.match(error.message, /sandbox\.allowedDomains/);
+      assert.doesNotMatch(error.message, INTERNAL_SUFFIX);
+      return true;
+    },
+  );
 });

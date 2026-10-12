@@ -187,6 +187,14 @@
  * neither; and the guard withholds on properties of the *command* — the constructs above — that
  * these rows, written as literal invocation prefixes, do not range over at all. Neither mechanism
  * is derivable from the other, so removing either narrows what an unattended run can spell.
+ *
+ * ## The sandbox block
+ *
+ * The template ships the `sandbox` block's static half; `sandboxProfile.ts` → `applySandbox` fills
+ * the configuration-dependent half — the two excluded commands, the allowed domains, the opt-out —
+ * and owns the rule for which command may run unsandboxed. {@link assertRunnable} scans the block's
+ * lists with the same table it scans the permission lists with. That module imports from this one
+ * and this one calls it, a cycle kept safe by using every imported binding at call time only.
  */
 
 import { basename, dirname, isAbsolute, join, sep } from 'node:path';
@@ -213,6 +221,7 @@ import {
   type OuterLoopScript,
   type WrittenOuterLoopScript,
 } from './outerLoopScripts.js';
+import { applySandbox } from './sandboxProfile.js';
 import {
   scriptInvocation,
   selectWrapper,
@@ -367,6 +376,14 @@ const FORBIDDEN_IN_ENTRY: ReadonlyArray<readonly [needle: string, described: str
 
 /** The permission lists checked by {@link assertRunnable}, in the order the template writes them. */
 const PERMISSION_LISTS: readonly string[] = Object.freeze(['allow', 'deny', 'ask']);
+
+/** The `sandbox` block's lists {@link assertRunnable} checks, as dotted paths under `sandbox`. */
+const SANDBOX_LISTS: readonly string[] = Object.freeze([
+  'excludedCommands',
+  'filesystem.allowWrite',
+  'filesystem.denyWrite',
+  'network.allowedDomains',
+]);
 
 /** How many `allow` entries one selected script must contribute — the three forms of choice 1. */
 const FORMS_PER_SCRIPT = 3;
@@ -884,19 +901,35 @@ export function entryWord(count: number): string {
  */
 function assertRunnable(profile: JsonObject): void {
   const permissions = permissionsOf(profile);
+  const lists: Array<readonly [where: string, entries: readonly string[]]> = PERMISSION_LISTS.map((list) => [
+    `permissions.${list}`,
+    entriesOf(permissions, list),
+  ]);
+  for (const dotted of SANDBOX_LISTS) {
+    const where = `sandbox.${dotted}`;
+    const value = where.split('.').reduce<JsonValue | undefined>(
+      (node, key) => (isJsonObject(node) ? node[key] : undefined),
+      profile,
+    );
+    if (value === undefined) continue;
+    if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+      throw internal(`the generated \`${where}\` is not a list of strings`);
+    }
+    lists.push([where, value as string[]]);
+  }
 
-  for (const list of PERMISSION_LISTS) {
-    for (const entry of entriesOf(permissions, list)) {
+  for (const [where, list] of lists) {
+    for (const entry of list) {
       for (const [needle, described] of FORBIDDEN_IN_ENTRY) {
         if (entry.includes(needle)) {
           throw internal(
-            `the generated permission entry ${JSON.stringify(entry)} in \`permissions.${list}\` contains ${described}, which the guard matches literally: the entry would fall through to a prompt and stall an unattended run`,
+            `the generated permission entry ${JSON.stringify(entry)} in \`${where}\` contains ${described}, which the guard matches literally: the entry would fall through to a prompt and stall an unattended run`,
           );
         }
       }
       if (containsToken(entry)) {
         throw internal(
-          `the generated permission entry ${JSON.stringify(entry)} in \`permissions.${list}\` still carries an unsubstituted token`,
+          `the generated permission entry ${JSON.stringify(entry)} in \`${where}\` still carries an unsubstituted token`,
         );
       }
     }
@@ -1079,7 +1112,7 @@ const COMMAND_REMEDY =
  * packaging fault that check reports. `remedy` is what makes the message actionable, and it differs
  * per value — a command moves into a wrapper, a directory is renamed — so it is the caller's.
  */
-function assertUsableInEntry(value: string, described: string, remedy: string = COMMAND_REMEDY): void {
+export function assertUsableInEntry(value: string, described: string, remedy: string = COMMAND_REMEDY): void {
   for (const [needle, why] of FORBIDDEN_IN_COMMAND) {
     if (!value.includes(needle)) continue;
     throw new HarnessError(
@@ -1136,7 +1169,7 @@ function assertRepositoryValuesUsable({ repoRoot, projectName, scriptsDir, state
 }
 
 /** Append a generated line to the profile's rationale block. */
-function appendReadme(profile: JsonObject, line: string): void {
+export function appendReadme(profile: JsonObject, line: string): void {
   const readme = profile[README_KEY];
   if (!Array.isArray(readme)) {
     throw internal(
@@ -1667,6 +1700,8 @@ export function renderProfile({
       note: note ?? ((): void => {}),
     });
   }
+
+  applySandbox(profile, { repoRoot, config });
 
   assertRunnable(profile);
   assertNoBrowserDeny(profile);

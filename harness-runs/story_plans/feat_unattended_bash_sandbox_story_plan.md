@@ -83,7 +83,7 @@ The former residual *"a rewritten `.git` pointer or `commondir` is not detected"
 
 1. [x] **Task 1** — Add the `sandbox` configuration key to the config model and its structural check _(layer: cli)_ _(points: 15)_
 2. [x] **Task 15** — Make `dontAsk` the unattended permission mode, and correct the profile's own statements of what an unlisted call does _(layer: cli)_ _(points: 15)_
-3. [ ] **Task 2** — Render the strict sandbox block, the network denies and the two named unsandboxed wrappers into the unattended profile _(layer: cli)_ _(points: 20)_
+3. [x] **Task 2** — Render the strict sandbox block, the network denies and the two named unsandboxed wrappers into the unattended profile _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 23** — Deny credential reads on both sides: `sandbox.credentials` and the file tools' `Read` rules _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 3** — Protect every path that runs outside the sandbox, on both sides of the profile _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 4** — Add the per-working-copy config refusal and the hooks pin to the run library, and apply both in `push-branch.sh` _(layer: cli)_ _(points: 20)_
