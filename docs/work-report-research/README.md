@@ -119,7 +119,7 @@ The idea as briefed was: copy a template file to `<state_dir>/work_reports/<bran
 - **Reviewers grade writers against the writer's own definition.** `ui-tests-plan-reviewer` grades `ui-tests-plan-writer`, `docs-reviewer` grades `docs-writer`, and `conventions-reviewer` grades `conventions-writer`. A writer's template must therefore stay inside the text its reviewer reads, and thinning must not remove a graded rule. Paired reports must be landed together; the conventions pair already shares one combined `harness-analyze.md` change.
 - **Readers of findings files need an ignore rule for the report section:**
   - writers applying "Must Fix items" (`docs-writer.md:63`, task-plan revision);
-  - `/branch-status`'s keyword scan (it would match "deferred");
+  - `/autonomous-sdlc-harness:branch-status`'s keyword scan (it would match "deferred");
   - the improvement-observations round counts.
 - **Read-list precedence.** The generated `CLAUDE.md` (`cli/src/generators/claudeContext.ts:470`) tells every planning or review agent to read `context/conventions.md`, while several agent definitions say read only the layer document. One sentence should state which instruction wins. The reports recommend that the agent definition wins.
 - **Cited anchors must survive thinning.** Headings and labels that other files quote literally include:

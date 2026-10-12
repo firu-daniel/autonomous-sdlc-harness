@@ -16,7 +16,7 @@ Gate 13a–13c were reported `BLOCKED` because the Python environment was not pr
 
 Each entry resolves to a self-contained `harness-runs/test_fix_plans/fix_findings_overwrites_and_commit_gaps_task_round_1/finding_<K>.md` through its `**Finding K**` reference. Entries are sorted lowest blast-radius first.
 
-1. [ ] **Finding 1** — Qualify the 25 bare `/branch-*` command spellings in `docs/work-report-research/` as `/autonomous-sdlc-harness:<name>`. _(layer: general)_
+1. [x] **Finding 1** — Qualify the 25 bare `/branch-*` command spellings in `docs/work-report-research/` as `/autonomous-sdlc-harness:<name>`. _(layer: general)_
 
 ---
 

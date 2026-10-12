@@ -39,11 +39,11 @@ Paths are relative to the checkout root. Counts are from `wc -w`.
 |---|---|---|---|
 | `plan_orchestration_instructions_core.md:645-666` | `### D.1 Write the first branch-statistics file` | first-write | semi-autonomous and autonomous task flow (ledger phase `D`) |
 | `plan_orchestration_instructions_autonomous.md:107-145` | Override D: commit via `commit-on-branch.sh` with the **single** path `statistics.md` (`:119-123`) | — | autonomous only |
-| `code_review_instructions.md:32-50` step 6 | clean-review path, after `run-test-suite.sh task_supervised` passes | first-write | supervised `/branch-review` |
-| `code_review_fixes_instructions.md:22-40` Phase 3 | after every review item is `[x]` and gates pass | first-write | supervised `/branch-implement-review` |
+| `code_review_instructions.md:32-50` step 6 | clean-review path, after `run-test-suite.sh task_supervised` passes | first-write | supervised `/autonomous-sdlc-harness:branch-review` |
+| `code_review_fixes_instructions.md:22-40` Phase 3 | after every review item is `[x]` and gates pass | first-write | supervised `/autonomous-sdlc-harness:branch-implement-review` |
 | `user_review_fixes_instructions_core.md:194-213` | `### D.1 Update the branch-statistics file` | update | semi-autonomous and autonomous user-review fix (ledger phase `R5` per brief) |
 | `user_review_fixes_instructions_autonomous.md:104-126` | Override D: single-path commit, subject `chore: Update branch statistics for <branch>` | — | autonomous only |
-| `user_review_fixes_instructions.md:26-42` Phase 3 | after the fix plan is all `[x]` and gates pass | update | supervised `/branch-implement-user-review` |
+| `user_review_fixes_instructions.md:26-42` Phase 3 | after the fix plan is all `[x]` and gates pass | update | supervised `/autonomous-sdlc-harness:branch-implement-user-review` |
 
 Per branch: **one first-write**, plus **one update per user-review round**. `docs_orchestration_instructions_autonomous.md:131` explicitly excludes this agent from the docs flow.
 
@@ -150,7 +150,7 @@ The Process estimate, block by block (measured today → kept): 66–90 230 → 
 
 | Question | Finding |
 |---|---|
-| Phases and flows | First-write at `D` (semi-autonomous and autonomous), or at supervised `/branch-review` step 6 or `/branch-implement-review` Phase 3. Update at user-review `D.1` (`R5`) or supervised `/branch-implement-user-review` Phase 3. |
+| Phases and flows | First-write at `D` (semi-autonomous and autonomous), or at supervised `/autonomous-sdlc-harness:branch-review` step 6 or `/autonomous-sdlc-harness:branch-implement-review` Phase 3. Update at user-review `D.1` (`R5`) or supervised `/autonomous-sdlc-harness:branch-implement-user-review` Phase 3. |
 | Dispatches per branch | 1 + one per user-review round. |
 | Proposed `work_reports/<branch>/<phase>/…/report_<i>.md` | **Rejected for this agent.** (a) Phase key: the agent sees only the prompt verb (`Write` or `Update`), not `D` or `R<n>`, and the supervised flows have no ledger. A verb-derived key (`first-write`/`update`) would work. (b) Index: the agent could `ls` for the next free index (it has `Bash`/`Glob`), and that would be collision-safe. (c) **Commit breaks:** both autonomous Override Ds stage exactly one explicit path (`plan_orchestration_instructions_autonomous.md:119-123`, `user_review_fixes_instructions_autonomous.md:116-120`), so a second file would be left untracked and violate the clean-tree invariant. Both overrides, the guard's documented allow row (`autonomous-script-allowlist-guard.sh:452-454`), `cli/src/generators/stateDir.ts:94` and `cli/test/init.test.mjs:142` would all need to change. |
 | Chosen: `## Work report` section inside `statistics.md` | It is committed by the existing Override D commit with no caller change. In semi-autonomous and supervised flows it shares `statistics.md`'s deliberate uncommitted fate (`plan_orchestration_instructions_autonomous.md:109`). No index is needed: `statistics.md` is one file per branch and overwritten, and git history keeps earlier reports in autonomous runs only. |

@@ -47,7 +47,7 @@ The basis is this repository: `stateDir: harness-runs`, three layers, and `phase
 
 | Site (`user_review_fix_plan_writing_instructions_core.md`) | Flows | Prompt | Per round |
 |---|---|---|---|
-| step 5, :83–87 | supervised (`/branch-start-user-review-fix-plan`) and autonomous (`/branch-start-user-review-fix-autonomous`) | `Write the user-review fix plan. …` | 1, plus one per answered `## Questions` (:89, "answers appended") |
+| step 5, :83–87 | supervised (`/autonomous-sdlc-harness:branch-start-user-review-fix-plan`) and autonomous (`/autonomous-sdlc-harness:branch-start-user-review-fix-autonomous`) | `Write the user-review fix plan. …` | 1, plus one per answered `## Questions` (:89, "answers appended") |
 | step 7, :111–117 (only when `phases.parity` is on) | both | `Revise … per business-parity findings: …` | 0–5 |
 | step 8, :137–143 | both | `Revise … per architecture findings: …` | 0–5 |
 | step 11, :147–153 | supervised: on rejection-with-feedback (`…_instructions.md:44`), no cap; autonomous: only on an Override 2 (a) resume | `Revise … per user feedback: …` | 0–n |

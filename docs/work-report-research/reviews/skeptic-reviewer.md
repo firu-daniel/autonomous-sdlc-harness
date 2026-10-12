@@ -49,7 +49,7 @@ verdict: FAIL
    - Change: say so in Verdict and in Risks. Open question 1 should weigh adding the evidence to the `C2g` ledger flip line (autonomous) as the durable alternative.
 
 4. **A downstream reader is missing.**
-   - `/branch-status` globs the branch under `<state_dir>/skeptic_reviews/` and scans review artifacts for `deferred`, `assumption`, `BLOCKED`, `unreachable` (`plugin/commands/branch-status.md:43`, `:45`).
+   - `/autonomous-sdlc-harness:branch-status` globs the branch under `<state_dir>/skeptic_reviews/` and scans review artifacts for `deferred`, `assumption`, `BLOCKED`, `unreachable` (`plugin/commands/branch-status.md:43`, `:45`).
    - A `work_report.md` in the findings folder would feed that scan. Item S9's own text contains "deferred-work marker".
    - Change: add `branch-status` to "Downstream readers" (report:46-50) and give it the same "ignore `work_report*.md`" clause proposed for `review-plan-reviewer`.
 

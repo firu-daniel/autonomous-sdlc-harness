@@ -61,3 +61,5 @@ The bare spellings at each reported line, as they read in the current tree:
 - [ ] `docs/work-report-research/README.md` — line 122 "`/branch-status`'s keyword scan (it would match "deferred")". The log does not list this line, but it reads the same as `skeptic-reviewer.md:178`, which the log does list, and a `grep -E` of the gate's pattern matches it. Qualify it too, so the folder is consistent and the gate cannot trip on it.
 
 Before finishing, `grep -rnE` the gate's pattern (quoted in the diagnosis) over `docs/work-report-research/`. It should print nothing.
+
+**Deviations from plan:** Gate 6d (`scripts/check-command-spelling.sh`) was not run by this unit: the finding names no test file (`none — test (gate 6d …)`), and a gate script is never run on this row; `scripts/run-gates.sh`, which `commands.test` invokes, runs it, so the Run gates phase verifies it. The fix rests on executing the finding's own probe, `grep -rnE` of the gate pattern over `docs/work-report-research/`, which printed nothing (exit 1), plus a word-level `git diff` showing only bare `/<name>` spellings were rewritten to `/autonomous-sdlc-harness:<name>`.

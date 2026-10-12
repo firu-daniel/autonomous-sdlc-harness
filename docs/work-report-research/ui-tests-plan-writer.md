@@ -43,9 +43,9 @@ The changes required:
 | Site | Flow | Prompt (mode) | Node / ledger | Times per branch |
 |---|---|---|---|---|
 | `task_plan_writing_instructions_core.md` → `### 1. Spawn ui-tests-plan-writer` (:230–254) | semi-autonomous and autonomous planning | `Write…`, then `Revise…` | walker node `ui_writer` (`task_plan_writing.graph.json:130`); `P2` (autonomous only) | 1 + up to 5 revisions (graph :8 `cap: 5`), plus one per answered question |
-| `qa_test_instructions.md` → `### 1.` step 3 (:38–55), from `/branch-qa-test` | supervised | `Write…`; `Augment…` only on the user's request | none | 0–1 |
+| `qa_test_instructions.md` → `### 1.` step 3 (:38–55), from `/autonomous-sdlc-harness:branch-qa-test` | supervised | `Write…`; `Augment…` only on the user's request | none | 0–1 |
 | `user_review_fixes_instructions_core.md` → `### QA.0` step 2 (:155–163) | semi-autonomous and autonomous user-review | `Augment…`, sent in every case | no node; `R4` (autonomous only) | 1 per round |
-| `/branch-start-plan` step 9 (`plugin/commands/branch-start-plan.md:46`) | supervised | optional | none | 0–1 |
+| `/autonomous-sdlc-harness:branch-start-plan` step 9 (`plugin/commands/branch-start-plan.md:46`) | supervised | optional | none | 0–1 |
 
 **Prompt drift.** The augment prompt differs at all three quoting sites:
 

@@ -44,7 +44,7 @@ Measured with `wc -w` in this repository (layers `cli`, `plugin`, catch-all `gen
 |---|---|---|---|
 | `plan_orchestration_instructions_core.md` → `### B.1 Generate the review plan` (`:273-283`) | semi-autonomous + autonomous plan run | two-pass (`per_task_findings_root` always passed) | 1 |
 | same → `### B.2` FAIL arm (`:308`): `Adjust the code-review index at … per findings at <findings_file>.` | same | adjust re-dispatch | 0–4 (cap `iteration >= 5`) |
-| `code_review_instructions.md` → `## Flow` step 2 (`:21`), step 4 re-spawn with a focused prompt (`:30`) | supervised `/branch-review` | single-pass | 1 + user-driven re-spawns |
+| `code_review_instructions.md` → `## Flow` step 2 (`:21`), step 4 re-spawn with a focused prompt (`:30`) | supervised `/autonomous-sdlc-harness:branch-review` | single-pass | 1 + user-driven re-spawns |
 
 Ledger ids: `Bg` and `Bm` (`autonomous_pause_and_ledger.md:79-80`) exist only in autonomous runs, and the agent never sees them. The user-review fix flows do not dispatch it. The docs flow excludes it (`plugin/commands/branch-start-docs-autonomous.md:30`).
 
@@ -164,7 +164,7 @@ How to read the "after" column: today's words, minus REDUNDANT, minus the ACTION
   - The committer's `review_plan_file` mode stages the **whole** per-finding folder `${plan_path%.md}/` without an existence guard (`committer.md:113`). B.3 therefore commits the report with **no committer change**. That mode is excluded from subject reconciliation (`committer.md:89`), so the "other paths staged" problem (lead 3) does not arise.
   - The brief's proposed tree would sit outside B.3's two or three explicit paths. It would stay untracked: tolerated by the engine (`plan_orchestration_instructions_autonomous.md:281`) but lost at PR time.
   - Rejected: a trailing `## Work report` section of the index. `review-plan-reviewer` grades the index's heading order (`review-plan-reviewer.md:92`), and the fix loop and committer key off that file.
-- **Storage key (lead 4).** The round-suffixed folder name already separates review rounds (`_code_review_2/`). `branch-reviewer` runs only in Phase B and in supervised `/branch-review`, so no phase id is needed, and the key also works in supervised and semi-autonomous runs.
+- **Storage key (lead 4).** The round-suffixed folder name already separates review rounds (`_code_review_2/`). `branch-reviewer` runs only in Phase B and in supervised `/autonomous-sdlc-harness:branch-review`, so no phase id is needed, and the key also works in supervised and semi-autonomous runs.
 - **Index `k`, collision-safe (lead 10).** The caller does not compute it: the adjust re-dispatch (`core.md:308`) passes no `iteration`. The agent takes the next free `k` with `Glob work_report_*.md`. A new round gets a new folder, and every adjust re-dispatch finds the previous reports and takes the next number. Nothing resets `k` or overwrites an earlier report, unlike a caller `iteration` reset per loop. All reports for a round land in the single B.3 commit.
 - **Clean-zero-findings case.** Today no folder is created, and the committer warns and skips. With a report, the folder holds only the report and is committed. Both are fine.
 - **Tools (lead 1, as corrected).**
@@ -204,7 +204,7 @@ How to read the "after" column: today's words, minus REDUNDANT, minus the ACTION
 1. Should the report go inside the per-finding folder for the other split-format reviewers? This works only where the agent always writes a folder that a commit stages. Architecture and skeptic reviews have PASS-writes-nothing paths (`autonomous_pause_and_ledger.md:77`, `:82`: "PASS with no findings, no file written"), so lead 8 applies to them, and their PASS report needs another home.
 2. Should `review-plan-reviewer` explicitly verify the evidence lines (re-run P4/P5)? That turns goal (a) from honour-system into a gate, at the cost of meta-review tokens.
 3. Is the brief's `report_<index>` naming worth keeping consistent if storage moves into artifact folders? `work_report_<k>.md` avoids a clash with `finding_<N>.md` and `review_<N>.md`.
-4. Supervised `/branch-review` never commits the review. Is an uncommitted report acceptable there, as the review itself is?
+4. Supervised `/autonomous-sdlc-harness:branch-review` never commits the review. Is an uncommitted report acceptable there, as the review itself is?
 
 ## Review response
 
