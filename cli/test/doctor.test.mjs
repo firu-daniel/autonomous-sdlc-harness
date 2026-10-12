@@ -5394,14 +5394,14 @@ const PYTHON_INSTALL_REMEDY_TEXT = 'install the package with its `models` extra'
 const COMPOSE_DEFAULT_DATABASE_URL = 'postgresql://harness:harness@127.0.0.1:5432/docs_retrieval';
 const DATABASE_URL_VARIABLE = 'HARNESS_DOCS_RETRIEVAL_DATABASE_URL';
 
-/** The ids `CHECKS` held before `docs.retrievalBackend` existed, frozen so an added id is visible. */
+/** The ids `CHECKS` holds other than the Python backend's, frozen so an added id is visible. */
 const PRE_BRANCH_CHECK_IDS = Object.freeze([
   'git', 'jj-repository', 'default-branch', 'remote', 'base-freshness', 'pre-push-guard', 'protected-set', 'jq',
   'worktrees', 'daemon-backend', 'run-watcher', 'notifications', 'repo-registry', 'machine-footprint', 'daemon-path',
   'remote-execution', 'remote-github', 'forge', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
   'state-dir', 'artifact-tree', 'setup-analysis', 'task-offer-rules', 'layer-profile', 'layer-drift', 'ignore-rules',
   'plugin-wiring', 'permission-profile', 'profile-paths', 'profile-tracked', 'profile-browser-deny',
-  'profile-deny-floor', 'plugin-permissions', 'browser-wiring', 'retrieval-dependencies', 'retrieval-model-cache',
+  'profile-deny-floor', 'profile-sandbox', 'plugin-permissions', 'browser-wiring', 'retrieval-dependencies', 'retrieval-model-cache',
   'retrieval-index',
 ]);
 

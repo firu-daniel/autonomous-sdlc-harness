@@ -282,7 +282,7 @@ const CLAUDE_DIR = '.claude';
 export const PROFILE_PATH = `${CLAUDE_DIR}/settings.autonomous.json`;
 
 /** The profile's rationale block: the array every generated explanation is appended to. */
-const README_KEY = '_README';
+export const README_KEY = '_README';
 
 /** The key that starts the repository's declared MCP servers for the run. Absent unless a fragment adds it. */
 const ENABLED_SERVERS_KEY = 'enabledMcpjsonServers';

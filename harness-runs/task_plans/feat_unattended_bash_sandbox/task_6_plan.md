@@ -67,3 +67,5 @@
 - `npm test --workspace cli -- test/doctor-profile-sandbox.test.mjs` and `npm test --workspace cli -- test/doctor.test.mjs` pass. The second is edited by this task. Then run `commands.typecheck` as written.
 - Grep `checks.ts` for `failIfUnavailable`, `strictAllowlist` or a `.sh` literal inside this check, and find none. The values come from `shippedSandboxSettings()` and `expectedSandbox()`.
 - Case (a) is the end-to-end proof that the generator (Task 2) and this check agree on a fresh profile.
+
+- **Deviations from plan:** `cli/src/generators/permissionProfile.ts` → `README_KEY` is now exported and read by `PROFILE_SANDBOX_CHECK` for the opt-out marker lookup, so `checks.ts` does not spell `_README` a second time; this file is not in the Targets list. Also amended in the same edit, because they would otherwise read false: `CheckContext.remoteJob`'s doc comment now lists `PROFILE_SANDBOX_CHECK` among the checks that fail under `--remote-job`, and `doctor.test.mjs` → `PRE_BRANCH_CHECK_IDS`'s doc comment no longer claims the list is the ids `CHECKS` held before `docs.retrievalBackend` existed.
