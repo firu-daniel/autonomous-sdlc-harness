@@ -106,7 +106,7 @@ The former residual *"a rewritten `.git` pointer or `commondir` is not detected"
 23. [x] **Task 12** — Declare `sandbox` in the configuration schema, with its two negative fixtures _(layer: general)_ _(points: 15)_
 24. [x] **Task 13** — Document the sandbox block, the permission mode and the two new `doctor` checks in `docs/cli.md` _(layer: general)_ _(points: 20)_
 25. [x] **Task 14** — Document the `sandbox` keys in `docs/config.md` and the sandbox object in `ARCHITECTURE.md` _(layer: general)_ _(points: 20)_
-26. [ ] **Task 25** — Document `PERMISSION_MODE` in `docs/watcher.md`, and correct the unlisted-call statements in the remaining docs and evals _(layer: general)_ _(points: 18)_
+26. [x] **Task 25** — Document `PERMISSION_MODE` in `docs/watcher.md`, and correct the unlisted-call statements in the remaining docs and evals _(layer: general)_ _(points: 18)_
 27. [ ] **Task 26** — Re-render the worked example's profile and wrappers _(layer: general)_ _(points: 15)_
 
 ## Scope register

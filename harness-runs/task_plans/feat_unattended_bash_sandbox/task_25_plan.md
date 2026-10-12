@@ -71,3 +71,8 @@ Its comment states what `dontAsk` refuses, that the job mode uses the same varia
   ```
 
 - Every command an adopter runs sits in a fenced block, one per line (`harness-runs/lessons.md` → `## Adopter-facing documentation`). `bash -n evals/docs-retrieval/arm-a/run-arm-a.sh` exits 0.
+
+**Deviations from plan:**
+
+- Roadmap reproducibility command: besides 1–21 it also reports `item 31`, from `harness-runs/task_plans/fix_remote_pause_state_and_gate12_record/task_6_plan.md`, a run artifact whose sentence forbids citing the Cloud QA row as "item 31". It is not a deferral in shipped text, so no row was added.
+- Entry G's second command, `-n` over the targets, also hits `evals/docs-retrieval/arm-a/run-arm-a.sh:11` (*"neither `allow` nor `deny` is refused in an"*): the rewritten sentence itself, which now states the refusal; not a remaining stall statement.

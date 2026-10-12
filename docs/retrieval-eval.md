@@ -288,7 +288,7 @@ bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --b
 backend; and `--data-dir` with `--backend python`, because the Python index lives in its Postgres
 database, not in a directory.
 
-### The two execution routes, and the one that stalls
+### The two execution routes, and the one that is refused
 
 The route above — `bash scripts/scratch-run.sh <file under harness-runs/scratch/>` — is the first of
 two. The second is a command **inside** `scripts/run-gates.sh`, whose commands run as a bash
@@ -296,8 +296,8 @@ subprocess with no per-command permission check; that is where the regression ga
 how `node evals/docs-retrieval/check-floor.mjs` is reached.
 
 A bare interpreter invocation — `node evals/docs-retrieval/run.mjs …` typed as a tool call — matches no
-entry in the unattended permission profile, and an unmatched tool call in print mode **stalls** rather
-than failing: the run hangs instead of reporting a refusal. That is why the launcher exists and why
+entry in the unattended permission profile, and an unmatched tool call in an unattended run is
+**refused**: the run reports a refusal and the command does not run. That is why the launcher exists and why
 nothing in this document asks for a bare `node`. At a terminal outside a harness run the launcher route
 works identically, so there is one set of commands to keep true rather than two.
 
@@ -826,7 +826,7 @@ runs and what a failure means.
 
 **Who runs this, and why it is you.** Arm A needs a nested agent subprocess, and no automated route in
 this repository may start one: the unattended permission profile carries no grant for the agent binary
-and an unmatched tool call stalls in print mode rather than refusing, while the `scratch-run.sh` route
+and an unmatched tool call in an unattended run is refused, while the `scratch-run.sh` route
 to the same subprocess is declined on purpose rather than unavailable — it would put an unsupervised
 agent session with its own auth and no token cap inside an unattended run. So an operator at a terminal
 runs arm A, and nobody else. `docs/retrieval-eval-results.md` → `## Arm A — the real-catalog hand run` is the
