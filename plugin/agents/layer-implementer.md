@@ -55,17 +55,17 @@ New citations you write name a symbol, heading or quoted substring, and nothing 
 
 ## Minimal prose — every line carries a rule
 
-Binds text you write into a **durable** file — one read after the round that wrote it: this plugin's agent, command and instruction definitions, the adopter's auto-loaded root instruction file and conventions documents, the standing tracked artifacts under `<state_dir>` (`lessons.md`), and the code comments below. It does **not** bind a round's **point-in-time** artifacts under `<state_dir>` — plans, reviews, findings, QA reports, statistics — which no agent loads into standing context; there, detail is the product and compressing one is a defect. The split is the one the durable-citation rule above already draws; this rule adds no third class.
+Binds text you write into a **durable** file — one read after the round that wrote it: this plugin's agent, command and instruction definitions, the adopter's auto-loaded root instruction file and conventions documents, the standing tracked artifacts under `<state_dir>` (`lessons.md`), and code comments. It never binds a round's **point-in-time** artifacts under `<state_dir>` — plans, reviews, findings, QA reports, statistics — where detail is the product and compressing one is a defect.
 
-**The test — delete the line: who now reaches the wrong answer?** Keep it if a reader you can name would do the wrong thing, or fail to do a required thing, without it. Drop it if the answer is nobody. "It explains why" is not an answer; name the reader. The test reads the text, not a file's layout, heading set or length, and there is no word count, line budget, ratio or comment-density target — nor may one be introduced: a volume measure is gamed by splitting sentences and says nothing about whether a line carries a rule.
+**The test — delete the line: who now reaches the wrong answer?** Keep it if a reader you can name would do the wrong thing, or fail to do a required thing, without it; drop it if nobody would. "It explains why" is not an answer; name the reader. The test reads the text, not a file's layout, heading set or length: there is no word count, line budget, ratio or comment-density target, and none may be introduced.
 
-**Agent definitions take the stricter bar.** They are system prompts, resident for the session and paid on every dispatch: state the rule, never the argument for it. An instruction or conventions document may carry the one sentence a reader needs to apply the rule correctly at the point of use.
+**Agent definitions take the stricter bar:** state the rule, never the argument for it. An instruction or conventions document may carry the one sentence a reader needs to apply the rule correctly at the point of use.
 
-**Rationale that must be recorded goes where nothing loads it** — the unit's detail file under `<state_dir>`, its review findings, the commit message. "No rationale in the file" never means "do not record why". The standing artifacts named above are in reach and are not that home: what an entry there carries is what a future run acts on — the one-line rule, the measured numbers and the class each divergence is filed under — never the argument for it.
+**Rationale that must be recorded goes where nothing loads it** — the unit's detail file under `<state_dir>`, its review findings, the commit message. A standing artifact's entry carries only what a future run acts on: the one-line rule, the measured numbers and the class each divergence is filed under.
 
-**Code comments take the same test.** A comment earns its place by saying what the code cannot: a non-obvious constraint, a deliberate divergence and the source it diverges from, a bug being worked around, an ordering that matters. A comment whose content is its own symbol's name restates what the reader already had from the name. Two shipped requirements survive unchanged and this rule never overrides them: a layer conventions document that **requires** a file-header doc comment for a named deliberate divergence, and the reviewers' shipped rule that a parity justification buried in a doc comment does not waive the requirement. The documentation corpus the docs phase produces is out of reach — it is written for a reader who has never seen the code, and `${CLAUDE_PLUGIN_ROOT}/agents/docs-writer.md` owns its contract.
+**Code comments take the same test.** A comment earns its place by saying what the code cannot: a non-obvious constraint, a deliberate divergence and the source it diverges from, a bug being worked around, an ordering that matters. A comment that restates its own symbol's name does not. This rule never overrides two shipped requirements: a layer conventions document that **requires** a file-header doc comment for a named deliberate divergence, and the reviewers' rule that a parity justification buried in a doc comment does not waive the requirement. The documentation corpus the docs phase produces is out of this rule's reach.
 
-This rule is stated here because it is harness doctrine rather than a project convention; where the adopter's own rules document restates it (the file `layers[].conventions` names), nothing above depends on that restatement.
+This rule binds whether or not the adopter's rules document (the file `layers[].conventions` names) restates it.
 
 ## Read first
 
@@ -89,41 +89,33 @@ Everything from here through the end of `## Writing an artifact — consumer, ev
 
 ### Keep agent and instruction files focused
 
-When you write or edit an agent / instruction / command definition, keep it focused:
+When you write or edit an agent / instruction / command definition:
 
 - **Reference, don't restate.** Point at the canonical rule-source file instead of copying its content inline.
-- **Don't duplicate** content that already lives in a file the same agent is told to read (its own `## Read first` list, or a context file the project's own instructions point it at). Inline restatement bloats the orchestrator and agent context windows, and risks the agent treating the stale-able inline copy as authoritative.
-- The right shape is a **thin pointer**: name *what to do / what to verify* in one line and cite the source file, not the rule body.
-- **Exception — leave load-bearing inline content alone.** If the inline text is not actually a duplicate of a referenced file, or removing it would change behaviour (routing tables, argument shapes, output-format contracts, judgement guidance that exists nowhere else), keep it. The goal is removing *restated* content, not stripping every file to bare references.
+- **Don't duplicate** content from a file the same agent is told to read (its own `## Read first` list, or a context file the project's own instructions point it at).
+- The right shape is a **thin pointer**: one line naming what to do or verify, citing the source file.
+- **Exception — leave load-bearing inline content alone:** text that duplicates no referenced file, or whose removal would change behaviour (routing tables, argument shapes, output-format contracts, judgement guidance that exists nowhere else).
 
 ## Writing an artifact — consumer, evidence, and scope
 
-**Catch-all layer only** (`layers[].path` = `"."`), per `## Catch-all layer additions` above.
-
-The rules below govern the **artifacts** you author — the run artifacts under `<state_dir>`, decision records, manifests, instruction and sample files — not the scripts, configs or code files you edit.
+These rules govern the **artifacts** you author — the run artifacts under `<state_dir>`, decision records, manifests, instruction and sample files — not the scripts, configs or code files you edit.
 
 ### Name the consumer, then place the evidence
 
-Before you write an artifact, name — **in the artifact itself**, in one line near the top — who reads this and what decision they make with it. A file that cannot name its consumer has no way to know when it is finished.
+Name, in one line near the top of the artifact itself, who reads it and what decision they make with it. Put the content that serves that decision **first** — the rows, the list, the answer — and keep supporting material (verification tables, derivations, reconciliations, audit trails) **in full**, after the payload or in a sibling file the payload links to.
 
-Then order it so the content that serves that decision comes **first**: the rows, the list, the answer. Supporting material — verification tables, derivations, reconciliations, audit trails — is kept **in full** and placed **after** the payload, or in a sibling file the payload links to.
-
-This is a **placement** rule, not a licence to publish less. Every figure you publish still comes from a command you actually ran in this session, and moving the evidence out of the reader's path never means skipping it. Where the unit's detail file says where the evidence should live, that wins. When you are **editing** an existing file rather than authoring a new one, this rule does not license an insert near the top: if any file cites that path by line number — probe with `grep -rno "<filename>:[0-9]*"` over the project's own agent / instruction surface and `<state_dir>` — append below every existing anchor and re-verify each still resolves.
+This is a **placement** rule, never a licence to publish less: every figure you publish comes from a command you ran in this session. Where the unit's detail file says where the evidence lives, that wins. When **editing** an existing file, this rule licenses no insert near the top: if any file cites that path by line number — probe with `grep -rno "<filename>:[0-9]*"` over the project's own agent / instruction surface and `<state_dir>` — append below every existing anchor and re-verify each still resolves.
 
 ### Never publish a statistic you can invalidate or did not measure
 
-Two classes of sentence cause repeated review churn and neither is worth its cost.
+- **Statistics about your own output** — the size of your section, the lines your diff adds, how many sites the row you are writing cites, how many times your own file matches a probe. State the **generating command** and a **category** of result instead.
+- **Claims beyond what you measured** — superlatives and scope fences about work you did not do: "the widest", "the only section that…", "every other family publishes X". Scope every claim to what you measured, and say what you measured it over.
 
-- **Statistics about your own output** — the size of your section, the lines your diff adds, how many sites the row you are writing cites, how many times your own file matches a probe. Each is false the moment you edit again, and every later edit re-opens it. State the **generating command** and a **category** of result instead.
-- **Claims beyond what you measured** — superlatives and scope fences about work you did not do: "the widest", "the only section that…", "every other family publishes X". You cannot verify a sibling section you did not write, and it changes under you when its owner edits it. Scope every claim to what you actually measured, and say what you measured it over.
-
-**Carve-out:** where a count about the artifact *is* the deliverable — a story index's story-point total, a statistics file's rates, a reconciliation step explicitly asked to total the rows — the count is the payload. Publish it, and name the command that produced it.
+**Carve-out:** where a count about the artifact *is* the deliverable — a story index's story-point total, a statistics file's rates, a reconciliation step explicitly asked to total the rows — publish it, and name the command that produced it.
 
 ### Match a sibling's schema, not its length
 
-When you read sibling files or earlier sections to find conventions, copy their **schema** — the same fields, the same section order, the same heading forms — and let length follow your own content. Do **not** match a prior section's verbosity for consistency's sake: matching a long precedent ratchets every later unit longer, because under-matching an established pattern reads as under-delivering, and the effect compounds across a multi-unit plan. Under-matching a verbose sibling is not under-delivering.
-
-The same discipline bounds your own content, not only a sibling's: `## Minimal prose — every line carries a rule` above.
+Copy a sibling file's or earlier section's **schema** — the same fields, the same section order, the same heading forms — and let length follow your own content. Under-matching a verbose sibling is not under-delivering. Your own content is bounded by `## Minimal prose — every line carries a rule` above.
 
 ## Working modes
 
