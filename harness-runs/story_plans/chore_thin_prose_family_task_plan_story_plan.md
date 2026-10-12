@@ -29,7 +29,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_task
 5. [x] **Task 5** — Thin `task-plan-reviewer.md` from the intro through `## Process`, moving `sample_task_plan.md` to on demand _(layer: plugin)_ _(points: 15)_
 6. [x] **Task 6** — Thin `task-plan-reviewer.md` structure checks, pointing the register shape at the writer's `**Scope closure:**` bullet _(layer: plugin)_ _(points: 15)_
 7. [x] **Task 7** — Thin `task-plan-reviewer.md` architecture, granularity, parity and completeness checks _(layer: plugin)_ _(points: 20)_
-8. [ ] **Task 8** — Measure both agents' up-front words and check frozen text and anchors against `4cbe7f72` _(layer: general)_ _(points: 10)_
+8. [x] **Task 8** — Measure both agents' up-front words and check frozen text and anchors against `4cbe7f72` _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
@@ -124,5 +124,5 @@ Measured by Task 8's probe. `Before` at `4cbe7f72`: the definition + `## The tes
 
 | Agent | Before — definition | Before — up-front | After — definition | After — up-front | Δ |
 |---|---|---|---|---|---|
-| task-plan-writer | 6335 | 11168 | | | |
-| task-plan-reviewer | 5776 | 10609 | | | |
+| task-plan-writer | 6335 | 11168 | 4249 | 7683 | -3485 |
+| task-plan-reviewer | 5776 | 10609 | 4247 | 7681 | -2928 |
