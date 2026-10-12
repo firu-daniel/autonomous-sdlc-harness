@@ -48,7 +48,7 @@ The verification bar for the branch as a whole — `cli/test` and `scripts/run-g
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_branch_review/task_<K>_plan.md`. Ordered bottom-up by ship sequence, with the catch-all layer last.
 
 1. [x] **Task 1** — Thin the blocks `branch-reviewer` and `skeptic-reviewer` share, identically in both, and write the family check probe _(layer: plugin)_ _(points: 15)_
-2. [ ] **Task 2** — Thin `branch-reviewer`'s intro, `## Invocation contract` and `## Read first` _(layer: plugin)_ _(points: 10)_
+2. [x] **Task 2** — Thin `branch-reviewer`'s intro, `## Invocation contract` and `## Read first` _(layer: plugin)_ _(points: 10)_
 3. [ ] **Task 3** — Thin `branch-reviewer`'s `## Process`: Pass 1, Pass 0 and Pass 2 _(layer: plugin)_ _(points: 20)_
 4. [ ] **Task 4** — Thin `branch-reviewer`'s `## Findings format` index bullet, `## Common findings to look for` and `## Output contract` _(layer: plugin)_ _(points: 15)_
 5. [ ] **Task 5** — Thin `skeptic-reviewer`'s intro, `## What you are NOT`, its own `## Resolved values` row and `## Invocation contract` _(layer: plugin)_ _(points: 15)_
