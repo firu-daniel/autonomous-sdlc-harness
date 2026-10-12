@@ -51,7 +51,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_bran
 2. [x] **Task 2** — Thin `branch-reviewer`'s intro, `## Invocation contract` and `## Read first` _(layer: plugin)_ _(points: 10)_
 3. [x] **Task 3** — Thin `branch-reviewer`'s `## Process`: Pass 1, Pass 0 and Pass 2 _(layer: plugin)_ _(points: 20)_
 4. [x] **Task 4** — Thin `branch-reviewer`'s `## Findings format` index bullet, `## Common findings to look for` and `## Output contract` _(layer: plugin)_ _(points: 15)_
-5. [ ] **Task 5** — Thin `skeptic-reviewer`'s intro, `## What you are NOT`, its own `## Resolved values` row and `## Invocation contract` _(layer: plugin)_ _(points: 15)_
+5. [x] **Task 5** — Thin `skeptic-reviewer`'s intro, `## What you are NOT`, its own `## Resolved values` row and `## Invocation contract` _(layer: plugin)_ _(points: 15)_
 6. [ ] **Task 6** — Thin `skeptic-reviewer` from `## Read first` through `## Output contract` _(layer: plugin)_ _(points: 20)_
 7. [ ] **Task 7** — Thin `review-plan-reviewer`'s intro, `## Invocation contract`, `## Read first` and `## Process` _(layer: plugin)_ _(points: 15)_
 8. [ ] **Task 8** — Thin `review-plan-reviewer`'s `## What to check`, `### False positives` and `### Missed checks` _(layer: plugin)_ _(points: 15)_
