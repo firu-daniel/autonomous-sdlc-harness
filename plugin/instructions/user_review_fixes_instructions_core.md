@@ -175,7 +175,7 @@ Now run **Phase E (E.0–E.4) of `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orches
 - The **skip-`[x]` resume behaviour** is inherited too (Phase E.1): the QA loop dispatches the qa-tester only for readiness entries still `[ ]` and skips `[x]` ones, so re-running QA runs only the remaining tests. After this flow's QA.0 augment adds/revises tests, those new/revised entries are `[ ]` and get run; previously-passed `[x]` tests are skipped. If the augmented index is **all `[x]`**, the E.1 short-circuit treats QA as already complete (no loop). Do not restate the mechanics — they live in Phase E.1.
 - Apply this flow's **safety contract** (above) before every dispatch, and count every QA dispatch against this flow's `MAX_TOTAL_DISPATCHES`. Heartbeat labels use a `QA` phase tag, e.g. `[QA · qa · test 3 · iter 0] → qa-tester  (#N)`, `[QA · qa · test 3 · mark-pass] → committer  (#N)` (the inherited per-test mark-pass committer dispatch), and `[QA · Finding 2 · presentation · iter 0] → layer-implementer  (#N)`.
 
-When the round verdict is PASS (no `[ ]` entries remain in `<ui_test_index>` after the run, E.2), tear down the dev server and go to Phase G. On any halt during this phase, tear the dev server down before stopping.
+When the round verdict is PASS (no `[ ]` entry remains in `<ui_test_index>` after the run except tests that returned the per-test blocked line `error: blocked — test <T>: <one-line cause>` this round, E.2), tear down the dev server and go to Phase G. On any halt during this phase, tear the dev server down before stopping.
 
 ---
 
