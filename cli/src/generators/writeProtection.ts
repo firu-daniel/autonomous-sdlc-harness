@@ -81,7 +81,8 @@ function libraryDir(): string {
 }
 
 /**
- * The write-protected set, in a fixed order: the unsandboxed wrappers and their library, the hooks
+ * The write-protected set, in a fixed order: the main checkout's copy of every top-level outer-loop
+ * script (the unsandboxed wrappers first) and the wrappers' library, the hooks
  * directories, the MCP launch surface, the plugin roots, the main repository's git configuration and
  * the main checkout's configuration file.
  */
@@ -103,6 +104,16 @@ export function protectedPaths({
       path: outerLoopScriptPath(repoRoot, config, outerLoopRelativePath(row)),
       kind: 'file',
       reason: `the main checkout's ${row.file} runs outside the sandbox`,
+    });
+  }
+  for (const row of OUTER_LOOP_SCRIPTS.filter(
+    (script) =>
+      script.subdir === undefined && script.runsUnsandboxed !== true && script.file !== DOCS_SEARCH_SERVER_SCRIPT_NAME,
+  )) {
+    paths.push({
+      path: outerLoopScriptPath(repoRoot, config, outerLoopRelativePath(row)),
+      kind: 'file',
+      reason: `the run watcher, the remote job or a person runs the main checkout's ${row.file} outside the sandbox`,
     });
   }
   paths.push({

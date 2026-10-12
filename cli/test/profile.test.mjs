@@ -1071,6 +1071,19 @@ test('every path that runs outside the sandbox is write-protected on both sides'
     // The worktree's copy runs sandboxed, so it needs no protection.
     assertUnprotected(profile, join(glob, SCRIPTS_DIR, outerLoopRelativePath(row)));
   }
+  // The watcher, the remote job or a person runs the main checkout's other top-level scripts unsandboxed.
+  const topLevelRows = OUTER_LOOP_SCRIPTS.filter(
+    (script) =>
+      script.subdir === undefined && script.runsUnsandboxed !== true && script.file !== DOCS_SEARCH_SERVER_SCRIPT_NAME,
+  );
+  assert.ok(
+    topLevelRows.some((row) => row.file === 'autonomous-notify.sh'),
+    'the outer-loop table has no top-level autonomous-notify.sh row',
+  );
+  for (const row of topLevelRows) {
+    assertProtected(profile, join(dir, SCRIPTS_DIR, row.file), 'file');
+    assertUnprotected(profile, join(glob, SCRIPTS_DIR, row.file));
+  }
   assertProtected(profile, join(dir, SCRIPTS_DIR, LIB_SUBDIR), 'directory');
   assertProtected(profile, join(dir, githooks), 'directory');
   assertProtected(profile, join(glob, githooks), 'directory');

@@ -110,8 +110,8 @@ artifacts quote no machine path, so clauses (2) and (3) had nothing left to rewr
 and the home-directory and account-name fallbacks never fired. In that file 28 machine-path
 occurrences became 0. A later re-render of its sandbox, permission-mode and `deny` entries ran the
 same three clauses, and on that pass the home-directory clause fired: the credential `Read` denies
-name the generating machine's home directory, which became `/workspace`. The file now carries 106
-`/workspace`-rooted occurrences across 91 lines: 75 `/workspace/notes-app`, nineteen of them the
+name the generating machine's home directory, which became `/workspace`. The file now carries 154
+`/workspace`-rooted occurrences across 127 lines: 123 `/workspace/notes-app`, nineteen of them the
 sibling worktree glob `/workspace/notes-app-*`; 30 home-directory ones, the
 `Read(//workspace/.ssh)` family; and one bare `/workspace`. Every occurrence was substituted, **prose included** — the two `_comment`
 sentences that quote the file rules and the sibling-glob relation, every `Read` / `Edit` / `Write`
