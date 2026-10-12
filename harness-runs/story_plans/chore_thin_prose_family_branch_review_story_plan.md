@@ -55,7 +55,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_bran
 6. [x] **Task 6** — Thin `skeptic-reviewer` from `## Read first` through `## Output contract` _(layer: plugin)_ _(points: 20)_
 7. [x] **Task 7** — Thin `review-plan-reviewer`'s intro, `## Invocation contract`, `## Read first` and `## Process` _(layer: plugin)_ _(points: 15)_
 8. [x] **Task 8** — Thin `review-plan-reviewer`'s `## What to check`, `### False positives` and `### Missed checks` _(layer: plugin)_ _(points: 15)_
-9. [ ] **Task 9** — Thin `review-plan-reviewer`'s `### Unactionable gates` and parity spot-check _(layer: plugin)_ _(points: 10)_
+9. [x] **Task 9** — Thin `review-plan-reviewer`'s `### Unactionable gates` and parity spot-check _(layer: plugin)_ _(points: 10)_
 10. [ ] **Task 10** — Measure the three definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
