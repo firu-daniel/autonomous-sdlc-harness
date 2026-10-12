@@ -86,7 +86,7 @@ The former residual *"a rewritten `.git` pointer or `commondir` is not detected"
 3. [x] **Task 2** — Render the strict sandbox block, the network denies and the two named unsandboxed wrappers into the unattended profile _(layer: cli)_ _(points: 20)_
 4. [x] **Task 23** — Deny credential reads on both sides: `sandbox.credentials` and the file tools' `Read` rules _(layer: cli)_ _(points: 15)_
 5. [x] **Task 3** — Protect every path that runs outside the sandbox, on both sides of the profile _(layer: cli)_ _(points: 20)_
-6. [ ] **Task 4** — Add the per-working-copy config refusal and the hooks pin to the run library, and apply both in `push-branch.sh` _(layer: cli)_ _(points: 20)_
+6. [x] **Task 4** — Add the per-working-copy config refusal and the hooks pin to the run library, and apply both in `push-branch.sh` _(layer: cli)_ _(points: 20)_
 7. [ ] **Task 5** — Apply the refusal and the pin in `refresh-branch.sh`, and let it refresh a named checkout _(layer: cli)_ _(points: 15)_
 8. [ ] **Task 24** — Make both unsandboxed wrappers refuse any target but the main checkout or a worktree it lists _(layer: cli)_ _(points: 20)_
 9. [ ] **Task 6** — Add `doctor`'s `profile-sandbox` check _(layer: cli)_ _(points: 15)_

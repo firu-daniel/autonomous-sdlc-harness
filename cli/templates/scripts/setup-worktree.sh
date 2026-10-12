@@ -185,16 +185,18 @@ fi
 # absolute path. The value written here is therefore ABSOLUTE and
 # WORKTREE-SCOPED, so each working copy resolves to its own tracked hook.
 # Idempotent: both the `config` writes and the `chmod` are no-ops on a re-run.
-hooks_rel="$(hr_githooks_dir "$top")" || hooks_rel=""
-hooks_dir="$top/$hooks_rel"
-if [ -n "$hooks_rel" ] && [ -f "$hooks_dir/pre-push" ]; then
+# The value comes from the library because push-branch.sh refuses any other
+# value here (`hr_worktree_config_check_var`).
+hooks_dir="$(hr_worktree_hooks_path "$top")" || hooks_dir=""
+if [ -n "$hooks_dir" ] && [ -f "$hooks_dir/pre-push" ]; then
   chmod +x "$hooks_dir/pre-push" || true
   # NOTE: `extensions.worktreeConfig true` is a one-way, REPOSITORY-GLOBAL
   # switch — once enabled it changes config resolution for EVERY working copy
   # sharing this `.git`, including older ones that have not re-run this script.
   # It is safe here because `core.hooksPath` is the only worktree-scoped value
   # and every active working copy re-runs this script; keep that invariant if
-  # you add another `--worktree` setting.
+  # you add another `--worktree` setting — push-branch.sh refuses to push from
+  # a working copy whose `config.worktree` holds any other key.
   if git -C "$top" config extensions.worktreeConfig true &&
     git -C "$top" config --worktree core.hooksPath "$hooks_dir"; then
     echo "setup-worktree.sh: pre-push hook installed (core.hooksPath -> $hooks_dir)"

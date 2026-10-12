@@ -23,8 +23,9 @@
 # neither and draws a prompt an unattended run cannot answer.
 #
 # EVERY FAILURE PATH IS NON-FATAL (exit 0). A non-git directory, a detached
-# HEAD, a protected branch, a configuration that cannot be resolved, or a failed
-# push (a transient network, say) is made VISIBLE with a one-line message but
+# HEAD, a protected branch, a configuration that cannot be resolved, a
+# per-working-copy configuration it does not trust, a hooks directory it will
+# not pin, or a failed push (a transient network, say) is made VISIBLE with a one-line message but
 # must NEVER abort the calling run — a stale remote is recoverable and a halted
 # run is not. That is why this script uses `set -uo pipefail` deliberately
 # WITHOUT `set -e`, and why even the fail-closed arm below exits 0: it refuses
@@ -71,6 +72,32 @@
 # changed, and nothing at all in a repository whose integration branch is named
 # something else.
 #
+# THE PER-WORKING-COPY CONFIG IS NOT TRUSTED. The main checkout's copy of this
+# script runs OUTSIDE the sandbox, so any git configuration a sandboxed command
+# could write would run with the wrapper's reach. In a linked worktree that is
+# `.git/worktrees/<name>/config.worktree`: the sandbox can write it, and its path
+# differs per worktree, so no profile entry can name it. `setup-worktree.sh`
+# writes exactly one key there, `core.hooksPath`, so before its first git call
+# this script refuses unless that file is absent, empty, or holds that one key at
+# the value `setup-worktree.sh` writes (`hr_worktree_config_check_var`); a
+# refusal names each offending key and never its value. Every git call after
+# the check then pins `core.hooksPath` to the MAIN repository's configured hooks
+# directory (`hr_pinned_hooks_path`), not the worktree's: the worktree's hooks
+# directory is sandbox-writable, and on Linux the globbed `denyWrite` that would
+# cover it is skipped. The pin accepts only `<main>/<githooksDir>` or
+# `<main>/.git/hooks` — the two directories the permission profile
+# write-protects on both sides — compared against the main checkout's own
+# `harness.config.json`, which the profile also protects; any other directory,
+# such as a foreign `core.hooksPath` `init` left in place, is refused. The pin is
+# exported as `GIT_CONFIG_COUNT` for the library's git calls, which needs git
+# 2.31 or newer — an older git ignores it — and every git call this file spells
+# also carries an explicit `-c core.hooksPath`, which pins on any git.
+# Residual: the watcher's **own** git calls in a worktree a sandboxed session has
+# written to are outside this branch's two wrappers. Examples are its staging
+# and commit of a dropped user review, and its `status`, `fetch` and `merge`
+# there. They still read that worktree's `config.worktree` and its hooks
+# directory.
+#
 # WHAT IT NEVER DOES. It performs only a fast-forward push of already-committed
 # work: no `--force`, no `--force-with-lease`, no history-rewriting flag, no
 # commit of its own, and no non-zero exit, and never pushes back a branch it
@@ -81,7 +108,10 @@
 # loudly, and is never fetched, rebased or retried").
 #
 # Usage: push-branch.sh [<repo-dir>]
+#        bash <main checkout>/<scripts_dir>/push-branch.sh <worktree>
 #   <repo-dir>  worktree/repository to operate in (default: $PWD)
+#   The second form, the main checkout's copy aimed at a worktree, is the one
+#   the permission profile runs unsandboxed.
 #
 # REPRO — reproduce any decision by hand, against a throwaway fixture:
 #
@@ -113,6 +143,35 @@
 #                     git -C "$c" commit -qm other --allow-empty; git -C "$c" push -q
 #                     git -C "$d" commit -qm mine --allow-empty; push-branch.sh "$d"
 #                     -> exit 0, a "(not retried)" line, one push attempt
+#
+#   The per-working-copy check and the pin, from a linked worktree (`githooksDir`
+#   takes its default, `githooks`):
+#   mkdir -p "$d/githooks" "$d/scripts"; cp -R <this script> <its lib/> "$d/scripts/"
+#   printf '%s\n' '#!/bin/sh' "echo main >> $d.marker" > "$d/githooks/pre-push"
+#   chmod +x "$d/githooks/pre-push"; git -C "$d" config core.hooksPath githooks
+#   git -C "$d" add -A && git -C "$d" commit -qm hooks
+#   w=$(mktemp -d)/wt; git -C "$d" worktree add -q -b feat_w "$w"
+#   git -C "$w" config extensions.worktreeConfig true
+#   git -C "$w" config --worktree core.hooksPath "$(cd -P "$w" && pwd -P)/githooks"
+#   printf '%s\n' '#!/bin/sh' "echo wt >> $d.marker" > "$w/githooks/pre-push"
+#
+#   clean worktree    bash "$d/scripts/push-branch.sh" "$w"
+#                     -> exit 0; `git -C "$b" rev-parse feat_w` equals
+#                     `git -C "$w" rev-parse HEAD`
+#   the pin           cat "$d.marker"   -> `main` only: the worktree's own
+#                     pre-push hook never ran
+#   a foreign key     git -C "$w" config --worktree user.name x
+#                     bash "$d/scripts/push-branch.sh" "$w"
+#                     -> exit 0, a "refusing to push:" line naming user.name and
+#                     not its value, "$b" unchanged
+#   wrong hooks value git -C "$w" config --worktree --unset user.name
+#                     git -C "$w" config --worktree core.hooksPath /tmp
+#                     bash "$d/scripts/push-branch.sh" "$w"
+#                     -> exit 0, a "refusing to push:" line, "$b" unchanged
+#   a foreign pin     git -C "$d" config core.hooksPath .husky; re-run on a
+#                     clean worktree
+#                     -> exit 0, a "refusing to push:" line naming "$d/.husky",
+#                     "$b" unchanged
 
 set -uo pipefail
 
@@ -143,6 +202,30 @@ fi
 . "$hr_lib"
 
 repo_dir="${1:-$PWD}"
+
+# THE PER-WORKING-COPY CONFIG IS NOT TRUSTED (header): settled before the first
+# git call, each function called directly so its variables survive.
+top_nogit="$(hr_checkout_top_nogit "$repo_dir")" || top_nogit=""
+if [ -z "$top_nogit" ]; then
+  echo "push-branch.sh: '$repo_dir' is not a git repository — nothing to push"
+  exit 0
+fi
+if ! hr_worktree_config_check_var "$top_nogit"; then
+  echo "push-branch.sh: refusing to push: $HR_WT_CONFIG_REFUSAL"
+  exit 0
+fi
+if ! hr_pinned_hooks_path "$top_nogit"; then
+  if [ -n "$HR_PINNED_HOOKS_REFUSAL" ]; then
+    echo "push-branch.sh: refusing to push: $HR_PINNED_HOOKS_REFUSAL"
+  else
+    echo "push-branch.sh: refusing to push: could not resolve the hooks directory to pin for '$top_nogit'"
+  fi
+  exit 0
+fi
+pinned="$HR_PINNED_HOOKS_PATH"
+# Pins the library helpers' git calls below; every call spelled here also
+# carries `-c`, which an older git than 2.31 still honours.
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$pinned"
 
 # Resolve the repository top. Not a git repository => warn and skip (non-fatal).
 top="$(hr_repo_root "$repo_dir")"
@@ -178,13 +261,13 @@ esac
 
 # A BRANCH ITS REMOTE DELETED STAYS DELETED (header). Once, before the retry
 # loop; a branch tracking nothing is a first push and skips the check.
-track_merge="$(git -C "$top" config --get "branch.$branch.merge" 2>/dev/null)"
+track_merge="$(git -C "$top" -c core.hooksPath="$pinned" config --get "branch.$branch.merge" 2>/dev/null)"
 if [ -n "$track_merge" ] ||
-  git -C "$top" rev-parse --verify --quiet "refs/remotes/origin/$branch" >/dev/null 2>&1; then
-  track_remote="$(git -C "$top" config --get "branch.$branch.remote" 2>/dev/null)"
+  git -C "$top" -c core.hooksPath="$pinned" rev-parse --verify --quiet "refs/remotes/origin/$branch" >/dev/null 2>&1; then
+  track_remote="$(git -C "$top" -c core.hooksPath="$pinned" config --get "branch.$branch.remote" 2>/dev/null)"
   [ -n "$track_remote" ] || track_remote=origin
   track_ref="${track_merge:-refs/heads/$branch}"
-  git -C "$top" ls-remote --exit-code --heads "$track_remote" "$track_ref" >/dev/null 2>&1
+  git -C "$top" -c core.hooksPath="$pinned" ls-remote --exit-code --heads "$track_remote" "$track_ref" >/dev/null 2>&1
   ls_status=$?
   case "$ls_status" in
     0) ;;
@@ -201,10 +284,10 @@ fi
 # Push the branch; the deleted-on-its-remote check above has already run. Use
 # the existing upstream when one is configured; otherwise set it on the fly, so
 # a branch with no upstream is still pushed. Fast-forward only.
-if git -C "$top" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
-  push_cmd=(git -C "$top" push)
+if git -C "$top" -c core.hooksPath="$pinned" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+  push_cmd=(git -C "$top" -c core.hooksPath="$pinned" push)
 else
-  push_cmd=(git -C "$top" push --set-upstream origin "$branch")
+  push_cmd=(git -C "$top" -c core.hooksPath="$pinned" push --set-upstream origin "$branch")
 fi
 
 # Every failure line keeps the `push failed for <branch>` prefix: logs and

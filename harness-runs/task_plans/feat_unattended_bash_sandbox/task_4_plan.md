@@ -56,3 +56,12 @@ No function in the library parses a `.git` pointer file or a `commondir` file ex
 - Case (a)'s marker assertion is the end-to-end proof that the pin redirects the hooks of an unsandboxed push. A pass on (b) alone proves nothing about the pin.
 - Grep `push-branch.sh` for a `git` call after the check that carries no `-c core.hooksPath`, and find none.
 - Grep `harness-run-lib.sh` for `commondir` and for `gitdir:`; every hit outside comments lies inside `hr_gitdir_nogit` or `hr_common_dir_nogit`.
+
+**Deviations from plan:**
+
+- Added an eighth library function, `hr_canonical_path_nogit`, as the one canonicalizer `hr_pinned_hooks_path` uses for both sides of its comparison. For a path that does not exist it canonicalizes the longest existing ancestor with `cd -P` and appends the lexically normalized rest, rather than using the purely lexical path: on macOS a lexical `/var/...` never equals the physical `/private/var/...` of the other side.
+- `hr_checkout_top_nogit` makes `<dir>` physical (`cd -P`) before walking up, so its answer is the same string `git rev-parse --show-toplevel` gives — the base `setup-worktree.sh` builds the written `core.hooksPath` on. Without it, a symlinked path to a worktree (macOS `/var` → `/private/var`) is refused as a wrong hooks value.
+- `hr_worktree_config_check_var` reads the file with `git -C / config --file <f> --null --list`, in one call fed through a process substitution with a trailing `hr-status=<n>` record carrying git's exit status, so a value holding a newline cannot pose as a key and a parse failure is not lost to the substitution.
+- `hr_pinned_hooks_path` reads `core.hooksPath` with `--path` added, so a `~/`-relative value is expanded the way git expands it.
+- The library header's JURISDICTION and NAMING paragraphs and its bash 3.2 case-folding sentence are amended to admit the new section and its three `HR_` variables.
+- Verification: the byte-identity suite (`cli/test/outer-loop-scripts.test.mjs`) and `commands.test` are deferred to the Run gates phase, as the plan states.

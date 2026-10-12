@@ -51,7 +51,8 @@
 #
 # JURISDICTION. Configuration is read at `<repo_root>/harness.config.json` and
 # nowhere else, where `<repo_root>` is resolved from a bare
-# `git rev-parse --show-toplevel` at the directory the caller names. Nothing
+# `git rev-parse --show-toplevel` at the directory the caller names — or, in the
+# git-free section, at the checkout `hr_checkout_top_nogit` finds. Nothing
 # here reads an environment variable in place of a configured value, and nothing
 # here writes inside a repository except through the named write exceptions
 # below.
@@ -216,7 +217,8 @@
 # watcher calls these on every tick: `HR_CFG_PID`, `HR_CFG_ROOT`,
 # `HR_CFG_STATE`, `HR_CFG_FILE`, `HR_CFG_SCALARS`, `HR_CFG_LISTS`,
 # `HR_CFG_VALUE`, `HR_CFG_COMMAND_KEYS`, `HR_PROTECTED_DEFAULT`,
-# `HR_INBOX_KIND`, `HR_INBOX_BRANCH`, the branch derivation's
+# `HR_INBOX_KIND`, `HR_INBOX_BRANCH`, `HR_WT_CONFIG_REFUSAL`,
+# `HR_PINNED_HOOKS_PATH`, `HR_PINNED_HOOKS_REFUSAL`, the branch derivation's
 # `HR_BRANCH_SLUG_MAX`, `HR_BRANCH_SUFFIX_MAX`, `HR_TAKEN_REMOTE`,
 # `HR_TAKEN_ARTIFACTS` and `HR_TAKEN_WHY`, and the lane's
 # `HR_LANE_RANK`, `HR_LANE_STATE`, `HR_LANE_RESUME_AT`, `HR_LANE_OBSERVED_AT`,
@@ -231,7 +233,7 @@
 #
 # BASH 3.2 IS THE FLOOR. macOS ships `/bin/bash` 3.2, so nothing here uses an
 # associative array, `${var^^}` / `${var,,}`, `mapfile` or `local -n`. The cache
-# below is a string-record store for exactly that reason, and the one
+# below is a string-record store for exactly that reason, and each
 # case-folding step forks `tr` rather than reaching for a 4.x expansion.
 #
 # JQ 1.5 IS THE FLOOR, AND AN OLDER `jq` IS UNRESOLVABLE, NOT ABSENT.
@@ -474,6 +476,270 @@ hr_default_project_name() {
   root=${root##*/}
   [ -n "$root" ] || return 1
   printf '%s\n' "$root"
+}
+
+# ---------------------------------------------------------------------------
+# Git-free resolution and the per-working-copy configuration. A wrapper the
+# permission profile runs OUTSIDE the sandbox calls these before its first git
+# call: any git call loads the target's configuration, including
+# `.git/worktrees/<name>/config.worktree`, which a sandboxed command can write.
+# So nothing in this section runs git except `git -C / config --file <f>`,
+# which reads that one file and loads no repository's configuration.
+#
+# Only `hr_gitdir_nogit` and `hr_common_dir_nogit` parse a `.git` pointer file
+# or a `commondir` file; everything else that needs a gitdir or a common dir
+# calls them.
+# ---------------------------------------------------------------------------
+
+# Print the canonical form of the absolute path <p>: the physical path of its
+# longest existing ancestor (`cd -P`), with the rest appended after `.`, `..`
+# and empty segments are removed lexically. Return 1 for a relative <p>.
+hr_canonical_path_nogit() {
+  local p="${1-}" out="" rest seg head tail=""
+  case "$p" in /*) ;; *) return 1 ;; esac
+  if [ -d "$p" ]; then
+    ( CDPATH= cd -P -- "$p" 2>/dev/null && pwd -P ) || return 1
+    return 0
+  fi
+  rest=${p#/}
+  while [ -n "$rest" ]; do
+    seg=${rest%%/*}
+    if [ "$seg" = "$rest" ]; then rest=""; else rest=${rest#*/}; fi
+    case "$seg" in
+      '' | .) ;;
+      ..) out=${out%/*} ;;
+      *) out="$out/$seg" ;;
+    esac
+  done
+  [ -n "$out" ] || out=/
+  head=$out
+  while [ ! -d "$head" ]; do
+    tail="/${head##*/}$tail"
+    head=${head%/*}
+    [ -n "$head" ] || head=/
+  done
+  head=$( CDPATH= cd -P -- "$head" 2>/dev/null && pwd -P ) || return 1
+  [ "$head" != / ] || head=""
+  out="$head$tail"
+  [ -n "$out" ] || out=/
+  printf '%s\n' "$out"
+}
+
+# Print the nearest ancestor of <dir>, <dir> included, that holds a `.git`
+# entry (directory or pointer file); return 1, printing nothing, when none
+# does. <dir> is made physical first, so the answer matches what
+# `git rev-parse --show-toplevel` prints for the same checkout — the base
+# `setup-worktree.sh` builds the `core.hooksPath` value on.
+hr_checkout_top_nogit() {
+  local dir="${1-}" d
+  [ -n "$dir" ] || return 1
+  d=$( CDPATH= cd -P -- "$dir" 2>/dev/null && pwd -P ) || return 1
+  while :; do
+    if [ -e "$d/.git" ] || [ -L "$d/.git" ]; then
+      printf '%s\n' "$d"
+      return 0
+    fi
+    [ "$d" != / ] || return 1
+    d=${d%/*}
+    [ -n "$d" ] || d=/
+  done
+}
+
+# Print the canonical gitdir of the checkout at <top>: `<top>/.git` when that is
+# a directory; when it is a file whose first line is `gitdir: <p>`, `<p>`
+# (resolved against <top> when relative). Return 1 otherwise.
+hr_gitdir_nogit() {
+  local top="${1-}" line="" p
+  [ -n "$top" ] || return 1
+  if [ -d "$top/.git" ]; then
+    p="$top/.git"
+  elif [ -f "$top/.git" ]; then
+    IFS= read -r line 2>/dev/null <"$top/.git" || [ -n "$line" ] || return 1
+    line=${line%$'\r'}
+    case "$line" in
+      'gitdir: '?*) p=${line#gitdir: } ;;
+      *) return 1 ;;
+    esac
+    case "$p" in /*) ;; *) p="$top/$p" ;; esac
+  else
+    return 1
+  fi
+  ( CDPATH= cd -P -- "$p" 2>/dev/null && pwd -P ) || return 1
+}
+
+# Print the canonical git common dir of the checkout at <top>: the content of
+# `<gitdir>/commondir` resolved against the gitdir when that file exists, else
+# the gitdir itself. Return 1 when `hr_gitdir_nogit` fails, or when the result's
+# basename is not `.git` — the main checkout is that directory's parent, and a
+# common dir with any other name (a bare or a submodule repository) has none.
+hr_common_dir_nogit() {
+  local top="${1-}" gd line="" c out
+  gd=$(hr_gitdir_nogit "$top") || return 1
+  if [ -f "$gd/commondir" ]; then
+    IFS= read -r line 2>/dev/null <"$gd/commondir" || [ -n "$line" ] || return 1
+    line=${line%$'\r'}
+    [ -n "$line" ] || return 1
+    case "$line" in /*) c=$line ;; *) c="$gd/$line" ;; esac
+    out=$( CDPATH= cd -P -- "$c" 2>/dev/null && pwd -P ) || return 1
+  else
+    out=$gd
+  fi
+  case "$out" in */.git) ;; *) return 1 ;; esac
+  printf '%s\n' "$out"
+}
+
+# Print the per-working-copy configuration file of the checkout at <top>:
+# `<gitdir>/config.worktree` (`<top>/.git/config.worktree` for the main
+# checkout). Return 1 when `hr_gitdir_nogit` fails. Whether the file exists is
+# the caller's question.
+hr_worktree_config_file() {
+  local gd
+  gd=$(hr_gitdir_nogit "${1-}") || return 1
+  printf '%s\n' "$gd/config.worktree"
+}
+
+# Print the `core.hooksPath` value `setup-worktree.sh` writes into the checkout
+# at <top>: `<top>/<githooksDir>`. The writer and `hr_worktree_config_check_var`
+# both take it from here, so they cannot drift. Return 1 when `githooksDir`
+# cannot be read from `<top>/harness.config.json`.
+hr_worktree_hooks_path() {
+  local top="${1-}" rel
+  [ -n "$top" ] || return 1
+  rel=$(hr_githooks_dir "$top") || return 1
+  printf '%s\n' "$top/$rel"
+}
+
+# Judge the per-working-copy configuration of the checkout at <top>. Return 0
+# when `hr_worktree_config_file` names no file, an empty one, or one holding
+# exactly one entry, `core.hooksPath`, equal to `hr_worktree_hooks_path <top>`;
+# return 1 otherwise — including a file git cannot parse — with
+# `HR_WT_CONFIG_REFUSAL` set to one sentence naming each offending key, never a
+# value. Prints nothing. Call it directly, never inside `$(…)`.
+#
+# The file is read with `git -C / config --file <f> --null --list`, one call; a
+# trailing `hr-status=<n>` record carries git's exit status out of the process
+# substitution, and no git key can begin with it (a section name holds no `=`).
+# Key names are compared case-insensitively, as git compares section and
+# variable names.
+hr_worktree_config_check_var() {
+  local top="${1-}" f entry name lname value has_value status="" nl
+  local hooks_count=0 hooks_value="" hooks_has_value=0 offending="" parts="" expected
+  HR_WT_CONFIG_REFUSAL=""
+  nl='
+'
+  if ! f=$(hr_worktree_config_file "$top"); then
+    HR_WT_CONFIG_REFUSAL="cannot locate the git directory of '$top', so its per-working-copy configuration cannot be checked"
+    return 1
+  fi
+  [ -e "$f" ] || [ -L "$f" ] || return 0
+  if [ ! -f "$f" ] || [ ! -r "$f" ]; then
+    HR_WT_CONFIG_REFUSAL="$f is not a readable file, so this working copy's configuration is not trusted"
+    return 1
+  fi
+  [ -s "$f" ] || return 0
+
+  while IFS= read -r -d '' entry; do
+    case "$entry" in
+      hr-status=*)
+        status=${entry#hr-status=}
+        continue
+        ;;
+      *"$nl"*)
+        name=${entry%%"$nl"*}
+        value=${entry#*"$nl"}
+        has_value=1
+        ;;
+      *)
+        name=$entry
+        value=""
+        has_value=0
+        ;;
+    esac
+    lname=$(printf '%s' "$name" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+    if [ "$lname" = core.hookspath ]; then
+      hooks_count=$((hooks_count + 1))
+      hooks_value=$value
+      hooks_has_value=$has_value
+    else
+      case ", $offending, " in
+        *", $name, "*) ;;
+        *) offending="${offending:+$offending, }$name" ;;
+      esac
+    fi
+  done < <(git -C / config --file "$f" --null --list 2>/dev/null; printf 'hr-status=%s\0' "$?")
+
+  if [ "$status" != 0 ]; then
+    HR_WT_CONFIG_REFUSAL="git cannot parse $f, so this working copy's configuration is not trusted"
+    return 1
+  fi
+  [ -z "$offending" ] || parts="$f sets $offending, and only core.hooksPath may be set there"
+  if [ "$hooks_count" -gt 1 ]; then
+    parts="${parts:+$parts; }$f sets core.hooksPath more than once"
+  elif [ "$hooks_count" -eq 1 ]; then
+    expected=$(hr_worktree_hooks_path "$top") || expected=""
+    if [ -z "$expected" ]; then
+      parts="${parts:+$parts; }cannot resolve githooksDir from '$top/harness.config.json' to check the core.hooksPath in $f"
+    elif [ "$hooks_has_value" -ne 1 ] || [ "$hooks_value" != "$expected" ]; then
+      parts="${parts:+$parts; }$f sets core.hooksPath to something other than $expected, the value setup-worktree.sh writes"
+    fi
+  fi
+  [ -n "$parts" ] || return 0
+  HR_WT_CONFIG_REFUSAL="$parts; remove the file, then re-run setup-worktree.sh in that working copy"
+  return 1
+}
+
+# Set `HR_PINNED_HOOKS_PATH` to the absolute hooks directory a wrapper pins
+# `core.hooksPath` to for the checkout at <top>, and `HR_PINNED_HOOKS_REFUSAL`
+# to '' or one refusal sentence. Prints nothing; call it directly, never inside
+# `$(…)`, so both variables survive. Return 1 on any failure and on a directory
+# outside the two below.
+#
+# The value is the MAIN repository's configured one — `core.hooksPath` from
+# `<common>/config` (absolute as is, relative joined to `<main>`, unset giving
+# `<common>/hooks`), with `<common>` from `hr_common_dir_nogit` and `<main>` its
+# parent — never the worktree's, which the sandbox can write. It is accepted
+# only when, compared canonically, it equals `<main>/<githooksDir>` (read from
+# the MAIN checkout's `harness.config.json`) or `<common>/hooks`: the two
+# directories the permission profile write-protects. A foreign hooks directory,
+# such as one `init` left in place, is refused.
+hr_pinned_hooks_path() {
+  local top="${1-}" common main value status resolved rel allowed_cfg allowed_git
+  HR_PINNED_HOOKS_PATH=""
+  HR_PINNED_HOOKS_REFUSAL=""
+  if ! common=$(hr_common_dir_nogit "$top"); then
+    HR_PINNED_HOOKS_REFUSAL="cannot locate the main repository's .git directory from '$top', so the hooks directory to pin cannot be judged"
+    return 1
+  fi
+  main=${common%/.git}
+  [ -n "$main" ] || main=/
+
+  value=$(git -C / config --file "$common/config" --path --get core.hooksPath 2>/dev/null)
+  status=$?
+  case "$status" in
+    0) case "$value" in /*) resolved=$value ;; *) resolved="$main/$value" ;; esac ;;
+    1) resolved="$common/hooks" ;;
+    *)
+      HR_PINNED_HOOKS_REFUSAL="git cannot read core.hooksPath from $common/config, so the hooks directory to pin cannot be judged"
+      return 1
+      ;;
+  esac
+
+  if ! rel=$(hr_githooks_dir "$main"); then
+    HR_PINNED_HOOKS_REFUSAL="cannot resolve githooksDir from '$main/harness.config.json', so the hooks directory to pin cannot be judged"
+    return 1
+  fi
+  if ! resolved=$(hr_canonical_path_nogit "$resolved"); then
+    HR_PINNED_HOOKS_REFUSAL="cannot resolve the hooks directory core.hooksPath names in $common/config"
+    return 1
+  fi
+  allowed_cfg=$(hr_canonical_path_nogit "$main/$rel") || allowed_cfg="$main/$rel"
+  allowed_git=$(hr_canonical_path_nogit "$common/hooks") || allowed_git="$common/hooks"
+  if [ "$resolved" = "$allowed_cfg" ] || [ "$resolved" = "$allowed_git" ]; then
+    HR_PINNED_HOOKS_PATH=$resolved
+    return 0
+  fi
+  HR_PINNED_HOOKS_REFUSAL="core.hooksPath in $common/config resolves to $resolved, which is neither $allowed_cfg (githooksDir) nor $allowed_git, the two hooks directories the permission profile write-protects; point core.hooksPath at githooksDir, or set githooksDir to that directory and re-run init so the profile protects it"
+  return 1
 }
 
 # ---------------------------------------------------------------------------
