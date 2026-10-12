@@ -19,7 +19,7 @@ What remains is two containment gaps and five smaller defects. The write protect
 1. [x] **Finding 6** — Refuse a push whose current branch name begins with `-` in `push-branch.sh` _(layer: cli)_
 2. [x] **Finding 4** — Set `failIfUnavailable: false` alongside `enabled: false` under a taken `sandbox.optOut` _(layer: cli, general)_
 3. [x] **Finding 1** — Write-protect the main checkout's copy of every top-level outer-loop script _(layer: cli, general)_
-4. [ ] **Finding 3** — Write-protect the profile and the project settings files whose hooks run outside the sandbox _(layer: cli, general)_
+4. [x] **Finding 3** — Write-protect the profile and the project settings files whose hooks run outside the sandbox _(layer: cli, general)_
 5. [ ] **Finding 2** — Put the `<MAIN_REPO>` push in its own fenced block and Bash call at the four sites that share one with the commit _(layer: plugin)_
 6. [ ] **Finding 5** — Bind `<MAIN_REPO>` to a literal `git worktree list --porcelain` path in the three forks that name a nonexistent watcher environment _(layer: plugin)_
 7. [ ] **Finding 7** — State the sandbox's platform prerequisites and the interim remote-job consequence in `docs/cli.md` and `docs/remote-execution.md` _(layer: general)_

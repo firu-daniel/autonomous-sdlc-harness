@@ -9,8 +9,8 @@
  * `Edit(//<repoRoot>/**)` / `Write(//<repoRoot>/**)` allows would otherwise reach.
  *
  * Every path is built through its owner — the outer-loop table and its path builders, the hooks
- * directory resolver, the MCP wiring's path, the configuration file's name — never joined by hand,
- * so the file protected is the file the writer wrote. `doctor` grades a profile on disk against
+ * directory resolver, the MCP wiring's path, the profile's and the settings files' paths, the
+ * configuration file's name — never joined by hand, so the file protected is the file the writer wrote. `doctor` grades a profile on disk against
  * {@link protectedPaths} and {@link fileToolDenyRules}, so they are the one statement of the set.
  */
 
@@ -31,7 +31,8 @@ import {
   RUN_LIBRARY_SCRIPT_NAME,
   type OuterLoopScript,
 } from './outerLoopScripts.js';
-import { appendReadme, assertUsableInEntry, normalizedRoot } from './profileEntries.js';
+import { appendReadme, assertUsableInEntry, normalizedRoot, PROFILE_PATH } from './profileEntries.js';
+import { SETTINGS_LOCAL_PATH, SETTINGS_PATH } from './projectSettings.js';
 import { MCP_PATH } from './repoRoot.js';
 import { SANDBOX_KEY } from './sandboxProfile.js';
 
@@ -83,7 +84,7 @@ function libraryDir(): string {
 /**
  * The write-protected set, in a fixed order: the main checkout's copy of every top-level outer-loop
  * script (the unsandboxed wrappers first) and the wrappers' library, the hooks
- * directories, the MCP launch surface, the plugin roots, the main repository's git configuration and
+ * directories, the MCP launch surface, the profile and the project settings files, the plugin roots, the main repository's git configuration and
  * the main checkout's configuration file.
  */
 export function protectedPaths({
@@ -135,6 +136,11 @@ export function protectedPaths({
   paths.push(
     { path: join(repoRoot, MCP_PATH), kind: 'file', reason: 'the agent runner starts the MCP servers it declares outside the sandbox' },
     { path: join(glob, MCP_PATH), kind: 'file', reason: "a worktree's MCP servers start outside the sandbox" },
+    { path: join(repoRoot, PROFILE_PATH), kind: 'file', reason: 'the run watcher passes it to every unattended run with --settings' },
+    { path: join(repoRoot, SETTINGS_PATH), kind: 'file', reason: 'Claude Code runs the hooks it declares outside the sandbox' },
+    { path: join(glob, SETTINGS_PATH), kind: 'file', reason: "a worktree's session runs the hooks it declares outside the sandbox" },
+    { path: join(repoRoot, SETTINGS_LOCAL_PATH), kind: 'file', reason: 'Claude Code runs the hooks it declares outside the sandbox' },
+    { path: join(glob, SETTINGS_LOCAL_PATH), kind: 'file', reason: "a worktree's session runs the hooks it declares outside the sandbox" },
   );
   if (retrievalApplies(config)) {
     const docs = outerLoopRelativePath(rowNamed(DOCS_SEARCH_SERVER_SCRIPT_NAME));
@@ -225,6 +231,6 @@ export function applyWriteProtection(profile: JsonObject, { repoRoot, workRoot, 
     profile,
     `WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN FROM INSIDE IT: each path below is in \`sandbox.filesystem.denyWrite\` and has an \`Edit\` and a \`Write\` rule in \`deny\`, because the file tools run outside the sandbox. ${paths
       .map(({ path, reason }) => `${path} - ${reason}`)
-      .join('; ')}. Linux skips a \`denyWrite\` entry containing \`*\`, so there the worktree-glob entries - the worktree's hooks directory and MCP wiring, and its docs-search-server.sh and library when docs retrieval applies - hold on the file-tool side only. A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, is refused by design.`,
+      .join('; ')}. Linux skips a \`denyWrite\` entry containing \`*\`, so there the worktree-glob entries - the worktree's hooks directory, MCP wiring and settings files, and its docs-search-server.sh and library when docs retrieval applies - hold on the file-tool side only. A run's own edit under a protected worktree path, such as a change to its hooks directory or to ${MCP_PATH}, or to ${SETTINGS_PATH}, is refused by design.`,
   );
 }

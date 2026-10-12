@@ -112,6 +112,9 @@ const CLAUDE_DIR = '.claude';
  */
 export const SETTINGS_PATH = `${CLAUDE_DIR}/settings.json`;
 
+/** The adopter's local settings file; never written here, named so `writeProtection.ts` can protect it. */
+export const SETTINGS_LOCAL_PATH = `${CLAUDE_DIR}/settings.local.json`;
+
 /**
  * The flag that supplies the slug when this package's manifest cannot, and the shape it takes —
  * which is also the shape a parsed manifest URL has to match.

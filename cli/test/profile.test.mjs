@@ -1090,6 +1090,11 @@ test('every path that runs outside the sandbox is write-protected on both sides'
   assertProtected(profile, join(dir, '.git', 'hooks'), 'directory');
   assertProtected(profile, join(dir, MCP_PATH), 'file');
   assertProtected(profile, join(glob, MCP_PATH), 'file');
+  assertProtected(profile, join(dir, '.claude', 'settings.autonomous.json'), 'file');
+  assertProtected(profile, join(dir, '.claude', 'settings.json'), 'file');
+  assertProtected(profile, join(glob, '.claude', 'settings.json'), 'file');
+  assertProtected(profile, join(dir, '.claude', 'settings.local.json'), 'file');
+  assertProtected(profile, join(glob, '.claude', 'settings.local.json'), 'file');
   assertProtected(profile, join(dir, '.git', 'config'), 'file');
   assertProtected(profile, join(dir, '.git', 'config.worktree'), 'file');
   assertProtected(profile, join(dir, CONFIG_FILENAME), 'file');
