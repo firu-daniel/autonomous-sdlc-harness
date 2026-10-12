@@ -85,16 +85,16 @@ The fix loop of `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## T
 
 ## What to check
 
-The review is **split**: a thin index at `review_path` plus one self-contained `finding_<N>.md` per finding in `findings_dir`. Check both.
+Check both halves of the split review.
 
 **Index (`review_path`):**
 
 - Has a Context paragraph, then the `## Phase 2 Readiness — Ordered Fix List`, then the `## Must Fix` / `## Should Fix` / `## Nice to Have` finding-pointer sections, then the intentional-divergence call-out section.
 - Findings are grouped into **Must Fix**, **Should Fix**, **Nice to Have**.
-- Each finding under those sections is a plain `### N. Title` heading followed by a **one-line pointer** to its detail file (e.g., `→ [finding_3.md](<branch>_code_review/finding_3.md)`). The index must NOT inline the full description or fix snippet — that lives in the per-finding file. (An index that re-bloats the full descriptions back inline defeats the split; flag it as a Should Fix.)
+- Each finding under those sections is a plain `### N. Title` heading followed by a **one-line pointer** to its detail file (e.g., `→ [finding_3.md](<branch>_code_review/finding_3.md)`). An index that inlines a full description or fix snippet is a Should Fix.
 - Finding *headings* do NOT carry `[ ]` / `[x]` markers (those live only in the readiness section).
 - Within each group, items are sorted by impact (highest blast-radius first).
-- There is a `## Phase 2 Readiness — Ordered Fix List` section placed **immediately after the Context paragraph at the top of the index (before Must Fix)**, ordering fixes by recommended ship sequence (small and safe first, then layered changes, then anything requiring a deploy). The heading text MUST match that exact string — the orchestrator and the committer key off it. A missing section, a mistitled section (e.g. `## Phase 2 readiness`, `## Phase 2 Readiness appendix`), one positioned after the findings sections, or one that contains no `[ ]` entries is a Must Fix. Entries inside the section use the form `N. [ ] **Finding K** — <short title>`; a trailing `_(layer: <one or more of <layer_names>>)_` tag is **correct, not a format break** — the fix loop routes off it without opening the finding body. This section is the single source of truth for the iteration loop; `[ ]` markers anywhere else (sub-step bullets inside individual per-finding files) are informational and the committer does not touch them.
+- A `## Phase 2 Readiness — Ordered Fix List` section sits **immediately after the Context paragraph (before Must Fix)**, ordering fixes by recommended ship sequence (small and safe first, then layered changes, then anything requiring a deploy). The heading text MUST match that exact string — the orchestrator and the committer key off it. A missing section, a mistitled section (e.g. `## Phase 2 readiness`, `## Phase 2 Readiness appendix`), one positioned after the findings sections, or one that contains no `[ ]` entries is a Must Fix. Entries use the form `N. [ ] **Finding K** — <short title>`; a trailing `_(layer: <one or more of <layer_names>>)_` tag is **correct, not a format break**. `[ ]` markers anywhere else (sub-step bullets inside per-finding files) are informational.
 
 **Per-finding files (`findings_dir/finding_<N>.md`):**
 
@@ -114,19 +114,19 @@ The reviewer should NOT flag:
 
 - **A convention deviation from `<reference_impl>` that is not a behaviour deviation** — presentation idiom, component choice, layout density, platform-appropriate interaction — when the behaviour is equivalent. Business-logic deviations from `<reference_impl>` ARE legitimate findings; convention choices are not. (This rule is inert when `phases.parity` is `false`, because then no finding cites `<reference_impl>` at all.)
 - **Plan-correct work that the implementer flagged as a deviation.** If the implementer added `**Deviations from plan:**` notes and the deviation agrees with the source of truth for that layer, the reviewer flagging it as "didn't follow the plan" is wrong.
-- **Should Fix or Nice to Have items dressed up as Must Fix.** Must Fix is reserved for: a business-logic divergence from `<reference_impl>` (only when `phases.parity` is `true`); broken architecture — a responsibility sitting in a layer no `layers[].conventions` document in `<layer_path_map>` puts it in, a boundary those documents draw being crossed, or a required accompanying item (a mandated test, a registry entry) missing; and a hard violation of a conventions document — a mandated accessor or `<convention_symbols>` identifier bypassed. Severity inflation is a finding **against the review**: it spends the fix loop on items that did not earn it.
+- **Should Fix or Nice to Have items dressed up as Must Fix.** Must Fix is reserved for: a business-logic divergence from `<reference_impl>` (only when `phases.parity` is `true`); broken architecture — a responsibility sitting in a layer no `layers[].conventions` document in `<layer_path_map>` puts it in, a boundary those documents draw being crossed, or a required accompanying item (a mandated test, a registry entry) missing; and a hard violation of a conventions document — a mandated accessor or `<convention_symbols>` identifier bypassed. Severity inflation is a finding **against the review**.
 
 ### Missed checks (Must Fix when applicable to the diff)
 
-The general rule, and the one that survives whatever the project's stack is: **the diff touched a layer, and no check drawn from that layer's rules appears in the review.** For each `layers[]` entry whose `path` (from `<layer_path_map>`) the diff touched, the review must show at least one finding, or an explicit clean-pass rationale, drawn from that entry's `conventions` document. Silence about a touched layer is the failure mode this check exists for.
+**The general rule: the diff touched a layer, and no check drawn from that layer's rules appears in the review.** For each `layers[]` entry whose `path` (from `<layer_path_map>`) the diff touched, the review must show at least one finding, or an explicit clean-pass rationale, drawn from that entry's `conventions` document.
 
-The per-layer triggers are the adopter's to state — *replace this table with your project's*, one row per `layers[]` entry, each filled from that entry's `conventions` document with the scans that document mandates (typically: the wire-surface and parity scan for the layer that owns serialization, the required-test check for the layer that owns behaviour, the styling / sizing / localized-copy scan for the layer that owns presentation):
+The per-layer triggers are the adopter's — *replace this table with your project's*, one row per `layers[]` entry, each filled from that entry's `conventions` document with the scans it mandates (typically the wire-surface and parity scan for the layer that owns serialization, the required-test check for the layer that owns behaviour, the styling / sizing / localized-copy scan for the layer that owns presentation):
 
 | Layer (`<layer_names>`) | Its path (`<layer_path_map>`) | The scan the review must show when that path is touched — *replace with your project's* |
 |---|---|---|
 | | | |
 
-**An unfilled table disables this half only.** With no rows, the general rule above still applies and every check below it is unchanged. An empty table is a configuration gap to close, not a licence to skip the section.
+**An unfilled table disables this half only**: the general rule above and every check below still apply. An empty table is a configuration gap to close, not a licence to skip the section.
 
 The remaining triggers are stack-neutral and always apply:
 
