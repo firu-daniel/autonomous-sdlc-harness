@@ -25,7 +25,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_unit
 1. [x] **Task 1** — Thin the blocks `layer-implementer` and `layer-reviewer` share, identically in both files _(layer: plugin)_ _(points: 15)_
 2. [x] **Task 2** — Thin `layer-implementer`'s intro, own `## Resolved values` rows, prompt forms and `## Scope` _(layer: plugin)_ _(points: 15)_
 3. [x] **Task 3** — Thin `layer-implementer`'s `## Minimal prose` and its catch-all authoring sections _(layer: plugin)_ _(points: 15)_
-4. [ ] **Task 4** — Thin `layer-implementer`'s `## Working modes` through the evidence-downgrade rule _(layer: plugin)_ _(points: 20)_
+4. [x] **Task 4** — Thin `layer-implementer`'s `## Working modes` through the evidence-downgrade rule _(layer: plugin)_ _(points: 20)_
 5. [ ] **Task 5** — Thin `layer-implementer`'s disposition routes, readiness-index licence and `## Output contract` _(layer: plugin)_ _(points: 20)_
 6. [ ] **Task 6** — Thin `layer-reviewer`'s intro, own contract rows and `## Process` _(layer: plugin)_ _(points: 15)_
 7. [ ] **Task 7** — Thin `layer-reviewer`'s own checklist triggers, catch-all checks and `## Output contract` _(layer: plugin)_ _(points: 15)_
