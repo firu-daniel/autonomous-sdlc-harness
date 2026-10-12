@@ -98,19 +98,26 @@ Decide as follows:
 - `<state_dir>/ui_test_plans/<branch>_ui_test_plan.md` — the index
 - `<state_dir>/ui_test_plans/<branch>/` — the per-test detail dir (holds the index's `ui_test_<N>.md` siblings)
 
-This Override has **no idempotency guard** (it is reached only when a plan was written — the `no_ui: true` short-circuit exits before it), so the wrapper call replaces the `git add … ; git commit -m "$(cat <<EOF …)"` directly. Fixed subject `chore: Add UI-test plan for <branch>`, no `Co-Authored-By:` / trailer, no `--no-verify` / hook-skip flag — the wrapper enforces both: it builds the message from the positional args after `--` only (subject only here) and never passes `--no-verify`. Push the worktree branch immediately after the commit lands (see "Push after the commit" below). The whole block — commit **and** push — sits inside Override 3, which the `no_ui: true` short-circuit already exits before reaching here (per the short-circuit note above), so both the commit and the push are co-located in one block that runs only when a plan was written. Mirroring Override 4's structure, the push is part of the same block as the commit so nothing is pushed on the `no_ui` path:
+This Override has **no idempotency guard** (it is reached only when a plan was written — the `no_ui: true` short-circuit exits before it), so the wrapper call replaces the `git add … ; git commit -m "$(cat <<EOF …)"` directly. Fixed subject `chore: Add UI-test plan for <branch>`, no `Co-Authored-By:` / trailer, no `--no-verify` / hook-skip flag — the wrapper enforces both: it builds the message from the positional args after `--` only (subject only here) and never passes `--no-verify`. Push the worktree branch immediately after the commit lands (see "Push after the commit" below). Mirroring Override 4's structure, the commit and the push both sit in this override, so nothing is pushed on the `no_ui` path:
 
 ```zsh
 bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
   "<state_dir>/ui_test_plans/${branch}_ui_test_plan.md" \
   "<state_dir>/ui_test_plans/${branch}/" \
   -- "chore: Add UI-test plan for ${branch}"
+```
+
+Then issue the push as its **own** Bash call, never in the same call as the commit:
+
+```zsh
 bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"
 ```
 
+The profile runs this spelling outside the sandbox only when it is the call's only command; issued in one call with the commit, it runs sandboxed, where an SSH push can fail on macOS while the wrapper still exits 0.
+
 If a hook fails, surface the error — do not bypass it with a hook-skip flag and do not create a partial commit; the wrapper returns a loud non-zero on a hook failure, which the fork surfaces.
 
-**Push after the commit.** The `<scripts_dir>/push-branch.sh` call above runs in the same block as the commit, so it pushes the worktree branch to its upstream — tracking this planning-convergence commit — exactly when the commit ran, and not at all on the `no_ui: true` short-circuit (which exits Override 3 before this block, so neither the commit nor the push is reached). It uses the `$REPO_ROOT` the calling command (`/autonomous-sdlc-harness:branch-start-plan-autonomous`) derived at session start. The helper is best-effort (it exits 0 and logs on any failure — non-git dir, detached HEAD, protected branch, transient push failure) and reaches only the run's own non-protected branch; it never extends the flow or fails the planning phase. The shared rationale for this post-commit push is the clean-tree invariant cited under "Shared rationale" below — not restated here.
+**Push after the commit.** The `<scripts_dir>/push-branch.sh` call above runs right after the commit, in the same override, so it pushes the worktree branch to its upstream — tracking this planning-convergence commit — exactly when the commit ran, and not at all on the `no_ui: true` short-circuit (which exits Override 3 before this block, so neither the commit nor the push is reached). It uses the `$REPO_ROOT` the calling command (`/autonomous-sdlc-harness:branch-start-plan-autonomous`) derived at session start. The helper is best-effort (it exits 0 and logs on any failure — non-git dir, detached HEAD, protected branch, transient push failure) and reaches only the run's own non-protected branch; it never extends the flow or fails the planning phase. The shared rationale for this post-commit push is the clean-tree invariant cited under "Shared rationale" below — not restated here.
 
 **Interaction with Phase E's `mode: ui_test_pass` commits (complementary, not conflicting).** Phase E later flips the index's `**Test N**` readiness checkboxes one at a time and commits the index alone (`committer.md` `ui_test_pass`). That is **unchanged and complementary**: this override commits the *initial* plan (index + details) at planning convergence so the detail dir and the as-written index are tracked from the planning phase; Phase E commits the per-test checkbox flips on top later. The two never contend for the same change — one is the initial plan, the others are subsequent checkbox-flip commits.
 
@@ -154,8 +161,15 @@ bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
   "<state_dir>/architecture_reviews/${branch}/" \
   "<state_dir>/ui_test_plan_reviews/${branch}/" \
   -- "chore: Add task plan for ${branch}"
+```
+
+Then issue the push as its **own** Bash call, never in the same call as the commit:
+
+```zsh
 bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"
 ```
+
+The profile runs this spelling outside the sandbox only when it is the call's only command; issued in one call with the commit, it runs sandboxed, where an SSH push can fail on macOS while the wrapper still exits 0.
 
 > ⚠️ **No exit-code gate — deliberate.** Do **not** wrap the push in `if [ "$?" -eq 0 ]; then … fi`. Per `${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6 that control-flow block is a headless trap (the ` then bash …` piece defeats `allow-safe-compounds.sh`, nothing else matches the command, and the call **is refused at once rather than prompting** — **the commit does not land**, with that refusal as its only sign). `$?` is unreliable across Bash calls anyway — each runs in a fresh shell. No gate is needed: `push-branch.sh` is non-fatal and only fast-forwards already-committed work, so an unconditional push is a harmless no-op ("Everything up-to-date") on the exit-3 path.
 

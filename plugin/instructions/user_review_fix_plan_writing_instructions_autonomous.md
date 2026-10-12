@@ -106,10 +106,17 @@ bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
   "<state_dir>/business_parity_user_review_reviews/${branch}/" \
   "<state_dir>/architecture_user_review_reviews/${branch}/" \
   -- "chore: Add user-review fix plan for ${branch}"
+```
+
+Then issue the push as its **own** Bash call, never in the same call as the commit:
+
+```zsh
 bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"
 ```
 
-> ⚠️ **No `if …; then … fi` anywhere in this block — deliberate, and it applies to BOTH the removed stage-path conditional and the removed push gate.** Per `${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6 any `if …; then … ; fi` / `for …; do … done` control-flow block is a headless trap: `allow-safe-compounds.sh` splits on `;` and the ` then …` piece begins with a non-allow-listed prefix, so the command falls through the safe-compound allow, nothing else matches it, and the call **is refused at once rather than prompting** — **the commit does not land**, with that refusal as its only sign. That is especially damaging here, because on a zero-finding round this is the *only* commit the fix flow makes. The two conditionals are therefore replaced by: (a) passing the per-finding folder unconditionally and letting the wrapper warn-and-skip it when absent, and (b) an unconditional push — `push-branch.sh` is non-fatal and only fast-forwards already-committed work, so it is a harmless no-op ("Everything up-to-date") whenever the wrapper made no new commit. `$?` would also be unreliable across separate Bash calls, since each runs in a fresh shell.
+The profile runs this spelling outside the sandbox only when it is the call's only command; issued in one call with the commit, it runs sandboxed, where an SSH push can fail on macOS while the wrapper still exits 0.
+
+> ⚠️ **No `if …; then … fi` in either block — deliberate, and it applies to BOTH the removed stage-path conditional and the removed push gate.** Per `${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6 any `if …; then … ; fi` / `for …; do … done` control-flow block is a headless trap: `allow-safe-compounds.sh` splits on `;` and the ` then …` piece begins with a non-allow-listed prefix, so the command falls through the safe-compound allow, nothing else matches it, and the call **is refused at once rather than prompting** — **the commit does not land**, with that refusal as its only sign. That is especially damaging here, because on a zero-finding round this is the *only* commit the fix flow makes. The two conditionals are therefore replaced by: (a) passing the per-finding folder unconditionally and letting the wrapper warn-and-skip it when absent, and (b) an unconditional push — `push-branch.sh` is non-fatal and only fast-forwards already-committed work, so it is a harmless no-op ("Everything up-to-date") whenever the wrapper made no new commit. `$?` would also be unreliable across separate Bash calls, since each runs in a fresh shell.
 
 If a hook fails, surface the error — do not bypass it with a hook-skip flag and do not create a partial commit; the wrapper returns a loud non-zero on a hook failure, which the fork surfaces.
 

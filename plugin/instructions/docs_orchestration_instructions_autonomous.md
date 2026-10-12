@@ -103,8 +103,15 @@ Commit **only** through the wrapper — never a raw `git add` / `git commit` (a 
 bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
   "<output_path>" "<state_dir>/docs_catalog/<branch>_docs.md" [<other changed paths…>] \
   -- "docs: <doc_title>"
+```
+
+Then issue the push as its **own** Bash call, never in the same call as the commit:
+
+```zsh
 bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"
 ```
+
+The profile runs this spelling outside the sandbox only when it is the call's only command; issued in one call with the commit, it runs sandboxed, where an SSH push can fail on macOS while the wrapper still exits 0.
 
 > ⚠️ **No exit-code gate — deliberate.** Do **not** wrap the push in `if [ "$?" -eq 0 ]; then … fi`. Per `${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6 that control-flow block is a headless trap: `allow-safe-compounds.sh` splits on `;` and the ` then bash …` piece begins with a non-allow-listed prefix, so the command falls through the safe-compound allow, nothing else matches it, and the call **is refused at once rather than prompting** — **the commit does not land**, with that refusal as its only sign. `$?` is unreliable across Bash calls anyway (each runs in a fresh shell). No gate is needed: an unconditional push is a harmless no-op whenever no commit landed.
 
