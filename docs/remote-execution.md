@@ -765,7 +765,7 @@ The runner is one repository variable, read by `runs-on: ${{ vars.HARNESS_RUNNER
 
 **A run started from GitHub, on your own hardware.** A run started from an issue always executes through `harness-run.yml`, because GitHub cannot reach your machine to launch it there. A self-hosted runner registered on that machine and named in `HARNESS_RUNNER` runs it there, which is the way to run a GitHub-triggered run locally.
 
-**GitHub-hosted runners that work:** a standard Linux runner by label (`ubuntu-latest`, `ubuntu-24.04`), or a Linux larger runner by the runner label you gave it when you created it. **Not supported:** macOS and Windows GitHub-hosted runners — the outer-loop scripts and the job's `jq` / `gh` bootstrap are Linux-shaped.
+**GitHub-hosted runners that work:** a standard Linux runner by label (`ubuntu-latest`, `ubuntu-24.04`), or a Linux larger runner by the runner label you gave it when you created it. **Not supported:** macOS and Windows GitHub-hosted runners — the outer-loop scripts and the job's `jq` / `gh` bootstrap are Linux-shaped. A run's Bash sandbox needs `bubblewrap` and `socat` on the runner (`docs/cli.md` §6). The workflows do not install them yet (roadmap item 20). On a runner without both, the run's session exits at startup, because the generated profile sets `failIfUnavailable`. Install them on a self-hosted runner, or take `sandbox.optOut` with its reason (`docs/config.md` §5).
 
 ### Setting up a self-hosted runner
 
