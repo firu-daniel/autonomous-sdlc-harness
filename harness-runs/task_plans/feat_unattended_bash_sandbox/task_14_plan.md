@@ -73,3 +73,8 @@
   ```
 - The sentence `ARCHITECTURE.md` quotes from the `_README` matches `cli/templates/claude/settings.autonomous.json` byte for byte (`grep -F` the quoted text in both files).
 - Neither file carries a command an adopter must run outside a fenced block. If a row names `init --force`, it does so as a pointer to `docs/cli.md`, which holds the fenced form (Task 13).
+
+**Deviations from plan:**
+
+- Entry G's second command, re-run with `-n` over `ARCHITECTURE.md docs/config.md`, still hits `ARCHITECTURE.md` line 122 (the row-49 site) on `neither allowed nor denied`. That hit is the corrected quotation itself: the plan requires the `_README` sentence quoted byte for byte, and the template's new `COMPLETENESS IS LOAD-BEARING` sentence says such a call *"is refused at once"*, so it states no stall and is not `change` under entry G's decision rule. Every other hit of both commands is on rows 127 (line 118), 128 (lines 80, 88, 164) and 145 (`docs/config.md` line 43).
+- `ARCHITECTURE.md` line 122: *"A gap therefore surfaces as a hang rather than an error"* became *"A gap therefore surfaces as a refused step"*, dropping the contrast, because a refusal is an error and no truthful contrast replaces it.
