@@ -52,7 +52,7 @@
 
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -94,6 +94,10 @@ const { pluginScriptsDir } = await built('machine/plugins.js');
 const { LOOPBACK_ALLOWED_HOST, SANDBOX_OPT_OUT_MARKER, shippedSandboxSettings } = await built(
   'generators/sandboxProfile.js',
 );
+const { CONFIG_FILENAME, DEFAULTS } = await built('config/model.js');
+const { MCP_PATH } = await built('generators/repoRoot.js');
+const { PLUGIN_KEY } = await built('generators/projectSettings.js');
+const { DOCS_SEARCH_SERVER_SCRIPT_NAME } = await built('generators/outerLoopScripts.js');
 
 /** The generated profile, and the template it is generated from. */
 const PROFILE_FILE = '.claude/settings.autonomous.json';
@@ -369,7 +373,9 @@ test('an outer-loop script an agent runs is allow-listed in three forms, and eve
       const seeded = scriptsDir === INIT_SCRIPTS_DIR ? {} : { 'harness.config.json': seededConfig({ scriptsDir }) };
       const { dir, profile } = await profileFor(subtest, [], seeded);
       const worktreeGlob = worktreeGlobFor(dir);
-      const everyEntry = allEntries(profile);
+      // The grant lists only: `deny` carries the write protection's `Edit`/`Write` rules for the
+      // unsandboxed wrappers, which refuse a write rather than grant a run.
+      const everyEntry = [...entries(profile, 'allow'), ...entries(profile, 'ask')];
 
       assert.ok(OUTER_LOOP_SCRIPTS.length > 0, 'the shipped table declares no outer-loop scripts to check');
 
@@ -673,7 +679,7 @@ async function retrievalProfileFor(t, { docsPhase, retrieval }) {
   await plantRetrievalRuntime(cacheHome);
   const result = await runCli(dir, ['init'], retrievalEnv(cacheHome));
   assert.equal(result.status, 0, `init exited ${result.status}\n${result.stdout}\n${result.stderr}`);
-  return { profile: readJson(join(dir, PROFILE_FILE)), text: readFileSync(join(dir, PROFILE_FILE), 'utf8') };
+  return { dir, profile: readJson(join(dir, PROFILE_FILE)), text: readFileSync(join(dir, PROFILE_FILE), 'utf8') };
 }
 
 /**
@@ -1031,4 +1037,122 @@ test('a domain carrying a quote is the adopter\'s to fix, never this CLI\'s faul
       return true;
     },
   );
+});
+
+/** Both sides of one protected path: its `denyWrite` entry and its `Edit`/`Write` deny pair. */
+function assertProtected(profile, path, kind) {
+  const target = kind === 'directory' ? `${path}/**` : path;
+  assert.ok(profile.sandbox.filesystem.denyWrite.includes(path), `sandbox.filesystem.denyWrite does not hold ${path}`);
+  for (const rule of [`Edit(/${target})`, `Write(/${target})`]) {
+    assert.ok(entries(profile, 'deny').includes(rule), `permissions.deny does not hold ${rule}`);
+  }
+}
+
+/** Neither side of one path: no `denyWrite` entry, and no `Edit`/`Write` deny naming it. */
+function assertUnprotected(profile, path) {
+  assert.ok(!profile.sandbox.filesystem.denyWrite.includes(path), `sandbox.filesystem.denyWrite holds ${path}`);
+  for (const rule of entries(profile, 'deny')) {
+    if (!rule.startsWith('Edit(') && !rule.startsWith('Write(')) continue;
+    assert.ok(rule !== `Edit(/${path})` && !rule.startsWith(`Edit(/${path}/`), `permissions.deny holds ${rule}`);
+    assert.ok(rule !== `Write(/${path})` && !rule.startsWith(`Write(/${path}/`), `permissions.deny holds ${rule}`);
+  }
+}
+
+/** The run library's directory, read from the outer-loop table. */
+const LIB_SUBDIR = OUTER_LOOP_SCRIPTS.find((script) => script.file === 'harness-run-lib.sh').subdir;
+
+test('every path that runs outside the sandbox is write-protected on both sides', async (t) => {
+  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
+  const glob = worktreeGlobFor(dir);
+  const githooks = DEFAULTS.githooksDir;
+
+  for (const row of UNSANDBOXED_ROWS) {
+    assertProtected(profile, join(dir, SCRIPTS_DIR, outerLoopRelativePath(row)), 'file');
+    // The worktree's copy runs sandboxed, so it needs no protection.
+    assertUnprotected(profile, join(glob, SCRIPTS_DIR, outerLoopRelativePath(row)));
+  }
+  assertProtected(profile, join(dir, SCRIPTS_DIR, LIB_SUBDIR), 'directory');
+  assertProtected(profile, join(dir, githooks), 'directory');
+  assertProtected(profile, join(glob, githooks), 'directory');
+  assertProtected(profile, join(dir, '.git', 'hooks'), 'directory');
+  assertProtected(profile, join(dir, MCP_PATH), 'file');
+  assertProtected(profile, join(glob, MCP_PATH), 'file');
+  assertProtected(profile, join(dir, '.git', 'config'), 'file');
+  assertProtected(profile, join(dir, '.git', 'config.worktree'), 'file');
+  assertProtected(profile, join(dir, CONFIG_FILENAME), 'file');
+  assertUnprotected(profile, join(glob, CONFIG_FILENAME));
+
+  // Retrieval is off here, so its launcher is not in the set.
+  assert.ok(
+    !JSON.stringify(profile.sandbox.filesystem.denyWrite).includes(DOCS_SEARCH_SERVER_SCRIPT_NAME),
+    `denyWrite names ${DOCS_SEARCH_SERVER_SCRIPT_NAME} with retrieval off`,
+  );
+
+  const stateDirAbs = join(dir, 'sdlc-harness');
+  assert.ok(profile.sandbox.filesystem.allowWrite.includes(stateDirAbs), 'allowWrite does not name the state directory');
+  assertUnprotected(profile, stateDirAbs);
+
+  assert.ok(
+    profile._README.some((line) => line.startsWith('WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN') && line.includes('Linux')),
+    'no _README line names the write-protected set and its Linux residual',
+  );
+  assertEntriesRunnable(profile);
+});
+
+test('the docs-search launcher and its worktree library are write-protected only when retrieval applies', async (t) => {
+  const { dir, profile } = await retrievalProfileFor(t, { docsPhase: true, retrieval: true });
+  const glob = worktreeGlobFor(dir);
+  assertProtected(profile, join(dir, SCRIPTS_DIR, DOCS_SEARCH_SERVER_SCRIPT_NAME), 'file');
+  assertProtected(profile, join(glob, SCRIPTS_DIR, DOCS_SEARCH_SERVER_SCRIPT_NAME), 'file');
+  assertProtected(profile, join(glob, SCRIPTS_DIR, LIB_SUBDIR), 'directory');
+
+  const off = await retrievalProfileFor(t, { docsPhase: true, retrieval: false });
+  const offGlob = worktreeGlobFor(off.dir);
+  assertUnprotected(off.profile, join(off.dir, SCRIPTS_DIR, DOCS_SEARCH_SERVER_SCRIPT_NAME));
+  assertUnprotected(off.profile, join(offGlob, SCRIPTS_DIR, DOCS_SEARCH_SERVER_SCRIPT_NAME));
+  assertUnprotected(off.profile, join(offGlob, SCRIPTS_DIR, LIB_SUBDIR));
+});
+
+test('a scriptsDir with a trailing slash protects the library the writer wrote', async (t) => {
+  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: `${SCRIPTS_DIR}/` }) });
+  assert.ok(existsSync(join(dir, SCRIPTS_DIR, LIB_SUBDIR)), 'the fixture wrote no library directory');
+  assertProtected(profile, `${dir}/${SCRIPTS_DIR}/${LIB_SUBDIR}`, 'directory');
+});
+
+test('each plugin root in additionalDirectories is write-protected, and the state directory is not', async (t) => {
+  // A throwaway install root and the agent runner's record of it, as init.test.mjs plants them.
+  const root = await fixtureFor(t);
+  await mkdir(join(root, 'scripts'), { recursive: true });
+  await writeFile(join(root, 'scripts', PLUGIN_HELPER), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  const home = await fixtureFor(t);
+  await mkdir(join(home, 'plugins'), { recursive: true });
+  await writeFile(
+    join(home, 'plugins', 'installed_plugins.json'),
+    `${JSON.stringify({ version: 2, plugins: { [PLUGIN_KEY]: [{ scope: 'user', installPath: root }] } }, null, 2)}\n`,
+  );
+
+  const dir = await fixtureFor(t);
+  const result = await runCli(dir, ['init', '--plugin-root-entries'], { CLAUDE_CONFIG_DIR: home });
+  assert.equal(result.status, 0, `init exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+  const profile = readJson(join(dir, PROFILE_FILE));
+
+  const directories = profile.permissions.additionalDirectories;
+  assert.ok(directories.includes(root), `the plugin root is not in additionalDirectories:\n${directories.join('\n')}`);
+  const stateDirAbs = directories[0];
+  assert.ok(profile.sandbox.filesystem.allowWrite.includes(stateDirAbs), 'the first additionalDirectories entry is not the state directory');
+  for (const directory of directories.slice(1)) assertProtected(profile, directory, 'directory');
+  assertUnprotected(profile, stateDirAbs);
+});
+
+test('with the sandbox opted out the file-tool write protection still applies', async (t) => {
+  const sandbox = { optOut: { reason: 'the fixture runner has no sandbox support' } };
+  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR, sandbox }) });
+  for (const row of UNSANDBOXED_ROWS) {
+    const path = join(dir, SCRIPTS_DIR, outerLoopRelativePath(row));
+    for (const rule of [`Edit(/${path})`, `Write(/${path})`]) {
+      assert.ok(entries(profile, 'deny').includes(rule), `the opt-out dropped ${rule}`);
+    }
+  }
+  const config = join(dir, CONFIG_FILENAME);
+  assert.ok(entries(profile, 'deny').includes(`Edit(/${config})`), `the opt-out dropped the ${CONFIG_FILENAME} Edit rule`);
 });

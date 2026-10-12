@@ -195,6 +195,8 @@
  * and owns the rule for which command may run unsandboxed. {@link assertRunnable} scans the block's
  * lists with the same table it scans the permission lists with. That module imports from this one
  * and this one calls it, a cycle kept safe by using every imported binding at call time only.
+ * `writeProtection.ts` → `applyWriteProtection` adds the write protection last, under the same cycle
+ * rule, once `permissions.additionalDirectories` is final.
  */
 
 import { basename, dirname, isAbsolute, join, sep } from 'node:path';
@@ -231,6 +233,7 @@ import {
   type WrapperKey,
   type WrittenWrapper,
 } from './scripts.js';
+import { applyWriteProtection } from './writeProtection.js';
 
 /**
  * The template's home under `cli/templates/`, addressed as {@link readTemplate} wants it.
@@ -1721,6 +1724,11 @@ export function renderProfile({
   }
 
   applySandbox(profile, { repoRoot, config });
+
+  // Last, after the plugin roots and the carry-forward, so `additionalDirectories` is final; and
+  // under the opt-out too. Its `deny` entries name the wrapper files, which `assertEveryScriptListed`
+  // above never sees: it counts `allow` only.
+  applyWriteProtection(profile, { repoRoot, workRoot, config });
 
   assertRunnable(profile);
   assertNoBrowserDeny(profile);
