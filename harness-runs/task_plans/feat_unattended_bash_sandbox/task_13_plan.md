@@ -95,3 +95,9 @@ This task describes them and changes none of them. Where this file and a module 
   ```
 
 - Every command an adopter is meant to run sits in a fenced block, one command per line (`harness-runs/lessons.md` → `## Adopter-facing documentation`).
+
+- **Deviations from plan:**
+  - The `profile-sandbox` table row carries the code's title byte for byte — *"the permission profile's sandbox block is what the configuration asks for"* (`cli/src/doctor/checks.ts` → `PROFILE_SANDBOX_CHECK`) — rather than the plan's *"the profile's sandbox block …"*, because the Verification bullet requires the titles to match `checks.ts` byte for byte.
+  - The `profile-sandbox` severity bullet cites its grade's ground as *"the ground the bullet above gives"* rather than naming `profile-deny-floor`, so derivation entry C's `docs/cli.md` hits stay within register rows 33–36 (re-run: hits at the opening paragraph, the table row, the severity bullet and the `--remote-job` paragraph only).
+  - The override is stated in one sentence plus the fenced `PERMISSION_MODE=acceptEdits` block the Work list requires, so derivation entry G's first command reaches two new lines (the sentence and the block's line), not one; every other remaining hit is 338, 340 or row 144's evaluation-order sentence.
+  - Lines 140 and 329 restate the condition as *"matching no `allow` or `deny` entry"* rather than *"neither `allow` nor `deny`"*, which entry G's second command would otherwise still reach.
