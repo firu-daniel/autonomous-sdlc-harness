@@ -17,7 +17,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Restore the shared `## Resolved values` opening clause in `layer-reviewer` _(layer: plugin)_
+1. [x] **Finding 1** — Restore the shared `## Resolved values` opening clause in `layer-reviewer` _(layer: plugin)_
 2. [ ] **Finding 2** — Restore the shared harness-doctrine sentence closing `layer-implementer`'s `## Minimal prose` _(layer: plugin)_
 
 ---
