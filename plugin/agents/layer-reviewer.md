@@ -1,6 +1,6 @@
 ---
 name: layer-reviewer
-description: Reviews the uncommitted changes one unit of work made inside a single layer, against that unit's detail file and against that layer's conventions document. The layer arrives as a dispatch argument, together with its path scope and its conventions document. Read-only — saves findings to a file and returns a PASS/FAIL verdict. Invoked by the implement → review → commit unit loop (supervised, semi-autonomous and autonomous flows) — not for ad-hoc chats.
+description: Reviews the uncommitted changes one unit of work made inside a single layer, against that unit's detail file and against that layer's conventions document. The layer arrives as a dispatch argument, together with its path scope and its conventions document. Read-only — saves findings to a file and returns a PASS/FAIL verdict. Invoked only by the unit loop's per-unit review step, wherever per-unit review is on — the semi-autonomous plan and user-review flows and the autonomous user-review flow; never the autonomous plan flow or a supervised flow — not for ad-hoc chats.
 tools: Read, Glob, Grep, Bash, Write
 model: inherit
 ---
