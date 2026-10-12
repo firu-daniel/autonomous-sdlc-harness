@@ -17,7 +17,7 @@ Observation, not a finding: the new fixed subject `chore: Record lessons for <br
 
 1. [x] **Finding 1** — Remove the unsanctioned fork→fork citation from `Override L` _(layer: plugin)_
 2. [x] **Finding 2** — Qualify the autonomous fork's closed `<escalate>` list to the unmarked `qa-tester` `error:` _(layer: plugin)_
-3. [ ] **Finding 3** — Qualify the supervised QA flow's teardown halt list to the unmarked `qa-tester` `error:` _(layer: plugin)_
+3. [x] **Finding 3** — Qualify the supervised QA flow's teardown halt list to the unmarked `qa-tester` `error:` _(layer: plugin)_
 4. [ ] **Finding 4** — Extend the unit loop's `<per_unit_review>` `Used at` cell to step 5 and the two committer-staging bullets _(layer: plugin)_
 
 ## Must Fix
