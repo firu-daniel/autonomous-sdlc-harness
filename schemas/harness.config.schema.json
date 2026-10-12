@@ -366,6 +366,50 @@
           "description": "Whether a run that executes on GitHub Actions with forge 'github' keeps one progress comment on its pull request, edited as the run passes its four main phases (for a task run planning, implementation, branch review and done; for a user-review round fix plan, fix implementation, branch review and done). false posts none; every other lifecycle comment is unchanged. Read at run time from the run's branch; an absent key is true."
         }
       }
+    },
+    "sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The unattended run's Bash sandbox. Read by init, which renders it into the unattended permission profile, and by doctor, which grades that profile against it. Absent means the sandbox is on and this repository adds no domain to its network allowlist.",
+      "properties": {
+        "allowedDomains": {
+          "type": "array",
+          "default": [],
+          "description": "This repository's own additions to the sandbox's network allowlist, each with the reason a sandboxed command needs it.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["domain", "reason"],
+            "properties": {
+              "domain": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*$",
+                "description": "A bare hostname or IPv4 literal: dot-separated labels of letters, digits and inner hyphens, with no scheme, port, path or wildcard. This pattern must match SANDBOX_DOMAIN_PATTERN in cli/src/config/model.ts."
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S",
+                "description": "Why a sandboxed command needs this domain. The generated profile repeats it beside the entry, so it must hold more than whitespace."
+              }
+            }
+          }
+        },
+        "optOut": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason"],
+          "description": "Run every unattended command unsandboxed, for the reason stated. Never a default, and never a bare switch; the generated profile shows that the opt-out is taken.",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "description": "Why every unattended command runs unsandboxed. Must hold more than whitespace: an opt-out nobody explained is not one taken."
+            }
+          }
+        }
+      }
     }
   }
 }

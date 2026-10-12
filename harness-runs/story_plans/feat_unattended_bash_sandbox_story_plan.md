@@ -103,7 +103,7 @@ The former residual *"a rewritten `.git` pointer or `commondir` is not detected"
 20. [x] **Task 20** — Correct the unlisted-call statements in the plan and task-plan instruction cores and forks _(layer: plugin)_ _(points: 15)_
 21. [x] **Task 21** — Correct the unlisted-call statements in the review-fix and docs forks and the three autonomous commands _(layer: plugin)_ _(points: 15)_
 22. [x] **Task 22** — Correct the unlisted-call statements in the agents, the flow docs and the plugin scripts README _(layer: plugin)_ _(points: 10)_
-23. [ ] **Task 12** — Declare `sandbox` in the configuration schema, with its two negative fixtures _(layer: general)_ _(points: 15)_
+23. [x] **Task 12** — Declare `sandbox` in the configuration schema, with its two negative fixtures _(layer: general)_ _(points: 15)_
 24. [ ] **Task 13** — Document the sandbox block, the permission mode and the two new `doctor` checks in `docs/cli.md` _(layer: general)_ _(points: 20)_
 25. [ ] **Task 14** — Document the `sandbox` keys in `docs/config.md` and the sandbox object in `ARCHITECTURE.md` _(layer: general)_ _(points: 20)_
 26. [ ] **Task 25** — Document `PERMISSION_MODE` in `docs/watcher.md`, and correct the unlisted-call statements in the remaining docs and evals _(layer: general)_ _(points: 18)_

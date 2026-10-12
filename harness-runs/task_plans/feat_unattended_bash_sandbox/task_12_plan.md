@@ -50,3 +50,5 @@ It also matches `cli/src/config/check.ts`'s sandbox key sets.
 - `grep -o 'schemas/negative/sandbox-[a-z-]*\.json' package.json` prints exactly the set of `sandbox-*.json` files that `ls schemas/negative` lists, so no fixture is left unwired.
 - Each fixture differs from `examples/harness.config.json` only in the `sandbox` key and the re-based `$schema`. Check it by reading the two documents side by side.
 - The schema gate itself (`validate:config`, `validate:config:negative`) runs in the Run gates phase. This task does not run it.
+
+- **Deviations from plan:** Plan specified `reason` with `minLength: 1` only; `cli/src/config/check.ts` → `checkReason` also rejects a whitespace-only reason (`value.trim() === ''`), so both `reason` properties carry `"minLength": 1` and `"pattern": "\\S"` to match the structural check. The `validate:config` / `validate:config:negative` runs are deferred to the Run gates phase, as the plan's own Verification states; the fixture-wiring grep and the side-by-side `diff` against `examples/harness.config.json` were run (each fixture differs only in `$schema` and the added `sandbox` key).
