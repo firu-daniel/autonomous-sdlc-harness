@@ -12,7 +12,7 @@
 
 **Work:**
 
-- [ ] Replace points 1–6 (from the line beginning `1. **No unit runs` through the end of point 6, which ends `and its return ends its dispatch, not the session.`) with exactly the text below. Leave the blank line and `**Who may cite this.**` that follow it untouched.
+- [x] Replace points 1–6 (from the line beginning `1. **No unit runs` through the end of point 6, which ends `and its return ends its dispatch, not the session.`) with exactly the text below. Leave the blank line and `**Who may cite this.**` that follow it untouched.
 
 ```markdown
 1. **No unit runs `<test_cmd>`, a gate script it runs, or a test file the unit did not create or edit — except a row `G.4` unit, which may run the test file(s) its finding names, through `<test_file_cmd>` only.** The full suite and the whole-tree `<typecheck_cmd>` run once per Run gates round, through its wrapper, at `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `## Phase G — Run gates`; the suite runs nowhere else in the flow. A targeted test the unit did not write is excluded too. The row-`G.4` exception covers **only** that row and **only** the file(s) the finding names — never `<test_cmd>`, a gate script or any other test file.
@@ -28,7 +28,7 @@
 6. **A unit's run stays in the foreground.** Run `<typecheck_cmd>` and `<test_file_cmd>` each as one foreground command whose output returns to you — never redirected to a file, piped, backgrounded or wrapped in a `cd`, a refusal included. A refusal takes its own route: point 3's skip for a test file; for `<typecheck_cmd>`, the refused-call fallback of `${CLAUDE_PLUGIN_ROOT}/agents/layer-implementer.md` → `## Resolved values`. When the tool layer moves a run to the background itself, do not collect it: no `Monitor` and no `sleep` (`${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `### G.1 Run the gates` forbids both by name), and no loop that reads its output for a completion line. Record the run in your return as moved to the background — not run, never a pass — raise no blocker, and continue.
 ```
 
-- [ ] Check the replacement against the rule inventory below before saving — each line names a rule the old text states and where the new text keeps it. If any one has no home in the new text, restore it in the shortest form rather than drop it:
+- [x] Check the replacement against the rule inventory below before saving — each line names a rule the old text states and where the new text keeps it. If any one has no home in the new text, restore it in the shortest form rather than drop it:
   - the three run prohibitions (`<test_cmd>`, a gate script, a file the unit did not write) and the row-`G.4` exception's two limits — point 1;
   - Phase G as the only place the suite runs — point 1, whose "nowhere else" names the suite as its subject; point 1 places no limit on the per-unit whole-tree `<typecheck_cmd>` run that point 2 requires;
   - typecheck as the whole tree, the `<none>` case, and the three failure arms — point 2;
@@ -37,7 +37,7 @@
   - the no-plan-asks rule, its seven bound writers and the reviewers' Must Fix — point 4;
   - typecheck is not a test run — point 5;
   - foreground only; no redirect, pipe, background or `cd`; the two refusal routes; no `Monitor`, no `sleep`, no completion-line loop; record as not run — point 6.
-- [ ] What the new text deliberately drops is rationale no reader acts on: point 1's *why* a targeted test is excluded and why the `G.4` exception does not breach it; point 3's and point 6's "Phase G runs that test / the suite anyway"; and point 6's closing sentence on run duration. Drop nothing else.
+- [x] What the new text deliberately drops is rationale no reader acts on: point 1's *why* a targeted test is excluded and why the `G.4` exception does not breach it; point 3's and point 6's "Phase G runs that test / the suite anyway"; and point 6's closing sentence on run duration. Drop nothing else.
 
 **Verification:**
 

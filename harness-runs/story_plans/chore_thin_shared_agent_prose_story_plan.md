@@ -24,7 +24,7 @@ The verification bar for the branch as a whole — `cli/test` and `scripts/run-g
 
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_shared_agent_prose/task_<K>_plan.md`. Ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Thin `## The test-run rule` in `unit_loop_core.md`, keeping every rule and the citer roster _(layer: plugin)_ _(points: 10)_
+1. [x] **Task 1** — Thin `## The test-run rule` in `unit_loop_core.md`, keeping every rule and the citer roster _(layer: plugin)_ _(points: 10)_
 2. [ ] **Task 2** — Thin `## Unsolicited dispatch guidance` and its return-contract pointers, identically in every copy _(layer: plugin)_ _(points: 15)_
 3. [ ] **Task 3** — Thin the `<docs_root>` and `<docs_retrieval>` rows and the docs-retrieval tool bullet, identically in every copy _(layer: plugin)_ _(points: 15)_
 4. [ ] **Task 4** — Thin the `<state_dir>` rows, identically in every copy _(layer: plugin)_ _(points: 10)_
