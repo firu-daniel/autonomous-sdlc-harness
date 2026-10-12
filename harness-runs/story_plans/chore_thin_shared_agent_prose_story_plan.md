@@ -34,7 +34,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_shared_agent_pros
 8. [x] **Task 8** — Thin the reviewers' shared grading blocks — the severity ladder, `**Guard carve-out.**` and `**Prose volume — the receiving side.**` — identically in every copy _(layer: plugin)_ _(points: 10)_
 9. [x] **Task 9** — Thin the rejected-findings rules on both sides, and the reviewers' "If there are Must Fix issues" line, identically in every copy _(layer: plugin)_ _(points: 15)_
 10. [x] **Task 10** — Add the read-list precedence sentence to the ten agents whose read list is narrower than the `CLAUDE.md` routing table _(layer: plugin)_ _(points: 10)_
-11. [ ] **Task 11** — Measure every agent's up-front words after the thinning, and record the result in the story index _(layer: general)_ _(points: 10)_
+11. [x] **Task 11** — Measure every agent's up-front words after the thinning, and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
@@ -335,28 +335,28 @@ Up-front words = the agent definition plus every plugin file or section it reads
 
 | Agent | Family | Reads counted (besides the definition) | Before — definition | Before — reads | Before — up-front | After — up-front | Δ |
 |---|---|---|---|---|---|---|---|
-| architecture-reviewer | plan/diff gates | `## The test-run rule` | 5139 | 732 | 5871 | | |
-| branch-reviewer | branch review | `## The test-run rule`, `sample_code_review.md`, `sample_code_review/finding_1.md` | 6175 | 2255 | 8430 | | |
-| business-parity-reviewer | plan/diff gates | `## The test-run rule` | 6158 | 732 | 6890 | | |
-| committer | unit loop | — | 8430 | 0 | 8430 | | |
-| conventions-reviewer | conventions | `agents/conventions-writer.md` | 5893 | 5108 | 11001 | | |
-| conventions-writer | conventions | — | 5108 | 0 | 5108 | | |
-| docs-reviewer | docs | `agents/docs-writer.md` | 2528 | 3481 | 6009 | | |
-| docs-writer | docs | — | 3481 | 0 | 3481 | | |
-| layer-implementer | unit loop | `## The test-run rule`, `## Substitution table` | 6287 | 5118 | 11405 | | |
-| layer-reviewer | unit loop | `## The test-run rule` | 4043 | 732 | 4775 | | |
-| qa-tester | UI tests and QA | — | 8063 | 0 | 8063 | | |
-| qa-tester-mobile-maestro | UI tests and QA | — | 1186 | 0 | 1186 | | |
-| qa-tester-mobile-mcp | UI tests and QA | — | 1340 | 0 | 1340 | | |
-| review-plan-reviewer | branch review | `## The test-run rule`, `sample_code_review.md`, `sample_code_review/finding_1.md` | 4440 | 2255 | 6695 | | |
-| skeptic-reviewer | branch review | `## The test-run rule`, `sample_code_review.md`, `sample_code_review/finding_1.md` | 5373 | 2255 | 7628 | | |
-| statistics-plan-writer | fix-plan and statistics | `sample_statistics.md` | 2941 | 1509 | 4450 | | |
-| task-plan-reviewer | task plan | `## The test-run rule`, `sample_task_plan.md`, `sample_story_plan.md`, `sample_story/task_1–3_plan.md` | 6038 | 4968 | 11006 | | |
-| task-plan-writer | task plan | `## The test-run rule`, `sample_task_plan.md`, `sample_story_plan.md`, `sample_story/task_1–3_plan.md` | 6476 | 4968 | 11444 | | |
-| test-fix-plan-writer | fix-plan and statistics | `## The test-run rule`, `sample_user_review_fix_plan.md`, `sample_user_review_fix_plan/finding_1.md` | 2411 | 1999 | 4410 | | |
-| ui-tests-plan-reviewer | UI tests and QA | `agents/ui-tests-plan-writer.md`, `agents/qa-tester.md` | 4530 | 13829 | 18359 | | |
-| ui-tests-plan-writer | UI tests and QA | `agents/qa-tester.md` | 5766 | 8063 | 13829 | | |
-| user-review-fix-plan-writer | fix-plan and statistics | `## The test-run rule`, `sample_user_review_fix_plan.md`, `sample_user_review_fix_plan/finding_1.md` | 4095 | 1999 | 6094 | | |
+| architecture-reviewer | plan/diff gates | `## The test-run rule` | 5139 | 732 | 5871 | 5513 | -358 |
+| branch-reviewer | branch review | `## The test-run rule`, `sample_code_review.md`, `sample_code_review/finding_1.md` | 6175 | 2255 | 8430 | 8005 | -425 |
+| business-parity-reviewer | plan/diff gates | `## The test-run rule` | 6158 | 732 | 6890 | 6536 | -354 |
+| committer | unit loop | — | 8430 | 0 | 8430 | 8410 | -20 |
+| conventions-reviewer | conventions | `agents/conventions-writer.md` | 5893 | 5108 | 11001 | 10979 | -22 |
+| conventions-writer | conventions | — | 5108 | 0 | 5108 | 5097 | -11 |
+| docs-reviewer | docs | `agents/docs-writer.md` | 2528 | 3481 | 6009 | 5856 | -153 |
+| docs-writer | docs | — | 3481 | 0 | 3481 | 3433 | -48 |
+| layer-implementer | unit loop | `## The test-run rule`, `## Substitution table` | 6287 | 5118 | 11405 | 11245 | -160 |
+| layer-reviewer | unit loop | `## The test-run rule` | 4043 | 732 | 4775 | 4433 | -342 |
+| qa-tester | UI tests and QA | — | 8063 | 0 | 8063 | 7922 | -141 |
+| qa-tester-mobile-maestro | UI tests and QA | — | 1186 | 0 | 1186 | 1186 | 0 |
+| qa-tester-mobile-mcp | UI tests and QA | — | 1340 | 0 | 1340 | 1340 | 0 |
+| review-plan-reviewer | branch review | `## The test-run rule`, `sample_code_review.md`, `sample_code_review/finding_1.md` | 4440 | 2255 | 6695 | 6312 | -383 |
+| skeptic-reviewer | branch review | `## The test-run rule`, `sample_code_review.md`, `sample_code_review/finding_1.md` | 5373 | 2255 | 7628 | 7220 | -408 |
+| statistics-plan-writer | fix-plan and statistics | `sample_statistics.md` | 2941 | 1509 | 4450 | 4437 | -13 |
+| task-plan-reviewer | task plan | `## The test-run rule`, `sample_task_plan.md`, `sample_story_plan.md`, `sample_story/task_1–3_plan.md` | 6038 | 4968 | 11006 | 10610 | -396 |
+| task-plan-writer | task plan | `## The test-run rule`, `sample_task_plan.md`, `sample_story_plan.md`, `sample_story/task_1–3_plan.md` | 6476 | 4968 | 11444 | 11168 | -276 |
+| test-fix-plan-writer | fix-plan and statistics | `## The test-run rule`, `sample_user_review_fix_plan.md`, `sample_user_review_fix_plan/finding_1.md` | 2411 | 1999 | 4410 | 4255 | -155 |
+| ui-tests-plan-reviewer | UI tests and QA | `agents/ui-tests-plan-writer.md`, `agents/qa-tester.md` | 4530 | 13829 | 18359 | 17911 | -448 |
+| ui-tests-plan-writer | UI tests and QA | `agents/qa-tester.md` | 5766 | 8063 | 13829 | 13584 | -245 |
+| user-review-fix-plan-writer | fix-plan and statistics | `## The test-run rule`, `sample_user_review_fix_plan.md`, `sample_user_review_fix_plan/finding_1.md` | 4095 | 1999 | 6094 | 5869 | -225 |
 
 ## Repeated lines — before and after
 
@@ -364,28 +364,30 @@ The task prompt's line-repetition check (lines over 80 characters found in three
 
 | # | Block (line at `b7ebf1f0` begins) | Owner | Before copies | Before words | New line begins | After copies | After words |
 |---|---|---|---|---|---|---|---|
-| 1 | `<docs_retrieval>` row | Task 3 | 11 | 56 | "… whether the docs-retrieval search tool is wired. Read **only** when" | | |
-| 2 | `<docs_root>` row | Task 3 | 11 | 38 | "… otherwise the corpus does not exist." | | |
-| 3 | "Your dispatch prompt is defined by your own contract" | Task 2 | 10 | 111 | "Your dispatch prompt is your own contract plus" | | |
-| 4 | "**How to report.** Emit a" | Task 2 | 10 | 84 | "- **Report it** in a" | | |
-| 5 | "Two things are not steering. A **bare pointer**" | Task 2 | 10 | 67 | "Two things are not steering: a **bare pointer**" | | |
-| 6 | "This report **never** changes your verdict" | Task 2 | 10 | 30 | "- The report never changes your verdict" | | |
-| 7 | `<state_dir>` row, form A | Task 4 | 8 | 36 | "… Default `sdlc-harness/`; no path segment of it begins with a dot. \|" | | |
-| 8 | `<repo_root>` row, five-copy form | Task 5 | 5 | 77 | "… The absolute root of the checkout this run executes in" | | |
-| 9 | `<state_dir>` row, form B | Task 4 | 5 | 61 | "… strip any trailing slash first" | | |
-| 10 | `<parity_vocabulary>` / `<reference_impl>` row | Task 6 | 5 | 54 | "… the name and path of the reference implementation" | | |
-| 11 | `iteration` row | Task 7 | 5 | 41 | "\| `iteration` \| Integer from the caller" | | |
-| 12 | `<default_branch>` row | Task 6 | 5 | 36 | "… merges into, so the diff base" | | |
-| 13 | "Where the dispatch carried steering" | Task 2 | 5 | 30 | "An optional `## Unsolicited dispatch guidance` section precedes whichever fixed return applies" | | |
-| 14 | `<layer_names>` row, four-copy form | Task 7 | 4 | 37 | "… **No substitution of the names themselves.** They are also" | | |
-| 15 | "**Prose volume — the receiving side.**" | Task 8 | 3 | 172 | "**Prose volume — the receiving side.** This binds durable text" | | |
-| 16 | `<repo_root>` / `<app_dir>` row, three-copy form | Task 5 | 3 | 140 | "… this run executes in" (the three-copy form) | | |
-| 17 | docs-retrieval tool bullet, variant A | Task 3 | 3 | 132 | "… the code wins. … fall back to the index-first reading above." | | |
-| 18 | docs-retrieval tool bullet, variant D | Task 3 | 3 | 130 | "… fall back to your own reading of the code." | | |
-| 19 | "**A reviewer finding you judge wrong is resolved or recorded" | Task 9 | 3 | 124 | "… Record it as one line of a" | | |
-| 20 | "- **Should Fix** — the code or claim is wrong" | Task 8 | 3 | 74 | "- **Should Fix** — wrong or unclear, but" | | |
-| 21 | `<convention_symbols>` row, three-copy form | Task 7 | 3 | 55 | "… Read them off the conventions documents `<layer_path_map>` names. \|" | | |
-| 22 | "**Guard carve-out.**" | Task 8 | 3 | 45 | "**Guard carve-out.** … It never binds a line coordinate" | | |
-| 23 | "- **Must Fix** — a consumer acting on this diff" | Task 8 | 3 | 38 | "- **Must Fix** — … wrong behaviour," | | |
-| 24 | "- **Nice to Have** — style, wording, ordering;" | Task 8 | 3 | 31 | "- **Nice to Have** — style, wording, ordering; also a stale line hint beside a resolving anchor" | | |
-| 25 | "**If there are Must Fix issues**, save findings to" | Task 9 | 3 | 28 | "**If there are Must Fix issues**, run `mkdir -p" | | |
+| 1 | `<docs_retrieval>` row | Task 3 | 11 | 56 | "… whether the docs-retrieval search tool is wired. Read **only** when" | 11 | 48 |
+| 2 | `<docs_root>` row | Task 3 | 11 | 38 | "… otherwise the corpus does not exist." | 11 | 28 |
+| 3 | "Your dispatch prompt is defined by your own contract" | Task 2 | 10 | 111 | "Your dispatch prompt is your own contract plus" | 10 | 71 |
+| 4 | "**How to report.** Emit a" | Task 2 | 10 | 84 | "- **Report it** in a" | 10 | 52 |
+| 5 | "Two things are not steering. A **bare pointer**" | Task 2 | 10 | 67 | "Two things are not steering: a **bare pointer**" | 10 | 54 |
+| 6 | "This report **never** changes your verdict" | Task 2 | 10 | 30 | "- The report never changes your verdict" | 10 | 20 |
+| 7 | `<state_dir>` row, form A | Task 4 | 8 | 36 | "… Default `sdlc-harness/`; no path segment of it begins with a dot. \|" | 8 | 31 |
+| 8 | `<repo_root>` row, five-copy form | Task 5 | 5 | 77 | "… The absolute root of the checkout this run executes in" | 5 | 62 |
+| 9 | `<state_dir>` row, form B | Task 4 | 5 | 61 | "… strip any trailing slash first" | 5 | 54 |
+| 10 | `<parity_vocabulary>` / `<reference_impl>` row | Task 6 | 5 | 54 | "… the name and path of the reference implementation" | 5 | 43 |
+| 11 | `iteration` row | Task 7 | 5 | 41 | "\| `iteration` \| Integer from the caller" | 5 | 22 |
+| 12 | `<default_branch>` row | Task 6 | 5 | 36 | "… merges into, so the diff base" | 5 | 33 |
+| 13 | "Where the dispatch carried steering" | Task 2 | 5 | 30 | "An optional `## Unsolicited dispatch guidance` section precedes whichever fixed return applies" | 5 | 17 |
+| 14 | `<layer_names>` row, four-copy form | Task 7 | 4 | 37 | "… **No substitution of the names themselves.** They are also" | 4 | 28 |
+| 15 | "**Prose volume — the receiving side.**" | Task 8 | 3 | 172 | "**Prose volume — the receiving side.** This binds durable text" | 3 | 107 |
+| 16 | `<repo_root>` / `<app_dir>` row, three-copy form | Task 5 | 3 | 140 | "… this run executes in" (the three-copy form) | 3 | 109 |
+| 17 | docs-retrieval tool bullet, variant A | Task 3 | 3 | 132 | "… the code wins. … fall back to the index-first reading above." | 3 | 96 |
+| 18 | docs-retrieval tool bullet, variant D | Task 3 | 3 | 130 | "… fall back to your own reading of the code." | 3 | 98 |
+| 19 | "**A reviewer finding you judge wrong is resolved or recorded" | Task 9 | 3 | 124 | "… Record it as one line of a" | 3 | 109 |
+| 20 | "- **Should Fix** — the code or claim is wrong" | Task 8 | 3 | 74 | "- **Should Fix** — wrong or unclear, but" | 3 | 68 |
+| 21 | `<convention_symbols>` row, three-copy form | Task 7 | 3 | 55 | "… Read them off the conventions documents `<layer_path_map>` names. \|" | 3 | 49 |
+| 22 | "**Guard carve-out.**" | Task 8 | 3 | 45 | "**Guard carve-out.** … It never binds a line coordinate" | 3 | 40 |
+| 23 | "- **Must Fix** — a consumer acting on this diff" | Task 8 | 3 | 38 | "- **Must Fix** — … wrong behaviour," | 3 | 35 |
+| 24 | "- **Nice to Have** — style, wording, ordering;" | Task 8 | 3 | 31 | "- **Nice to Have** — style, wording, ordering; also a stale line hint beside a resolving anchor" | 3 | 26 |
+| 25 | "**If there are Must Fix issues**, save findings to" | Task 9 | 3 | 28 | "**If there are Must Fix issues**, run `mkdir -p" | 3 | 18 |
+
+Repeated lines in the `After` run that the `Before` list did not have (27 lines in all): "Where the auto-loaded `CLAUDE.md` routing table names a document this definition does not," — 10 copies, the read-list precedence sentence Task 10 added; "- **Disregard it for verdict purposes**: grade by the standard your own definition and the" — 10 copies, the steering block's first bullet, which became a line of its own when Task 2 split that paragraph into bullets.
