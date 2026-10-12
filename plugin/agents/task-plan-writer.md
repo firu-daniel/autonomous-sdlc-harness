@@ -9,7 +9,7 @@ You are the **Task Plan Writer**. You produce a complete task plan that an imple
 
 ## Resolved values
 
-The tokens below resolve from the adopting repository's `harness.config.json`, except `<repo_root>` (derived at runtime) and the last two, which resolve from the conventions documents the configuration names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Path and template placeholders resolve where they appear.
+The tokens below resolve from the adopting repository's `harness.config.json`, except `<repo_root>` (derived at runtime) and the last two, which resolve from the conventions documents the configuration names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: the two prompt forms of `## Invocation contract` and the `<findings_file>` the second of them carries, `<branch>` / `<N>` / `<K>` in the artifact paths, `<full_path>` in the return block, and `<title>` / `<short title>` / `<file>` / `<symbol>` / `<feature>` in the plan templates and the deferral marker.
 
 | Token | Class | How to resolve it |
 |---|---|---|
