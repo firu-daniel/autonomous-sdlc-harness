@@ -33,6 +33,7 @@ import {
   outerLoopRelativePath,
   outerLoopScriptPath,
   outerLoopScriptsDir,
+  RUN_LIBRARY_SCRIPT_NAME,
   type OuterLoopScript,
 } from './outerLoopScripts.js';
 import { appendReadme, assertUsableInEntry, normalizedRoot } from './permissionProfile.js';
@@ -78,8 +79,8 @@ function rowNamed(file: string): OuterLoopScript {
 
 /** The run library's row: its `subdir` is the directory the unsandboxed wrappers source from. */
 function libraryDir(): string {
-  const { subdir } = rowNamed('harness-run-lib.sh');
-  if (subdir === undefined) throw internal('the outer-loop script table places harness-run-lib.sh in no subdirectory');
+  const { subdir } = rowNamed(RUN_LIBRARY_SCRIPT_NAME);
+  if (subdir === undefined) throw internal(`the outer-loop script table places ${RUN_LIBRARY_SCRIPT_NAME} in no subdirectory`);
   return subdir;
 }
 
