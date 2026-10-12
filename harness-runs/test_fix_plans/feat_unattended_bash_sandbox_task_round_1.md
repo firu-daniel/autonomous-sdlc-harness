@@ -12,7 +12,7 @@
 
 **This section is the single source of truth for the fix loop.** The loop walks the `[ ]` entries below from top to bottom, and the committing role flips each one to `[x]` when that fix's commit lands. `[ ]` markers anywhere else, such as sub-step bullets inside a per-finding file, are informational only.
 
-1. [ ] **Finding 1** — Qualify the bare plugin command spellings in `docs/work-report-research/` with `/autonomous-sdlc-harness:`. _(layer: general)_
+1. [x] **Finding 1** — Qualify the bare plugin command spellings in `docs/work-report-research/` with `/autonomous-sdlc-harness:`. _(layer: general)_
 
 ---
 
