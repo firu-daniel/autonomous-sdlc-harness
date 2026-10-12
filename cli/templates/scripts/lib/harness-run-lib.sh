@@ -588,6 +588,88 @@ hr_common_dir_nogit() {
   printf '%s\n' "$out"
 }
 
+# Print the canonical main checkout of the checkout holding <dir>: the parent of
+# `hr_common_dir_nogit "$(hr_checkout_top_nogit <dir>)"`. Return 1, printing
+# nothing, when either call fails. The git-free twin of `hr_main_repo`, which
+# runs `git worktree list` and so would load the configuration of a checkout a
+# wrapper has not yet decided to trust.
+hr_main_checkout_of() {
+  local top common main
+  top=$(hr_checkout_top_nogit "${1-}") || return 1
+  common=$(hr_common_dir_nogit "$top") || return 1
+  main=${common%/.git}
+  [ -n "$main" ] || main=/
+  ( CDPATH= cd -P -- "$main" 2>/dev/null && pwd -P ) || return 1
+}
+
+# Judge whether <target_top> is a checkout an unsandboxed wrapper may run git in,
+# for the main checkout <main_top> the wrapper's own location gives. Return 0
+# when, compared canonically, <target_top> is <main_top>, or when it is a
+# worktree that main repository lists: `<target_top>/.git` is a regular file;
+# its gitdir `<p>` (`hr_gitdir_nogit`) sits directly in `<main_top>/.git/worktrees`;
+# `<p>/commondir` exists and the common dir (`hr_common_dir_nogit`) is
+# `<main_top>/.git` — without that file the common dir is `<p>` itself, whose
+# basename is not `.git`, so `hr_common_dir_nogit` already fails; and `<p>/gitdir`, resolved against `<p>`, is
+# `<target_top>/.git`. Return 1 otherwise, with `HR_TARGET_REFUSAL` set to one
+# sentence naming the failed condition, never a file's contents. Prints nothing;
+# call it directly, never inside `$(…)`.
+#
+# The target is untrusted because the permission profile's excluded rule for
+# each wrapper ends in `:*`, which takes any argument: a sandboxed command could
+# build a repository whose own configuration runs a program, and hand it over.
+# The git records read are the target's `.git` pointer, `<p>/commondir` and
+# `<p>/gitdir` — the back-pointer by which git itself lists a worktree, read
+# here and nowhere else in this library.
+#
+# A worktree registered by a sandboxed command still passes: a linked worktree
+# may write the main repository's `.git` except `hooks/` and `config`, so it can
+# create a `<main>/.git/worktrees/<name>` of its own. Such a worktree's
+# configuration is the main `.git/config`, which the sandbox cannot write, plus
+# its `config.worktree`, which `hr_worktree_config_check_var` holds to one key,
+# and its hooks are pinned (`hr_pinned_hooks_path`).
+hr_wrapper_target_check_var() {
+  local main="${1-}" target="${2-}" p common line="" back back_c want
+  HR_TARGET_REFUSAL=""
+  if ! main=$( CDPATH= cd -P -- "$main" 2>/dev/null && pwd -P ); then
+    HR_TARGET_REFUSAL="the main checkout '${1-}' is not a directory"
+    return 1
+  fi
+  if ! target=$( CDPATH= cd -P -- "$target" 2>/dev/null && pwd -P ); then
+    HR_TARGET_REFUSAL="the target '${2-}' is not a directory"
+    return 1
+  fi
+  [ "$target" != "$main" ] || return 0
+  local refused="'$target' is neither the main checkout $main nor a worktree it lists"
+  if [ ! -f "$target/.git" ] || [ -L "$target/.git" ]; then
+    HR_TARGET_REFUSAL="$refused: its .git is not a regular pointer file"
+    return 1
+  fi
+  if ! p=$(hr_gitdir_nogit "$target") || [ "${p%/*}" != "$main/.git/worktrees" ]; then
+    HR_TARGET_REFUSAL="$refused: its .git does not point into $main/.git/worktrees"
+    return 1
+  fi
+  if ! common=$(hr_common_dir_nogit "$target") || [ "$common" != "$main/.git" ]; then
+    HR_TARGET_REFUSAL="$refused: its worktree record's commondir does not resolve to $main/.git"
+    return 1
+  fi
+  if [ -f "$p/gitdir" ]; then
+    IFS= read -r line 2>/dev/null <"$p/gitdir" || [ -n "$line" ] || line=""
+    line=${line%$'\r'}
+  fi
+  back=""
+  if [ -n "$line" ]; then
+    case "$line" in /*) back=$line ;; *) back="$p/$line" ;; esac
+  fi
+  back_c=""
+  [ -z "$back" ] || back_c=$(hr_canonical_path_nogit "$back") || back_c=""
+  want=$(hr_canonical_path_nogit "$target/.git") || want=""
+  if [ -z "$back_c" ] || [ -z "$want" ] || [ "$back_c" != "$want" ]; then
+    HR_TARGET_REFUSAL="$refused: its worktree record's gitdir does not point back at $target/.git"
+    return 1
+  fi
+  return 0
+}
+
 # Print the per-working-copy configuration file of the checkout at <top>:
 # `<gitdir>/config.worktree` (`<top>/.git/config.worktree` for the main
 # checkout). Return 1 when `hr_gitdir_nogit` fails. Whether the file exists is

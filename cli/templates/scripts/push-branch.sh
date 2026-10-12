@@ -23,11 +23,11 @@
 # neither and draws a prompt an unattended run cannot answer.
 #
 # EVERY FAILURE PATH IS NON-FATAL (exit 0). A non-git directory, a detached
-# HEAD, a protected branch, a configuration that cannot be resolved, a
-# per-working-copy configuration it does not trust, a hooks directory it will
-# not pin, or a failed push (a transient network, say) is made VISIBLE with a one-line message but
-# must NEVER abort the calling run — a stale remote is recoverable and a halted
-# run is not. That is why this script uses `set -uo pipefail` deliberately
+# HEAD, a protected branch, a configuration that cannot be resolved, a target
+# it does not trust, a per-working-copy configuration it does not trust, a
+# hooks directory it will not pin, or a failed push (a transient network, say)
+# is made VISIBLE with a one-line message but must NEVER abort the calling
+# run — a stale remote is recoverable and a halted run is not. That is why this script uses `set -uo pipefail` deliberately
 # WITHOUT `set -e`, and why even the fail-closed arm below exits 0: it refuses
 # to push, which is the closed outcome here, and says so. A push the remote
 # refused for any reason but a `[rejected]` ref is attempted up to
@@ -71,6 +71,17 @@
 # into this file would enforce the wrong set the moment `protectedBranches`
 # changed, and nothing at all in a repository whose integration branch is named
 # something else.
+#
+# THE TARGET IS NOT TRUSTED. The permission profile runs the main checkout's
+# copy of this script OUTSIDE the sandbox under a rule ending in `:*`, which
+# takes any argument, so a sandboxed command could hand it a repository whose
+# own configuration runs a program. Before its first git call this script
+# refuses (exit 0, a "refusing to push:" line) unless the target is the main
+# checkout this file sits in — derived from this file's own location, never
+# from the argument — or a worktree that main repository lists (conditions:
+# `lib/harness-run-lib.sh` → `hr_wrapper_target_check_var`). That covers a
+# rewritten `.git` pointer and a rewritten `commondir` as well as a foreign
+# repository.
 #
 # THE PER-WORKING-COPY CONFIG IS NOT TRUSTED. The main checkout's copy of this
 # script runs OUTSIDE the sandbox, so any git configuration a sandboxed command
@@ -118,7 +129,10 @@
 #   b=$(mktemp -d)/origin.git; git init -q --bare "$b"
 #   d=$(mktemp -d); git -C "$d" init -q -b feat_x; git -C "$d" remote add origin "$b"
 #   printf '%s' '{"version":1,"defaultBranch":"trunk","protectedBranches":["trunk","release/*"],"stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$d/harness.config.json"
+#   mkdir -p "$d/scripts"; cp -R <this script> <its lib/> "$d/scripts/"
 #   git -C "$d" add -A && git -C "$d" commit -qm "seed"
+#   # `push-branch.sh` below is `bash "$d/scripts/push-branch.sh"`: a copy
+#   # outside the checkout it is aimed at refuses (THE TARGET IS NOT TRUSTED).
 #
 #   no upstream yet   push-branch.sh "$d"   -> exit 0; `git -C "$b" branch` lists
 #                     feat_x and the branch now has an upstream
@@ -146,7 +160,7 @@
 #
 #   The per-working-copy check and the pin, from a linked worktree (`githooksDir`
 #   takes its default, `githooks`):
-#   mkdir -p "$d/githooks" "$d/scripts"; cp -R <this script> <its lib/> "$d/scripts/"
+#   mkdir -p "$d/githooks"
 #   printf '%s\n' '#!/bin/sh' "echo main >> $d.marker" > "$d/githooks/pre-push"
 #   chmod +x "$d/githooks/pre-push"; git -C "$d" config core.hooksPath githooks
 #   git -C "$d" add -A && git -C "$d" commit -qm hooks
@@ -172,6 +186,22 @@
 #                     clean worktree
 #                     -> exit 0, a "refusing to push:" line naming "$d/.husky",
 #                     "$b" unchanged
+#
+#   The target check, on a clean worktree as above; each row starts from it:
+#   s=$(mktemp -d); git -C "$s" init -q -b feat_x; git -C "$s" remote add origin "$b"
+#   git -C "$s" commit -qm s --allow-empty
+#   git -C "$s" config core.sshCommand "touch $s.marker; ssh"
+#
+#   a scratch repo    bash "$d/scripts/push-branch.sh" "$s"
+#                     -> exit 0, a "refusing to push:" line, no "$s.marker",
+#                     "$b" unchanged
+#   rewritten pointer printf 'gitdir: %s\n' "$s/.git" > "$w/.git"
+#                     bash "$d/scripts/push-branch.sh" "$w"
+#                     -> exit 0, a "refusing to push:" line, "$b" unchanged
+#   rewritten         printf '%s\n' "$s/.git" > "$d/.git/worktrees/wt/commondir"
+#   commondir         bash "$d/scripts/push-branch.sh" "$w"
+#                     -> exit 0, a "refusing to push:" line, "$b" unchanged
+#   clean worktree    the clean worktree row above: it pushes
 
 set -uo pipefail
 
@@ -202,12 +232,22 @@ fi
 . "$hr_lib"
 
 repo_dir="${1:-$PWD}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # THE PER-WORKING-COPY CONFIG IS NOT TRUSTED (header): settled before the first
 # git call, each function called directly so its variables survive.
 top_nogit="$(hr_checkout_top_nogit "$repo_dir")" || top_nogit=""
 if [ -z "$top_nogit" ]; then
   echo "push-branch.sh: '$repo_dir' is not a git repository — nothing to push"
+  exit 0
+fi
+# THE TARGET IS NOT TRUSTED (header).
+if ! main_top="$(hr_main_checkout_of "$script_dir")"; then
+  echo "push-branch.sh: refusing to push: cannot place this script in a main checkout"
+  exit 0
+fi
+if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
+  echo "push-branch.sh: refusing to push: $HR_TARGET_REFUSAL"
   exit 0
 fi
 if ! hr_worktree_config_check_var "$top_nogit"; then

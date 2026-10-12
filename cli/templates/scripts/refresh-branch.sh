@@ -37,6 +37,15 @@
 # not pushed — which is exactly the state a worktree cut from `origin/<base>` is
 # stale against while `origin/<base>` looks current.
 #
+# THE TARGET IS NOT TRUSTED. The permission profile runs the main checkout's
+# copy of this script OUTSIDE the sandbox under a rule ending in `:*`, which
+# takes any argument. So before its first git call this script refuses (exit 1,
+# a "refusing to refresh:" line) unless the target is the main checkout this
+# file sits in — derived from this file's own location, never from the
+# argument — or a worktree that main repository lists (conditions:
+# `lib/harness-run-lib.sh` → `hr_wrapper_target_check_var`; the reasoning:
+# `push-branch.sh` → the paragraph of the same name).
+#
 # THE PER-WORKING-COPY CONFIG IS NOT TRUSTED. The main checkout's copy of this
 # script runs OUTSIDE the sandbox, and a linked worktree's
 # `.git/worktrees/<name>/config.worktree` is sandbox-writable. So before its
@@ -66,6 +75,7 @@
 #   0  the current branch now contains the base (the merge landed)
 #   1  usage error / not a git repository / detached HEAD / the configuration
 #      could not be read / the working tree has uncommitted tracked changes /
+#      a target this script does not trust (THE TARGET IS NOT TRUSTED above) /
 #      a per-working-copy configuration or a hooks directory this script does
 #      not trust (THE PER-WORKING-COPY CONFIG IS NOT TRUSTED above)
 #   2  protected-branch refusal — HEAD is ON a protected branch, so this would be
@@ -136,6 +146,21 @@
 #   a foreign key     git -C "$w" config --worktree user.name x; the same call
 #                     -> exit 1, a "refusing to refresh:" line naming user.name
 #                     and not its value; `git -C "$w" rev-parse HEAD` unchanged
+#
+#   The target check, on a clean worktree as above; each row starts from it:
+#   s=$(mktemp -d); git -C "$s" init -q -b feat_s; git -C "$s" remote add origin "$b"
+#   git -C "$s" commit -qm s --allow-empty
+#   git -C "$s" config core.sshCommand "touch $s.marker; ssh"
+#
+#   a scratch repo    bash "$d/scripts/refresh-branch.sh" "$s"
+#                     -> exit 1, a "refusing to refresh:" line, no "$s.marker",
+#                     `git -C "$s" rev-parse HEAD` unchanged
+#   rewritten pointer printf 'gitdir: %s\n' "$s/.git" > "$w/.git"; the same
+#                     call on "$w" -> exit 1, a "refusing to refresh:" line
+#   rewritten         printf '%s\n' "$s/.git" > "$d/.git/worktrees/wt/commondir";
+#   commondir         the same call on "$w" -> exit 1, a "refusing to refresh:"
+#                     line
+#   clean worktree    the "a worktree" row above: it refreshes
 
 set -uo pipefail
 
@@ -185,6 +210,15 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 top_nogit="$(hr_checkout_top_nogit "$target")" || top_nogit=""
 if [ -z "$top_nogit" ]; then
   echo "refresh-branch.sh: '$target' is not inside a git repository — refusing to merge" >&2
+  exit 1
+fi
+# THE TARGET IS NOT TRUSTED (header).
+if ! main_top="$(hr_main_checkout_of "$script_dir")"; then
+  echo "refresh-branch.sh: refusing to refresh: cannot place this script in a main checkout" >&2
+  exit 1
+fi
+if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
+  echo "refresh-branch.sh: refusing to refresh: $HR_TARGET_REFUSAL" >&2
   exit 1
 fi
 if ! hr_worktree_config_check_var "$top_nogit"; then
