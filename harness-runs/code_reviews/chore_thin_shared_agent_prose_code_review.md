@@ -38,7 +38,7 @@ Two findings remain. One is a behaviour change in the shared steering block, whi
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Change "and so are the changed paths" to "and so do the changed paths" in review-plan-reviewer's `<repo_root>` / `<app_dir>` row _(layer: plugin)_
+1. [x] **Finding 2** — Change "and so are the changed paths" to "and so do the changed paths" in review-plan-reviewer's `<repo_root>` / `<app_dir>` row _(layer: plugin)_
 2. [ ] **Finding 1** — Restore the steering block's full sanctioned-dispatch scope ("plus what the instruction file … defines") in all ten copies _(layer: plugin)_
 
 ---
