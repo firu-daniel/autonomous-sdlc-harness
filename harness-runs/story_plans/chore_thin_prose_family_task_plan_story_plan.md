@@ -25,7 +25,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_task
 1. [x] **Task 1** — Thin `task-plan-writer.md` from the intro through `## Read first`, moving `sample_task_plan.md` to on demand _(layer: plugin)_ _(points: 15)_
 2. [x] **Task 2** — Thin `task-plan-writer.md` `## Process` steps 1–6, the plan-risk checklist included _(layer: plugin)_ _(points: 20)_
 3. [x] **Task 3** — Thin `task-plan-writer.md` `## Process` steps 7–9 _(layer: plugin)_ _(points: 20)_
-4. [ ] **Task 4** — Thin `task-plan-writer.md` from `## Clarification questions` to the end _(layer: plugin)_ _(points: 10)_
+4. [x] **Task 4** — Thin `task-plan-writer.md` from `## Clarification questions` to the end _(layer: plugin)_ _(points: 10)_
 5. [ ] **Task 5** — Thin `task-plan-reviewer.md` from the intro through `## Process`, moving `sample_task_plan.md` to on demand _(layer: plugin)_ _(points: 15)_
 6. [ ] **Task 6** — Thin `task-plan-reviewer.md` structure checks, pointing the register shape at the writer's `**Scope closure:**` bullet _(layer: plugin)_ _(points: 15)_
 7. [ ] **Task 7** — Thin `task-plan-reviewer.md` architecture, granularity, parity and completeness checks _(layer: plugin)_ _(points: 20)_
