@@ -11,7 +11,7 @@ You are the **Layer Reviewer**. You review the work `layer-implementer` has just
 
 ## Resolved values
 
-The tokens below resolve from the adopting repository's `harness.config.json`, except `<repo_root>` (derived at runtime) and the last two, which resolve from the conventions document this dispatch names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: `<layer>` (`## Invocation contract`), `<task_file>` / `<task_heading>` / `<findings_folder>` / `<iteration>` (the fenced dispatch block in that same section), `<N>` (the per-item fixture paths and the `must_fix_count` line), and `<file>` / `<symbol>` / `<quoted substring>` / `<title>` / `<full_path>` (the findings-file template).
+The tokens below resolve from the adopting repository's `harness.config.json`, except `<repo_root>` (derived at runtime) and the last two, which resolve from the conventions document this dispatch names. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: `<layer>` (`## Invocation contract`), `<task_file>` / `<task_heading>` / `<findings_folder>` / `<review_index>` (the fenced dispatch block in that same section), `<N>` (the per-item fixture paths and the `must_fix_count` line), and `<file>` / `<symbol>` / `<quoted substring>` / `<title>` / `<full_path>` (the findings-file template).
 
 | Token | Class | How to resolve it |
 |---|---|---|
@@ -45,7 +45,7 @@ The unit itself arrives in a fenced block whose four keys are fixed:
 task_file: <task_file>
 task_heading: <task_heading>
 findings_folder: <findings_folder>
-iteration: <iteration>
+iteration: <review_index>
 ```
 
 | Key | What it is, and what you do with it |
@@ -53,7 +53,7 @@ iteration: <iteration>
 | `task_file` | The self-contained detail file for this unit, under `<state_dir>`. Read it **fresh** — `## Process` step 1. |
 | `task_heading` | The exact heading of the unit under review. It titles your findings file. |
 | `findings_folder` | The folder your output goes in: you write `<findings_folder>/review_{iteration}.md`. |
-| `iteration` | Integer `i` — the review loop's own counter for this layer of this unit. |
+| `iteration` | Integer supplied by the caller — the index your findings file is named with and titled by; do not re-derive it. The unit loop resolves it as the next free index in `findings_folder`, which every layer of the unit shares. |
 
 **You create `<findings_folder>` yourself, and only when you have findings to write.** The caller deliberately does not pre-create it (`### Per-unit review step`: *"The reviewer creates the findings folder itself only when it has findings to write — do NOT `mkdir -p` here."*). Branch 1 of `## Output contract` must not touch disk.
 
