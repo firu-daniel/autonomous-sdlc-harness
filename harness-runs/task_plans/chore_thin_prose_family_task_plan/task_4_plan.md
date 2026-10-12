@@ -1,0 +1,32 @@
+### Task 4 — Thin `task-plan-writer.md` from `## Clarification questions` to the end
+
+**Goal:** Shorten the writer's closing sections — `## Clarification questions`, `## Revision mode` and `## Output contract` — to direct instructions stated once, keeping every return literal the caller parses and every anchor another file cites.
+
+**Depends on:** Task 3, which thinned the last `## Process` step and left this range untouched. Task 1 reduced `## Invocation contract` → **How the caller consumes your return** to a pointer at `## Output contract`, so this section is now the only place that states the summary keys, the parity-only section and how `## Corpus staleness` is consumed — keep all three here.
+
+**Source:** `docs/work-report-research/task-plan-writer.md` → `## Prose classification` (rows `## Clarification questions` through Manual setup + closing) and `## Thinning plan`, as input only; the standard is `.claude/context/plugin.md` → `## Writing agent prose`.
+
+**Where this task stops.** It edits only the lines from the `## Clarification questions` heading to the end of the file.
+
+### Targets
+
+- `plugin/agents/task-plan-writer.md` → `## Clarification questions`, `## Revision mode`, `## Output contract`.
+
+**Frozen in this range — keep byte-for-byte** (each also appears in agents outside this family):
+- The whole paragraph beginning *"**A reviewer finding you judge wrong is resolved or recorded — never only answered in your return.**"*, through *"a Must Fix you do not resolve stays open into the next round."*, and it stays under `## Revision mode` — `scripts/lib/flow-walker-gates.sh` and `cli/templates/scripts/lib/flow-walker-gates.sh` cite `task-plan-writer.md` → `## Revision mode` for `call stands`.
+- *"Do not paste the plan content back to the orchestrator — it will not read it."*
+
+**Wire text to keep byte-for-byte:** the three headings; the summary block's four lines `story_file: <full_path>`, `task_files_dir: <state_dir>/task_plans/<branch>/`, `tasks_count: <N>`, `story_points_total: <N>`; `## Questions`; `## Parity exclusions / deferrals`; `## Corpus staleness` ("under that heading exactly"); the type tokens `stale-rule` and `undescribed-layer`; `## Manual setup required`; `TODO: @claude`; `/autonomous-sdlc-harness:harness-analyze`; `npx autonomous-sdlc-harness config set layers`; `layer-drift`; `--yes`; `skip`; `merge`.
+
+**Work:**
+
+- [ ] **`## Clarification questions` and `## Revision mode`.** Clarification: keep "ask before drafting when something material is missing or ambiguous; state the questions and stop; never make a load-bearing assumption silently". Revision mode: keep that the findings file is authoritative; that an item may target the index, per-task files or both, and only the targeted files are opened and re-saved; apply only Must Fix items, never rewrite from scratch, preserve everything unflagged; the one exception — a Must Fix that changes the target set (a task added, removed or split, a target file added) re-executes the register's own derivation entries and updates `## Scope register` in the same pass; keep the readiness list and the per-task files 1:1; add no Should Fix or Nice to Have unless told. Cut the clause explaining what `task-plan-reviewer` already considered.
+- [ ] **`## Output contract`, the summary and the parity section.** Keep "return exactly" and the four-line block; one sentence that `story_points_total` is the sum of every `_(points: <N>)_` value, the statistics writer's denominator. Keep `## Questions` above the summary when there are questions. Keep `## Parity exclusions / deferrals` **only when `phases.parity` is `true`**, listing each excluded behaviour with its authorising task-prompt line and each deferred one with its `TODO: @claude` marker location, omitted when empty and never written with the phase off. Keep that the caller reads back `story_file`, `task_files_dir` and `tasks_count` without opening the plan files, and that you do not paste the plan back (the frozen sentence).
+- [ ] **`## Corpus staleness` and `## Manual setup required`.** Keep the trigger (the branch invalidates a conventions document's rule, or lands in a directory the layer profile does not describe), the exact heading, that every entry opens with its type as its first token, and both types with every field: `stale-rule` — the document, the falsified rule, the supervised follow-up (a `/autonomous-sdlc-harness:harness-analyze <target>` re-run or a hand edit); `undescribed-layer` — a directory only the catch-all row covers, whether created or found, the code it holds, and the remedy (a `/autonomous-sdlc-harness:harness-analyze` run in a session answered `skip` for every already-filled document, never `--yes`, which takes `merge` on all of them, with the profile applied through `npx autonomous-sdlc-harness config set layers`; `doctor`'s `layer-drift` check reports the same directories). Keep that the caller writes it to the branch's improvement-observations intake and the closing Done summary, and that each entry is a recommendation, never a task; state that consumption once. `## Manual setup required`: keep the trigger, each step with the task depending on it, and that the same list sits in the index's `## Context`.
+
+**Verification:**
+
+- `wc -w plugin/agents/task-plan-writer.md` prints less than it did before this task's edit.
+- `git diff -- plugin/agents/task-plan-writer.md` (this task's uncommitted edit) shows no change above the `## Clarification questions` heading, and no removed line inside the fenced summary block or the frozen paragraph.
+- Each frozen sentence and wire string above is found by `grep -c -F -e '<string>' plugin/agents/task-plan-writer.md` (a non-zero count), and `## Revision mode` is still the heading the frozen paragraph sits under.
+- `plugin/instructions/task_plan_writing_instructions_core.md` → ``### 1. Spawn `task-plan-writer` ``, `plugin/instructions/plan_orchestration_instructions_autonomous.md` (its bullet *"The plan's corpus staleness is one of the observations."*) and `plugin/instructions/plan_orchestration_instructions_core.md` (its Done-summary bullet *"**Corpus staleness: each entry's type and what it owes …**"*, which takes "the `## Corpus staleness` section of the plan writer's return (that literal heading …)" with each entry's type as its first token) still find every key, heading and type token they read in this return contract.
