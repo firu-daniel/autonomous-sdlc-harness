@@ -114,7 +114,7 @@ Read the file the dispatched `layers[].conventions` value names and review again
 
 ## Catch-all layer additions
 
-Everything in this section applies **only when the dispatched `layers[].path` is `"."`**, in addition to the dispatched conventions document. On any other path, skip to `## Output contract`.
+Everything in this section applies **only when the dispatched `layers[].path` is `"."`**, in addition to the dispatched conventions document. Otherwise, skip to `## Unsolicited dispatch guidance`.
 
 **Read every layer's rules, not just this one's.** On a catch-all dispatch, read **every** conventions document `harness.config.json` → `layers[].conventions` names, because the checks below turn on what the other layers' documents say. Still grade each layer's files only against that layer's document.
 

@@ -28,7 +28,7 @@ The one Must Fix predates the branch, but it sits in a line this branch rewrote.
 1. [x] **Finding 6** — Make `committer`'s template-capitalisation sentence cover all three Subject reconciliation templates _(layer: plugin)_
 2. [x] **Finding 3** — Reword `layer-reviewer`'s intro so `Write` is not barred from the findings and probe files _(layer: plugin)_
 3. [x] **Finding 2** — Name the wrapper in `layer-implementer`'s refused-call fallback _(layer: plugin)_
-4. [ ] **Finding 1** — Point `layer-reviewer`'s catch-all skip at `## Unsolicited dispatch guidance`, not past it _(layer: plugin)_
+4. [x] **Finding 1** — Point `layer-reviewer`'s catch-all skip at `## Unsolicited dispatch guidance`, not past it _(layer: plugin)_
 5. [ ] **Finding 4** — Restore the shared path-placeholder clause in both family `## Resolved values` preambles _(layer: plugin)_
 6. [ ] **Finding 5** — Restore the shared site-anchor definition in `layer-reviewer`'s `### 3. At least one Must Fix` _(layer: plugin)_
 7. [ ] **Finding 7** — Re-point `.claude/context/conventions.md`'s citation of the committer's **Fixed-form subjects** bullet _(layer: general)_
