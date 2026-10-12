@@ -385,6 +385,12 @@ const SANDBOX_LISTS: readonly string[] = Object.freeze([
   'network.allowedDomains',
 ]);
 
+/** The `sandbox.credentials` lists {@link assertRunnable} checks, each with the field it names an entry by. */
+const CREDENTIAL_LISTS: ReadonlyArray<readonly [list: string, field: string]> = Object.freeze([
+  ['files', 'path'],
+  ['envVars', 'name'],
+] as const);
+
 /** How many `allow` entries one selected script must contribute — the three forms of choice 1. */
 const FORMS_PER_SCRIPT = 3;
 
@@ -916,6 +922,19 @@ function assertRunnable(profile: JsonObject): void {
       throw internal(`the generated \`${where}\` is not a list of strings`);
     }
     lists.push([where, value as string[]]);
+  }
+  for (const [list, field] of CREDENTIAL_LISTS) {
+    const where = `sandbox.credentials.${list}`;
+    const value = where.split('.').reduce<JsonValue | undefined>(
+      (node, key) => (isJsonObject(node) ? node[key] : undefined),
+      profile,
+    );
+    if (value === undefined) continue;
+    const named = Array.isArray(value) ? value.map((entry) => (isJsonObject(entry) ? entry[field] : undefined)) : [];
+    if (!Array.isArray(value) || named.some((name) => typeof name !== 'string')) {
+      throw internal(`the generated \`${where}\` is not a list of entries each with a string \`${field}\``);
+    }
+    lists.push([`${where}[].${field}`, named as string[]]);
   }
 
   for (const [where, list] of lists) {

@@ -24,7 +24,8 @@
     "TWO COMMANDS RUN OUTSIDE THE SANDBOX, EACH IN ONE SPELLING: `sandbox.excludedCommands` names the main checkout's own `push-branch.sh` and `refresh-branch.sh` under {{scriptsDirAbs}}, because on macOS an SSH push or fetch fails inside the sandbox. An excluded command runs with full access and reaches any host, so the file it runs has to be one the sandbox cannot write - and the worktree's copy is not: a run's worktree is sandbox-writable, the only spelling a profile has for a sibling worktree is a glob, and Linux skips a `denyWrite` entry carrying one. The repo-relative and sibling-worktree spellings of both wrappers stay in `allow` above and stay sandboxed, as does a call that compounds the excluded spelling with anything else. The excluded rule's `:*` accepts any argument, so both wrappers refuse any target but the main checkout or a worktree it lists.",
     "`allowLocalBinding` IS macOS ONLY: it is set so a test suite or dev server a sandboxed command starts can bind loopback. On Linux each sandboxed command has a private loopback and cannot reach a server another one started.",
     "THE NETWORK-CLIENT DENIES ARE A SECOND LAYER: `WebFetch` and `WebSearch` are denied as tools, because they run outside the sandbox. The `Bash(<client>:*)` entries for `curl`, `wget`, `nc`, `ncat`, `socat`, `ssh`, `scp`, `sftp`, `ftp`, `telnet` and `rsync` are prefix matches on the start of the command string like every other deny entry, so a client reached any other way passes them: without the sandbox they are cosmetic.",
-    "TWO RESIDUALS, STATED RATHER THAN HIDDEN: on Linux the worktree-glob `denyWrite` entries are skipped, so the protection they add - the worktree's hooks directory, and the worktree's copy of `docs-search-server.sh` and its library when docs retrieval applies - holds on macOS only, while the `Edit` and `Write` deny rules carry the same globs and hold everywhere. And the interactive-test phase is unmeasured under the sandbox: on Linux each sandboxed command has a private loopback, so the dev server and the readiness poll cannot meet."
+    "TWO RESIDUALS, STATED RATHER THAN HIDDEN: on Linux the worktree-glob `denyWrite` entries are skipped, so the protection they add - the worktree's hooks directory, and the worktree's copy of `docs-search-server.sh` and its library when docs retrieval applies - holds on macOS only, while the `Edit` and `Write` deny rules carry the same globs and hold everywhere. And the interactive-test phase is unmeasured under the sandbox: on Linux each sandboxed command has a private loopback, so the dev server and the readiness poll cannot meet.",
+    "CREDENTIALS ARE DENIED ON BOTH SIDES: `sandbox.credentials` below names credential files and shell startup files, each read-denied to a sandboxed command, and token variables, each unset before every sandboxed command. It reaches sandboxed Bash commands only, so the two excluded wrappers above keep the environment an HTTPS push needs. `Read`, `Grep` and `Glob` run outside the sandbox, so every file that block names is also a pair of `Read` rules in `deny` - the path itself and everything under it, with the home directory of the machine that generated this file in place of `~` - and those rules hold in every permission mode, the `PERMISSION_MODE=acceptEdits` override included. A credentials `deny` entry from any settings scope merges with these, and no scope can remove one another added. Three files are left out on purpose: `~/.npmrc` and `~/.gitconfig`, which npm and git read on every invocation, and `~/.zshenv`, which zsh reads on every invocation. Whether denying them breaks a run is not yet measured, so they are left readable until measured (roadmap item 21)."
   ],
   "permissions": {
     "allow": [
@@ -127,6 +128,33 @@
       "strictAllowlist": true,
       "allowLocalBinding": true,
       "allowedDomains": []
+    },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws", "mode": "deny" },
+        { "path": "~/.config/gh", "mode": "deny" },
+        { "path": "~/.gnupg", "mode": "deny" },
+        { "path": "~/.netrc", "mode": "deny" },
+        { "path": "~/.git-credentials", "mode": "deny" },
+        { "path": "~/.docker/config.json", "mode": "deny" },
+        { "path": "~/.kube", "mode": "deny" },
+        { "path": "~/.config/gcloud", "mode": "deny" },
+        { "path": "~/.azure", "mode": "deny" },
+        { "path": "~/.bashrc", "mode": "deny" },
+        { "path": "~/.bash_profile", "mode": "deny" },
+        { "path": "~/.profile", "mode": "deny" },
+        { "path": "~/.zshrc", "mode": "deny" },
+        { "path": "~/.zprofile", "mode": "deny" }
+      ],
+      "envVars": [
+        { "name": "GH_TOKEN", "mode": "deny" },
+        { "name": "GITHUB_TOKEN", "mode": "deny" },
+        { "name": "HARNESS_PR_TOKEN", "mode": "deny" },
+        { "name": "NPM_TOKEN", "mode": "deny" },
+        { "name": "ANTHROPIC_API_KEY", "mode": "deny" },
+        { "name": "CLAUDE_CODE_OAUTH_TOKEN", "mode": "deny" }
+      ]
     }
   }
 }

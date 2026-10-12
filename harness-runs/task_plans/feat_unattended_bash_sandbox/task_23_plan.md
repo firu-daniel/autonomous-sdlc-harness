@@ -70,3 +70,8 @@
 - The file-tool half is exercised end to end only by the manual step in the story index, which reads `~/.ssh` with the `Read`, `Grep` and `Glob` tools in a session launched with the regenerated profile. The suite proves the rules are rendered, not that the host honours them.
 - `grep -n "'~/" cli/src/generators/*.ts` finds no credential path literal. The list lives in the template only.
 - `grep -n 'feat_' cli/templates/claude/settings.autonomous.json` prints nothing: the `_README` names no branch.
+
+- **Deviations from plan:**
+  - `FORBIDDEN_IN_ENTRY` does not refuse `~`, so `assertRunnable` scans `sandbox.credentials.files[].path` and `envVars[].name` with no exemption and no comment; the conditional exemption was not needed.
+  - `applySandbox` screens `homeRoot()` with `assertUsableInEntry` (ordinary exit code) before building the `Read` rules: the home directory is a machine value, and without the screen a home path carrying a quote would reach `assertRunnable` and be reported as this CLI's fault (`.claude/context/cli.md` → "screen the adopter-fixable shape first").
+  - The `~/` prefix is matched with a regex (`HOME_RELATIVE`) rather than a `'~/'` string literal, so the plan's `grep -n "'~/" cli/src/generators/*.ts` check holds.

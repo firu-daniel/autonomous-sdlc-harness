@@ -10,13 +10,18 @@
  * the path is `outerLoopScriptPath`'s, the same producer the write protection builds its denied path
  * through, so the file that runs unsandboxed and the file that cannot be written are one string.
  *
- * The static half — the strict-mode booleans, the empty lists, the state directory's write grant —
- * is the shipped template's, which {@link shippedSandboxSettings} reads rather than restating.
+ * The static half — the strict-mode booleans, the empty lists, the state directory's write grant,
+ * the credentials block — is the shipped template's, which {@link shippedSandboxSettings} reads rather
+ * than restating. The template is also the one list of credential paths: the file tools run outside
+ * the sandbox, so {@link applySandbox} derives a `Read` deny pair per path from it rather than from a
+ * second copy here.
  *
  * **Import cycle, deliberate:** this module imports from `permissionProfile.ts`, whose
  * `renderProfile` calls {@link applySandbox}. Every binding imported from there is used at call time
  * only, never while either module is being evaluated; keep it that way.
  */
+
+import { join } from 'node:path';
 
 import {
   browserWiringApplies,
@@ -27,7 +32,7 @@ import {
 } from '../config/model.js';
 import { internal } from '../core/errors.js';
 import { isJsonObject, type JsonObject, type JsonValue } from '../core/json.js';
-import { readTemplate } from '../core/paths.js';
+import { homeRoot, readTemplate } from '../core/paths.js';
 import { OUTER_LOOP_SCRIPTS, outerLoopRelativePath, outerLoopScriptPath } from './outerLoopScripts.js';
 import { appendReadme, assertUsableInEntry, bashScriptRule, TEMPLATE_PATH } from './permissionProfile.js';
 
@@ -42,6 +47,9 @@ export const SANDBOX_OPT_OUT_MARKER = "THE SANDBOX IS OFF BY THIS REPOSITORY'S O
  * loopback is refused unless the IP itself is listed.
  */
 export const LOOPBACK_ALLOWED_HOST = '127.0.0.1';
+
+/** A `sandbox.credentials.files` path relative to the home directory, capturing the rest. */
+const HOME_RELATIVE = /^~\/(.+)$/;
 
 /** The `_README` line prefix one allowed domain is explained under. */
 const ALLOWED_DOMAIN_README = 'ALLOWED DOMAIN';
@@ -138,6 +146,40 @@ export function shippedSandboxSettings(): readonly { readonly path: string; read
   });
 }
 
+/**
+ * The file-tool half of the credential denial: for each `~/`-relative path, a `Read` deny for the
+ * path and one for everything under it, in the `//` absolute form with `home` in place of `~`. No
+ * `Read(~/…)` form is emitted: the profile defines only the `//` and `/` prefixes. A path without the
+ * `~/` prefix is an internal fault, since the shipped template is the only source.
+ */
+export function credentialReadDenyRules(input: {
+  readonly home: string;
+  readonly files: readonly string[];
+}): readonly string[] {
+  return input.files.flatMap((path) => {
+    const rest = HOME_RELATIVE.exec(path)?.[1];
+    if (rest === undefined) {
+      throw internal(
+        `the permission-profile template's \`${SANDBOX_KEY}.credentials.files\` entry ${JSON.stringify(path)} is not relative to the home directory`,
+      );
+    }
+    const absolute = join(input.home, rest);
+    return [`Read(/${absolute})`, `Read(/${absolute}/**)`];
+  });
+}
+
+/** The `path` of every `sandbox.credentials.files` entry in the rendered profile. */
+function credentialFilePaths(sandbox: JsonObject): readonly string[] {
+  const credentials = objectAt(sandbox, ['credentials'], `the permission-profile template's \`${SANDBOX_KEY}\``);
+  return listAt(credentials, 'files', `${SANDBOX_KEY}.credentials.files`).map((entry) => {
+    const path = isJsonObject(entry) ? entry['path'] : undefined;
+    if (typeof path !== 'string') {
+      throw internal(`the permission-profile template has a \`${SANDBOX_KEY}.credentials.files\` entry with no string \`path\``);
+    }
+    return path;
+  });
+}
+
 /** Append `values` to `list`, adding none twice. */
 function appendUnique(list: JsonValue[], values: readonly string[]): void {
   for (const value of values) if (!list.includes(value)) list.push(value);
@@ -147,10 +189,12 @@ function appendUnique(list: JsonValue[], values: readonly string[]): void {
  * Fill the rendered profile's sandbox block for this configuration, in place: the excluded commands
  * and the allowed domains, one `_README` line per allowed domain with its reason, and — when the
  * configuration takes the opt-out — `enabled: false` with a marker line. Everything else stays under
- * an opt-out, the `deny` entries included.
+ * an opt-out, the `deny` entries included, and so do the credential `Read` denies appended to
+ * `permissions.deny`: the file tools run outside the sandbox, so those hold with it off.
  *
  * Every configured domain is screened first, with the adopter-fixable code: it is the adopter's
- * value, and the generated-entry check after it would bill it to this CLI.
+ * value, and the generated-entry check after it would bill it to this CLI. The home directory is
+ * screened the same way: it is this machine's, not a value this CLI produced.
  */
 export function applySandbox(profile: JsonObject, { repoRoot, config }: SandboxInput): void {
   const configured = sandboxAllowedDomains(config);
@@ -162,11 +206,23 @@ export function applySandbox(profile: JsonObject, { repoRoot, config }: SandboxI
     );
   }
 
+  const home = homeRoot();
+  assertUsableInEntry(
+    home,
+    `the home directory ${JSON.stringify(home)}, which the credential \`Read\` denies are built from`,
+    'Run init from an account whose home directory path carries none of those characters',
+  );
+
   const expected = expectedSandbox({ repoRoot, config });
   const sandbox = objectAt(profile, [SANDBOX_KEY], 'the permission-profile template');
   appendUnique(listAt(sandbox, 'excludedCommands', `${SANDBOX_KEY}.excludedCommands`), expected.excludedCommands);
   const network = objectAt(sandbox, ['network'], `the permission-profile template's \`${SANDBOX_KEY}\``);
   appendUnique(listAt(network, 'allowedDomains', `${SANDBOX_KEY}.network.allowedDomains`), expected.allowedDomains);
+  const permissions = objectAt(profile, ['permissions'], 'the permission-profile template');
+  appendUnique(
+    listAt(permissions, 'deny', 'permissions.deny'),
+    credentialReadDenyRules({ home, files: credentialFilePaths(sandbox) }),
+  );
 
   const explained = new Set<string>();
   for (const { domain, reason } of configured) {

@@ -53,7 +53,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
@@ -967,6 +967,40 @@ test('the opt-out shows in the profile, and keeps every deny entry', async (t) =
   assert.ok(profile._README.some((line) => line.startsWith(SANDBOX_OPT_OUT_MARKER)), 'no _README line starts with the opt-out marker');
   for (const tool of ['WebFetch', 'WebSearch']) {
     assert.ok(entries(profile, 'deny').includes(tool), `the opt-out dropped the ${tool} deny`);
+  }
+});
+
+/** The `Read` deny pair a credential path owes, built from `os.homedir()` rather than the generator's helper. */
+function credentialReadPair(path) {
+  const absolute = join(homedir(), path.slice('~/'.length));
+  return [`Read(/${absolute})`, `Read(/${absolute}/**)`];
+}
+
+test('credentials are denied to sandboxed commands and to the file tools, with the sandbox on or off', async (t) => {
+  const template = JSON.parse(readFileSync(PROFILE_TEMPLATE, 'utf8'));
+  const shipped = template.sandbox.credentials;
+  assert.ok(shipped.files.length > 0 && shipped.envVars.length > 0, 'the template denies no credential');
+
+  const { profile } = await profileFor(t);
+  assert.deepEqual(profile.sandbox.credentials.files, shipped.files, 'sandbox.credentials.files is not the template\'s list');
+  assert.deepEqual(profile.sandbox.credentials.envVars, shipped.envVars, 'sandbox.credentials.envVars is not the template\'s list');
+
+  const deny = entries(profile, 'deny');
+  const ssh = credentialReadPair('~/.ssh');
+  assert.deepEqual(ssh, [`Read(/${homedir()}/.ssh)`, `Read(/${homedir()}/.ssh/**)`]);
+  for (const rule of ssh) assert.ok(deny.includes(rule), `permissions.deny does not hold ${rule}`);
+  for (const rule of deny) {
+    assert.ok(!rule.startsWith('Read(///') && !rule.startsWith('Read(~'), `${rule} is not in the \`//\` absolute form`);
+  }
+  for (const { path } of shipped.files) {
+    for (const rule of credentialReadPair(path)) assert.ok(deny.includes(rule), `${path} lacks ${rule} in permissions.deny`);
+  }
+
+  const sandbox = { optOut: { reason: 'the fixture runner has no sandbox support' } };
+  const { profile: optedOut } = await profileFor(t, [], { 'harness.config.json': seededConfig({ sandbox }) });
+  const optedOutDeny = entries(optedOut, 'deny');
+  for (const { path } of shipped.files) {
+    for (const rule of credentialReadPair(path)) assert.ok(optedOutDeny.includes(rule), `the opt-out dropped ${rule}`);
   }
 });
 
