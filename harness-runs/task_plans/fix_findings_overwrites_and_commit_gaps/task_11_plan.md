@@ -57,3 +57,9 @@ In practice these can return only through `error:`, which halts and escalates th
 - `git grep -n 'error: blocked — ' -- plugin/agents/qa-tester.md` shows the defined literal in `## Output contract` and each mapped block's pointer. After Tasks 12–14 the same grep across `plugin/instructions` shows each caller matching that exact string.
 - Walk one dispatch per table row on paper and confirm each yields exactly one of the four shapes, and that no per-test row yields an unmarked `error:`.
 - The per-dispatch file names (`qa_review_<iteration>_t<T>.md`, `finding_t<T>_<N>.md`) and the boundaries (never start the server, never flip a checkbox) are unchanged.
+
+**Deviations from plan:**
+
+- Targets named only `plugin/agents/qa-tester.md`, but `plugin/agents/qa-tester-mobile-maestro.md` and `plugin/agents/qa-tester-mobile-mcp.md` cite the renamed heading `"3. Tests blocked"` for their not-implemented `error:` line, which is a run-level (shape 3) return. Repointed both to `"4. The run cannot proceed"` and changed their "**three return shapes**" to "**four**", so the rename strands no citer.
+- Each mapped block's pointer carries the literal itself — "the per-test `error: blocked — ` line (`## Output contract` → `### 3. A test blocked`)" — so the plan's `git grep -n 'error: blocked — '` verification hits every pointer, not only the definition.
+- Paper walk of the mapping table (reading, not execution): each row's block now names exactly one of `### 2.` / `### 3.` / `### 4.` or PASS; no per-test row names an unmarked `error:`. `git grep` for `Tests blocked` across `plugin/` returns nothing.
