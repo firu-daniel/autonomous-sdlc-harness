@@ -34,7 +34,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_unit
 10. [x] **Task 10** — Thin `committer`'s `## Commit-message policy`, keeping every wire template _(layer: plugin)_ _(points: 20)_
 11. [x] **Task 11** — Thin `committer`'s argument guard, mode routing and standard procedure steps 1–6 _(layer: plugin)_ _(points: 20)_
 12. [x] **Task 12** — Thin `committer`'s `ui_test_pass` procedure to its own steps, and its `## Output contract` _(layer: plugin)_ _(points: 15)_
-13. [ ] **Task 13** — Measure the three definitions after the thinning and record the result in the story index _(layer: general)_ _(points: 10)_
+13. [x] **Task 13** — Measure the three definitions after the thinning and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
@@ -174,6 +174,6 @@ Up-front words = the agent definition plus every plugin file or section it reads
 
 | Agent | Reads counted besides the definition (unchanged) | Before — definition | After — definition | Δ |
 |---|---|---|---|---|
-| layer-implementer | `unit_loop_core.md` → `## The test-run rule`, `## Substitution table` | 6246 | | |
-| layer-reviewer | `unit_loop_core.md` → `## The test-run rule` | 3819 | | |
-| committer | — | 8410 | | |
+| layer-implementer | `unit_loop_core.md` → `## The test-run rule`, `## Substitution table` | 6246 | 4665 | −1581 |
+| layer-reviewer | `unit_loop_core.md` → `## The test-run rule` | 3819 | 2971 | −848 |
+| committer | — | 8410 | 3569 | −4841 |
