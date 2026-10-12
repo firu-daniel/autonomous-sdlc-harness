@@ -241,7 +241,7 @@ An `R4` seeded `[-]` on this ground is therefore never reported as one of the co
 
 **Autonomous fork only. Do NOT propagate into the core.** The core's `### QA.0` step 2 dispatches `ui-tests-plan-writer`, which may add `ui_test_<K>.md` files, revise existing ones and rewrite the UI-test index. This override commits that augment.
 
-**Trigger.** Right after `### QA.0` step 2's writer returns a **normal write** (`ui_test_index:` present in its return), and before E.0 starts the dev server — so E.1's per-test `ui_test_pass` commits and any E.3 `review_item` commit start from a tree in which the augment is already tracked. It does **not** fire on `no_ui: true` (nothing was written) or on a `## Questions` return (the `<ask>` park comes first; the resumed QA.0 re-dispatches the writer and fires it then).
+**Trigger.** Right after `### QA.0` step 2's writer returns with `ui_test_index:` present in its return — a normal write, **or** a write that also carries a `## Questions` section — and before anything else that return leads to: before E.0 starts the dev server, so E.1's per-test `ui_test_pass` commits and any E.3 `review_item` commit start from a tree in which the augment is already tracked, and before a `## Questions` section is routed through `<ask>`, because the park commits nothing and the resumed fused command halts on any modified tracked file before it reaches QA.0. A resumed QA.0 re-dispatches the writer and fires this override again on its return; wrapper exit 3 then covers an unchanged plan. It does **not** fire on `no_ui: true` (nothing was written).
 
 ```zsh
 bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \

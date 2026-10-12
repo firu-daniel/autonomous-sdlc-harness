@@ -26,7 +26,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Fire `Override L` on a `## Questions` augment return, before the `<ask>` park _(layer: plugin)_
+1. [x] **Finding 1** — Fire `Override L` on a `## Questions` augment return, before the `<ask>` park _(layer: plugin)_
 
 ---
 
