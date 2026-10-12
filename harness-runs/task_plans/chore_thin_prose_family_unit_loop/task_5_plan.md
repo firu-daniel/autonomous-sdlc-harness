@@ -33,3 +33,8 @@
 - `git grep -n -F -e '## Working modes' -- plugin/samples/sample_story_plan.md plugin/agents/layer-implementer.md` prints a line in each, and the licence paragraph sits under that heading in `layer-implementer.md`.
 - `git diff -- plugin/agents/layer-implementer.md` shows hunks only from `**Standing-prohibition disposition.**` to the end of the file.
 - `wc -w plugin/agents/layer-implementer.md`, run before the first edit and again after the last, is lower the second time.
+
+**Deviations from plan:**
+
+- Licence paragraph keeps the original "are the plan-artifact edits you make **on your own initiative**" rather than the plan's "only plan edits": the agent's mandated detail-file writes (`## Disposition`, `## Already passing`, `**Unactioned under a gate:**`) are also plan edits, so "only" would contradict them.
+- Beyond the plan's named cuts, also dropped the rationale clauses in item 2 ("so the orchestrator knows history was preserved"), item 7 ("because no commit record is minted for it" — the gate paragraph states it) and the blocker intro ("the orchestrator will not read your output beyond this contract", "so the orchestrator can surface it instead of dispatching a reviewer"); no rule or wire string removed.
