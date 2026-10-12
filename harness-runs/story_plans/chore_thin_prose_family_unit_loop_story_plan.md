@@ -23,7 +23,7 @@ The verification bar for the branch as a whole — `cli/test` and `scripts/run-g
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_unit_loop/task_<K>_plan.md`. Ordered bottom-up by ship sequence, with the catch-all layer last.
 
 1. [x] **Task 1** — Thin the blocks `layer-implementer` and `layer-reviewer` share, identically in both files _(layer: plugin)_ _(points: 15)_
-2. [ ] **Task 2** — Thin `layer-implementer`'s intro, own `## Resolved values` rows, prompt forms and `## Scope` _(layer: plugin)_ _(points: 15)_
+2. [x] **Task 2** — Thin `layer-implementer`'s intro, own `## Resolved values` rows, prompt forms and `## Scope` _(layer: plugin)_ _(points: 15)_
 3. [ ] **Task 3** — Thin `layer-implementer`'s `## Minimal prose` and its catch-all authoring sections _(layer: plugin)_ _(points: 15)_
 4. [ ] **Task 4** — Thin `layer-implementer`'s `## Working modes` through the evidence-downgrade rule _(layer: plugin)_ _(points: 20)_
 5. [ ] **Task 5** — Thin `layer-implementer`'s disposition routes, readiness-index licence and `## Output contract` _(layer: plugin)_ _(points: 20)_
