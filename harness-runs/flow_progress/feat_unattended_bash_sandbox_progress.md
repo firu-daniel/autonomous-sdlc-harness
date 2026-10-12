@@ -25,4 +25,4 @@ Source: harness-runs/task_prompts/feat_unattended_bash_sandbox_task_prompt.md â†
 - [x] C2f.    Skeptic findings fixed (findings index all [x] â€” or no index, the review having passed clean)
 - [-] E.      QA passed (UI-test index all [x] / no_ui)
 - [x] G.      Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
-- [ ] D.      Branch statistics committed & pushed
+- [x] D.      Branch statistics committed & pushed
