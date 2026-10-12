@@ -15,10 +15,6 @@
  * than restating. The template is also the one list of credential paths: the file tools run outside
  * the sandbox, so {@link applySandbox} derives a `Read` deny pair per path from it rather than from a
  * second copy here.
- *
- * **Import cycle, deliberate:** this module imports from `permissionProfile.ts`, whose
- * `renderProfile` calls {@link applySandbox}. Every binding imported from there is used at call time
- * only, never while either module is being evaluated; keep it that way.
  */
 
 import { join } from 'node:path';
@@ -34,7 +30,7 @@ import { internal } from '../core/errors.js';
 import { appendUnique, isJsonObject, listAt, objectAt, type JsonObject, type JsonValue } from '../core/json.js';
 import { homeRoot, readTemplate } from '../core/paths.js';
 import { OUTER_LOOP_SCRIPTS, outerLoopRelativePath, outerLoopScriptPath } from './outerLoopScripts.js';
-import { appendReadme, assertUsableInEntry, bashScriptRule, TEMPLATE_PATH } from './permissionProfile.js';
+import { appendReadme, assertUsableInEntry, bashScriptRule, TEMPLATE_PATH } from './profileEntries.js';
 
 /** The profile's top-level key for the sandbox block. */
 export const SANDBOX_KEY = 'sandbox';

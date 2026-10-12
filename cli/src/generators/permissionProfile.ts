@@ -194,10 +194,10 @@
  * The template ships the `sandbox` block's static half; `sandboxProfile.ts` → `applySandbox` fills
  * the configuration-dependent half — the two excluded commands, the allowed domains, the opt-out —
  * and owns the rule for which command may run unsandboxed. {@link assertRunnable} scans the block's
- * lists with the same table it scans the permission lists with. That module imports from this one
- * and this one calls it, a cycle kept safe by using every imported binding at call time only.
- * `writeProtection.ts` → `applyWriteProtection` adds the write protection last, under the same cycle
- * rule, once `permissions.additionalDirectories` is final.
+ * lists with the same table it scans the permission lists with. `writeProtection.ts` →
+ * `applyWriteProtection` adds the write protection last, once `permissions.additionalDirectories` is
+ * final. Both modules take the profile primitives they share with this one from `profileEntries.ts`
+ * and import nothing from here.
  */
 
 import { basename, dirname, isAbsolute, join, sep } from 'node:path';
@@ -224,6 +224,18 @@ import {
   type OuterLoopScript,
   type WrittenOuterLoopScript,
 } from './outerLoopScripts.js';
+import {
+  appendReadme,
+  assertUsableInEntry,
+  bashScriptRule,
+  FORBIDDEN_IN_ENTRY,
+  INVOCATION_PREFIX,
+  normalizedRoot,
+  PROFILE_PATH,
+  QA_TEMPLATE_PATH,
+  RETRIEVAL_TEMPLATE_PATH,
+  TEMPLATE_PATH,
+} from './profileEntries.js';
 import { applySandbox, SANDBOX_KEY } from './sandboxProfile.js';
 import {
   scriptInvocation,
@@ -236,64 +248,12 @@ import {
 } from './scripts.js';
 import { applyWriteProtection } from './writeProtection.js';
 
-/**
- * The template's home under `cli/templates/`, addressed as {@link readTemplate} wants it.
- *
- * Exported for the same reason {@link QA_TEMPLATE_PATH} is: the shipped template is the single
- * declaration of the profile's own floor, and `doctor` compares an adopter's `permissions.deny`
- * against it rather than keeping a second copy of the entries that must be there
- * (`doctor/checks.ts`).
- */
-export const TEMPLATE_PATH = 'claude/settings.autonomous.json';
-
-/**
- * The interactive-test fragment, merged into the base only when the phase is on and its driver is
- * the browser one — see the module header.
- *
- * A **partial** profile — see the module header. It is stored beside the base under the same
- * dot-less directory, and neither file is ever named with the adopter's leading dot inside this
- * repository (`cli/templates/claude/README.md`).
- *
- * Exported because the fragment's `enabledMcpjsonServers` list is the single declaration of which
- * browser servers a run starts, and the generator that writes the repository's own MCP wiring
- * checks its declared servers against it rather than keeping a second copy of the names
- * (`generators/repoRoot.ts`).
- */
-export const QA_TEMPLATE_PATH = 'claude/settings.autonomous.qa.json';
-
-/**
- * The docs-retrieval fragment, merged into the base only when `phases.docs` and `docs.retrieval` are
- * both on — see the module header.
- *
- * Exported for the reason {@link QA_TEMPLATE_PATH} is: its `enabledMcpjsonServers` list is the
- * declaration `generators/repoRoot.ts` checks the retrieval half of `.mcp.json` against.
- */
-export const RETRIEVAL_TEMPLATE_PATH = 'claude/settings.autonomous.retrieval.json';
-
-/** The adopter-side directory the rendered profile lands in. The dot is added here, at `init` time. */
-const CLAUDE_DIR = '.claude';
-
-/**
- * Where the rendered profile is written, relative to the adopting repository's root — and the path
- * an unattended run names in its own `--settings` flag.
- *
- * Exported because more than one caller has to say it: `init`'s summary points at it, and `doctor`
- * checks that the file is there and that the absolute paths inside it still resolve.
- */
-export const PROFILE_PATH = `${CLAUDE_DIR}/settings.autonomous.json`;
-
-/** The profile's rationale block: the array every generated explanation is appended to. */
-export const README_KEY = '_README';
-
 /** The key that starts the repository's declared MCP servers for the run. Absent unless a fragment adds it. */
 const ENABLED_SERVERS_KEY = 'enabledMcpjsonServers';
 
 /** The prefix every MCP tool entry carries, and the pattern its server name is read out of. */
 const MCP_ENTRY_PREFIX = 'mcp__';
 const MCP_SERVER_PATTERN = /^mcp__(.+?)__/;
-
-/** The interpreter every wrapper invocation starts with, per {@link wrapperInvocation}. */
-const INVOCATION_PREFIX = 'bash ';
 
 /** The three token names one row family marks its rows with — one per wrapper form. */
 interface RowTokens {
@@ -353,30 +313,6 @@ const DEPLOY_ROW_TOKENS: RowTokens = Object.freeze({
 function tokenNames(tokens: RowTokens): readonly string[] {
   return [tokens.invocation, tokens.file, tokens.path];
 }
-
-/**
- * What may never appear in a permission entry, and how a message names it.
- *
- * The quote characters are failure mode 1 and the operators are failure mode 2 (module header).
- * `$` is on the list for the same reason as the operators: a substitution is a different string to
- * whatever the guard matched, so an entry containing one cannot be relied on to match anything.
- * `///` is the third: a file rule marks an absolute path with a `//` prefix and the substituted
- * path brings its own leading slash, so a template row that adds a second one produces a rule that
- * silently matches no file — the same class of failure as a missed worktree glob, and just as quiet.
- */
-const FORBIDDEN_IN_ENTRY: ReadonlyArray<readonly [needle: string, described: string]> = Object.freeze([
-  ['///', 'a third slash on the `//` absolute-path prefix, which leaves a rule matching no file'],
-  ['"', 'a double quote'],
-  ["'", 'a single quote'],
-  ['`', 'a backquote'],
-  ['&', 'a shell operator (&)'],
-  [';', 'a shell operator (;)'],
-  ['|', 'a shell operator (|)'],
-  ['$', 'a shell substitution ($)'],
-  ['>', 'a shell redirect (>)'],
-  ['<', 'a shell redirect (<)'],
-  ['\n', 'a newline'],
-] as const);
 
 /** The permission lists checked by {@link assertRunnable}, in the order the template writes them. */
 const PERMISSION_LISTS: readonly string[] = Object.freeze(['allow', 'deny', 'ask']);
@@ -803,17 +739,8 @@ export function readRule(absolutePath: string): string {
 }
 
 /**
- * A wrapper-script rule, in the unquoted `Bash(bash <path>:*)` form every generated one uses — and
- * the other plugin-root form, for a helper under the plugin's own scripts directory. Same consumers,
- * and the same decision, as {@link readRule}.
- */
-export function bashScriptRule(absolutePath: string): string {
-  return `Bash(${INVOCATION_PREFIX}${absolutePath}:*)`;
-}
-
-/**
- * The fixed halves of the two builders above, taken from the builders themselves over a path none of
- * those halves can contain — so the inverse below recognises each form rather than spelling it a
+ * The fixed halves of {@link readRule} and {@link bashScriptRule}, taken from the builders themselves
+ * over a path none of those halves can contain — so the inverse below recognises each form rather than spelling it a
  * second time, and a change to either builder cannot leave that inverse matching the old shape. Same
  * derivation, and the same reason, as `doctor/checks.ts`'s `HELPER_RULE_OPEN`.
  */
@@ -866,15 +793,6 @@ export function pluginRootEntryTarget(entry: string): string | undefined {
   const directory = between(entry, READ_RULE_OPEN, READ_RULE_CLOSE) ?? bashScriptRuleTarget(entry);
   if (directory === undefined || !isAbsolute(directory)) return undefined;
   return GLOB_CHARACTERS.some((character) => directory.includes(character)) ? undefined : directory;
-}
-
-/**
- * A directory in the one spelling {@link isUnderDirectory} compares against: no trailing separator,
- * no `.` or `..` segment. Exported so the normalisation the predicate assumes is stated once, beside
- * the predicate, rather than at each root a caller happens to resolve.
- */
-export function normalizedRoot(path: string): string {
-  return join(path, '.');
 }
 
 /**
@@ -1110,34 +1028,6 @@ function assertBrowserWiring(profile: JsonObject): void {
 /** The flag supplying the reference toolchain's directory, as a message should name it. */
 const TOOLCHAIN_FLAG = '--reference-toolchain-path';
 
-/**
- * {@link FORBIDDEN_IN_ENTRY} minus its `///` row, which is about a **file** rule's `//` absolute-path
- * prefix and says nothing about a command entry. Every other row applies to both.
- */
-const FORBIDDEN_IN_COMMAND = FORBIDDEN_IN_ENTRY.filter(([needle]) => needle !== '///');
-
-/** The fix for a *command* value: the one place a command carrying shell syntax can still live. */
-const COMMAND_REMEDY =
-  "Take it out of the value, or put the command in a wrapper script and let that script's literal path be what is allow-listed";
-
-/**
- * Refuse an adopter-supplied value that cannot be made into an entry the guard will match.
- *
- * The same shapes {@link assertRunnable} catches, raised **before** the entry is built and with the
- * ordinary exit code: a toolchain path, a configured command or a configured directory carrying a
- * quote or a shell operator is a repository-side mistake with a repository-side fix, not the
- * packaging fault that check reports. `remedy` is what makes the message actionable, and it differs
- * per value — a command moves into a wrapper, a directory is renamed — so it is the caller's.
- */
-export function assertUsableInEntry(value: string, described: string, remedy: string = COMMAND_REMEDY): void {
-  for (const [needle, why] of FORBIDDEN_IN_COMMAND) {
-    if (!value.includes(needle)) continue;
-    throw new HarnessError(
-      `${described} contains ${why}, and the permission guard matches an entry literally: an entry built from it would match neither allow nor deny, so an unattended run's call would be refused. ${remedy}`,
-    );
-  }
-}
-
 /** The repository-side values {@link assertRepositoryValuesUsable} screens, as `renderProfile` resolved them. */
 interface RepositoryValues {
   readonly repoRoot: string;
@@ -1183,17 +1073,6 @@ function assertRepositoryValuesUsable({ repoRoot, projectName, scriptsDir, state
     `the configured stateDir ${JSON.stringify(stateDir)}`,
     `Set stateDir in ${CONFIG_FILENAME} to a directory whose path carries no such character (\`config set stateDir <dir>\`), then run init again`,
   );
-}
-
-/** Append a generated line to the profile's rationale block. */
-export function appendReadme(profile: JsonObject, line: string): void {
-  const readme = profile[README_KEY];
-  if (!Array.isArray(readme)) {
-    throw internal(
-      `the permission-profile template has no \`${README_KEY}\` list, so a generated group of entries could not be explained in the file it was written into`,
-    );
-  }
-  readme.push(line);
 }
 
 /** Append `values` to one `permissions` list after the template's own, adding none twice; returns how many were added. */

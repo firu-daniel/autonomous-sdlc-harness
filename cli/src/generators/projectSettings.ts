@@ -65,7 +65,7 @@ import { isJsonObject, type JsonObject, type JsonValue } from '../core/json.js';
 import { packageRoot, parseRepoSlug } from '../core/paths.js';
 import { PLUGIN_NAME } from '../core/pluginIdentity.js';
 import type { WritePlan } from '../core/writer.js';
-import { PROFILE_PATH } from './permissionProfile.js';
+import { PROFILE_PATH } from './profileEntries.js';
 
 /** The marketplace's name, mirroring `.claude-plugin/marketplace.json`'s `name`. */
 export const MARKETPLACE_NAME = 'autonomous-sdlc-harness';

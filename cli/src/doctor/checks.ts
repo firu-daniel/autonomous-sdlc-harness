@@ -170,21 +170,23 @@ import {
 import { IN_FLIGHT_RUNS_NOTE, pinnedCliCommand, unparseableControlRoute, upgradeWorkflowsCommand } from '../generators/githubWorkflows.js';
 import { DOCS_SEARCH_SERVER_SCRIPT_NAME, outerLoopScriptsDir } from '../generators/outerLoopScripts.js';
 import {
-  bashScriptRule,
   entryWord,
   isUnderDirectory,
   namesBrowserTool,
-  normalizedRoot,
   pluginRootDirectories,
   pluginRootEntries,
   pluginRootEntryTarget,
   pluginRootHelpers,
   PLUGIN_ROOT_ENTRIES_FLAG,
+  renderProfile,
+} from '../generators/permissionProfile.js';
+import {
+  bashScriptRule,
+  normalizedRoot,
   PROFILE_PATH,
   README_KEY,
-  renderProfile,
   TEMPLATE_PATH as PROFILE_TEMPLATE_PATH,
-} from '../generators/permissionProfile.js';
+} from '../generators/profileEntries.js';
 import {
   ENABLED_PLUGINS_KEY,
   MARKETPLACE_ENTRY_SHAPE,

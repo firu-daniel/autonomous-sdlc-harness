@@ -87,9 +87,8 @@ async function built(relativePath) {
 
 const { OUTER_LOOP_SCRIPTS, outerLoopRelativePath } = await built('generators/outerLoopScripts.js');
 const { scriptInvocation } = await built('generators/scripts.js');
-const { bashScriptRule, pluginRootEntryTarget, readRule, renderProfile } = await built(
-  'generators/permissionProfile.js',
-);
+const { pluginRootEntryTarget, readRule, renderProfile } = await built('generators/permissionProfile.js');
+const { bashScriptRule } = await built('generators/profileEntries.js');
 const { pluginScriptsDir } = await built('machine/plugins.js');
 const { LOOPBACK_ALLOWED_HOST, SANDBOX_OPT_OUT_MARKER, shippedSandboxSettings } = await built(
   'generators/sandboxProfile.js',

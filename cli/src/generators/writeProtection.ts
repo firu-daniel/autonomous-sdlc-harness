@@ -12,11 +12,6 @@
  * directory resolver, the MCP wiring's path, the configuration file's name — never joined by hand,
  * so the file protected is the file the writer wrote. `doctor` grades a profile on disk against
  * {@link protectedPaths} and {@link fileToolDenyRules}, so they are the one statement of the set.
- *
- * **Import cycle, deliberate:** this module imports from `permissionProfile.ts`, whose
- * `renderProfile` calls {@link applyWriteProtection}, and from `repoRoot.ts` and `sandboxProfile.ts`,
- * which both import `permissionProfile.ts`. Every binding imported from any of them is used at call
- * time only, never while a module is being evaluated; keep it that way.
  */
 
 import { join } from 'node:path';
@@ -36,7 +31,7 @@ import {
   RUN_LIBRARY_SCRIPT_NAME,
   type OuterLoopScript,
 } from './outerLoopScripts.js';
-import { appendReadme, assertUsableInEntry, normalizedRoot } from './permissionProfile.js';
+import { appendReadme, assertUsableInEntry, normalizedRoot } from './profileEntries.js';
 import { MCP_PATH } from './repoRoot.js';
 import { SANDBOX_KEY } from './sandboxProfile.js';
 

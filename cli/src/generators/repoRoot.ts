@@ -92,7 +92,7 @@ import {
   PROFILE_PATH,
   QA_TEMPLATE_PATH as QA_PROFILE_FRAGMENT,
   RETRIEVAL_TEMPLATE_PATH as RETRIEVAL_PROFILE_FRAGMENT,
-} from './permissionProfile.js';
+} from './profileEntries.js';
 import { invokedPath, scriptInvocation } from './scripts.js';
 import { STATE_DIR_ENTRIES } from './stateDir.js';
 
@@ -274,17 +274,17 @@ interface ProfileFragment {
   readonly mcpTemplate: string;
 }
 
-/*
- * Functions rather than constants: `permissionProfile.ts` → `writeProtection.ts` imports this module
- * back, so the fragment paths imported from `permissionProfile.ts` may only be read at call time.
- */
-function browserFragment(): ProfileFragment {
-  return { path: QA_PROFILE_FRAGMENT, role: 'interactive-test', mcpTemplate: TEMPLATES.mcp };
-}
+const BROWSER_FRAGMENT: ProfileFragment = Object.freeze({
+  path: QA_PROFILE_FRAGMENT,
+  role: 'interactive-test',
+  mcpTemplate: TEMPLATES.mcp,
+});
 
-function retrievalFragment(): ProfileFragment {
-  return { path: RETRIEVAL_PROFILE_FRAGMENT, role: 'docs-retrieval', mcpTemplate: TEMPLATES.mcpRetrieval };
-}
+const RETRIEVAL_FRAGMENT: ProfileFragment = Object.freeze({
+  path: RETRIEVAL_PROFILE_FRAGMENT,
+  role: 'docs-retrieval',
+  mcpTemplate: TEMPLATES.mcpRetrieval,
+});
 
 /** Everything {@link writeRepoRootFiles} needs. */
 export interface RepoRootOptions {
@@ -404,12 +404,12 @@ function assertServersMatchFragment(servers: JsonObject, fragment: ProfileFragme
 
 /** {@link assertServersMatchFragment} for the browser half. */
 function assertServersMatchProfile(servers: JsonObject): void {
-  assertServersMatchFragment(servers, browserFragment());
+  assertServersMatchFragment(servers, BROWSER_FRAGMENT);
 }
 
 /** {@link assertServersMatchFragment} for the docs-retrieval half. */
 function assertRetrievalServersMatchProfile(servers: JsonObject): void {
-  assertServersMatchFragment(servers, retrievalFragment());
+  assertServersMatchFragment(servers, RETRIEVAL_FRAGMENT);
 }
 
 /** The `mcpServers` object of the browser-wiring template, checked against the profile fragment. */

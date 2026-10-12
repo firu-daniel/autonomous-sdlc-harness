@@ -17,7 +17,7 @@ Most of the layering holds. The new configuration key lands in the right order i
 3. [x] **Finding 5** — The run library's NAMING header omits `HR_TARGET_REFUSAL` _(layer: cli)_
 4. [x] **Finding 3** — The new `doctor` profile checks re-probe the profile root `buildCheckContext` resolves once _(layer: cli)_
 5. [x] **Finding 2** — JSON dotted-path and list helpers are copied across `generators/` and `doctor/` instead of living in `core/json.ts` _(layer: cli)_
-6. [ ] **Finding 6** — The new generators close runtime import cycles through `permissionProfile.ts` _(layer: cli)_
+6. [x] **Finding 6** — The new generators close runtime import cycles through `permissionProfile.ts` _(layer: cli)_
 
 ## Must Fix
 
