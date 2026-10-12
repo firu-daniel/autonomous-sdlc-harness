@@ -16,7 +16,7 @@ No test or gate was run, because none is in scope for a branch-level review. `ph
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Restore the shared unreadable-input blocker wording in both family definitions _(layer: plugin)_
+1. [x] **Finding 1** — Restore the shared unreadable-input blocker wording in both family definitions _(layer: plugin)_
 2. [ ] **Finding 4** — Cover the writer definition in the reviewer's unreadable-input blocker rule _(layer: plugin)_
 3. [ ] **Finding 2** — Restore the shared `## Resolved values` placeholder sentence in the writer _(layer: plugin)_
 4. [ ] **Finding 3** — Restore the multi-file split-signal examples in the writer's story-point scale _(layer: plugin)_

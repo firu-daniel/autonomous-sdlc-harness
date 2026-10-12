@@ -64,7 +64,7 @@ Read the findings file and the files it targets, then follow `## Revision mode`.
 
 Read `${CLAUDE_PLUGIN_ROOT}/samples/sample_task_plan.md` on demand only, for how the index-plus-per-item split applies to other artifact families.
 
-If a conventions document, a sample above or any input your dispatch names cannot be read, return only a `blocker:` line naming the path and the refusal, and write no plan file. Never substitute another document or a remembered format.
+**A cited path you cannot read is a finding, not a fallback.** If a conventions document, a sample above or any input your dispatch names cannot be read, return only a `blocker:` line naming the path and the refusal, and write no plan file. Never substitute another document for a cited one, and never plan against a remembered format.
 
 ## Process
 
