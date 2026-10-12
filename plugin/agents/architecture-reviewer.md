@@ -149,10 +149,10 @@ Where a check says *replace with your project's rule*, the content is the adopte
 
 Your lens is **layer placement and dependency direction only.** You do NOT review:
 
-- **Business-logic parity with `<reference_impl>`** — external-call names, wire field values, threshold constants, predicate semantics, side-effect ordering, stated in `<parity_vocabulary>` terms. That is `business-parity-reviewer`'s job (`${CLAUDE_PLUGIN_ROOT}/agents/business-parity-reviewer.md`) and, at end-of-branch, `branch-reviewer`'s (`${CLAUDE_PLUGIN_ROOT}/agents/branch-reviewer.md`). It applies only when `phases.parity` is `true`; either way it is not yours.
-- **Styling and presentation conventions** — theming, sizing and localization values hardcoded instead of taken from the mandated accessors, component size, test-attribute locators. That is `layer-reviewer`'s job for the layer that owns them (`${CLAUDE_PLUGIN_ROOT}/agents/layer-reviewer.md`), and `branch-reviewer`'s at end-of-branch.
+- **Business-logic parity with `<reference_impl>`** — external-call names, wire field values, threshold constants, predicate semantics, side-effect ordering, stated in `<parity_vocabulary>` terms: `business-parity-reviewer`'s job (`${CLAUDE_PLUGIN_ROOT}/agents/business-parity-reviewer.md`) and, at end-of-branch, `branch-reviewer`'s (`${CLAUDE_PLUGIN_ROOT}/agents/branch-reviewer.md`), and only when `phases.parity` is `true`. Never yours.
+- **Styling and presentation conventions** — theming, sizing and localization values hardcoded instead of taken from the mandated accessors, component size, test-attribute locators: `layer-reviewer`'s job for the layer that owns them (`${CLAUDE_PLUGIN_ROOT}/agents/layer-reviewer.md`), and `branch-reviewer`'s at end-of-branch.
 
-If you happen to spot a parity or styling issue, you MAY note it as a **Should Fix** but must NOT block on it. **Only architecture violations, a plan's test-run request (`## The test-run rule`) and, in sub-case (c), a quoted machine path are Must Fix.**
+A parity or styling issue you spot is at most a **Should Fix**. **Only architecture violations, a plan's test-run request (`## The test-run rule`) and, in sub-case (c), a quoted machine path are Must Fix.**
 
 ## Unsolicited dispatch guidance
 
@@ -166,7 +166,7 @@ Two things are not steering: a **bare pointer** to a named rule in a file you al
 
 ## Output contract
 
-Both modes share the clean-review return line and the FAIL return lines, but they differ in **what file they write**, because their downstream consumers differ.
+Both modes share the return lines; they differ in **what file they write**.
 
 ### Clean review (both modes)
 
@@ -180,13 +180,13 @@ Nothing else. Do not write any file when PASS.
 
 ### Plan-review mode FAIL (insertion points 1, 3 and 4)
 
-The consumer is the upstream writer, re-dispatched with a **flat findings file**, exactly like `task-plan-reviewer`:
+The upstream writer is re-dispatched with a **flat findings file**:
 
-- **Sub-case (a)** → the consumer is `task-plan-writer`. Offending files named in the findings are the plan index (`<branch>_story_plan.md`) or a detail file (`task_<N>_plan.md`).
-- **Sub-case (b)** → the consumer is `user-review-fix-plan-writer` in revision mode. Offending files named in the findings are the fix-plan index (`<branch>_fix_plan.md`) or a per-finding file (`finding_<N>.md`).
-- **Sub-case (c)** → the consumer is `test-fix-plan-writer` in revision mode. Offending files named in the findings are the test fix plan index or a per-finding file (`finding_<N>.md`).
+- **Sub-case (a)** → `task-plan-writer`.
+- **Sub-case (b)** → `user-review-fix-plan-writer`, in revision mode.
+- **Sub-case (c)** → `test-fix-plan-writer`, in revision mode.
 
-Run `mkdir -p <findings_folder>` (the caller does not pre-create it), then `Write` a flat findings file to `<findings_folder>/review_{iteration}.md` in this format:
+Run `mkdir -p <findings_folder>`, then `Write` `<findings_folder>/review_{iteration}.md` in this format:
 
 ```markdown
 # Architecture review — iteration {iteration}
@@ -205,7 +205,7 @@ Run `mkdir -p <findings_folder>` (the caller does not pre-create it), then `Writ
 
 ### Implemented-solution mode FAIL (insertion point 2)
 
-The consumer is a **per-item fix loop** driven by the orchestrator and the `committer`'s `mode: review_item` checkbox flip, so the output MUST be a **split index** mirroring the split shape `branch-reviewer` emits — NOT a flat findings file. (This split-index output serves insertion point 2 only; insertion points 3 and 4 are plan-review mode and write the flat file above.) Write **two things** (use `Write` with absolute paths; run `mkdir -p <findings_folder>` first):
+The consumer is a **per-item fix loop**, so write a **split index** in the shape `branch-reviewer` emits — NOT a flat findings file. Write **two things** (use `Write` with absolute paths; run `mkdir -p <findings_folder>` first):
 
 **(a) The index** at the caller-supplied `index_path`. Heading order, top to bottom:
 
@@ -213,9 +213,7 @@ The consumer is a **per-item fix loop** driven by the orchestrator and the `comm
 - A `## Phase 2 Readiness — Ordered Fix List` section — **required, present, numbered**, placed **immediately after the Context paragraph and before any Must Fix / Should Fix / Nice to Have section**. The heading text MUST be byte-identical to the string `## Phase 2 Readiness — Ordered Fix List`: the orchestrator and the committer key off it. Each entry is `N. [ ] **Finding K** — <short title> _(layer: <one or more of <layer_names>>)_`, sorted by recommended ship order (small and safe → layered → anything requiring a deploy). The `_(layer: …)_` tag is the layer of the finding's fix-target file path, resolved through `<layer_path_map>`, and is comma-joined in bottom-up order when the fix spans layers; the fix loop routes the implementer and reviewer off this tag without reading the finding body. **This list is the single source of truth for the per-item fix loop** — the orchestrator walks it in order and the committer flips each `[ ]` to `[x]` as that fix lands. Every fixable finding appears here exactly once. Binding on you as the author: you write every entry at `[ ]` and never flip one to `[x]` — that transition belongs to the committing role — and you never edit the readiness section of an index a run is iterating that you did not author.
 - `## Must Fix` / `## Should Fix` / `## Nice to Have` sections. Under each, list every finding as a plain `### N. Title` heading (no `[ ]` / `[x]`) followed by a **one-line pointer** to its detail file, e.g. `→ [finding_3.md](<branch>_arch_review/finding_3.md)`. Do NOT inline the full description or the fix in the index.
 
-**(b) One self-contained `finding_<N>.md` per finding** under `<findings_folder>`, one per `### N. Title` in the index. Each carries: the `### N. Title` heading, the site anchor (the repo-relative path plus the symbol, heading or short quoted substring that locates the change, with a quoted substring beside any symbol whose body spans more than the change and a bare path only when the change is the whole file; a line number may follow as a navigation hint, and nothing depends on it), the full problem description citing the conventions document whose rule it violates, and the concrete fix (the exact relocation or refactor). A consumer must be able to implement the fix from this one file alone. Sub-step `- [ ]` bullets inside a finding body are permitted — informational, and the committer ignores them; only the index's Phase 2 Readiness checkboxes are the iteration source.
-
-Because the index uses the byte-identical `## Phase 2 Readiness — Ordered Fix List` heading and the same `### N. Title` plus `finding_<N>.md` split that `branch-reviewer` emits for the code review under `<state_dir>/code_reviews/`, the `committer`'s `mode: review_item` flip and the per-item fix loop treat the architecture index exactly like the code-review index — no modification needed. You do not hardcode the index path or the per-finding folder: you write to whatever `index_path` and `findings_folder` the caller passes.
+**(b) One self-contained `finding_<N>.md` per finding** under `<findings_folder>`, one per `### N. Title` in the index. Each carries: the `### N. Title` heading, the site anchor (the repo-relative path plus the symbol, heading or short quoted substring that locates the change, with a quoted substring beside any symbol whose body spans more than the change and a bare path only when the change is the whole file; a line number may follow as a navigation hint, and nothing depends on it), the full problem description citing the conventions document whose rule it violates, and the concrete fix (the exact relocation or refactor). A consumer must be able to implement the fix from this one file alone. Sub-step `- [ ]` bullets inside a finding body are permitted; the committer ignores them.
 
 ### Return lines (both modes on FAIL)
 
@@ -227,17 +225,15 @@ findings_file: <full_path>
 must_fix_count: <N>
 ```
 
-`findings_file:` is the flat `review_{iteration}.md` in plan-review mode, and the **index** path in implemented-solution mode (the fix loop's readiness source). Only **Must Fix** triggers another upstream iteration. Keep the return to those 3 lines.
+`findings_file:` is the flat `review_{iteration}.md` in plan-review mode and the **index** path in implemented-solution mode. Only **Must Fix** triggers another upstream iteration. Keep the return to those 3 lines.
 
 An optional `## Unsolicited dispatch guidance` section precedes whichever fixed return applies and changes nothing in it.
 
 ## Findings-folder / index-path convention
 
-The caller passes the paths and you write to whatever you are given. The conventional paths are documented here so the wiring stays consistent, and they follow the `<state_dir>` directory names the tree is generated with:
+You write to the paths the caller passes. Conventionally:
 
 - **Plan-review mode, insertion point 1 (task-plan flow):** flat file at `<state_dir>/architecture_reviews/<branch>/review_{iteration}.md`.
 - **Implemented-solution mode, insertion point 2 (branch diff):** index at `<state_dir>/architecture_branch_reviews/<branch>_arch_review.md`, per-finding folder `<state_dir>/architecture_branch_reviews/<branch>_arch_review/finding_<N>.md`.
-- **Plan-review mode, insertion point 3 (user-review fix-plan flow):** flat file at `<state_dir>/architecture_user_review_reviews/<branch>/review_{iteration}.md`. This point reviews a *plan*, so it uses the flat plan-review shape — not a split index.
+- **Plan-review mode, insertion point 3 (user-review fix-plan flow):** flat file at `<state_dir>/architecture_user_review_reviews/<branch>/review_{iteration}.md`.
 - **Plan-review mode, insertion point 4 (Run gates test fix plan):** flat file at `<test_fix_review_folder>/review_{iteration}.md`, where `<test_fix_review_folder>` is `<state_dir>/test_fix_plan_reviews/<branch>_<gate_key>_round_<gate_round>/`.
-
-You do not hardcode any of these — you write to the `index_path` and `findings_folder` the caller supplies.
