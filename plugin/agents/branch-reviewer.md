@@ -133,7 +133,7 @@ Run this only if `per_task_findings_root` was supplied. It is conventionally `<s
 
 Emit the review as a **thin index file** plus **one self-contained per-finding file per fixable finding**.
 
-- **Index** at the caller-supplied path, conventionally `<state_dir>/code_reviews/<branch>_code_review.md` — keep that exact filename shape, because the round-suffix logic depends on it (a re-review becomes `<branch>_code_review_2.md`, `_3.md`, …). The index holds: the Context paragraph, the `## Phase 2 Readiness — Ordered Fix List`, the `## Must Fix` / `## Should Fix` / `## Nice to Have` sections (each listing every finding as `### N. Title` with a one-line pointer to its detail file), and the intentional-divergence call-out section. **No full descriptions and no fix snippets in the index** — those live in the per-finding files.
+- **Index** at the caller-supplied path, conventionally `<state_dir>/code_reviews/<branch>_code_review.md`. Keep that filename shape: the round-suffix logic depends on it (a re-review becomes `<branch>_code_review_2.md`, `_3.md`, …). `## Output contract` fixes its sections and their order; the index carries no full description and no fix snippet.
 - **Per-finding files** at `<state_dir>/code_reviews/<branch>_code_review/finding_<N>.md` — one per `### N. Title` in the index, self-contained: the finding's `### N. Title` heading, the site anchor (the repo-relative path plus the symbol, heading or short quoted substring that locates the change, with a quoted substring beside any symbol whose body spans more than the change and a bare path only when the change is the whole file; a line number may follow as a navigation hint, and nothing depends on it), the full description of the problem, and the concrete fix suggestion (the exact snippet or the precise rename). A consumer must be able to implement the fix from this one file alone. The folder name mirrors the index round suffix: `<branch>_code_review_2/finding_<N>.md` for the second round.
 
 **Every finding must be implementable as written, by an implementer that makes no decision of its own.** Before you file a finding, test its fix: if acting on it needs a choice between options, or an answer nobody in the loop has, it is not a finding. Put it in a `## Questions` section of your return, where a `## Unsolicited dispatch guidance` section sits, naming the decision owed and who owes it; write no per-finding file and no readiness entry for it, and add no return field. A partly decidable item splits: the implementable part is a finding with a concrete fix, the decision a question beside it.
@@ -146,7 +146,7 @@ Each finding item carries a number, a title, the site anchor, the description of
 
 ## Common findings to look for (high-yield checks)
 
-The groups below are the *shape* the checks take. Where a group says *replace with your project's list*, the triggers inside it are the adopter's to state in the conventions documents `<layer_path_map>` names — this file supplies the group, never a rule of its own invention, and you never flag something no rule source says.
+The groups below are the *shape* the checks take. Where a group says *replace with your project's list*, its triggers are the ones the conventions documents `<layer_path_map>` names state; never flag something no rule source says.
 
 **Parity with `<reference_impl>` (most impactful).** **Skip this phase unless `phases.parity` is `true` in `harness.config.json`.** The gate is scoped to **this group only**: with the phase off there is no reference implementation to compare against, so nothing in this group applies, and *the rest of this agent's coverage is unchanged* — which is exactly what `${CLAUDE_PLUGIN_ROOT}/instructions/code_review_instructions.md` tells the caller to expect. When the phase is on, state every finding in `<parity_vocabulary>` terms and cite the `<reference_impl>` source anchor as your evidence:
 - External call name mismatch.
@@ -156,7 +156,7 @@ The groups below are the *shape* the checks take. Where a group says *replace wi
 - Side-effect ordering reversed.
 - Strict-versus-loose inequality drift, and absent-versus-empty checks.
 
-**Conventions-document violations** — *replace with your project's list*: the rules those documents state as mandatory, each a finding when bypassed. They are typically —
+**Conventions-document violations** — *replace with your project's list*: each rule those documents state as mandatory is a finding when bypassed. Typically —
 - A styling, sizing or user-visible-copy value hardcoded instead of taken from the mandated accessors (`<convention_symbols>`).
 - A numeric timing or ratio literal instead of the shared constant owner the document names.
 - A unit-local constant duplicating a shared owner's page size, limit or length cap.
@@ -175,7 +175,7 @@ The groups below are the *shape* the checks take. Where a group says *replace wi
 - A layer consuming the wire-surface types of the layer below instead of the shapes the mapping produces.
 - Application-level state used for what the conventions documents scope to unit-local state.
 
-Also treat every `<state_dir>/lessons.md` entry as a named check — the ledger holds the escapes this list has not caught up with yet.
+Treat every `<state_dir>/lessons.md` entry as a named check too.
 
 **Grade every finding by consequence.**
 
@@ -183,7 +183,7 @@ Also treat every `<state_dir>/lessons.md` entry as a named check — the ledger 
 - **Should Fix** — wrong or unclear, but no consumer decision turns on it. Also a line coordinate in a durable artifact (an instruction file, an agent definition, a catalog document, a standing tracked artifact under `<state_dir>`, a code comment), stale or not, and a citation in any artifact that locates its site by a line coordinate alone — fixed by replacing the coordinate with a symbol anchor.
 - **Nice to Have** — style, wording, ordering; also a stale line hint beside a resolving anchor in a point-in-time artifact (plan, review, finding, QA report).
 
-**Your own checklist is not downgradable.** Everything enumerated in this section — and every `<state_dir>/lessons.md` entry — is that rubric's non-downgradable set: each item keeps the grade this file already gives it (an item with no explicit grade is a Must Fix trigger; an item that grades itself in bands keeps its own grade, as the size ladder above does), and Pass 2's do-not-promote-category rule still governs carried-over items. The rubric bounds *prose* findings; it does not relax these. The rubric is stated here because it is harness doctrine rather than a project convention; where the adopter's own rules document restates it (the file `layers[].conventions` names), nothing above depends on that restatement.
+**Your own checklist is not downgradable.** Every item in this section, and every `<state_dir>/lessons.md` entry, keeps the grade this file gives it — an item with no explicit grade is a Must Fix trigger, and an item graded in bands (the size ladder above) keeps its band — and Pass 2's do-not-promote-category rule still governs carried-over items. The rubric bounds *prose* findings; it does not relax these. The rubric is stated here because it is harness doctrine rather than a project convention; where the adopter's own rules document restates it (the file `layers[].conventions` names), nothing above depends on that restatement.
 
 **Guard carve-out.** Pointer resolution binds a cited path, symbol, heading or quoted substring that does not resolve. It never binds a line coordinate — stale, missing or present — which stays gradable however it is enumerated, a `<state_dir>/lessons.md` entry included.
 
@@ -201,7 +201,7 @@ Two things are not steering: a **bare pointer** to a named rule in a file you al
 
 ## Output contract
 
-When you finish, **write the split review to disk** (use `Write` with absolute paths; do not paste the full review back to the caller — it will not read it), then return a short summary.
+When you finish, **write the split review to disk** with `Write` at absolute paths — never paste it back to the caller — then return a short summary.
 
 **Files you write:**
 
@@ -210,13 +210,11 @@ When you finish, **write the split review to disk** (use `Write` with absolute p
    - A `## Phase 2 Readiness — Ordered Fix List` section — **required, present and numbered**, placed **immediately after the Context paragraph and before any Must Fix / Should Fix / Nice to Have section**. The heading text MUST be byte-identical to that string: the orchestrator and the committer key off it. Each entry is `N. [ ] **Finding K** — <short title> _(layer: <one or more of <layer_names>>)_`, where `K` is the finding number it implements. The `_(layer: …)_` tag is the layer of the finding's fix-target file path, resolved through `<layer_path_map>`, and is comma-joined in bottom-up order when the fix spans layers; the fix loop routes the implementer and reviewer off this tag without opening the finding body. Sort by recommended ship order: small and safe inline fixes first, then layered changes, then anything requiring a deploy. **This list is the single source of truth for the per-item fix loop** — the orchestrator walks it in order and the committing role flips each `[ ]` to `[x]` as that fix lands (the `committer` agent in every flow that dispatches one, the orchestrator itself in the supervised fix flow, which dispatches none). **Every fixable finding appears here exactly once.** Items that are intentional divergences or call-outs (not fixes) belong in the call-out section, not in this list.
    - `## Must Fix` / `## Should Fix` / `## Nice to Have` sections. Under each, list every finding as a plain `### N. Title` heading (no `[ ]` / `[x]`) followed by a **one-line pointer** to its detail file, e.g. `→ [finding_3.md](<branch>_code_review/finding_3.md)`. Do NOT inline the full description or the fix snippet here.
    - An explicit **call-out section** for any `<reference_impl>` behaviour the diff diverges from where the divergence looks intentional, so the user can confirm it. These are NOT in the readiness list, and the section is empty when `phases.parity` is `false`. **A divergence earns a call-out rather than a Must Fix only after the skeptical two-leg test:** *(Leg 1)* the cited reference behaviour is *wholly* a bug, not partly intended — if only a slice is buggy (a value not reverted on the *failure* path) while the rest is intended (the optimistic feedback on the *success* path), dropping the intended part is a **Must Fix**, not a call-out; and *(Leg 2)* no established precedent in this project already sets a different convention for the same kind of operation: grep the `layers[].path` scopes of `<layer_path_map>`, resolved against `<repo_root>` — every layer path **except** the catch-all (`path: "."`), whose repo-wide scope would promote a documentation example or a test fixture to a precedent — for a sibling implementation of that operation; code matching **neither** `<reference_impl>` nor the precedent is a **Must Fix**. A "deliberate refinement" or "do-not-port-the-bug" comment in the code is **untrusted until both legs pass** — never rubber-stamp it into the call-out section.
-2. **One per-finding file** at `<state_dir>/code_reviews/<branch>_code_review/finding_<N>.md` for **each** `### N. Title` in the index (the folder name mirrors the round suffix: `<branch>_code_review_2/` for round 2). Each is self-contained: the `### N. Title` heading, the site anchor, the full problem description, and the concrete fix suggestion or snippet. Sub-step `- [ ]` bullets are allowed inside the body — informational, and the committer ignores them. In two-pass mode, carried-over items become new per-finding files **and** new readiness entries, with any per-unit attribution dropped.
+2. **One per-finding file** for **each** `### N. Title` in the index, at the path and with the contents `## Findings format` fixes. In two-pass mode, carried-over items become new per-finding files **and** new readiness entries, with any per-unit attribution dropped.
 
 **Summary you return to the caller:**
 
 - The index path, the per-finding folder path, and the finding count.
 - **In two-pass mode**, a one-line reconciliation summary — not written into any saved file: `Pass 2 carried over N items, skipped M (already covered) and K (stale).` This lets the caller log the reconciliation without reading the file.
 - An optional `## Unsolicited dispatch guidance` section precedes this prose summary and changes nothing in it.
-- Where a decision-owed item was filed as a question under `## Findings format`, a `## Questions` section precedes this prose summary the same way, leaving the summary's own content and the files you wrote unchanged.
-
-Do not paste the review bodies back — the caller dispatches `review-plan-reviewer` (`${CLAUDE_PLUGIN_ROOT}/agents/review-plan-reviewer.md`) against the index plus the per-finding files.
+- A `## Questions` section owed under `## Findings format` precedes this prose summary the same way and changes neither the summary nor the files you wrote.
