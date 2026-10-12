@@ -2,7 +2,7 @@
 
 Autonomous variant. Run `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fix_plan_writing_instructions_core.md` **`## Flow` steps 1–8 and step 11**, its **`## Convergence`**, and its `## Context discipline` rules verbatim by reference, with the bindings below and the overrides that follow them. Do not restate the flow body — the review-file discovery and round-suffix resolution (steps 1–3), the writer dispatch prompts (steps 5 and 11's revision shape), the `## Questions` handling (step 6), the `business-parity-reviewer` gate (step 7, with its `phases.parity` gate sentence), the `architecture-reviewer` gate (step 8), and the 5-iteration caps on each gate are all canonical there and are **not** restated here.
 
-**This fork differs from the core only in the binding values below and the overrides after them.** Two former overrides are now binding *values*: the removed approval gate is `<terminal_handoff>` (emit the convergence summary and fall straight through), and the non-interactive existing-plan decision is `<existing_artifact_decision>`, whose three cases stay stated in **`## Override 2 — resumability`** below rather than in the table — the sibling autonomous fixes fork and this file's own overrides resolve `Override 2(a)` **by name**. Two former sections are values too: the headless clarification reroute is the `<escalate>` / `<ask>` pair, and the path-resolution rule is the `<repo_root>` / `<app_root>` pair. What stays an override is what this mode purely **adds** and the core has no surface for: the resumability half of Override 2, the fix-plan + source-review commit at convergence (3), the pause/resume + flow-progress ledger's fix-planning half (4), the ask-vs-assume policy this fork carries by reference, and the whole **Safety scaffolding** section — the core states no dispatch counter and no `STOP`-file check, and the supervised fork over it adds none. Everything else — both gate dispatch blocks, all four writer prompts, both 5-iteration caps and the `## Convergence` fact list — is identical and is NOT duplicated here.
+**This fork differs from the core only in the binding values below and the overrides after them.** Two former overrides are now binding *values*: the removed approval gate is `<terminal_handoff>` (emit the convergence summary and fall straight through), and the non-interactive existing-plan decision is `<existing_artifact_decision>`, whose three cases stay stated in **`## Override 2 — resumability`** below rather than in the table — the sibling autonomous fixes fork and this file's own overrides resolve `Override 2(a)` **by name**. Two former sections are values too: the headless clarification reroute is the `<escalate>` / `<ask>` pair, and the path-resolution rule is the `<repo_root>` / `<app_root>` pair. What stays an override is what this mode purely **adds** and the core has no surface for: the resumability half of Override 2, the fix-plan + source-review commit at convergence (3), the pause/resume + flow-progress ledger's fix-planning half (4), the lessons-ledger commit (5), the ask-vs-assume policy this fork carries by reference, and the whole **Safety scaffolding** section — the core states no dispatch counter and no `STOP`-file check, and the supervised fork over it adds none. Everything else — both gate dispatch blocks, all four writer prompts, both 5-iteration caps and the `## Convergence` fact list — is identical and is NOT duplicated here.
 
 ---
 
@@ -142,6 +142,29 @@ The block's shape, the three markers, the `[-]`-eligible set and the seeding rul
 - `R2` — right after **Override 3** commits the fix-plan family + source review at convergence. Flip `R2` as the **last fix-planning action** before `<terminal_handoff>` falls through to fix implementation.
 
 **Resume-from-ledger.** Override 2's resumability composes with the ledger (canonical-doc §1.7): on re-entry, `R1`/`R2` `[x]` mean the fix plan is converged-and-committed — skip the gates and fall through to fixing (the fixes fork resumes from the fix-plan index checkboxes for R3). These are the durable, computed form of Override 2's fix-plan-index heuristic.
+
+---
+
+## Override 5 — commit the lessons ledger after the writer's initial write
+
+**Autonomous fork only.** The writer appends net-new lessons to `<state_dir>/lessons.md` (`${CLAUDE_PLUGIN_ROOT}/agents/user-review-fix-plan-writer.md` → step 6) and commits nothing; left modified, the ledger is swept into the first Phase A `review_item` commit, and a park or gate-cap `<escalate>` after the write leaves a modified tracked file that halts the fused command's launch check on resume. The supervised fork leaves the ledger to the human's fix-plan commit instead (its `<terminal_handoff>` step 9 names it). Do **not** propagate this step into the core.
+
+**Trigger.** Immediately after **every** initial-write return of `user-review-fix-plan-writer` — the core's `## Flow` step 5, and step 6's redispatch with answers appended, which is the same mode — and **before** step 6 routes any `## Questions` through `<ask>` and before either gate. A revision-mode return never triggers it: the writer appends lessons in initial-write mode only.
+
+**Commit.** Fixed subject `chore: Record lessons for <branch>`, through the wrapper, never a committer, with no `if` and an unconditional push — the same form and the same headless constraints as `## Override 3` above, whose ⚠️ note applies unchanged:
+
+```zsh
+bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
+  "<state_dir>/lessons.md" \
+  -- "chore: Record lessons for ${branch}"
+bash <scripts_dir>/push-branch.sh "$REPO_ROOT"
+```
+
+Exit 3 (nothing to commit) is the normal outcome when the writer appended nothing, and the push is then a no-op. A hook failure is surfaced exactly as Override 3 surfaces one.
+
+**One owner.** `## Override 3`'s staging list deliberately does **not** repeat the ledger: this point is its one owner.
+
+**Shared rationale.** This commit is one of the autonomous-fork commit points that collectively keep the clean-tree precondition honest — see **Autonomous-fork commit points — the clean-tree invariant** in `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_autonomous.md`.
 
 ---
 
