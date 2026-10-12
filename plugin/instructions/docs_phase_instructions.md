@@ -46,7 +46,7 @@ Compute the changed files (`git diff --name-only <default_branch>...HEAD -- ':(t
 
 ## Commit mechanics
 
-Identical to the docs-catalog engine (`${CLAUDE_PLUGIN_ROOT}/instructions/docs_orchestration_instructions_autonomous.md` → `## Commit mechanics (single source of truth)`): the `commit-on-branch.sh` wrapper only (never raw `git add`/`commit`), explicit paths before `--`, then `push-branch.sh` issued unconditionally as a separate statement — **no exit-code gate** (that section says why: the gate stalls a headless run, and an unconditional push is a harmless no-op when no commit landed).
+Identical to the docs-catalog engine (`${CLAUDE_PLUGIN_ROOT}/instructions/docs_orchestration_instructions_autonomous.md` → `## Commit mechanics (single source of truth)`): the `commit-on-branch.sh` wrapper only (never raw `git add`/`commit`), explicit paths before `--`, then `push-branch.sh` issued unconditionally as a separate statement — **no exit-code gate** (that section says why: the gate is refused in a headless run, and an unconditional push is a harmless no-op when no commit landed).
 
 ## Activation (wired via Override H — recorded here for reference)
 

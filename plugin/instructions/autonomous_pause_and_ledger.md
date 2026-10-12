@@ -296,8 +296,8 @@ profile runs outside the sandbox). Fixed subject `chore: Flow progress <entry-id
 push on the commit's exit code with a shell conditional** (`commit … ; if [ "$?" -eq 0 ]; then push … ; fi`).
 That compound is a headless trap: `allow-safe-compounds.sh` splits on `;` and the ` then bash push-branch.sh …`
 piece begins with a non-allow-listed `then`/`bash` prefix, so the whole command falls through the safe-compound
-allow — and nothing else matches it either, so the run **stalls on a permission prompt it cannot answer
-headlessly** and the commit is never made. No guard rescues it and none refuses it:
+allow — and nothing else matches it either, so the call **is refused at once rather than prompting**
+and the commit is never made. No guard rescues it and none refuses it:
 `git-commit-branch-guard.sh` judges only a piece whose own command word is `git`, and it judges the repository
 that command names, so a `bash <scripts_dir>/commit-on-branch.sh …` piece is outside its scope by construction
 and it stays silent — its own protected-branch `ask`, which quotes the configured set back, is reserved for a
@@ -309,7 +309,7 @@ those out of the command itself and not only out of the compound (`$?` and `${br
 exit-0 gate is needed anyway:
 `push-branch.sh` is non-fatal and only fast-forwards already-committed work, so an unconditional push is a
 harmless no-op ("Everything up-to-date") whenever the wrapper made no new commit — including the idempotent
-exit-3 re-flip. If a flip ever does hang on an unanswerable permission prompt, treat the commit as **not
+exit-3 re-flip. If a flip is ever refused, treat the commit as **not
 landed** and re-run it as a plain single-statement command.
 
 This is **NOT** a `committer` agent dispatch, for three reasons — the same rationale the task flow's Override
@@ -325,7 +325,7 @@ D uses for `statistics.md`:
 3. **Nothing to infer.** The fork already knows exactly which entry it just completed.
 
 `commit-on-branch.sh` is the same wrapper the committer uses internally, so the fork inherits identical
-safety (no shell-expansion stall on `${branch}`, explicit-path staging — never `git add -A`/`.`,
+safety (no shell-expansion refusal on `${branch}`, explicit-path staging — never `git add -A`/`.`,
 protected-branch refusal, the exit-code 0/1/2/3 contract). **Idempotency:** re-flipping an already-`[x]`
 entry stages no diff → the wrapper returns **exit 3** (nothing to commit) → no commit is made, and the
 unconditional push that follows is a harmless "Everything up-to-date" no-op (there is **no** exit-0 gate —
@@ -468,7 +468,7 @@ The safety contract runs **before every Agent dispatch** and already does the pe
    — only a **bare** `git status …` matches the `Bash(git status:*)` allow entry, whereas
    `git -C <worktree-root> status` matches **no** allow entry (the generated permission profile at
    `.claude/settings.autonomous.json` allow-lists `Bash(git status:*)` and carries no `git -C …` entry at all, so
-   any `-C` form falls through to neither `allow` nor `deny`) and stalls. The bare form is correct because the
+   any `-C` form matches no `allow` or `deny` rule) and is refused. The bare form is correct because the
    run's cwd is the worktree root (the engine never `cd`s) and `git status` reports the whole worktree's tracked
    state regardless. Read its lines: if every line begins with `??` (untracked) or there is no output, the
    **tracked** tree is clean; any line NOT beginning with `??` (a staged/modified/renamed/deleted tracked
@@ -492,13 +492,13 @@ The safety contract runs **before every Agent dispatch** and already does the pe
         third gives the same silent nothing from the other side.
      b. Create the ack marker `<state_dir>/PAUSE_ACK` with the **`Write` tool** (an empty/one-char file) or
         `echo "" > <state_dir>/PAUSE_ACK`. **Do NOT use `touch`** — `Bash(touch:*)` is **not** on the allow list
-        and stalls in the headless `-p` profile (same trap as the `-C` form above).
+        and is refused in the headless `-p` profile (same trap as the `-C` form above).
      c. Emit a one-line `PAUSED: <branch> — <phase>` to the run log (ordinary assistant output — no shell).
      d. **End the session** — truly stop and yield. Do NOT spin, poll, sleep, or re-dispatch. Ending the
         session is what makes the pause free of dispatch cost (same rule as a clarification park).
 
 Do **not** delete `<state_dir>/PAUSE` yourself (the watcher owns its lifecycle, and `rm` is not allow-listed in
-the generated profile — only `rm -rf` is on its deny floor, so a bare `rm` stalls rather than being refused). The
+the generated profile — only `rm -rf` is on its deny floor, so a bare `rm` is refused). The
 `PAUSE_PROGRESS.md` append and `PAUSE_ACK` write are ordinary `<state_dir>/…` writes (allowed under the profile)
 and are the run's only actions before ending.
 

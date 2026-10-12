@@ -75,7 +75,7 @@ The push follows the commit **immediately**, as a **plain, single-statement** Ba
 bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"
 ```
 
-> ⚠️ **No exit-code gate.** Why an `if …; then … fi` wrapper is a headless stall, and why no gate is needed, is canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## Push` and applies here as written.
+> ⚠️ **No exit-code gate.** Why an `if …; then … fi` wrapper is refused in a headless run, and why no gate is needed, is canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## Push` and applies here as written.
 
 ## Ledger / resume
 
