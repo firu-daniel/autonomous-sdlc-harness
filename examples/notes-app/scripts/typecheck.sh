@@ -40,7 +40,7 @@ npm run typecheck "$@"
 status=$?
 
 # Exactly one verdict line, so no caller ever appends an exit-code probe to this script. That
-# compound form is what stalls an unattended run on a permission prompt.
+# compound form is what an unattended run's permission mode refuses.
 if [ "$status" -eq 0 ]; then
   echo "PASS: typecheck"
 else
