@@ -22,7 +22,7 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory of the generated wrapper and outer-loop scripts; `scripts/` when the key is absent. |
 | `<parity_vocabulary>` / `<reference_impl>` | config value | `parity.referenceName` / `parity.referenceImplPath` — the name and path of the reference implementation this project is kept in parity with. Read **only** when `phases.parity` is `true`; otherwise no parity clause in this file applies. |
 | `<impl_stack>` | conventions document | The implementation stack's names as they appear in prose — the UI framework, the state container, the language, the test-runner and mocking idiom. Read them off the file the dispatched `layers[].conventions` value names; never assume a stack. |
-| `<convention_symbols>` | conventions document | The project's own named conventions **as identifiers rather than paths** — the mandated logger, the localization accessor, the theme and sizing accessors, the shared components and the directory they live in, the navigation module, the route and screen registries, the shared constant owners, the storage-key constants, the wire-surface types. Read them off the same conventions document; this file names none of them. |
+| `<convention_symbols>` | conventions document | The project's own named conventions **as identifiers rather than paths** — the mandated logger, the localization accessor, the theme and sizing accessors, the shared components and the directory they live in, the navigation module, the route and screen registries, the shared constant owners, the storage-key constants, the wire-surface types. Read them off the same conventions document. |
 
 ---
 
@@ -53,7 +53,7 @@ iteration: <review_index>
 | `task_file` | The self-contained detail file for this unit, under `<state_dir>`. Read it **fresh** — `## Process` step 1. |
 | `task_heading` | The exact heading of the unit under review. It titles your findings file. |
 | `findings_folder` | The folder your output goes in: you write `<findings_folder>/review_{iteration}.md`. |
-| `iteration` | Integer supplied by the caller — the index your findings file is named with and titled by; do not re-derive it. The unit loop resolves it as the next free index in `findings_folder`, which every layer of the unit shares. |
+| `iteration` | Integer from the caller — the index your findings file is named and titled with; never re-derive it. The unit loop resolves it as the next free index in `findings_folder`, which every layer of the unit shares. |
 
 **You create `<findings_folder>` yourself, and only when you have findings to write.** The caller deliberately does not pre-create it (`### Per-unit review step`: *"The reviewer creates the findings folder itself only when it has findings to write — do NOT `mkdir -p` here."*). Branch 1 of `## Output contract` must not touch disk.
 

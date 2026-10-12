@@ -21,7 +21,7 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file sits under. Default `sdlc-harness/`; no path segment of it begins with a dot. |
 | `<qa_driver>` | config value | `qa.driver` — which variant of the `qa-tester` runs, and so how it reaches the application. It fixes the capability vocabulary every `**Capability / MCP:**` annotation in the plan must be drawn from; see `### Capability/MCP correctness`. Read **only** when `phases.qa` is `true`. |
-| `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves** — the configured names travel through this file unchanged. They are the only permitted values of the `_(layer: …)_` tag on a readiness entry, and the only values that route: the QA fix loop maps the tag to a dispatch one row per `layers[]` entry. |
+| `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves.** They are the only permitted values of the `_(layer: …)_` tag on a readiness entry, and the only values that route: the QA fix loop maps the tag to a dispatch one row per `layers[]` entry. |
 | `<layer_path_map>` | config value | Every `layers[]` entry's `path` together with its `conventions` — the repo-relative directory that layer's source lives in, and the document that supplies that layer's rules. You need both halves: the `conventions` half locates the document of the layer that owns the application's surfaces — the one that states the test-attribute locator convention and the surface rules the plan's steps are phrased against; the `path` half is the directory you grep for the call site that emits an asserted attribute value (`### Asserted attribute values agree with the source`). The **catch-all** layer is the entry whose `path` is `"."`. |
 | `<docs_root>` | config value | `docs.root` — the repo-relative directory holding the documentation corpus. Read **only** when `phases.docs` is `true`; otherwise the corpus does not exist. |
 | `<docs_retrieval>` | config value | `docs.retrieval` — whether the docs-retrieval search tool is wired. Read **only** when `phases.docs` is `true`; an absent key is `false`. When `false`, the tool does not exist even though your `tools:` allowlist names it: ignore `mcp__harness-docs__search_docs` wherever this file names it. |
@@ -47,7 +47,7 @@ iteration: <iteration>
 | `ui_test_files_dir` | The folder of per-test files, holding one `ui_test_<N>.md` per readiness entry. Read **every** one. |
 | `prompt_path` | The original task prompt the plan was written from; the caller resolves it to `<state_dir>/task_prompts/<branch>_task_prompt.md`. It is the requirement the completeness check runs against. |
 | `findings_folder` | Where your own findings go: `<findings_folder>/review_{iteration}.md`. |
-| `iteration` | Integer supplied by the caller — the index your findings file is named with and titled by; do not re-derive it. At the gates that resolve it that way, it is the next free index in `findings_folder`. |
+| `iteration` | Integer from the caller — the index your findings file is named and titled with; never re-derive it. |
 
 **You create `<findings_folder>` yourself, and only when you have findings to write.** The caller deliberately declines to pre-create it (*"creates `<state_dir>/ui_test_plan_reviews/<branch>/` itself only when it has findings to write — do NOT `mkdir -p` here"*). The PASS branch of `## Output contract` must not touch disk.
 

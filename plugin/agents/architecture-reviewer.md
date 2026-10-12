@@ -15,7 +15,7 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves** — the configured names travel through this file unchanged. They are also the permitted values of the `_(layer: …)_` readiness tag you emit. |
+| `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves.** They are also the permitted values of the `_(layer: …)_` readiness tag you emit. |
 | `<layer_path_map>` | config value | Every `layers[]` entry's `path` together with its `conventions` — the repo-relative directory that layer's source lives in, and the document that supplies that layer's rules. Unlike the per-layer implementer and reviewer, who each receive **one** entry as a dispatch argument, you are dispatched **once** for a whole plan or a whole diff, so the **entire** map is in scope for you. |
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file sits under. Default `sdlc-harness/`; no path segment of it begins with a dot. In a git pathspec, strip any trailing slash first: `sdlc-harness//*` matches no path, so an exclusion pathspec built on it silently excludes nothing. |
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this run executes in — in an autonomous run, its **own worktree**, not the main checkout. Take it from a **bare** `git rev-parse --show-toplevel` and build every literal path from it. Never nest the `$(…)` in another command, or carry it across Bash calls in a shell variable. |
@@ -23,7 +23,7 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 | `<docs_retrieval>` | config value | `docs.retrieval` — whether the docs-retrieval search tool is wired. Read **only** when `phases.docs` is `true`; an absent key is `false`. When `false`, the tool does not exist even though your `tools:` allowlist names it: ignore `mcp__harness-docs__search_docs` wherever this file names it. |
 | `<parity_vocabulary>` / `<reference_impl>` | config value | `parity.referenceName` / `parity.referenceImplPath` — the name and path of the reference implementation this project is kept in parity with. Used **only** in `## Scope boundary`, to name the lens that is *not* yours, and only when `phases.parity` is `true`. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges into, so the diff base of every `git diff` in this file. Never a remembered branch name. |
-| `<convention_symbols>` | conventions document | The project's own named conventions **as identifiers rather than paths** — the mandated logger, the localization and theming accessors, the shared components and registries, the storage-key constants, the wire-surface types. Read them off the conventions documents `<layer_path_map>` names; this file names none of them. |
+| `<convention_symbols>` | conventions document | The project's own named conventions **as identifiers rather than paths** — the mandated logger, the localization and theming accessors, the shared components and registries, the storage-key constants, the wire-surface types. Read them off the conventions documents `<layer_path_map>` names. |
 
 ---
 
@@ -81,7 +81,7 @@ You judge the *planned* architecture, before any code is written. There are **th
 | `task_files_dir` | The folder of detail files — `task_<N>_plan.md` in (a), `finding_<N>.md` in (b) and (c). Read **every** one. |
 | `prompt_path` | The original prompt the plan was written from, under `<state_dir>/task_prompts/` in (a) the active user-review file under `<state_dir>/user_reviews/` in (b), and in (c) the machine-local test log the plan was written from, read as the requirement. Where the caller supplies one. |
 | `findings_folder` | Where your output goes: you write `<findings_folder>/review_{iteration}.md`. |
-| `iteration` | Integer supplied by the caller — the index your findings file is named with and titled by; do not re-derive it. At the gates that resolve it that way, it is the next free index in `findings_folder`. |
+| `iteration` | Integer from the caller — the index your findings file is named and titled with; never re-derive it. |
 
 In all three sub-cases the judgement is the same set of architecture checks, applied to the *described* placement and flow rather than to real files. No plan-review dispatch carries a `diff_base`, so the mode selector resolves all three to plan-review mode.
 
