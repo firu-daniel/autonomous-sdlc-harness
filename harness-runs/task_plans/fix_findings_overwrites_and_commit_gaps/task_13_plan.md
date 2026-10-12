@@ -35,3 +35,8 @@
 - `git grep -n 'error: blocked — ' -- plugin/instructions/qa_test_instructions.md plugin/instructions/user_review_fixes_instructions_core.md` matches the literal in `plugin/agents/qa-tester.md` byte for byte. And `git grep -n 'per-test .error:' -- plugin/instructions/qa_test_instructions.md`: every remaining hit, including the `### 3.` collect sentence and the `### 4.` arm, is qualified as an unmarked `error:` (one not beginning with `error: blocked — `). No hit may leave a blocked return able to end the dispatch loop.
 - `git grep -n 'blocked with no credentials' -- plugin/instructions` returns nothing, once Task 12 has landed too.
 - Supervised walk on paper: three tests. Test 1 passes, test 2 is blocked, test 3 passes. Step 3 collects test 2's blocked line and **still dispatches test 3**. Step 4 then reports PASS with `Test 2 — <cause>`, assembles no index and commits nothing, as the supervised flow never does.
+
+**Deviations from plan:**
+
+- `user_review_fixes_instructions_core.md` → `## Resolved values` → the `<escalate>` row listed "a per-test `qa-tester` `error:`" among Phase E's escalation points, unqualified — outside the named Targets but contradicting the narrowed stop condition. Narrowed to "an unmarked per-test `qa-tester` `error:`".
+- The supervised paper walk was carried out by reading, not execution: step 3 now collects the blocked line and dispatches the next test; step 4's blocked arm records it, Round PASS admits it and names `Test 2 — <cause>`, and the PASS arm assembles no index and commits nothing.
