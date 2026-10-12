@@ -224,7 +224,7 @@ import {
   type OuterLoopScript,
   type WrittenOuterLoopScript,
 } from './outerLoopScripts.js';
-import { applySandbox } from './sandboxProfile.js';
+import { applySandbox, SANDBOX_KEY } from './sandboxProfile.js';
 import {
   scriptInvocation,
   selectWrapper,
@@ -916,7 +916,7 @@ function assertRunnable(profile: JsonObject): void {
     entriesOf(permissions, list),
   ]);
   for (const dotted of SANDBOX_LISTS) {
-    const where = `sandbox.${dotted}`;
+    const where = `${SANDBOX_KEY}.${dotted}`;
     const value = where.split('.').reduce<JsonValue | undefined>(
       (node, key) => (isJsonObject(node) ? node[key] : undefined),
       profile,
@@ -928,7 +928,7 @@ function assertRunnable(profile: JsonObject): void {
     lists.push([where, value as string[]]);
   }
   for (const [list, field] of CREDENTIAL_LISTS) {
-    const where = `sandbox.credentials.${list}`;
+    const where = `${SANDBOX_KEY}.credentials.${list}`;
     const value = where.split('.').reduce<JsonValue | undefined>(
       (node, key) => (isJsonObject(node) ? node[key] : undefined),
       profile,

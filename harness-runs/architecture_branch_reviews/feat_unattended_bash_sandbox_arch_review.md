@@ -13,7 +13,7 @@ Most of the layering holds. The new configuration key lands in the right order i
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — `writeProtection.ts` spells `harness-run-lib.sh` as a second source for the outer-loop table _(layer: cli)_
-2. [ ] **Finding 4** — `writeProtection.ts` and `permissionProfile.ts` retype the `sandbox` key instead of importing `SANDBOX_KEY` _(layer: cli)_
+2. [x] **Finding 4** — `writeProtection.ts` and `permissionProfile.ts` retype the `sandbox` key instead of importing `SANDBOX_KEY` _(layer: cli)_
 3. [ ] **Finding 5** — The run library's NAMING header omits `HR_TARGET_REFUSAL` _(layer: cli)_
 4. [ ] **Finding 3** — The new `doctor` profile checks re-probe the profile root `buildCheckContext` resolves once _(layer: cli)_
 5. [ ] **Finding 2** — JSON dotted-path and list helpers are copied across `generators/` and `doctor/` instead of living in `core/json.ts` _(layer: cli)_

@@ -14,9 +14,9 @@
  * {@link protectedPaths} and {@link fileToolDenyRules}, so they are the one statement of the set.
  *
  * **Import cycle, deliberate:** this module imports from `permissionProfile.ts`, whose
- * `renderProfile` calls {@link applyWriteProtection}, and from `repoRoot.ts`, which imports
- * `permissionProfile.ts`. Every binding imported from either is used at call time only, never while
- * a module is being evaluated; keep it that way.
+ * `renderProfile` calls {@link applyWriteProtection}, and from `repoRoot.ts` and `sandboxProfile.ts`,
+ * which both import `permissionProfile.ts`. Every binding imported from any of them is used at call
+ * time only, never while a module is being evaluated; keep it that way.
  */
 
 import { join } from 'node:path';
@@ -38,6 +38,7 @@ import {
 } from './outerLoopScripts.js';
 import { appendReadme, assertUsableInEntry, normalizedRoot } from './permissionProfile.js';
 import { MCP_PATH } from './repoRoot.js';
+import { SANDBOX_KEY } from './sandboxProfile.js';
 
 /** One path the profile write-protects. */
 export interface ProtectedPath {
@@ -217,7 +218,7 @@ export function applyWriteProtection(profile: JsonObject, { repoRoot, workRoot, 
   const paths = protectedPaths({ repoRoot, workRoot, config, additionalDirectories });
 
   appendUnique(
-    listAt(profile, ['sandbox', 'filesystem', 'denyWrite']),
+    listAt(profile, [SANDBOX_KEY, 'filesystem', 'denyWrite']),
     paths.map(({ path }) => path),
   );
   appendUnique(listAt(profile, ['permissions', 'deny']), paths.flatMap(fileToolDenyRules));
