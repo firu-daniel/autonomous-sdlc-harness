@@ -69,7 +69,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_findings_overwrites_and_
 7. [x] **Task 7** — Key per-unit layer reviews by next free index and hand each fix the file its own layer returned _(layer: plugin)_ _(points: 15)_
 8. [x] **Task 8** — Rewrite `layer-reviewer`'s description to its real dispatch sites _(layer: plugin)_ _(points: 5)_
 9. [x] **Task 9** — Add the committer's `unit_findings_folder` argument and exclude it from subject reconciliation _(layer: plugin)_ _(points: 15)_
-10. [ ] **Task 10** — Pass `unit_findings_folder` from the unit loop's commit step _(layer: plugin)_ _(points: 8)_
+10. [x] **Task 10** — Pass `unit_findings_folder` from the unit loop's commit step _(layer: plugin)_ _(points: 8)_
 11. [ ] **Task 11** — Give every qa-tester per-test block a defined return, with the `error: blocked — ` marker _(layer: plugin)_ _(points: 20)_
 12. [ ] **Task 12** — Parse the per-test blocked marker in the task-plan flow's Phase E _(layer: plugin)_ _(points: 15)_
 13. [ ] **Task 13** — Parse the per-test blocked marker in the supervised QA flow and the user-review fixes core _(layer: plugin)_ _(points: 10)_
