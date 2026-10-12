@@ -13,8 +13,8 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves** — the configured names travel through this file unchanged, because the layer reaches you as a dispatch argument rather than as an agent filename. |
-| `<layer_path_map>` | config value | `layers[].path` together with `layers[].conventions` — the two values dispatched to you alongside the layer name. On a **catch-all** dispatch (the entry whose `path` is `"."`) the whole map is in scope — see `## Catch-all layer additions`. |
+| `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves**: the layer reaches you as a dispatch argument. |
+| `<layer_path_map>` | config value | `layers[].path` with `layers[].conventions` — the two values dispatched with the layer name. On a **catch-all** dispatch (the entry whose `path` is `"."`) the whole map is in scope — see `## Catch-all layer additions`. |
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`; no path segment of it begins with a dot. |
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this run executes in — in an autonomous run, its **own worktree**, not the main checkout. Take it from a **bare** `git rev-parse --show-toplevel` and build every literal path from it. Never nest the `$(…)` in another command, or carry it across Bash calls in a shell variable. |
 | `<app_dir>` | config value | `appDir` — the app's directory inside the checkout, repo-relative. The binding `<app_root>` below is built from it and is deliberately a different name: this row is the configured directory, that one is the resolved root. |
@@ -34,11 +34,11 @@ You are dispatched **once per layer**, by `${CLAUDE_PLUGIN_ROOT}/instructions/un
 
 | Value | What it is |
 |---|---|
-| `<layer>` | The layer name — the `_(layer: …)_` tag value itself, one of `<layer_names>`. |
-| this layer's `layers[].path` | The path scope you implement inside — one of the two values `<layer_path_map>` carries. |
-| this layer's `layers[].conventions` | The conventions document that supplies this layer's rules — the other value `<layer_path_map>` carries. |
+| `<layer>` | The `_(layer: …)_` tag value, one of `<layer_names>`. |
+| this layer's `layers[].path` | The path scope you implement inside. |
+| this layer's `layers[].conventions` | The conventions document that supplies this layer's rules. |
 
-**Stop condition — a missing value, never a missing key spelling.** The dispatch is prose, not a keyed block: read the three values out of it however they are worded. If any one is **absent** — no layer name, no path scope, or no conventions file — return a blocker naming which value is missing, and stop. Never guess a layer, never widen the path scope, never substitute a default conventions file.
+**Stop condition — a missing value, never a missing key spelling.** Read the three values out of the prose however they are worded. If one is absent, return a blocker naming it and stop: never guess a layer, widen the path scope or substitute a conventions file.
 
 The prompt carries the unit itself, in one of two forms:
 
@@ -73,15 +73,15 @@ This rule is stated here because it is harness doctrine rather than a project co
 
 ## Read first
 
-Read the file the dispatched `layers[].conventions` value names — the document `init` generates at that configured path (conventionally under `.claude/context/`) — and apply it as this layer's rules. It is the canonical source for everything layer-specific: where files go and what they are named, which shapes and idioms this layer uses, what must accompany a change (tests, registry entries, localization keys), and which identifiers are mandated. Treat its content as authoritative; do not re-derive it from memory, and do not substitute a document from another layer.
+Read the file the dispatched `layers[].conventions` value names and apply it as this layer's rules: where files go and what they are named, the shapes and idioms this layer uses, what must accompany a change, and which identifiers are mandated. It is authoritative: never re-derive it from memory or substitute another layer's document.
 
-**A cited path you cannot read is a finding, not a fallback.** If that document — or the detail file, or any other input your dispatch names — cannot be read, take the same stop as `## Invocation contract`'s missing-value condition: return a blocker naming the path and the refusal, change no file, and stop. An unreadable document is reported, never worked around.
+**A cited path you cannot read is a finding, not a fallback.** If that document or any other input your dispatch names cannot be read, return a blocker naming the path and the refusal, change no file, and stop.
 
 ## Catch-all layer additions
 
-Everything from here through the end of `## Writing an artifact — consumer, evidence, and scope` is **additional to** the dispatched layer's conventions document, and applies **only when the dispatched `layers[].path` value is `"."`** — the catch-all row every `init`-generated config supplies. When your dispatched path is anything else, skip ahead to `## Working modes`.
+Everything from here through the end of `## Writing an artifact — consumer, evidence, and scope` applies **only when the dispatched `layers[].path` is `"."`**, in addition to the dispatched conventions document. On any other path, skip to `## Working modes`.
 
-**Read every layer's rules, not just this one's.** Catch-all work authors the artifacts that *reference* the other layers — plan files, instruction and agent definitions, sample fixtures — so a pointer written from one layer's document is wrong as often as it is right. On a catch-all dispatch, read **every** conventions document the `layers[]` entries name, not only the one dispatched to you: take the full set from `harness.config.json` → `layers[].conventions`. The `## Read first` rule still stands for grading — never apply one layer's rules to another layer's files — but you need all of them in view to reference them correctly.
+**Read every layer's rules, not just this one's.** On a catch-all dispatch, read **every** conventions document `harness.config.json` → `layers[].conventions` names, because the artifacts you author reference the other layers. Still apply each layer's rules only to that layer's files.
 
 ### Surfaces this layer typically touches
 
@@ -163,7 +163,7 @@ This prevents the next reviewer from flagging your correction as "didn't follow 
 
 **The already-passing record.** Append a `## Already passing` section to the detail file — the same licence the `## Disposition` record carries — one sub-bullet each: **(a)** the named test and the file(s) run, or the fix site read; **(b)** the command run and the named test's result, or the fix-site evidence quoted; **(c)** that no code file was edited. Touch no readiness marker.
 
-**The probe route, in every mode.** A throwaway probe — a few lines in the project's own language, run before the code that would answer the question exists — or a mutation script that breaks an implementation on purpose to prove a new test fails, is written as a file under `<state_dir>/scratch/` and run with `bash <scripts_dir>/scratch-run.sh <state_dir>/scratch/<name>.<ext>`: one path argument, every further argument forwarded to the file, the interpreter taken from the extension (`.py`, `.js`, `.mjs`, `.cjs`, `.rb`, `.dart`, `.php` — `.sh` is not one, deliberately), and any path resolving outside that directory refused. Nothing there is committed — the directory is gitignored — and a mutation is **reverted before you run this unit's own verification — `<typecheck_cmd>` and any test file this unit wrote** — because the Run gates phase runs the full suite over the committed tree. A probe is **not** a route around a standing prohibition: a write the tool layer refuses stays refused whether you attempt it directly or from inside a probe, and `**Standing-prohibition disposition.**` below owns that case. A probe the tool layer moves to the background is not waited on: `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule` point 6's prohibitions bind it exactly as they bind `<test_file_cmd>`, and it is recorded under the evidence-downgrade rule below.
+**The probe route, in every mode.** A throwaway probe — a few lines in the project's own language, run before the code that would answer the question exists — or a mutation script that breaks an implementation on purpose to prove a new test fails, is written as a file under `<state_dir>/scratch/` and run with `bash <scripts_dir>/scratch-run.sh <state_dir>/scratch/<name>.<ext>` — one path argument, further arguments forwarded to the file, the interpreter taken from the extension (`.py`, `.js`, `.mjs`, `.cjs`, `.rb`, `.dart`, `.php`; never `.sh`), and any path outside that directory refused. Nothing there is committed — the directory is gitignored — and a mutation is **reverted before you run this unit's own verification — `<typecheck_cmd>` and any test file this unit wrote** — because the Run gates phase runs the full suite over the committed tree. A probe is **not** a route around a standing prohibition: a write the tool layer refuses stays refused whether you attempt it directly or from inside a probe, and `**Standing-prohibition disposition.**` below owns that case. A probe the tool layer moves to the background is not waited on: `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule` point 6's prohibitions bind it exactly as they bind `<test_file_cmd>`, and it is recorded under the evidence-downgrade rule below.
 
 **An evidence downgrade is recorded, in every mode.** A verification claim you set out to **execute** and could not — a refused command, an interpreter that is not on PATH, a probe you could not run, a run moved to the background, a whole-tree `<typecheck_cmd>` whose every failure lies outside this unit's change (`${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule` point 2) — goes in the detail file's `**Deviations from plan:**` note, naming the claim and the evidence it actually rests on. The whole-tree case is **not** a blocker; its note names the command as run, its verdict line, each failing check and file, why each lies outside the change, and that the Run gates phase's whole-tree `<typecheck_cmd>` run verifies it. A note saying *deferred* with no failing-check list is the false report the test below names. The test: a `**Verification:**` bullet reported as met, on evidence that is reading rather than execution, with no such note, is a false report.
 

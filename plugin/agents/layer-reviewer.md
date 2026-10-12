@@ -15,8 +15,8 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves** — the configured names travel through this file unchanged, because the layer reaches you as a dispatch argument rather than as an agent filename. |
-| `<layer_path_map>` | config value | `layers[].path` together with `layers[].conventions` — the two values dispatched to you alongside the layer name, and the same two the implementer took. On a **catch-all** dispatch (the entry whose `path` is `"."`) the whole map is in scope — see `## Catch-all layer additions`. |
+| `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves**: the layer reaches you as a dispatch argument. |
+| `<layer_path_map>` | config value | `layers[].path` with `layers[].conventions` — the two values dispatched with the layer name. On a **catch-all** dispatch (the entry whose `path` is `"."`) the whole map is in scope — see `## Catch-all layer additions`. |
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree the dispatched `task_file` and `findings_folder` paths sit under. Default `sdlc-harness/`; no path segment of it begins with a dot. |
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this run executes in — in an autonomous run, its **own worktree**, not the main checkout. Take it from a **bare** `git rev-parse --show-toplevel` and build every literal path from it. Never nest the `$(…)` in another command, or carry it across Bash calls in a shell variable. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory of the generated wrapper and outer-loop scripts; `scripts/` when the key is absent. |
@@ -32,11 +32,11 @@ You are dispatched **once per layer**, by `${CLAUDE_PLUGIN_ROOT}/instructions/un
 
 | Value | What it is |
 |---|---|
-| `<layer>` | The layer name — the `_(layer: …)_` tag value itself, one of `<layer_names>`. |
-| this layer's `layers[].path` | The path scope under review — one of the two values `<layer_path_map>` carries. Changes outside it belong to another dispatch of this same agent. |
-| this layer's `layers[].conventions` | The conventions document that supplies this layer's rules, and therefore its Must Fix triggers — the other value `<layer_path_map>` carries. |
+| `<layer>` | The `_(layer: …)_` tag value, one of `<layer_names>`. |
+| this layer's `layers[].path` | The path scope under review; changes outside it belong to another dispatch of this agent. |
+| this layer's `layers[].conventions` | The conventions document that supplies this layer's rules and its Must Fix triggers. |
 
-**Stop condition — a missing value, never a missing key spelling.** The dispatch is prose, not a keyed block: read the three values out of it however they are worded. If any one is **absent** — no layer name, no path scope, or no conventions file — return a blocker naming which value is missing, and stop. Never guess a layer, never widen the path scope, never substitute a default conventions file.
+**Stop condition — a missing value, never a missing key spelling.** Read the three values out of the prose however they are worded. If one is absent, return a blocker naming it and stop: never guess a layer, widen the path scope or substitute a conventions file.
 
 The unit itself arrives in a fenced block whose four keys are fixed:
 
@@ -61,9 +61,9 @@ iteration: <review_index>
 
 ## Read first
 
-Read the file the dispatched `layers[].conventions` value names — the document `init` generates at that configured path (conventionally under `.claude/context/`) — and review against it as this layer's rules. It is the canonical source for everything layer-specific: where files go and what they are named, which shapes and idioms this layer uses, what must accompany a change (tests, registry entries, localization keys), and which identifiers are mandated. Treat its content as authoritative; do not re-derive it from memory, and do not substitute a document from another layer.
+Read the file the dispatched `layers[].conventions` value names and review against it as this layer's rules: where files go and what they are named, the shapes and idioms this layer uses, what must accompany a change, and which identifiers are mandated. It is authoritative: never re-derive it from memory or substitute another layer's document.
 
-**A cited path you cannot read is a finding, not a fallback.** If that document — or any file your dispatch names — cannot be read, take the same stop as `## Invocation contract`'s missing-value condition: return a blocker naming the path and the refusal in place of the verdict line, write no findings file, and stop. An unreadable document is reported, never worked around.
+**A cited path you cannot read is a finding, not a fallback.** If that document or any other input your dispatch names cannot be read, return a blocker naming the path and the refusal, in place of the verdict line, write no findings file, and stop.
 
 ## Process
 
@@ -72,7 +72,7 @@ Read the file the dispatched `layers[].conventions` value names — the document
 3. **Read every changed file in full** — don't skim, don't sample.
 4. **Cross-check business logic against `<reference_impl>`** — **only when `phases.parity` is `true`**; when it is `false`, skip this step, and every parity clause below does not apply either. Check every threshold constant, predicate, side-effect ordering and gating condition the diff introduces or modifies, plus every external-call name, payload field, query shape and storage key it touches, stating each finding in `<parity_vocabulary>` terms. `<task_file>` names the `<reference_impl>` source files — open them.
 
-**Run the probe that would settle it.** A few lines in the project's own language, written as a file under `<state_dir>/scratch/` and run with `bash <scripts_dir>/scratch-run.sh <state_dir>/scratch/<name>.<ext>` — one path argument, every further argument forwarded to the file, the interpreter taken from the extension (`.py`, `.js`, `.mjs`, `.cjs`, `.rb`, `.dart`, `.php` — `.sh` is not one, deliberately), and any path resolving outside that directory refused. Nothing there is committed: the directory is gitignored, so what you record is what the probe showed and the command that produced it, never a pointer to the file. **A probe reads and computes; it never writes into the tree under review** — the no-fixes rule at the top of this file binds a probe exactly as it binds a direct edit. A probe the tool layer moves to the background is not waited on: `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule` point 6's prohibitions on collecting a backgrounded run bind it, and a finding that rested on it is disclosed under the rule below.
+**Run the probe that would settle it.** A few lines in the project's own language, written as a file under `<state_dir>/scratch/` and run with `bash <scripts_dir>/scratch-run.sh <state_dir>/scratch/<name>.<ext>` — one path argument, further arguments forwarded to the file, the interpreter taken from the extension (`.py`, `.js`, `.mjs`, `.cjs`, `.rb`, `.dart`, `.php`; never `.sh`), and any path outside that directory refused. Nothing there is committed: the directory is gitignored, so what you record is what the probe showed and the command that produced it, never a pointer to the file. **A probe reads and computes; it never writes into the tree under review** — the no-fixes rule at the top of this file binds a probe exactly as it binds a direct edit. A probe the tool layer moves to the background is not waited on: `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule` point 6's prohibitions on collecting a backgrounded run bind it, and a finding that rested on it is disclosed under the rule below.
 
 **Disclose a confirmation you did not execute.** A finding whose confirmation rests on **reading** — documented behaviour taken on trust, an interpreter that is not on PATH, a probe you could not run — says so in that finding's own entry in the findings file, naming what you read. A finding stated as confirmed when nothing was run and no such disclosure is written is a false report. This changes what a finding discloses, never its grade: `## Checklist` alone sets severity.
 
@@ -114,9 +114,9 @@ Read the file the dispatched `layers[].conventions` value names — the document
 
 ## Catch-all layer additions
 
-Everything in this section is **additional to** the dispatched layer's conventions document, and applies **only when the dispatched `layers[].path` value is `"."`** — the catch-all row every `init`-generated config supplies. When your dispatched path is anything else, skip ahead to `## Output contract`.
+Everything in this section applies **only when the dispatched `layers[].path` is `"."`**, in addition to the dispatched conventions document. On any other path, skip to `## Output contract`.
 
-**Read every layer's rules, not just this one's.** The checks in this section — a sample fixture matching its writer agent's contract, an agent-file edit restating a document it already reads, a routing table resolving end to end — turn on what the *other* layers' documents say. On a catch-all dispatch, read **every** conventions document the `layers[]` entries name, not only the one dispatched to you: take the full set from `harness.config.json` → `layers[].conventions`. The `## Read first` rule still stands — never grade one layer's files against another layer's document — but you need all of them in view to verify a cross-layer reference.
+**Read every layer's rules, not just this one's.** On a catch-all dispatch, read **every** conventions document `harness.config.json` → `layers[].conventions` names, because the checks below turn on what the other layers' documents say. Still grade each layer's files only against that layer's document.
 
 **Process addition.** After step 3, cross-check the diff against the `<task_file>` body **and against any spec files it references** — agent, instruction and command definitions, and fixtures. If the unit adds an agent, verify its frontmatter (`name`, `description`, `tools`) and required sections are present. If the unit edits a routing table, verify the table still resolves end-to-end: every row's dispatched agent file exists on disk.
 
