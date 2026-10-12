@@ -90,27 +90,27 @@ Read the file the dispatched `layers[].conventions` value names and review again
 
 **Prose volume — the receiving side.** This binds durable text — the definition files an agent loads, the standing tracked artifacts under `<state_dir>`, code comments — never a round's point-in-time artifacts, where detail is the product. A finding that asks for **more** prose names the reader who reaches the wrong answer without it and states that answer; one that names neither is not a finding. Prose no reader test keeps is padding: **Should Fix**, never Must Fix — except prose that also creates a second owner (a rule restated inline from a file the same agent already reads), which keeps the grade the ladder above gives it.
 
-**The layer's triggers come from its conventions document, not from this file.** Read the file the dispatched `layers[].conventions` value names and grade the unit's diff against **that file** — never against a remembered rule set, and never against another layer's document. The groups below are the *shape* every layer's trigger list takes; the triggers inside them are the conventions document's to state.
+**The layer's triggers come from its conventions document, not from this file.** Grade the diff against the dispatched conventions document — never a remembered rule set or another layer's document. The groups below are the shape; the triggers inside them are that document's.
 
-**Parity** (only when `phases.parity` is `true`) — layer-independent, and the four that matter:
+**Parity** (only when `phases.parity` is `true`):
 - A threshold constant invented instead of taken from `<reference_impl>`.
 - Predicate semantics wrong (a boundary comparison flipped, absent vs empty, an ownership check inverted).
 - Side-effect ordering reversed against `<reference_impl>`.
 - A gating condition that does not match `<reference_impl>`.
 
-**Hard violations of the conventions document** — *replace with your project's list*: the rules that document states as mandatory for this layer, each a Must Fix when bypassed. They are typically the mandated accessors and the mandated `<convention_symbols>` — the logger, the localization and theming accessors, the shared components and registries — plus this layer's mandated file placement and naming.
+**Hard violations of the conventions document** — *replace with your project's list*: each rule that document makes mandatory for this layer is a Must Fix when bypassed — typically the mandated accessors and `<convention_symbols>` (the logger, the localization and theming accessors, the shared components and registries), and this layer's mandated file placement and naming.
 
-**Architecture** — a responsibility placed in a layer the conventions document does not put it in; a boundary that document draws being crossed in the diff; a shared component, helper or constant hand-rolled when the project already ships one (`<convention_symbols>`); a unit doing more than the one thing its layer's contract allows.
+**Architecture** — a responsibility in a layer the conventions document does not put it in; a boundary it draws crossed; a shared component, helper or constant hand-rolled when the project ships one (`<convention_symbols>`); a unit doing more than its layer's contract allows.
 
-**Testing** — a new unit of behaviour that the conventions document requires a test for landing without one (**Must Fix — no exceptions**); a test that diverges from the project's own pattern, i.e. the `<impl_stack>` test-runner and mocking idiom that document states.
+**Testing** — a new unit of behaviour landing without the test the conventions document requires (**Must Fix — no exceptions**); a test off the `<impl_stack>` test-runner and mocking idiom that document states.
 
-**Required-set completeness** — where the conventions document defines a set that must accompany a change (a new page's touch-points, a new module's registry entries, a new string's localization files), **each missing item of that set is its own Must Fix**, not one aggregate finding.
+**Required-set completeness** — where the conventions document defines a set that must accompany a change (a new page's touch-points, a module's registry entries, a string's localization files), **each missing item is its own Must Fix**, not one aggregate finding.
 
-**Size** — a file over the first line-count threshold the conventions document states → Should Fix; over its second threshold → Must Fix.
+**Size** — a file over the first line-count threshold the conventions document states → Should Fix; over its second → Must Fix.
 
 **Do NOT flag:**
-- (When `phases.parity` is `true`.) Deviations from `<reference_impl>` that are **convention** choices rather than behaviour — presentation idiom, component choice, layout, platform-appropriate interaction — when the behaviour is equivalent. Business-logic deviations from `<reference_impl>` ARE legitimate findings.
-- Implementer-documented deviations under `**Deviations from plan:**` that agree with the source of truth for this layer.
+- (When `phases.parity` is `true`.) Deviations from `<reference_impl>` that are **convention** choices — presentation idiom, component choice, layout, platform-appropriate interaction — with equivalent behaviour. Business-logic deviations from `<reference_impl>` ARE findings.
+- Implementer-documented deviations under `**Deviations from plan:**` that agree with this layer's source of truth.
 
 ## Catch-all layer additions
 
@@ -118,27 +118,27 @@ Everything in this section applies **only when the dispatched `layers[].path` is
 
 **Read every layer's rules, not just this one's.** On a catch-all dispatch, read **every** conventions document `harness.config.json` → `layers[].conventions` names, because the checks below turn on what the other layers' documents say. Still grade each layer's files only against that layer's document.
 
-**Process addition.** After step 3, cross-check the diff against the `<task_file>` body **and against any spec files it references** — agent, instruction and command definitions, and fixtures. If the unit adds an agent, verify its frontmatter (`name`, `description`, `tools`) and required sections are present. If the unit edits a routing table, verify the table still resolves end-to-end: every row's dispatched agent file exists on disk.
+**Process addition.** After step 3, cross-check the diff against `<task_file>` **and every spec file it references** — agent, instruction and command definitions, and fixtures. A new agent: verify its frontmatter (`name`, `description`, `tools`) and required sections. An edited routing table: verify it resolves end to end — every row's dispatched agent file exists on disk.
 
 **Workflow / orchestrator coherence:**
-- A new agent file is missing the `name:` / `description:` frontmatter, or the `name:` does not match the filename slug.
-- A routing-table row dispatches an agent whose file does not exist on disk.
-- An instruction file references a renamed agent by its old name (broken pointer).
-- The `## Phase 2 Readiness — Ordered Fix List` heading text is changed away from that exact string in a fixture, writer-contract, or orchestrator file (the orchestrator keys off it).
-- Iteration caps disagree between the canonical instruction file and any command file that advertises the cap to the user.
-- STOP-file message phrasing disagrees across launch vs. dispatch paths in the same instruction file.
+- A new agent file missing `name:` / `description:` frontmatter, or a `name:` not matching the filename slug.
+- A routing-table row dispatching an agent whose file is not on disk.
+- An instruction file citing a renamed agent by its old name.
+- The `## Phase 2 Readiness — Ordered Fix List` heading changed from that exact string in a fixture, writer contract or orchestrator file.
+- Iteration caps disagreeing between the canonical instruction file and a command file that advertises the cap.
+- STOP-file message phrasing disagreeing between launch and dispatch paths in one instruction file.
 
 **Scripts / infra:**
-- Shell script lacks `set -e` (or equivalent error handling) and silently masks failures.
-- Hardcoded absolute path that should be derived from the script's own location or a known env var.
-- `cd` inside a script when the orchestrator instructions explicitly say "never `cd`".
+- A shell script with no `set -e` or equivalent error handling, silently masking failures.
+- A hardcoded absolute path that should derive from the script's own location or a known env var.
+- `cd` inside a script where the orchestrator instructions say "never `cd`".
 
 **Documentation parity:**
-- A user-facing command-file description claims behaviour that disagrees with the instruction file it chains to.
-- An agent / instruction / command file edit inlines content that restates a file the same agent is told to read (its own `## Read first` list, or a file the project's own instructions point it at) — a verbatim or near-verbatim duplicate of referenced rule text rather than a thin pointer that cites the source and says what to do or verify in one line. Do NOT flag genuinely non-duplicate inline content (routing detail, argument and output-format contracts, judgement guidance that exists nowhere else) — only restated content that already lives in a referenced file.
-- A sample fixture does not match the structure its writer agent is contractually required to emit. The fixtures are **split** into an index plus a per-item directory, because that split is itself part of the shape being demonstrated: the story index `${CLAUDE_PLUGIN_ROOT}/samples/sample_story_plan.md` with its per-task files `${CLAUDE_PLUGIN_ROOT}/samples/sample_story/task_<N>_plan.md` (`${CLAUDE_PLUGIN_ROOT}/samples/sample_task_plan.md` is the format-reference README that links to them), the code-review index `${CLAUDE_PLUGIN_ROOT}/samples/sample_code_review.md` with `${CLAUDE_PLUGIN_ROOT}/samples/sample_code_review/finding_<N>.md`, and the user-review fix-plan index `${CLAUDE_PLUGIN_ROOT}/samples/sample_user_review_fix_plan.md` with `${CLAUDE_PLUGIN_ROOT}/samples/sample_user_review_fix_plan/finding_<N>.md`. Each fixture — index and per-item alike — must match the split shape its writer agent emits.
+- A command-file description claiming behaviour the instruction file it chains to disagrees with.
+- An agent / instruction / command edit inlining a verbatim or near-verbatim restatement of a file the same agent is told to read (its `## Read first` list, or a file the project's instructions point it at) instead of a one-line pointer to it. Not flagged: genuinely non-duplicate inline content — routing detail, argument and output-format contracts, judgement guidance found nowhere else.
+- A sample fixture, index or per-item file, not matching the split shape its writer agent emits: the story index `${CLAUDE_PLUGIN_ROOT}/samples/sample_story_plan.md` with `${CLAUDE_PLUGIN_ROOT}/samples/sample_story/task_<N>_plan.md` (`${CLAUDE_PLUGIN_ROOT}/samples/sample_task_plan.md` is the format-reference README linking them), the code-review index `${CLAUDE_PLUGIN_ROOT}/samples/sample_code_review.md` with `${CLAUDE_PLUGIN_ROOT}/samples/sample_code_review/finding_<N>.md`, and the user-review fix-plan index `${CLAUDE_PLUGIN_ROOT}/samples/sample_user_review_fix_plan.md` with `${CLAUDE_PLUGIN_ROOT}/samples/sample_user_review_fix_plan/finding_<N>.md`.
 
-**Project-convention compliance** (when the diff touches code, not just documents) — *replace with your project's list*: the triggers the catch-all layer's own conventions document states for code that falls into no other layer's path. Typically the mandated logger and the mandated theme / sizing / localization accessors — read them off that document (`<convention_symbols>`), never from memory.
+**Project-convention compliance** (when the diff touches code, not only documents) — *replace with your project's list*: the triggers the catch-all layer's conventions document states for code no other layer's path holds — typically the mandated logger and theme / sizing / localization accessors (`<convention_symbols>`), read off that document.
 
 ## Unsolicited dispatch guidance
 
@@ -152,13 +152,13 @@ Two things are not steering: a **bare pointer** to a named rule in a file you al
 
 ## Output contract
 
-There are three possible outcomes. Pick exactly one.
+Pick exactly one of the three outcomes below.
 
-**When a branch below writes a findings file (branches 2 and 3):** run `mkdir -p <findings_folder>` before the Write — the caller does not pre-create the folder. Branch 1 must not touch disk.
+**Branches 2 and 3 write a findings file:** run `mkdir -p <findings_folder>` before the `Write` — the caller does not pre-create it. Branch 1 touches no disk.
 
 ### 1. No findings at all
 
-Do not save a file. Return exactly:
+Save no file. Return exactly:
 
 ```
 verdict: PASS
@@ -166,19 +166,17 @@ verdict: PASS
 
 ### 2. Only Should Fix and/or Nice to Have findings (no Must Fix)
 
-Save findings to `<findings_folder>/review_{iteration}.md` containing ONLY the Should Fix and/or Nice to Have sections (omit `## Must Fix` entirely). Use the same markdown template as branch 3 below, just without the Must Fix section. Then return exactly:
+Save `<findings_folder>/review_{iteration}.md` with only the Should Fix and/or Nice to Have sections of branch 3's template — no `## Must Fix`. Then return exactly:
 
 ```
 verdict: PASS
 ```
 
-The caller does NOT loop on this verdict — the unit moves forward to the next layer, then to the commit. The `branch-reviewer`'s end-of-branch Pass 2 reconciliation reads these files to pick up your findings and merge them into the branch-level review. **This is the safety net: if you skip writing the file, the items vanish.**
+The caller does not loop on this verdict. `branch-reviewer`'s Pass 2 reads these files: **skip the file and the items are lost.**
 
 ### 3. At least one Must Fix
 
-Save findings to `<findings_folder>/review_{iteration}.md` in this format:
-
-Each finding's location is the site anchor (the repo-relative path plus the symbol, heading or short quoted substring that locates the change, with a quoted substring beside any symbol whose body spans more than the change and a bare path only when the change is the whole file; a line number may follow as a navigation hint, and nothing depends on it).
+Save `<findings_folder>/review_{iteration}.md` in this format. Each finding's location is its site anchor: the repo-relative path plus the symbol, heading or short quoted substring locating the change — a quoted substring beside any symbol whose body spans more than the change, a bare path only when the change is the whole file, and a line number only as a trailing hint.
 
 ```markdown
 # <layer> review — <task_heading> — iteration {iteration}
@@ -203,6 +201,6 @@ findings_file: <full_path>
 must_fix_count: <N>
 ```
 
-Keep the return message to 1 line for PASS, 3 lines for FAIL. The caller will not read the findings file — it just passes the path to the next implementer dispatch (or to the `branch-reviewer` in Pass 2).
+Return 1 line on PASS, 3 on FAIL. The caller passes the findings path on without reading the file.
 
 An optional `## Unsolicited dispatch guidance` section precedes whichever fixed return applies and changes nothing in it.
