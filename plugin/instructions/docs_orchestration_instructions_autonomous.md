@@ -27,7 +27,7 @@ This loop is deliberately lean — no planner, no code/parity/architecture/skept
 
 ## Setup (once, at session start)
 
-1. **Paths (Override-A equivalent).** Resolve `<repo_root>` exactly as `## Resolved values` above states — a **bare** `git rev-parse --show-toplevel` (this worktree, not the main repo) — and write it `$REPO_ROOT` below. Every path you pass to an agent is **absolute** under `$REPO_ROOT` — worktree agents otherwise write to the main repo. `<MAIN_REPO>` (for the global kill switch only) is the first entry of `git worktree list`.
+1. **Paths (Override-A equivalent).** Resolve `<repo_root>` exactly as `## Resolved values` above states — a **bare** `git rev-parse --show-toplevel` (this worktree, not the main repo) — and write it `$REPO_ROOT` below. Every path you pass to an agent is **absolute** under `$REPO_ROOT` — worktree agents otherwise write to the main repo. `<MAIN_REPO>` (for the global kill switch and the push wrapper) is the first entry of `git worktree list`.
 2. **Kill switch (Override-B equivalent).** If `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` exists, halt before dispatching anything and report it. Do NOT delete it.
 3. **Branch.** `git branch --show-current` → `<branch>`.
 4. **Read + parse the checklist** at `$REPO_ROOT/<state_dir>/docs_catalog/<branch>_docs.md`. It is an ordered list of entries; each entry is one doc and carries: a `[ ]`/`[x]` box, `slug`, `type` (`feature`|`concept`), `output_path`, `title`, and an `entry` blob. The **final** entry is always the `INDEX` (see below). See **Checklist entry format**.
@@ -103,12 +103,14 @@ Commit **only** through the wrapper — never a raw `git add` / `git commit` (a 
 bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
   "<output_path>" "<state_dir>/docs_catalog/<branch>_docs.md" [<other changed paths…>] \
   -- "docs: <doc_title>"
-bash <scripts_dir>/push-branch.sh "$REPO_ROOT"
+bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"
 ```
 
 > ⚠️ **No exit-code gate — deliberate.** Do **not** wrap the push in `if [ "$?" -eq 0 ]; then … fi`. Per `${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6 that control-flow block is a headless trap: `allow-safe-compounds.sh` splits on `;` and the ` then bash …` piece begins with a non-allow-listed prefix, so the command falls through the safe-compound allow, nothing else matches it, and the run **stalls on a permission prompt it cannot answer headlessly** — **the commit silently does not land.** `$?` is unreliable across Bash calls anyway (each runs in a fresh shell). No gate is needed: an unconditional push is a harmless no-op whenever no commit landed.
 
 The wrapper stages **only** the explicit paths listed before `--` (`git add -- …`, never `git add -A`/`.`), builds the message from the args after `--` (subject only — no `Co-Authored-By`/trailer, no `--no-verify`), and returns: 0 committed, 1 error (surface it), 2 protected-branch refusal (surface it), 3 nothing-to-commit. `push-branch.sh` is best-effort, non-fatal, only fast-forwards already-committed work, and reaches only the run's **own non-protected** branch — the protected-branch hard boundary is unchanged.
+
+The push names `<MAIN_REPO>`'s copy of the wrapper, spelled as a literal absolute path rather than through a variable, because that copy is the one the unattended permission profile runs outside the sandbox: the worktree's own copy stays sandboxed, where an SSH push can fail while the wrapper still exits 0.
 
 ---
 
