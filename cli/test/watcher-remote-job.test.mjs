@@ -275,6 +275,7 @@ test('none: the launch line, the start and stop records, and the parked detail',
     const after = (flag) => argv[argv.indexOf(flag) + 1];
     assert.equal(after('--settings'), join(j.dir, '.claude', 'settings.autonomous.json'));
     assert.ok(argv.includes('--permission-mode'), argv.join(' '));
+    assert.equal(after('--permission-mode'), 'dontAsk', argv.join(' '));
     // The profile's only additionalDirectories entry is the state directory, so it is not repeated.
     const addDirs = argv.flatMap((arg, i) => (arg === '--add-dir' ? [argv[i + 1]] : []));
     assert.deepEqual(addDirs, [j.dir, join(j.dir, STATE_DIR)]);

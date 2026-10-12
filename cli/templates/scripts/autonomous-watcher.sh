@@ -993,8 +993,15 @@ POLL_INTERVAL_SECS="${POLL_INTERVAL_SECS:-15}"
 # The permission mode an unattended run is launched with. Deliberately NOT a
 # permission-bypass mode: the generated profile's deny floor is the thing that
 # keeps an unattended run inside its lane, and bypassing it would make every
-# refusal in this family decorative.
-PERMISSION_MODE="${PERMISSION_MODE:-acceptEdits}"
+# refusal in this family decorative. Under `dontAsk` a call the profile neither
+# allows nor denies, or one that hits an `ask` rule, is refused at once, so a
+# profile gap shows up as a refusal in the run's stream rather than as a session
+# waiting on a prompt. It also refuses a host outside the sandbox's allowed
+# domains, which is what holds if `strictAllowlist` is not honoured from
+# `--settings`. `job` mode reads this same variable, so a remote run launches
+# under `dontAsk` too. Override: `PERMISSION_MODE=acceptEdits` in `watcher.env`
+# restores prompting, under which those calls stall the run.
+PERMISSION_MODE="${PERMISSION_MODE:-dontAsk}"
 # Throttle for the merged-working-copy cleanup sweep (housekeeping, in `tick`).
 CLEANUP_INTERVAL_SECS="${CLEANUP_INTERVAL_SECS:-300}"
 # When that sweep last ran. STATE, not a tunable — assigned plainly rather than

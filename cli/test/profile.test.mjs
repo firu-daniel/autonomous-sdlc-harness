@@ -311,6 +311,14 @@ test('with the interactive-test phase off, the profile carries no browser wiring
   }
 });
 
+test('the profile carries the shipped template\'s permission mode', async (t) => {
+  const { profile } = await profileFor(t);
+  // Read from the template rather than restated, choice 2's reason.
+  const shipped = JSON.parse(readFileSync(PROFILE_TEMPLATE, 'utf8')).permissions.defaultMode;
+  assert.ok(typeof shipped === 'string' && shipped.length > 0, 'the shipped template declares no defaultMode');
+  assert.equal(profile.permissions.defaultMode, shipped);
+});
+
 test('every permission entry is a single unquoted command, with the phase off and on', async (t) => {
   for (const args of [[], ['--qa']]) {
     await t.test(args.length === 0 ? 'phase off' : 'phase on', async (subtest) => {
