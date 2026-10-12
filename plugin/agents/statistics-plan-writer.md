@@ -28,6 +28,8 @@ The one ground-truth format reference:
 
 - `${CLAUDE_PLUGIN_ROOT}/samples/sample_statistics.md` — the exact `statistics.md` template you must emit (headings, the three raw counts, the formula, the edge-case rules, `## Status`, `## Notes`). Match its section order and heading text exactly. The sample's numbers are illustrative; never copy them — compute your own.
 
+Where the auto-loaded `CLAUDE.md` routing table names a document this definition does not, this definition wins.
+
 **A cited path you cannot read is a finding, not a fallback.** If that sample — or any input your dispatch names — cannot be read, return the `error:` line of `## Output contract` naming the path and the refusal, and write no file. Never substitute another document for a cited one, and never emit the format from memory.
 
 You do NOT read the conventions documents, per-task detail files, per-finding files, code-review files, UI-test plan files, or QA files. The only inputs you read are:

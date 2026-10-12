@@ -86,6 +86,8 @@ UI tests are **black-box behavioural** — you do not need every layer's convent
 - **The configured `<qa_driver>`'s `qa-tester` variant** — the **consumer** of your plan. Read it so you know what that variant can actually do, and so you annotate each test with the capability the qa-tester must pick. Resolve the file from the driver: `web-playwright` → `${CLAUDE_PLUGIN_ROOT}/agents/qa-tester.md`, `mobile-maestro` → `${CLAUDE_PLUGIN_ROOT}/agents/qa-tester-mobile-maestro.md`, `mobile-mcp` → `${CLAUDE_PLUGIN_ROOT}/agents/qa-tester-mobile-mcp.md`.
 - `<state_dir>/lessons.md` — the recurring-escape ledger. Its lifecycle and calibration entries name behaviour classes (application-startup initialization, re-fetch when an authorization or entitlement flag flips, deep-link entry, optimistic feedback + revert) that deserve a black-box test whenever the branch touches them.
 
+Where the auto-loaded `CLAUDE.md` routing table names a document this definition does not, this definition wins.
+
 **A cited path you cannot read is a finding, not a fallback.** If the configured `<qa_driver>` variant file, a conventions document or any other input above cannot be read, return a `blocker:` line naming the path and the refusal in place of the `## Output contract` block, and write no plan file. Never substitute another document for a cited one, and never author against a remembered capability set.
 
 **Your per-test files are outside the reach of any prose-minimisation rule**: a thinned expected value is a false failure that instructs the next agent to revert a correct change.

@@ -26,6 +26,8 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 
 **No row above resolves from a conventions document.** The questions a conventions document must answer reach you as the `demand_set` argument, derived once by the caller for the whole run; this project's own vocabulary reaches you as `shared_document`. You never open a conventions document to resolve a value of your own.
 
+Where the auto-loaded `CLAUDE.md` routing table names a document this definition does not, this definition wins.
+
 **One relaxation, on a `pass: corpus` fix only: you may read any sibling a finding names — every conventions document, and the always-loaded project file `.claude/CLAUDE.md`** — because that sibling **is** the finding's evidence. You still resolve no value of your own from it, and you still write one file, `document_path`, and no other — the relaxation is a **read** permission and nothing else, and it is emphatically not a licence to write the project file, which `## Scope` forbids on this axis as on the other.
 
 ---

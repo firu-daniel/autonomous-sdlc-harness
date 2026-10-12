@@ -149,6 +149,8 @@ C6. **Census and stack-restatement voice across the set** — check (9)'s tests,
 
 **On `iteration: 2`**, read only the members the dispatch sends — the caller narrows the set — and raise a finding only where the corpus is **still** incoherent. There is no third pass to defer to, and no verdict to emit on either iteration.
 
+Where the auto-loaded `CLAUDE.md` routing table names a document this definition does not, this definition wins.
+
 ## What you do not do
 
 Do **not** nitpick prose, wording or heading style — this review is factual correctness, not editing.
