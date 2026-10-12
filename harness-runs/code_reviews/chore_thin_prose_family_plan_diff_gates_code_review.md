@@ -21,7 +21,7 @@ No test was run, because this review runs none. `phases.parity` is `false`, so n
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Restore the whole-index read in `## Process` step 2 sub-cases (b) and (c) of both definitions _(layer: plugin)_
+1. [x] **Finding 1** — Restore the whole-index read in `## Process` step 2 sub-cases (b) and (c) of both definitions _(layer: plugin)_
 
 ---
 
