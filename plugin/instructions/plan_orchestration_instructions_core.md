@@ -70,11 +70,11 @@ The `Used at` column is load-bearing, not documentation. A flow that enters this
    | `<parity_review_path>` | `<state_dir>/business_parity_branch_reviews/<branch>_parity_review.md` | (will be created later) The business-parity-review **index** (thin: `## Context` + `## Phase 2 Readiness — Ordered Fix List` + finding pointers). |
    | `<parity_review_findings_dir>` | `<state_dir>/business_parity_branch_reviews/<branch>_parity_review/` | (will be created later) The per-finding detail folder (`finding_<N>.md`). |
    | `<parity_fix_findings_root>` | `<state_dir>/business_parity_branch_review_point_reviews/<branch>_parity_review/` | The per-item layer-reviewer findings root (`item_<N>/`), mirroring `<arch_fix_findings_root>`. |
-   | `<review_plan_review_folder>` | `<state_dir>/review_plan_reviews/<branch>/` | — |
+   | `<review_plan_review_folder>` | `<state_dir>/review_plan_reviews/<branch>/` | New files take the next free `review_<n>.md` index (B.2). |
    | `<per_review_findings_root>` | `<state_dir>/review_plan_point_reviews/<branch>_review/` | — |
    | `<skeptic_review_path>` | `<state_dir>/skeptic_reviews/<branch>_skeptic_review.md` | (will be created later, only if the skeptic finds something) The adversarial-review **index** (thin: `## Context` + `## Phase 2 Readiness — Ordered Fix List` + finding pointers + call-outs), same split format as the code-review index. |
    | `<skeptic_review_findings_dir>` | `<state_dir>/skeptic_reviews/<branch>_skeptic_review/` | (will be created later) The per-finding detail folder (`finding_<N>.md`). |
-   | `<skeptic_review_meta_folder>` | `<state_dir>/skeptic_review_plan_reviews/<branch>/` | Where the `review-plan-reviewer` writes its meta-review of the skeptic index (mirrors `<review_plan_review_folder>`). |
+   | `<skeptic_review_meta_folder>` | `<state_dir>/skeptic_review_plan_reviews/<branch>/` | Where the `review-plan-reviewer` writes its meta-review of the skeptic index (mirrors `<review_plan_review_folder>`). New files take the next free `review_<n>.md` index (C2.2). |
    | `<skeptic_fix_findings_root>` | `<state_dir>/skeptic_review_point_reviews/<branch>_skeptic_review/` | The per-item layer-reviewer findings root (`item_<N>/`) for the Phase C2 fix loop, mirroring `<per_review_findings_root>`. |
    | `<ui_test_index>` | `<state_dir>/ui_test_plans/<branch>_ui_test_plan.md` | The UI-test plan **index** (produced by the planning flow; an input to Phase E). |
    | `<ui_test_files_dir>` | `<state_dir>/ui_test_plans/<branch>/` | The per-test detail folder (`ui_test_<N>.md`). |
@@ -84,7 +84,7 @@ The `Used at` column is load-bearing, not documentation. A flow that enters this
    | `<gate_key>` | `task` | The Run gates key of this flow: the wrapper label's and every test-fix path's leading segment. |
    | `<test_fix_plan_path>` | `<state_dir>/test_fix_plans/<branch>_<gate_key>_round_<gate_round>.md` | (will be created later, on the first round the gates fail) The test fix plan **index** (thin: `## Context` + `## Phase 2 Readiness — Ordered Fix List` + finding pointers). `<gate_round>` is bound in `### G.0 Resolve the round` and re-bound each round — resolve this path through it every time, never as a literal. |
    | `<test_fix_findings_dir>` | `<state_dir>/test_fix_plans/<branch>_<gate_key>_round_<gate_round>/` | (will be created later) The per-finding detail folder (`finding_<N>.md`). |
-   | `<test_fix_review_folder>` | `<state_dir>/test_fix_plan_reviews/<branch>_<gate_key>_round_<gate_round>/` | Where the `architecture-reviewer` writes its review of the test fix plan (G.2). |
+   | `<test_fix_review_folder>` | `<state_dir>/test_fix_plan_reviews/<branch>_<gate_key>_round_<gate_round>/` | Where the `architecture-reviewer` writes its review of the test fix plan (G.2). New files take the next free `review_<n>.md` index (G.2). |
    | `<test_fix_findings_root>` | `<state_dir>/test_fix_point_reviews/<branch>_<gate_key>_round_<gate_round>/` | The per-item layer-reviewer findings root (`item_<N>/`) for the G.4 fix loop. |
 
    **Phase-gated rows.** `init` materializes an artifact directory, with its contract README, only when the phase that owns it is `true` in `harness.config.json`: every path above under `<state_dir>/business_parity_*` is gated on `phases.parity`, and every one under `<state_dir>/qa_*` or `<state_dir>/ui_test_*` on `phases.qa`. The rest are always written. A gated directory that is absent means its phase is off, not a write the flow missed.
@@ -292,14 +292,14 @@ A **`## Questions`** section in that return (that literal heading; omitted when 
 
 `iteration = 0`. Loop:
 
-1. Spawn `review-plan-reviewer`:
+1. Spawn `review-plan-reviewer`. `<meta_review_index>` is the **next free index** in `<review_plan_review_folder>`, resolved immediately before **every** dispatch: `ls <review_plan_review_folder>` and take one past the highest `review_<n>.md`, or `0` when the folder is absent or holds none — never the loop counter `iteration`, which only caps the loop. It is bound here, at its point of use, and is neither a Mode-contract binding nor a path placeholder. The folder is keyed by branch alone, so a later code-review round continues the branch's series rather than restarting it at `review_0.md`.
 
    ```
    review_path: <code_review_path>
    findings_dir: <code_review_findings_dir>
    plan_path: <story_path>
    findings_folder: <review_plan_review_folder>
-   iteration: <iteration>
+   iteration: <meta_review_index>
    ```
 
    `review_path` is the code-review **index**; `findings_dir` is the per-finding detail folder it cross-checks for index↔finding correspondence; `plan_path` is the **story index** (read for context only — what the diff was trying to do); `findings_folder` is where the meta-reviewer writes its own findings. (The `review-plan-reviewer` creates `findings_folder` itself only when it has findings to write — do NOT `mkdir -p` here.)
@@ -319,7 +319,7 @@ commit_prefix: chore
 <committer_push>
 ```
 
-(`meta_findings_folder` is what gets B.2's meta-review findings committed: the committer derives the per-finding folder from `plan_path` by stripping `.md`, and `<review_plan_review_folder>` is a different tree it cannot reach that way, so this phase passes it explicitly. **The existence guard is yours** — include the key **only if** `<review_plan_review_folder>` exists and is non-empty. A B.2 meta-review that returned `PASS` on iteration 0 wrote no findings and created no folder — omit the key entirely in that case, and the dispatch is byte-for-byte what it was before.)
+(`meta_findings_folder` is what gets B.2's meta-review findings committed: the committer derives the per-finding folder from `plan_path` by stripping `.md`, and `<review_plan_review_folder>` is a different tree it cannot reach that way, so this phase passes it explicitly. **The existence guard is yours** — include the key **only if** `<review_plan_review_folder>` exists and is non-empty. A B.2 meta-review that returned `PASS` on its first dispatch wrote no findings this round — on a branch's first round the folder then does not exist, so omit the key entirely and the dispatch is byte-for-byte what it was before; on a later round it may already hold an earlier round's tracked files, which the committer stages as an unchanged no-op.)
 
 ---
 
@@ -372,14 +372,14 @@ Because the skeptic is adversarial it is the review most prone to false positive
 
 `iteration = 0`. Loop:
 
-1. Spawn `review-plan-reviewer`:
+1. Spawn `review-plan-reviewer`. `<meta_review_index>` is the **next free index** in `<skeptic_review_meta_folder>`, resolved immediately before **every** dispatch: `ls <skeptic_review_meta_folder>` and take one past the highest `review_<n>.md`, or `0` when the folder is absent or holds none — never the loop counter `iteration`, which only caps the loop. It is bound here, at its point of use, and is neither a Mode-contract binding nor a path placeholder. The folder is keyed by branch alone, so a later skeptic round continues the branch's series rather than restarting it at `review_0.md`.
 
    ```
    review_path: <skeptic_review_path>
    findings_dir: <skeptic_review_findings_dir>
    plan_path: <story_path>
    findings_folder: <skeptic_review_meta_folder>
-   iteration: <iteration>
+   iteration: <meta_review_index>
    ```
 
 2. Parse return:
@@ -398,7 +398,7 @@ commit_prefix: chore
 <committer_push>
 ```
 
-(The committer's `review_plan_file` mode is index-agnostic and derives the per-finding folder from `plan_path` by stripping `.md`, so the skeptic index works unmodified. `<skeptic_review_meta_folder>` is **not** derivable that way — it is a separate tree — so C2.2's meta-review findings are passed explicitly, exactly as B.3 passes `<review_plan_review_folder>`, and under the same caller-side existence guard: include the key **only if** the folder exists and is non-empty, since a C2.2 meta-review that passed on iteration 0 created none. Its fixed subject `chore: add code review for <branch>` is reused as-is — same as the QA-review commit in E.2; do not ask for a different subject, and the extra staged folder does not change it.)
+(The committer's `review_plan_file` mode is index-agnostic and derives the per-finding folder from `plan_path` by stripping `.md`, so the skeptic index works unmodified. `<skeptic_review_meta_folder>` is **not** derivable that way — it is a separate tree — so C2.2's meta-review findings are passed explicitly, exactly as B.3 passes `<review_plan_review_folder>`, and under the same caller-side existence guard: include the key **only if** the folder exists and is non-empty. A C2.2 meta-review that passed on its first dispatch wrote nothing this round: on a branch's first round the folder then does not exist, and on a later round it may already hold an earlier round's tracked files, which the committer stages as an unchanged no-op. Its fixed subject `chore: add code review for <branch>` is reused as-is — same as the QA-review commit in E.2; do not ask for a different subject, and the extra staged folder does not change it.)
 
 ### C2.4 Fix loop
 
@@ -532,7 +532,7 @@ Tear down the dev server when QA passes (E.2) or on any halt in this phase.
 
 Run this phase after Phase E — or after Phase E was skipped — and before Phase D. **It is the only place in the flow `<test_cmd>` runs, and the only place `<typecheck_cmd>` runs over the whole tree on the flow's behalf** — both through one `run-test-suite.sh` call per round. You never learn what the gates are and never read their output: you read the one line the wrapper prints, and hand its log path on unread. Why no unit runs the suite, and what a unit runs instead, is `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`. A `fail` opens a fix loop — a test fix plan written from the log, approved by the architecture gate, committed, then walked by the unit loop — and the gates run again, for at most `MAX_GATE_ROUNDS` gate runs.
 
-> **Two flow-dependent vocabularies of `<…>` name appear below, and this section is written to be executed by a flow from another family too** (`mode_contract.md` rule (5) — another family's core may cite it by reference). The **Mode-contract bindings** it uses are `<escalate>` and `<committer_push>` — plus `<per_unit_review>`, via the unit-loop row G.4 runs — and they resolve from the fork the executing flow was dispatched via. Every **other** `<…>` name here — setting aside the config-value tokens declared in `## Resolved values` — is a **path placeholder** and resolves from the `## Setup` of the flow's **own entry core**: `<branch>`, `<gate_key>`, `<test_fix_plan_path>`, `<test_fix_findings_dir>`, `<test_fix_review_folder>` and `<test_fix_findings_root>`. **Resolve the four test-fix paths through that Setup every round, never as a literal** — each carries `<gate_round>`, and a path baked in on one round lands the next round's artifacts in the previous round's folder. `<gate_round>`, the wrapper's `<log>` and the counter `<iteration>` are neither kind: they are bound below, at their point of use. No step in this phase depends on any other phase of this file having run.
+> **Two flow-dependent vocabularies of `<…>` name appear below, and this section is written to be executed by a flow from another family too** (`mode_contract.md` rule (5) — another family's core may cite it by reference). The **Mode-contract bindings** it uses are `<escalate>` and `<committer_push>` — plus `<per_unit_review>`, via the unit-loop row G.4 runs — and they resolve from the fork the executing flow was dispatched via. Every **other** `<…>` name here — setting aside the config-value tokens declared in `## Resolved values` — is a **path placeholder** and resolves from the `## Setup` of the flow's **own entry core**: `<branch>`, `<gate_key>`, `<test_fix_plan_path>`, `<test_fix_findings_dir>`, `<test_fix_review_folder>` and `<test_fix_findings_root>`. **Resolve the four test-fix paths through that Setup every round, never as a literal** — each carries `<gate_round>`, and a path baked in on one round lands the next round's artifacts in the previous round's folder. `<gate_round>`, the wrapper's `<log>`, the counter `<iteration>` and the next-free index `<test_fix_review_index>` are neither kind: they are bound below, at their point of use. No step in this phase depends on any other phase of this file having run.
 
 ### G.0 Resolve the round
 
@@ -597,12 +597,14 @@ Parse the return — on this dispatch and on every revision dispatch below alike
 [G · test-fix-plan · arch · iter <iteration>] → architecture-reviewer  (#<total_dispatches>)
 ```
 
+`<test_fix_review_index>` is the **next free index** in `<test_fix_review_folder>`, resolved immediately before **every** dispatch of this gate: `ls <test_fix_review_folder>` and take one past the highest `review_<n>.md`, or `0` when the folder is absent or holds none — never the counter `<iteration>`, which only caps the loop and titles the heartbeat. A draft round re-entered from **G.0** therefore adds files beside the earlier attempt's instead of rewriting `review_0.md`.
+
 ```
 story_path: <test_fix_plan_path>
 task_files_dir: <test_fix_findings_dir>
 prompt_path: <log>
 findings_folder: <test_fix_review_folder>
-iteration: <iteration>
+iteration: <test_fix_review_index>
 ```
 
 (The `architecture-reviewer` creates `<test_fix_review_folder>` itself only when it has findings to write — do NOT `mkdir -p` here.)

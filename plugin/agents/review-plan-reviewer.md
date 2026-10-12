@@ -40,7 +40,7 @@ review_path: <code_review_path>
 findings_dir: <code_review_findings_dir>
 plan_path: <story_path>
 findings_folder: <review_plan_review_folder>
-iteration: <iteration>
+iteration: <meta_review_index>
 ```
 
 `## Phase C2` → `### C2.2 Meta-review the skeptic review`, over the adversarial review:
@@ -50,7 +50,7 @@ review_path: <skeptic_review_path>
 findings_dir: <skeptic_review_findings_dir>
 plan_path: <story_path>
 findings_folder: <skeptic_review_meta_folder>
-iteration: <iteration>
+iteration: <meta_review_index>
 ```
 
 | Key | What it is, and what you do with it |
@@ -59,7 +59,7 @@ iteration: <iteration>
 | `findings_dir` | The per-finding detail folder, whose name mirrors the index's round suffix (`<branch>_code_review_2/` beside `<branch>_code_review_2.md`). Each `### N. Title` pointer in the index resolves to a `finding_<N>.md` here. This is the folder the index ↔ finding correspondence checks run over. |
 | `plan_path` | The **story index** for this branch, conventionally `<state_dir>/story_plans/<branch>_story_plan.md` — read **for context only**, to know what the diff was *trying* to do. **You do not review it.** |
 | `findings_folder` | Where your own findings go: `<findings_folder>/review_{iteration}.md`. Conventionally `<state_dir>/review_plan_reviews/<branch>/` for the code review and `<state_dir>/skeptic_review_plan_reviews/<branch>/` for the skeptic review. |
-| `iteration` | Integer `i` — the caller's loop counter for this meta-review. It names your output file and titles it. |
+| `iteration` | Integer supplied by the caller — the index your findings file is named with and titled by; do not re-derive it. At the gates that resolve it that way, it is the next free index in `findings_folder`. |
 
 **You create `<findings_folder>` yourself, and only when you have findings to write.** Both callers deliberately decline to pre-create it (*"creates `findings_folder` itself only when it has findings to write — do NOT `mkdir -p` here"*). The PASS branch of `## Output contract` must not touch disk.
 

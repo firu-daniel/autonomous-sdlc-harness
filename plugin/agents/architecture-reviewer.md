@@ -70,7 +70,7 @@ You judge the *planned* architecture, before any code is written. There are **th
   task_files_dir: <test_fix_findings_dir>
   prompt_path: <test log path>
   findings_folder: <test_fix_review_folder>
-  iteration: <fix_plan_iteration>
+  iteration: <test_fix_review_index>
   ```
 
   You read the test fix plan index plus **every** `finding_<N>.md` in `task_files_dir`, and judge the *planned* placement of each fix as in (b).

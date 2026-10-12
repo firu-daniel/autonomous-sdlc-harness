@@ -64,7 +64,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_findings_overwrites_and_
 2. [x] **Task 2** — Rewrite the eight per-item point-review state-dir READMEs for next-free keying, own-layer reads and unit commits _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Key the user-review fix-plan gates by next free index _(layer: plugin)_ _(points: 12)_
 4. [x] **Task 4** — Commit the lessons ledger in both user-review fix-plan forks _(layer: plugin)_ _(points: 15)_
-5. [ ] **Task 5** — Key the B.2 / C2.2 meta-review loops and the G.2 gate by next free index _(layer: plugin)_ _(points: 18)_
+5. [x] **Task 5** — Key the B.2 / C2.2 meta-review loops and the G.2 gate by next free index _(layer: plugin)_ _(points: 18)_
 6. [ ] **Task 6** — Resolve the docs catalog review index to the next free slot _(layer: plugin)_ _(points: 8)_
 7. [ ] **Task 7** — Key per-unit layer reviews by next free index and hand each fix the file its own layer returned _(layer: plugin)_ _(points: 15)_
 8. [ ] **Task 8** — Rewrite `layer-reviewer`'s description to its real dispatch sites _(layer: plugin)_ _(points: 5)_
