@@ -2,13 +2,14 @@
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor ordinary **path placeholders** (`<branch>`, plus the names this file's own text defines at their use sites — the `**Placeholder resolution.**` note below enumerates them): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>`, which is derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor ordinary **path placeholders** (`<branch>`, plus the names this file's own text defines at their use sites — the `**Placeholder resolution.**` note below enumerates them): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>` and `<repo_root>`, which are derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. The two scripts this file names by path, `commit-on-branch.sh` in `## Commit mechanics` and `push-branch.sh` in `## Push`, are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles that. `push-branch.sh` is invoked under `<MAIN_REPO>` rather than repo-relative, because the main checkout's copy is the one the unattended permission profile runs outside the sandbox. |
 | `<MAIN_REPO>` | derived at runtime | The main checkout — the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
+| `<repo_root>` | derived at runtime | The worktree root this run executes in — the value the activating flow's `<repo_root>` binding gives and `$REPO_ROOT` holds. In the push command, spell it as a literal absolute path, never through a substitution or a variable. |
 
 ---
 An orchestrating agent composes every sub-agent prompt itself, and whatever it adds beyond the block its governing instruction defines exists only in the session transcript — gone when the session ends, while the finding, the verdict and the round count that text shaped are committed and read later as the agent's own. **This file is the canonical policy governing that added text.** A flow **activates** it by pointing at it from each site where its orchestrator composes a prompt; it never restates any part of it, per `${CLAUDE_PLUGIN_ROOT}/instructions/mode_contract.md` rule (5) — a copy creates a second owner of the contract. This file is otherwise inert.
@@ -132,11 +133,13 @@ bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
 
 ## Push
 
-**This commit carries its own push — do not leave it to a later step.** In a flow that pushes its commits at all, the push follows the commit **immediately**, as a **plain, single-statement** Bash command, using the same `$REPO_ROOT` the commit above used:
+**This commit carries its own push — do not leave it to a later step.** In a flow that pushes its commits at all, the push follows the commit **immediately**, as a **plain, single-statement** Bash command, naming the same worktree root the commit above used, spelled literally:
 
 ```zsh
-bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"
+bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>
 ```
+
+Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a worktree, the script-allowlist guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only grant, and a command carrying a shell expansion does not match it.
 
 The script-path token stays **unquoted**, as `## Commit mechanics` above requires, and is named under `<MAIN_REPO>` rather than repo-relative, because the main checkout's copy is the one the unattended permission profile runs outside the sandbox — and the call is **unconditional**: never gated on the wrapper's exit status, never wrapped in a shell conditional. That is the ⚠️ **no-exit-code-gate** trap `## Commit mechanics` already points at (`${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6, which also states why no gate is needed here) — read it there. A flow that pushes **none** of its own commits — one whose fork deliberately leaves them unpushed for a human merge step — issues none here either: this step pushes exactly where the flow it runs in pushes, which is what keeps it family-neutral. A phase that owes no block skips the step whole (`## Write point — once per phase, never per dispatch`), so it issues neither commit nor push.
 

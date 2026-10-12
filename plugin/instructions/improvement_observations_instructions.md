@@ -2,13 +2,14 @@
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor ordinary **path placeholders** (`<branch>`, and the locally-defined counters `<i>` / `<i-1>` / `<fix_round>` / `<n>` / `<N>`, which this file's own text resolves): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>`, which is derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor ordinary **path placeholders** (`<branch>`, and the locally-defined counters `<i>` / `<i-1>` / `<fix_round>` / `<n>` / `<N>`, which this file's own text resolves): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>` and `<repo_root>`, which are derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. The two scripts this file names by path, `commit-on-branch.sh` in `## Commit mechanics` and `push-branch.sh` in `## Push`, are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles it. `push-branch.sh` is invoked under `<MAIN_REPO>` rather than repo-relative, because the main checkout's copy is the one the unattended permission profile runs outside the sandbox. |
 | `<MAIN_REPO>` | derived at runtime | The main checkout — the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
+| `<repo_root>` | derived at runtime | The worktree root this run executes in — the value the activating flow's `<repo_root>` binding gives and `$REPO_ROOT` holds. In the push command, spell it as a literal absolute path, never through a substitution or a variable. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into, and therefore the base of the commit range `## Dispositioned units — an entry per unit closed without a fix` derives its entries from. |
 | `<parity_vocabulary>` / `<reference_impl>` | config value | `parity.referenceName` / `parity.referenceImplPath` — the name of the reference implementation this project is kept in parity with, and the path to it. Read **only** when `phases.parity` is `true`. This file names them once, in `## The entry format`'s **tooling-gap** example. |
 
@@ -181,11 +182,13 @@ using the `$REPO_ROOT` the activating flow resolved once at session start from i
 
 ## Push
 
-The push follows the commit **immediately**, as a **plain, single-statement** Bash command, using the same session-start `$REPO_ROOT`:
+The push follows the commit **immediately**, as a **plain, single-statement** Bash command, naming the same worktree root the commit above used, spelled literally:
 
 ```zsh
-bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"
+bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>
 ```
+
+Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a worktree, the script-allowlist guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only grant, and a command carrying a shell expansion does not match it.
 
 > ⚠️ **No exit-code gate — this is deliberate and load-bearing.** Do **not** wrap the push in `if [ "$?" -eq 0 ]; then … fi` (or any `if …; then … fi` / `for …; do … done` block). Per the canonical rule in `${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6, such a control-flow block is a **headless trap**: `allow-safe-compounds.sh` splits on `;` and the ` then bash …` piece begins with a non-allow-listed prefix, so the command falls through the safe-compound allow, nothing else matches it, and the call **is refused at once rather than prompting** — and the commit is **NOT** made, with that refusal as its only sign. A `$?` test is also unreliable here for a second, independent reason: each Bash tool call runs in a **fresh shell**, so a gate issued as a separate call from the command it gates inspects the new shell's status, not the wrapper's. **No gate is needed anyway** — `push-branch.sh` is non-fatal and only fast-forwards already-committed work, so an unconditional push is a harmless no-op ("Everything up-to-date") in every non-commit case the step can reach: when the wrapper **refused** (exit 2, protected branch) or **failed** (exit 1, hook failure), and when it returned its **nothing-to-commit status** (exit 3 — a re-entry that appended nothing, typically a resumed run). **A run that observed nothing with no intake file yet tracked reaches none of these** — it skips the whole step, so no commit *and no push* is issued at all. The helper is best-effort (it exits 0 and logs on any failure — non-git dir, detached HEAD, protected branch, transient push failure), so a push problem is visible but never blocks the D.2 Done summary.
 

@@ -285,10 +285,13 @@ should have been `[-]` and was seeded `[ ]` is corrected by fixing the **seeding
 
 ### 1.6 How to flip / create — direct `commit-on-branch.sh`, NEVER a committer dispatch
 Each flip (and the initial creation) is: **Edit the ledger file, then commit and push via the wrapper** —
-`<scripts_dir>/commit-on-branch.sh`, then `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"`, using
+`<scripts_dir>/commit-on-branch.sh`, then `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>`, the commit using
 the `$REPO_ROOT` the fork resolved at session start (the commit wrapper's path is repo-relative and takes no
 app-root prefix; the push names `<MAIN_REPO>`'s copy, because that copy is the one the unattended permission
-profile runs outside the sandbox). Fixed subject `chore: Flow progress <entry-id> for <branch>`
+profile runs outside the sandbox). Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the
+absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a worktree, the script-allowlist
+guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only
+grant, and a command carrying a shell expansion does not match it. Fixed subject `chore: Flow progress <entry-id> for <branch>`
 (e.g. `chore: Flow progress A1.5f for <branch>`; for creation, `chore: Add flow-progress ledger for
 <branch>`). No `Co-Authored-By:` / trailer, no `--no-verify` — the wrapper enforces both.
 

@@ -20,7 +20,7 @@
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom, and the committing role flips each one to `[x]` as that fix's commit lands. `[ ]` markers anywhere else, such as sub-step bullets inside a per-finding file, are informational, and the committer never touches them. Each entry resolves to `harness-runs/skeptic_reviews/feat_unattended_bash_sandbox_skeptic_review/finding_<K>.md`. The leading number is the ship order and the `K` is the finding's stable identity.
 
 1. [x] **Finding 2** — Refuse a `defaultBranch` starting with `-` in `refresh-branch.sh` before it reaches `git fetch` _(layer: cli)_
-2. [ ] **Finding 1** — Spell the worktree argument of every `<MAIN_REPO>` push literally, as the committer does, instead of `"$REPO_ROOT"` _(layer: plugin)_
+2. [x] **Finding 1** — Spell the worktree argument of every `<MAIN_REPO>` push literally, as the committer does, instead of `"$REPO_ROOT"` _(layer: plugin)_
 
 ---
 

@@ -111,8 +111,10 @@ bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
 Then issue the push as its **own** Bash call, never in the same call as the commit:
 
 ```zsh
-bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"
+bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>
 ```
+
+Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a worktree, the script-allowlist guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only grant, and a command carrying a shell expansion does not match it.
 
 The profile runs this spelling outside the sandbox only when it is the call's only command; issued in one call with the commit, it runs sandboxed, where an SSH push can fail on macOS while the wrapper still exits 0.
 

@@ -63,3 +63,5 @@ The story index lists this as a top risk: "A missed agent-issued push spelling f
   Also add `<repo_root>` to the sentence in each file's table lead that names the tokens "derived at runtime", beside `<MAIN_REPO>`. The other six files already declare `<repo_root>`.
 
 No test file covers these instruction files, so this fix runs no test.
+
+- **Deviations from plan:** Two push-introducing sentences the fix list does not name still told the reader to push "using the `$REPO_ROOT` resolved once at session start", contradicting the new literal-spelling sentence beside them: `plan_orchestration_instructions_autonomous.md` → `### Override E` (the sentence ending "the Override D commit command") and the paragraph after the push fence in `user_review_fixes_instructions_autonomous.md` → `### Override E`. Both reworded to name the worktree root the commit above used, spelled literally. The commit-wrapper sentences that use `$REPO_ROOT` (`### Override D` in both files) are unchanged, per the fix's first bullet.
