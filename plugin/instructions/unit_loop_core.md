@@ -29,7 +29,7 @@ The three names below are Mode-contract **bindings**. This file states behaviour
 | Binding | Used at | Meaning (short) |
 |---|---|---|
 | `<escalate>` | `## The unit loop` step 3 (the implementer reports an **escalating** blocker — one whose line carries neither the `prohibited — ` marker nor, on row `G.4`, the `already passing — ` marker; a marked one takes `### The dispositioned outcome` and never reaches this binding); `### Per-unit review step` (the review loop does not converge) | This flow's path for halting and reporting an **agent/flow blocker**. |
-| `<per_unit_review>` | `## The unit loop` step 4 (the extension point); the whole of `### Per-unit review step`, including its `iteration >= 5` convergence cap; `## Layer routing table` (its `Reviewer` column) | `on` \| `off` — whether the per-unit reviewer step runs between implementer and committer. |
+| `<per_unit_review>` | `## The unit loop` step 4 (the extension point); the whole of `### Per-unit review step`, including its `iteration >= 5` convergence cap; `## Layer routing table` (its `Reviewer` column); `## The unit loop` step 5 (whether `unit_findings_folder:` is sent); the row `A` and `review_item` **Committer staging** bullets (whether the unit's findings folder is staged) | `on` \| `off` — whether the per-unit reviewer step runs between implementer and committer. |
 | `<committer_push>` | `## The unit loop` step 5 (the `committer` dispatch block) | The extra arg line appended to each `committer` dispatch — omitted, or `push: true`. |
 
 This file declares no other binding. Every remaining `<…>` name it uses is a **config value** (`## Resolved values`), a **path placeholder**, or a locally-defined name — see `### Placeholder resolution`.
