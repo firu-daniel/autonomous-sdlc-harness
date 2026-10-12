@@ -22,7 +22,7 @@ This branch is the **task-plan family session** of the agent-thinning series (`d
 
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_task_plan/task_<K>_plan.md`. Ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Thin `task-plan-writer.md` from the intro through `## Read first`, moving `sample_task_plan.md` to on demand _(layer: plugin)_ _(points: 15)_
+1. [x] **Task 1** — Thin `task-plan-writer.md` from the intro through `## Read first`, moving `sample_task_plan.md` to on demand _(layer: plugin)_ _(points: 15)_
 2. [ ] **Task 2** — Thin `task-plan-writer.md` `## Process` steps 1–6, the plan-risk checklist included _(layer: plugin)_ _(points: 20)_
 3. [ ] **Task 3** — Thin `task-plan-writer.md` `## Process` steps 7–9 _(layer: plugin)_ _(points: 20)_
 4. [ ] **Task 4** — Thin `task-plan-writer.md` from `## Clarification questions` to the end _(layer: plugin)_ _(points: 10)_
