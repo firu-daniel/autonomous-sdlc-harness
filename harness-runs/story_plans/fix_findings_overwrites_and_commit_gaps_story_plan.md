@@ -71,7 +71,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_findings_overwrites_and_
 9. [x] **Task 9** — Add the committer's `unit_findings_folder` argument and exclude it from subject reconciliation _(layer: plugin)_ _(points: 15)_
 10. [x] **Task 10** — Pass `unit_findings_folder` from the unit loop's commit step _(layer: plugin)_ _(points: 8)_
 11. [x] **Task 11** — Give every qa-tester per-test block a defined return, with the `error: blocked — ` marker _(layer: plugin)_ _(points: 20)_
-12. [ ] **Task 12** — Parse the per-test blocked marker in the task-plan flow's Phase E _(layer: plugin)_ _(points: 15)_
+12. [x] **Task 12** — Parse the per-test blocked marker in the task-plan flow's Phase E _(layer: plugin)_ _(points: 15)_
 13. [ ] **Task 13** — Parse the per-test blocked marker in the supervised QA flow and the user-review fixes core _(layer: plugin)_ _(points: 10)_
 14. [ ] **Task 14** — Let the `E` / `R4` ledger entries resolve over a blocked-only remainder _(layer: plugin)_ _(points: 8)_
 15. [ ] **Task 15** — Make `ui-tests-plan-writer` the single source of the augment prompt, and state why the augment is not re-reviewed _(layer: plugin)_ _(points: 15)_
