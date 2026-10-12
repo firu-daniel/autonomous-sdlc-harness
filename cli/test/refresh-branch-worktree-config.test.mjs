@@ -7,7 +7,9 @@
  * merges the base into that worktree and never into the main checkout; it does so only when the
  * worktree's `config.worktree` is absent, empty or holds just the `core.hooksPath`
  * `setup-worktree.sh` writes, refusing otherwise with exit 1 and the worktree untouched; and every
- * merge it makes runs the main repository's configured hooks directory, never the worktree's.**
+ * merge it makes runs the main repository's configured hooks directory, never the worktree's; and a
+ * worktree `defaultBranch` starting with `-` is refused with exit 1 before git can read it as an
+ * option.**
  * Case (a)'s marker assertion is the proof of the pin: a refusal case passing proves nothing about it.
  *
  * The fixture is built by hand rather than by `init`, so the hooks configuration under test is
@@ -17,9 +19,9 @@
  */
 
 import assert from 'node:assert/strict';
-import { chmod, cp, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, chmod, cp, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import { PACKAGE_ROOT, runBash, runGit } from './helpers/fixture.mjs';
@@ -165,5 +167,25 @@ test('(e) A second checkout argument is a usage error', async (t) => {
   const result = await f.refresh(f.mainScript, [f.wt, f.main]);
   assert.equal(result.status, 1, output(result));
   assert.match(result.stderr, /usage: refresh-branch\.sh \[--local\] \[<repo-dir>\]/, output(result));
+  assert.equal(await f.head(f.wt), wtHead);
+});
+
+test('(f) A worktree defaultBranch starting with `-` is refused before git fetch can run it as an option', async (t) => {
+  const f = await worktreeFixture(t);
+  const root = dirname(f.main);
+  const marker = join(root, 'upload-pack-ran');
+  const program = join(root, 'marker.sh');
+  await writeFile(program, `#!/bin/sh\ntouch '${marker}'\nexec git upload-pack "$@"\n`);
+  await chmod(program, 0o755);
+  await writeFile(
+    join(f.wt, 'harness.config.json'),
+    `${JSON.stringify({ ...CONFIG, defaultBranch: `--upload-pack=${program}` })}\n`,
+  );
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-am', 'fixture: hostile defaultBranch']);
+  const wtHead = await f.head(f.wt);
+  const result = await f.refresh(f.mainScript, [f.wt]);
+  assert.equal(result.status, 1, output(result));
+  assert.match(result.stderr, /starts with '-'/, output(result));
+  await assert.rejects(access(marker), output(result));
   assert.equal(await f.head(f.wt), wtHead);
 });

@@ -77,7 +77,8 @@
 #      could not be read / the working tree has uncommitted tracked changes /
 #      a target this script does not trust (THE TARGET IS NOT TRUSTED above) /
 #      a per-working-copy configuration or a hooks directory this script does
-#      not trust (THE PER-WORKING-COPY CONFIG IS NOT TRUSTED above)
+#      not trust (THE PER-WORKING-COPY CONFIG IS NOT TRUSTED above) / a
+#      `defaultBranch` starting with `-`
 #   2  protected-branch refusal — HEAD is ON a protected branch, so this would be
 #      a merge INTO the integration line; nothing was attempted
 #   3  nothing to do — the current branch already contains the base
@@ -258,6 +259,15 @@ if [ -z "$base" ]; then
   echo "refresh-branch.sh: no defaultBranch in '$top/harness.config.json' — refusing to merge" >&2
   exit 1
 fi
+# A base git would parse as an option (THE TARGET IS NOT TRUSTED): the
+# worktree's harness.config.json is sandbox-writable, and no branch git
+# creates starts with `-`.
+case "$base" in
+  -*)
+    echo "refresh-branch.sh: defaultBranch '$base' in '$top/harness.config.json' starts with '-', which git would read as an option — refusing to merge" >&2
+    exit 1
+    ;;
+esac
 
 branch="$(hr_current_branch "$top")"
 if [ -z "$branch" ]; then
