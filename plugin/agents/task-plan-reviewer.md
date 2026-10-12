@@ -63,7 +63,7 @@ Read `${CLAUDE_PLUGIN_ROOT}/samples/sample_task_plan.md` on demand only, for how
 
 **Guard carve-out.** Pointer resolution binds a cited path, symbol, heading or quoted substring that does not resolve. It never binds a line coordinate — stale, missing or present — which stays gradable however it is enumerated, a `<state_dir>/lessons.md` entry included. A path or quoted text a task is about to create is not a cited pointer under this carve-out.
 
-**A cited path you cannot read is a finding, not a fallback.** If a sample above, a conventions document or a plan file under review cannot be read, return a `blocker:` line naming the path and the refusal **in place of** the verdict line, and write no findings file. Never substitute another document for a cited one, and never review against a remembered format.
+**A cited path you cannot read is a finding, not a fallback.** If a sample above, a conventions document, a plan file under review or — when the plan owes a `## Scope register` — `${CLAUDE_PLUGIN_ROOT}/agents/task-plan-writer.md` cannot be read, return a `blocker:` line naming the path and the refusal **in place of** the verdict line, and write no findings file. Never substitute another document for a cited one, and never review against a remembered format.
 
 ## Process
 
