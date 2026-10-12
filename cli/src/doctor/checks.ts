@@ -3322,7 +3322,7 @@ function renderListGroup(list: string, entries: readonly string[]): string {
  * `init --force`. Measured on one such adoption, `permissions.allow` carried no `test.sh` or
  * `typecheck.sh` entry where a normally-detected repository carries six, and the report was clean.
  * What it costs is the failure the profile exists to prevent — a command matching neither `allow` nor
- * `deny` does not prompt in print mode, it hangs.
+ * `deny` is refused in an unattended run.
  *
  * **The expectation is re-derived, never restated.** {@link renderProfile}, the producer `init` itself
  * uses, is called with no `written` list — so the wrapper selection falls back to
@@ -3334,7 +3334,7 @@ function renderListGroup(list: string, entries: readonly string[]): string {
  *
  * **Each list is compared against its own.** A rendered `allow` entry is looked for in `allow` and a
  * rendered `ask` entry — which the deploy wrapper's three are — in `ask`, never in a union of the two:
- * `ask` is evaluated before `allow`, so a wrapper entry that moved into it is the stall rather than
+ * `ask` is evaluated before `allow`, so a wrapper entry that moved into it is the refusal rather than
  * the grant, and which list a row belongs in stays the template's statement rather than a second one
  * here.
  *
@@ -3445,7 +3445,7 @@ const COMMAND_PERMISSIONS_CHECK: Check = {
         .filter(({ entries }) => entries.length > 0)
         .map(({ list, entries }) => renderListGroup(list, entries));
       return warn(
-        `${absentSentence}${absentSentence === '' ? '' : ' '}${PROFILE_PATH} is missing ${missing.length} of the ${owed} permission ${entryWord(owed)} this repository's ${keys} imply, so a command an agent runs from one of them matches neither allow nor deny and an unattended run hangs there with no diagnostic rather than failing. \`${CLI} init\` writes these entries from the commands it detected, so a key filled in afterwards carries none of them and no ordinary re-run adds them. Run \`${CLI} init --force\`, which regenerates the profile from the config as it now stands after copying the current one to a .bak sibling and carrying the plugin-root entries forward — or add each line below to that list in ${PROFILE_PATH} as its own string, unquoted exactly as it stands:\n${blocks.join('\n\n')}`,
+        `${absentSentence}${absentSentence === '' ? '' : ' '}${PROFILE_PATH} is missing ${missing.length} of the ${owed} permission ${entryWord(owed)} this repository's ${keys} imply, so a command an agent runs from one of them matches neither allow nor deny and an unattended run is refused there. \`${CLI} init\` writes these entries from the commands it detected, so a key filled in afterwards carries none of them and no ordinary re-run adds them. Run \`${CLI} init --force\`, which regenerates the profile from the config as it now stands after copying the current one to a .bak sibling and carrying the plugin-root entries forward — or add each line below to that list in ${PROFILE_PATH} as its own string, unquoted exactly as it stands:\n${blocks.join('\n\n')}`,
       );
     }
 
@@ -4829,9 +4829,9 @@ function namesHelperScript(entry: string): boolean {
  * its path, so an entry written once goes silently stale on an upgrade and no document can hold one
  * either: the entries are an operator's to add. Until this check existed the requirement lived only
  * in prose an adopter reaches by already knowing to look, and what a missing entry costs is a
- * **silent stall** — a run that reaches one of these helpers with nothing matching parks with no
- * error. So the check does the one thing a written-down answer cannot: it **re-resolves the roots on
- * every run** and prints the exact lines to paste, which turns that stall into a copy-paste and
+ * **refusal** — a run that reaches one of these helpers with nothing matching is refused
+ * there. So the check does the one thing a written-down answer cannot: it **re-resolves the roots on
+ * every run** and prints the exact lines to paste, which turns that refusal into a copy-paste and
  * catches a version bump that has silently invalidated entries added against a previous root.
  *
  * **Why two roots, and how each is derived.** A helper named in an **instruction file** arrives as
@@ -4878,8 +4878,8 @@ function namesHelperScript(entry: string): boolean {
  * each a `fail`, and every directory {@link pluginRootDirectories} returns for the graded roots is
  * required in `permissions.additionalDirectories` — the shell-readable grant. The job differs because
  * the plugin was installed and the profile generated moments earlier on a machine that exists for one
- * run, so a gap is a launch that parks rather than an operator's paste. Outside the flag that list is
- * not graded: a missing shell grant has not been observed to stall a run on a person's machine, and a
+ * run, so a gap is a launch whose helper calls are refused rather than an operator's paste. Outside the flag that list is
+ * not graded: a missing shell grant has not been observed to stop a run on a person's machine, and a
  * version-carrying directory would go stale at every upgrade.
  *
  * **A helper entry under no resolved root is named in every *graded* disposition and moves no
@@ -4964,7 +4964,7 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
 
     // A config that did not parse leaves the phase unknowable, so the report says the helper entries
     // were not graded rather than reading an absent phase as "off" and reporting a repository as
-    // complete that is one unreadable file away from a stall.
+    // complete that is one unreadable file away from a refused helper.
     const phaseKnown = ctx.config !== undefined;
     const qaOn = ctx.config?.phases?.qa === true;
     const helpers = pluginRootHelpers(roots, qaOn);
@@ -4986,7 +4986,7 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
         symptom:
           kind === 'read'
             ? 'improvises in place of a contract file it is refused'
-            : 'parks with no error at the first helper script it reaches',
+            : 'is refused at the first helper script it reaches',
       })),
     }));
     const required = groups.flatMap((group) => group.required);
@@ -5015,7 +5015,7 @@ const PLUGIN_PERMISSIONS_CHECK: Check = {
     const directoryBlock =
       missingDirectories.length === 0 ? '' : `\n\npermissions.additionalDirectories:\n${missingDirectories.join('\n')}`;
     const jobClause = ctx.remoteJob
-      ? ' Under --remote-job this is a failure: the plugin was installed and the profile generated moments earlier on a machine that exists for one run, so a gap here is a launch that parks rather than an operator\'s paste.'
+      ? ' Under --remote-job this is a failure: the plugin was installed and the profile generated moments earlier on a machine that exists for one run, so a gap here is a launch whose helper calls are refused rather than an operator\'s paste.'
       : '';
     const jobRemedy = ` In a remote job \`${CLI} init ${PLUGIN_ROOT_ENTRIES_FLAG}\`, which the job's setup step runs, writes these into the profile it generates, so a profile lacking them is one that step did not generate — a committed copy its create-if-absent run kept, which the profile-tracked check names the untrack route for — or one whose plugin root carries a character the permission guard matches literally, which that step warned about in its own log. The lines below are what is missing:`;
 

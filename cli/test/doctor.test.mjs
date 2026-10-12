@@ -4742,7 +4742,7 @@ function reportLines(output) {
  *
  * **The pasteable lines are asserted verbatim, as whole lines**, because that is the entire value of
  * the check: an entry whose form drifted by one character matches nothing at run time and costs a
- * silent stall, and a substring assertion would go on passing through exactly that drift.
+ * refusal, and a substring assertion would go on passing through exactly that drift.
  */
 test('the plugin-permissions check prints the entries to paste, and never above a warning', { concurrency: CASE_CONCURRENCY }, async (t) => {
   const subtests = [];

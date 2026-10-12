@@ -25,8 +25,8 @@
  * 2. **The repository-root probe is issued bare** — the literal arguments
  *    `rev-parse --show-toplevel`, with nothing added. An unattended run's permission profile
  *    can allow-list a literal read-only git command, while the same command wrapped in a shell
- *    substitution or embedded in a compound statement is a different string and stalls on a
- *    prompt (`docs/config.md` §1).
+ *    substitution or embedded in a compound statement is a different string, which an
+ *    unattended run refuses (`docs/config.md` §1).
  *
  * Most of what follows is read-only. The two exceptions — {@link initRepository} and
  * {@link commitAll} — are the only functions in the CLI that mutate a repository's history, and

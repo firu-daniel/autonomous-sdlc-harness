@@ -53,3 +53,8 @@
 - Re-run derivation entry G's two commands with `-n` in place of `-l` and the six target paths as the pathspec. Every remaining hit must be a line a `no-change` row keeps for these files: `checks.ts` 4980 and 5048 (row 56) and its evaluation-order sentences (row 132), `git.ts`'s unanswerable-probe comment (row 130), `init.test.mjs`'s un-loaded-tool comment (row 137), or init.ts's interactive-prompt sentences that state no unattended outcome.
 - Re-run derivation entry H's first step and read its `checks.ts`, `init.test.mjs` and `doctor.test.mjs` hits: every remaining one is a park on a question file (rows 181, 182) or the CLI's own interactive prompt.
 - The 3117 closing step is exercised end to end by the `init.test.mjs` case at 6095, which drives the compiled `init` and reads its printed step.
+
+**Deviations from plan:**
+
+- `doctor.test.mjs` (register row 125): plan gave *"costs a refusal at run time"*; the sentence already reads *"matches nothing at run time and costs a …"*, so it was implemented as *"costs a refusal"* to avoid repeating the phrase.
+- `init.ts` `operatorSteps` doc comment (3035): the plan's wording *"a refusal at the first helper the run reaches"* was implemented as *"a refusal at the first helper the first unattended run reaches"*, because the sentence's subject is the first unattended run and the following clause (*act on before that run*) refers back to it.
