@@ -61,7 +61,7 @@ You judge the *planned* / *described* parity, before any code is written. There 
   task_files_dir: <fix_finding_dir>
   prompt_path: <user_review_path>
   findings_folder: <state_dir>/business_parity_user_review_reviews/<branch>/
-  iteration: <parity_iteration>
+  iteration: <parity_review_index>
   ```
 
   You read the fix-plan index plus **every** `finding_<N>.md` in `task_files_dir`, and judge the *planned* parity of the drafted fixes: does each cite a real `<reference_impl>` source for every constant, call name and field; do the described payloads match field-by-field; do the described predicates match the reference's boundary comparisons?
