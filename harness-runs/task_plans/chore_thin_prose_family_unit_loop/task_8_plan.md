@@ -25,3 +25,8 @@
 - The cross-family rows and sentences keep their file sets: for each of `They are declared here once; after this table the body uses each one as an ordinary placeholder.`, `Ordinary **path placeholders** are deliberately not listed`, `The absolute root of the checkout this run executes in` and `no path segment of it begins with a dot.`, `git grep -l -F -e '<string>' -- plugin/agents` lists the same files as `git grep -l -F -e '<string>' fa8867c9 -- plugin/agents`.
 - `git diff -- plugin/agents/committer.md` shows hunks only inside the parts this task owns; the frontmatter and the `<repo_root>` / `<state_dir>` rows are unchanged.
 - `wc -w plugin/agents/committer.md`, run before the first edit and again after the last, is lower the second time.
+
+**Deviations from plan:**
+
+- Verification bullet *cross-family file sets*: for `They are declared here once; after this table the body uses each one as an ordinary placeholder.` the HEAD set has one file more than the `fa8867c9` set — `plugin/agents/layer-implementer.md`, which gained the sentence in Task 2 (`3941663c`), before this task. `plugin/agents/committer.md` is in both sets, and the other three strings' sets match exactly. Evidence: the two `git grep -l -F` runs, diffed.
+- Not done in this task: the word *self-contained* still appears in `## Process` (the argument guard, the mode routing and `### Standard procedure`'s and `### ui_test_pass procedure`'s opening lines). Those sections belong to Tasks 11–12; this task removed it from the intro and the `ui_test_pass` mode bullet only.
