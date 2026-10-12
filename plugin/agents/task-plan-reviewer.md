@@ -15,7 +15,7 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file sits under. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file sits under. Default `sdlc-harness/`; no path segment of it begins with a dot. |
 | `<layer_names>` | config value | `layers[].name`. **No substitution of the names themselves** — the configured names travel through this file unchanged. They are the permitted values of the readiness-entry layer tag on every entry you check, and the only values that route: the loop maps the tag to a dispatch one row per `layers[]` entry, and no other value routes. |
 | `<layer_path_map>` | config value | Every `layers[]` entry's `path` together with its `conventions` — the repo-relative directory that layer's source lives in, and the document that supplies that layer's rules. You review a plan that spans every layer, so the **entire** map is in scope for you. The **catch-all** layer is the entry whose `path` is `"."`. |
 | `<docs_root>` | config value | `docs.root` — the repo-relative directory holding the documentation corpus. Read **only** when `phases.docs` is `true`; otherwise the corpus does not exist. |

@@ -19,7 +19,7 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file sits under. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
+| `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file sits under. Default `sdlc-harness/`; no path segment of it begins with a dot. |
 | `<qa_driver>` | config value | `qa.driver` — which variant of the `qa-tester` runs, and so how it reaches the application. It selects the capability vocabulary your `**Capability / MCP:**` annotations must be drawn from; see `### Capability guidance`. Read **only** when `phases.qa` is `true`. |
 | `<qa_creds_path>` | config value | `qa.credentialsPath` — the repo-relative path of the gitignored test-account file. **You name this path; you do not read it and you never restate a value out of it.** The qa-tester reads the live values at run time; your preconditions refer to the accounts, not to their credentials. Read **only** when `phases.qa` is `true`. |
 | `<auth_provider>` | config value | `qa.authProvider` — which sign-in route the interactive-test phase takes when the application offers more than one. Every "sign in" step you write goes through that route and no other. Read **only** when `phases.qa` is `true`. |

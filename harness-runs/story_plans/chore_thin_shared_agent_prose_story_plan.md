@@ -27,7 +27,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_shared_agent_pros
 1. [x] **Task 1** — Thin `## The test-run rule` in `unit_loop_core.md`, keeping every rule and the citer roster _(layer: plugin)_ _(points: 10)_
 2. [x] **Task 2** — Thin `## Unsolicited dispatch guidance` and its return-contract pointers, identically in every copy _(layer: plugin)_ _(points: 15)_
 3. [x] **Task 3** — Thin the `<docs_root>` and `<docs_retrieval>` rows and the docs-retrieval tool bullet, identically in every copy _(layer: plugin)_ _(points: 15)_
-4. [ ] **Task 4** — Thin the `<state_dir>` rows, identically in every copy _(layer: plugin)_ _(points: 10)_
+4. [x] **Task 4** — Thin the `<state_dir>` rows, identically in every copy _(layer: plugin)_ _(points: 10)_
 5. [ ] **Task 5** — Thin the shared sentences of the `<repo_root>` and `<repo_root>` / `<app_dir>` rows, identically in every copy _(layer: plugin)_ _(points: 20)_
 6. [ ] **Task 6** — Thin the `<parity_vocabulary>` / `<reference_impl>`, `<default_branch>` and `<scripts_dir>` rows, identically in every copy _(layer: plugin)_ _(points: 10)_
 7. [ ] **Task 7** — Thin the shared sentences of the `<layer_names>`, `<convention_symbols>` and `iteration` rows, identically in every copy _(layer: plugin)_ _(points: 15)_
