@@ -1,0 +1,17 @@
+### 6. The new generators close runtime import cycles through `permissionProfile.ts`
+
+**Severity:** Should Fix. **Layer:** cli.
+
+**Sites:**
+- `cli/src/generators/sandboxProfile.ts`, the header paragraph starting `**Import cycle, deliberate:**`, and `import { appendReadme, assertUsableInEntry, bashScriptRule, TEMPLATE_PATH } from './permissionProfile.js';`
+- `cli/src/generators/writeProtection.ts`, the header paragraph starting `**Import cycle, deliberate:**`, and `import { appendReadme, assertUsableInEntry, normalizedRoot } from './permissionProfile.js';`
+- `cli/src/generators/repoRoot.ts` → `browserFragment` / `retrievalFragment`, which replaced the frozen `BROWSER_FRAGMENT` / `RETRIEVAL_FRAGMENT` constants *"because `permissionProfile.ts` → `writeProtection.ts` imports this module back"*
+
+**Problem.** `permissionProfile.ts` imports `applySandbox` and `applyWriteProtection` at run time, and both modules import values back from `permissionProfile.ts`. `writeProtection.ts` also imports `MCP_PATH` from `repoRoot.ts`, which imports `permissionProfile.ts`. Each header argues that the cycle is safe as long as every imported binding is read at call time only. That invariant is enforced by nothing. `repoRoot.ts` has already paid for it: two `Object.freeze`d module constants were turned into per-call functions, only to survive module-evaluation order.
+
+The layer's documents do not forbid a runtime cycle between generators, so this is graded Should Fix. The layer does show a preference for avoiding one. `.claude/context/cli.md` → `## Dependencies, and which way they point` has command modules import back from their table *"type-only, so the table can carry a real row without a runtime import cycle"*. The same section's `core/` bullet takes shapes from above `import type` *"so the edge is erased at compile time"*.
+
+**Fix.** Break the cycle by moving what the two new generators import from `permissionProfile.ts` into a leaf module that imports neither of them. For example, create `cli/src/generators/profileEntries.ts` with its own header stating it owns the profile-entry primitives, and move into it `appendReadme`, `README_KEY`, `assertUsableInEntry` with `FORBIDDEN_IN_COMMAND` and `COMMAND_REMEDY`, `bashScriptRule`, `normalizedRoot` and `TEMPLATE_PATH`. Then:
+1. Have `permissionProfile.ts`, `sandboxProfile.ts`, `writeProtection.ts` and `doctor/checks.ts` (for `README_KEY`) import those from the leaf module.
+2. Drop the `**Import cycle, deliberate:**` paragraphs from the two new headers, and the cycle sentence from `permissionProfile.ts` → `## The sandbox block`.
+3. Restore `BROWSER_FRAGMENT` / `RETRIEVAL_FRAGMENT` in `repoRoot.ts` as frozen constants, once `writeProtection.ts` → `repoRoot.ts` → `permissionProfile.ts` no longer closes a loop. If `MCP_PATH` is still the only edge into `repoRoot.ts`, check that the loop is really gone first.
