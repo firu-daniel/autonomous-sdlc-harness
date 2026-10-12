@@ -37,17 +37,37 @@
 # not pushed — which is exactly the state a worktree cut from `origin/<base>` is
 # stale against while `origin/<base>` looks current.
 #
-# Usage: refresh-branch.sh [--local]
-#   --local   merge the local `<base>` branch instead of `origin/<base>`, and
-#             skip the fetch
-#   No repository argument: the checkout is THIS FILE's own location, never $PWD,
-#   because the caller runs it from wherever it happens to be.
+# THE PER-WORKING-COPY CONFIG IS NOT TRUSTED. The main checkout's copy of this
+# script runs OUTSIDE the sandbox, and a linked worktree's
+# `.git/worktrees/<name>/config.worktree` is sandbox-writable. So before its
+# first git call this script refuses (exit 1) unless that file is absent, empty,
+# or holds only the `core.hooksPath` `setup-worktree.sh` writes
+# (`hr_worktree_config_check_var`); a refusal names each offending key and never
+# its value. Every git call after the check pins `core.hooksPath` to the MAIN
+# repository's hooks directory, never the worktree's — exported as
+# `GIT_CONFIG_COUNT` for the library's calls, and as `-c core.hooksPath` on every
+# call spelled here (derivation: `lib/harness-run-lib.sh` →
+# `hr_pinned_hooks_path`; the reasoning: `push-branch.sh` → the paragraph of the
+# same name). The pin matters for a merge too: `git merge` runs the
+# `pre-merge-commit`, `commit-msg` and `post-merge` hooks.
+#
+# Usage: refresh-branch.sh [--local] [<repo-dir>]
+#        bash <main checkout>/<scripts_dir>/refresh-branch.sh <worktree>
+#   --local     merge the local `<base>` branch instead of `origin/<base>`, and
+#               skip the fetch
+#   <repo-dir>  the checkout to refresh is the one holding it. Default: THIS
+#               FILE's own location, never $PWD, because the caller runs it from
+#               wherever it happens to be. The second form, the main checkout's
+#               copy aimed at a worktree, is the one the permission profile runs
+#               unsandboxed.
 #
 # Exit map a caller can switch on:
 #
 #   0  the current branch now contains the base (the merge landed)
 #   1  usage error / not a git repository / detached HEAD / the configuration
-#      could not be read / the working tree has uncommitted tracked changes
+#      could not be read / the working tree has uncommitted tracked changes /
+#      a per-working-copy configuration or a hooks directory this script does
+#      not trust (THE PER-WORKING-COPY CONFIG IS NOT TRUSTED above)
 #   2  protected-branch refusal — HEAD is ON a protected branch, so this would be
 #      a merge INTO the integration line; nothing was attempted
 #   3  nothing to do — the current branch already contains the base
@@ -94,6 +114,28 @@
 #   --local           commit on trunk WITHOUT pushing, then from feat_x:
 #                     bash "$d/scripts/refresh-branch.sh" --local -> exit 0
 #                     the same call without --local                -> exit 3
+#
+#   The main checkout's copy refreshing a linked worktree (`githooksDir` takes
+#   its default, `githooks`), on a fresh fixture built as above up to the
+#   `checkout -q -b feat_x` line, with `"$d/scripts"` populated and committed:
+#   mkdir -p "$d/githooks"; git -C "$d" config core.hooksPath githooks
+#   printf '%s\n' '#!/bin/sh' "echo main >> $d.marker" > "$d/githooks/post-merge"
+#   chmod +x "$d/githooks/post-merge"; git -C "$d" add -A; git -C "$d" commit -qm hooks
+#   w=$(mktemp -d)/wt; git -C "$d" worktree add -q -b feat_w "$w"
+#   git -C "$w" config extensions.worktreeConfig true
+#   git -C "$w" config --worktree core.hooksPath "$(cd -P "$w" && pwd -P)/githooks"
+#   printf '%s\n' '#!/bin/sh' "echo wt >> $d.marker" > "$w/githooks/post-merge"
+#   chmod +x "$w/githooks/post-merge"
+#   # move trunk on and publish it, as above
+#
+#   a worktree        bash "$d/scripts/refresh-branch.sh" "$w" -> exit 0; `git -C
+#                     "$w" log --oneline` shows the base commit, and "$d"'s HEAD
+#                     and branch are unchanged
+#   the pin           cat "$d.marker"   -> `main` only: the worktree's own
+#                     post-merge hook never ran
+#   a foreign key     git -C "$w" config --worktree user.name x; the same call
+#                     -> exit 1, a "refusing to refresh:" line naming user.name
+#                     and not its value; `git -C "$w" rev-parse HEAD` unchanged
 
 set -uo pipefail
 
@@ -109,26 +151,62 @@ fi
 . "$hr_lib"
 
 use_local=0
+target=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --local)
       use_local=1
       shift
       ;;
-    *)
+    -*)
       echo "refresh-branch.sh: unknown argument '$1'" >&2
-      echo "  usage: refresh-branch.sh [--local]" >&2
+      echo "  usage: refresh-branch.sh [--local] [<repo-dir>]" >&2
       exit 1
+      ;;
+    *)
+      if [ -n "$target" ]; then
+        echo "refresh-branch.sh: unexpected second checkout argument '$1'" >&2
+        echo "  usage: refresh-branch.sh [--local] [<repo-dir>]" >&2
+        exit 1
+      fi
+      target="$1"
+      shift
       ;;
   esac
 done
 
-# The checkout being refreshed is where THIS FILE lives — never $PWD, which
-# belongs to whoever invoked it.
+# Without an argument the checkout being refreshed is where THIS FILE lives —
+# never $PWD, which belongs to whoever invoked it.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-top="$(hr_repo_root "$script_dir")" || top=""
+[ -n "$target" ] || target="$script_dir"
+
+# THE PER-WORKING-COPY CONFIG IS NOT TRUSTED (header): settled before the first
+# git call, each function called directly so its variables survive.
+top_nogit="$(hr_checkout_top_nogit "$target")" || top_nogit=""
+if [ -z "$top_nogit" ]; then
+  echo "refresh-branch.sh: '$target' is not inside a git repository — refusing to merge" >&2
+  exit 1
+fi
+if ! hr_worktree_config_check_var "$top_nogit"; then
+  echo "refresh-branch.sh: refusing to refresh: $HR_WT_CONFIG_REFUSAL" >&2
+  exit 1
+fi
+if ! hr_pinned_hooks_path "$top_nogit"; then
+  if [ -n "$HR_PINNED_HOOKS_REFUSAL" ]; then
+    echo "refresh-branch.sh: refusing to refresh: $HR_PINNED_HOOKS_REFUSAL" >&2
+  else
+    echo "refresh-branch.sh: refusing to refresh: could not resolve the hooks directory to pin for '$top_nogit'" >&2
+  fi
+  exit 1
+fi
+pinned="$HR_PINNED_HOOKS_PATH"
+# Pins the library helpers' git calls below; every call spelled here also
+# carries `-c`, which an older git than 2.31 still honours.
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$pinned"
+
+top="$(hr_repo_root "$target")" || top=""
 if [ -z "$top" ]; then
-  echo "refresh-branch.sh: '$script_dir' is not inside a git repository — refusing to merge" >&2
+  echo "refresh-branch.sh: '$target' is not inside a git repository — refusing to merge" >&2
   exit 1
 fi
 
@@ -186,7 +264,7 @@ esac
 # A merge writes the working tree, so an uncommitted tracked change is refused
 # before anything is fetched: the caller's own edit must not be carried into a
 # merge commit, and an aborted merge must be able to restore what was there.
-if ! git -C "$top" diff --quiet || ! git -C "$top" diff --cached --quiet; then
+if ! git -C "$top" -c core.hooksPath="$pinned" diff --quiet || ! git -C "$top" -c core.hooksPath="$pinned" diff --cached --quiet; then
   echo "refresh-branch.sh: uncommitted tracked changes in '$top' — refusing to merge" >&2
   echo "  commit them (bash \"$script_dir/commit-on-branch.sh\" …) and re-run" >&2
   exit 1
@@ -202,10 +280,10 @@ else
   # ref already present is still a refresh this can do — and judge the ref the
   # next block names rather than the fetch. git's own stderr still reaches the
   # caller's log whichever outcome follows.
-  git -C "$top" fetch origin "$base" || true
+  git -C "$top" -c core.hooksPath="$pinned" fetch origin "$base" || true
 fi
 
-if ! git -C "$top" show-ref --verify --quiet "$ref_path"; then
+if ! git -C "$top" -c core.hooksPath="$pinned" show-ref --verify --quiet "$ref_path"; then
   echo "refresh-branch.sh: no '$base_ref' in '$top' — nothing to merge from" >&2
   if [ "$use_local" -eq 1 ]; then
     echo "  --local merges the local '$base' branch; drop the flag to merge origin/$base" >&2
@@ -217,12 +295,12 @@ fi
 
 # Already contained => a distinct, dedicated status, so a caller can tell "the
 # base is already here" apart from a refusal.
-if git -C "$top" merge-base --is-ancestor "$base_ref" HEAD; then
+if git -C "$top" -c core.hooksPath="$pinned" merge-base --is-ancestor "$base_ref" HEAD; then
   echo "refresh-branch.sh: '$branch' already contains $base_ref — nothing to do"
   exit 3
 fi
 
-if git -C "$top" merge --no-edit "$base_ref"; then
+if git -C "$top" -c core.hooksPath="$pinned" merge --no-edit "$base_ref"; then
   echo "refresh-branch.sh: merged $base_ref into $branch"
   exit 0
 fi
@@ -230,8 +308,8 @@ fi
 # A failed merge is one of two things, and they are distinguished by whether a
 # merge is in progress: a conflict leaves MERGE_HEAD behind, anything else (a
 # refused fast-forward, a hook, an unmergeable ref) never started one.
-if git -C "$top" rev-parse --verify --quiet MERGE_HEAD >/dev/null; then
-  if git -C "$top" merge --abort; then
+if git -C "$top" -c core.hooksPath="$pinned" rev-parse --verify --quiet MERGE_HEAD >/dev/null; then
+  if git -C "$top" -c core.hooksPath="$pinned" merge --abort; then
     echo "refresh-branch.sh: $base_ref conflicts with $branch — merge aborted, working copy unchanged" >&2
     exit 4
   fi

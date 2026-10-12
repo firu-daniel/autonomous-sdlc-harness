@@ -40,3 +40,11 @@ Task 4's pinning pattern is the template: export `GIT_CONFIG_COUNT=1`, `GIT_CONF
 - `npm test --workspace cli -- test/refresh-branch-worktree-config.test.mjs` passes.
 - Case (a) is the end-to-end proof that the excluded spelling Task 2 names, `bash <main checkout>/<scriptsDir>/refresh-branch.sh <worktree>`, refreshes the worktree and never the main checkout.
 - Grep `refresh-branch.sh` for a `git` call after the check that carries no `-c core.hooksPath`, and find none.
+
+**Deviations from plan:**
+
+- Added a fifth suite case, (e): a second positional argument exits 1 with the new usage line, the worktree's HEAD unchanged — the plan states that behaviour but lists no case for it.
+- The fixture leaves both `githooks/` directories untracked: overwriting a tracked hook in the worktree, as Task 4's fixture does, would dirty its tree and trip the wrapper's uncommitted-changes refusal (exit 1) before any merge.
+- An argument beginning with `-` other than `--local` stays an unknown-argument usage error rather than being taken as `<repo-dir>`.
+- Pin proof beyond the plan: a throwaway mutation (`harness-runs/scratch/t5_mutate.py`, run through `scripts/scratch-run.sh`) stripped every `-c core.hooksPath="$pinned"` and the `GIT_CONFIG_*` export; cases (a) and (d) failed, (b), (c), (e) passed; the script was restored and the suite re-run green.
+- Verification: `commands.test` and the byte-identity suite (`cli/test/outer-loop-scripts.test.mjs`) are deferred to the Run gates phase. The repository's own self-adopted `scripts/refresh-branch.sh` copy is outside the `cli` layer and was not touched (Task 4 likewise left `scripts/push-branch.sh`).
