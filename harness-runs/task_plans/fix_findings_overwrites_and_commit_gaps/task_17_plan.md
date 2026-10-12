@@ -45,3 +45,7 @@ What changes is how a Phase-D count isolates *this* run's files:
   - **Later round that passes clean.** Round 1's B.2 FAILed and B.3 committed its files; on `…_code_review_2.md` B.2 PASSes on the first dispatch and writes nothing, and B.3 stages an unchanged folder with no new commit there. The folder is unmeasurable because the index is suffixed — round 1's files are never attributed to this run. Repeat the same case for `<skeptic_review_meta_folder>` with `<skeptic_review_path>` and C2.3.
 - `git grep -n -e 'git log' -- plugin/instructions/plan_orchestration_instructions_autonomous.md` shows no hit inside `## Override I` → (b): the rule reads the resolved index path, not history.
 - Both bullets still name their roots by placeholder or by the owning core's step, never as a `<state_dir>/…` expansion, which is each fork's existing ⚠️ rule.
+
+**Deviations from plan:**
+
+- `user_review_fixes_instructions_autonomous.md` → `## Override I` → (a): the Work bullet names only the "independent counters" sentence and the ⚠️ reason, but the preceding clause "each a plain consecutive `review_<i>.md` series" also matched the Verification grep for `plain consecutive`; it was dropped, its content now carried by the next-free sentence. The ⚠️ sentence's `review_<i>.md` was respelled `review_<n>.md` to match the owning core's next-free wording.
