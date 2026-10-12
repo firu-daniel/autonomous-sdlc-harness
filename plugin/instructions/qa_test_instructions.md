@@ -2,7 +2,7 @@
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<N>`, `<qa_port>`, `<round>`, `<qa_review_findings_dir>`, which this file's own text resolves): they are derived at runtime or resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none) nor ordinary **path placeholders** (`<branch>`, `<N>`, `<qa_port>`, `<round>`, `<qa_review_findings_dir>`, `<fix_plan_path>`, `<fix_finding_dir>`, `<ui_test_index>`, `<ui_test_files_dir>`, which this file's own text resolves): they are derived at runtime or resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
@@ -44,12 +44,10 @@ You drive the agents; you do **not** edit app code, you do **not** edit the UI-t
      Outputs: index <state_dir>/ui_test_plans/<branch>_ui_test_plan.md and per-test files <state_dir>/ui_test_plans/<branch>/ui_test_<N>.md
      ```
 
-   - **If it already exists**, do NOT re-write it by default. Only if the user explicitly asks to refresh it (e.g., because behaviour changed since it was written), dispatch `ui-tests-plan-writer` in augment mode:
+   - **If it already exists**, do NOT re-write it by default. Only if the user explicitly asks to refresh it (e.g., because behaviour changed since it was written), dispatch `ui-tests-plan-writer` in augment mode. First resolve the four path placeholders the prompt carries: `<fix_plan_path>` is the **latest** round's fix-plan index — list `ls <repo_root>/<state_dir>/user_reviews/ | grep -E '<branch>_fix_plan(_[0-9]+)?\.md$'` and take the name with the highest numeric suffix, the unsuffixed file being round 1, joined to `<state_dir>/user_reviews/`; `<fix_finding_dir>` is that index's stem with the `.md` dropped and a `/` added; `<ui_test_index>` is `<state_dir>/ui_test_plans/<branch>_ui_test_plan.md`; `<ui_test_files_dir>` is `<state_dir>/ui_test_plans/<branch>/`. Then send the prompt quoted from `${CLAUDE_PLUGIN_ROOT}/agents/ui-tests-plan-writer.md` → `## Invocation contract`, byte for byte:
 
      ```
-     Augment the UI-test plan.
-     Branch: <branch>
-     Additional input: user-review fix plan <state_dir>/user_reviews/<branch>_fix_plan*.md (+ its finding_<K>.md files)
+     Augment the UI-test plan. Branch: <branch>. Additional input: user-review fix plan <fix_plan_path> (+ its finding_<K>.md files under <fix_finding_dir>). Index: <ui_test_index>. Per-test files: <ui_test_files_dir>.
      ```
 
      (Augment mode reads the existing plan and only adds/revises cases for behaviour the fixes changed — see `ui-tests-plan-writer.md`. Pass the augment input only if such a fix plan exists; otherwise just tell the user the plan is current and skip the refresh.)

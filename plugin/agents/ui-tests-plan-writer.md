@@ -45,11 +45,13 @@ Inputs: task prompt <state_dir>/task_prompts/<branch>_task_prompt.md, story inde
 Outputs: index <state_dir>/ui_test_plans/<branch>_ui_test_plan.md and per-test files <state_dir>/ui_test_plans/<branch>/ui_test_<N>.md
 ```
 
-**Augment after user-review fixes** — sent by `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fixes_instructions_core.md` → `### QA.0`, which sends it **in every case**, whether or not an index already exists on disk:
+**Augment after user-review fixes** — sent by `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fixes_instructions_core.md` → `### QA.0`, which sends it **in every case**, whether or not an index already exists on disk, and by `${CLAUDE_PLUGIN_ROOT}/instructions/qa_test_instructions.md` → `### 1.` step 3, which sends it only when the user explicitly asks for a refresh:
 
 ```
-Augment the UI-test plan. Branch: <branch>. Additional input: user-review fix plan <state_dir>/user_reviews/<branch>_fix_plan*.md (+ its finding_<K>.md files). Index: <state_dir>/ui_test_plans/<branch>_ui_test_plan.md. Per-test files: <state_dir>/ui_test_plans/<branch>/.
+Augment the UI-test plan. Branch: <branch>. Additional input: user-review fix plan <fix_plan_path> (+ its finding_<K>.md files under <fix_finding_dir>). Index: <ui_test_index>. Per-test files: <ui_test_files_dir>.
 ```
+
+The caller resolves the four path placeholders before sending: `<fix_plan_path>` is the active round's fix-plan index, `<state_dir>/user_reviews/<branch>_fix_plan[_<n>].md`; `<fix_finding_dir>` is its per-finding folder, the same stem with the `.md` dropped and a `/` added; `<ui_test_index>` is `<state_dir>/ui_test_plans/<branch>_ui_test_plan.md`; `<ui_test_files_dir>` is `<state_dir>/ui_test_plans/<branch>/`. `<K>` stays literal. This block is the single source of the augment prompt: both callers quote it verbatim. An augment is not re-graded by `ui-tests-plan-reviewer` — the user-review fixes core's `### QA.0` states why.
 
 Read the **existing** UI-test plan (index + per-test files) AND the fix plan. **Add** test cases covering behaviour the fix plan changed that the original plan did not cover, and **revise** any test case whose expected behaviour the fixes changed. Do **NOT** rewrite from scratch and do NOT disturb test cases the fixes don't touch. The user review may introduce behaviour the original UI-test plan never described — your job is to close that gap. Keep the index ↔ per-test 1:1 correspondence after adding/revising.
 
