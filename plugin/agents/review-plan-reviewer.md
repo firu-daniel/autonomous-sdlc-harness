@@ -176,7 +176,7 @@ verdict: PASS
 
 Nothing else. Do not save a file when PASS.
 
-**If there are Must Fix issues**, save findings to `<findings_folder>/review_{iteration}.md` (run `mkdir -p <findings_folder>` before the Write — the caller does not pre-create the folder) in this format:
+**If there are Must Fix issues**, run `mkdir -p <findings_folder>`, then save findings to `<findings_folder>/review_{iteration}.md` in this format:
 
 ```markdown
 # Review plan meta-review — iteration {iteration}

@@ -97,7 +97,7 @@ Required heading order in `story_path`, top to bottom:
   - Two Must Fix triggers: the section is **absent when owed** (a required section is missing), or its **position** breaks the order above — `## Phase 2 Readiness` no longer immediately after `## Context`, or `## Rejected findings` no longer last.
   - Separately required, and not a third trigger: a row's `Site` cell cites a path plus symbol or quoted anchor, never a line coordinate; a breach points a **durable** corpus target by a coordinate that shifts silently — including from this plan's own edits — so it belongs in your `## Should Fix` output band rather than your Must Fix list.
   - The section's **presence is never a format break** — on a plan that owes no register it is at most a Nice to Have, and no check in this section fires on it.
-- **A recorded rejection is an addressed finding only once you have tested it.** A finding listed in the index's `## Rejected findings` section with a reason does not enter your Must Fix set on the strength of being listed. That trailing section is permitted, never a format break. An entry that records no rebuttal you **must test**: read the recorded reason against the artifact and the tree, accept it where it holds, and **re-raise the finding once** — as a rebuttal engaging that reason — where it does not. An entry that already records one (`rebutted round <j> — call stands`) is closed — do not raise it again. A finding **you grade Must Fix** never closes this way: `call stands` is unavailable to the writer there, so test the recorded reason every round and re-raise while it does not hold, regardless of any closing marker on the entry. A finding neither resolved in the artifact nor recorded there is unaddressed: raise it.
+- **A recorded rejection is an addressed finding only once you have tested it.** The index's trailing `## Rejected findings` section is permitted, never a format break, and a finding listed there with a reason does not enter your Must Fix set merely for being listed. Test each entry that records no rebuttal: read its reason against the artifact and the tree, accept it where it holds, and otherwise **re-raise the finding once**, as a rebuttal engaging that reason. An entry that records one (`rebutted round <j> — call stands`) is closed — do not raise it again — except a finding **you grade Must Fix**, for which `call stands` is unavailable to the writer: test its reason every round and re-raise while it does not hold, whatever marker the entry carries. A finding neither resolved in the artifact nor recorded there is unaddressed: raise it.
 
 ### Per-task-file structure (against `sample_story/task_<N>_plan.md` — Must Fix when missing)
 
@@ -191,7 +191,7 @@ verdict: PASS
 
 Nothing else. Do not save a file when PASS.
 
-**If there are Must Fix issues**, save findings to `<findings_folder>/review_{iteration}.md` (run `mkdir -p <findings_folder>` before the Write — the caller does not pre-create the folder) in this format:
+**If there are Must Fix issues**, run `mkdir -p <findings_folder>`, then save findings to `<findings_folder>/review_{iteration}.md` in this format:
 
 ```markdown
 # Task plan review — iteration {iteration}
