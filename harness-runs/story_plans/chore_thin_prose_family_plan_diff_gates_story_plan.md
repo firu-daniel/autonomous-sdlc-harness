@@ -89,7 +89,7 @@ The verification bar for the branch as a whole belongs to the Run gates phase, n
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_plan_diff_gates/task_<K>_plan.md`. Ordered bottom-up by ship sequence, with the catch-all layer last.
 
 1. [x] **Task 1** — Thin the `## Process` blocks both definitions share, identically in both, and write the family check probe _(layer: plugin)_ _(points: 15)_
-2. [ ] **Task 2** — Thin both definitions' intros and the `## Invocation contract` blocks they share _(layer: plugin)_ _(points: 20)_
+2. [x] **Task 2** — Thin both definitions' intros and the `## Invocation contract` blocks they share _(layer: plugin)_ _(points: 20)_
 3. [ ] **Task 3** — Thin both definitions' `## Scope boundary`, `## Output contract` and `## Findings-folder / index-path convention` _(layer: plugin)_ _(points: 20)_
 4. [ ] **Task 4** — Thin `architecture-reviewer`'s own `## Read first` bullet, sub-case (c) step, `## What to check` and justification rule _(layer: plugin)_ _(points: 15)_
 5. [ ] **Task 5** — Thin `business-parity-reviewer`'s `## Read first`, `## Process` step 3 and parity checks (a)–(h) _(layer: plugin)_ _(points: 15)_
