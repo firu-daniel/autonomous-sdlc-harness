@@ -204,7 +204,7 @@ import { basename, dirname, isAbsolute, join, sep } from 'node:path';
 
 import { browserWiringApplies, CONFIG_FILENAME, DEFAULTS, retrievalApplies, type HarnessConfig } from '../config/model.js';
 import { HarnessError, internal } from '../core/errors.js';
-import { isJsonObject, readJsonFile, type JsonObject, type JsonValue } from '../core/json.js';
+import { isJsonObject, readJsonFile, valueAt, type JsonObject, type JsonValue } from '../core/json.js';
 import { defaultProjectName, readTemplate, workRoot as resolveWorkRoot, worktreeGlob } from '../core/paths.js';
 import { normalizeRepoDir } from '../core/repoPaths.js';
 import { containsToken, renderTemplate } from '../core/templating.js';
@@ -917,10 +917,7 @@ function assertRunnable(profile: JsonObject): void {
   ]);
   for (const dotted of SANDBOX_LISTS) {
     const where = `${SANDBOX_KEY}.${dotted}`;
-    const value = where.split('.').reduce<JsonValue | undefined>(
-      (node, key) => (isJsonObject(node) ? node[key] : undefined),
-      profile,
-    );
+    const value = valueAt(profile, where.split('.'));
     if (value === undefined) continue;
     if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
       throw internal(`the generated \`${where}\` is not a list of strings`);
@@ -929,10 +926,7 @@ function assertRunnable(profile: JsonObject): void {
   }
   for (const [list, field] of CREDENTIAL_LISTS) {
     const where = `${SANDBOX_KEY}.credentials.${list}`;
-    const value = where.split('.').reduce<JsonValue | undefined>(
-      (node, key) => (isJsonObject(node) ? node[key] : undefined),
-      profile,
-    );
+    const value = valueAt(profile, where.split('.'));
     if (value === undefined) continue;
     const named = Array.isArray(value) ? value.map((entry) => (isJsonObject(entry) ? entry[field] : undefined)) : [];
     if (!Array.isArray(value) || named.some((name) => typeof name !== 'string')) {

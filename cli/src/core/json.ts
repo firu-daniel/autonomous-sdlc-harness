@@ -16,6 +16,11 @@
  * them. The machine-scoped registry `machine/registry.ts` owns is the single exception: it
  * writes {@link formatJson} output itself, outside any plan and outside `--dry-run`, and states
  * why in its own header.
+ *
+ * It also owns the walk by key path — {@link valueAt}, its throwing forms {@link objectAt} and
+ * {@link listAt}, {@link stringsAt} and {@link appendUnique} — so the generators and `doctor` share
+ * one body rather than private copies. A throwing form takes its error from the caller: the fault's
+ * wording, and whether it is this CLI's fault, belong to the call site.
  */
 
 import { readFileSync } from 'node:fs';
@@ -132,4 +137,35 @@ function mergeMissingInto(target: JsonObject, source: JsonObject, prefix: string
     // Anything else: `target` already has a value here and keeps it.
   }
   return added;
+}
+
+/** The value at `path` under `root`, or `undefined` where any segment is missing or not an object. */
+export function valueAt(root: JsonObject, path: readonly string[]): JsonValue | undefined {
+  let current: JsonValue | undefined = root;
+  for (const key of path) current = isJsonObject(current) ? current[key] : undefined;
+  return current;
+}
+
+/** The object at `path` under `root`; otherwise throws what `fault` returns. */
+export function objectAt(root: JsonObject, path: readonly string[], fault: () => Error): JsonObject {
+  const value = valueAt(root, path);
+  if (!isJsonObject(value)) throw fault();
+  return value;
+}
+
+/** The list at `path` under `root`, mutable in place; otherwise throws what `fault` returns. */
+export function listAt(root: JsonObject, path: readonly string[], fault: () => Error): JsonValue[] {
+  const value = valueAt(root, path);
+  if (!Array.isArray(value)) throw fault();
+  return value;
+}
+
+/** The string members of `value` when it is a list, or none when it is not. */
+export function stringsAt(value: JsonValue | undefined): readonly string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+/** Append `values` to `list`, adding none twice and leaving existing members where they are. */
+export function appendUnique(list: JsonValue[], values: readonly string[]): void {
+  for (const value of values) if (!list.includes(value)) list.push(value);
 }

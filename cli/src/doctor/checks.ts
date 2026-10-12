@@ -124,7 +124,7 @@ import {
   resolveRepoRoot,
   worktreeList,
 } from '../core/git.js';
-import { isJsonObject, readJsonFile, type JsonObject, type JsonValue } from '../core/json.js';
+import { isJsonObject, readJsonFile, stringsAt, valueAt, type JsonObject, type JsonValue } from '../core/json.js';
 import {
   defaultBranchPushCommand,
   defaultBranchPushReason,
@@ -4630,18 +4630,6 @@ const PROFILE_DENY_FLOOR_CHECK: Check = {
   },
 };
 
-/** The value at the dotted `path` in `root`, or `undefined` where any segment is missing. */
-function valueAtPath(root: JsonObject, path: string): JsonValue | undefined {
-  let current: JsonValue | undefined = root;
-  for (const key of path.split('.')) current = isJsonObject(current) ? current[key] : undefined;
-  return current;
-}
-
-/** The string members of the list at `value`, or none when it is not a list. */
-function stringMembers(value: JsonValue | undefined): readonly string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
-}
-
 /**
  * Is the profile's `sandbox` block what the configuration asks for: on, strict, excluding exactly
  * the expected wrapper rules, allowing exactly the expected domains — or, under a taken
@@ -4669,8 +4657,8 @@ const PROFILE_SANDBOX_CHECK: Check = {
     const expected = expectedSandbox({ repoRoot: profileRoot, config: ctx.config });
     const sandbox = ctx.profile[SANDBOX_KEY];
     const enabledPath = `${SANDBOX_KEY}.enabled`;
-    const enabled = valueAtPath(ctx.profile, enabledPath);
-    const marked = stringMembers(ctx.profile[README_KEY]).some((line) => line.startsWith(SANDBOX_OPT_OUT_MARKER));
+    const enabled = valueAt(ctx.profile, enabledPath.split('.'));
+    const marked = stringsAt(ctx.profile[README_KEY]).some((line) => line.startsWith(SANDBOX_OPT_OUT_MARKER));
     const regenerate = `Regenerate it with \`${CLI} init --force\`, which writes a .bak sibling first`;
     const grade = ctx.remoteJob ? fail : warn;
 
@@ -4698,7 +4686,7 @@ const PROFILE_SANDBOX_CHECK: Check = {
       );
     }
     for (const { path, value } of shippedSandboxSettings()) {
-      const held = valueAtPath(ctx.profile, path);
+      const held = valueAt(ctx.profile, path.split('.'));
       if (held === value || (path === enabledPath && held === false)) continue;
       findings.push(
         `\`${path}\` holds ${held === undefined ? 'nothing' : JSON.stringify(held)} where a generated profile holds ${JSON.stringify(value)}: the sandbox is weaker than the one this configuration asks for`,
@@ -4706,7 +4694,7 @@ const PROFILE_SANDBOX_CHECK: Check = {
     }
 
     const excludedPath = `${SANDBOX_KEY}.excludedCommands`;
-    const excluded = stringMembers(valueAtPath(ctx.profile, excludedPath));
+    const excluded = stringsAt(valueAt(ctx.profile, excludedPath.split('.')));
     for (const entry of expected.excludedCommands.filter((rule) => !excluded.includes(rule))) {
       findings.push(
         `\`${excludedPath}\` lacks ${entry}: that wrapper's SSH push or fetch fails inside the sandbox on macOS, and the push wrapper still exits 0`,
@@ -4717,7 +4705,7 @@ const PROFILE_SANDBOX_CHECK: Check = {
     }
 
     const domainsPath = `${SANDBOX_KEY}.network.allowedDomains`;
-    const domains = stringMembers(valueAtPath(ctx.profile, domainsPath));
+    const domains = stringsAt(valueAt(ctx.profile, domainsPath.split('.')));
     for (const domain of expected.allowedDomains.filter((host) => !domains.includes(host))) {
       findings.push(
         `\`${domainsPath}\` lacks ${domain}, which the configuration asks for: a sandboxed command reaching it is refused`,
@@ -4769,7 +4757,7 @@ const PROFILE_WRITE_PROTECTION_CHECK: Check = {
     });
     const optedOut = sandboxOptedOut(ctx.config);
     const denyWritePath = `${SANDBOX_KEY}.filesystem.denyWrite`;
-    const denyWrite = stringMembers(valueAtPath(ctx.profile, denyWritePath));
+    const denyWrite = stringsAt(valueAt(ctx.profile, denyWritePath.split('.')));
     const denied = permissionEntries(ctx.profile, 'deny');
     const notGraded = `; ${denyWritePath} is not graded because the sandbox is off (sandbox.optOut)`;
 

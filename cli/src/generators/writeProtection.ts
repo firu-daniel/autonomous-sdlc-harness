@@ -23,7 +23,7 @@ import { join } from 'node:path';
 
 import { CONFIG_FILENAME, DEFAULTS, retrievalApplies, type HarnessConfig } from '../config/model.js';
 import { internal } from '../core/errors.js';
-import { isJsonObject, type JsonObject, type JsonValue } from '../core/json.js';
+import { appendUnique, listAt, type JsonObject, type JsonValue } from '../core/json.js';
 import { defaultProjectName, worktreeGlob } from '../core/paths.js';
 import { normalizeRepoDir } from '../core/repoPaths.js';
 import { resolveGithooksDir } from './githooks.js';
@@ -183,17 +183,9 @@ export function fileToolDenyRules(entry: ProtectedPath): readonly string[] {
   return [`Edit(/${target})`, `Write(/${target})`];
 }
 
-/** The list at `path` under `root`, or an internal fault naming where the profile lost its shape. */
-function listAt(root: JsonObject, path: readonly string[]): JsonValue[] {
-  let node: JsonValue | undefined = root;
-  for (const key of path) node = isJsonObject(node) ? node[key] : undefined;
-  if (!Array.isArray(node)) throw internal(`the permission-profile template has no \`${path.join('.')}\` list`);
-  return node;
-}
-
-/** Append `values` to `list`, adding none twice. */
-function appendUnique(list: JsonValue[], values: readonly string[]): void {
-  for (const value of values) if (!list.includes(value)) list.push(value);
+/** The list at `path` in the rendered profile, or an internal fault naming where the template lost its shape. */
+function profileList(profile: JsonObject, path: readonly string[]): JsonValue[] {
+  return listAt(profile, path, () => internal(`the permission-profile template has no \`${path.join('.')}\` list`));
 }
 
 /**
@@ -212,16 +204,16 @@ export function applyWriteProtection(profile: JsonObject, { repoRoot, workRoot, 
     `Set githooksDir in ${CONFIG_FILENAME} to a directory whose path carries no such character, then run init again`,
   );
 
-  const additionalDirectories = listAt(profile, ['permissions', 'additionalDirectories']).filter(
+  const additionalDirectories = profileList(profile, ['permissions', 'additionalDirectories']).filter(
     (entry): entry is string => typeof entry === 'string',
   );
   const paths = protectedPaths({ repoRoot, workRoot, config, additionalDirectories });
 
   appendUnique(
-    listAt(profile, [SANDBOX_KEY, 'filesystem', 'denyWrite']),
+    profileList(profile, [SANDBOX_KEY, 'filesystem', 'denyWrite']),
     paths.map(({ path }) => path),
   );
-  appendUnique(listAt(profile, ['permissions', 'deny']), paths.flatMap(fileToolDenyRules));
+  appendUnique(profileList(profile, ['permissions', 'deny']), paths.flatMap(fileToolDenyRules));
 
   appendReadme(
     profile,

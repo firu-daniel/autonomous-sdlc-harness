@@ -31,7 +31,7 @@ import {
   type HarnessConfig,
 } from '../config/model.js';
 import { internal } from '../core/errors.js';
-import { isJsonObject, type JsonObject, type JsonValue } from '../core/json.js';
+import { appendUnique, isJsonObject, listAt, objectAt, type JsonObject, type JsonValue } from '../core/json.js';
 import { homeRoot, readTemplate } from '../core/paths.js';
 import { OUTER_LOOP_SCRIPTS, outerLoopRelativePath, outerLoopScriptPath } from './outerLoopScripts.js';
 import { appendReadme, assertUsableInEntry, bashScriptRule, TEMPLATE_PATH } from './permissionProfile.js';
@@ -104,21 +104,14 @@ export function expectedSandbox({ repoRoot, config }: SandboxInput): ExpectedSan
   };
 }
 
-/** The object at `path` under `root`, or an internal fault naming where the template lost its shape. */
-function objectAt(root: JsonObject, path: readonly string[], described: string): JsonObject {
-  let current: JsonValue | undefined = root;
-  for (const key of path) {
-    current = isJsonObject(current) ? current[key] : undefined;
-  }
-  if (!isJsonObject(current)) throw internal(`${described} has no \`${path.join('.')}\` object`);
-  return current;
+/** The internal fault for a template that lost the `path` object, worded as `described`. */
+function noObject(described: string, path: readonly string[]): () => Error {
+  return () => internal(`${described} has no \`${path.join('.')}\` object`);
 }
 
-/** The list at `key` in `parent`, or an internal fault. */
-function listAt(parent: JsonObject, key: string, where: string): JsonValue[] {
-  const value = parent[key];
-  if (!Array.isArray(value)) throw internal(`the permission-profile template has no \`${where}\` list`);
-  return value;
+/** The internal fault for a template that lost the list at the dotted `where`. */
+function noList(where: string): () => Error {
+  return () => internal(`the permission-profile template has no \`${where}\` list`);
 }
 
 /**
@@ -135,12 +128,12 @@ export function shippedSandboxSettings(): readonly { readonly path: string; read
     throw internal(`${described} is not valid JSON (${error instanceof Error ? error.message : String(error)})`);
   }
   if (!isJsonObject(parsed)) throw internal(`${described} is not a JSON object`);
-  const sandbox = objectAt(parsed, [SANDBOX_KEY], described);
+  const sandbox = objectAt(parsed, [SANDBOX_KEY], noObject(described, [SANDBOX_KEY]));
 
   return GRADED_SETTINGS.map((dotted) => {
     const segments = dotted.split('.');
     const leaf = segments.pop() as string;
-    const value = objectAt(sandbox, segments, `${described}'s \`${SANDBOX_KEY}\``)[leaf];
+    const value = objectAt(sandbox, segments, noObject(`${described}'s \`${SANDBOX_KEY}\``, segments))[leaf];
     if (typeof value !== 'boolean') throw internal(`${described}'s \`${SANDBOX_KEY}.${dotted}\` is not a boolean`);
     return { path: `${SANDBOX_KEY}.${dotted}`, value };
   });
@@ -170,19 +163,14 @@ export function credentialReadDenyRules(input: {
 
 /** The `path` of every `sandbox.credentials.files` entry in the rendered profile. */
 function credentialFilePaths(sandbox: JsonObject): readonly string[] {
-  const credentials = objectAt(sandbox, ['credentials'], `the permission-profile template's \`${SANDBOX_KEY}\``);
-  return listAt(credentials, 'files', `${SANDBOX_KEY}.credentials.files`).map((entry) => {
+  const credentials = objectAt(sandbox, ['credentials'], noObject(`the permission-profile template's \`${SANDBOX_KEY}\``, ['credentials']));
+  return listAt(credentials, ['files'], noList(`${SANDBOX_KEY}.credentials.files`)).map((entry) => {
     const path = isJsonObject(entry) ? entry['path'] : undefined;
     if (typeof path !== 'string') {
       throw internal(`the permission-profile template has a \`${SANDBOX_KEY}.credentials.files\` entry with no string \`path\``);
     }
     return path;
   });
-}
-
-/** Append `values` to `list`, adding none twice. */
-function appendUnique(list: JsonValue[], values: readonly string[]): void {
-  for (const value of values) if (!list.includes(value)) list.push(value);
 }
 
 /**
@@ -214,13 +202,14 @@ export function applySandbox(profile: JsonObject, { repoRoot, config }: SandboxI
   );
 
   const expected = expectedSandbox({ repoRoot, config });
-  const sandbox = objectAt(profile, [SANDBOX_KEY], 'the permission-profile template');
-  appendUnique(listAt(sandbox, 'excludedCommands', `${SANDBOX_KEY}.excludedCommands`), expected.excludedCommands);
-  const network = objectAt(sandbox, ['network'], `the permission-profile template's \`${SANDBOX_KEY}\``);
-  appendUnique(listAt(network, 'allowedDomains', `${SANDBOX_KEY}.network.allowedDomains`), expected.allowedDomains);
-  const permissions = objectAt(profile, ['permissions'], 'the permission-profile template');
+  const template = 'the permission-profile template';
+  const sandbox = objectAt(profile, [SANDBOX_KEY], noObject(template, [SANDBOX_KEY]));
+  appendUnique(listAt(sandbox, ['excludedCommands'], noList(`${SANDBOX_KEY}.excludedCommands`)), expected.excludedCommands);
+  const network = objectAt(sandbox, ['network'], noObject(`${template}'s \`${SANDBOX_KEY}\``, ['network']));
+  appendUnique(listAt(network, ['allowedDomains'], noList(`${SANDBOX_KEY}.network.allowedDomains`)), expected.allowedDomains);
+  const permissions = objectAt(profile, ['permissions'], noObject(template, ['permissions']));
   appendUnique(
-    listAt(permissions, 'deny', 'permissions.deny'),
+    listAt(permissions, ['deny'], noList('permissions.deny')),
     credentialReadDenyRules({ home, files: credentialFilePaths(sandbox) }),
   );
 
