@@ -72,7 +72,7 @@ Output: write the code-review **index** to <code_review_path> and one self-conta
 
 ### Pass 1 — Independent review (always)
 
-Do this **without looking at any per-unit review file**. Your judgment must be uncontaminated by what the layer reviewers already flagged.
+Do this **without looking at any per-unit review file**.
 
 1. **Get the diff and segment it:**
    ```bash
@@ -81,10 +81,10 @@ Do this **without looking at any per-unit review file**. Your judgment must be u
    ```
    Report that count in your index's Context paragraph as: "N run-artifact files excluded from the reviewed diff."
 
-   Group the changed files into **feature-area segments** — one feature's page plus its unit-local state and its components; one layer's slice plus its tests. You review segment by segment: findings written while a segment is fresh beat findings recalled at the end of a big branch.
-2. **Read the task prompt** at `<state_dir>/task_prompts/<branch>_task_prompt.md` and the **story index** at `<state_dir>/story_plans/<branch>_story_plan.md` (its `## Context` plus its `## Phase 2 Readiness — Ordered Fix List`; the per-unit bodies live at `<state_dir>/task_plans/<branch>/task_<N>_plan.md` — read those only where a specific unit's intent is unclear). These define what the diff is *trying* to accomplish, which anchors the review.
-3. **Run the mechanical sweep (Pass 0).** See `### Pass 0 — the deterministic sweep` below. Run it before any judgment reading.
-4. **Review segment by segment from the diff, not from full files.** For each segment, read its diff hunks with generous context (`git diff -U15 <default_branch>...HEAD -- <segment files>`); escalate to a targeted `Read` (offset/limit around the hunk) only where a hunk cannot be judged in isolation. Do NOT read whole changed files — new files arrive complete in the diff anyway, and pre-existing large files are read only at the relevant ranges. Review first-hand — do NOT delegate reading to sub-agents. **Write down the segment's finding drafts (title, site anchor, severity, one-line description) before moving to the next segment.**
+   Group the changed files into **feature-area segments** — one feature's page with its unit-local state and components, or one layer's slice with its tests — and review segment by segment.
+2. **Read the task prompt** at `<state_dir>/task_prompts/<branch>_task_prompt.md` and the **story index** at `<state_dir>/story_plans/<branch>_story_plan.md` — its `## Context` and its `## Phase 2 Readiness — Ordered Fix List` — for what the diff is *trying* to accomplish. Open a per-unit body at `<state_dir>/task_plans/<branch>/task_<N>_plan.md` only where that unit's intent is unclear.
+3. **Run the mechanical sweep (Pass 0)** — `### Pass 0 — the deterministic sweep` — before any judgment reading.
+4. **Review segment by segment from the diff, not from full files.** Read each segment's hunks with generous context (`git diff -U15 <default_branch>...HEAD -- <segment files>`); escalate to a targeted `Read` (offset/limit around the hunk) only where a hunk cannot be judged alone. Never read whole changed files: new files arrive whole in the diff, and pre-existing large files are read only at the relevant ranges. Review first-hand — never delegate reading to sub-agents. **Write down the segment's finding drafts (title, site anchor, severity, one-line description) before moving to the next segment.**
 5. **Cross-check business logic against `<reference_impl>`** — **only when `phases.parity` is `true`**; when it is `false`, skip this step entirely. Every external-call name, every payload field and its wire name, every stored-data query shape, every threshold constant, every gating predicate and every side-effect ordering the diff introduces must match `<reference_impl>` exactly, stated in `<parity_vocabulary>` terms. **This is the one place you DO read in full: the *entire* corresponding `<reference_impl>` method / state object, top to bottom.** A missing behaviour is invisible in the project's own diff, so the spec side can never be reviewed from hunks, and a grep for one field will not reveal a whole *missing* branch (an auto-open after a single-item fetch, a fallthrough case, a post-await revert, an optimistic-before-await mutation). A `<reference_impl>` behaviour present in the ported source but absent from the diff — with no real prompt-exclusion line and no entry-point deferred-work marker — is a **Must Fix**, the same grade as a wrong field. And when an omission or divergence is justified by a cited authorization (a prompt point, a deferred-work marker), **open the cited file and confirm the citation is real and says what is claimed**: a fabricated or miscited reference (for example "prompt point 6" when the prompt has no numbered points), or a justification buried in a doc comment, does not waive parity → **Must Fix**.
 6. **Cross-segment pass.** After the last segment, sweep for what is only visible whole-branch: duplication across segments, code introduced by one unit and orphaned by another, flow gaps that only emerge with everything in place, convention drift between segments. Reconcile and de-duplicate the per-segment finding drafts.
 7. **Produce the Pass 1 review** in the split format of `## Findings format` — the index plus one self-contained `finding_<N>.md` per finding.
@@ -93,15 +93,15 @@ Do this **without looking at any per-unit review file**. Your judgment must be u
 
 Two halves, both run before any judgment reading, and both over the **added lines only**.
 
-**(a) The grep sweep.** Each hit is a finding *candidate to verify in context* — **never an automatic finding**. The file that owns the project's styling tokens legitimately contains styling literals; test-attribute locator values are exempt from the localized-copy rule; a test fixture may legitimately inline a constant. Verify every hit against the owning layer's conventions document before it becomes a finding.
+**(a) The grep sweep.** Each hit is a finding *candidate to verify in context*, **never an automatic finding**: the file that owns the styling tokens legitimately holds styling literals, test-attribute locator values are exempt from the localized-copy rule, and a test fixture may inline a constant. Verify every hit against the owning layer's conventions document before it becomes a finding.
 
 ```bash
 git diff <default_branch>...HEAD --unified=0 -- <every layers[].path scope of <layer_path_map>> | grep -E '^\+[^+]' | grep -nE '<regex>'
 ```
 
-Scope it to **every** layer path, not to `<app_dir>`: those paths are repo-relative and resolve against `<repo_root>`, and a layer dropped from the pathspec sweeps as clean. Where a layer's path is the repository root (`.`), keep step 1's `':(top,exclude)<state_dir>/…'` exclusions on the command.
+Scope it to **every** layer path, never to `<app_dir>`: a layer dropped from the pathspec sweeps as clean. Where a layer's path is the repository root (`.`), keep step 1's `':(top,exclude)<state_dir>/…'` exclusions on the command.
 
-The sweep list below is a **stub, and it is expected to be edited**: the escape *classes* are what transfer between stacks, the regexes are not. Fill each `Regex` cell with the pattern that catches that class in `<impl_stack>`, taking the identifier to match from the mandated symbol the owning layer's `layers[].conventions` document names (`<convention_symbols>`) — never from a remembered spelling. One row per named escape class; add a row when the ledger at `<state_dir>/lessons.md` records a new one.
+The sweep list below is a **stub, to be edited**: the escape *classes* transfer between stacks, the regexes do not. Fill each `Regex` cell with the pattern that catches its class in `<impl_stack>`, matching the mandated symbol the owning layer's `layers[].conventions` document names (`<convention_symbols>`), never a remembered spelling. One row per escape class; add a row when `<state_dir>/lessons.md` records a new one.
 
 | Escape class | Regex — *replace with your project's* | What a hit is a candidate for |
 |---|---|---|
@@ -113,21 +113,21 @@ The sweep list below is a **stub, and it is expected to be edited**: the escape 
 | Invocation from the wrong layer | | A navigation, notification or dialog call made from a unit whose layer contract forbids it and requires a caller-supplied callback instead. |
 | Open literal set | | An ad-hoc union of literal values where the conventions document requires a declared closed type. |
 
-**An empty sweep list disables this half only.** With no regexes filled in, half (a) finds nothing and the rest of this agent — including half (b) below and the whole of `## Common findings to look for` — is unchanged. An empty list is a configuration gap to close, not a licence to skip Pass 0.
+**An empty sweep list disables this half only.** Half (b) and the whole of `## Common findings to look for` still run; an empty list is a configuration gap to close, not a licence to skip Pass 0.
 
-**(b) The new-exported-symbol caller check — always runs, regexes or not.** For every **new exported symbol** the diff adds under a `layers[].path` from `<layer_path_map>` whose layer exists to be consumed by the layers above it, grep the `layers[].path` scopes of `<layer_path_map>`, resolved against `<repo_root>`, for a call site **outside its defining file** — the same set the symbols were enumerated over. **Zero callers = an un-wired / dead feature → Must Fix**, but only once the search covered every layer path: a search narrowed to one directory grades a wired feature dead. Enumerate the added exports from the diff with the export form of `<impl_stack>` — e.g. `git diff <default_branch>...HEAD -- ':(top,exclude)<state_dir>/*<branch>*' ':(top,exclude)<state_dir>/docs_catalog/reviews/*' | grep -E '^\+<the export declaration form>'`.
+**(b) The new-exported-symbol caller check — always runs, regexes or not.** For every **new exported symbol** the diff adds under a `layers[].path` from `<layer_path_map>` whose layer exists to be consumed by the layers above it, grep the `layers[].path` scopes of `<layer_path_map>`, resolved against `<repo_root>`, for a call site **outside its defining file**. **Zero callers = an un-wired / dead feature → Must Fix**, but only once the search covered every layer path: a search narrowed to one directory grades a wired feature dead. Enumerate the added exports from the diff with the export form of `<impl_stack>` — e.g. `git diff <default_branch>...HEAD -- ':(top,exclude)<state_dir>/*<branch>*' ':(top,exclude)<state_dir>/docs_catalog/reviews/*' | grep -E '^\+<the export declaration form>'`.
 
 ### Pass 2 — Reconcile with per-unit findings (two-pass mode only)
 
 Run this only if `per_task_findings_root` was supplied. It is conventionally `<state_dir>/task_plan_point_reviews/<branch>_task_plan/`, but you use the value the caller passed.
 
-1. **Enumerate per-unit findings.** For each `task_<N>/` subfolder, find the highest-numbered `review_*.md` — that is the latest `layer-reviewer` verdict for that unit. Earlier iterations were superseded.
-2. **Extract carry-over candidates.** From each latest `review_*.md`, collect every item under **Should Fix** and **Nice to Have**. Must Fix items were resolved before commit by definition.
+1. **Enumerate per-unit findings.** In each `task_<N>/` subfolder, the highest-numbered `review_*.md` is that unit's latest `layer-reviewer` verdict; ignore earlier iterations.
+2. **Extract carry-over candidates:** every **Should Fix** and **Nice to Have** item in each latest `review_*.md` (Must Fix items were resolved before commit).
 3. **Reconcile each candidate against Pass 1:**
-   - **Already covered:** Pass 1 already flagged the same root issue (the same site anchor, or the same systemic problem at a different location). Skip — do not duplicate.
-   - **Stale:** the issue described no longer applies in the current diff (a later unit refactored the code away, or the component was deleted). Skip.
-   - **Real and missed:** the issue still exists in the current code and Pass 1 missed it. Add it as a new finding — a new `finding_<N>.md` detail file, a new `### N. Title` pointer in the appropriate index section, and a new `## Phase 2 Readiness — Ordered Fix List` entry. **Drop any per-unit attribution:** by the end of the branch, items are branch-level, not unit-scoped.
-4. **Do not promote category.** A Should Fix that came from a per-unit review is a Should Fix in your final document, never a Must Fix. The layer reviewer already made that severity judgment under fresh context; second-guessing it days later in aggregate review only inflates the Must Fix list.
+   - **Already covered:** Pass 1 flagged the same root issue (the same site anchor, or the same systemic problem elsewhere). Skip.
+   - **Stale:** the issue no longer applies in the current diff (a later unit refactored the code away, or the component was deleted). Skip.
+   - **Real and missed:** the issue still exists and Pass 1 missed it. Add it as a new finding — a new `finding_<N>.md` detail file, a new `### N. Title` pointer in the right index section, and a new `## Phase 2 Readiness — Ordered Fix List` entry — and **drop any per-unit attribution**: every item is branch-level now.
+4. **Do not promote category.** A Should Fix carried over from a per-unit review stays a Should Fix, never a Must Fix.
 
 ## Findings format (split: index + per-finding files)
 
