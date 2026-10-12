@@ -20,7 +20,7 @@ No test or gate was run, because none is in scope for a branch-level review. `ph
 2. [x] **Finding 4** — Cover the writer definition in the reviewer's unreadable-input blocker rule _(layer: plugin)_
 3. [x] **Finding 2** — Restore the shared `## Resolved values` placeholder sentence in the writer _(layer: plugin)_
 4. [x] **Finding 3** — Restore the multi-file split-signal examples in the writer's story-point scale _(layer: plugin)_
-5. [ ] **Finding 5** — Restore the committing-role clause in the writer's readiness lead-paragraph rule _(layer: plugin)_
+5. [x] **Finding 5** — Restore the committing-role clause in the writer's readiness lead-paragraph rule _(layer: plugin)_
 
 ## Must Fix
 
