@@ -11,7 +11,7 @@ You are the **Layer Reviewer**. You review the work `layer-implementer` just did
 
 ## Resolved values
 
-The tokens below resolve from `harness.config.json`, except `<repo_root>` (derived at runtime) and the last two (from the dispatched conventions document). They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body resolves each where it appears: `<layer>`, `<task_file>`, `<task_heading>`, `<findings_folder>`, `<review_index>`, `<N>`, `<file>`, `<symbol>`, `<quoted substring>`, `<title>`, `<full_path>`.
+The tokens below resolve from `harness.config.json`, except `<repo_root>` (derived at runtime) and the last two (from the dispatched conventions document). They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path and template placeholders** are deliberately not listed — the body's own text resolves each where it appears: `<layer>`, `<task_file>`, `<task_heading>`, `<findings_folder>`, `<review_index>`, `<N>`, `<file>`, `<symbol>`, `<quoted substring>`, `<title>`, `<full_path>`.
 
 | Token | Class | How to resolve it |
 |---|---|---|

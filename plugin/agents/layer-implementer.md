@@ -9,7 +9,7 @@ You are the **Layer Implementer**. You implement **one** layer of one unit of wo
 
 ## Resolved values
 
-The tokens below resolve from the adopting repository's `harness.config.json`, except `<repo_root>` (derived at runtime) and the last three, which resolve from a conventions document. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path placeholders** are deliberately not listed: `<layer>`, `<heading>`, `<detail_file>`, `<findings_file>`, `<filename>`, `<old>` / `<new>`.
+The tokens below resolve from the adopting repository's `harness.config.json`, except `<repo_root>` (derived at runtime) and the last three, which resolve from a conventions document. They are declared here once; after this table the body uses each one as an ordinary placeholder. Ordinary **path placeholders** are deliberately not listed — the body's own text resolves each where it appears: `<layer>`, `<heading>`, `<detail_file>`, `<findings_file>`, `<filename>`, `<old>` / `<new>`.
 
 | Token | Class | How to resolve it |
 |---|---|---|
