@@ -2,13 +2,14 @@
  * Generator: the unattended-run permission profile — the renderer, and the write that lands it.
  *
  * **The rule this module exists to enforce: the generator must be incapable of producing an entry
- * that stalls an unattended run.** In print mode a tool call that matches neither `allow` nor
- * `deny` does not prompt and does not fail — it hangs, and the run parks with no diagnostic. Every
+ * that costs an unattended run a step.** Under the default `dontAsk` mode a tool call that matches
+ * neither `allow` nor `deny` is refused at once rather than prompting a session nobody can answer:
+ * the call does not run, and the run carries on without that step. Every
  * shape below is the way it is because some run already paid for the alternative, and each of those
  * three prices is stated once here and once in the template's own `_README`:
  *
  * 1. **Wrapper paths are unquoted literals.** The allow-list guard matches the raw command string,
- *    so a quoted path fails a `*.sh` match, falls through to a prompt and stalls.
+ *    so a quoted path fails a `*.sh` match and the call is refused.
  * 2. **One command per entry, never a compound.** A single `mkdir && cp && rm` block is refused
  *    where each of those commands succeeds on its own, because the joined string matches no entry.
  * 3. **The checkout *and* its sibling worktrees.** A glob that misses the worktree a run is
@@ -29,9 +30,9 @@
  * 1. **Every wrapper is allow-listed in three forms, not one.** `commands.*` is repo-relative —
  *    every path in `harness.config.json` is (`docs/config.md` §5) — while a profile entry is
  *    conventionally absolute. A profile carrying only the absolute form would leave the configured
- *    verification command matching neither `allow` nor `deny`. So each selected wrapper contributes
- *    the repo-relative invocation an agent runs verbatim from the repository root, its
- *    repo-root-absolute twin for a caller that resolves the path first, and its sibling-worktree
+ *    verification command matching neither `allow` nor `deny`, and so refused. So each selected
+ *    wrapper contributes the repo-relative invocation an agent runs verbatim from the repository
+ *    root, its repo-root-absolute twin for a caller that resolves the path first, and its sibling-worktree
  *    twin for a run executing in a second working copy. The agent-invocable outer-loop scripts land
  *    in the same directory and are emitted through the same row family, so they take the same three
  *    forms for the same reason rather than a shape of their own.
@@ -95,7 +96,7 @@
  *   it is about to replace; under `init --plugin-root-entries`, the agent runner's plugin records.**
  *   {@link writePermissionProfile} enqueues the rendered profile into the
  *   command's write plan under the `create-if-absent` contract — the profile is hand-tuned after
- *   generation, and an overwrite silently drops the allow entries an adopter added to close a stall —
+ *   generation, and an overwrite silently drops the allow entries an adopter added to close a gap —
  *   and the write itself belongs to the write engine. `--force` is the one flag that suspends that
  *   contract, and therefore the one run under which those hand-added entries can be lost, so
  *   {@link carriedPluginRootEntries} reads the profile back and {@link renderProfile} carries forward
@@ -164,9 +165,9 @@
  * Two properties of those entries are load-bearing:
  *
  * - **They are `allow`, never `ask`.** The corpus invokes them on the unattended commit path, and
- *   `ask` is evaluated before `allow`, so an `ask` there is precisely the stall this module exists to
- *   prevent. The deploy wrapper's `ask` treatment is unaffected — it is a wrapper row, and a deploy
- *   is a decision a person makes.
+ *   `ask` is evaluated before `allow`, so an `ask` there is a refusal under the default `dontAsk`
+ *   mode — precisely the missing step this module exists to prevent. The deploy wrapper's `ask`
+ *   treatment is unaffected — it is a wrapper row, and a deploy is a decision a person makes.
  * - **Every other row gets nothing, deliberately.** The shared library is only ever sourced, and
  *   every remaining row — the watcher, the worktree and cleanup scripts, the notification helpers —
  *   is run by the watcher process or by a person. An entry for one of those would hand a dispatched
@@ -697,7 +698,7 @@ function usesAny(text: string, tokens: readonly string[]): boolean {
  *
  * `assertNoneSurvive` is off: the post-substitution sweep for this generator is
  * {@link assertRunnable}, which runs over every rendered *entry* rather than each string as it is
- * produced, and reports a leftover token as the stall it would cause.
+ * produced, and reports a leftover token as the refusal it would cause.
  */
 function substitute(text: string, values: Readonly<Record<string, string>>, known: ReadonlySet<string>): string {
   return renderTemplate(text, values, { describe: 'the permission-profile template', known });
@@ -769,7 +770,7 @@ function permissionsOf(profile: JsonObject): JsonObject {
   const permissions = profile['permissions'];
   if (permissions === null || typeof permissions !== 'object' || Array.isArray(permissions)) {
     throw internal(
-      'the permission-profile template has no `permissions` object, so nothing could be checked for the shapes that stall an unattended run',
+      'the permission-profile template has no `permissions` object, so nothing could be checked for the shapes that get a call refused in an unattended run',
     );
   }
   return permissions;
@@ -945,7 +946,7 @@ function assertRunnable(profile: JsonObject): void {
       for (const [needle, described] of FORBIDDEN_IN_ENTRY) {
         if (entry.includes(needle)) {
           throw internal(
-            `the generated permission entry ${JSON.stringify(entry)} in \`${where}\` contains ${described}, which the guard matches literally: the entry would fall through to a prompt and stall an unattended run`,
+            `the generated permission entry ${JSON.stringify(entry)} in \`${where}\` contains ${described}, which the guard matches literally: the entry would match no call, so an unattended run's call would be refused`,
           );
         }
       }
@@ -964,7 +965,7 @@ function assertRunnable(profile: JsonObject): void {
  * entries.
  *
  * Checked rather than assumed because the three forms live in the template, where a well-meaning
- * edit can drop one — and a dropped form is invisible until the run that used that spelling hangs.
+ * edit can drop one — and a dropped form is invisible until the run that used that spelling is refused.
  * The other direction (no entry names a script that was not written, and none names one an agent
  * must not run) is the fixture tests', which can see the filesystem this module deliberately never
  * touches.
@@ -1138,7 +1139,7 @@ export function assertUsableInEntry(value: string, described: string, remedy: st
   for (const [needle, why] of FORBIDDEN_IN_COMMAND) {
     if (!value.includes(needle)) continue;
     throw new HarnessError(
-      `${described} contains ${why}, and the permission guard matches an entry literally: an entry built from it would match neither allow nor deny, which stalls an unattended run rather than failing it. ${remedy}`,
+      `${described} contains ${why}, and the permission guard matches an entry literally: an entry built from it would match neither allow nor deny, so an unattended run's call would be refused. ${remedy}`,
     );
   }
 }
@@ -1767,7 +1768,7 @@ export interface PermissionProfileResult {
  * Render the profile and enqueue it at {@link PROFILE_PATH} under the `create-if-absent` contract.
  *
  * That contract is the whole reason this is a separate step from rendering. The profile is
- * **hand-tuned after generation** — the entry an adopter adds to close a stall is the most valuable
+ * **hand-tuned after generation** — the entry an adopter adds to close a gap is the most valuable
  * line in the file and the least reproducible — so a second `init` leaves an existing one
  * byte-identical, and `--force` regenerates it only after the write engine has copied it to a `.bak`
  * sibling — carrying the plugin-root entries of the file it replaces into the one it writes, which is

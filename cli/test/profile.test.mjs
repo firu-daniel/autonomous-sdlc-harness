@@ -2,13 +2,13 @@
  * The generated permission profile — the artifact whose failure modes are the reason it is generated
  * at all.
  *
- * **The rule these tests exist to enforce: an entry that matches neither `allow` nor `deny` stalls an
- * unattended run, and nothing about a stall is loud.** There is no error, no prompt and no log line —
- * the run parks. So each assertion below pins one shape that has already cost a run: a quoted path
- * that fails the guard's literal match, a compound command that matches no entry, a wrapper listed
- * for the checkout but not for its sibling worktrees, and a browser tool named in `deny`, which is
- * evaluated before any allow and would revoke the interactive-test agent's own grant. A later edit to
- * the shipped template cannot silently reintroduce any of them without failing here.
+ * **The rule these tests exist to enforce: a call that matches neither `allow` nor `deny` is refused
+ * in an unattended run, and a refused step is a missing step.** The step does not happen, and nothing
+ * else in the run announces it. So each assertion below pins one shape that has already cost a run:
+ * a quoted path that fails the guard's literal match, a compound command that matches no entry, a
+ * wrapper listed for the checkout but not for its sibling worktrees, and a browser tool named in
+ * `deny`, which is evaluated before any allow and would revoke the interactive-test agent's own
+ * grant. A later edit to the shipped template cannot silently reintroduce any of them without failing here.
  *
  * These run against the **compiled** CLI at `dist/cli.js`, so `npm run build` precedes `npm test`.
  *
@@ -148,7 +148,7 @@ const PERMISSION_LISTS = ['allow', 'deny', 'ask'];
  * slashes and the prefix below is the one the template adds. Spelling the whole entry out is the
  * point, and it is why the prefix is asserted rather than assumed: a one-slash `Edit` rule asks for
  * a file under `<settings root>/Users/…`, which no checkout has, and a rule that matches nothing
- * stalls exactly like a rule that is missing — the same silent nothing a third slash gives.
+ * is refused exactly like a rule that is missing — the same silent nothing a third slash gives.
  */
 const FILE_RULE_KINDS = [
   ['Edit', '/'],
@@ -175,7 +175,7 @@ const HELPER_SCRIPTS_README = /^THE PHASE'S OWN HELPER SCRIPTS ARE NOT ALLOW-LIS
  * The one way that line can be reworded and still cost a run: a phrase reading as a pointer to an
  * entry the profile already carries. It carries none — that is the whole reason the line exists — so
  * an adopter who follows the pointer scans `allow`, finds browser tools and a port probe, concludes
- * the wiring is there and adds nothing, and the phase stalls at the first helper. This is the
+ * the wiring is there and adds nothing, and the phase is refused at the first helper. This is the
  * anti-pattern rather than the sentence verbatim, for the reason {@link HELPER_SCRIPTS_README} gives:
  * the prose is meant to be improved, and only a claim that the entry is *here* is a defect. A
  * reference to an entry the adopter writes ("the entry you add …") is not one, and neither is the
@@ -291,7 +291,7 @@ function assertEntriesRunnable(profile) {
         assert.ok(
           !entry.includes(needle),
           `permissions.${list} carries ${JSON.stringify(entry)}, which contains ${JSON.stringify(needle)}: the ` +
-            'guard matches an entry literally, so it would fall through to a prompt and stall an unattended run',
+            'guard matches an entry literally, so it would match no call and an unattended run\'s call would be refused',
         );
       }
     }
@@ -399,7 +399,7 @@ test('an outer-loop script an agent runs is allow-listed in three forms, and eve
         assert.deepEqual(
           naming,
           expected,
-          `${relative} is not allow-listed in exactly the three forms a caller may use: a caller using a missing spelling matches neither allow nor deny, which parks an unattended run`,
+          `${relative} is not allow-listed in exactly the three forms a caller may use: a caller using a missing spelling matches neither allow nor deny, which an unattended run refuses`,
         );
 
         // Form (i) is the invocation producer's own return value rather than a lookalike: the corpus
@@ -418,7 +418,7 @@ test('an outer-loop script an agent runs is allow-listed in three forms, and eve
 
 /**
  * The one row whose entries *are* a capability rather than a convenience: without all three, an
- * agent reaching for the spelling that is missing draws a prompt no unattended run answers, and the
+ * agent reaching for the spelling that is missing is refused in an unattended run, and the
  * probe or mutation check it was going to run is silently downgraded to a claim nobody executed.
  */
 const SCRATCH_FILE = 'scratch-run.sh';
@@ -428,7 +428,7 @@ test('the scratch runner is allow-listed in exactly its three forms, and asked a
   const naming = (list) => entries(profile, list).filter((entry) => entry.includes(SCRATCH_FILE));
 
   // Exactly three rather than at least one: the count is the invariant, and a dropped form is
-  // invisible until the run that happened to use that spelling parks.
+  // invisible until the run that happened to use that spelling is refused.
   assert.deepEqual(
     naming('allow').sort(),
     expectedForms({
@@ -440,9 +440,9 @@ test('the scratch runner is allow-listed in exactly its three forms, and asked a
     `${SCRATCH_FILE} is not allow-listed in the repo-relative, repo-root-absolute and sibling-worktree forms`,
   );
 
-  // And in `ask` in none of them: an `ask` entry is a prompt by another name, so it stalls a run
-  // exactly as a missing entry does — while reading, in review, like a grant that was made.
-  assert.deepEqual(naming('ask'), [], `${SCRATCH_FILE} is named in permissions.ask, which prompts an unattended run`);
+  // And in `ask` in none of them: an `ask` entry is refused in an unattended run exactly as a
+  // missing entry is — while reading, in review, like a grant that was made.
+  assert.deepEqual(naming('ask'), [], `${SCRATCH_FILE} is named in permissions.ask, which an unattended run refuses`);
 });
 
 test('the three-form emission holds for a written outer-loop row an agent runs, and drops one it must not', async (t) => {
@@ -588,7 +588,7 @@ test('reading, changing and creating a file are each granted, for this checkout 
     // Creating a file and changing one are different grants, and it is creating that the flow does
     // most: a plan, a review, a ledger entry and a new source file are all written, not edited. A
     // profile carrying only the `Edit` pair leaves the commonest operation in the flow matching
-    // neither `allow` nor `deny`, which in print mode parks the run instead of refusing the call.
+    // neither `allow` nor `deny`, which an unattended run refuses.
     for (const path of [dir, worktreeGlobFor(dir)]) {
       const expected = `${kind}(${prefix}${path}/**)`;
       assert.ok(allow.includes(expected), `no allow entry is ${expected}`);
@@ -735,13 +735,13 @@ test('the phase carries the one instruction an adopter must act on by hand, and 
     stated.length,
     1,
     `the phase-on profile states the helper-script gap ${stated.length} times, not once: an entry for those ` +
-      'scripts is not generated, so the only thing standing between an adopter and a stalled phase is ' +
-      'this line telling them to add one',
+      'scripts is not generated, so the only thing standing between an adopter and a phase whose ' +
+      'helpers are refused is this line telling them to add one',
   );
 
   // And it has to send them to an entry they write, never to one in the file: the profile carries no
   // helper entry and generates none, so a pointer at an entry "below" is read as "already wired", which ends
-  // in the same silent stall the line is there to prevent. The line carried such a pointer once.
+  // in the same refusal the line is there to prevent. The line carried such a pointer once.
   const misdirection = ENTRY_ALREADY_HERE.exec(stated[0]);
   assert.equal(
     misdirection,

@@ -91,7 +91,7 @@ The former residual *"a rewritten `.git` pointer or `commondir` is not detected"
 8. [x] **Task 24** — Make both unsandboxed wrappers refuse any target but the main checkout or a worktree it lists _(layer: cli)_ _(points: 20)_
 9. [x] **Task 6** — Add `doctor`'s `profile-sandbox` check _(layer: cli)_ _(points: 15)_
 10. [x] **Task 7** — Add `doctor`'s `profile-write-protection` check _(layer: cli)_ _(points: 18)_
-11. [ ] **Task 16** — Correct the unlisted-call statements in the generators and the profile suite _(layer: cli)_ _(points: 18)_
+11. [x] **Task 16** — Correct the unlisted-call statements in the generators and the profile suite _(layer: cli)_ _(points: 18)_
 12. [ ] **Task 27** — Correct the unlisted-call statements in `init`, `doctor`, the daemon backend and the `init` suite _(layer: cli)_ _(points: 18)_
 13. [ ] **Task 17** — Correct the unlisted-call statements in the shipped wrapper scripts and the CLI's scripts README _(layer: cli)_ _(points: 15)_
 14. [ ] **Task 8** — Move the autonomous forks' pushes to the main checkout's wrapper _(layer: plugin)_ _(points: 18)_

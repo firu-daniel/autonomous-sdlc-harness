@@ -61,3 +61,9 @@
 - Re-run derivation entry G's two commands with `-n` in place of `-l` and the six target paths as the pathspec. Every remaining hit must be a line this file lists as kept: un-loaded tools, row 179's *"is not a stall"* comment, and the new wording where it legitimately says *"neither `allow` nor `deny`"*.
 - Re-run derivation entry H's first step and read its hits in the six targets. Every remaining one must be a line this file lists as kept, `scripts.ts`'s recursion assertion (row 180), or a park on a question file.
 - Every message whose text changed is either asserted by a case edited here or by none. Check with `grep -rn` of each old substring under `cli/test`; it must print nothing.
+
+- **Deviations from plan:**
+  - The plan's line hints had shifted (Tasks 2, 3 and 23 landed first): its 746, 893, 1086, 1708, 1017, 1048 are now `permissionsOf`'s throw, `assertRunnable`'s `FORBIDDEN_IN_ENTRY` throw, `assertUsableInEntry`'s throw, `writePermissionProfile`'s doc comment, and the two un-loaded-tool sentences in `assertBrowserWiring`'s doc comment and message. Edited by anchor; the kept un-loaded-tool lines are untouched.
+  - `cli/test/profile.test.mjs`'s "287" (`assertEntriesRunnable`) does not assert the generator's message: it is the suite's own parallel failure message. Both were rewritten to the refusal wording in the same edit, so the two still read alike.
+  - The module header's rule sentence in `permissionProfile.ts` itself carried the stall word (*"an entry that stalls an unattended run"*), so the rule is kept in substance as *"an entry that costs an unattended run a step"*, followed by the `dontAsk` refusal consequence.
+  - One unlisted sentence in a target was corrected with its neighbour: the scratch-runner case's `ask` assertion message, *"which prompts an unattended run"*, now *"which an unattended run refuses"*. It states the same outcome the plan's 426 comment does, and no case asserts it.
