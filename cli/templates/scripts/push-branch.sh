@@ -25,8 +25,9 @@
 # EVERY FAILURE PATH IS NON-FATAL (exit 0). A non-git directory, a detached
 # HEAD, a protected branch, a configuration that cannot be resolved, a target
 # it does not trust, a per-working-copy configuration it does not trust, a
-# hooks directory it will not pin, or a failed push (a transient network, say)
-# is made VISIBLE with a one-line message but must NEVER abort the calling
+# hooks directory it will not pin, a branch name starting with `-`, or a failed
+# push (a transient network, say) is made VISIBLE with a one-line message but
+# must NEVER abort the calling
 # run — a stale remote is recoverable and a halted run is not. That is why this script uses `set -uo pipefail` deliberately
 # WITHOUT `set -e`, and why even the fail-closed arm below exits 0: it refuses
 # to push, which is the closed outcome here, and says so. A push the remote
@@ -280,6 +281,15 @@ if [ -z "$branch" ]; then
   echo "push-branch.sh: detached HEAD — refusing to push"
   exit 0
 fi
+
+# A branch name git would parse as an option (THE TARGET IS NOT TRUSTED): a
+# worktree's HEAD is sandbox-writable, and no branch git creates starts with `-`.
+case "$branch" in
+  -*)
+    echo "push-branch.sh: branch '$branch' starts with '-', which git would read as an option — refusing to push"
+    exit 0
+    ;;
+esac
 
 # The protected-branch decision, from this repository's configuration. Called
 # unsubstituted so the library's per-process cache is warmed here.

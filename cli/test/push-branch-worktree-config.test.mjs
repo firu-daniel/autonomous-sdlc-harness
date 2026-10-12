@@ -7,14 +7,15 @@
  * `setup-worktree.sh` writes, and every push it makes runs the main repository's configured hooks
  * directory — accepted only when it is `<main>/<githooksDir>` or `<main>/.git/hooks` — never the
  * worktree's. Every refusal exits 0 and leaves origin unchanged.** Case (a)'s marker assertion is
- * the proof of the pin: a refusal case passing proves nothing about it.
+ * the proof of the pin: a refusal case passing proves nothing about it. A worktree whose `HEAD` names
+ * a branch starting with `-` is refused too, since `git push` would read that name as an option.
  *
  * The fixture is built by hand rather than by `init`, so the hooks configuration under test is
  * exactly the one each case sets. Each `pre-push` hook writes a marker file named for its directory.
  */
 
 import assert from 'node:assert/strict';
-import { chmod, cp, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, chmod, cp, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -92,6 +93,8 @@ async function worktreeFixture(t, mainHooksPath = 'githooks') {
     configWorktree: join(main, '.git', 'worktrees', 'wt', 'config.worktree'),
     push: (target) =>
       runBash(root, [join(main, 'scripts', 'push-branch.sh'), target], { PUSH_RETRY_DELAY_SECS: '0' }),
+    root,
+    origin,
     head: async (dir) => (await runGit(dir, ['rev-parse', 'HEAD'])).stdout.trim(),
     originTip: async (branch) =>
       (await runBash(origin, ['-c', `git rev-parse --verify --quiet refs/heads/${branch}`])).stdout.trim(),
@@ -165,4 +168,26 @@ test('(g) core.hooksPath unset in the main .git/config pins <main>/.git/hooks', 
   assert.match(result.stdout, PUSHED, output(result));
   assert.equal(await f.originTip(BRANCH), await f.head(f.wt));
   assert.deepEqual(await f.markers(), ['gitdefault']);
+});
+
+test('(h) A worktree HEAD naming a branch that starts with `-` is refused before any push', async (t) => {
+  const f = await worktreeFixture(t);
+  const ran = join(f.root, 'receive-pack-ran');
+  const program = join(f.root, 'marker.sh');
+  await writeFile(program, `#!/bin/sh\ntouch '${ran}'\nexit 1\n`);
+  await chmod(program, 0o755);
+  const originRefs = async () => (await runGit(f.origin, ['for-each-ref'])).stdout;
+  const before = await originRefs();
+  // Written with the file system, as a sandboxed command could: git refuses to create such a branch.
+  await writeFile(
+    join(f.main, '.git', 'worktrees', 'wt', 'HEAD'),
+    `ref: refs/heads/--receive-pack=${program}\n`,
+  );
+  const result = await f.push(f.wt);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /refusing to push/, output(result));
+  assert.doesNotMatch(result.stdout, /^push-branch\.sh: pushed /m);
+  await assert.rejects(access(ran), output(result));
+  assert.equal(await originRefs(), before);
+  assert.deepEqual(await f.markers(), []);
 });

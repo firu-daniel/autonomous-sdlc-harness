@@ -16,7 +16,7 @@ What remains is two containment gaps and five smaller defects. The write protect
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom, and the committing role flips each one to `[x]` as that fix's commit lands. `[ ]` markers anywhere else, such as sub-step bullets inside a per-finding file, are informational, and the committer never touches them. Each entry resolves to `harness-runs/code_reviews/feat_unattended_bash_sandbox_code_review/finding_<K>.md`. The leading number is the ship order and the `K` is the finding's stable identity.
 
-1. [ ] **Finding 6** — Refuse a push whose current branch name begins with `-` in `push-branch.sh` _(layer: cli)_
+1. [x] **Finding 6** — Refuse a push whose current branch name begins with `-` in `push-branch.sh` _(layer: cli)_
 2. [ ] **Finding 4** — Set `failIfUnavailable: false` alongside `enabled: false` under a taken `sandbox.optOut` _(layer: cli, general)_
 3. [ ] **Finding 1** — Write-protect the main checkout's copy of every top-level outer-loop script _(layer: cli, general)_
 4. [ ] **Finding 3** — Write-protect the profile and the project settings files whose hooks run outside the sandbox _(layer: cli, general)_
