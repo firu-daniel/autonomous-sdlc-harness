@@ -60,7 +60,7 @@ No `start i=0` survives.
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_findings_overwrites_and_commit_gaps/task_<K>_plan.md`. Entries are ordered bottom-up in the configured layer order (`cli`, then `plugin`). The catch-all `general` layer has no task.
 
-1. [ ] **Task 1** — Rewrite the gate, meta-review, test-fix-review, UI-test-plan and QA-review state-dir READMEs for next-free keying and the blocked-test outcome _(layer: cli)_ _(points: 18)_
+1. [x] **Task 1** — Rewrite the gate, meta-review, test-fix-review, UI-test-plan and QA-review state-dir READMEs for next-free keying and the blocked-test outcome _(layer: cli)_ _(points: 18)_
 2. [ ] **Task 2** — Rewrite the eight per-item point-review state-dir READMEs for next-free keying, own-layer reads and unit commits _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Key the user-review fix-plan gates by next free index _(layer: plugin)_ _(points: 12)_
 4. [ ] **Task 4** — Commit the lessons ledger in both user-review fix-plan forks _(layer: plugin)_ _(points: 15)_
