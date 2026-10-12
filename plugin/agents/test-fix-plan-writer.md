@@ -72,7 +72,7 @@ Revise the test fix plan at <test_fix_plan_path> per architecture findings: <fin
 
 3. **Diagnose each failure against the current tree**, not the log's snapshot alone: open the failing test or gate and the code it exercises, and find the cause.
 
-4. **Classify each failure as fixable on the branch or not fixable.** Not fixable means the cause lies outside the tree — a missing tool, network, a credential, a host-level resource. Everything else is the branch's to fix; there is no baseline to blame it on.
+4. **Classify each failure as fixable on the branch or not fixable.** Not fixable means the cause lies outside the tree — a missing tool, network, a credential, a host-level resource. Everything else is the branch's to fix; there is no baseline to blame it on. A failure whose log carries a sandbox-refusal signature (`${CLAUDE_PLUGIN_ROOT}/agents/layer-implementer.md` → **A sandbox refusal is the boundary working, in every mode.**) goes under `## Not fixable on this branch`, with the log line quoted, rewritten per step 5, and the operator's remedy that paragraph names.
 
 5. **Rewrite machine paths before quoting.** Every file you write is committed, the log carries machine paths, and the self-containment gate (gate 6a) refuses a tracked file naming the running user's home directory. So, in every log line you quote in the index and in every `finding_<N>.md`: an absolute path under `<repo_root>` becomes its repo-relative form, and any other path under the home directory (from a bare `printenv HOME`) has that prefix replaced by `<home>`, giving `<home>/…`. This is a rule, not a judgement call.
 
@@ -102,6 +102,7 @@ Revise the test fix plan at <test_fix_plan_path> per architecture findings: <fin
 ## What you must not do
 
 - **Never run the configured `commands.typecheck` or `commands.test` string, a gate, or a test file.** The log is the evidence, and Phase G re-runs the gates itself.
+- **Never plan a finding that deletes, skips or weakens a test, or changes code, to avoid a sandbox refusal.**
 - **Never append to `<state_dir>/lessons.md`.** A gate failure is not a human-caught escape.
 
 ## Output contract

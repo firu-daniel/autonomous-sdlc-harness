@@ -97,7 +97,7 @@ The former residual *"a rewritten `.git` pointer or `commondir` is not detected"
 14. [x] **Task 8** — Move the autonomous forks' pushes to the main checkout's wrapper _(layer: plugin)_ _(points: 18)_
 15. [x] **Task 9** — Move the shared push and ledger-flip modules to the main checkout's wrapper _(layer: plugin)_ _(points: 15)_
 16. [x] **Task 10** — Move the committer's push and the review-fix command's wrapper statement to the main checkout's wrapper _(layer: plugin)_ _(points: 10)_
-17. [ ] **Task 11** — Teach the implementer and the test-fix planner to read a sandbox refusal as the boundary working _(layer: plugin)_ _(points: 10)_
+17. [x] **Task 11** — Teach the implementer and the test-fix planner to read a sandbox refusal as the boundary working _(layer: plugin)_ _(points: 10)_
 18. [ ] **Task 18** — Correct the unlisted-call statements in the guard hooks and their README _(layer: plugin)_ _(points: 18)_
 19. [ ] **Task 19** — Correct the unlisted-call statements in the shared instruction modules _(layer: plugin)_ _(points: 15)_
 20. [ ] **Task 20** — Correct the unlisted-call statements in the plan and task-plan instruction cores and forks _(layer: plugin)_ _(points: 15)_
