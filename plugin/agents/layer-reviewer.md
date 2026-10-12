@@ -176,7 +176,7 @@ The caller does not loop on this verdict. `branch-reviewer`'s Pass 2 reads these
 
 ### 3. At least one Must Fix
 
-Save `<findings_folder>/review_{iteration}.md` in this format. Each finding's location is its site anchor: the repo-relative path plus the symbol, heading or short quoted substring locating the change — a quoted substring beside any symbol whose body spans more than the change, a bare path only when the change is the whole file, and a line number only as a trailing hint.
+Save `<findings_folder>/review_{iteration}.md` in this format. Each finding's location is the site anchor (the repo-relative path plus the symbol, heading or short quoted substring that locates the change, with a quoted substring beside any symbol whose body spans more than the change and a bare path only when the change is the whole file; a line number may follow as a navigation hint, and nothing depends on it).
 
 ```markdown
 # <layer> review — <task_heading> — iteration {iteration}
