@@ -75,7 +75,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_findings_overwrites_and_
 13. [x] **Task 13** — Parse the per-test blocked marker in the supervised QA flow and the user-review fixes core _(layer: plugin)_ _(points: 10)_
 14. [x] **Task 14** — Let the `E` / `R4` ledger entries resolve over a blocked-only remainder _(layer: plugin)_ _(points: 8)_
 15. [x] **Task 15** — Make `ui-tests-plan-writer` the single source of the augment prompt, and state why the augment is not re-reviewed _(layer: plugin)_ _(points: 15)_
-16. [ ] **Task 16** — Add the autonomous QA.0 augment commit point _(layer: plugin)_ _(points: 10)_
+16. [x] **Task 16** — Add the autonomous QA.0 augment commit point _(layer: plugin)_ _(points: 10)_
 17. [ ] **Task 17** — Teach both autonomous `Override I` round counts the branch-wide next-free series _(layer: plugin)_ _(points: 10)_
 
 ## Scope register

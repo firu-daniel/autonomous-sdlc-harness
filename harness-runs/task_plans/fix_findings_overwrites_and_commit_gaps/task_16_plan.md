@@ -48,3 +48,5 @@ bash <scripts_dir>/push-branch.sh "$REPO_ROOT"
   - zero-test augment: exit 3, no commit;
   - `no_ui: true`: Override L does not fire.
 - `git grep -n -E 'semi.autonomous' -- plugin/instructions/user_review_fixes_instructions_autonomous.md`: nothing here claims the semi-autonomous fork is covered. That gap is stated as out of scope in the story Context.
+
+**Deviations from plan:** Two sentences the plan did not name were extended so they stay true with entry 14 and Override L in place: the commit-points list lead-in in `plan_orchestration_instructions_autonomous.md` (it now covers entries 13 and 14 both being appended out of run order), and the opening paragraph of `user_review_fixes_instructions_autonomous.md`, which lists the overrides this fork adds (it now names L).

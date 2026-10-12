@@ -2,7 +2,7 @@
 
 Autonomous variant. Run `${CLAUDE_PLUGIN_ROOT}/instructions/user_review_fixes_instructions_core.md` Phases **A → QA → G → D** verbatim by reference, with the bindings below and the overrides that follow them. Do not restate the phase bodies — the Setup, the Safety contract, the Phase A fix-item loop, the Phase QA augment + E.0–E.4 loop, Phase D's statistics + Done summary, the stop-condition list and the "What you must NOT do" list are canonical there; the unit loop with its substitution row `UR-A`, its named exceptions and its gated per-unit review step is canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md`, and the QA loop itself in `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_core.md` → `## Phase E — QA testing` — both cited by the core, not by this fork.
 
-**This fork differs from the core only in the binding values below and the overrides after them.** Three former overrides are now binding *values*: path resolution (`<repo_root>` / `<app_root>`, with the residue those two values do **not** carry kept as **Override A**), the clarification reroute (`<escalate>` / `<ask>`), and the committer half of Override E (`<committer_push>`). What stays an override is what this mode purely **adds** and the core has no surface for: the worktree-relative reads the two path bindings leave uncovered (A), the global kill switch (B), the post-user-review statistics commit (D) and its direct-`git` push (E), the pause/resume + flow-progress ledger (G), the docs phase (H), the improvement-observations intake (I), the remote-job QA skip's Done-summary arm (K), and the hard boundary. **This fork has no Override F** — this flow never dropped the per-unit layer reviewers, so `<per_unit_review>` is bound **`on`** explicitly in the table below; do not infer a value from the absence of that override. Everything else — the per-item implement→review→commit loop, the per-run `<state_dir>/STOP` check, `<state_dir>/.dispatch_counter`, `MAX_TOTAL_DISPATCHES`, the heartbeat formats, the per-test QA fan-out, Phase D — is identical and is NOT duplicated here, **except** Override K's replacement of the Done summary's QA (Phase QA) arm. (The per-run safety scaffolding is kept as-is: it is already per-worktree.)
+**This fork differs from the core only in the binding values below and the overrides after them.** Three former overrides are now binding *values*: path resolution (`<repo_root>` / `<app_root>`, with the residue those two values do **not** carry kept as **Override A**), the clarification reroute (`<escalate>` / `<ask>`), and the committer half of Override E (`<committer_push>`). What stays an override is what this mode purely **adds** and the core has no surface for: the worktree-relative reads the two path bindings leave uncovered (A), the global kill switch (B), the post-user-review statistics commit (D) and its direct-`git` push (E), the pause/resume + flow-progress ledger (G), the docs phase (H), the improvement-observations intake (I), the remote-job QA skip's Done-summary arm (K), the QA.0 augment commit (L), and the hard boundary. **This fork has no Override F** — this flow never dropped the per-unit layer reviewers, so `<per_unit_review>` is bound **`on`** explicitly in the table below; do not infer a value from the absence of that override. Everything else — the per-item implement→review→commit loop, the per-run `<state_dir>/STOP` check, `<state_dir>/.dispatch_counter`, `MAX_TOTAL_DISPATCHES`, the heartbeat formats, the per-test QA fan-out, Phase D — is identical and is NOT duplicated here, **except** Override K's replacement of the Done summary's QA (Phase QA) arm. (The per-run safety scaffolding is kept as-is: it is already per-worktree.)
 
 ---
 
@@ -237,11 +237,33 @@ An `R4` seeded `[-]` on this ground is therefore never reported as one of the co
 
 ---
 
+## Override L — commit the QA.0 UI-test plan augment (autonomous fork only)
+
+**Autonomous fork only. Do NOT propagate into the core.** The core's `### QA.0` step 2 dispatches `ui-tests-plan-writer`, which may add `ui_test_<K>.md` files, revise existing ones and rewrite the UI-test index. This override commits that augment.
+
+**Trigger.** Right after `### QA.0` step 2's writer returns a **normal write** (`ui_test_index:` present in its return), and before E.0 starts the dev server — so E.1's per-test `ui_test_pass` commits and any E.3 `review_item` commit start from a tree in which the augment is already tracked. It does **not** fire on `no_ui: true` (nothing was written) or on a `## Questions` return (the `<ask>` park comes first; the resumed QA.0 re-dispatches the writer and fires it then).
+
+```zsh
+bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
+  "<ui_test_index>" \
+  "<ui_test_files_dir>" \
+  -- "chore: Add UI-test plan for ${branch}"
+bash <scripts_dir>/push-branch.sh "$REPO_ROOT"
+```
+
+Substitute the writer's returned `ui_test_index:` and `ui_test_files_dir:` values, repo-relative, for the two paths — the issued command carries no `<…>`, because a `<` withdraws the script-allowlist guard's permit (`## Override D` → **Exact staging + commit.**). The subject is the planning fork's fixed one (`${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_autonomous.md` → `## Override 3`), byte-for-byte. No `if`, no existence guard, and the push is unconditional, as in `## Override E`. **Wrapper exit 3** (nothing to commit) is the normal outcome of a zero-test augment, which leaves every file byte-identical; the push is then a no-op. Any other non-zero exit is surfaced, as in `## Override D` → **Wrapper exit status (surface the error).**
+
+**Why not a committer dispatch.** No mode fits: `ui_test_pass` stages only the index and flips a checkbox, and `review_plan_file` is locked to a different fixed subject.
+
+**Shared rationale.** This commit is **entry 14** of the autonomous-fork commit points that collectively keep the clean-tree precondition honest — see **Autonomous-fork commit points — the clean-tree invariant** in `${CLAUDE_PLUGIN_ROOT}/instructions/plan_orchestration_instructions_autonomous.md`.
+
+---
+
 ## What this file does NOT redefine
 
 - The Setup step (branch determination, `<fix_plan_path>` / `<fix_finding_dir>` passed in by the calling command, all `<state_dir>/…` path placeholders, STOP soft-fail, counter init) — canonical in the core (the `<repo_root>` / `<app_root>` bindings only rebase the `<app_dir>` / `<reference_impl>` / credentials literals onto `$REPO_ROOT` / `$APP_ROOT`; everything else stands).
 - The Safety contract (per-run STOP check, `.dispatch_counter` increment, `MAX_TOTAL_DISPATCHES`, heartbeat, compose the prompt) — unchanged, **except** Override G folds a `<state_dir>/PAUSE` check in immediately after the STOP check (autonomous fork only; see `autonomous_pause_and_ledger.md` §2.2).
 - **The unit loop** — its body, the layer routing table, substitution row `UR-A`, the named exceptions and the gated per-unit review step. Canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md`, which the core cites by reference; this fork binds `<per_unit_review>` = `on` and states none of it.
-- Phases A, QA (incl. the E.0–E.4 loop the core runs by reference from `plan_orchestration_instructions_core.md` → `## Phase E — QA testing`), G (the core runs `plan_orchestration_instructions_core.md` → `## Phase G — Run gates` by reference), D — every body run verbatim by reference, **except** Override K replaces `### D.2`'s QA (Phase QA) bullet when the recorded `## Run mode` block carries the remote-job skip (autonomous fork only).
+- Phases A, QA (incl. the E.0–E.4 loop the core runs by reference from `plan_orchestration_instructions_core.md` → `## Phase E — QA testing`), G (the core runs `plan_orchestration_instructions_core.md` → `## Phase G — Run gates` by reference), D — every body run verbatim by reference, **except** Override K replaces `### D.2`'s QA (Phase QA) bullet when the recorded `## Run mode` block carries the remote-job skip, and `Override L`'s commit after QA.0 (both autonomous fork only).
 - The stop-condition list semantics and the "What you must NOT do" list — unchanged (`<escalate>` / `<ask>` only reroute *where* a stop surfaces in the headless entry point), **except** Override I's narrow, Phase-D-only read exception to the path-only findings rule (autonomous fork only; canonical in `improvement_observations_instructions.md`).
 - The clarification-channel file format, the consume-then-archive contract, and the ask-vs-assume policy — canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/task_plan_writing_instructions_autonomous.md`.
