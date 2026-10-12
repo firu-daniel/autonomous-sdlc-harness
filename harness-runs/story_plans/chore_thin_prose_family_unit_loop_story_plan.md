@@ -30,7 +30,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_unit
 6. [x] **Task 6** — Thin `layer-reviewer`'s intro, own contract rows and `## Process` _(layer: plugin)_ _(points: 15)_
 7. [x] **Task 7** — Thin `layer-reviewer`'s own checklist triggers, catch-all checks and `## Output contract` _(layer: plugin)_ _(points: 15)_
 8. [x] **Task 8** — Thin `committer`'s intro, `## Resolved values`, and its index and mode argument bullets _(layer: plugin)_ _(points: 15)_
-9. [ ] **Task 9** — Thin `committer`'s `commit_prefix`, `push` and record arguments, and replace its caller table with a pointer _(layer: plugin)_ _(points: 15)_
+9. [x] **Task 9** — Thin `committer`'s `commit_prefix`, `push` and record arguments, and replace its caller table with a pointer _(layer: plugin)_ _(points: 15)_
 10. [ ] **Task 10** — Thin `committer`'s `## Commit-message policy`, keeping every wire template _(layer: plugin)_ _(points: 20)_
 11. [ ] **Task 11** — Thin `committer`'s argument guard, mode routing and standard procedure steps 1–6 _(layer: plugin)_ _(points: 20)_
 12. [ ] **Task 12** — Thin `committer`'s `ui_test_pass` procedure to its own steps, and its `## Output contract` _(layer: plugin)_ _(points: 15)_
