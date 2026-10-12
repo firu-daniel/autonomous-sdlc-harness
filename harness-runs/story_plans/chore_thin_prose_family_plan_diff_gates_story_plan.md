@@ -91,7 +91,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_plan
 1. [x] **Task 1** — Thin the `## Process` blocks both definitions share, identically in both, and write the family check probe _(layer: plugin)_ _(points: 15)_
 2. [x] **Task 2** — Thin both definitions' intros and the `## Invocation contract` blocks they share _(layer: plugin)_ _(points: 20)_
 3. [x] **Task 3** — Thin both definitions' `## Scope boundary`, `## Output contract` and `## Findings-folder / index-path convention` _(layer: plugin)_ _(points: 20)_
-4. [ ] **Task 4** — Thin `architecture-reviewer`'s own `## Read first` bullet, sub-case (c) step, `## What to check` and justification rule _(layer: plugin)_ _(points: 15)_
+4. [x] **Task 4** — Thin `architecture-reviewer`'s own `## Read first` bullet, sub-case (c) step, `## What to check` and justification rule _(layer: plugin)_ _(points: 15)_
 5. [ ] **Task 5** — Thin `business-parity-reviewer`'s `## Read first`, `## Process` step 3 and parity checks (a)–(h) _(layer: plugin)_ _(points: 15)_
 6. [ ] **Task 6** — Thin `business-parity-reviewer`'s checks (i)–(j), exclusion basis, obvious-reference-bug exception and dead-code carve-out _(layer: plugin)_ _(points: 10)_
 7. [ ] **Task 7** — Measure both definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
