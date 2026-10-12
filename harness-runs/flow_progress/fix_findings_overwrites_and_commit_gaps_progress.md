@@ -24,5 +24,5 @@ Source: harness-runs/task_prompts/fix_findings_overwrites_and_commit_gaps_task_p
 - [x] C2m.    Skeptic meta-review PASS — or not owed (C2.1 returned PASS, so C2.2 never ran)
 - [x] C2f.    Skeptic findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [-] E.      QA passed (UI-test index all [x] / no_ui)
-- [ ] G.      Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
+- [x] G.      Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
 - [ ] D.      Branch statistics committed & pushed
