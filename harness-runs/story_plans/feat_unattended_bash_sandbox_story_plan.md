@@ -81,7 +81,7 @@ The former residual *"a rewritten `.git` pointer or `commondir` is not detected"
 
 **This section is the single source of truth for the implementation loop.** The orchestrator walks the `[ ]` entries below top to bottom. **Only the committing role flips a marker to `[x]`**: the `committer` agent in every flow that dispatches one, and the orchestrator itself in the supervised flow, which dispatches none. No implementer changes a marker, or edits any other line of this section, while a run is iterating this index. `[ ]` markers anywhere else, such as sub-step bullets inside the per-task files, are informational only, and the committer never touches them. Each entry resolves 1:1 to `harness-runs/task_plans/feat_unattended_bash_sandbox/task_<K>_plan.md`. The order is bottom-up by ship sequence, in the configured layer order with the catch-all `general` layer last. A task's id is not its position.
 
-1. [ ] **Task 1** — Add the `sandbox` configuration key to the config model and its structural check _(layer: cli)_ _(points: 15)_
+1. [x] **Task 1** — Add the `sandbox` configuration key to the config model and its structural check _(layer: cli)_ _(points: 15)_
 2. [ ] **Task 15** — Make `dontAsk` the unattended permission mode, and correct the profile's own statements of what an unlisted call does _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 2** — Render the strict sandbox block, the network denies and the two named unsandboxed wrappers into the unattended profile _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 23** — Deny credential reads on both sides: `sandbox.credentials` and the file tools' `Read` rules _(layer: cli)_ _(points: 15)_

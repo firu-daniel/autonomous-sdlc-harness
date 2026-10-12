@@ -55,3 +55,8 @@ The four places are one contract (`.claude/context/conventions.md` → `### The 
 - `npm test --workspace cli -- test/config-sandbox.test.mjs`, run from the repository root as one plain foreground command, passes. Then run `commands.typecheck` as written.
 - `sandboxOptedOut({ sandbox: { optOut: { reason: '  ' } } } as HarnessConfig)` is `false`, because a blank reason is not a taken opt-out. A case in the suite asserts the `config` check's error for it rather than calling the function directly.
 - Grep `cli/src` for a second hostname pattern or a second spelling of `optOut`, and find none outside `model.ts` and `check.ts`.
+
+**Deviations from plan:**
+
+- `sandboxAllowedDomains` falls back to a new `DEFAULTS.sandbox.allowedDomains` (`[]`) rather than an inline `[]`, because Task 12 gives the schema property `default: []` and `DEFAULTS`' doc comment requires every schema default to appear there; the `DEFAULTS` doc comment gained one sentence saying no generator seeds `sandbox`. `init`'s generated config is unchanged: nothing iterates `DEFAULTS` as a whole (`grep -rn "DEFAULTS" cli/src` shows only property reads).
+- Both `reason` keys are graded blank-is-an-error (`value.trim() === ''`), as the Verification bullet's blank-reason case requires. Task 12 states only `minLength: 1` for both, so the schema as planned would accept `"  "` where this check refuses it; Task 12 needs `"pattern": "\\S"` on both `reason`s to keep the write guard no stricter than the schema gate.
