@@ -2,12 +2,13 @@
 
 ## Resolved values
 
-The tokens below are neither Mode-contract **bindings** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor ordinary **path placeholders** (`<branch>`, and the locally-defined counters `<n>` / `<N>`): they resolve from the adopting repository's `harness.config.json`. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
+The tokens below are neither Mode-contract **bindings** (this file declares none — the `**Placeholder resolution.**` note below states where the ones it *uses* come from) nor ordinary **path placeholders** (`<branch>`, and the locally-defined counters `<n>` / `<N>`): they resolve from the adopting repository's `harness.config.json`, except `<MAIN_REPO>`, which is derived at runtime. They are declared here once, and after this table the body uses each one as an ordinary placeholder.
 
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
-| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. The two scripts this file names by path, `commit-on-branch.sh` in `## Commit mechanics` and `push-branch.sh` in `## Push`, are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles it. |
+| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. The two scripts this file names by path, `commit-on-branch.sh` in `## Commit mechanics` and `push-branch.sh` in `## Push`, are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles it. `push-branch.sh` is invoked under `<MAIN_REPO>` rather than repo-relative, because the main checkout's copy is the one the unattended permission profile runs outside the sandbox. |
+| `<MAIN_REPO>` | derived at runtime | The main checkout — the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 
 ---
 
@@ -71,7 +72,7 @@ bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
 The push follows the commit **immediately**, as a **plain, single-statement** Bash command, using the same session-start `$REPO_ROOT`:
 
 ```zsh
-bash <scripts_dir>/push-branch.sh "$REPO_ROOT"
+bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"
 ```
 
 > ⚠️ **No exit-code gate.** Why an `if …; then … fi` wrapper is a headless stall, and why no gate is needed, is canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## Push` and applies here as written.

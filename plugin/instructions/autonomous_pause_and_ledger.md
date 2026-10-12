@@ -27,6 +27,7 @@ ordinary path placeholder, exactly as it uses `<branch>`, `<entry-id>` and `<n>`
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this run is executing in — in an autonomous run, the run's **own worktree**, not the main checkout. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to, the ledger and the four pause sentinels included. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the project-command wrapper scripts live in. The three outer-loop scripts this file names (`autonomous-watcher.sh`, `commit-on-branch.sh`, `push-branch.sh`) are written into it by setup as well — copied verbatim rather than rendered from a detected command line, since each reads the configuration at run time — so every `<scripts_dir>/…` invocation below resolves in a wired repository. The two guard hooks it names (`allow-safe-compounds.sh`, `git-commit-branch-guard.sh`) ship as plugin hooks and are **not** under it either: they are named bare and take no prefix. |
+| `<MAIN_REPO>` | derived at runtime | The main checkout — the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into. Never a remembered branch name. Bound for completeness — no step in this file consumes it. |
 | `<protected_branches>` | config value | `protectedBranches` — the branches the commit wrapper and the `git-commit-branch-guard.sh` hook refuse to commit or push to, and the set the guard quotes back in its refusal message (§1.6). The effective set is these together with `<default_branch>`. |
 | `<worktree_glob>` | derived at runtime | The **parent directory of `<repo_root>`** (the work root) joined to the configured `projectName` stem and a `-*` suffix — the sibling-worktree pattern an autonomous run's per-branch worktrees match, and the pattern the generated permission profile is materialized with. It is **absolute**, so a permission rule written over it takes one leading slash of its own — `Write(/<worktree_glob>/**)`, two slashes in the rendered rule, never three; §2.2 sub-step (a) states that rule where it is used. |
@@ -284,8 +285,10 @@ should have been `[-]` and was seeded `[ ]` is corrected by fixing the **seeding
 
 ### 1.6 How to flip / create — direct `commit-on-branch.sh`, NEVER a committer dispatch
 Each flip (and the initial creation) is: **Edit the ledger file, then commit and push via the wrapper** —
-`<scripts_dir>/commit-on-branch.sh`, then `<scripts_dir>/push-branch.sh`, using the `$REPO_ROOT` the fork
-resolved at session start (both wrapper paths are repo-relative and take no app-root prefix). Fixed subject `chore: Flow progress <entry-id> for <branch>`
+`<scripts_dir>/commit-on-branch.sh`, then `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh "$REPO_ROOT"`, using
+the `$REPO_ROOT` the fork resolved at session start (the commit wrapper's path is repo-relative and takes no
+app-root prefix; the push names `<MAIN_REPO>`'s copy, because that copy is the one the unattended permission
+profile runs outside the sandbox). Fixed subject `chore: Flow progress <entry-id> for <branch>`
 (e.g. `chore: Flow progress A1.5f for <branch>`; for creation, `chore: Add flow-progress ledger for
 <branch>`). No `Co-Authored-By:` / trailer, no `--no-verify` — the wrapper enforces both.
 

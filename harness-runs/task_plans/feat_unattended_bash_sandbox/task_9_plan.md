@@ -63,3 +63,7 @@ Here `<repoRoot>` is the checkout `init` ran in. The repo-relative spelling stay
   It must print nothing, and `git grep -n -F 'and the call is **unconditional**' -- plugin/instructions/dispatch_discipline_instructions.md` must still print the `## Push` sentence.
 - Re-run scope-register derivation entry L (`git grep -n -i -F 'repo-relative' -- plugin`): its hits in these four files are ⊆ the register's rows, and none of them says the push token is repo-relative.
 - Each `<MAIN_REPO>` this task uses is declared in its own file's `## Resolved values`, in the table's three-column form (`.claude/context/plugin.md` → `## The placeholder vocabulary`).
+
+**Deviations from plan:**
+
+- The `## Resolved values` lead sentence of `dispatch_discipline_instructions.md`, `improvement_observations_instructions.md` and `clarification_digest_instructions.md` said every declared token resolves from `harness.config.json` (and, in the first, counted "The two tokens below"). Adding the `derived at runtime` `<MAIN_REPO>` row made that false, so each now reads "…`harness.config.json`, except `<MAIN_REPO>`, which is derived at runtime", and "The two tokens below" became "The tokens below". `autonomous_pause_and_ledger.md`'s lead already covers runtime-derived tokens and was left unchanged.
