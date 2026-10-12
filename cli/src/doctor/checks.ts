@@ -444,6 +444,12 @@ export interface CheckContext {
    */
   readonly profilePath?: string;
   /**
+   * The checkout whose {@link profilePath} was read — the main worktree, or {@link repoRoot} when the
+   * probe did not answer. Absent exactly when {@link repoRoot} is. A check grading the profile against
+   * values derived from a root reads this rather than probing again, so both describe one checkout.
+   */
+  readonly profileRoot?: string;
+  /**
    * Whether the run asked for {@link BROWSER_WIRING_CHECK}'s registry reachability probe, which
    * `doctor --check-registry` turns on and nothing else reads. It and {@link probeGithub} are the only
    * questions in this module that reach the network; both are `false` in every default run, which is
@@ -787,6 +793,7 @@ export function buildCheckContext(
     profile,
     profileProblem,
     profilePath,
+    profileRoot,
     probeRegistry,
     probeGithub,
     remoteJob,
@@ -4654,11 +4661,11 @@ const PROFILE_SANDBOX_CHECK: Check = {
   id: 'profile-sandbox',
   title: "the permission profile's sandbox block is what the configuration asks for",
   run: (ctx) => {
-    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.repoRoot === undefined || ctx.profileRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
     if (ctx.profile === undefined) return unevaluated(`${PROFILE_PATH} could not be read (see the permission-profile check)`);
 
-    const profileRoot = mainWorktreeRoot(ctx.repoRoot) ?? ctx.repoRoot;
+    const profileRoot = ctx.profileRoot;
     const expected = expectedSandbox({ repoRoot: profileRoot, config: ctx.config });
     const sandbox = ctx.profile[SANDBOX_KEY];
     const enabledPath = `${SANDBOX_KEY}.enabled`;
@@ -4749,11 +4756,11 @@ const PROFILE_WRITE_PROTECTION_CHECK: Check = {
   id: 'profile-write-protection',
   title: 'everything that runs outside the sandbox is write-protected on both sides',
   run: (ctx) => {
-    if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
+    if (ctx.repoRoot === undefined || ctx.profileRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
     if (ctx.profile === undefined) return unevaluated(`${PROFILE_PATH} could not be read (see the permission-profile check)`);
 
-    const profileRoot = mainWorktreeRoot(ctx.repoRoot) ?? ctx.repoRoot;
+    const profileRoot = ctx.profileRoot;
     const expected = protectedPaths({
       repoRoot: profileRoot,
       workRoot: workRoot(profileRoot),
