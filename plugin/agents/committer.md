@@ -106,35 +106,29 @@ The subject **text** — prefix vocabulary, capitalisation, length cap, fixed-fo
 
 ### ui_test_pass procedure
 
-This is the **single, complete source of truth** for `mode == ui_test_pass`. It is self-contained — do NOT consult or "patch" the standard steps 1–6 above; in particular this mode has **no clean-tree guard**, because the flip you make in step (d) IS the only working-tree change and a clean tree *before* that flip is the normal, expected state, never an error.
+This procedure runs none of steps 1–6 and has no clean-tree guard: the flip is its only change, so a clean tree before it is normal. Where it applies a standard step's rule, it names that step.
 
-Run these steps in order:
+a. **Branch:** `git branch --show-current` for `<branch>`.
 
-a. **Branch:** `git branch --show-current` to get `<branch>`. (Confirm a branch is checked out.)
+b. **Locate the entry:** read `plan_path` (the UI-test plan index, `<state_dir>/ui_test_plans/<branch>_ui_test_plan.md`) and, in its `## Phase 2 Readiness — Ordered Fix List`, resolve the `**Test K**` entry by the unit token `K` that `task_heading` carries — never by position; title text corroborates only. No entry carries that token → return `error: task_heading matched no readiness entry in <plan_path>` and stop: no edit, no commit, no push.
 
-b. **Locate the entry:** Read `plan_path` (the **UI-test plan index**, `<state_dir>/ui_test_plans/<branch>_ui_test_plan.md`). In its `## Phase 2 Readiness — Ordered Fix List` section, resolve the target entry **by the unit token `K` that `task_heading` carries** (the `**Test K**` readiness entry / test heading text) — the heading and the entry line differ by construction (bold marker, short title, trailing tags), so match on `K` and treat title text as corroboration only, never as the key. `task_heading` is the **sole selector**: never select by position, so a re-test round flips the *specific* test that just passed. **No `**Test K**` entry carries that token** → return `error: task_heading matched no readiness entry in <plan_path>` and stop: no edit, no commit, no push.
+c. **Before any edit:** that entry already `[x]` → return `noop: UI test K already marked` and stop: no edit, no commit, no push. This is the expected case on a re-test round.
 
-c. **Idempotent check (do this BEFORE editing):** if that `**Test K**` entry is **already `[x]`**, make NO edit and NO commit — return `noop: UI test K already marked` and stop. This is the expected case on re-test rounds where the test passed in an earlier round.
+d. **Flip:** change that one `[ ]` to `[x]`, and nothing else — no other marker, sub-step bullets included.
 
-d. **Flip:** otherwise change that single `[ ]` to `[x]` on that one line. This is the ONLY edit you make in this mode — never flip any other `[ ]` marker (sub-step bullets inside test cases are informational and must NEVER be touched).
+e. **Sanity, after the flip:** `git status --short` shows only `plan_path` modified.
 
-e. **Sanity (AFTER the flip, not before):** run `git status --short`. It should now show exactly that one file (`plan_path`) modified. **A clean tree BEFORE the flip is normal for this mode and is NOT an error — never abort on it.** (You do NOT run `git add` here — the wrapper in step f stages the single explicit `plan_path` AND commits it in one call.)
-
-f. **Stage + commit via the wrapper (fixed-form subject, single explicit file):** the subject is this mode's fixed form from `## Commit-message policy` — substitute `K` (the test number from the flipped `**Test K**` entry) and `<branch>` (from step a) verbatim. Stage ONLY the UI-test plan index file and commit it in one call:
+f. **Commit:** the subject is this mode's string from **Fixed-form subjects**, with `K` and `<branch>` substituted. Call the wrapper once:
    ```
    bash <scripts_dir>/commit-on-branch.sh <plan_path> -- "<the fixed ui_test_pass subject>"
    ```
-   **Pass `<plan_path>` exactly as the orchestrator gave it — repo-relative, never absolute and never prefixed with a checkout root**, even though step b resolved it to a literal absolute path to read it. The wrapper resolves each path against the repo top it derives itself and stages it only if `<top>/<path>` exists, so an absolute path is skipped with a warning and the wrapper exits 3 `nothing to commit` — you would report `error: nothing to commit` while the flip you made in step d sat uncommitted.
-   The wrapper stages the single explicit `plan_path` and commits it — pass ONLY `<plan_path>`; NEVER `git add -A` / `git add .` / anything-else (a passing test produces no code diff, so there is nothing else to stage), and do NOT run a separate `git add` or direct `git commit`. No trailer beyond what `<commit_conventions>` requires; the wrapper never passes `--no-verify` and never skips hooks. **Map the wrapper's exit status:**
-   - **exit 0** — the commit landed; the wrapper prints `commit-on-branch.sh: committed <short_sha> on <branch>` to stdout — read `<short_sha>` for the `commit_sha:` output line. Proceed to step g.
-   - **exit 3** (nothing to commit) — return `error: nothing to commit`. This is the "the edit somehow produced no diff" case (the flip in step d should always produce a diff; an already-`[x]` target is the `noop:` case from step c, which returns before here, not this error).
-   - **any other non-zero** (protected-branch refusal / hook failure / detached HEAD) — return `error: <one-line description>` surfacing the wrapper's stderr message. No partial commit, no retry.
+   `plan_path` is the only path, passed exactly as the dispatch gave it — repo-relative, as step 3 requires, even though step b read it by an absolute path. Never `git add -A` / `git add .`, and no separate `git add` or `git commit`. Map the exit as step 4 does, exit 0 continuing to step g; exit 3 here means the flip produced no diff.
 
-g. **Verify:** `git status --short` (confirm clean), `git log -1 --oneline` (confirm commit SHA, matching the `<short_sha>` the wrapper printed in step f).
+g. **Verify** as step 5 does.
 
-h. **Push (only when `push == true` AND a commit was made in step f):** If `push` is absent or `false`, skip this step (do nothing); set `pushed: no`. The step-c `noop:` already-`[x]` path returns before here and makes **no commit**, so it makes **no push** regardless of `push`. When `push == true` and step f committed, resolve `<repo_root>` with a bare `git rev-parse --show-toplevel` and run `bash <scripts_dir>/push-branch.sh <repo_root>`; capture its output. Report `pushed: yes` on a successful push or `pushed: failed` if the helper reported a failure (a `failed` push is **not** a commit failure — the step-f commit still landed and is not touched).
+h. **Push** as step 6 does, only when `push == true` and step f committed; the step-c `noop:` path never pushes.
 
-i. **Return:** the 5-line success contract below (or the single `noop:` line from step c if the target was already `[x]`).
+i. **Return** the 5-line block in `## Output contract`, or step c's `noop:` line.
 
 ## Output contract
 
@@ -148,19 +142,19 @@ plan_flipped: <readiness entry that was flipped (story-index for task, review in
 pushed: <yes|no|failed>
 ```
 
-`pushed:` reflects the push step: `no` when `push` was not requested (absent/`false` — the semi-auto/supervised default); `yes` on a successful push; `failed` when `push: true` was requested and the helper reported a push failure (the commit still landed — a `failed` push is never a commit failure).
+`pushed:` is `no` when `push` was not requested, `yes` on a successful push, and `failed` when the helper reported a failure — never a commit failure.
 
-The `already-[x]: <entry> — not flipped by this committer` form of `plan_flipped:` is **mandatory** whenever step 2 resolved `task_heading` to an entry that was already `[x]` (`task` / `review_item`). It is a duty, not an advisory — the unit loop carries it onto the run's progress line (`${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` step 6). Never report `none`, and never report the entry alone as if you had flipped it.
+The `already-[x]: <entry> — not flipped by this committer` form of `plan_flipped:` is **mandatory** whenever step 2 resolved `task_heading` to an entry already `[x]` (`task` / `review_item`). Never report `none`, and never the entry alone as if you had flipped it.
 
-**A sixth line, on the one path whose commit landed no work.** When the commit staged nothing but `plan_path`, the unit's own detail file and `unit_findings_folder` (when passed), add exactly:
+**A sixth line**, emitted exactly when **Subject reconciliation**'s test answered **No** — with or without a `disposition` or `already_passing` argument — and omitted on every other commit:
 
 ```
 staged: index-only — <the step-3 stage-path set> was the whole diff; no work file was staged
 ```
 
-Emit it **exactly** when `## Commit-message policy`'s **Subject reconciliation** test answered **No** — with or without a `disposition` or `already_passing` argument — and omit it entirely on every other commit; it is a duty on that path, like `already-[x]` is on its own. Name the set step 3 actually staged — `plan_path`, plus the unit's own detail file where step 3 staged one, plus `unit_findings_folder` where the caller passed one (a run-artifact folder, not a work file); on a dispositioned unit the detail file carrying the `## Disposition` section is part of that set, and is what `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## Dispositioned units` **(b)** resolves the entry's detail-file pointer from. It is the only signal that distinguishes an index-only commit from one that landed work: the subject alone is buried in a progress line, and a `disposition`-less index-only commit is otherwise indistinguishable from an implementer that returned success having written nothing. The unit loop appends it to the run's progress line verbatim (`${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` step 6) and continues — it is a report, not a refusal.
+Name the set step 3 staged: `plan_path`, plus the unit's own detail file where staged (on a dispositioned unit, the one carrying `## Disposition`), plus `unit_findings_folder` where passed.
 
-If `mode == ui_test_pass` and the target `**Test K**` entry was already `[x]`, do NOT commit — return the benign no-op (one line):
+If `mode == ui_test_pass` and the target `**Test K**` entry was already `[x]`, do NOT commit — return:
 
 ```
 noop: UI test K already marked
@@ -172,6 +166,6 @@ If anything blocked the commit:
 error: <one-line description>
 ```
 
-The named `error:` returns are `error: task_heading required for mode <mode>` (argument guard at the top of **Process**), `error: task_heading matched no readiness entry in <plan_path>` (step 2 / `ui_test_pass` step b), and `error: nothing to commit` (step 2, when neither the tree nor the entry moved; step 1's clean-tree return for `review_plan_file`; or wrapper exit 3); every other wrapper non-zero exit is surfaced as one line. Each stops where it fires — no edit past that point, no commit, no push.
+The named `error:` returns are `error: task_heading required for mode <mode>` (argument guard at the top of **Process**), `error: task_heading matched no readiness entry in <plan_path>` (step 2 / `ui_test_pass` step b), and `error: nothing to commit` (step 1's clean-tree return for `review_plan_file`; step 2, when neither the tree nor the entry moved; or wrapper exit 3); every other wrapper non-zero exit is surfaced as one line. Each stops where it fires — no edit past that point, no commit, no push.
 
-Keep the return to those 5 lines on success — 6 where the `staged: index-only` line applies — or one line for the `noop:` / `error:` cases (neither makes a commit, so neither pushes — no `pushed:` line on those).
+Return 5 lines on success, 6 with the `staged: index-only` line, and one line for `noop:` / `error:` — neither commits, so neither carries `pushed:`.
