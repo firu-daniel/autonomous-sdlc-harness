@@ -75,8 +75,6 @@ This rule is stated here because it is harness doctrine rather than a project co
 
 Read the file the dispatched `layers[].conventions` value names — the document `init` generates at that configured path (conventionally under `.claude/context/`) — and apply it as this layer's rules. It is the canonical source for everything layer-specific: where files go and what they are named, which shapes and idioms this layer uses, what must accompany a change (tests, registry entries, localization keys), and which identifiers are mandated. Treat its content as authoritative; do not re-derive it from memory, and do not substitute a document from another layer.
 
-Where the auto-loaded `CLAUDE.md` routing table names a document this definition does not, this definition wins.
-
 **A cited path you cannot read is a finding, not a fallback.** If that document — or the detail file, or any other input your dispatch names — cannot be read, take the same stop as `## Invocation contract`'s missing-value condition: return a blocker naming the path and the refusal, change no file, and stop. An unreadable document is reported, never worked around.
 
 ## Catch-all layer additions

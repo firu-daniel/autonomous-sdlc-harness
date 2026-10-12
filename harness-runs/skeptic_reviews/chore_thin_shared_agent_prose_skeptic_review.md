@@ -22,7 +22,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Remove the read-list precedence sentence from layer-implementer, layer-reviewer and business-parity-reviewer, whose read lists were additive, not narrower _(layer: plugin)_
+1. [x] **Finding 1** — Remove the read-list precedence sentence from layer-implementer, layer-reviewer and business-parity-reviewer, whose read lists were additive, not narrower _(layer: plugin)_
 
 ---
 
