@@ -969,6 +969,7 @@ test('the opt-out shows in the profile, and keeps every deny entry', async (t) =
   const sandbox = { optOut: { reason: 'the fixture runner has no sandbox support' } };
   const { profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ sandbox }) });
   assert.equal(profile.sandbox.enabled, false);
+  assert.equal(profile.sandbox.failIfUnavailable, false);
   assert.ok(profile._README.some((line) => line.startsWith(SANDBOX_OPT_OUT_MARKER)), 'no _README line starts with the opt-out marker');
   for (const tool of ['WebFetch', 'WebSearch']) {
     assert.ok(entries(profile, 'deny').includes(tool), `the opt-out dropped the ${tool} deny`);
