@@ -82,7 +82,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - [ ] C2g.    Skeptic review resolved (index committed — or PASS with no net-new findings, no file written)
 - [ ] C2m.    Skeptic meta-review PASS — or not owed (C2.1 returned PASS, so C2.2 never ran)
 - [ ] C2f.    Skeptic findings fixed (findings index all [x] — or no index, the review having passed clean)
-- [ ] E.      QA passed (UI-test index all [x] / no_ui)
+- [ ] E.      QA passed (UI-test index all [x], or only blocked tests left / no_ui)
 - [ ] G.      Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
 - [ ] D.      Branch statistics committed & pushed
 ```
@@ -103,7 +103,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - [ ] R2. Fix plan + source review committed
 ## Fixing
 - [ ] R3. All fix-plan findings implemented (fix-plan index all [x])
-- [ ] R4. QA passed (UI-test index all [x] / no_ui / no-op augment)
+- [ ] R4. QA passed (UI-test index all [x], or only blocked tests left / no_ui / no-op augment)
 - [ ] RG. Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
 - [ ] R5. Post-user-review statistics committed
 ```
