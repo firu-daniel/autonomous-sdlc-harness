@@ -77,7 +77,7 @@ The push is best-effort by the committer's own contract: it runs only after a co
 
 In addition to the per-run `<state_dir>/STOP` check (which is per-worktree and stays unchanged), honor a **global** kill switch that stops every run and prevents new launches:
 
-- **Path:** `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` — a single file in the **main** repo, distinct from each worktree's per-run `<state_dir>/STOP`. `<MAIN_REPO>` is the main worktree's root; resolve it from the watcher-supplied environment, or as the first entry of `git worktree list` (since `$REPO_ROOT` inside a run points at the run's own worktree, not the main repo).
+- **Path:** `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` — a single file in the **main** repo, distinct from each worktree's per-run `<state_dir>/STOP`. `<MAIN_REPO>` is the main worktree's root; resolve it from the first `worktree ` line of a bare `git worktree list --porcelain`, and spell it as a literal absolute path in every command that names it — never through a substitution or a variable (since `$REPO_ROOT` inside a run points at the run's own worktree, not the main repo).
 - **Check it at session start** (alongside the per-run STOP soft-fail): if `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` exists, halt before dispatching anything and report it. Do NOT delete it — the user controls it.
 - **The watcher honors it before every launch and during resume** — that watcher-side enforcement belongs to `<scripts_dir>/autonomous-watcher.sh`, not to this file. This file only states the engine's session-start check and that the file is the global switch.
 
