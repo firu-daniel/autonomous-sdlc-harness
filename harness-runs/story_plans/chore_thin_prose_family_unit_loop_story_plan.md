@@ -32,7 +32,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_unit
 8. [x] **Task 8** — Thin `committer`'s intro, `## Resolved values`, and its index and mode argument bullets _(layer: plugin)_ _(points: 15)_
 9. [x] **Task 9** — Thin `committer`'s `commit_prefix`, `push` and record arguments, and replace its caller table with a pointer _(layer: plugin)_ _(points: 15)_
 10. [x] **Task 10** — Thin `committer`'s `## Commit-message policy`, keeping every wire template _(layer: plugin)_ _(points: 20)_
-11. [ ] **Task 11** — Thin `committer`'s argument guard, mode routing and standard procedure steps 1–6 _(layer: plugin)_ _(points: 20)_
+11. [x] **Task 11** — Thin `committer`'s argument guard, mode routing and standard procedure steps 1–6 _(layer: plugin)_ _(points: 20)_
 12. [ ] **Task 12** — Thin `committer`'s `ui_test_pass` procedure to its own steps, and its `## Output contract` _(layer: plugin)_ _(points: 15)_
 13. [ ] **Task 13** — Measure the three definitions after the thinning and record the result in the story index _(layer: general)_ _(points: 10)_
 
