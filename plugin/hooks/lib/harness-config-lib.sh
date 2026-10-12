@@ -461,8 +461,8 @@ hc_clean_piece_line() {
 #
 #   * Ignoring the depth-0 `)` is what keeps an ordinary parenthesis harmless.
 #     A count does not work in either direction: an equality test refuses
-#     `sed -E "s/(a|b)/x/" f.txt` (zero `$(`, one `)`) and stalls an unattended
-#     run on a prompt it cannot answer, while a "more opens than closes" test is
+#     `sed -E "s/(a|b)/x/" f.txt` (zero `$(`, one `)`) and is refused in an
+#     unattended run, while a "more opens than closes" test is
 #     offset by a regex group's `)` — `sed "s/(a)(b)/x/" $(rm -rf <dir>` counts
 #     one open against two closes and reads as balanced.
 #   * Tracking depth is what catches a NESTED, CLOSED substitution inside the

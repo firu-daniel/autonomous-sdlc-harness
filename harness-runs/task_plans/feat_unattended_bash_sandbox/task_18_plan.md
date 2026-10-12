@@ -49,3 +49,5 @@
 - `bash -n plugin/hooks/autonomous-protected-branch-guard.sh` and `bash -n plugin/hooks/git-commit-branch-guard.sh`, one plain command each, exit 0.
 - Re-run derivation entry G's two commands with `-n` in place of `-l`, pathspec `plugin/hooks`. Every remaining hit must be a line this file lists as kept. Re-run derivation entry H's first step and read each `plugin/hooks` hit with its whole sentence; none may meet entry G's `change` rule.
 - `git diff --stat` shows comment-only changes in the `.sh` files. Read the diff and confirm no line outside a `#` comment changed.
+
+- **Deviations from plan:** `plugin/hooks/README.md` 39 and `git-commit-branch-guard.sh` item 2 read *"in an unattended run, under the default `dontAsk` mode, that `ask` is refused at once, so the commit does not land"* — the plan's two wordings differed (README lacked the commit clause), and its own Goal requires the canonical restatement to state the default; the two now carry identical words. The `(the stall escape)` label was relabelled: `git grep -n "stall escape" -- plugin docs cli` returned only the guard's own row.
