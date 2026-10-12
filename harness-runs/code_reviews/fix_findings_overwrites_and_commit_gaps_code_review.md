@@ -37,7 +37,7 @@ Each entry resolves to `harness-runs/code_reviews/fix_findings_overwrites_and_co
 1. [x] **Finding 4** — Correct the heading level of `Override L`'s three `Override D` / `Override E` citations. _(layer: plugin)_
 2. [x] **Finding 1** — Restate E.2's blocked-remainder Round PASS in the user-review core's `### QA.1+` closing paragraph. _(layer: plugin)_
 3. [x] **Finding 3** — Make qa-tester's PASS priority turn on "no part blocked", and stop the setup sub-bullet asking for a note a PASS cannot carry. _(layer: plugin)_
-4. [ ] **Finding 2** — Let both D.2 QA bullets derive the blocked clause off `<ui_test_index>` when the session did not walk the passing round. _(layer: plugin)_
+4. [x] **Finding 2** — Let both D.2 QA bullets derive the blocked clause off `<ui_test_index>` when the session did not walk the passing round. _(layer: plugin)_
 
 ---
 
