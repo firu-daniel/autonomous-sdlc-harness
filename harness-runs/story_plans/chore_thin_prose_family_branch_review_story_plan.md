@@ -56,7 +56,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_bran
 7. [x] **Task 7** — Thin `review-plan-reviewer`'s intro, `## Invocation contract`, `## Read first` and `## Process` _(layer: plugin)_ _(points: 15)_
 8. [x] **Task 8** — Thin `review-plan-reviewer`'s `## What to check`, `### False positives` and `### Missed checks` _(layer: plugin)_ _(points: 15)_
 9. [x] **Task 9** — Thin `review-plan-reviewer`'s `### Unactionable gates` and parity spot-check _(layer: plugin)_ _(points: 10)_
-10. [ ] **Task 10** — Measure the three definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
+10. [x] **Task 10** — Measure the three definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
@@ -143,6 +143,6 @@ Up-front words are the agent definition plus every plugin file or section it rea
 
 | Agent | Reads counted besides the definition (unchanged) | Before — definition | After — definition | Δ |
 |---|---|---|---|---|
-| branch-reviewer | `plugin/samples/sample_code_review.md`, `plugin/samples/sample_code_review/finding_1.md` | 5884 | | |
-| skeptic-reviewer | `plugin/samples/sample_code_review.md`, `plugin/samples/sample_code_review/finding_1.md` | 5099 | | |
-| review-plan-reviewer | `plugin/samples/sample_code_review.md`, `plugin/samples/sample_code_review/finding_1.md` | 4191 | | |
+| branch-reviewer | `plugin/samples/sample_code_review.md`, `plugin/samples/sample_code_review/finding_1.md` | 5884 | 5183 | -701 |
+| skeptic-reviewer | `plugin/samples/sample_code_review.md`, `plugin/samples/sample_code_review/finding_1.md` | 5099 | 4577 | -522 |
+| review-plan-reviewer | `plugin/samples/sample_code_review.md`, `plugin/samples/sample_code_review/finding_1.md` | 4191 | 3821 | -370 |
