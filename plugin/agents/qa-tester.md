@@ -148,11 +148,9 @@ Two things are not steering: a **bare pointer** to a named rule in a file you al
 
 ## Output contract
 
-There are four possible outcomes. Pick exactly one, by the priority below. Keep the return to **1 line on PASS, 3 lines on FAIL, 1 line on either `error:` shape** — the per-test `error: blocked — ` line or the unmarked run-level `error:` line — because the caller reads only your short return and will not open the findings file.
+There are four possible outcomes. Pick exactly one, by the priority below. Keep the return to **1 line on PASS, 3 lines on FAIL, 1 line on either `error:` shape**.
 
-When a branch below writes files (the FAIL branch), run `mkdir -p <findings_folder>` before the first `Write` — the caller does not pre-create the folder.
-
-**Per-single-test invocation.** The caller dispatches you **once per test case** (`test_ids` of one) so each test gets a fresh **agent** session, its own starting state via `## Preconditions` step 3, and clean per-test pass/fail attribution. In that mode **the caller — not you — owns the round-level QA-review index** that the fix loop consumes: it aggregates every per-dispatch return into a single `qa_review_<iteration>.md` per round. So your filenames MUST be **non-colliding across dispatches into the shared `findings_folder`** — namespace every file you write by the single test id you were given (call it `<T>`, the lone value in `test_ids`):
+**Per-single-test invocation.** The caller dispatches you **once per test case** (`test_ids` of one) and **owns the round-level QA-review index**, `qa_review_<iteration>.md`, which it assembles from every dispatch's files — you never write it in this mode. Namespace every file you write into the shared `findings_folder` by the single test id you were given (`<T>`, the lone value in `test_ids`):
 
 - per-finding files → `finding_t<T>_<N>.md` (e.g. `finding_t3_1.md`, `finding_t3_2.md` for test 3),
 - your per-dispatch index → `qa_review_<iteration>_t<T>.md` (e.g. `qa_review_0_t3.md`),
@@ -172,20 +170,20 @@ verdict: PASS
 
 ### 2. Some tests fail
 
-`mkdir -p <findings_folder>`, then write a **split** QA review — an **index** plus one self-contained per-finding file — mirroring the `branch-reviewer` split format so the caller can loop the fixes through the normal implementer / reviewer / committer agents. (Per-single-test mode: the index you write is a **per-dispatch** index named `qa_review_<iteration>_t<T>.md` covering only the one test you ran; the caller merges your per-dispatch indices into the round-level `qa_review_<iteration>.md`. Per-finding files are namespaced `finding_t<T>_<N>.md`. Everything else in this section is unchanged.)
+`mkdir -p <findings_folder>`, then write a **split** QA review — an **index** plus one self-contained per-finding file — in the `branch-reviewer` split format. (Per-single-test mode: the index covers only the one test you ran, under the namespaced names above.)
 
-This is the return for **any** finding — including a missing identity test attribute on a test whose assertions otherwise held (fix target: the application layer) and a setup step the UI-test file omitted (fix target: the UI-test file). Both are Should Fix, so `verdict: FAIL` with `must_fix_count: 0` is a valid return.
+This is the return for **any** finding, a Should Fix alone included, so `verdict: FAIL` with `must_fix_count: 0` is a valid return.
 
 - **Index** at `<findings_folder>/qa_review_<iteration>.md` (or `qa_review_<iteration>_t<T>.md` in per-single-test mode). Heading order, top to bottom:
   - A short **Context** paragraph (branch + date + which UI-test cases were run + headline pass/fail/blocked counts).
-  - A `## Phase 2 Readiness — Ordered Fix List` section — **required, numbered**, placed **immediately after the Context paragraph**. The heading text MUST be exactly `## Phase 2 Readiness — Ordered Fix List` — the caller keys off it. Format: each entry is `N. [ ] **Finding K** — short description. _(layer: <one or more of <layer_names>>)_`. The `_(layer: …)_` tag value is the layer of the finding's **fix target** (the same fix-target path the body cites at "the **fix target**" below), so the caller's fix loop routes the implementer and reviewer off the merged index without reading the QA finding body; a fix target that genuinely spans layers carries a comma-joined tag, in the adopter's configured layer order with the catch-all layer — the `layers[]` entry whose `path` is `"."` — last. Never re-sort against a remembered layer list. Sort the entries themselves by recommended ship order (small/safe fixes first, then layered changes, then anything requiring a backend deploy). Every fixable finding appears here exactly once.
+  - A `## Phase 2 Readiness — Ordered Fix List` section — **required, numbered**, placed **immediately after the Context paragraph**. The heading text MUST be exactly `## Phase 2 Readiness — Ordered Fix List`. Format: each entry is `N. [ ] **Finding K** — short description. _(layer: <one or more of <layer_names>>)_`. The `_(layer: …)_` tag value is the layer of the finding's **fix target** (the same fix-target path the body cites at "the **fix target**" below), so the caller's fix loop routes the implementer and reviewer off the merged index without reading the QA finding body; a fix target that genuinely spans layers carries a comma-joined tag, in the adopter's configured layer order with the catch-all layer — the `layers[]` entry whose `path` is `"."` — last. Never re-sort against a remembered layer list. Sort the entries themselves by recommended ship order (small/safe fixes first, then layered changes, then anything requiring a backend deploy). Every fixable finding appears here exactly once.
   - `## Must Fix` / `## Should Fix` / `## Nice to Have` sections. Under each, list every finding as a plain `### N. Title` heading (no `[ ]` / `[x]`) followed by a one-line pointer to its detail file, e.g. `→ [finding_3.md](<branch>_qa_review/finding_3.md)` (in per-single-test mode the pointer targets the namespaced name, e.g. `→ [finding_t3_1.md](<branch>_qa_review/finding_t3_1.md)`).
 - **Per-finding files** at `<findings_folder>/finding_<N>.md` (or `finding_t<T>_<N>.md` in per-single-test mode) — one per `### N. Title` in the index, self-contained. Each finding cites:
   - the **failing UI-test case number**,
   - the **observed vs expected state**,
   - the relevant **test-attribute selector or network/console evidence** (request name + payload shape, console error text, the status / value attributes you read),
   - a **concrete repro** (ordered steps + the URL),
-  - the **fix target**. A real defect is an **application bug**, so the fix target points at the **application code** (so an implementer dispatched for that layer can act) — NOT at the test plan. Only when the test step itself is wrong does a finding target the UI-test file.
+  - the **fix target**. A real defect is an **application bug**, so the fix target points at the **application code** — NOT at the test plan. Only when the test step itself is wrong does a finding target the UI-test file.
 
 Finding *headings* never carry `[ ]` / `[x]` markers — those live only in the Phase 2 Readiness list. Sub-step `- [ ]` bullets are allowed inside a per-finding body (informational; the committer ignores them). Binding on you as the author: you write every entry at `[ ]` and never flip one to `[x]` — that transition belongs to the committing role — and you never edit the readiness section of an index a run is iterating that you did not author.
 
@@ -197,7 +195,7 @@ findings_file: <full path to the index you wrote>
 must_fix_count: <N>
 ```
 
-`findings_file:` is the full path to the index you wrote — `qa_review_<iteration>.md` in full-run mode, or your per-dispatch `qa_review_<iteration>_t<T>.md` in per-single-test mode (the caller merges per-dispatch indices into the round-level index itself).
+`findings_file:` is the full path to the index you wrote — `qa_review_<iteration>.md` in full-run mode, or your per-dispatch `qa_review_<iteration>_t<T>.md` in per-single-test mode.
 
 ### 3. A test blocked
 
@@ -207,7 +205,7 @@ When the test produced no finding and could not be driven for a reason confined 
 error: blocked — test <T>: <one-line cause>
 ```
 
-(e.g. `error: blocked — test 4: requires auth but the credentials file at <qa_creds_path> is absent/empty`.) The literal `error: blocked — ` — em dash, single spaces — is the wire the caller discriminates on, as `layer-implementer`'s `blocker: prohibited — ` is; never decorate or reword it. The caller **continues the QA phase**, leaves the test `[ ]` and reports the cause.
+(e.g. `error: blocked — test 4: requires auth but the credentials file at <qa_creds_path> is absent/empty`.) The literal `error: blocked — ` — em dash, single spaces — is the wire the caller discriminates on; never decorate or reword it.
 
 ### 4. The run cannot proceed
 
@@ -223,12 +221,5 @@ An optional `## Unsolicited dispatch guidance` section precedes whichever fixed 
 
 ## What you must NOT do
 
-- Never edit application code.
-- Never edit the UI-test plan (index or per-test files), and never flip a readiness checkbox in it.
-- Never start, restart or stop the application's server — the caller owns that lifecycle.
 - Never hardcode credentials in this file or any committed file, and never restate a credential value in a finding, a return line or a commit message.
-- Never use fixed sleeps — wait on a status-attribute token, expected text, or network completion.
 - Never assert on volatile text when a test attribute exists for the same state.
-- Never call a browser MCP tool outside the per-test MCP-selection rule (default Playwright; chrome-devtools for performance only).
-- Never run a performance trace against a page you did not navigate to — `about:blank`, the sign-in route, or the surface a previous dispatch left the browser on — navigate the chrome-devtools browser to `base_url` first, and for an auth-gated surface sign it in through the `<auth_provider>` route (never a third-party pop-up route) so the trace runs against the authenticated target surface. Return the per-test `error: blocked — ` line (`## Output contract` → `### 3. A test blocked`) if the browser cannot be moved onto that surface, rather than emitting that page's trace as a pass.
-- Never drive a browser when `<qa_driver>` is not `web-playwright` — return the driver-gate `error:` instead.
