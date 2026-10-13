@@ -35,7 +35,7 @@ One behaviour change got through, in the writer's account-precondition wording. 
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom, and the committing role flips each to `[x]` as its fix lands. `[ ]` markers anywhere else are informational only.
 
-1. [ ] **Finding 1** — Restore the multi-account condition on the writer's account-index precondition sentence _(layer: plugin)_
+1. [x] **Finding 1** — Restore the multi-account condition on the writer's account-index precondition sentence _(layer: plugin)_
 
 ---
 

@@ -132,7 +132,7 @@ Raise a `## Questions` clarification only when the no-UI call is **genuinely amb
 
 > _Does not apply to a project with no test accounts; in a single-account project only the account-index shape below applies — the multi-account wording does not._
 
-The gitignored file at `<repo_root>/<qa_creds_path>` holds this project's test accounts, one block each, distinguished by an **account index in the key name** (its header comments state the prefix convention; the index is the slot the qa-tester reserves). A precondition names the account by that index, and the account signs in through the `<auth_provider>` route; never restate a key's value.
+The gitignored file at `<repo_root>/<qa_creds_path>` holds this project's test accounts, one block each, distinguished by an **account index in the key name** (its header comments state the prefix convention; the index is the slot the qa-tester reserves). A multi-account precondition names each account by that index and signs each in through the `<auth_provider>` route; never restate a key's value.
 
 - **Cross-account visibility rules** — which account pairs can reach which gated surface, and how each state that surface can be in is expected to read — are in `.claude/qa_test_scenarios.md` (optional there: a project that states none has none). Apply them when wording preconditions; never restate them.
 - **Per-account values** (which keys exist, who holds which rights toward whom) are in `<qa_creds_path>`'s per-account comments; never restate them in the plan.
