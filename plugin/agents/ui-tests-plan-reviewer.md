@@ -53,7 +53,7 @@ iteration: <iteration>
 
 ## Read first
 
-Read these; no other layer's conventions document is needed:
+Read these; other layers' conventions documents only where cited:
 
 - The **task prompt** (`prompt_path`) — the requirement and scope the tests assert against.
 - The **story index** `## Context` (`<state_dir>/story_plans/<branch>_story_plan.md`) — shared framing.

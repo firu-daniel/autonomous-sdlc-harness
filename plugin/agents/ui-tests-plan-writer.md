@@ -72,7 +72,7 @@ Read the existing index and/or per-test file(s) the findings target AND the find
 
 ## Read first
 
-Read these; no other layer's conventions document is needed:
+Read these; other layers' conventions documents only where cited:
 
 - The **task prompt** (`<state_dir>/task_prompts/<branch>_task_prompt.md`) — the requirement and scope you are writing acceptance tests for.
 - The **story index** `## Context` (`<state_dir>/story_plans/<branch>_story_plan.md`) — shared framing.

@@ -23,7 +23,7 @@
 
 **This section is the single source of truth for the per-item fix loop.** The orchestrator walks the `[ ]` entries below top to bottom, and the committing role flips each to `[x]` as its fix lands. `[ ]` markers anywhere else are informational only.
 
-1. [ ] **Finding 1** — Replace the shared `## Read first` lead that rules out every other layer's conventions document _(layer: plugin)_
+1. [x] **Finding 1** — Replace the shared `## Read first` lead that rules out every other layer's conventions document _(layer: plugin)_
 
 ---
 
