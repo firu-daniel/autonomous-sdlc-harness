@@ -941,6 +941,53 @@ test('a jq whose version string is unrecognizable warns and leaves the exit stat
   assert.match(stdout, CLEAN_SUMMARY);
 });
 
+/**
+ * A temp directory holding a `git` that prints one chosen line for `git --version` and hands every
+ * other call to the real git, to be put **first** on `PATH` — so the version floor is graded on a
+ * real executable while every repository check keeps answering from the real git.
+ *
+ * @param {import('node:test').TestContext} t
+ * @param {string} line what the stub prints for `git --version`.
+ * @returns {Promise<string>} a `PATH` value with the stub ahead of everything else.
+ */
+async function gitVersionStubPath(t, line) {
+  const real = resolveOnPath('git');
+  assert.ok(real, 'git does not resolve on PATH, so a git version stub cannot be built for this test');
+  const dir = await mkdtemp(join(tmpdir(), 'harness-git-stub-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  writeFileSync(
+    join(dir, 'git'),
+    `#!/bin/sh\nif [ "$#" -eq 1 ] && [ "$1" = --version ]; then printf '%s\\n' ${JSON.stringify(line)}; exit 0; fi\nexec ${JSON.stringify(real)} "$@"\n`,
+    { mode: 0o755 },
+  );
+  return `${dir}${delimiter}${process.env.PATH ?? ''}`;
+}
+
+test('a git at or above the 2.38 floor passes and names the version', async (t) => {
+  const dir = await wiredFixture(t);
+  const PATH = await gitVersionStubPath(t, 'git version 2.38.0');
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor'], { PATH });
+
+  assert.equal(status, 0, `doctor exited ${status} with a git at the floor\n${stdout}\n${stderr}`);
+  assert.match(stdout, passLine('git'));
+  assert.match(stdout, /git 2\.38 answered/);
+});
+
+test('a git below the 2.38 floor warns, names refresh-branch.sh, and leaves the exit status at 0', async (t) => {
+  const dir = await wiredFixture(t);
+  const PATH = await gitVersionStubPath(t, 'git version 2.37.9');
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor'], { PATH });
+
+  // A warning: only the stale-base repair needs the floor, so a run still starts on this git.
+  assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+  assert.match(stderr, warnLine('git'));
+  assert.match(stderr, /2\.37/);
+  assert.match(stderr, /refresh-branch\.sh/);
+  assert.match(stderr, /merge-tree --write-tree/);
+});
+
 test('the jq check answers the same in a repository whose config is gone', async (t) => {
   const dir = await wiredFixture(t);
   await rm(join(dir, CONFIG_FILE));

@@ -22,23 +22,32 @@
  * checks' own `git -C / config --file` reads — after every check has read them, before any git
  * call that could honour them. `push-branch.sh` then pushes the real branch to the real origin
  * with no payload run, the worktree's `.git` pointer, its record's `commondir` and its
- * `config.worktree` all rewritten; `refresh-branch.sh` merges the real base with the `.git`
- * pointer rewritten, and runs no payload with the `commondir` rewritten. A rewritten
- * `config.worktree` is not staged for the refresh: its merge still reads that file, which only the
- * permission profile protects.
+ * `config.worktree` all rewritten; `refresh-branch.sh` merges the real base into the real branch
+ * with the `.git` pointer (j) or the `commondir` (k) rewritten, runs no `core.fsmonitor` planted in
+ * `config.worktree` on the merge path (k2) or the conflict path (k3), and moves only
+ * `refs/heads/<branch>` when the record's `HEAD` is flipped to another branch (k4) — every refresh
+ * call runs against `<main>/.git` with only the worktree's index and files borrowed.
  *
  * **A remote whose URL the main `.git/config` does not name is refused** by both wrappers, so a
  * legacy `.git/remotes/origin` a sandboxed command planted never names the repository they push to
  * or fetch from (cases (l) and (m)). **The refresh's clean-tree test never runs git inside a nested
  * repository at a gitlink** (case (n)): without `--ignore-submodules` git would, under that
- * repository's own sandbox-writable configuration.
+ * repository's own sandbox-writable configuration. **Neither wrapper recurses into a submodule
+ * under a `submodule.recurse` in the main configuration** (cases (o) and (o2)): the refresh's
+ * `read-tree` would check one out, and the push would push one, under its
+ * `<main>/.git/modules/<name>/config`, which the permission profile does not protect.
+ *
+ * **The refresh moves the branch before the working tree, so a moved branch is caught before
+ * anything is written** (case (p)), a working tree that refuses after the branch moved puts the
+ * branch back (case (p2)), and exit 5 is the one state where that put-back fails too (case (p3)) —
+ * each staged by the same `git` shim at the call that opens the window.
  *
  * The fixture is built by hand rather than by `init`, so the git records under test are exactly
  * the ones each case rewrites.
  */
 
 import assert from 'node:assert/strict';
-import { chmod, cp, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -290,9 +299,11 @@ async function evilRepository(f) {
 /**
  * Put a `git` shim first on `PATH` that runs `flip` — a list of `[file, contents]` writes — once,
  * at the first git call that is not a `git -C / config --file` read, then hands every call to the
- * real git. Returns the environment that installs it.
+ * real git. Returns the environment that installs it. `trigger`, a shell `case` pattern matched
+ * against the call's arguments, moves the flip to the first call it matches instead: `*" diff "*`
+ * is the refresh's clean-tree test, the first call after the branch is read.
  */
-async function racingGit(f, flip) {
+async function racingGit(f, flip, trigger) {
   const root = dirname(f.main);
   const realGit = (await runBash(root, ['-c', 'command -v git'])).stdout.trim();
   const bin = join(root, 'shim-bin');
@@ -306,7 +317,9 @@ async function racingGit(f, flip) {
   const done = join(root, 'flip-done');
   await writeFile(
     join(bin, 'git'),
-    `#!/bin/sh\nif [ ! -e '${done}' ] && [ "$1 $2" != "-C /" ]; then : > '${done}'; /bin/sh '${flipScript}'; fi\nexec '${realGit}' "$@"\n`,
+    trigger === undefined
+      ? `#!/bin/sh\nif [ ! -e '${done}' ] && [ "$1 $2" != "-C /" ]; then : > '${done}'; /bin/sh '${flipScript}'; fi\nexec '${realGit}' "$@"\n`
+      : `#!/bin/sh\nif [ ! -e '${done}' ]; then case " $* " in ${trigger}) : > '${done}'; /bin/sh '${flipScript}' ;; esac; fi\nexec '${realGit}' "$@"\n`,
   );
   await chmod(join(bin, 'git'), 0o755);
   return { PATH: `${bin}:${process.env.PATH}`, flipped: async () => (await readdir(root)).includes('flip-done') };
@@ -361,9 +374,88 @@ test('(k) refresh-branch.sh: a commondir rewritten after its checks never brings
     PATH: race.PATH,
   });
   assert.ok(await race.flipped(), `the shim never ran\n${output(result)}`);
-  // The record's commondir still steers git's ref store (a residual the permission profile covers),
-  // so the outcome is not asserted; that nothing from the other repository's configuration or hooks
-  // ran is.
+  // Every refresh call runs against <main>/.git, so the record's commondir is never followed: the
+  // real base is merged into the real branch, and nothing from the other repository ran.
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /^refresh-branch\.sh: merged origin\/trunk into feat_w$/m, output(result));
+  const merged = await runBash(f.main, ['-c', 'git merge-base --is-ancestor refs/remotes/origin/trunk refs/heads/feat_w']);
+  assert.equal(merged.status, 0, `feat_w does not contain origin/trunk\n${output(result)}`);
+  assert.deepEqual(await f.markers(), [], output(result));
+});
+
+/** A program that leaves the marker `fsmonitor` and fails, for a planted `core.fsmonitor`. */
+async function fsmonitorMarker(f) {
+  const root = dirname(f.main);
+  const file = join(root, 'fsmonitor-marker.sh');
+  await writeFile(file, `#!/bin/sh\n: > '${join(root, 'markers', 'fsmonitor')}'\nexit 1\n`);
+  await chmod(file, 0o755);
+  return file;
+}
+
+/** The worktree behind origin's trunk on a commit of its own, so the refresh builds a merge commit. */
+async function behind(f) {
+  await runGit(f.wt, ['reset', '--quiet', '--hard', 'origin/trunk~1']);
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', 'fixture: behind']);
+}
+
+test('(k2) refresh-branch.sh: a core.fsmonitor written to config.worktree after its checks never runs, and the base is merged', async (t) => {
+  const f = await fixture(t);
+  await behind(f);
+  const monitor = await fsmonitorMarker(f);
+  const race = await racingGit(
+    f,
+    [[join(f.record, 'config.worktree'), `[core]\n\thooksPath = ${join(f.wt, 'githooks')}\n\tfsmonitor = ${monitor}\n`]],
+    '*" diff "*',
+  );
+  const result = await runBash(dirname(f.main), [join(f.main, 'scripts', 'refresh-branch.sh'), f.wt], {
+    PATH: race.PATH,
+  });
+  assert.ok(await race.flipped(), `the shim never ran\n${output(result)}`);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /^refresh-branch\.sh: merged origin\/trunk into feat_w$/m, output(result));
+  assert.deepEqual(await f.markers(), [], output(result));
+});
+
+test('(k3) refresh-branch.sh: a core.fsmonitor in config.worktree never runs on the conflict path either', async (t) => {
+  const f = await fixture(t);
+  await runGit(f.wt, ['reset', '--quiet', '--hard', 'origin/trunk~1']);
+  // origin's trunk adds base.txt; adding it here too, differently, is an add/add conflict.
+  await writeFile(join(f.wt, 'base.txt'), 'not the base\n');
+  await runGit(f.wt, ['add', 'base.txt']);
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-m', 'fixture: conflicting base.txt']);
+  const wtHead = await f.head(f.wt);
+  const monitor = await fsmonitorMarker(f);
+  const race = await racingGit(
+    f,
+    [[join(f.record, 'config.worktree'), `[core]\n\thooksPath = ${join(f.wt, 'githooks')}\n\tfsmonitor = ${monitor}\n`]],
+    '*" diff "*',
+  );
+  const result = await runBash(dirname(f.main), [join(f.main, 'scripts', 'refresh-branch.sh'), f.wt], {
+    PATH: race.PATH,
+  });
+  assert.ok(await race.flipped(), `the shim never ran\n${output(result)}`);
+  assert.equal(result.status, 4, output(result));
+  assert.equal((await runGit(f.main, ['rev-parse', 'refs/heads/feat_w'])).stdout.trim(), wtHead);
+  assert.deepEqual(await f.markers(), [], output(result));
+});
+
+test('(k4) refresh-branch.sh: a worktree HEAD flipped to another branch after the read moves only refs/heads/<branch>', async (t) => {
+  const f = await fixture(t);
+  await behind(f);
+  const refs = async () =>
+    (await runGit(f.main, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads/trunk', 'refs/heads/feat_main']))
+      .stdout;
+  const before = await refs();
+  const race = await racingGit(f, [[join(f.record, 'HEAD'), 'ref: refs/heads/feat_main\n']], '*" diff "*');
+  const result = await runBash(dirname(f.main), [join(f.main, 'scripts', 'refresh-branch.sh'), f.wt], {
+    PATH: race.PATH,
+  });
+  assert.ok(await race.flipped(), `the shim never ran\n${output(result)}`);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /^refresh-branch\.sh: merged origin\/trunk into feat_w$/m, output(result));
+  assert.equal(await refs(), before);
+  const merged = await runBash(f.main, ['-c', 'git merge-base --is-ancestor refs/remotes/origin/trunk refs/heads/feat_w']);
+  assert.equal(merged.status, 0, `feat_w does not contain origin/trunk\n${output(result)}`);
   assert.deepEqual(await f.markers(), [], output(result));
 });
 
@@ -425,4 +517,160 @@ test('(n) refresh-branch.sh never runs git inside a nested repository planted at
   const result = await f.refresh(f.wt);
   assert.doesNotMatch(result.stderr, REFRESH_REFUSED, output(result));
   assert.deepEqual(await f.markers(), [], output(result));
+});
+
+/**
+ * A real submodule `sm` in the main checkout, its git directory at `<main>/.git/modules/sm` — a
+ * directory the permission profile does not write-protect — recorded on origin's `trunk` at its
+ * first commit, with the worktree reset onto that `trunk` and one commit ahead of it. The main
+ * configuration sets `submodule.recurse`, so any wrapper call that honoured it would run git inside
+ * the submodule under that directory's configuration.
+ */
+async function withSubmodule(f) {
+  const root = dirname(f.main);
+  const source = join(root, 'sm-source');
+  await mkdir(source);
+  const id = ['-c', 'user.email=fixture@example.invalid', '-c', 'user.name=Harness Fixture'];
+  await runGit(source, ['init', '--quiet', '-b', 'main']);
+  await runGit(source, [...id, 'commit', '--quiet', '--allow-empty', '-m', 'sm: c1']);
+  const c1 = (await runGit(source, ['rev-parse', 'HEAD'])).stdout.trim();
+  await runGit(source, [...id, 'commit', '--quiet', '--allow-empty', '-m', 'sm: c2']);
+  const c2 = (await runGit(source, ['rev-parse', 'HEAD'])).stdout.trim();
+  const sm = join(f.main, 'sm');
+  await runGit(f.main, ['-c', 'protocol.file.allow=always', 'submodule', 'add', '--quiet', source, 'sm']);
+  await runGit(sm, ['checkout', '--quiet', c1]);
+  await runGit(f.main, ['add', 'sm']);
+  await runGit(f.main, ['commit', '--quiet', '--no-verify', '-m', 'fixture: add sm']);
+  await runGit(f.main, ['push', '--quiet', '--no-verify', 'origin', 'HEAD:refs/heads/trunk']);
+  await runGit(f.wt, ['reset', '--quiet', '--hard', 'origin/trunk']);
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', 'fixture: work']);
+  await runGit(f.main, ['config', 'submodule.recurse', 'true']);
+  return { sm, c2, modules: join(f.main, '.git', 'modules', 'sm', 'config'), id };
+}
+
+test('(o) refresh-branch.sh never checks out a submodule under submodule.recurse, so its fsmonitor never runs', async (t) => {
+  const f = await fixture(t);
+  const { sm, c2, modules } = await withSubmodule(f);
+  // The base bumps the gitlink: a recursing read-tree would check the submodule out.
+  await runGit(sm, ['checkout', '--quiet', c2]);
+  await runGit(f.main, ['add', 'sm']);
+  await runGit(f.main, ['commit', '--quiet', '--no-verify', '-m', 'fixture: bump sm']);
+  await runGit(f.main, ['push', '--quiet', '--no-verify', 'origin', 'HEAD:refs/heads/trunk']);
+  await runGit(f.main, ['config', '--file', modules, 'core.fsmonitor', await fsmonitorMarker(f)]);
+  const result = await f.refresh(f.wt);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /^refresh-branch\.sh: merged origin\/trunk into feat_w$/m, output(result));
+  const merged = await runBash(f.main, ['-c', 'git merge-base --is-ancestor refs/remotes/origin/trunk refs/heads/feat_w']);
+  assert.equal(merged.status, 0, `feat_w does not contain origin/trunk\n${output(result)}`);
+  assert.deepEqual(await f.markers(), [], output(result));
+});
+
+test('(o2) push-branch.sh never pushes a submodule under submodule.recurse, so its configuration never runs', async (t) => {
+  const f = await fixture(t);
+  const { sm, modules, id } = await withSubmodule(f);
+  // A submodule commit its own remote lacks, recorded on feat_w: an on-demand push would push it,
+  // to the URL and with the SSH command the submodule's configuration names.
+  await runGit(sm, [...id, 'commit', '--quiet', '--allow-empty', '-m', 'sm: c3']);
+  const c3 = (await runGit(sm, ['rev-parse', 'HEAD'])).stdout.trim();
+  await runGit(sm, ['branch', 'feat_w']);
+  await runGit(f.wt, ['update-index', '--cacheinfo', `160000,${c3},sm`]);
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-m', 'fixture: bump sm']);
+  const ssh = join(dirname(f.main), 'sm-ssh.sh');
+  await writeFile(ssh, `#!/bin/sh\n: > '${join(dirname(f.main), 'markers', 'sm-ssh')}'\nexit 1\n`);
+  await chmod(ssh, 0o755);
+  await runGit(f.main, ['config', '--file', modules, 'core.sshCommand', ssh]);
+  await runGit(f.main, ['config', '--file', modules, 'remote.origin.url', 'ssh://harness.invalid/sm.git']);
+  const result = await f.push(f.wt);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /^push-branch\.sh: pushed feat_w to origin$/m, output(result));
+  assert.equal(await f.originTip('feat_w'), await f.head(f.wt));
+  assert.deepEqual(await f.markers(), [], output(result));
+});
+
+/**
+ * The worktree behind origin's `trunk` (which adds `base.txt`) on a commit of its own, plus what a
+ * refresh must leave alone when it refuses: the branch tip, the index bytes and the tracked status.
+ */
+async function refreshState(f) {
+  const index = join(f.record, 'index');
+  return {
+    tip: async () => (await runGit(f.main, ['rev-parse', 'refs/heads/feat_w'])).stdout.trim(),
+    index: async () => readFile(index),
+    status: async () => (await runGit(f.wt, ['status', '--porcelain', '--untracked-files=all'])).stdout,
+  };
+}
+
+test('(p) refresh-branch.sh: a branch moved before its update-ref exits 1 with nothing written', async (t) => {
+  const f = await fixture(t);
+  await behind(f);
+  const s = await refreshState(f);
+  const oldTip = await s.tip();
+  // Another writer's commit on feat_w, landing after the merge was built and before the ref moves.
+  const tree = (await runGit(f.main, ['rev-parse', `${oldTip}^{tree}`])).stdout.trim();
+  const moved = (
+    await runGit(f.main, ['commit-tree', tree, '-p', oldTip, '-m', 'fixture: another writer'])
+  ).stdout.trim();
+  const indexBefore = await s.index();
+  const statusBefore = await s.status();
+  // A working tree updated and then put back still leaves a trace: base.txt created and removed
+  // again moves the directory's own modification time.
+  const dirBefore = (await stat(f.wt, { bigint: true })).mtimeNs;
+  const race = await racingGit(f, [[join(f.main, '.git', 'refs', 'heads', 'feat_w'), `${moved}\n`]], '*" update-ref "*');
+  const result = await runBash(dirname(f.main), [join(f.main, 'scripts', 'refresh-branch.sh'), f.wt], {
+    PATH: race.PATH,
+  });
+  assert.ok(await race.flipped(), `the shim never ran\n${output(result)}`);
+  assert.equal(result.status, 1, output(result));
+  assert.match(result.stderr, /'feat_w' moved while it was being refreshed, or its ref could not be locked \(see output above\) — nothing was merged, working copy unchanged/, output(result));
+  assert.equal(await s.tip(), moved);
+  assert.deepEqual(await s.index(), indexBefore);
+  assert.equal(await s.status(), statusBefore);
+  assert.equal(await readdir(f.wt).then((names) => names.includes('base.txt')), false);
+  assert.equal((await stat(f.wt, { bigint: true })).mtimeNs, dirBefore, 'the working tree was written');
+});
+
+test('(p2) refresh-branch.sh: a working tree that refuses after the ref moved puts the branch back and exits 1', async (t) => {
+  const f = await fixture(t);
+  await behind(f);
+  const s = await refreshState(f);
+  const oldTip = await s.tip();
+  const indexBefore = await s.index();
+  // An untracked base.txt appearing after the dry run: the real read-tree refuses to overwrite it.
+  const race = await racingGit(f, [[join(f.wt, 'base.txt'), 'untracked\n']], '*" read-tree --no-recurse-submodules -m "*');
+  const result = await runBash(dirname(f.main), [join(f.main, 'scripts', 'refresh-branch.sh'), f.wt], {
+    PATH: race.PATH,
+  });
+  assert.ok(await race.flipped(), `the shim never ran\n${output(result)}`);
+  assert.equal(result.status, 1, output(result));
+  assert.match(result.stderr, /'feat_w' was put back where it was, nothing was merged/, output(result));
+  assert.equal(await s.tip(), oldTip);
+  assert.deepEqual(await s.index(), indexBefore);
+  assert.equal(await readFile(join(f.wt, 'base.txt'), 'utf8'), 'untracked\n');
+});
+
+test('(p3) refresh-branch.sh: exit 5 when the working tree refuses and the branch cannot be put back', async (t) => {
+  const f = await fixture(t);
+  await behind(f);
+  const s = await refreshState(f);
+  const oldTip = await s.tip();
+  const tree = (await runGit(f.main, ['rev-parse', `${oldTip}^{tree}`])).stdout.trim();
+  const moved = (
+    await runGit(f.main, ['commit-tree', tree, '-p', oldTip, '-m', 'fixture: another writer'])
+  ).stdout.trim();
+  const race = await racingGit(
+    f,
+    [
+      [join(f.wt, 'base.txt'), 'untracked\n'],
+      [join(f.main, '.git', 'refs', 'heads', 'feat_w'), `${moved}\n`],
+    ],
+    '*" read-tree --no-recurse-submodules -m "*',
+  );
+  const result = await runBash(dirname(f.main), [join(f.main, 'scripts', 'refresh-branch.sh'), f.wt], {
+    PATH: race.PATH,
+  });
+  assert.ok(await race.flipped(), `the shim never ran\n${output(result)}`);
+  assert.equal(result.status, 5, output(result));
+  assert.match(result.stderr, /putting 'feat_w' back failed too/, output(result));
+  assert.equal(await s.tip(), moved);
+  assert.equal(await readFile(join(f.wt, 'base.txt'), 'utf8'), 'untracked\n');
 });

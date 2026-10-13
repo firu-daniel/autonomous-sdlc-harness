@@ -246,7 +246,7 @@ export function protectedPaths({
     {
       path: join(repoRoot, GIT_DIR, GIT_WORKTREES, '*', GIT_CONFIG_WORKTREE),
       kind: 'file',
-      reason: "every git call in that worktree reads it, the unsandboxed refresh's merge included",
+      reason: "every git call made in that worktree reads it, the run watcher's included",
     },
     {
       path: join(glob, GIT_DIR),

@@ -521,6 +521,17 @@ const JQ_MIN_MINOR = 5;
  */
 const JQ_VERSION_PATTERN = /(\d+)\.(\d+)/;
 
+/**
+ * The oldest git `refresh-branch.sh` runs on: it builds its merge with `git merge-tree
+ * --write-tree`, which git 2.38 introduced, and refuses on anything older (that script's header →
+ * `THE MERGE IS BUILT FROM PLUMBING`). Nothing else the harness ships needs it.
+ */
+const GIT_MIN_MAJOR = 2;
+const GIT_MIN_MINOR = 38;
+
+/** The `<major>.<minor>` in `git --version`'s `git version 2.50.1 (Apple Git-155)`. */
+const GIT_VERSION_PATTERN = /git version (\d+)\.(\d+)/;
+
 /** How much of a probe's own output a detail quotes back before it elides the rest. */
 const PROBE_OUTPUT_CAP = 60;
 
@@ -802,17 +813,57 @@ export function buildCheckContext(
   };
 }
 
-/** Is this repository inside a work tree at all — the precondition every repo-wiring check has. */
+/**
+ * Is this repository inside a work tree at all — the precondition every repo-wiring check has — and
+ * is git at or above {@link GIT_MIN_MAJOR}.{@link GIT_MIN_MINOR}?
+ *
+ * The version floor is a `warn`, never a `fail`: one shipped script, `refresh-branch.sh`, refuses
+ * below it, and every other one works, so a run starts and parks cleanly on an older git and only
+ * the stale-base repair is out of reach. `git --version` not answering, or answering with a string
+ * this check cannot parse, warns too, in {@link JQ_CHECK}'s manner, since git demonstrably resolved
+ * the repository root.
+ */
 const GIT_CHECK: Check = {
   id: 'git',
-  title: 'git is available and the current directory is inside a work tree',
-  run: (ctx) =>
-    ctx.repoRoot === undefined
-      ? fail(
-          ctx.repoProblem ??
-            `the repository root of ${ctx.cwd} could not be resolved, so there is no repository to check`,
-        )
-      : pass(`git answered, and ${ctx.cwd} is inside the work tree rooted at ${ctx.repoRoot}`),
+  title: `git is available and the current directory is inside a work tree; warns below ${GIT_MIN_MAJOR}.${GIT_MIN_MINOR}`,
+  run: (ctx) => {
+    if (ctx.repoRoot === undefined) {
+      return fail(
+        ctx.repoProblem ??
+          `the repository root of ${ctx.cwd} could not be resolved, so there is no repository to check`,
+      );
+    }
+    const located = `${ctx.cwd} is inside the work tree rooted at ${ctx.repoRoot}`;
+    const floor = `${GIT_MIN_MAJOR}.${GIT_MIN_MINOR}`;
+    let output: string;
+    try {
+      output = execFileSync('git', ['--version'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: JQ_PROBE_TIMEOUT_MS,
+        windowsHide: true,
+      });
+    } catch (error) {
+      return warn(
+        `${located}, but \`git --version\` did not answer (${messageOf(error)}), so the ${floor} floor refresh-branch.sh needs could not be checked — run \`git --version\` yourself`,
+      );
+    }
+    const printed = firstLine(output);
+    const parsed = GIT_VERSION_PATTERN.exec(printed);
+    if (parsed === null) {
+      return warn(
+        `${located}, and \`git --version\` printed ${JSON.stringify(printed)}, which carries no version number this check recognises, so the ${floor} floor refresh-branch.sh needs could not be checked — compare it by hand`,
+      );
+    }
+    const major = Number(parsed[1]);
+    const minor = Number(parsed[2]);
+    if (major < GIT_MIN_MAJOR || (major === GIT_MIN_MAJOR && minor < GIT_MIN_MINOR)) {
+      return warn(
+        `${located}, but git is ${major}.${minor} (\`git --version\` printed ${JSON.stringify(printed)}), older than ${floor}: refresh-branch.sh builds its merge with \`git merge-tree --write-tree\` and refuses on this git, so a stale working copy cannot be refreshed through it — every other script works. Install git ${floor} or newer`,
+      );
+    }
+    return pass(`git ${major}.${minor} answered, at or above the ${floor} floor, and ${located}`);
+  },
 };
 
 /**

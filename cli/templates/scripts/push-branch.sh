@@ -41,18 +41,25 @@
 #
 # A BRANCH ITS REMOTE DELETED STAYS DELETED. A branch this checkout tracks on
 # its remote is never pushed when that remote no longer lists it. It tracks one
-# when `branch.<branch>.merge` is set, or when `refs/remotes/origin/<branch>`
-# resolves; a branch with neither is a first push and is not checked. The remote
-# asked is `branch.<branch>.remote` (else `origin`), for `branch.<branch>.merge`
-# (else `refs/heads/<branch>`), once with `ls-remote --exit-code` before any
-# push attempt. Exit 2 (not listed) skips the push with one line naming the hand
-# push that publishes it again; any other failure is not evidence of a deletion,
-# so the push goes ahead and reports its own result. Reason: Gate 12 round 9,
-# finding 1 — a run stopped because its branch was deleted had that branch
-# re-created by the job's `always()` push step. Accepted costs: a deletion that
-# lands between the `ls-remote` and the push is still pushed back; and a local
-# branch reusing the name of one deleted on origin is not pushed while its stale
-# `refs/remotes/origin/<branch>` survives — the skip line names the hand push.
+# when `branch.<branch>.merge` is `refs/heads/<branch>` — its own name — or when
+# `refs/remotes/<remote>/<branch>` resolves; a branch with neither is a first
+# push and is not checked. A `branch.<branch>.merge` naming another ref is not
+# tracking: `create-worktree.sh` cuts a branch from `origin/<base>`, which
+# leaves it pointing at `refs/heads/<base>` until the first push replaces it
+# (`--set-upstream` is passed whenever it does not name the branch itself). The
+# remote asked is the resolved one below, for `refs/heads/<branch>` — never the
+# base — once with `ls-remote --exit-code` before any push attempt. Exit 2 (not
+# listed) skips the push with one line naming the hand push that publishes it
+# again; any other failure is not evidence of a deletion, so the push goes
+# ahead and reports its own result. Reason: Gate 12 round 9, finding 1 — a run
+# stopped because its branch was deleted had that branch re-created by the
+# job's `always()` push step. Accepted costs: a deletion that lands between the
+# `ls-remote` and the push is still pushed back; a local branch reusing the
+# name of one deleted on origin is not pushed while its stale
+# `refs/remotes/origin/<branch>` survives — the skip line names the hand push;
+# and a branch whose name already exists on the remote while its
+# `branch.<branch>.merge` still names `<base>` has that tracking re-pointed at
+# `refs/heads/<branch>` by its first push, as any first push would.
 #
 # DEFENCE IN DEPTH, NOT THE SOLE GUARD. The caller-agnostic backstop is the
 # committed pre-push hook `init` writes into the configured `githooksDir`, which
@@ -105,10 +112,15 @@
 # `refs/heads/<branch>` — the push an explicit
 # `refs/heads/<branch>:refs/heads/<branch>` refspec — so no worktree record and
 # no `config.worktree` is consulted at all. Upstream tracking lives in the main
-# `.git/config` either way; a first push still sets it.
+# `.git/config` either way; a first push still sets it. The
+# `worktrees/<name>/HEAD` pseudo-ref syntax needs git 2.23 or newer; an older
+# git cannot read it, which lands on the detached-HEAD skip.
 #
 # A REMOTE WITH NO CONFIGURED URL IS REFUSED. The remote is
-# `branch.<branch>.remote`, else `origin`. When the main `.git/config` names no
+# `branch.<branch>.remote`, else `origin`, resolved here and named on the
+# command line, so git's own push-remote choice — `branch.<branch>.pushRemote`
+# and `remote.pushDefault` — is ignored: a fork workflow that pushes somewhere
+# other than the branch's fetch remote is not followed. When the main `.git/config` names no
 # `remote.<remote>.url`, git reads the remote from the legacy
 # `.git/remotes/<remote>` or `.git/branches/<remote>`, both sandbox-writable, and
 # a push to a repository named there runs that repository's `pre-receive` with
@@ -185,7 +197,12 @@
 # as `! [rejected]` (non-fast-forward, fetch first), and never fetches or
 # rebases: a push that lost a race fails loudly, which is the run-control rule
 # of record (docs/github-run-control.md -> "A push that loses a race fails
-# loudly, and is never fetched, rebased or retried").
+# loudly, and is never fetched, rebased or retried"). It never pushes, or
+# inspects, a submodule: the push passes `--no-recurse-submodules` and
+# `-c submodule.recurse=false`, so a `push.recurseSubmodules` or
+# `submodule.recurse` in the main configuration never has git run in a
+# submodule under its `.git/modules/<name>/config`, which a sandboxed command
+# can write.
 #
 # Usage: push-branch.sh [<repo-dir>]
 #        bash <main checkout>/<scripts_dir>/push-branch.sh <worktree>
@@ -425,36 +442,41 @@ if ! hr_remote_url_configured "$main_top" "$remote"; then
 fi
 
 # A BRANCH ITS REMOTE DELETED STAYS DELETED (header). Once, before the retry
-# loop; a branch tracking nothing is a first push and skips the check.
+# loop; a branch that does not track its own name is a first push and skips the
+# check. `create-worktree.sh` cuts a branch from `origin/<base>`, so a new
+# branch's `branch.<branch>.merge` is `refs/heads/<base>` until its first push:
+# that is NOT tracking, and the ref asked about is always the branch's own.
 track_merge="$(git -C "$main_top" -c core.hooksPath="$pinned" config --get "branch.$branch.merge" 2>/dev/null)"
-if [ -n "$track_merge" ] ||
-  git -C "$main_top" -c core.hooksPath="$pinned" rev-parse --verify --quiet "refs/remotes/origin/$branch" >/dev/null 2>&1; then
-  track_remote="$remote"
-  track_ref="${track_merge:-refs/heads/$branch}"
-  git -C "$main_top" -c core.hooksPath="$pinned" ls-remote --exit-code --heads "$track_remote" "$track_ref" >/dev/null 2>&1
+track_ref="refs/heads/$branch"
+if [ "$track_merge" = "$track_ref" ] ||
+  git -C "$main_top" -c core.hooksPath="$pinned" rev-parse --verify --quiet "refs/remotes/$remote/$branch" >/dev/null 2>&1; then
+  git -C "$main_top" -c core.hooksPath="$pinned" ls-remote --exit-code --heads "$remote" "$track_ref" >/dev/null 2>&1
   ls_status=$?
   case "$ls_status" in
     0) ;;
     2)
-      echo "push-branch.sh: $track_remote no longer has $branch, which this checkout tracks; not pushing it back (a branch deleted on its remote stays deleted). To publish it again on purpose: git push --set-upstream $track_remote $branch"
+      echo "push-branch.sh: $remote no longer has $branch, which this checkout tracks; not pushing it back (a branch deleted on its remote stays deleted). To publish it again on purpose: git push --set-upstream $remote $branch"
       exit 0
       ;;
     *)
-      echo "push-branch.sh: could not ask $track_remote whether it still has $branch (ls-remote exited $ls_status); pushing as before"
+      echo "push-branch.sh: could not ask $remote whether it still has $branch (ls-remote exited $ls_status); pushing as before"
       ;;
   esac
 fi
 
 # Push the branch, by an explicit refspec from the main checkout; the
-# deleted-on-its-remote check above has already run. A branch with an upstream
-# keeps it; one with none has it set on the fly, as before, so a first push
-# still tracks. Fast-forward only.
+# deleted-on-its-remote check above has already run. A branch whose
+# `branch.<branch>.merge` already names its own ref keeps it; any other — none
+# at all, or the base `create-worktree.sh` cut it from — has it set on the fly
+# to `refs/heads/<branch>`, so a first push tracks the branch it published.
+# Fast-forward only. `--no-recurse-submodules`, with `submodule.recurse` off as
+# well, so `push.recurseSubmodules` or `submodule.recurse` in the main
+# configuration never has git push — or inspect — a submodule from its
+# `.git/modules/<name>`, whose configuration a sandboxed command can write.
 refspec="refs/heads/$branch:refs/heads/$branch"
-if git -C "$main_top" -c core.hooksPath="$pinned" rev-parse --abbrev-ref --symbolic-full-name "$branch@{u}" >/dev/null 2>&1; then
-  push_cmd=(git -C "$main_top" -c core.hooksPath="$pinned" push "$remote" "$refspec")
-else
-  push_cmd=(git -C "$main_top" -c core.hooksPath="$pinned" push --set-upstream "$remote" "$refspec")
-fi
+push_cmd=(git -C "$main_top" -c core.hooksPath="$pinned" -c submodule.recurse=false push --no-recurse-submodules)
+[ "$track_merge" = "$track_ref" ] || push_cmd+=(--set-upstream)
+push_cmd+=("$remote" "$refspec")
 
 # Every failure line keeps the `push failed for <branch>` prefix: logs and
 # Gate 12 records quote it.

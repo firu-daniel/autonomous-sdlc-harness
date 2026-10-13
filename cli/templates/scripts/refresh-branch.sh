@@ -24,12 +24,35 @@
 # library's unresolvable answer is a refusal here too, never a permit.
 #
 # WHAT IT NEVER DOES. It never pushes. It never checks out, resets, updates or
-# deletes the base branch — the only ref it writes is the remote-tracking
-# `refs/remotes/origin/<base>` a fetch updates. It never rebases and never
-# rewrites history. It leaves a conflicted merge aborted rather than half-done,
-# so a failed run's working copy is exactly what it was — with one exception it
-# reports as its own status rather than hiding: exit 5 below, where the abort
-# itself failed and the tree is left mid-merge.
+# deletes the base branch — the refs it writes are the remote-tracking
+# `refs/remotes/origin/<base>` a fetch updates and `refs/heads/<branch>` itself,
+# moved only from the tip the merge was built on. It never rebases and never
+# rewrites history. A conflict is found before anything is written, so there is
+# no half-done merge to abort and a refused or conflicted refresh leaves the
+# working copy and the branch exactly as they were — with one exception it
+# reports as its own status rather than hiding: exit 5 below.
+#
+# THE MERGE IS BUILT FROM PLUMBING. There is no `git merge`: the merge result is
+# computed from objects alone by `git merge-tree --write-tree` (git 2.38 or
+# newer — an older git is refused, exit 1, before anything is fetched or merged),
+# written as a two-parent commit by `git commit-tree` with the message `git
+# merge` would have used, and then applied in an order that catches a branch
+# moved under this script before anything is written: a dry run of the two-tree
+# `git read-tree -m -u` (`-n`, which writes nothing and still refuses an
+# untracked file or an out-of-date path in the way); `git update-ref` on
+# `refs/heads/<branch>` guarded by its old value, a compare-and-swap whose
+# failure means the branch moved; and only then the real `read-tree`, whose
+# failure puts the branch back with a second guarded `update-ref`. The ref
+# update writes `logs/refs/heads/<branch>` and, for a linked worktree, no entry
+# in that worktree's `logs/HEAD`: `git reflog <branch>` shows a refresh, a bare
+# `git reflog` there does not. A branch the base is ahead of
+# is fast-forwarded to it, as `git merge` does by default; `merge.ff` and
+# `branch.<branch>.mergeOptions` are not consulted. A conflict is `merge-tree`'s
+# exit 1, before any write. The commit takes its identity and its signing from
+# the main checkout's configuration (`user.*`, `commit.gpgSign`) as the merge
+# did, and an unset identity is a refusal (exit 1) with nothing written. No
+# merge hook runs — not `pre-merge-commit`, `prepare-commit-msg`, `commit-msg`
+# nor `post-merge`.
 #
 # `--local` MERGES THE LOCAL `<base>` REF AND MAKES NO NETWORK CALL. Default mode
 # fetches and merges `origin/<base>`. `--local` is for the state where the local
@@ -51,26 +74,24 @@
 # `<main>/<scripts_dir>/.git` is the permission profile alone (`push-branch.sh`
 # → the paragraph of the same name).
 #
-# GIT NEVER RE-READS THE TARGET'S RECORDS — ALMOST. The checks read a
-# worktree's `.git` pointer, its record's `commondir` and `gitdir`, and its
-# `config.worktree` once, and a sandboxed process still running when this
-# script starts could rewrite one before git reads it again. So after its
-# checks this script reads the branch once from the main checkout
-# (`lib/harness-run-lib.sh` → `hr_wrapper_branch_var`); the fetch, the ref
-# lookups and the ancestry test run as `git -C <main checkout>`; and the calls
-# that need the working tree — the clean-tree test, the merge and its abort —
-# run with `GIT_DIR` set to the record the target check accepted,
-# `GIT_COMMON_DIR` to `<main>/.git` and `GIT_WORK_TREE` to the target, so git
-# never reads the `.git` pointer and takes its configuration, hooks and objects
-# from the main repository whatever the record's `commondir` says. Two re-reads
-# remain in those calls, both write-protected by the permission profile and
-# neither closed here: git's ref store still follows the record's `commondir`
-# (refs only), and git still reads the record's `config.worktree`, which a
-# merge honours whole — `-c extensions.worktreeConfig=false` was measured not
-# to stop that, and pinning a few dangerous keys with `-c` is not done because
-# the set is open (merge and filter drivers are named by the tree's own
-# attributes). How the Linux sandbox treats those globbed profile entries is
-# unverified.
+# GIT NEVER RE-READS THE TARGET'S RECORDS. The checks read a worktree's `.git`
+# pointer, its record's `commondir` and `gitdir`, and its `config.worktree`
+# once, and a sandboxed process still running when this script starts could
+# rewrite one before git reads it again. So after its checks this script reads
+# the branch once from the main checkout (`lib/harness-run-lib.sh` →
+# `hr_wrapper_branch_var`); the fetch, the ref lookups, the ancestry tests, the
+# merge and the ref update run as `git -C <main checkout>`, naming
+# `refs/heads/<branch>` and never a `HEAD`; and the calls that need the working
+# tree — the clean-tree test and the `read-tree` — run with `GIT_DIR` set to
+# `<main>/.git`, `GIT_INDEX_FILE` to the index in the record the target check
+# accepted and `GIT_WORK_TREE` to the target. So git reads nothing of the
+# record but that index: not the `.git` pointer, not the record's `commondir`
+# or `HEAD`, and not its `config.worktree` — a `core.fsmonitor` or a filter
+# driver written there after the check never runs. Its configuration is the
+# main repository's (and the main `.git/config.worktree`, which the permission
+# profile write-protects, when `extensions.worktreeConfig` is on), as are its
+# hooks and objects. A `HEAD` flipped to another branch after the read is not
+# followed: only `refs/heads/<branch>` moves.
 #
 # A REMOTE WITH NO CONFIGURED URL IS REFUSED. Before a fetch this script
 # refuses (exit 1) unless the main `.git/config` names `remote.origin.url`
@@ -100,21 +121,25 @@
 # `GIT_CONFIG_COUNT` for the library's calls, and as `-c core.hooksPath` on every
 # call spelled here (derivation: `lib/harness-run-lib.sh` →
 # `hr_pinned_hooks_path`; the reasoning: `push-branch.sh` → the paragraph of the
-# same name). The pin matters for a merge too: `git merge` runs the
-# `pre-merge-commit`, `commit-msg` and `post-merge` hooks. The clean-tree test
-# passes `--ignore-submodules`, so git never runs inside a nested repository a
-# sandboxed command could have planted, and the fetch passes
-# `--no-recurse-submodules` for the same reason. The check compares
-# that `core.hooksPath` against the `githooksDir` in the worktree's own
-# `harness.config.json` — the one configured value read from the worktree, and
-# an inert one: a rewritten copy can only make the check accept a different
+# same name). No merge hook runs (THE MERGE IS BUILT FROM PLUMBING above), but
+# the fetch and the ref updates run `reference-transaction`, so the pin still
+# matters. The clean-tree test passes `--ignore-submodules`, so git never runs
+# inside a nested repository a sandboxed command could have planted, and the
+# fetch and both `read-tree` calls pass `--no-recurse-submodules` for the same
+# reason; every call also carries `-c submodule.recurse=false`. So a
+# `submodule.recurse` in the main configuration never has the checkout run git
+# in a submodule under its `.git/modules/<name>/config`, which a sandboxed
+# command can write. The check compares that `core.hooksPath` against the
+# `githooksDir` in the worktree's own `harness.config.json` — the one
+# configured value read from the worktree, and an inert one: a rewritten copy
+# can only make the check accept a different
 # `core.hooksPath`, which the pin overrides on every call.
 #
 # THE INHERITED GIT ENVIRONMENT IS DROPPED. Before anything else this script
 # unsets the same `GIT_*` names `push-branch.sh` does, every `GIT_TRACE*`
 # included, and keeps `GIT_SSH_COMMAND`; `PATH` and `BASH_ENV` are trusted as
 # they arrive (the list and the reasoning: `push-branch.sh` → the paragraph of
-# the same name). It sets `GIT_DIR`, `GIT_COMMON_DIR` and `GIT_WORK_TREE` itself
+# the same name). It sets `GIT_DIR`, `GIT_INDEX_FILE` and `GIT_WORK_TREE` itself
 # afterwards, for the working-tree calls only.
 #
 # Usage: refresh-branch.sh [--local] [<repo-dir>]
@@ -129,8 +154,10 @@
 #
 # Exit map a caller can switch on:
 #
-#   0  the current branch now contains the base (the merge landed)
-#   1  usage error / not a git repository / detached HEAD / the working tree
+#   0  the current branch now contains the base (the merge landed, or the
+#      branch was fast-forwarded to it)
+#   1  usage error / not a git repository / detached HEAD / git older than
+#      2.38 / the working tree
 #      has uncommitted tracked changes / a target this script does not trust,
 #      or a main checkout it cannot place (THE TARGET IS NOT TRUSTED above) /
 #      the main checkout's configuration could not be read (THE TARGET'S
@@ -143,17 +170,25 @@
 #   2  protected-branch refusal — HEAD is ON a protected branch, so this would be
 #      a merge INTO the integration line; nothing was attempted
 #   3  nothing to do — the current branch already contains the base
-#   4  the merge conflicted and was aborted; the working copy is exactly as it was
-#   5  the merge conflicted and `git merge --abort` ALSO failed, so the working
-#      copy is left mid-merge and is NOT what it was — the one row of this map on
-#      which this script's "leaves a conflicted merge aborted rather than
-#      half-done" guarantee does not hold, and the one that needs a human before
-#      anything else runs in this checkout
+#   4  the base conflicts with the branch; nothing was written, the conflicted
+#      paths are listed, and the working copy is exactly as it was
+#   5  the branch had been moved to the merge result, the working tree then
+#      refused it (something changed in the tree after the dry run), and
+#      putting the branch back ALSO failed because something else moved it in
+#      between — the working copy is the old tip's while the branch is not: the
+#      one row of this map on which the "leaves the branch and the working copy
+#      as they were" guarantee does not hold, and the one that needs a human
+#      before anything else runs in this checkout
 #
-# Two conditions outside that list land on 1 as well, for the same reason every
+# Conditions outside that list land on 1 as well, for the same reason every
 # other row of it does — the script cannot proceed and changed nothing: the base
-# ref named by the mode is not present, and a merge that failed for a reason
-# other than a conflict.
+# ref named by the mode is not present; `merge-tree` failed for a reason other
+# than a conflict; the merge commit could not be written (an unset identity, a
+# failed signature); the working tree would not take the merge result (an
+# untracked file in its way), found by the dry run before anything is written;
+# the branch moved after its tip was read, found by the guarded `update-ref`
+# before the working tree is touched; and the working tree refused the merge
+# result after the branch moved to it, with the branch put back.
 #
 # REPRO — reproduce every row by hand, against a throwaway fixture:
 #
@@ -177,10 +212,18 @@
 #   dirty tree        printf 'x\n' >> "$d/f.txt"; same call -> exit 1, and
 #                     `git -C "$d" status --porcelain` is byte-identical after
 #   conflict          edit the same line on trunk and on feat_x, commit both
-#                     -> exit 4, and `git -C "$d" status` shows no MERGING state
-#   failed abort (5)  no fixture row: the state that makes `git merge --abort`
-#                     fail has to arise between this script's own merge and its
-#                     abort, and nothing outside the script runs in that window
+#                     -> exit 4, "conflicted: f.txt", `git -C "$d" status`
+#                     shows no MERGING state and feat_x's tip is unchanged
+#   fast-forward      git -C "$d" reset -q --hard <the seed commit> on feat_x;
+#                     same call -> exit 0, feat_x now IS trunk's tip
+#   old git (1)       a git older than 2.38 first on PATH -> exit 1, "needs
+#                     git 2.38 or newer", nothing fetched
+#   put back failed   no fixture row: the tree has to change after the dry run
+#   (5)               and the branch has to move after this script's own
+#                     `update-ref`, both before its `read-tree`, and nothing
+#                     outside the script runs there (cli/test/
+#                     wrapper-target-check.test.mjs case (p3) stages it with a
+#                     `git` shim, and cases (p) and (p2) the two exit-1 paths)
 #   unresolvable      printf 'x' > "$d/harness.config.json"; same call -> exit 1,
 #                     nothing merged; restore -> exit 0
 #   --local           commit on trunk WITHOUT pushing, then from feat_x:
@@ -203,8 +246,8 @@
 #   a worktree        bash "$d/scripts/refresh-branch.sh" "$w" -> exit 0; `git -C
 #                     "$w" log --oneline` shows the base commit, and "$d"'s HEAD
 #                     and branch are unchanged
-#   the pin           cat "$d.marker"   -> `main` only: the worktree's own
-#                     post-merge hook never ran
+#   no merge hook     cat "$d.marker"   -> no such file: neither post-merge hook
+#                     ran (a `reference-transaction` hook in "$d/githooks" would)
 #   a foreign key     git -C "$w" config --worktree user.name x; the same call
 #                     -> exit 1, a "refusing to refresh:" line naming user.name
 #                     and not its value; `git -C "$w" rev-parse HEAD` unchanged
@@ -222,6 +265,11 @@
 #   rewritten         printf '%s\n' "$s/.git" > "$d/.git/worktrees/wt/commondir";
 #   commondir         the same call on "$w" -> exit 1, a "refusing to refresh:"
 #                     line
+#   planted monitor   git -C "$w" config --worktree core.fsmonitor "touch $s.marker"
+#                     -> exit 1 (refused by name); written AFTER the check
+#                     instead, as a racing sandboxed process could, it is never
+#                     read: no "$s.marker" (cli/test/wrapper-target-check.test.mjs
+#                     cases (k2) and (k3) stage that race)
 #   planted main      printf '%s\n' "$s/.git" > "$d/.git/commondir"; the same
 #   commondir         call on "$w" -> exit 1, "refusing to refresh: cannot place
 #                     this script in a main checkout", no "$s.marker"
@@ -335,17 +383,42 @@ export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$p
 # GIT NEVER RE-READS THE TARGET'S RECORDS (header). The checkout and its git
 # directory are the values the checks above judged, taken once: a call that
 # needs no working tree runs in the main checkout, and one that does goes
-# through `wt_git`, which hands git those values instead of letting it find
-# them again through the target's `.git` pointer.
+# through `wt_git`, which runs git against the MAIN repository's git directory
+# with only the target's index and working tree borrowed — so git reads neither
+# the target's `.git` pointer nor anything in its record but the index: not its
+# `commondir`, not its `HEAD`, not its `config.worktree`.
 top="$top_nogit"
 wt_gitdir="$HR_TARGET_GITDIR"
+# `-c submodule.recurse=false` on both, and `--no-recurse-submodules` on every
+# call that could recurse, so no call here runs git inside a submodule (THE
+# PER-WORKING-COPY CONFIG IS NOT TRUSTED, header).
 main_git() {
-  git -C "$main_top" -c core.hooksPath="$pinned" "$@"
+  git -C "$main_top" -c core.hooksPath="$pinned" -c submodule.recurse=false "$@"
 }
 wt_git() {
-  GIT_DIR="$wt_gitdir" GIT_COMMON_DIR="$main_top/.git" GIT_WORK_TREE="$top" \
-    git -C "$top" -c core.hooksPath="$pinned" "$@"
+  GIT_DIR="$main_top/.git" GIT_INDEX_FILE="$wt_gitdir/index" GIT_WORK_TREE="$top" \
+    git -C "$top" -c core.hooksPath="$pinned" -c submodule.recurse=false "$@"
 }
+
+# THE MERGE IS BUILT FROM PLUMBING (header), and `git merge-tree --write-tree`
+# is git 2.38's. Refused before anything is fetched or merged on an older git,
+# rather than discovered as a usage error halfway through.
+git_version="$(git --version 2>/dev/null)" || git_version=""
+git_major=""
+git_minor=""
+case "$git_version" in
+  "git version "[0-9]*.[0-9]*)
+    git_nums="${git_version#git version }"
+    git_major="${git_nums%%.*}"
+    git_nums="${git_nums#*.}"
+    git_minor="${git_nums%%[!0-9]*}"
+    ;;
+esac
+if [ -z "$git_major" ] || [ -z "$git_minor" ] ||
+  [ "$git_major" -lt 2 ] || { [ "$git_major" -eq 2 ] && [ "$git_minor" -lt 38 ]; }; then
+  echo "refresh-branch.sh: needs git 2.38 or newer (for 'git merge-tree --write-tree'); 'git --version' printed '$git_version' — refusing to merge" >&2
+  exit 1
+fi
 
 # THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER (header): every
 # configured value below is read at the main checkout, never at "$top".
@@ -418,14 +491,24 @@ EOF
     ;;
 esac
 
+# The tip the merge is built on, read once: every later step names this commit,
+# and the ref moves only if it still points here.
+old_tip="$(main_git rev-parse --verify --quiet "refs/heads/$branch^{commit}")" || old_tip=""
+if [ -z "$old_tip" ]; then
+  echo "refresh-branch.sh: '$branch' does not resolve to a commit in '$main_top' — refusing to merge" >&2
+  exit 1
+fi
+
 # A merge writes the working tree, so an uncommitted tracked change is refused
 # before anything is fetched: the caller's own edit must not be carried into a
-# merge commit, and an aborted merge must be able to restore what was there.
+# merge commit, and the working tree must be exactly the branch's tip for the
+# two-tree update below to be a pure move to the merge result. The index is
+# compared against the branch's tip, never against a `HEAD`.
 # `--ignore-submodules` on the working-tree diff: without it git runs `git
 # status` inside every gitlink's directory, under that nested repository's own
 # configuration, which a sandboxed command can write. A merge never touches a
 # submodule's working tree here, so its state is not this check's concern.
-if ! wt_git diff --quiet --ignore-submodules || ! wt_git diff --cached --quiet; then
+if ! wt_git diff --quiet --ignore-submodules || ! wt_git diff-index --cached --quiet "$old_tip" --; then
   echo "refresh-branch.sh: uncommitted tracked changes in '$top' — refusing to merge" >&2
   echo "  commit them (bash \"$script_dir/commit-on-branch.sh\" …) and re-run" >&2
   exit 1
@@ -434,9 +517,11 @@ fi
 if [ "$use_local" -eq 1 ]; then
   base_ref="$base"
   ref_path="refs/heads/$base"
+  merge_msg="Merge branch '$base' into $branch"
 else
   base_ref="origin/$base"
   ref_path="refs/remotes/origin/$base"
+  merge_msg="Merge remote-tracking branch 'origin/$base' into $branch"
   # A REMOTE WITH NO CONFIGURED URL IS REFUSED (header).
   if ! hr_remote_url_configured "$main_top" origin; then
     echo "refresh-branch.sh: refusing to refresh: $main_top/.git/config names no URL for remote 'origin' (git would read one from .git/remotes or .git/branches, which a sandboxed command can write)" >&2
@@ -451,7 +536,8 @@ else
   main_git fetch --no-recurse-submodules origin "$base" || true
 fi
 
-if ! main_git show-ref --verify --quiet "$ref_path"; then
+base_tip="$(main_git rev-parse --verify --quiet "$ref_path^{commit}")" || base_tip=""
+if [ -z "$base_tip" ]; then
   echo "refresh-branch.sh: no '$base_ref' in '$top' — nothing to merge from" >&2
   if [ "$use_local" -eq 1 ]; then
     echo "  --local merges the local '$base' branch; drop the flag to merge origin/$base" >&2
@@ -463,28 +549,68 @@ fi
 
 # Already contained => a distinct, dedicated status, so a caller can tell "the
 # base is already here" apart from a refusal.
-if main_git merge-base --is-ancestor "$ref_path" "refs/heads/$branch"; then
+if main_git merge-base --is-ancestor "$base_tip" "$old_tip"; then
   echo "refresh-branch.sh: '$branch' already contains $base_ref — nothing to do"
   exit 3
 fi
 
-if wt_git merge --no-edit "$base_ref"; then
+# THE MERGE IS BUILT FROM PLUMBING (header). A branch the base is ahead of is
+# fast-forwarded to it, as `git merge` would; anything else gets a merge commit
+# built from objects alone. A conflict is found before anything is written, so
+# there is nothing to abort.
+if main_git merge-base --is-ancestor "$old_tip" "$base_tip"; then
+  new_tip="$base_tip"
+else
+  merge_out="$(main_git merge-tree --write-tree --name-only --no-messages "$old_tip" "$base_tip")"
+  merge_status=$?
+  case "$merge_status" in
+    0) ;;
+    1)
+      echo "refresh-branch.sh: $base_ref conflicts with $branch — nothing was merged, working copy unchanged" >&2
+      # The conflicted paths, one per line after the tree id.
+      printf '%s\n' "$merge_out" | sed -n '2,$p' | while IFS= read -r path; do
+        [ -n "$path" ] && printf '  conflicted: %s\n' "$path" >&2
+      done
+      exit 4
+      ;;
+    *)
+      echo "refresh-branch.sh: 'git merge-tree' failed (exit $merge_status, see output above) — nothing was merged" >&2
+      exit 1
+      ;;
+  esac
+  merge_tree="$(printf '%s\n' "$merge_out" | sed -n '1p')"
+  new_tip="$(main_git commit-tree "$merge_tree" -p "$old_tip" -p "$base_tip" -m "$merge_msg")" || new_tip=""
+  if [ -z "$new_tip" ]; then
+    echo "refresh-branch.sh: could not write the merge commit (see output above; an unset user.name/user.email is the usual cause) — nothing was merged" >&2
+    exit 1
+  fi
+fi
+
+# The branch moves before the working tree does, so a branch that moved under
+# this script is caught before anything is written. First a dry run of the
+# two-tree update: it refuses, writing nothing, when it would overwrite an
+# untracked file or a path that is not up to date.
+if ! wt_git read-tree -n --no-recurse-submodules -m -u "$old_tip" "$new_tip"; then
+  echo "refresh-branch.sh: could not update '$top' to the merge result (see output above) — nothing was merged, working copy unchanged" >&2
+  exit 1
+fi
+# Then the branch, as a compare-and-swap: it moves `refs/heads/<branch>` and
+# nothing else, and only from the tip the merge was built on.
+if ! main_git update-ref -m "refresh-branch.sh: merge $base_ref" "refs/heads/$branch" "$new_tip" "$old_tip"; then
+  echo "refresh-branch.sh: '$branch' moved while it was being refreshed, or its ref could not be locked (see output above) — nothing was merged, working copy unchanged" >&2
+  exit 1
+fi
+# Then the working tree and index. `read-tree` checks every path before it
+# writes one, so a refusal here — something changed in the tree since the dry
+# run — has written nothing, and the branch is put back.
+if wt_git read-tree --no-recurse-submodules -m -u "$old_tip" "$new_tip"; then
   echo "refresh-branch.sh: merged $base_ref into $branch"
   exit 0
 fi
-
-# A failed merge is one of two things, and they are distinguished by whether a
-# merge is in progress: a conflict leaves MERGE_HEAD behind, anything else (a
-# refused fast-forward, a hook, an unmergeable ref) never started one.
-if wt_git rev-parse --verify --quiet MERGE_HEAD >/dev/null; then
-  if wt_git merge --abort; then
-    echo "refresh-branch.sh: $base_ref conflicts with $branch — merge aborted, working copy unchanged" >&2
-    exit 4
-  fi
-  echo "refresh-branch.sh: $base_ref conflicts with $branch and 'git merge --abort' failed — the working copy is LEFT MID-MERGE and is NOT what it was" >&2
-  echo "  resolve or abandon it yourself (git status, git merge --abort), then re-run" >&2
-  exit 5
+if main_git update-ref -m "refresh-branch.sh: undo merge $base_ref" "refs/heads/$branch" "$old_tip" "$new_tip"; then
+  echo "refresh-branch.sh: could not update '$top' to the merge result (see output above) — '$branch' was put back where it was, nothing was merged" >&2
+  exit 1
 fi
-
-echo "refresh-branch.sh: 'git merge $base_ref' failed (see output above) — nothing was merged" >&2
-exit 1
+echo "refresh-branch.sh: could not update '$top' to the merge result, and putting '$branch' back failed too — '$branch' does not point at the commit the working copy holds" >&2
+echo "  inspect it yourself (git log -1 $branch, git status), then re-run" >&2
+exit 5
