@@ -1048,8 +1048,9 @@ test('a domain carrying a quote is the adopter\'s to fix, never this CLI\'s faul
 
 /**
  * Both sides of one protected path: its `denyWrite` entry and its `Edit`/`Write` deny rules — on the
- * path for a `file`, under it for a `directory`, and both for an `entry`, a path that must not come to
- * exist as either.
+ * path for a `file` or a `name` (a globbed directory protected against creation, moving and removal
+ * while the files in it stay writable), under it for a `directory`, and both for an `entry`, a path
+ * that must not come to exist as either.
  */
 function assertProtected(profile, path, kind) {
   const targets = kind === 'entry' ? [path, `${path}/**`] : [kind === 'directory' ? `${path}/**` : path];
@@ -1114,6 +1115,22 @@ test('every path that runs outside the sandbox is write-protected on both sides'
   // redirect it, and so would a nearer `.git` between the main checkout and the scripts directory.
   assertProtected(profile, join(dir, '.git', 'commondir'), 'file');
   assertProtected(profile, join(dir, SCRIPTS_DIR, '.git'), 'entry');
+  // The worktree records git and the wrappers follow: each record can be neither created nor moved,
+  // and the three files in it that point elsewhere are protected, while the record's own HEAD,
+  // index and logs stay writable for a run's git.
+  const records = join(dir, '.git', 'worktrees');
+  assertProtected(profile, join(records, '*'), 'name');
+  assert.ok(!profile.sandbox.filesystem.denyWrite.includes(records), 'denyWrite holds the whole worktrees directory');
+  for (const file of ['commondir', 'gitdir', 'config.worktree']) assertProtected(profile, join(records, '*', file), 'file');
+  for (const file of ['HEAD', 'index', 'logs']) assertUnprotected(profile, join(records, '*', file));
+  assert.ok(
+    !profile.permissions.deny.some((rule) => rule.endsWith(`${join(records, '*')}/**)`)),
+    'a deny rule covers everything under a worktree record',
+  );
+  assertProtected(profile, join(glob, '.git'), 'file');
+  // A remote with no configured URL is read from these.
+  assertProtected(profile, join(dir, '.git', 'remotes'), 'entry');
+  assertProtected(profile, join(dir, '.git', 'branches'), 'entry');
   assertProtected(profile, join(dir, CONFIG_FILENAME), 'file');
   assertUnprotected(profile, join(glob, CONFIG_FILENAME));
 

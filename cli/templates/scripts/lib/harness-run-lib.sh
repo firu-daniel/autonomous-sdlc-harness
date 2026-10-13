@@ -66,7 +66,15 @@
 # honours that key — each pins its own (`-c core.hooksPath`, and
 # `GIT_CONFIG_COUNT` for the library's) — while every other key in that file is
 # refused whatever the copy says, and the check's own git call is
-# `git -C / config --file`, which loads no repository's configuration. Nothing
+# `git -C / config --file`, which loads no repository's configuration. Past
+# their checks the two wrappers keep git off the target's records too: every
+# call that needs no working tree runs in the main checkout (`-C <main>`), and
+# the refresh's working-tree calls take `GIT_DIR`, `GIT_COMMON_DIR` and
+# `GIT_WORK_TREE` from the values `hr_wrapper_target_check_var` checked, so git
+# never re-reads the worktree's `.git` pointer and takes its configuration from
+# the main repository; the branch is read once (`hr_wrapper_branch_var`), and a
+# remote is used only when the main `.git/config` names its URL
+# (`hr_remote_url_configured`). Nothing
 # here reads an environment variable in place of a configured value, and nothing
 # here writes inside a repository except through the named write exceptions
 # below.
@@ -658,7 +666,10 @@ hr_wrapper_main_of() {
 
 # Judge whether <target_top> is a checkout an unsandboxed wrapper may run git in,
 # for the main checkout <main_top> the wrapper's own location gives
-# (`hr_wrapper_main_of`). Return 0
+# (`hr_wrapper_main_of`), and set `HR_TARGET_GITDIR` to its canonical gitdir —
+# `<main_top>/.git` for the main checkout, `<p>` below for a worktree — so the
+# wrapper can hand git the record it checked instead of letting git find one
+# again. Return 0
 # when, compared canonically, <target_top> is <main_top>, or when it is a
 # worktree that main repository lists: `<target_top>/.git` is a regular file;
 # its gitdir `<p>` (`hr_gitdir_nogit`) sits directly in `<main_top>/.git/worktrees`;
@@ -683,14 +694,23 @@ hr_wrapper_main_of() {
 # its `config.worktree`, which `hr_worktree_config_check_var` holds to one key,
 # and its hooks are pinned (`hr_pinned_hooks_path`).
 #
-# Residual: every record judged here, and the `config.worktree` judged after
-# it, is read once and then re-read by git on each of the wrapper's own calls,
-# and all of them stay sandbox-writable. A sandboxed process still running when
-# the wrapper starts, rewriting a record's `commondir`, its `.git` pointer or
-# its `config.worktree` between the check and a git call, is not caught here.
+# Every record judged here is read once. A sandboxed process still running when
+# the wrapper starts could rewrite one between this check and a git call, so
+# the wrappers do not let git re-read them: `push-branch.sh` runs every git call
+# in the main checkout, and `refresh-branch.sh` passes `HR_TARGET_GITDIR` as
+# `GIT_DIR` with `GIT_COMMON_DIR` and `GIT_WORK_TREE`, so the `.git` pointer is
+# never read again and the configuration and hooks come from the main
+# repository. Two re-reads remain in the refresh's working-tree calls: git's
+# ref store still follows the record's `commondir` (refs only — no
+# configuration, hooks or objects), and git still reads the record's
+# `config.worktree`. The permission profile write-protects both files, each
+# record's `gitdir`, each worktree's `.git` pointer and the record directories
+# themselves (`cli/src/generators/writeProtection.ts`); how the Linux sandbox
+# treats those globbed entries is unverified.
 hr_wrapper_target_check_var() {
   local main="${1-}" target="${2-}" p common line="" back back_c want
   HR_TARGET_REFUSAL=""
+  HR_TARGET_GITDIR=""
   if ! main=$( CDPATH= cd -P -- "$main" 2>/dev/null && pwd -P ); then
     HR_TARGET_REFUSAL="the main checkout '${1-}' is not a directory"
     return 1
@@ -699,7 +719,10 @@ hr_wrapper_target_check_var() {
     HR_TARGET_REFUSAL="the target '${2-}' is not a directory"
     return 1
   fi
-  [ "$target" != "$main" ] || return 0
+  if [ "$target" = "$main" ]; then
+    HR_TARGET_GITDIR="$main/.git"
+    return 0
+  fi
   local refused="'$target' is neither the main checkout $main nor a worktree it lists"
   if [ ! -f "$target/.git" ] || [ -L "$target/.git" ]; then
     HR_TARGET_REFUSAL="$refused: its .git is not a regular pointer file"
@@ -728,7 +751,65 @@ hr_wrapper_target_check_var() {
     HR_TARGET_REFUSAL="$refused: its worktree record's gitdir does not point back at $target/.git"
     return 1
   fi
+  HR_TARGET_GITDIR=$p
   return 0
+}
+
+# Set `HR_WRAPPER_BRANCH` to the branch the checkout whose canonical gitdir is
+# <gitdir> has out, asked of the main checkout <main> alone, for the two
+# unsandboxed wrappers after `hr_wrapper_target_check_var` set <gitdir>.
+# Return 1, the variable empty, on a detached or unreadable HEAD and on a name
+# that is not a valid branch name. Prints nothing; call it directly, never
+# inside `$(…)`.
+#
+# The main checkout's own HEAD is `HEAD` there; a worktree's is
+# `worktrees/<name>/HEAD`, which git resolves from the main repository without
+# reading that worktree's `.git` pointer, its record's `commondir` or its
+# `config.worktree`. The wrapper reads the branch once and names it as
+# `refs/heads/<branch>` in every later call, so a HEAD rewritten afterwards
+# changes nothing it does. A name starting with `-` is returned, not refused:
+# each wrapper refuses it under its own exit contract.
+hr_wrapper_branch_var() {
+  local main="${1-}" gitdir="${2-}" head ref
+  HR_WRAPPER_BRANCH=""
+  [ -n "$main" ] && [ -n "$gitdir" ] || return 1
+  if [ "$gitdir" = "$main/.git" ]; then
+    head=HEAD
+  else
+    case "$gitdir" in
+      "$main/.git/worktrees/"?*) head="worktrees/${gitdir##*/}/HEAD" ;;
+      *) return 1 ;;
+    esac
+  fi
+  ref=$(git -C "$main" symbolic-ref -q "$head" 2>/dev/null) || return 1
+  case "$ref" in
+    refs/heads/?*) ;;
+    *) return 1 ;;
+  esac
+  case "$ref" in
+    refs/heads/-*) ;;
+    *) git -C "$main" check-ref-format "$ref" >/dev/null 2>&1 || return 1 ;;
+  esac
+  HR_WRAPPER_BRANCH=${ref#refs/heads/}
+  return 0
+}
+
+# Return 0 when the main checkout <main>'s own `.git/config` names a URL for
+# the remote <remote>; return 1 otherwise. Read with `git -C / config --file`,
+# which loads no repository's configuration.
+#
+# git reads a remote whose configuration names no URL from the legacy
+# `<main>/.git/remotes/<remote>` or `<main>/.git/branches/<remote>` instead, and
+# a sandboxed command can write both directories. A push or fetch to a path
+# named there would run that repository's hooks — its `pre-receive`, say — with
+# the unsandboxed wrapper's reach. Requiring the URL in the write-protected
+# `.git/config` means git never consults those files. The permission profile
+# write-protects them too.
+hr_remote_url_configured() {
+  local main="${1-}" remote="${2-}" url
+  [ -n "$main" ] && [ -n "$remote" ] || return 1
+  url=$(git -C / config --file "$main/.git/config" --get "remote.$remote.url" 2>/dev/null) || return 1
+  [ -n "$url" ]
 }
 
 # Print the per-working-copy configuration file of the checkout at <top>:

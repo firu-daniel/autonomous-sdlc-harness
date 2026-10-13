@@ -16,6 +16,23 @@
  * holds one is refused under the same exit contracts, so a repository that file names is never
  * taken for the main checkout, and its configuration and hooks never run.
  *
+ * **After its checks, neither wrapper lets git re-read the target's records.** A race cannot be
+ * staged reliably, so cases (i)–(k) stage its outcome deterministically instead: a `git` shim
+ * first on `PATH` rewrites the records at the wrapper's first git call that is not one of its
+ * checks' own `git -C / config --file` reads — after every check has read them, before any git
+ * call that could honour them. `push-branch.sh` then pushes the real branch to the real origin
+ * with no payload run, the worktree's `.git` pointer, its record's `commondir` and its
+ * `config.worktree` all rewritten; `refresh-branch.sh` merges the real base with the `.git`
+ * pointer rewritten, and runs no payload with the `commondir` rewritten. A rewritten
+ * `config.worktree` is not staged for the refresh: its merge still reads that file, which only the
+ * permission profile protects.
+ *
+ * **A remote whose URL the main `.git/config` does not name is refused** by both wrappers, so a
+ * legacy `.git/remotes/origin` a sandboxed command planted never names the repository they push to
+ * or fetch from (cases (l) and (m)). **The refresh's clean-tree test never runs git inside a nested
+ * repository at a gitlink** (case (n)): without `--ignore-submodules` git would, under that
+ * repository's own sandbox-writable configuration.
+ *
  * The fixture is built by hand rather than by `init`, so the git records under test are exactly
  * the ones each case rewrites.
  */
@@ -212,6 +229,8 @@ test('(h) A commondir planted in the main .git cannot make another repository th
   await writeFile(ssh, `#!/bin/sh\n: > '${join(markers, 'fake-ssh')}'\nexit 1\n`);
   await chmod(ssh, 0o755);
   await runGit(fake, ['config', 'core.sshCommand', ssh]);
+  // An ssh:// push URL, so a push git started from this repository would run that command.
+  await runGit(fake, ['config', 'remote.origin.pushurl', 'ssh://harness.invalid/origin.git']);
   const fakeHead = await f.head(fake);
 
   // Written with the file system, as a sandboxed command could: `.git/` is writable but for
@@ -227,4 +246,183 @@ test('(h) A commondir planted in the main .git cannot make another repository th
   assert.match(refreshed.stderr, /refusing to refresh: cannot place this script in a main checkout/, output(refreshed));
   assert.equal(await f.head(fake), fakeHead);
   assert.deepEqual(await f.markers(), []);
+});
+
+/**
+ * A repository a sandboxed command could build to receive the redirected records: its
+ * configuration runs a marker from `core.fsmonitor` (any index refresh) and `core.sshCommand`, its
+ * hooks directory holds marker `pre-push` and `post-merge` hooks, and its `origin` is a bare
+ * repository whose `pre-receive` leaves a marker — so whichever of them a git call honoured, a
+ * marker says so. Its `HEAD` is on `feat_evil`.
+ */
+async function evilRepository(f) {
+  const root = dirname(f.main);
+  const markers = join(root, 'markers');
+  const marker = async (name) => {
+    const file = join(root, `evil-${name}.sh`);
+    await writeFile(file, `#!/bin/sh\n: > '${join(markers, `evil-${name}`)}'\nexit 1\n`);
+    await chmod(file, 0o755);
+    return file;
+  };
+  const evilOrigin = join(root, 'evil-origin.git');
+  await mkdir(evilOrigin);
+  await runGit(evilOrigin, ['init', '--bare', '--quiet']);
+  const receive = join(evilOrigin, 'hooks', 'pre-receive');
+  await writeFile(receive, `#!/bin/sh\n: > '${join(markers, 'evil-pre-receive')}'\nexit 0\n`);
+  await chmod(receive, 0o755);
+
+  const evil = join(root, 'evil');
+  await mkdir(evil);
+  await runGit(evil, ['init', '--quiet', '-b', 'feat_evil']);
+  await runGit(evil, ['config', 'user.email', 'fixture@example.invalid']);
+  await runGit(evil, ['config', 'user.name', 'Harness Fixture']);
+  await runGit(evil, ['commit', '--quiet', '--allow-empty', '-m', 'fixture: evil']);
+  await runGit(evil, ['remote', 'add', 'origin', evilOrigin]);
+  await runGit(evil, ['config', 'core.fsmonitor', await marker('fsmonitor')]);
+  await runGit(evil, ['config', 'core.sshCommand', await marker('ssh')]);
+  const hooks = join(root, 'evil-hooks');
+  await mkdir(hooks);
+  for (const name of ['pre-push', 'post-merge']) await cp(await marker(name), join(hooks, name));
+  await runGit(evil, ['config', 'core.hooksPath', hooks]);
+  return { evil, evilOrigin, receivepack: await marker('receive-pack') };
+}
+
+/**
+ * Put a `git` shim first on `PATH` that runs `flip` — a list of `[file, contents]` writes — once,
+ * at the first git call that is not a `git -C / config --file` read, then hands every call to the
+ * real git. Returns the environment that installs it.
+ */
+async function racingGit(f, flip) {
+  const root = dirname(f.main);
+  const realGit = (await runBash(root, ['-c', 'command -v git'])).stdout.trim();
+  const bin = join(root, 'shim-bin');
+  await mkdir(bin);
+  const flipScript = join(root, 'flip.sh');
+  const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
+  await writeFile(
+    flipScript,
+    flip.map(([file, contents]) => `printf '%s' ${quote(contents)} > ${quote(file)}\n`).join(''),
+  );
+  const done = join(root, 'flip-done');
+  await writeFile(
+    join(bin, 'git'),
+    `#!/bin/sh\nif [ ! -e '${done}' ] && [ "$1 $2" != "-C /" ]; then : > '${done}'; /bin/sh '${flipScript}'; fi\nexec '${realGit}' "$@"\n`,
+  );
+  await chmod(join(bin, 'git'), 0o755);
+  return { PATH: `${bin}:${process.env.PATH}`, flipped: async () => (await readdir(root)).includes('flip-done') };
+}
+
+test('(i) push-branch.sh: records rewritten after its checks are never read, and the real branch is pushed', async (t) => {
+  const f = await fixture(t);
+  const { evil, receivepack } = await evilRepository(f);
+  const race = await racingGit(f, [
+    [join(f.wt, '.git'), `gitdir: ${join(evil, '.git')}\n`],
+    [join(f.record, 'commondir'), `${join(evil, '.git')}\n`],
+    [join(f.record, 'config.worktree'), `[remote "origin"]\n\treceivepack = ${receivepack}\n[core]\n\tfsmonitor = ${receivepack}\n`],
+  ]);
+  const wtHead = await f.head(f.wt);
+  const result = await runBash(dirname(f.main), [join(f.main, 'scripts', 'push-branch.sh'), f.wt], {
+    PUSH_RETRY_DELAY_SECS: '0',
+    PATH: race.PATH,
+  });
+  assert.ok(await race.flipped(), `the shim never ran\n${output(result)}`);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /^push-branch\.sh: pushed feat_w to origin$/m, output(result));
+  assert.equal(await f.originTip('feat_w'), wtHead);
+  assert.deepEqual(await f.markers(), []);
+});
+
+test('(j) refresh-branch.sh: a .git pointer rewritten after its checks is never read, and the real base is merged', async (t) => {
+  const f = await fixture(t);
+  // Behind origin's trunk on its own branch, so there is a merge to make.
+  await runGit(f.wt, ['reset', '--quiet', '--hard', 'origin/trunk~1']);
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', 'fixture: behind']);
+  const base = (await runGit(f.main, ['rev-parse', 'refs/remotes/origin/trunk'])).stdout.trim();
+  const { evil } = await evilRepository(f);
+  const race = await racingGit(f, [[join(f.wt, '.git'), `gitdir: ${join(evil, '.git')}\n`]]);
+  const result = await runBash(dirname(f.main), [join(f.main, 'scripts', 'refresh-branch.sh'), f.wt], {
+    PATH: race.PATH,
+  });
+  assert.ok(await race.flipped(), `the shim never ran\n${output(result)}`);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /^refresh-branch\.sh: merged origin\/trunk into feat_w$/m, output(result));
+  const merged = await runBash(f.main, ['-c', `git merge-base --is-ancestor ${base} refs/heads/feat_w`]);
+  assert.equal(merged.status, 0, `feat_w does not contain origin/trunk\n${output(result)}`);
+  assert.deepEqual(await f.markers(), []);
+});
+
+test('(k) refresh-branch.sh: a commondir rewritten after its checks never brings in another configuration', async (t) => {
+  const f = await fixture(t);
+  await runGit(f.wt, ['reset', '--quiet', '--hard', 'origin/trunk~1']);
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', 'fixture: behind']);
+  const { evil } = await evilRepository(f);
+  const race = await racingGit(f, [[join(f.record, 'commondir'), `${join(evil, '.git')}\n`]]);
+  const result = await runBash(dirname(f.main), [join(f.main, 'scripts', 'refresh-branch.sh'), f.wt], {
+    PATH: race.PATH,
+  });
+  assert.ok(await race.flipped(), `the shim never ran\n${output(result)}`);
+  // The record's commondir still steers git's ref store (a residual the permission profile covers),
+  // so the outcome is not asserted; that nothing from the other repository's configuration or hooks
+  // ran is.
+  assert.deepEqual(await f.markers(), [], output(result));
+});
+
+/** Unset the main checkout's `remote.origin.url` and plant a legacy `.git/remotes/origin` naming `url`. */
+async function legacyRemote(f, url) {
+  await runGit(f.main, ['config', '--unset', 'remote.origin.url']);
+  await mkdir(join(f.main, '.git', 'remotes'));
+  await writeFile(
+    join(f.main, '.git', 'remotes', 'origin'),
+    `URL: ${url}\nPush: refs/heads/*:refs/heads/*\nPull: refs/heads/*:refs/remotes/origin/*\n`,
+  );
+}
+
+test('(l) push-branch.sh refuses a remote the main .git/config names no URL for, and never reaches the planted one', async (t) => {
+  const f = await fixture(t);
+  const { evilOrigin } = await evilRepository(f);
+  await legacyRemote(f, evilOrigin);
+  const result = await assertPushRefused(f, f.wt);
+  assert.match(result.stdout, /names no URL for remote 'origin'/, output(result));
+  assert.equal((await runGit(evilOrigin, ['for-each-ref'])).stdout, '');
+});
+
+test('(m) refresh-branch.sh refuses a fetch from a remote the main .git/config names no URL for', async (t) => {
+  const f = await fixture(t);
+  await runGit(f.wt, ['reset', '--quiet', '--hard', 'origin/trunk']);
+  // A planted origin one commit ahead of the real one's trunk: a fetch from it would bring that
+  // commit in, and the merge would land it.
+  const { evilOrigin } = await evilRepository(f);
+  await runGit(f.main, ['push', '--quiet', '--no-verify', evilOrigin, 'refs/remotes/origin/trunk:refs/heads/trunk']);
+  const clone = join(dirname(f.main), 'evil-clone');
+  await runGit(dirname(f.main), ['clone', '--quiet', '-b', 'trunk', evilOrigin, clone]);
+  await runGit(clone, ['config', 'user.email', 'fixture@example.invalid']);
+  await runGit(clone, ['config', 'user.name', 'Harness Fixture']);
+  await runGit(clone, ['commit', '--quiet', '--allow-empty', '-m', 'fixture: planted']);
+  await runGit(clone, ['push', '--quiet', '--no-verify', 'origin', 'trunk']);
+  await legacyRemote(f, evilOrigin);
+  const tracking = (await runGit(f.main, ['rev-parse', 'refs/remotes/origin/trunk'])).stdout;
+  const wtHead = await f.head(f.wt);
+  const result = await f.refresh(f.wt);
+  assert.equal(result.status, 1, output(result));
+  assert.match(result.stderr, /refusing to refresh: .*names no URL for remote 'origin'/, output(result));
+  assert.equal((await runGit(f.main, ['rev-parse', 'refs/remotes/origin/trunk'])).stdout, tracking);
+  assert.equal(await f.head(f.wt), wtHead);
+});
+
+test('(n) refresh-branch.sh never runs git inside a nested repository planted at a gitlink', async (t) => {
+  const f = await fixture(t);
+  // What a sandboxed command can build in its own worktree: a nested repository whose configuration
+  // runs a marker on any index refresh, recorded as a gitlink in a commit.
+  const { receivepack } = await evilRepository(f);
+  const sub = join(f.wt, 'sub');
+  await mkdir(sub);
+  await runGit(sub, ['init', '--quiet']);
+  await runGit(sub, ['-c', 'user.email=fixture@example.invalid', '-c', 'user.name=Fixture', 'commit', '--quiet', '--allow-empty', '-m', 'sub']);
+  await runGit(sub, ['config', 'core.fsmonitor', receivepack]);
+  const subHead = (await runGit(sub, ['rev-parse', 'HEAD'])).stdout.trim();
+  await runGit(f.wt, ['update-index', '--add', '--cacheinfo', `160000,${subHead},sub`]);
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-m', 'fixture: gitlink']);
+  const result = await f.refresh(f.wt);
+  assert.doesNotMatch(result.stderr, REFRESH_REFUSED, output(result));
+  assert.deepEqual(await f.markers(), [], output(result));
 });

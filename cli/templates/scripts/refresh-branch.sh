@@ -47,6 +47,35 @@
 # `push-branch.sh` → the paragraph of the same name). The main checkout itself
 # is placed by `lib/harness-run-lib.sh` → `hr_wrapper_main_of`, which refuses a
 # `.git` directory holding a `commondir` the sandbox could have planted.
+# Residual: the defence against a `.git` pointer FILE planted at
+# `<main>/<scripts_dir>/.git` is the permission profile alone (`push-branch.sh`
+# → the paragraph of the same name).
+#
+# GIT NEVER RE-READS THE TARGET'S RECORDS — ALMOST. The checks read a
+# worktree's `.git` pointer, its record's `commondir` and `gitdir`, and its
+# `config.worktree` once, and a sandboxed process still running when this
+# script starts could rewrite one before git reads it again. So after its
+# checks this script reads the branch once from the main checkout
+# (`lib/harness-run-lib.sh` → `hr_wrapper_branch_var`); the fetch, the ref
+# lookups and the ancestry test run as `git -C <main checkout>`; and the calls
+# that need the working tree — the clean-tree test, the merge and its abort —
+# run with `GIT_DIR` set to the record the target check accepted,
+# `GIT_COMMON_DIR` to `<main>/.git` and `GIT_WORK_TREE` to the target, so git
+# never reads the `.git` pointer and takes its configuration, hooks and objects
+# from the main repository whatever the record's `commondir` says. Two re-reads
+# remain in those calls, both write-protected by the permission profile and
+# neither closed here: git's ref store still follows the record's `commondir`
+# (refs only), and git still reads the record's `config.worktree`, which a
+# merge honours whole — `-c extensions.worktreeConfig=false` was measured not
+# to stop that, and pinning a few dangerous keys with `-c` is not done because
+# the set is open (merge and filter drivers are named by the tree's own
+# attributes). How the Linux sandbox treats those globbed profile entries is
+# unverified.
+#
+# A REMOTE WITH NO CONFIGURED URL IS REFUSED. Before a fetch this script
+# refuses (exit 1) unless the main `.git/config` names `remote.origin.url`
+# (`hr_remote_url_configured`; the reasoning: `push-branch.sh` → the paragraph
+# of the same name). `--local` makes no network call and is not checked.
 #
 # THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER. A worktree's own
 # copy is a tracked file in a sandbox-writable tree, so a sandboxed command
@@ -72,16 +101,21 @@
 # call spelled here (derivation: `lib/harness-run-lib.sh` →
 # `hr_pinned_hooks_path`; the reasoning: `push-branch.sh` → the paragraph of the
 # same name). The pin matters for a merge too: `git merge` runs the
-# `pre-merge-commit`, `commit-msg` and `post-merge` hooks. The check compares
+# `pre-merge-commit`, `commit-msg` and `post-merge` hooks. The clean-tree test
+# passes `--ignore-submodules`, so git never runs inside a nested repository a
+# sandboxed command could have planted, and the fetch passes
+# `--no-recurse-submodules` for the same reason. The check compares
 # that `core.hooksPath` against the `githooksDir` in the worktree's own
 # `harness.config.json` — the one configured value read from the worktree, and
 # an inert one: a rewritten copy can only make the check accept a different
 # `core.hooksPath`, which the pin overrides on every call.
 #
 # THE INHERITED GIT ENVIRONMENT IS DROPPED. Before anything else this script
-# unsets `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE`, `GIT_CONFIG_PARAMETERS`,
-# `GIT_CONFIG_COUNT` and `GIT_EXEC_PATH`, and keeps `GIT_SSH_COMMAND` (the
-# reasoning: `push-branch.sh` → the paragraph of the same name).
+# unsets the same `GIT_*` names `push-branch.sh` does, every `GIT_TRACE*`
+# included, and keeps `GIT_SSH_COMMAND`; `PATH` and `BASH_ENV` are trusted as
+# they arrive (the list and the reasoning: `push-branch.sh` → the paragraph of
+# the same name). It sets `GIT_DIR`, `GIT_COMMON_DIR` and `GIT_WORK_TREE` itself
+# afterwards, for the working-tree calls only.
 #
 # Usage: refresh-branch.sh [--local] [<repo-dir>]
 #        bash <main checkout>/<scripts_dir>/refresh-branch.sh <worktree>
@@ -103,7 +137,9 @@
 #      `harness.config.json` IS NOT TRUSTED EITHER above) /
 #      a per-working-copy configuration or a hooks directory this script does
 #      not trust (THE PER-WORKING-COPY CONFIG IS NOT TRUSTED above) / a
-#      `defaultBranch` starting with `-`
+#      `defaultBranch` or a branch starting with `-` / a fetch from a remote
+#      whose URL the main `.git/config` does not name (A REMOTE WITH NO
+#      CONFIGURED URL IS REFUSED above)
 #   2  protected-branch refusal — HEAD is ON a protected branch, so this would be
 #      a merge INTO the integration line; nothing was attempted
 #   3  nothing to do — the current branch already contains the base
@@ -189,6 +225,11 @@
 #   planted main      printf '%s\n' "$s/.git" > "$d/.git/commondir"; the same
 #   commondir         call on "$w" -> exit 1, "refusing to refresh: cannot place
 #                     this script in a main checkout", no "$s.marker"
+#   legacy remote     git -C "$d" config --unset remote.origin.url
+#                     mkdir -p "$d/.git/remotes"
+#                     printf 'URL: %s\n' "$s/.git" > "$d/.git/remotes/origin"
+#                     the same call on "$w" -> exit 1, "refusing to refresh:
+#                     ... names no URL for remote 'origin'", nothing fetched
 #   clean worktree    the "a worktree" row above: it refreshes
 #
 #   The configuration is the main checkout's, on a clean worktree as above:
@@ -206,7 +247,14 @@
 set -uo pipefail
 
 # THE INHERITED GIT ENVIRONMENT IS DROPPED (header). GIT_SSH_COMMAND is kept.
-unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_EXEC_PATH
+# Each name is unset on its own; `${!GIT_TRACE*}` lists every set GIT_TRACE*
+# name, which bash 3.2 supports.
+unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES \
+  GIT_TEMPLATE_DIR GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_CONFIG_GLOBAL \
+  GIT_CONFIG_SYSTEM GIT_EXEC_PATH
+for hr_trace_var in ${!GIT_TRACE*}; do unset "$hr_trace_var"; done
+unset hr_trace_var
 
 # The library is reached by a path computed from this script's own location, so a
 # copy that was moved with its `lib/` still finds it, and no session root or
@@ -284,11 +332,20 @@ pinned="$HR_PINNED_HOOKS_PATH"
 # carries `-c`, which an older git than 2.31 still honours.
 export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$pinned"
 
-top="$(hr_repo_root "$target")" || top=""
-if [ -z "$top" ]; then
-  echo "refresh-branch.sh: '$target' is not inside a git repository — refusing to merge" >&2
-  exit 1
-fi
+# GIT NEVER RE-READS THE TARGET'S RECORDS (header). The checkout and its git
+# directory are the values the checks above judged, taken once: a call that
+# needs no working tree runs in the main checkout, and one that does goes
+# through `wt_git`, which hands git those values instead of letting it find
+# them again through the target's `.git` pointer.
+top="$top_nogit"
+wt_gitdir="$HR_TARGET_GITDIR"
+main_git() {
+  git -C "$main_top" -c core.hooksPath="$pinned" "$@"
+}
+wt_git() {
+  GIT_DIR="$wt_gitdir" GIT_COMMON_DIR="$main_top/.git" GIT_WORK_TREE="$top" \
+    git -C "$top" -c core.hooksPath="$pinned" "$@"
+}
 
 # THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER (header): every
 # configured value below is read at the main checkout, never at "$top".
@@ -318,11 +375,18 @@ case "$base" in
     ;;
 esac
 
-branch="$(hr_current_branch "$top")"
-if [ -z "$branch" ]; then
+# Read once, and named as `refs/heads/<branch>` wherever a call can name it.
+if ! hr_wrapper_branch_var "$main_top" "$wt_gitdir"; then
   echo "refresh-branch.sh: detached HEAD — refusing to merge" >&2
   exit 1
 fi
+branch="$HR_WRAPPER_BRANCH"
+case "$branch" in
+  -*)
+    echo "refresh-branch.sh: branch '$branch' starts with '-', which git would read as an option — refusing to merge" >&2
+    exit 1
+    ;;
+esac
 
 # The direction check, and the reason this wrapper is safe to allow-list. It
 # refuses on the branch the guard's dangerous case is about, and it takes the
@@ -357,7 +421,11 @@ esac
 # A merge writes the working tree, so an uncommitted tracked change is refused
 # before anything is fetched: the caller's own edit must not be carried into a
 # merge commit, and an aborted merge must be able to restore what was there.
-if ! git -C "$top" -c core.hooksPath="$pinned" diff --quiet || ! git -C "$top" -c core.hooksPath="$pinned" diff --cached --quiet; then
+# `--ignore-submodules` on the working-tree diff: without it git runs `git
+# status` inside every gitlink's directory, under that nested repository's own
+# configuration, which a sandboxed command can write. A merge never touches a
+# submodule's working tree here, so its state is not this check's concern.
+if ! wt_git diff --quiet --ignore-submodules || ! wt_git diff --cached --quiet; then
   echo "refresh-branch.sh: uncommitted tracked changes in '$top' — refusing to merge" >&2
   echo "  commit them (bash \"$script_dir/commit-on-branch.sh\" …) and re-run" >&2
   exit 1
@@ -369,14 +437,21 @@ if [ "$use_local" -eq 1 ]; then
 else
   base_ref="origin/$base"
   ref_path="refs/remotes/origin/$base"
+  # A REMOTE WITH NO CONFIGURED URL IS REFUSED (header).
+  if ! hr_remote_url_configured "$main_top" origin; then
+    echo "refresh-branch.sh: refusing to refresh: $main_top/.git/config names no URL for remote 'origin' (git would read one from .git/remotes or .git/branches, which a sandboxed command can write)" >&2
+    exit 1
+  fi
   # Tolerate a failed fetch the way create-worktree.sh does — offline with the
   # ref already present is still a refresh this can do — and judge the ref the
   # next block names rather than the fetch. git's own stderr still reaches the
-  # caller's log whichever outcome follows.
-  git -C "$top" -c core.hooksPath="$pinned" fetch origin "$base" || true
+  # caller's log whichever outcome follows. `--no-recurse-submodules`: an
+  # on-demand fetch would run git in the main checkout's submodules, under
+  # configuration a sandboxed command can write.
+  main_git fetch --no-recurse-submodules origin "$base" || true
 fi
 
-if ! git -C "$top" -c core.hooksPath="$pinned" show-ref --verify --quiet "$ref_path"; then
+if ! main_git show-ref --verify --quiet "$ref_path"; then
   echo "refresh-branch.sh: no '$base_ref' in '$top' — nothing to merge from" >&2
   if [ "$use_local" -eq 1 ]; then
     echo "  --local merges the local '$base' branch; drop the flag to merge origin/$base" >&2
@@ -388,12 +463,12 @@ fi
 
 # Already contained => a distinct, dedicated status, so a caller can tell "the
 # base is already here" apart from a refusal.
-if git -C "$top" -c core.hooksPath="$pinned" merge-base --is-ancestor "$base_ref" HEAD; then
+if main_git merge-base --is-ancestor "$ref_path" "refs/heads/$branch"; then
   echo "refresh-branch.sh: '$branch' already contains $base_ref — nothing to do"
   exit 3
 fi
 
-if git -C "$top" -c core.hooksPath="$pinned" merge --no-edit "$base_ref"; then
+if wt_git merge --no-edit "$base_ref"; then
   echo "refresh-branch.sh: merged $base_ref into $branch"
   exit 0
 fi
@@ -401,8 +476,8 @@ fi
 # A failed merge is one of two things, and they are distinguished by whether a
 # merge is in progress: a conflict leaves MERGE_HEAD behind, anything else (a
 # refused fast-forward, a hook, an unmergeable ref) never started one.
-if git -C "$top" -c core.hooksPath="$pinned" rev-parse --verify --quiet MERGE_HEAD >/dev/null; then
-  if git -C "$top" -c core.hooksPath="$pinned" merge --abort; then
+if wt_git rev-parse --verify --quiet MERGE_HEAD >/dev/null; then
+  if wt_git merge --abort; then
     echo "refresh-branch.sh: $base_ref conflicts with $branch — merge aborted, working copy unchanged" >&2
     exit 4
   fi

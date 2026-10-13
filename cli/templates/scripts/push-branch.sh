@@ -25,7 +25,8 @@
 # EVERY FAILURE PATH IS NON-FATAL (exit 0). A non-git directory, a detached
 # HEAD, a protected branch, a configuration that cannot be resolved, a target
 # it does not trust, a per-working-copy configuration it does not trust, a
-# hooks directory it will not pin, a branch name starting with `-`, or a failed
+# hooks directory it will not pin, a branch name starting with `-`, a remote
+# whose URL the main `.git/config` does not name, or a failed
 # push (a transient network, say) is made VISIBLE with a one-line message but
 # must NEVER abort the calling
 # run — a stale remote is recoverable and a halted run is not. That is why this script uses `set -uo pipefail` deliberately
@@ -86,7 +87,35 @@
 # `lib/harness-run-lib.sh` → `hr_wrapper_main_of`, which refuses a `.git`
 # directory holding a `commondir`: the sandbox can create that file, and
 # following it would let a sandboxed command name the main checkout — and with
-# it the configuration and the hooks pin below.
+# it the configuration and the hooks pin below. Residual: the defence against a
+# `.git` pointer FILE planted at `<main>/<scripts_dir>/.git` — which would make
+# that directory the nearest checkout, and `hr_wrapper_main_of`'s pointer-file
+# arm would follow it — is the permission profile alone, which write-protects a
+# `.git` at every level of the scripts directory; that arm has no check of its
+# own.
+#
+# GIT NEVER RE-READS THE TARGET'S RECORDS. The checks read a worktree's `.git`
+# pointer, its record's `commondir` and `gitdir`, and its `config.worktree`
+# once, and git would read them again on each later call — so a sandboxed
+# process still running when this script starts could rewrite one in between.
+# So after its checks this script never sends git to the target: the branch is
+# read once from the main checkout (`lib/harness-run-lib.sh` →
+# `hr_wrapper_branch_var`, which asks for `worktrees/<name>/HEAD`), and every
+# later call runs as `git -C <main checkout>` with the branch named as
+# `refs/heads/<branch>` — the push an explicit
+# `refs/heads/<branch>:refs/heads/<branch>` refspec — so no worktree record and
+# no `config.worktree` is consulted at all. Upstream tracking lives in the main
+# `.git/config` either way; a first push still sets it.
+#
+# A REMOTE WITH NO CONFIGURED URL IS REFUSED. The remote is
+# `branch.<branch>.remote`, else `origin`. When the main `.git/config` names no
+# `remote.<remote>.url`, git reads the remote from the legacy
+# `.git/remotes/<remote>` or `.git/branches/<remote>`, both sandbox-writable, and
+# a push to a repository named there runs that repository's `pre-receive` with
+# this script's reach. So this script refuses (exit 0, a "refusing to push:"
+# line) unless `.git/config` itself names the URL
+# (`hr_remote_url_configured`); the permission profile also write-protects both
+# directories.
 #
 # THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER. A worktree's own
 # copy is a tracked file in a sandbox-writable tree, so a sandboxed command
@@ -103,16 +132,17 @@
 # THE PER-WORKING-COPY CONFIG IS NOT TRUSTED. The main checkout's copy of this
 # script runs OUTSIDE the sandbox, so any git configuration a sandboxed command
 # could write would run with the wrapper's reach. In a linked worktree that is
-# `.git/worktrees/<name>/config.worktree`: the sandbox can write it, and its path
-# differs per worktree, so no profile entry can name it. `setup-worktree.sh`
+# `.git/worktrees/<name>/config.worktree`: its path differs per worktree, so only
+# a globbed profile entry can name it, and how the Linux sandbox treats one is
+# unverified. `setup-worktree.sh`
 # writes exactly one key there, `core.hooksPath`, so before its first git call
 # this script refuses unless that file is absent, empty, or holds that one key at
 # the value `setup-worktree.sh` writes (`hr_worktree_config_check_var`); a
 # refusal names each offending key and never its value. Every git call after
 # the check then pins `core.hooksPath` to the MAIN repository's configured hooks
 # directory (`hr_pinned_hooks_path`), not the worktree's: the worktree's hooks
-# directory is sandbox-writable, and on Linux the globbed `denyWrite` that would
-# cover it is skipped. The pin accepts only `<main>/<githooksDir>` or
+# directory is protected only by a globbed `denyWrite`, which is unverified on
+# Linux. The pin accepts only `<main>/<githooksDir>` or
 # `<main>/.git/hooks` — the two directories the permission profile
 # write-protects on both sides — compared against the main checkout's own
 # `harness.config.json`, which the profile also protects; any other directory,
@@ -131,15 +161,22 @@
 # directory.
 #
 # THE INHERITED GIT ENVIRONMENT IS DROPPED. Before anything else this script
-# unsets `GIT_DIR`, `GIT_COMMON_DIR` and `GIT_WORK_TREE`, which would point
-# every git call somewhere other than the checked target; `GIT_CONFIG_PARAMETERS`
-# and `GIT_CONFIG_COUNT`, which would add configuration the checks never saw (the
-# pin exports its own `GIT_CONFIG_COUNT` afterwards); and `GIT_EXEC_PATH`, which
-# would choose the git programs run. It keeps `GIT_SSH_COMMAND`: the environment
-# reaching an excluded command is the agent runner's, not one a sandboxed
-# command can set — an assignment prefix or a compound is a different command
-# string, which stays sandboxed — and an operator may rely on it for the SSH
-# push this script exists to make outside the sandbox.
+# unsets `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,
+# `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_NAMESPACE`
+# and `GIT_CEILING_DIRECTORIES`, which would point git's calls at another
+# repository, index, object store or ref namespace than the checked one;
+# `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_GLOBAL`,
+# `GIT_CONFIG_SYSTEM` and `GIT_TEMPLATE_DIR`, which would add configuration or
+# templates the checks never saw (the pin exports its own `GIT_CONFIG_COUNT`
+# afterwards); `GIT_EXEC_PATH`, which would choose the git programs run; and
+# every `GIT_TRACE*`, which would have git write a trace to a file of the
+# environment's choosing. It keeps `GIT_SSH_COMMAND`: the environment reaching
+# an excluded command is the agent runner's, not one a sandboxed command can
+# set — an assignment prefix or a compound is a different command string,
+# which stays sandboxed — and an operator may rely on it for the SSH push this
+# script exists to make outside the sandbox. Residual: the rest of that
+# environment is trusted as it arrives — `PATH`, which chooses the `git` and
+# `jq` run, and `BASH_ENV`, which `bash` sources before this file's first line.
 #
 # WHAT IT NEVER DOES. It performs only a fast-forward push of already-committed
 # work: no `--force`, no `--force-with-lease`, no history-rewriting flag, no
@@ -237,6 +274,12 @@
 #   commondir         bash "$d/scripts/push-branch.sh" "$w"
 #                     -> exit 0, "refusing to push: cannot place this script in
 #                     a main checkout", "$b" unchanged, no "$s.marker"
+#   legacy remote     git -C "$d" config --unset remote.origin.url
+#                     mkdir -p "$d/.git/remotes"
+#                     printf 'URL: %s\n' "$s/.git" > "$d/.git/remotes/origin"
+#                     bash "$d/scripts/push-branch.sh" "$w"
+#                     -> exit 0, "refusing to push: ... names no URL for remote
+#                     'origin'", no branch in "$s", "$b" unchanged
 #   clean worktree    the clean worktree row above: it pushes
 #
 #   The protected set is the main checkout's, on a clean worktree as above:
@@ -252,7 +295,14 @@
 set -uo pipefail
 
 # THE INHERITED GIT ENVIRONMENT IS DROPPED (header). GIT_SSH_COMMAND is kept.
-unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_EXEC_PATH
+# Each name is unset on its own; `${!GIT_TRACE*}` lists every set GIT_TRACE*
+# name, which bash 3.2 supports.
+unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES \
+  GIT_TEMPLATE_DIR GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_CONFIG_GLOBAL \
+  GIT_CONFIG_SYSTEM GIT_EXEC_PATH
+for hr_trace_var in ${!GIT_TRACE*}; do unset "$hr_trace_var"; done
+unset hr_trace_var
 
 # Attempts in all, and the wait before the second; the third waits three times
 # that (EVERY FAILURE PATH IS NON-FATAL above).
@@ -318,19 +368,16 @@ pinned="$HR_PINNED_HOOKS_PATH"
 # carries `-c`, which an older git than 2.31 still honours.
 export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$pinned"
 
-# Resolve the repository top. Not a git repository => warn and skip (non-fatal).
-top="$(hr_repo_root "$repo_dir")"
-if [ -z "$top" ]; then
-  echo "push-branch.sh: '$repo_dir' is not a git repository — nothing to push"
-  exit 0
-fi
+# Every git call below runs in the MAIN checkout and names the branch
+# explicitly (GIT NEVER RE-READS THE TARGET'S RECORDS, header): git is never
+# sent to "$top_nogit", whose records the checks above read once.
 
-# Current branch. Empty => detached HEAD => refuse (non-fatal skip).
-branch="$(hr_current_branch "$top")"
-if [ -z "$branch" ]; then
+# Current branch, read once. Empty => detached HEAD => refuse (non-fatal skip).
+if ! hr_wrapper_branch_var "$main_top" "$HR_TARGET_GITDIR"; then
   echo "push-branch.sh: detached HEAD — refusing to push"
   exit 0
 fi
+branch="$HR_WRAPPER_BRANCH"
 
 # A branch name git would parse as an option (THE TARGET IS NOT TRUSTED): a
 # worktree's HEAD is sandbox-writable, and no branch git creates starts with `-`.
@@ -361,15 +408,30 @@ case "$protected" in
     ;;
 esac
 
+# The remote: the branch's own `branch.<branch>.remote`, else `origin`. It must
+# be a name, not an option, and the main `.git/config` must name its URL
+# (A REMOTE WITH NO CONFIGURED URL IS REFUSED, header).
+remote="$(git -C "$main_top" -c core.hooksPath="$pinned" config --get "branch.$branch.remote" 2>/dev/null)"
+[ -n "$remote" ] || remote=origin
+case "$remote" in
+  -*)
+    echo "push-branch.sh: remote '$remote' starts with '-', which git would read as an option — refusing to push"
+    exit 0
+    ;;
+esac
+if ! hr_remote_url_configured "$main_top" "$remote"; then
+  echo "push-branch.sh: refusing to push: $main_top/.git/config names no URL for remote '$remote' (git would read one from .git/remotes or .git/branches, which a sandboxed command can write)"
+  exit 0
+fi
+
 # A BRANCH ITS REMOTE DELETED STAYS DELETED (header). Once, before the retry
 # loop; a branch tracking nothing is a first push and skips the check.
-track_merge="$(git -C "$top" -c core.hooksPath="$pinned" config --get "branch.$branch.merge" 2>/dev/null)"
+track_merge="$(git -C "$main_top" -c core.hooksPath="$pinned" config --get "branch.$branch.merge" 2>/dev/null)"
 if [ -n "$track_merge" ] ||
-  git -C "$top" -c core.hooksPath="$pinned" rev-parse --verify --quiet "refs/remotes/origin/$branch" >/dev/null 2>&1; then
-  track_remote="$(git -C "$top" -c core.hooksPath="$pinned" config --get "branch.$branch.remote" 2>/dev/null)"
-  [ -n "$track_remote" ] || track_remote=origin
+  git -C "$main_top" -c core.hooksPath="$pinned" rev-parse --verify --quiet "refs/remotes/origin/$branch" >/dev/null 2>&1; then
+  track_remote="$remote"
   track_ref="${track_merge:-refs/heads/$branch}"
-  git -C "$top" -c core.hooksPath="$pinned" ls-remote --exit-code --heads "$track_remote" "$track_ref" >/dev/null 2>&1
+  git -C "$main_top" -c core.hooksPath="$pinned" ls-remote --exit-code --heads "$track_remote" "$track_ref" >/dev/null 2>&1
   ls_status=$?
   case "$ls_status" in
     0) ;;
@@ -383,13 +445,15 @@ if [ -n "$track_merge" ] ||
   esac
 fi
 
-# Push the branch; the deleted-on-its-remote check above has already run. Use
-# the existing upstream when one is configured; otherwise set it on the fly, so
-# a branch with no upstream is still pushed. Fast-forward only.
-if git -C "$top" -c core.hooksPath="$pinned" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
-  push_cmd=(git -C "$top" -c core.hooksPath="$pinned" push)
+# Push the branch, by an explicit refspec from the main checkout; the
+# deleted-on-its-remote check above has already run. A branch with an upstream
+# keeps it; one with none has it set on the fly, as before, so a first push
+# still tracks. Fast-forward only.
+refspec="refs/heads/$branch:refs/heads/$branch"
+if git -C "$main_top" -c core.hooksPath="$pinned" rev-parse --abbrev-ref --symbolic-full-name "$branch@{u}" >/dev/null 2>&1; then
+  push_cmd=(git -C "$main_top" -c core.hooksPath="$pinned" push "$remote" "$refspec")
 else
-  push_cmd=(git -C "$top" -c core.hooksPath="$pinned" push --set-upstream origin "$branch")
+  push_cmd=(git -C "$main_top" -c core.hooksPath="$pinned" push --set-upstream "$remote" "$refspec")
 fi
 
 # Every failure line keeps the `push failed for <branch>` prefix: logs and
@@ -403,7 +467,7 @@ while :; do
   [ -n "$push_out" ] && printf '%s\n' "$push_out" >&2
 
   if [ "$push_status" -eq 0 ]; then
-    echo "push-branch.sh: pushed $branch to origin"
+    echo "push-branch.sh: pushed $branch to $remote"
     break
   fi
   # A here-string, not a pipe: `grep -q` exiting early would fail a pipeline

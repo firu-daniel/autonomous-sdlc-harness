@@ -4783,7 +4783,7 @@ const PROFILE_WRITE_PROTECTION_CHECK: Check = {
           `${PROFILE_PATH} carries an Edit and a Write deny rule for each of the ${expected.length} paths that run outside the sandbox${notGraded}`,
         )
       : pass(
-          `${PROFILE_PATH} write-protects each of the ${expected.length} paths that run outside the sandbox on both sides: a ${denyWritePath} entry, and an Edit and a Write deny rule. Linux skips a ${denyWritePath} entry containing *, so there the worktree-glob paths hold on the file-tool side only`,
+          `${PROFILE_PATH} write-protects each of the ${expected.length} paths that run outside the sandbox on both sides: a ${denyWritePath} entry, and an Edit and a Write deny rule. How the Linux sandbox treats a ${denyWritePath} entry containing * is unverified, so on Linux only the file-tool side is relied on for the globbed paths`,
         );
   },
 };

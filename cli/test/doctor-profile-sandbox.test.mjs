@@ -168,7 +168,7 @@ concurrentSuite('doctor profile-write-protection', () => {
   it('(a) passes on a freshly generated profile, stating the Linux residual', async (t) => {
     const dir = await wiredFixture(t);
     const { line } = await doctorLine(dir, 'PASS', [], WRITE_CHECK_ID);
-    assert.ok(line.includes('Linux skips'), line);
+    assert.ok(line.includes('How the Linux sandbox treats') && line.includes('is unverified'), line);
   });
 
   it("(b) warns when the main checkout's push wrapper has no denyWrite entry, naming the path and the side", async (t) => {
@@ -224,5 +224,22 @@ concurrentSuite('doctor profile-write-protection', () => {
     const { line } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
     assert.ok(line.includes(rule), line);
     assert.ok(line.includes('not graded because the sandbox is off'), line);
+  });
+
+  it("(g) warns when the scripts directory's .git entry lacks its under-it rule, naming that rule", async (t) => {
+    const dir = await wiredFixture(t);
+    const profile = JSON.parse(readFileSync(join(dir, PROFILE_FILE), 'utf8'));
+    const config = JSON.parse(readFileSync(join(dir, CONFIG_FILE), 'utf8'));
+    const path = join(dir, config.scriptsDir, '.git');
+    assert.ok(profile.sandbox.filesystem.denyWrite.includes(path), `no denyWrite entry for ${path}`);
+    const rule = `Edit(/${path}/**)`;
+    editJson(dir, PROFILE_FILE, (value) => {
+      assert.ok(value.permissions.deny.includes(rule), `no ${rule} in the profile's deny list`);
+      value.permissions.deny = value.permissions.deny.filter((entry) => entry !== rule);
+    });
+    const { line, status } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
+    assert.ok(line.includes(`${path} (`), line);
+    assert.ok(line.includes(`lacks the file-tool deny rule ${rule}`), line);
+    assert.equal(status, 0, line);
   });
 });
