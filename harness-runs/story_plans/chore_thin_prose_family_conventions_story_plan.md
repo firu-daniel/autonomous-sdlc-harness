@@ -72,7 +72,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_conv
 4. [x] **Task 4** — Thin `conventions-reviewer`'s checks, corpus pass, `## What you do not do` and `## House rules` _(layer: plugin)_ _(points: 20)_
 5. [x] **Task 5** — Thin `harness-analyze.md`'s `## Context` and steps 1–3 _(layer: plugin)_ _(points: 15)_
 6. [x] **Task 6** — Thin `harness-analyze.md`'s step 4 lead, `(4a)`, `(4b)` and `(4c)` _(layer: plugin)_ _(points: 20)_
-7. [ ] **Task 7** — Thin `harness-analyze.md`'s `(4d)`, step 5 and step 6 _(layer: plugin)_ _(points: 15)_
+7. [x] **Task 7** — Thin `harness-analyze.md`'s `(4d)`, step 5 and step 6 _(layer: plugin)_ _(points: 15)_
 8. [ ] **Task 8** — Measure the three files, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register

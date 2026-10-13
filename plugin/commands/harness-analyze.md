@@ -329,9 +329,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    once with `pass: corpus`, that document's **same write-dispatch values** (the write table step 3 spells
    out, **minus** `pass`, which this dispatch carries as `pass: corpus`), the three `prior_*` fields **taken
    verbatim from that document's own write return**, and `findings` = the collected lines, **each prefixed
-   with the exact literal `Layer-writer divergence — `** so the writer reads a forwarded divergence rather
-   than a reviewer finding — that prefix, and the absence of a corpus check id, is the discriminator its own
-   `## Invocation contract` names. **Fix-only:** no review dispatch accompanies it, the one-pass rule stands
+   with the exact literal `Layer-writer divergence — `** — the discriminator the writer's own `## Invocation contract` names. **Fix-only:** no review dispatch accompanies it, the one-pass rule stands
    for review, and step 3's closed-block rule binds it like every other dispatch.
 
    **The cap, in the receiving contract's own words** (`${CLAUDE_PLUGIN_ROOT}/agents/conventions-writer.md` →
@@ -340,11 +338,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    dispatch of the shared cross-layer document, sent before iteration 1 and counted outside both. This is that
    reconciliation dispatch, the third one that sentence admits; the shared cross-layer document is
    `role: fixable` like any other document this run wrote, so it takes the iteration fixes below in addition to
-   this one. The count is therefore admissible on both sides rather than only on this one: a caller that
-   exceeds it is refused by the writer's own stop condition.
-
-   It runs **first** so the corpus review reads an already-reconciled shared document and its findings are
-   net-new, rather than a re-discovery iteration 2 would then have to spend itself on.
+   this one.
 
    **Skipped, with the reason recorded for step 6**, in exactly two cases: this run did not write that
    document, so there is nothing in it this run may fix; or the collected set is empty. Those two are its
@@ -352,8 +346,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
 
    **A divergence the writer declines** lands on that document's `## Not determined` under the existing
    literal `Reviewer finding not applied — ` and in its `findings_declined:` return, exactly as a reviewer
-   finding does. That literal is **not forked for a second origin** — one literal, one grep, one count; the
-   origin rides inside the line, in the `Layer-writer divergence — ` prefix the report prints.
+   finding does, the `Layer-writer divergence — ` prefix carrying its origin.
 
    **The corpus set** is assembled from this run's own record, one entry per member carrying `document_path`
    (absolute), `target`, `scope` and `role`.
@@ -362,8 +355,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
      paragraph below its corpus dispatch table admits them: one of `<layer_names>`; `conventions` for the
      shared cross-layer document; or **`project`** for `.claude/CLAUDE.md`, whose `scope` is the
      **repository root** and whose evidence is step 2's `project`-target survey, not any layer's `path`.
-     Send no fourth value: that paragraph is the closed set, and a value it does not admit changes the
-     reviewer's `conventions` carve-out silently. It rides **inside** each member entry — there is no
+     Send no fourth value. It rides **inside** each member entry — there is no
      top-level `target` on this axis.
    - **`role: fixable`** — every document this run wrote (its write or fix return exists), plus
      `.claude/CLAUDE.md` when (4b) wrote or merged either section.
@@ -375,20 +367,15 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
      nothing in it this run may fix.
    - **One exclusion from the set, the same one `${CLAUDE_PLUGIN_ROOT}/agents/conventions-reviewer.md` →
      `## Invocation contract` states for `shared_document`:** a document (4a) classified `skip` that **still
-     carries `<!-- harness:unfilled -->`** is left out of `corpus_documents` entirely. An unfilled skeleton is
-     template prose, and measuring this run's documents against it produces findings against the template —
-     findings a writer then applies. The state is reachable: (4a)'s untouched-skeleton test is the marker
-     **and** the `**What belongs here**` block, so a half-edited file carrying only the marker is *asked*, and
-     can be answered `skip`. **Not a silent drop** — step 6 names the excluded document and the marker, which
-     is what keeps this from being the drop the next bullet refuses. `.claude/CLAUDE.md` is never excluded by
+     carries `<!-- harness:unfilled -->`** is left out of `corpus_documents` entirely. A half-edited file
+     carrying only the marker reaches this state, because (4a) asks about it and it can be answered `skip`.
+     **Not a silent drop** — step 6 names the excluded document and the marker. `.claude/CLAUDE.md` is never excluded by
      it: per (4b) that file carries no marker.
    - **`role` is that closed two-value set and nothing else.** A member carrying neither value is a malformed
-     dispatch, and silently dropping it from the set is worse than sending it: that is how the one member with
-     no writer loses its review-time rule-holder on exactly the re-run where no section was written.
+     dispatch, and silently dropping it from the set is worse than sending it.
 
-   **The pass does not run at all** when the set holds fewer than two members, or no `fixable` member: a
-   corpus of one has nothing to be incoherent with, and the run says so in step 6 rather than paying a
-   dispatch.
+   **The pass does not run at all** when the set holds fewer than two members, or no `fixable` member; the
+   run says so in step 6.
 
    **Iteration 1 — one review dispatch, then a per-document fix fan-out.** Dispatch `conventions-reviewer`
    **once** with `pass: corpus`, `corpus_documents` (the set above), `mode`, `excluded_paths`,
@@ -399,11 +386,9 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
      `conventions-writer` with `pass: corpus`, that document's **same write-dispatch values** (the write table
      **minus** `pass`, which this dispatch carries as `pass: corpus`), `findings` (its group, verbatim), and
      the three `prior_*` fields **taken verbatim from that document's own write return**, forwarded and never
-     re-gathered, for the reason (4c) already gives. `shared_document` travels with those write-dispatch
-     values as the writer's read-only anchor, but **the corpus-fix return carries
-     `shared_document_divergences: none` by that axis's own rule**
-     (`${CLAUDE_PLUGIN_ROOT}/agents/conventions-writer.md` → `## The document`): there is nothing to collect
-     here, and (4d.0) — the only consumer — is already past, sent or skipped, before iteration 1.
+     re-gathered. `shared_document` travels with those write-dispatch values as the writer's read-only anchor,
+     and **the corpus-fix return carries `shared_document_divergences: none` by that axis's own rule**
+     (`${CLAUDE_PLUGIN_ROOT}/agents/conventions-writer.md` → `## The document`), so nothing is collected here.
    - A group whose member is `.claude/CLAUDE.md` is applied **by this session**, (4b) being that file's only
      writer.
    - A group whose member is `role: context` is **not dispatched**, and is carried to step 6 as an outstanding
@@ -416,9 +401,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    `.claude/CLAUDE.md` where this session applied one — **plus** every member those findings' evidence cited.
    Dispatch the reviewer once more with that narrowed `corpus_documents` and `iteration: 2`, then fan out
    fixes exactly as iteration 1 does. **Iteration 2 does not run** when iteration 1 returned `findings: none`,
-   or when every finding was declined so no member changed: the narrowed set is empty, and a second full
-   corpus read is then a cost with no subject. **There is no third iteration and no verdict gates either one**
-   — the reviewer emits none by design, so the count is the terminator.
+   or when every finding was declined so no member changed: the narrowed set is empty. **There is no third iteration and no verdict gates either one.**
 5. **The `layers` target proposes and never writes.** Show the current and proposed `layers` arrays as a diff,
    and name what in the tree each added or changed row was read off. Keep **at least one** row with
    `path: "."`. Apply only on an explicit yes or `--apply-layers` — never on `--yes` alone — by running
@@ -426,9 +409,7 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    result and writes the `.bak`. **This step itself sends nothing.** On acceptance inside a no-argument run:
    the `layers` target has already run first, so next update the `project` target's routing table to match the
    new list. A `conventions` path the accepted proposal newly names **joins the run's document set** — step 1
-   re-derives the set, (4a) classifies that path `action: write` because no skeleton exists at it
-   (`autonomous-sdlc-harness init` is the only writer of one and is not re-run here, so the `document_path`
-   does not exist when the dispatch goes out), and step 4 sends it in the same waves, with the same argument
+   re-derives the set, (4a) classifies that path `action: write` because no skeleton exists at it, and step 4 sends it in the same waves, with the same argument
    block and the same one-pass review, as every other document. The shape to compose a document with no file
    behind it is `${CLAUDE_PLUGIN_ROOT}/agents/conventions-writer.md` → `## The document`, whose third case is
    exactly that dispatch; this file does not restate it.
@@ -445,25 +426,17 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    **Recording a refusal is not applying it** — the record says the profile was examined and the answer was
    no, `layers[]` is untouched on that arm and the run says so, and the record may never read as the change
    having landed. And on the refused arm the `rationale`
-   **names the proposal that was refused**, because a proposal an operator has already answered, re-put
-   unchanged by the next run, is what teaches them to stop reading it. And **any quantity the `rationale`
+   **names the proposal that was refused**. And **any quantity the `rationale`
    states is the output of a command run in this session before this `config set` call — or it is omitted**:
    name what was read, the directory, the manifest, the file, rather than counting its contents, and state a
-   count only where the count is the reason for the verdict, where it is run and not recalled. The rationale
-   is composed from this session's own working text, and a figure carried over from there has never been
-   checked. It is load-bearing because `doctor`'s `layer-profile` check
-   (`cli/src/doctor/checks.ts` → `LAYER_PROFILE_CHECK`) reproduces the rationale verbatim as its evidence, so
-   this record is read long after the run that wrote it. This call shells the CLI out of the
+   count only where the count is the reason for the verdict, where it is run and not recalled. `doctor`'s `layer-profile`
+   check (`cli/src/doctor/checks.ts` → `LAYER_PROFILE_CHECK`) reproduces the rationale verbatim as its evidence. This call shells the CLI out of the
    session exactly as the `config set layers` call above it does, on `## Context`'s terms.
 
-   **What that record clears, and what it does not.** `doctor`'s `layer-profile` check warns while the
-   profile carries no row scoped below the repository root and its provenance does not account for that — the
-   unrecognised-layout fallback, unrecorded, or a preset whose source root did not resolve — and this record is
-   the one thing that clears it — which is what closes this hand-off's
-   loop — while it deliberately does **not** silence `layer-drift`, which reads this record **for reporting
-   only**, naming the verdict and its date in its warning, so a recorded verdict never stops `doctor`
-   reporting a source directory no layer covers, including one added after the review. A verdict describes
-   the profile at the moment it was reviewed; `layer-drift` is what notices the tree moving afterwards.
+   **What that record clears, and what it does not.** It clears `doctor`'s `layer-profile` warning about a
+   profile that carries no row scoped below the repository root with provenance that does not account for it. It
+   never silences `layer-drift`, which reads this record **for reporting only** and keeps reporting a source
+   directory no layer covers, including one added after the review.
 6. **Report, in this order:** the mode and how it was decided; per target, the action taken (written / merged
    / skipped / proposed) and the evidence sampled, including what was **not** read on a large repository — a
    document two targets name is reported **once**, naming both;
@@ -497,9 +470,6 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
      value, never as a fifth one, the verdict step 5 recorded with its rationale. Where the
      `config set detection.review` call was **refused at the permission prompt or otherwise did not run**,
      say so in the same place: a silent run must never leave a reader to infer that something was recorded.
-
-   That is where all four action values above come from — `written` / `merged` from a writer return or from
-   (4b)'s own work, `skipped` from (4a), `proposed` from step 5.
 
    **The review lines are delegated-document rows only:** per document, whether it was **reviewed**, how many
    findings were applied (the fix return's `findings_applied:`) and how many were not, then every declined
