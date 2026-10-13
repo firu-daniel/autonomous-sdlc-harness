@@ -14,7 +14,7 @@
  * {@link protectedPaths} and {@link fileToolDenyRules}, so they are the one statement of the set.
  */
 
-import { join } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 
 import { CONFIG_FILENAME, DEFAULTS, retrievalApplies, type HarnessConfig } from '../config/model.js';
 import { internal } from '../core/errors.js';
@@ -40,7 +40,11 @@ import { SANDBOX_KEY } from './sandboxProfile.js';
 export interface ProtectedPath {
   /** Absolute, or a pattern under the sibling-worktree glob. */
   readonly path: string;
-  readonly kind: 'file' | 'directory';
+  /**
+   * `entry` is a path that must not come to exist at all, as a file or as a directory: its file-tool
+   * rules cover both the path and everything under it.
+   */
+  readonly kind: 'file' | 'directory' | 'entry';
   /** One clause, rendered into the profile's `_README` and into `doctor`'s message. */
   readonly reason: string;
 }
@@ -61,11 +65,24 @@ export interface WriteProtectionInput {
   readonly config: HarnessConfig;
 }
 
-/** The main repository's git directory, its default hooks directory and its two config files. */
+/** The main repository's git directory, its default hooks directory, its two config files and its `commondir`. */
 const GIT_DIR = '.git';
 const GIT_DEFAULT_HOOKS = 'hooks';
 const GIT_CONFIG = 'config';
 const GIT_CONFIG_WORKTREE = 'config.worktree';
+const GIT_COMMONDIR = 'commondir';
+
+/**
+ * Every directory strictly below `repoRoot` on the way to the scripts directory, that directory
+ * included — `scripts` for the default, `tools` and `tools/harness` for `tools/harness`. None when
+ * the scripts directory is the root itself or resolves outside it.
+ */
+function scriptsDirLevels(repoRoot: string, scriptsDir: string): readonly string[] {
+  const rel = relative(repoRoot, join(repoRoot, scriptsDir));
+  if (rel === '' || isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) return [];
+  const segments = rel.split(sep);
+  return segments.map((_, index) => join(repoRoot, ...segments.slice(0, index + 1)));
+}
 
 /** The outer-loop row whose file is `file`, or an internal fault when the table lost it. */
 function rowNamed(file: string): OuterLoopScript {
@@ -85,7 +102,10 @@ function libraryDir(): string {
  * The write-protected set, in a fixed order: the main checkout's copy of every top-level outer-loop
  * script (the unsandboxed wrappers first) and the wrappers' library, the hooks
  * directories, the MCP launch surface, the profile and the project settings files, the plugin roots, the main repository's git configuration and
- * the main checkout's configuration file.
+ * its `commondir`, the main checkout's configuration file, and a `.git` at each level of the scripts
+ * directory — the last two kinds because the wrappers place their main checkout from their own
+ * location, as the nearest directory holding a `.git` that is a real directory without a `commondir`
+ * (`cli/templates/scripts/lib/harness-run-lib.sh` → `hr_wrapper_main_of`).
  */
 export function protectedPaths({
   repoRoot,
@@ -180,17 +200,35 @@ export function protectedPaths({
       reason: 'every git call in the main checkout reads it once extensions.worktreeConfig is on',
     },
     {
+      path: join(repoRoot, GIT_DIR, GIT_COMMONDIR),
+      kind: 'file',
+      reason: "git, and the unsandboxed wrappers placing their main checkout, would follow it to another repository's configuration and hooks",
+    },
+    {
       path: join(repoRoot, CONFIG_FILENAME),
       kind: 'file',
-      reason: "the hooks pin compares against the githooksDir it names",
+      reason: 'the unsandboxed wrappers take githooksDir, defaultBranch and protectedBranches from it',
     },
   );
+  for (const level of scriptsDirLevels(repoRoot, scriptsDir)) {
+    paths.push({
+      path: join(level, GIT_DIR),
+      kind: 'entry',
+      reason: 'a .git here would make this directory the main checkout the unsandboxed wrappers place themselves in',
+    });
+  }
 
   return paths;
 }
 
-/** The `Edit` and `Write` deny rules for one protected path, in the `//` absolute form. */
+/**
+ * The `Edit` and `Write` deny rules for one protected path, in the `//` absolute form: the path for a
+ * `file`, everything under it for a `directory`, and both for an `entry`.
+ */
 export function fileToolDenyRules(entry: ProtectedPath): readonly string[] {
+  if (entry.kind === 'entry') {
+    return [`Edit(/${entry.path})`, `Edit(/${entry.path}/**)`, `Write(/${entry.path})`, `Write(/${entry.path}/**)`];
+  }
   const target = entry.kind === 'directory' ? `${entry.path}/**` : entry.path;
   return [`Edit(/${target})`, `Write(/${target})`];
 }

@@ -65,10 +65,10 @@
 # `jj git push`, which runs no git hook and gives that guard nothing to prove;
 # only a forge-side ruleset does. This
 # script refuses too, so it is safe when called from outside an unattended
-# profile — and it takes its protected set from
-# `<repo_root>/harness.config.json` at run time through
-# `lib/harness-run-lib.sh`, which is where that set is kept in step across all
-# of them. There is no second list to keep in sync with: a branch name written
+# profile — and it takes its protected set from the MAIN checkout's
+# `harness.config.json` at run time (THE TARGET'S `harness.config.json` IS NOT
+# TRUSTED EITHER below) through `lib/harness-run-lib.sh`, which is where that
+# set is kept in step across all of them. There is no second list to keep in sync with: a branch name written
 # into this file would enforce the wrong set the moment `protectedBranches`
 # changed, and nothing at all in a repository whose integration branch is named
 # something else.
@@ -82,7 +82,23 @@
 # from the argument — or a worktree that main repository lists (conditions:
 # `lib/harness-run-lib.sh` → `hr_wrapper_target_check_var`). That covers a
 # rewritten `.git` pointer and a rewritten `commondir` as well as a foreign
-# repository.
+# repository. The main checkout itself is placed by
+# `lib/harness-run-lib.sh` → `hr_wrapper_main_of`, which refuses a `.git`
+# directory holding a `commondir`: the sandbox can create that file, and
+# following it would let a sandboxed command name the main checkout — and with
+# it the configuration and the hooks pin below.
+#
+# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER. A worktree's own
+# copy is a tracked file in a sandbox-writable tree, so a sandboxed command
+# could commit one whose `protectedBranches` drops the branch it is on. So the
+# protected set — `protectedBranches` and `defaultBranch` — is read from the
+# MAIN checkout's `harness.config.json`, as the pin's `githooksDir` is: the checkout the target check above derives from this
+# file's own location, and a file the permission profile write-protects. The
+# target's own copy is never read for it, whichever checkout is the target, and
+# a main checkout whose configuration cannot be read is a refusal (exit 0, a
+# "refusing to push" line), never a fall-back to the target's. The committed
+# pre-push hook the pin runs is the backstop behind this check, not a reason to
+# skip it.
 #
 # THE PER-WORKING-COPY CONFIG IS NOT TRUSTED. The main checkout's copy of this
 # script runs OUTSIDE the sandbox, so any git configuration a sandboxed command
@@ -103,12 +119,27 @@
 # such as a foreign `core.hooksPath` `init` left in place, is refused. The pin is
 # exported as `GIT_CONFIG_COUNT` for the library's git calls, which needs git
 # 2.31 or newer — an older git ignores it — and every git call this file spells
-# also carries an explicit `-c core.hooksPath`, which pins on any git.
+# also carries an explicit `-c core.hooksPath`, which pins on any git. The one
+# configured value read from the worktree is the `githooksDir` the check
+# compares that `core.hooksPath` against, and it is inert: a rewritten copy can
+# only make the check accept a different `core.hooksPath`, which the pin then
+# overrides on every call, while any other key is refused whatever it says.
 # Residual: the watcher's **own** git calls in a worktree a sandboxed session has
 # written to are outside this branch's two wrappers. Examples are its staging
 # and commit of a dropped user review, and its `status`, `fetch` and `merge`
 # there. They still read that worktree's `config.worktree` and its hooks
 # directory.
+#
+# THE INHERITED GIT ENVIRONMENT IS DROPPED. Before anything else this script
+# unsets `GIT_DIR`, `GIT_COMMON_DIR` and `GIT_WORK_TREE`, which would point
+# every git call somewhere other than the checked target; `GIT_CONFIG_PARAMETERS`
+# and `GIT_CONFIG_COUNT`, which would add configuration the checks never saw (the
+# pin exports its own `GIT_CONFIG_COUNT` afterwards); and `GIT_EXEC_PATH`, which
+# would choose the git programs run. It keeps `GIT_SSH_COMMAND`: the environment
+# reaching an excluded command is the agent runner's, not one a sandboxed
+# command can set — an assignment prefix or a compound is a different command
+# string, which stays sandboxed — and an operator may rely on it for the SSH
+# push this script exists to make outside the sandbox.
 #
 # WHAT IT NEVER DOES. It performs only a fast-forward push of already-committed
 # work: no `--force`, no `--force-with-lease`, no history-rewriting flag, no
@@ -202,9 +233,26 @@
 #   rewritten         printf '%s\n' "$s/.git" > "$d/.git/worktrees/wt/commondir"
 #   commondir         bash "$d/scripts/push-branch.sh" "$w"
 #                     -> exit 0, a "refusing to push:" line, "$b" unchanged
+#   planted main      printf '%s\n' "$s/.git" > "$d/.git/commondir"
+#   commondir         bash "$d/scripts/push-branch.sh" "$w"
+#                     -> exit 0, "refusing to push: cannot place this script in
+#                     a main checkout", "$b" unchanged, no "$s.marker"
 #   clean worktree    the clean worktree row above: it pushes
+#
+#   The protected set is the main checkout's, on a clean worktree as above:
+#   git -C "$w" checkout -q -b release/x
+#   printf '%s' '{"version":1,"defaultBranch":"trunk","protectedBranches":[],"stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$w/harness.config.json"
+#   git -C "$w" commit -qam "drop the protected set"
+#
+#   a dropped pattern bash "$d/scripts/push-branch.sh" "$w"
+#                     -> exit 0, "branch 'release/x' is protected", "$b"
+#                     unchanged: `release/*` is in "$d"'s list, whatever "$w"'s
+#                     says
 
 set -uo pipefail
+
+# THE INHERITED GIT ENVIRONMENT IS DROPPED (header). GIT_SSH_COMMAND is kept.
+unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_EXEC_PATH
 
 # Attempts in all, and the wait before the second; the third waits three times
 # that (EVERY FAILURE PATH IS NON-FATAL above).
@@ -243,8 +291,8 @@ if [ -z "$top_nogit" ]; then
   exit 0
 fi
 # THE TARGET IS NOT TRUSTED (header).
-if ! main_top="$(hr_main_checkout_of "$script_dir")"; then
-  echo "push-branch.sh: refusing to push: cannot place this script in a main checkout"
+if ! main_top="$(hr_wrapper_main_of "$script_dir")"; then
+  echo "push-branch.sh: refusing to push: cannot place this script in a main checkout (its .git is a symbolic link, or a directory holding a commondir)"
   exit 0
 fi
 if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
@@ -255,7 +303,9 @@ if ! hr_worktree_config_check_var "$top_nogit"; then
   echo "push-branch.sh: refusing to push: $HR_WT_CONFIG_REFUSAL"
   exit 0
 fi
-if ! hr_pinned_hooks_path "$top_nogit"; then
+# The main checkout's hooks, whatever the target: never re-derived through a
+# worktree record the sandbox can rewrite.
+if ! hr_pinned_hooks_path "$main_top"; then
   if [ -n "$HR_PINNED_HOOKS_REFUSAL" ]; then
     echo "push-branch.sh: refusing to push: $HR_PINNED_HOOKS_REFUSAL"
   else
@@ -291,9 +341,11 @@ case "$branch" in
     ;;
 esac
 
-# The protected-branch decision, from this repository's configuration. Called
-# unsubstituted so the library's per-process cache is warmed here.
-hr_branch_is_protected "$top" "$branch"
+# The protected-branch decision, from the MAIN checkout's configuration (THE
+# TARGET'S `harness.config.json` IS NOT TRUSTED EITHER, header), never the
+# target's.
+cfg_root="$main_top"
+hr_branch_is_protected "$cfg_root" "$branch"
 protected=$?
 case "$protected" in
   0)
@@ -304,7 +356,7 @@ case "$protected" in
     # Fail closed, and stay non-fatal: a configuration that cannot be read is a
     # branch that cannot be judged, so the push does not happen — but the run
     # that called this is not stopped over it.
-    echo "push-branch.sh: cannot resolve '$top/harness.config.json' — refusing to push"
+    echo "push-branch.sh: cannot resolve '$cfg_root/harness.config.json' — refusing to push"
     exit 0
     ;;
 esac

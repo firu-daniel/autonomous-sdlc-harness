@@ -52,7 +52,21 @@
 # JURISDICTION. Configuration is read at `<repo_root>/harness.config.json` and
 # nowhere else, where `<repo_root>` is resolved from a bare
 # `git rev-parse --show-toplevel` at the directory the caller names — or, in the
-# git-free section, at the checkout `hr_checkout_top_nogit` finds. Nothing
+# git-free section, at the checkout `hr_checkout_top_nogit` finds. Which root
+# that is, is the caller's choice: the two wrappers the permission profile runs
+# unsandboxed, `push-branch.sh` and `refresh-branch.sh`, pass the MAIN checkout
+# (`hr_wrapper_main_of` their own location) for every configured value they
+# decide by — `defaultBranch`, `protectedBranches`, and the `githooksDir`
+# `hr_pinned_hooks_path` pins — never the worktree they act in, whose
+# `harness.config.json` the sandbox can rewrite. One worktree read remains and
+# is inert: `hr_worktree_config_check_var` compares a worktree's
+# `config.worktree` `core.hooksPath` against `<worktree>/<githooksDir>` read
+# from that worktree's own copy. A rewritten copy can only make the check
+# accept a different `core.hooksPath` there, and no git call the wrappers make
+# honours that key — each pins its own (`-c core.hooksPath`, and
+# `GIT_CONFIG_COUNT` for the library's) — while every other key in that file is
+# refused whatever the copy says, and the check's own git call is
+# `git -C / config --file`, which loads no repository's configuration. Nothing
 # here reads an environment variable in place of a configured value, and nothing
 # here writes inside a repository except through the named write exceptions
 # below.
@@ -602,8 +616,49 @@ hr_main_checkout_of() {
   ( CDPATH= cd -P -- "$main" 2>/dev/null && pwd -P ) || return 1
 }
 
+# Print the canonical main checkout of the wrapper whose own directory is
+# <script_dir>, for `push-branch.sh` and `refresh-branch.sh` only. Return 1,
+# printing nothing, when it cannot be placed. The checkout `hr_checkout_top_nogit`
+# finds from <script_dir> is taken as it stands when its `.git` is a real
+# directory — not a symbolic link — holding no `commondir`; one whose `.git` is
+# a regular pointer file is a linked worktree, and its main checkout is
+# `hr_main_checkout_of`'s answer; anything else, including a `.git` directory
+# holding a `commondir`, is refused.
+#
+# Why not `hr_main_checkout_of` throughout: it follows `<top>/.git/commondir`,
+# and a sandboxed command can create that file — a linked worktree may write
+# the main repository's `.git` except `hooks/` and `config`. Followed, it would
+# name a directory of the sandbox's choosing as the main checkout, and with it
+# the configuration, the target check's anchor and the hooks pin, for a script
+# running unsandboxed. git honours that file too, so the permission profile
+# write-protects it as well; this refusal is what holds where the profile is
+# not loaded. A real main checkout's `.git` holds no `commondir`.
+#
+# The pointer-file arm can be redirected, and that is harmless: the profile
+# runs only the MAIN checkout's copies unsandboxed, so a script whose own
+# checkout is a linked worktree is a worktree's copy, which runs sandboxed and
+# sits in a tree the sandbox can rewrite anyway. A `.git` planted between the
+# main checkout and <script_dir> — which would make that directory the nearest
+# checkout — is refused by the profile, which write-protects `<p>/.git` at
+# every level `<p>` of `scriptsDir` (`cli/src/generators/writeProtection.ts`).
+hr_wrapper_main_of() {
+  local top
+  top=$(hr_checkout_top_nogit "${1-}") || return 1
+  [ ! -L "$top/.git" ] || return 1
+  if [ -d "$top/.git" ]; then
+    if [ -e "$top/.git/commondir" ] || [ -L "$top/.git/commondir" ]; then
+      return 1
+    fi
+    printf '%s\n' "$top"
+    return 0
+  fi
+  [ -f "$top/.git" ] || return 1
+  hr_main_checkout_of "$top"
+}
+
 # Judge whether <target_top> is a checkout an unsandboxed wrapper may run git in,
-# for the main checkout <main_top> the wrapper's own location gives. Return 0
+# for the main checkout <main_top> the wrapper's own location gives
+# (`hr_wrapper_main_of`). Return 0
 # when, compared canonically, <target_top> is <main_top>, or when it is a
 # worktree that main repository lists: `<target_top>/.git` is a regular file;
 # its gitdir `<p>` (`hr_gitdir_nogit`) sits directly in `<main_top>/.git/worktrees`;
@@ -627,6 +682,12 @@ hr_main_checkout_of() {
 # configuration is the main `.git/config`, which the sandbox cannot write, plus
 # its `config.worktree`, which `hr_worktree_config_check_var` holds to one key,
 # and its hooks are pinned (`hr_pinned_hooks_path`).
+#
+# Residual: every record judged here, and the `config.worktree` judged after
+# it, is read once and then re-read by git on each of the wrapper's own calls,
+# and all of them stay sandbox-writable. A sandboxed process still running when
+# the wrapper starts, rewriting a record's `commondir`, its `.git` pointer or
+# its `config.worktree` between the check and a git call, is not caught here.
 hr_wrapper_target_check_var() {
   local main="${1-}" target="${2-}" p common line="" back back_c want
   HR_TARGET_REFUSAL=""
@@ -783,7 +844,10 @@ hr_worktree_config_check_var() {
 # only when, compared canonically, it equals `<main>/<githooksDir>` (read from
 # the MAIN checkout's `harness.config.json`) or `<common>/hooks`: the two
 # directories the permission profile write-protects. A foreign hooks directory,
-# such as one `init` left in place, is refused.
+# such as one `init` left in place, is refused. The two wrappers pass their own
+# main checkout (`hr_wrapper_main_of`) as <top>, whatever their target, so the
+# answer never rests on a worktree record's `commondir`, which the sandbox can
+# rewrite after the target check has read it.
 hr_pinned_hooks_path() {
   local top="${1-}" common main value status resolved rel allowed_cfg allowed_git
   HR_PINNED_HOOKS_PATH=""

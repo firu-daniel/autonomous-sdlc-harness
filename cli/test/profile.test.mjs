@@ -488,6 +488,13 @@ test('the three-form emission holds for a written outer-loop row an agent runs, 
         );
       }
 
+      // A `.git` at any level between the main checkout and the scripts directory would become the
+      // checkout the unsandboxed wrappers place themselves in, so each level is protected.
+      const levels = scriptsDir.split('/');
+      for (let depth = 1; depth <= levels.length; depth += 1) {
+        assertProtected(profile, join(repoRoot, ...levels.slice(0, depth), '.git'), 'entry');
+      }
+
       assertEntriesRunnable(profile);
     });
   }
@@ -1039,12 +1046,18 @@ test('a domain carrying a quote is the adopter\'s to fix, never this CLI\'s faul
   );
 });
 
-/** Both sides of one protected path: its `denyWrite` entry and its `Edit`/`Write` deny pair. */
+/**
+ * Both sides of one protected path: its `denyWrite` entry and its `Edit`/`Write` deny rules — on the
+ * path for a `file`, under it for a `directory`, and both for an `entry`, a path that must not come to
+ * exist as either.
+ */
 function assertProtected(profile, path, kind) {
-  const target = kind === 'directory' ? `${path}/**` : path;
+  const targets = kind === 'entry' ? [path, `${path}/**`] : [kind === 'directory' ? `${path}/**` : path];
   assert.ok(profile.sandbox.filesystem.denyWrite.includes(path), `sandbox.filesystem.denyWrite does not hold ${path}`);
-  for (const rule of [`Edit(/${target})`, `Write(/${target})`]) {
-    assert.ok(entries(profile, 'deny').includes(rule), `permissions.deny does not hold ${rule}`);
+  for (const target of targets) {
+    for (const rule of [`Edit(/${target})`, `Write(/${target})`]) {
+      assert.ok(entries(profile, 'deny').includes(rule), `permissions.deny does not hold ${rule}`);
+    }
   }
 }
 
@@ -1097,6 +1110,10 @@ test('every path that runs outside the sandbox is write-protected on both sides'
   assertProtected(profile, join(glob, '.claude', 'settings.local.json'), 'file');
   assertProtected(profile, join(dir, '.git', 'config'), 'file');
   assertProtected(profile, join(dir, '.git', 'config.worktree'), 'file');
+  // The wrappers place their main checkout from their own location: a planted `commondir` would
+  // redirect it, and so would a nearer `.git` between the main checkout and the scripts directory.
+  assertProtected(profile, join(dir, '.git', 'commondir'), 'file');
+  assertProtected(profile, join(dir, SCRIPTS_DIR, '.git'), 'entry');
   assertProtected(profile, join(dir, CONFIG_FILENAME), 'file');
   assertUnprotected(profile, join(glob, CONFIG_FILENAME));
 

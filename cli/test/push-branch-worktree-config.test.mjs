@@ -9,6 +9,10 @@
  * worktree's. Every refusal exits 0 and leaves origin unchanged.** Case (a)'s marker assertion is
  * the proof of the pin: a refusal case passing proves nothing about it. A worktree whose `HEAD` names
  * a branch starting with `-` is refused too, since `git push` would read that name as an option.
+ * The protected set is the MAIN checkout's `harness.config.json`'s, never the worktree's own
+ * committed copy, which the sandbox can rewrite; a main checkout whose configuration cannot be read
+ * is a refusal. The fixture's marker `pre-push` hooks never refuse, so a protected branch that is
+ * not pushed was refused by the wrapper, not by the hook.
  *
  * The fixture is built by hand rather than by `init`, so the hooks configuration under test is
  * exactly the one each case sets. Each `pre-push` hook writes a marker file named for its directory.
@@ -28,6 +32,7 @@ const MAIN_BRANCH = 'feat_main';
 const CONFIG = {
   version: 1,
   defaultBranch: 'trunk',
+  protectedBranches: ['trunk', 'release/*'],
   stateDir: 'sdlc-harness/',
   githooksDir: 'githooks',
   layers: [],
@@ -190,4 +195,47 @@ test('(h) A worktree HEAD naming a branch that starts with `-` is refused before
   await assert.rejects(access(ran), output(result));
   assert.equal(await originRefs(), before);
   assert.deepEqual(await f.markers(), []);
+});
+
+test('(i) A worktree harness.config.json dropping a protected pattern does not unprotect the branch', async (t) => {
+  const f = await worktreeFixture(t);
+  await runGit(f.wt, ['checkout', '--quiet', '-b', 'release/x']);
+  await writeFile(
+    join(f.wt, 'harness.config.json'),
+    `${JSON.stringify({ ...CONFIG, protectedBranches: [] })}\n`,
+  );
+  await runGit(f.wt, ['add', 'harness.config.json']);
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-m', 'fixture: worktree drops release/*']);
+  const result = await f.push(f.wt);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /^push-branch\.sh: branch 'release\/x' is protected — refusing to push$/m, output(result));
+  assert.equal(await f.originTip('release/x'), '');
+  assert.deepEqual(await f.markers(), []);
+});
+
+test('(j) A main checkout whose harness.config.json cannot be read is refused, never answered from the worktree’s', async (t) => {
+  const f = await worktreeFixture(t);
+  // The worktree keeps its own valid committed copy; only the main checkout's file is broken.
+  await writeFile(join(f.main, 'harness.config.json'), 'x');
+  const result = await f.push(f.wt);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /refusing to push/, output(result));
+  assert.doesNotMatch(result.stdout, PUSHED);
+  assert.equal(await f.originTip(BRANCH), '');
+  assert.deepEqual(await f.markers(), []);
+});
+
+test('(k) An unreadable worktree harness.config.json is never read: the main one decides, and the push lands', async (t) => {
+  const f = await worktreeFixture(t);
+  // No config.worktree key left, so the per-working-copy check never consults the worktree's copy:
+  // only the protected-set decision could still read it.
+  await runGit(f.wt, ['config', '--worktree', '--unset', 'core.hooksPath']);
+  await writeFile(join(f.wt, 'harness.config.json'), 'x');
+  await runGit(f.wt, ['add', 'harness.config.json']);
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-m', 'fixture: worktree config unreadable']);
+  const result = await f.push(f.wt);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, PUSHED, output(result));
+  assert.equal(await f.originTip(BRANCH), await f.head(f.wt));
+  assert.deepEqual(await f.markers(), ['main']);
 });

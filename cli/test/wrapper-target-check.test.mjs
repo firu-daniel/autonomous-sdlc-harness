@@ -11,6 +11,11 @@
  * `core.sshCommand` marker: its origin push URL is an `ssh://` one, so any push git started there
  * would run that command, and a refusal case passing with no marker is that proof.
  *
+ * **The main checkout is placed from each wrapper's own location and is never redirected by a
+ * `<main>/.git/commondir`**, which a sandboxed command can create: a main checkout whose `.git`
+ * holds one is refused under the same exit contracts, so a repository that file names is never
+ * taken for the main checkout, and its configuration and hooks never run.
+ *
  * The fixture is built by hand rather than by `init`, so the git records under test are exactly
  * the ones each case rewrites.
  */
@@ -18,7 +23,7 @@
 import assert from 'node:assert/strict';
 import { chmod, cp, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import { PACKAGE_ROOT, runBash, runGit } from './helpers/fixture.mjs';
@@ -181,4 +186,45 @@ test('(g) A worktree whose record’s gitdir no longer points back at it is refu
   await writeFile(join(f.record, 'gitdir'), `${join(f.scratch, '.git')}\n`);
   const result = await assertPushRefused(f, f.wt);
   assert.match(result.stdout, /gitdir does not point back at /);
+});
+
+test('(h) A commondir planted in the main .git cannot make another repository the main checkout', async (t) => {
+  const f = await fixture(t);
+  const root = dirname(f.main);
+  const markers = join(root, 'markers');
+  // A repository a sandboxed command could build: a valid configuration, a branch origin has not
+  // seen and is behind origin's trunk, and hooks and an SSH command that each leave a marker.
+  const fake = join(root, 'fake');
+  await runGit(root, ['clone', '--quiet', '-b', 'trunk', join(root, 'origin.git'), fake]);
+  await runGit(fake, ['config', 'user.email', 'fixture@example.invalid']);
+  await runGit(fake, ['config', 'user.name', 'Harness Fixture']);
+  await runGit(fake, ['reset', '--quiet', '--hard', 'HEAD~1']);
+  await runGit(fake, ['checkout', '--quiet', '-b', 'feat_fake']);
+  await writeFile(join(fake, 'harness.config.json'), `${JSON.stringify({ ...CONFIG, githooksDir: '.git/hooks' })}\n`);
+  await runGit(fake, ['add', 'harness.config.json']);
+  await runGit(fake, ['commit', '--quiet', '-m', 'fixture: fake']);
+  for (const name of ['pre-push', 'post-merge']) {
+    const hook = join(fake, '.git', 'hooks', name);
+    await writeFile(hook, `#!/bin/sh\n: > '${join(markers, name)}'\nexit 0\n`);
+    await chmod(hook, 0o755);
+  }
+  const ssh = join(root, 'fake-ssh.sh');
+  await writeFile(ssh, `#!/bin/sh\n: > '${join(markers, 'fake-ssh')}'\nexit 1\n`);
+  await chmod(ssh, 0o755);
+  await runGit(fake, ['config', 'core.sshCommand', ssh]);
+  const fakeHead = await f.head(fake);
+
+  // Written with the file system, as a sandboxed command could: `.git/` is writable but for
+  // `hooks/` and `config`.
+  await writeFile(join(f.main, '.git', 'commondir'), `${join(fake, '.git')}\n`);
+
+  const pushed = await assertPushRefused(f, fake);
+  assert.match(pushed.stdout, /refusing to push: cannot place this script in a main checkout/, output(pushed));
+  assert.equal(await f.originTip('feat_fake'), '');
+
+  const refreshed = await f.refresh(fake);
+  assert.equal(refreshed.status, 1, output(refreshed));
+  assert.match(refreshed.stderr, /refusing to refresh: cannot place this script in a main checkout/, output(refreshed));
+  assert.equal(await f.head(fake), fakeHead);
+  assert.deepEqual(await f.markers(), []);
 });

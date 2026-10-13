@@ -8,8 +8,10 @@
  * worktree's `config.worktree` is absent, empty or holds just the `core.hooksPath`
  * `setup-worktree.sh` writes, refusing otherwise with exit 1 and the worktree untouched; and every
  * merge it makes runs the main repository's configured hooks directory, never the worktree's; and a
- * worktree `defaultBranch` starting with `-` is refused with exit 1 before git can read it as an
- * option.**
+ * main-checkout `defaultBranch` starting with `-` is refused with exit 1 before git can read it as an
+ * option; and `defaultBranch` and the protected set come from the MAIN checkout's
+ * `harness.config.json`, never from the worktree's own committed copy, which the sandbox can
+ * rewrite.**
  * Case (a)'s marker assertion is the proof of the pin: a refusal case passing proves nothing about it.
  *
  * The fixture is built by hand rather than by `init`, so the hooks configuration under test is
@@ -32,7 +34,7 @@ const BRANCH = 'feat_w';
 const CONFIG = {
   version: 1,
   defaultBranch: BASE,
-  protectedBranches: [BASE],
+  protectedBranches: [BASE, 'release/*'],
   stateDir: 'sdlc-harness/',
   githooksDir: 'githooks',
   layers: [],
@@ -170,22 +172,79 @@ test('(e) A second checkout argument is a usage error', async (t) => {
   assert.equal(await f.head(f.wt), wtHead);
 });
 
-test('(f) A worktree defaultBranch starting with `-` is refused before git fetch can run it as an option', async (t) => {
+test('(f) A main-checkout defaultBranch starting with `-` is refused before git fetch can run it as an option', async (t) => {
   const f = await worktreeFixture(t);
   const root = dirname(f.main);
   const marker = join(root, 'upload-pack-ran');
   const program = join(root, 'marker.sh');
   await writeFile(program, `#!/bin/sh\ntouch '${marker}'\nexec git upload-pack "$@"\n`);
   await chmod(program, 0o755);
+  // Left uncommitted in the main checkout: the wrapper reads the file, not the commit.
   await writeFile(
-    join(f.wt, 'harness.config.json'),
+    join(f.main, 'harness.config.json'),
     `${JSON.stringify({ ...CONFIG, defaultBranch: `--upload-pack=${program}` })}\n`,
   );
-  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-am', 'fixture: hostile defaultBranch']);
   const wtHead = await f.head(f.wt);
   const result = await f.refresh(f.mainScript, [f.wt]);
   assert.equal(result.status, 1, output(result));
   assert.match(result.stderr, /starts with '-'/, output(result));
   await assert.rejects(access(marker), output(result));
   assert.equal(await f.head(f.wt), wtHead);
+});
+
+test('(g) A worktree harness.config.json naming another defaultBranch is ignored: the main one’s base is merged', async (t) => {
+  const f = await worktreeFixture(t);
+  // `other` is the seed commit, which feat_w already contains: merging it would be "nothing to do".
+  await runGit(f.main, ['push', '--quiet', '--no-verify', 'origin', 'HEAD~1:refs/heads/other']);
+  await writeFile(
+    join(f.wt, 'harness.config.json'),
+    `${JSON.stringify({ ...CONFIG, defaultBranch: 'other', protectedBranches: [] })}\n`,
+  );
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-am', 'fixture: worktree names another base']);
+  const result = await f.refresh(f.mainScript, [f.wt]);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /^refresh-branch\.sh: merged origin\/trunk into feat_w$/m, output(result));
+  assert.doesNotMatch(output(result), /origin\/other/);
+  assert.ok(await f.contains(f.wt, f.baseSha), output(result));
+});
+
+test('(h) A worktree harness.config.json dropping a protected pattern does not unprotect the branch', async (t) => {
+  const f = await worktreeFixture(t);
+  await runGit(f.wt, ['checkout', '--quiet', '-b', 'release/x']);
+  await writeFile(
+    join(f.wt, 'harness.config.json'),
+    `${JSON.stringify({ ...CONFIG, protectedBranches: [] })}\n`,
+  );
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-am', 'fixture: worktree drops release/*']);
+  const wtHead = await f.head(f.wt);
+  const result = await f.refresh(f.mainScript, [f.wt]);
+  assert.equal(result.status, 2, output(result));
+  assert.match(result.stderr, /HEAD is on protected branch 'release\/x'/, output(result));
+  assert.ok(result.stderr.includes(join(f.main, 'harness.config.json')), output(result));
+  assert.equal(await f.head(f.wt), wtHead);
+  assert.ok(!(await f.contains(f.wt, f.baseSha)), output(result));
+});
+
+test('(i) A main checkout whose harness.config.json cannot be read is refused with exit 1, never answered from the worktree’s', async (t) => {
+  const f = await worktreeFixture(t);
+  await writeFile(join(f.main, 'harness.config.json'), 'x');
+  const wtHead = await f.head(f.wt);
+  const result = await f.refresh(f.mainScript, [f.wt]);
+  assert.equal(result.status, 1, output(result));
+  assert.match(result.stderr, /refusing to (refresh|merge)/, output(result));
+  assert.equal(await f.head(f.wt), wtHead);
+  assert.deepEqual(await f.markers(), []);
+});
+
+test('(j) An unreadable worktree harness.config.json is never read: the main one decides, and the merge lands', async (t) => {
+  const f = await worktreeFixture(t);
+  // No config.worktree key left, so the per-working-copy check never consults the worktree's copy:
+  // only the base and protected-set decisions could still read it.
+  await runGit(f.wt, ['config', '--worktree', '--unset', 'core.hooksPath']);
+  await writeFile(join(f.wt, 'harness.config.json'), 'x');
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-am', 'fixture: worktree config unreadable']);
+  const result = await f.refresh(f.mainScript, [f.wt]);
+  assert.equal(result.status, 0, output(result));
+  assert.match(result.stdout, /^refresh-branch\.sh: merged origin\/trunk into feat_w$/m, output(result));
+  assert.ok(await f.contains(f.wt, f.baseSha), output(result));
 });

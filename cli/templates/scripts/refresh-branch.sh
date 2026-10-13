@@ -18,10 +18,10 @@
 # IT IS NOT A WAY AROUND THAT GUARD — IT RE-IMPLEMENTS ITS INTENT. The guard's
 # dangerous case is a merge or rebase issued while HEAD is ON a protected branch,
 # which would put unreviewed work on the integration line. This script makes that
-# decision itself, from `<repo_root>/harness.config.json` at run time through
-# `lib/harness-run-lib.sh` rather than from a branch name written into this file,
-# and refuses (exit 2) before anything is fetched or merged. The library's
-# unresolvable answer is a refusal here too, never a permit.
+# decision itself, from the MAIN checkout's `harness.config.json` at run time
+# through `lib/harness-run-lib.sh` rather than from a branch name written into
+# this file, and refuses (exit 2) before anything is fetched or merged. The
+# library's unresolvable answer is a refusal here too, never a permit.
 #
 # WHAT IT NEVER DOES. It never pushes. It never checks out, resets, updates or
 # deletes the base branch — the only ref it writes is the remote-tracking
@@ -44,7 +44,21 @@
 # file sits in — derived from this file's own location, never from the
 # argument — or a worktree that main repository lists (conditions:
 # `lib/harness-run-lib.sh` → `hr_wrapper_target_check_var`; the reasoning:
-# `push-branch.sh` → the paragraph of the same name).
+# `push-branch.sh` → the paragraph of the same name). The main checkout itself
+# is placed by `lib/harness-run-lib.sh` → `hr_wrapper_main_of`, which refuses a
+# `.git` directory holding a `commondir` the sandbox could have planted.
+#
+# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER. A worktree's own
+# copy is a tracked file in a sandbox-writable tree, so a sandboxed command
+# could commit one that names any ref as `defaultBranch` — which this
+# unsandboxed script would then fetch and merge — or that drops a branch from
+# `protectedBranches`. So `defaultBranch` and the protected set are read from
+# the MAIN checkout's `harness.config.json` — the checkout the target check
+# above derives from this file's own location, and a file the permission
+# profile write-protects — whichever checkout is the target; the target's own
+# copy is never read for them. A main checkout whose configuration cannot be
+# read is a refusal (exit 1), never a fall-back to the target's. The `-*`
+# refusal on `defaultBranch` below stays as defence in depth.
 #
 # THE PER-WORKING-COPY CONFIG IS NOT TRUSTED. The main checkout's copy of this
 # script runs OUTSIDE the sandbox, and a linked worktree's
@@ -58,7 +72,16 @@
 # call spelled here (derivation: `lib/harness-run-lib.sh` →
 # `hr_pinned_hooks_path`; the reasoning: `push-branch.sh` → the paragraph of the
 # same name). The pin matters for a merge too: `git merge` runs the
-# `pre-merge-commit`, `commit-msg` and `post-merge` hooks.
+# `pre-merge-commit`, `commit-msg` and `post-merge` hooks. The check compares
+# that `core.hooksPath` against the `githooksDir` in the worktree's own
+# `harness.config.json` — the one configured value read from the worktree, and
+# an inert one: a rewritten copy can only make the check accept a different
+# `core.hooksPath`, which the pin overrides on every call.
+#
+# THE INHERITED GIT ENVIRONMENT IS DROPPED. Before anything else this script
+# unsets `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE`, `GIT_CONFIG_PARAMETERS`,
+# `GIT_CONFIG_COUNT` and `GIT_EXEC_PATH`, and keeps `GIT_SSH_COMMAND` (the
+# reasoning: `push-branch.sh` → the paragraph of the same name).
 #
 # Usage: refresh-branch.sh [--local] [<repo-dir>]
 #        bash <main checkout>/<scripts_dir>/refresh-branch.sh <worktree>
@@ -73,9 +96,11 @@
 # Exit map a caller can switch on:
 #
 #   0  the current branch now contains the base (the merge landed)
-#   1  usage error / not a git repository / detached HEAD / the configuration
-#      could not be read / the working tree has uncommitted tracked changes /
-#      a target this script does not trust (THE TARGET IS NOT TRUSTED above) /
+#   1  usage error / not a git repository / detached HEAD / the working tree
+#      has uncommitted tracked changes / a target this script does not trust,
+#      or a main checkout it cannot place (THE TARGET IS NOT TRUSTED above) /
+#      the main checkout's configuration could not be read (THE TARGET'S
+#      `harness.config.json` IS NOT TRUSTED EITHER above) /
 #      a per-working-copy configuration or a hooks directory this script does
 #      not trust (THE PER-WORKING-COPY CONFIG IS NOT TRUSTED above) / a
 #      `defaultBranch` starting with `-`
@@ -161,9 +186,27 @@
 #   rewritten         printf '%s\n' "$s/.git" > "$d/.git/worktrees/wt/commondir";
 #   commondir         the same call on "$w" -> exit 1, a "refusing to refresh:"
 #                     line
+#   planted main      printf '%s\n' "$s/.git" > "$d/.git/commondir"; the same
+#   commondir         call on "$w" -> exit 1, "refusing to refresh: cannot place
+#                     this script in a main checkout", no "$s.marker"
 #   clean worktree    the "a worktree" row above: it refreshes
+#
+#   The configuration is the main checkout's, on a clean worktree as above:
+#   git -C "$d" branch other trunk; git -C "$d" push -q origin other
+#   printf '%s' '{"version":1,"defaultBranch":"other","protectedBranches":[],"stateDir":"sdlc-harness/","layers":[],"commands":{}}' > "$w/harness.config.json"
+#   git -C "$w" commit -qam "rewrite config"
+#
+#   another base      bash "$d/scripts/refresh-branch.sh" "$w" -> exit 0, a
+#                     "merged origin/trunk into feat_w" line: the worktree's
+#                     `defaultBranch` was never read
+#   a dropped pattern git -C "$w" checkout -q -b release/x; the same call
+#                     -> exit 2: `release/*` is protected by "$d"'s list,
+#                     whatever "$w"'s says
 
 set -uo pipefail
+
+# THE INHERITED GIT ENVIRONMENT IS DROPPED (header). GIT_SSH_COMMAND is kept.
+unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_EXEC_PATH
 
 # The library is reached by a path computed from this script's own location, so a
 # copy that was moved with its `lib/` still finds it, and no session root or
@@ -214,8 +257,8 @@ if [ -z "$top_nogit" ]; then
   exit 1
 fi
 # THE TARGET IS NOT TRUSTED (header).
-if ! main_top="$(hr_main_checkout_of "$script_dir")"; then
-  echo "refresh-branch.sh: refusing to refresh: cannot place this script in a main checkout" >&2
+if ! main_top="$(hr_wrapper_main_of "$script_dir")"; then
+  echo "refresh-branch.sh: refusing to refresh: cannot place this script in a main checkout (its .git is a symbolic link, or a directory holding a commondir)" >&2
   exit 1
 fi
 if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
@@ -226,7 +269,9 @@ if ! hr_worktree_config_check_var "$top_nogit"; then
   echo "refresh-branch.sh: refusing to refresh: $HR_WT_CONFIG_REFUSAL" >&2
   exit 1
 fi
-if ! hr_pinned_hooks_path "$top_nogit"; then
+# The main checkout's hooks, whatever the target: never re-derived through a
+# worktree record the sandbox can rewrite.
+if ! hr_pinned_hooks_path "$main_top"; then
   if [ -n "$HR_PINNED_HOOKS_REFUSAL" ]; then
     echo "refresh-branch.sh: refusing to refresh: $HR_PINNED_HOOKS_REFUSAL" >&2
   else
@@ -245,26 +290,30 @@ if [ -z "$top" ]; then
   exit 1
 fi
 
+# THE TARGET'S `harness.config.json` IS NOT TRUSTED EITHER (header): every
+# configured value below is read at the main checkout, never at "$top".
+cfg_root="$main_top"
+
 # Warm the library's cache once, unsubstituted, and fail closed here rather than
 # letting each reader below fail separately: a configuration that cannot be read
 # is a protected set that cannot be judged.
-if ! hr_config_load "$top"; then
-  echo "refresh-branch.sh: cannot resolve '$top/harness.config.json' — refusing to merge" >&2
+if ! hr_config_load "$cfg_root"; then
+  echo "refresh-branch.sh: cannot resolve '$cfg_root/harness.config.json' — refusing to merge" >&2
   echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
   exit 1
 fi
 
-base="$(hr_default_branch "$top")" || base=""
+base="$(hr_default_branch "$cfg_root")" || base=""
 if [ -z "$base" ]; then
-  echo "refresh-branch.sh: no defaultBranch in '$top/harness.config.json' — refusing to merge" >&2
+  echo "refresh-branch.sh: no defaultBranch in '$cfg_root/harness.config.json' — refusing to merge" >&2
   exit 1
 fi
-# A base git would parse as an option (THE TARGET IS NOT TRUSTED): the
-# worktree's harness.config.json is sandbox-writable, and no branch git
+# A base git would parse as an option. Defence in depth: the main checkout's
+# harness.config.json is write-protected from the sandbox, and no branch git
 # creates starts with `-`.
 case "$base" in
   -*)
-    echo "refresh-branch.sh: defaultBranch '$base' in '$top/harness.config.json' starts with '-', which git would read as an option — refusing to merge" >&2
+    echo "refresh-branch.sh: defaultBranch '$base' in '$cfg_root/harness.config.json' starts with '-', which git would read as an option — refusing to merge" >&2
     exit 1
     ;;
 esac
@@ -278,11 +327,11 @@ fi
 # The direction check, and the reason this wrapper is safe to allow-list. It
 # refuses on the branch the guard's dangerous case is about, and it takes the
 # library's unresolvable answer as a refusal rather than as a permit.
-hr_branch_is_protected "$top" "$branch"
+hr_branch_is_protected "$cfg_root" "$branch"
 protected=$?
 case "$protected" in
   0)
-    patterns="$(hr_protected_patterns "$top")" || patterns=""
+    patterns="$(hr_protected_patterns "$cfg_root")" || patterns=""
     protected_set=""
     while IFS= read -r pattern; do
       [ -n "$pattern" ] || continue
@@ -295,12 +344,12 @@ case "$protected" in
 $patterns
 EOF
     echo "refresh-branch.sh: HEAD is on protected branch '$branch' — refusing to merge into it" >&2
-    echo "  protected set (from harness.config.json): $protected_set" >&2
+    echo "  protected set (from '$cfg_root/harness.config.json'): $protected_set" >&2
     echo "  this wrapper only merges '$base' INTO a working branch; check one out and re-run" >&2
     exit 2
     ;;
   2)
-    echo "refresh-branch.sh: cannot resolve '$top/harness.config.json' — refusing to merge" >&2
+    echo "refresh-branch.sh: cannot resolve '$cfg_root/harness.config.json' — refusing to merge" >&2
     exit 1
     ;;
 esac
