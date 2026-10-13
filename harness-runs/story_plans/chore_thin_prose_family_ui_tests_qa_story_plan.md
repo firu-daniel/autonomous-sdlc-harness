@@ -107,7 +107,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_ui_t
 2. [x] **Task 2** — Scope `ui-tests-plan-writer`'s read of the `qa-tester` variant, and thin `## No-UI determination` and `### Capability guidance` _(layer: plugin)_ _(points: 15)_
 3. [x] **Task 3** — Thin `ui-tests-plan-writer`'s `## Process` and `### Test data` _(layer: plugin)_ _(points: 15)_
 4. [x] **Task 4** — Thin `ui-tests-plan-writer` from `## Split output spec` to the end _(layer: plugin)_ _(points: 15)_
-5. [ ] **Task 5** — Scope `ui-tests-plan-reviewer`'s reads of the writer and the `qa-tester` variant, and thin its intro through `## Process` _(layer: plugin)_ _(points: 15)_
+5. [x] **Task 5** — Scope `ui-tests-plan-reviewer`'s reads of the writer and the `qa-tester` variant, and thin its intro through `## Process` _(layer: plugin)_ _(points: 15)_
 6. [ ] **Task 6** — Thin `ui-tests-plan-reviewer`'s `## What to check` _(layer: plugin)_ _(points: 15)_
 7. [ ] **Task 7** — Thin `qa-tester`'s intro, gates, `## Invocation contract`, `## Read first` and `## Preconditions` _(layer: plugin)_ _(points: 20)_
 8. [ ] **Task 8** — Thin `qa-tester`'s `## Which MCP to use` and `## How it tests` _(layer: plugin)_ _(points: 20)_
