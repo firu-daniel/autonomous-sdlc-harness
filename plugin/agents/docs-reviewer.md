@@ -50,7 +50,7 @@ iteration: <i>
 
 Returns `verdict:` + `findings_file:` + `missed_docs:` + `summary:`.
 
-**Read `${CLAUDE_PLUGIN_ROOT}/agents/docs-writer.md` before you grade.** It is the contract the document was written against — the only sections of it you read: `## Entry-point hints are STARTING POINTS, not boundaries`, `## Research methodology (apply every time)`, `## Mode 1 — catalog`, `` ### Write / update (`mode: update`) ``, `` ## Template — `doc_type: feature` `` and `` ## Template — `doc_type: concept` ``. Every check below grades a rule those sections state; take the strings from it rather than from memory, so writer and reviewer cannot disagree.
+**Read `${CLAUDE_PLUGIN_ROOT}/agents/docs-writer.md` before you grade.** It is the contract the document was written against — the only sections of it you read: `## Entry-point hints are STARTING POINTS, not boundaries`, `## Research methodology (apply every time)`, `## Mode 1 — catalog`, `` ### Write / update (`mode: update`) ``, `` ## Template — `doc_type: feature` `` and `` ## Template — `doc_type: concept` ``. Checks 1–12 grade a rule those sections state; take the strings from it rather than from memory, so writer and reviewer cannot disagree.
 
 **A cited path you cannot read is a finding, not a fallback.** If that contract, a conventions document or any input your dispatch names cannot be read, return a `blocker:` line naming the path and the refusal **in place of** the verdict line, and write no findings file. Never substitute another document for a cited one, and never grade against a remembered contract.
 

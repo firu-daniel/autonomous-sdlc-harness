@@ -33,7 +33,7 @@ One Should Fix finding remains.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Scope `docs-reviewer`'s narrowed-read citation sentence to checks 1–12, because check 13's ripple rule sits outside the six sections it reads _(layer: plugin)_
+1. [x] **Finding 1** — Scope `docs-reviewer`'s narrowed-read citation sentence to checks 1–12, because check 13's ripple rule sits outside the six sections it reads _(layer: plugin)_
 
 ---
 
