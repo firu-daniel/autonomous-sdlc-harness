@@ -73,7 +73,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_conv
 5. [x] **Task 5** — Thin `harness-analyze.md`'s `## Context` and steps 1–3 _(layer: plugin)_ _(points: 15)_
 6. [x] **Task 6** — Thin `harness-analyze.md`'s step 4 lead, `(4a)`, `(4b)` and `(4c)` _(layer: plugin)_ _(points: 20)_
 7. [x] **Task 7** — Thin `harness-analyze.md`'s `(4d)`, step 5 and step 6 _(layer: plugin)_ _(points: 15)_
-8. [ ] **Task 8** — Measure the three files, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
+8. [x] **Task 8** — Measure the three files, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
@@ -187,6 +187,8 @@ Up-front words are the file plus every plugin file or section it reads on every 
 
 | File | Reads counted besides the file | Before — file | Before — up-front | After — file | After — up-front | Δ up-front |
 |---|---|---|---|---|---|---|
-| conventions-writer | none, before and after | 5097 | 5097 | | | |
-| conventions-reviewer | before: all of `plugin/agents/conventions-writer.md` (5097); after: its `## Scope`, `## The document`, `## The fix dispatch` and `## House rules` as Task 2 leaves them | 5882 | 10979 | | | |
-| harness-analyze.md | none (the `(4b)` read of the writer is conditional), before and after | 8297 | 8297 | | | |
+| conventions-writer | none, before and after | 5097 | 5097 | 4373 | 4373 | -724 |
+| conventions-reviewer | before: all of `plugin/agents/conventions-writer.md` (5097); after: its `## Scope`, `## The document`, `## The fix dispatch` and `## House rules` as Task 2 leaves them | 5882 | 10979 | 4954 | 7273 | -3706 |
+| harness-analyze.md | none (the `(4b)` read of the writer is conditional), before and after | 8297 | 8297 | 6790 | 6790 | -1507 |
+
+Task 8: `bash scripts/scratch-run.sh harness-runs/scratch/conventions_family_check.mjs` printed `PASS` (exit 0), every `before=` matching this table; C1, C2, C3 and C3b re-run reach no path without a register row; `git grep -n -E '[^:a-z]/harness-analyze'` over the three files prints nothing.
