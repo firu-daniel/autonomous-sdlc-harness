@@ -113,7 +113,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_ui_t
 8. [x] **Task 8** — Thin `qa-tester`'s `## Which MCP to use` and `## How it tests` _(layer: plugin)_ _(points: 20)_
 9. [x] **Task 9** — Thin `qa-tester`'s `## Output contract` and `## What you must NOT do` _(layer: plugin)_ _(points: 15)_
 10. [x] **Task 10** — Thin both mobile `qa-tester` stubs, identically except for their variant words _(layer: plugin)_ _(points: 15)_
-11. [ ] **Task 11** — Measure the five definitions and their up-front reads, run the family check probe, and record the result in the story index _(layer: general)_ _(points: 10)_
+11. [x] **Task 11** — Measure the five definitions and their up-front reads, run the family check probe, and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
@@ -249,11 +249,11 @@ Up-front words are the agent definition plus every plugin file or section it rea
 
 | Agent | Before — definition | After — definition | Δ |
 |---|---|---|---|
-| ui-tests-plan-writer | 5662 | | |
-| ui-tests-plan-reviewer | 4326 | | |
-| qa-tester | 7921 | | |
-| qa-tester-mobile-maestro | 1186 | | |
-| qa-tester-mobile-mcp | 1340 | | |
+| ui-tests-plan-writer | 5662 | 4446 | -1216 |
+| ui-tests-plan-reviewer | 4326 | 3605 | -721 |
+| qa-tester | 7921 | 5678 | -2243 |
+| qa-tester-mobile-maestro | 1186 | 794 | -392 |
+| qa-tester-mobile-mcp | 1340 | 889 | -451 |
 
 **Up-front, per driver.**
 - **Before:** the writer reads the driver's variant whole; the reviewer reads the variant and the writer whole.
@@ -261,9 +261,9 @@ Up-front words are the agent definition plus every plugin file or section it rea
 
 | Agent | `qa.driver` | Before — up-front | After — up-front | Δ |
 |---|---|---|---|---|
-| ui-tests-plan-writer | `web-playwright` | 13583 | | |
-| ui-tests-plan-writer | `mobile-maestro` | 6848 | | |
-| ui-tests-plan-writer | `mobile-mcp` | 7002 | | |
-| ui-tests-plan-reviewer | `web-playwright` | 17909 | | |
-| ui-tests-plan-reviewer | `mobile-maestro` | 11174 | | |
-| ui-tests-plan-reviewer | `mobile-mcp` | 11328 | | |
+| ui-tests-plan-writer | `web-playwright` | 13583 | 4941 | -8642 |
+| ui-tests-plan-writer | `mobile-maestro` | 6848 | 5240 | -1608 |
+| ui-tests-plan-writer | `mobile-mcp` | 7002 | 5335 | -1667 |
+| ui-tests-plan-reviewer | `web-playwright` | 17909 | 4976 | -12933 |
+| ui-tests-plan-reviewer | `mobile-maestro` | 11174 | 5275 | -5899 |
+| ui-tests-plan-reviewer | `mobile-mcp` | 11328 | 5370 | -5958 |
