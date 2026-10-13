@@ -32,10 +32,8 @@ an ordinary placeholder.
 `autonomous-sdlc-harness init` detects a layout from file existence alone and writes the conventions documents
 as skeletons. This command is the other half: it reads this repository and turns those skeletons into this
 project's actual rules, and fills the two skeleton sections of the always-loaded project file. It is not the
-host tool's own project-file initializer — that one writes a single always-loaded file from the codebase,
-while this one fills the per-layer conventions documents `<layer_path_map>` points at and refuses to guess
-what it could not determine. The setup verb it completes is written in full, `autonomous-sdlc-harness init`,
-never a bare `init`.
+host tool's own project-file initializer, and it refuses to guess what it could not determine. The setup verb it
+completes is written in full, `autonomous-sdlc-harness init`, never a bare `init`.
 
 **Usage:** `/autonomous-sdlc-harness:harness-analyze` with no argument runs every target; `$ARGUMENTS` may name one target plus flags,
 e.g. `/autonomous-sdlc-harness:harness-analyze <target> --existing`.
@@ -49,8 +47,7 @@ in the refusal, and cover its document in the no-argument run.
 
 **Supervised, first-session command.** It is not part of any unattended flow. Step 5's hand-off shells the
 harness CLI out of the session, which the generated permission profile does not allow-list, so that call is
-**expected to ask for permission** and a person is expected to be there to approve it — on a path that already
-needs an explicit yes or `--apply-layers`.
+**expected to ask for permission** and a person is expected to be there to approve it.
 
 Three standing prohibitions:
 
@@ -83,28 +80,25 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    now holds by construction rather than by a walk: two targets naming one document produce one dispatch, and
    step 6 names the pair once.
 
-   **What a run that does not itself write the shared cross-layer document sends as `shared_document`.** Two
-   run shapes do not write it: `/autonomous-sdlc-harness:harness-analyze <layer>` for a layer whose own `conventions` is some other
-   document, and any run — no-argument or single-target — in which (4a) classified that document `skip`. The
-   discriminator is **whether this run writes it**, never whether the document set contains it; (4a) settles
-   that for the whole set before any dispatch leaves, so the value is decided by the time one goes out. In both
-   shapes the anchor is whatever already sits on disk, and the field carries a **value in every case**:
+   **What a run that does not itself write the shared cross-layer document sends as `shared_document`.** Two run
+   shapes do not write it: `/autonomous-sdlc-harness:harness-analyze <layer>` for a layer whose own
+   `conventions` is some other document, and any run — no-argument or single-target — in which (4a) classified
+   that document `skip`. The discriminator is **whether this run writes it**, never whether the document set
+   contains it; (4a) settles that for the whole set before any dispatch leaves. In both shapes the anchor is
+   whatever already sits on disk, and the field carries a **value in every case**:
    `shared_document: <shared_conventions_path>` when a file exists there **and does not carry
    `<!-- harness:unfilled -->`**; `shared_document: none` when no file exists there **or** it is still an
-   unfilled skeleton. The unfilled case is `none` rather than a path because an unfilled skeleton is the CLI's
-   template prose: anchoring the run's vocabulary on it makes the writer borrow the template's words and the
-   reviewer raise naming findings against them. `none` is a **value and never an omitted key** — the writer's
-   and the reviewer's stop condition fires on a missing value, so an omitted field halts the dispatch instead
-   of relaxing it. A run that **does** write it sends `none` on that document's own dispatch, for the reason
-   it always does — whether the run reached it as the `conventions` target or as a layer whose `conventions`
-   names it, which every generated configuration's catch-all row does.
+   unfilled skeleton. `none` is a **value and never an omitted key**: the writer's and the reviewer's stop
+   condition halts on an omitted field. A run that **does** write it sends `none` on that document's own
+   dispatch, whether the run reached it as the `conventions` target or as a layer whose `conventions` names it,
+   which every generated configuration's catch-all row does.
 
    **The set is re-derived once, after step 5's `layers` proposal is applied.** The `layers` target runs first
    in the announced order, so its outcome is settled before any document leaves, and a `conventions` path an
-   accepted proposal newly names **joins the document set here** — classified by (4a) with every other
-   document and dispatched in step 4's waves like any other. The set step 4 classifies is the set as it stands
-   **after** the proposal, never the set as it stood before it; when a proposal is applied, reprint the
-   announcement's document set and dispatch plan with the addition named.
+   accepted proposal newly names **joins the document set here** — classified by (4a) with every other document
+   and dispatched in step 4's waves like any other. Step 4 classifies the set as it stands **after** the
+   proposal; when a proposal is applied, reprint the announcement's document set and dispatch plan with the
+   addition named.
 
    Print the target list (naming, for a skipped row, the target that covers its document), the mode with how
    it was decided, the planned action per target, and the **dispatch plan**: per document, which agent writes
@@ -116,11 +110,9 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    gathers that from its own `scope`.
 2. **Gather what the whole run shares, and what the targets this session writes itself need.** Never read
    `<state_dir>`, `<scripts_dir>` or `<githooks_dir>` as evidence about the adopter's code. The per-layer,
-   rule-deriving evidence is **not** gathered here: the manifests and lockfiles that name the stack, the entry
-   points, the files changed most recently and the shapes that recur are each writer's own gather, from its
-   own `scope`, and `${CLAUDE_PLUGIN_ROOT}/agents/conventions-writer.md` states that obligation. What this
-   step gathers is three things the whole run shares, plus the survey the one code-facing target this session
-   still writes needs:
+   rule-deriving evidence is **not** gathered here: each writer gathers it from its own `scope`
+   (`${CLAUDE_PLUGIN_ROOT}/agents/conventions-writer.md`). This step gathers three things the whole run shares,
+   plus the survey the `project` target needs:
 
    - **The mode facts** — the mode and how it was decided (step 1), carried into every dispatch as `mode`.
    - **The repo-level harvest** of the adopter's own written material — a root always-loaded file, contributor
@@ -150,54 +142,44 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
      third column. On a repository too large to survey whole, sample it and record what was sampled and what
      was not — that record is the `evidence:` clause step 6 prints for the `project` rows.
 3. **What is delegated, to whom, and in what order. This step sends nothing.** It is the reference **step 4
-   fills**, and step 4 is the sole sender of every dispatch in this run — write, review and fix alike —
-   because the `action` a write dispatch carries is decided by (4a), and a document (4a) classifies as `skip`
-   must never have been dispatched. Send nothing from here.
+   fills**, and step 4 is the sole sender of every dispatch in this run — write, review and fix alike — because
+   the `action` a write dispatch carries is decided by (4a), and a document (4a) classifies as `skip` must never
+   have been dispatched.
 
    **Every conventions document is written by `conventions-writer`**
    (`${CLAUDE_PLUGIN_ROOT}/agents/conventions-writer.md`), the shared cross-layer one included. That file owns
-   the document's content contract — the banner, the `**What belongs here**` answers, the stack-independent
-   rule block, the real example, the shared document's own sections and the `phases.parity` gate on the parity
-   one, provenance on every rule, and `## Not determined` — and this file does not restate it. What this step
-   keeps is what the orchestrator decides.
+   the document's content contract, and this file does not restate it.
 
    **Ordering, for the set the run actually has.** **When this run writes the shared cross-layer document** —
-   every no-argument run in which (4a) did not classify it `skip`, a `/autonomous-sdlc-harness:harness-analyze conventions` run, and a
-   single-target run naming the layer whose `conventions` is that document, which every generated
-   configuration's catch-all row is — `<shared_conventions_path>` is written first, in its own
-   write→review→fix chain completed before any per-layer document is dispatched: it owns the cross-layer
-   flow, the testing bar and the commit policy, and its finished text is then passed to every later writer as
-   `shared_document`, the read-only vocabulary anchor that keeps five writers from naming one concept five
-   ways. **When it does not** — a single-target run naming another layer, or any run in which it was
-   classified `skip` — there is no first chain to run and no text to pass down: the run dispatches the
+   every no-argument run in which (4a) did not classify it `skip`, a
+   `/autonomous-sdlc-harness:harness-analyze conventions` run, and a single-target run naming the layer whose
+   `conventions` is that document, which every generated configuration's catch-all row is —
+   `<shared_conventions_path>` is written first, in its own write→review→fix chain completed before any
+   per-layer document is dispatched, and its finished text is then passed to every later writer as
+   `shared_document`, the read-only vocabulary anchor. **When it does not** — a single-target run naming another
+   layer, or any run in which it was classified `skip` — there is no first chain to run: the run dispatches the
    remaining documents and takes its anchor off disk under step 1's rule (the path when that file is filled,
    `none` when it is missing or still unfilled).
 
    **The write dispatch's argument block**, exactly as the writer's `## Invocation contract` names the fields:
-   `pass: document`, **always sent** — the writer's stop condition fires on a missing value, so an omitted
-   `pass` halts the dispatch rather than defaulting to an axis;
-   `target`; `document_path` (absolute); `action` (`write` or `merge`, from (4a)); `scope` — this layer's
-   `layers[].path` for a layer target, and the **repository root** for the shared document, which governs
-   every layer and is normally the catch-all row's document, whose `layers[].path` is `.`; `mode`;
-   `excluded_paths` (`<state_dir>`, `<scripts_dir>`, `<githooks_dir>`); `harvested_sources`; `demand_set`;
-   `shared_document`, **always sent** — the finished shared document's path, or `none` on the dispatch that
-   writes it and in the on-disk cases step 1 names; and `parity`, only when `phases.parity` is
+   `pass: document`, **always sent**; `target`; `document_path` (absolute); `action` (`write` or `merge`, from
+   (4a)); `scope` — this layer's `layers[].path` for a layer target, and the **repository root** for the shared
+   document, which governs every layer and is normally the catch-all row's document, whose `layers[].path` is
+   `.`; `mode`; `excluded_paths` (`<state_dir>`, `<scripts_dir>`, `<githooks_dir>`); `harvested_sources`;
+   `demand_set`; `shared_document`, **always sent** — the finished shared document's path, or `none` on the
+   dispatch that writes it and in the on-disk cases step 1 names; and `parity`, only when `phases.parity` is
    `true`.
 
-   **What governs the prompt beyond that block.** `/autonomous-sdlc-harness:harness-analyze` does **not** activate
-   `${CLAUDE_PLUGIN_ROOT}/instructions/dispatch_discipline_instructions.md`: that file's activation list is
-   closed and this command is not on it, so activating would mean editing a policy every dispatching
-   instruction core obeys, and its obligations have no write point here — a setup run in an adopter's
-   repository has no branch, no committer and no run-control tree to record against. **What stands in its
-   place: the block is closed.** Every dispatch this command sends — write, review and fix alike — carries
-   **exactly** the fields named here and in (4c) and (4d) and no added prose: no `context_notes:` line, no
-   "where to be suspicious", no severity or verdict calibration, no scope narrowing.
+   **What governs the prompt beyond that block.** `/autonomous-sdlc-harness:harness-analyze` does **not**
+   activate `${CLAUDE_PLUGIN_ROOT}/instructions/dispatch_discipline_instructions.md`: that file's activation
+   list is closed and this command is not on it. **What stands in its place: the block is closed.** Every
+   dispatch this command sends — write, review and fix alike — carries **exactly** the fields named here and in
+   (4c) and (4d) and no added prose: no `context_notes:` line, no "where to be suspicious", no severity or
+   verdict calibration, no scope narrowing.
 
    **It binds (4d)'s two corpus dispatch shapes identically, and hardest on the corpus review**, which carries
    exactly the fields (4d) names — no named flaw classes, and no scope narrowing beyond the `corpus_documents`
-   set itself. That reviewer's independence is the only check the corpus pass has, and a caller that hands it
-   the divergences the run already knows about gets confirmation back rather than evidence — which is why a
-   divergence the run already holds rides a **fix** dispatch and never the review one.
+   set itself. A divergence the run already holds rides a **fix** dispatch and never the review one.
 4. **Classify every document, then dispatch, then review each written one once, then review the corpus as a
    set. This step sends every dispatch in the run.** Every write is **one whole document**, never a document assembled in place — the
    writer's obligation on every dispatch it receives. Each document is therefore either untouched or complete
