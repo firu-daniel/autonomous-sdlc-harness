@@ -81,7 +81,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_fix-
 2. [x] **Task 2** — Thin `user-review-fix-plan-writer`'s `## Process`, `## Output contract` and `## Revision mode` _(layer: plugin)_ _(points: 20)_
 3. [x] **Task 3** — Thin `test-fix-plan-writer` and make its sample read on-demand _(layer: plugin)_ _(points: 10)_
 4. [x] **Task 4** — Thin `statistics-plan-writer`'s intro, `## Read first`, `## Invocation contract` and `## Process` lead _(layer: plugin)_ _(points: 10)_
-5. [ ] **Task 5** — Thin `statistics-plan-writer`'s `## Process` steps 1–3, `## Output` and `## Output contract` _(layer: plugin)_ _(points: 20)_
+5. [x] **Task 5** — Thin `statistics-plan-writer`'s `## Process` steps 1–3, `## Output` and `## Output contract` _(layer: plugin)_ _(points: 20)_
 6. [ ] **Task 6** — Measure the three definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
