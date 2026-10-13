@@ -34,7 +34,7 @@ The one finding below is cosmetic.
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Re-flow the four unwrapped paragraphs in `harness-analyze.md` to the file's hard-wrap width _(layer: plugin)_
+1. [x] **Finding 1** — Re-flow the four unwrapped paragraphs in `harness-analyze.md` to the file's hard-wrap width _(layer: plugin)_
 
 ---
 

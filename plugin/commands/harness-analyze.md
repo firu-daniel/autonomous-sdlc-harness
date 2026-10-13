@@ -323,14 +323,15 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    every document wave has completed **and** after (4b) has written its sections: `.claude/CLAUDE.md` is a
    member, so a pass that ran before (4b) would grade a skeleton.
 
-   **(4d.0) Reconcile the shared cross-layer document first — one fix-only dispatch, and no review.** Before
-   the corpus review below: when this run **wrote** the shared cross-layer document and the
-   `shared_document_divergences:` set the layer wave collected is non-empty, dispatch `conventions-writer`
-   once with `pass: corpus`, that document's **same write-dispatch values** (the write table step 3 spells
-   out, **minus** `pass`, which this dispatch carries as `pass: corpus`), the three `prior_*` fields **taken
-   verbatim from that document's own write return**, and `findings` = the collected lines, **each prefixed
-   with the exact literal `Layer-writer divergence — `** — the discriminator the writer's own `## Invocation contract` names. **Fix-only:** no review dispatch accompanies it, the one-pass rule stands
-   for review, and step 3's closed-block rule binds it like every other dispatch.
+   **(4d.0) Reconcile the shared cross-layer document first — one fix-only dispatch, and no review.** Before the
+   corpus review below: when this run **wrote** the shared cross-layer document and the
+   `shared_document_divergences:` set the layer wave collected is non-empty, dispatch `conventions-writer` once
+   with `pass: corpus`, that document's **same write-dispatch values** (the write table step 3 spells out,
+   **minus** `pass`, which this dispatch carries as `pass: corpus`), the three `prior_*` fields **taken verbatim
+   from that document's own write return**, and `findings` = the collected lines, **each prefixed with the exact
+   literal `Layer-writer divergence — `** — the discriminator the writer's own `## Invocation contract` names.
+   **Fix-only:** no review dispatch accompanies it, the one-pass rule stands for review, and step 3's closed-block
+   rule binds it like every other dispatch.
 
    **The cap, in the receiving contract's own words** (`${CLAUDE_PLUGIN_ROOT}/agents/conventions-writer.md` →
    `## Invocation contract`): on the corpus axis a document takes at most one fix dispatch per corpus
@@ -396,23 +397,24 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
 
    The fixes go out as **one wave**, concurrently, like every other wave in this step.
 
-   **Iteration 2 — narrowed, fixed, and skippable on its own evidence.** Its set is the members iteration 1's
-   fixes **changed** — a `fixable` member whose fix return reports at least one finding applied, or
-   `.claude/CLAUDE.md` where this session applied one — **plus** every member those findings' evidence cited.
-   Dispatch the reviewer once more with that narrowed `corpus_documents` and `iteration: 2`, then fan out
-   fixes exactly as iteration 1 does. **Iteration 2 does not run** when iteration 1 returned `findings: none`,
-   or when every finding was declined so no member changed: the narrowed set is empty. **There is no third iteration and no verdict gates either one.**
-5. **The `layers` target proposes and never writes.** Show the current and proposed `layers` arrays as a diff,
-   and name what in the tree each added or changed row was read off. Keep **at least one** row with
-   `path: "."`. Apply only on an explicit yes or `--apply-layers` — never on `--yes` alone — by running
+   **Iteration 2 — narrowed, fixed, and skippable on its own evidence.** Its set is the members iteration 1's fixes
+   **changed** — a `fixable` member whose fix return reports at least one finding applied, or `.claude/CLAUDE.md`
+   where this session applied one — **plus** every member those findings' evidence cited. Dispatch the reviewer
+   once more with that narrowed `corpus_documents` and `iteration: 2`, then fan out fixes exactly as iteration 1
+   does. **Iteration 2 does not run** when iteration 1 returned `findings: none`, or when every finding was
+   declined so no member changed: the narrowed set is empty. **There is no third iteration and no verdict gates
+   either one.**
+5. **The `layers` target proposes and never writes.** Show the current and proposed `layers` arrays as a diff, and
+   name what in the tree each added or changed row was read off. Keep **at least one** row with `path: "."`. Apply
+   only on an explicit yes or `--apply-layers` — never on `--yes` alone — by running
    `npx autonomous-sdlc-harness config set layers '<json>'` and reporting its output; that verb validates the
-   result and writes the `.bak`. **This step itself sends nothing.** On acceptance inside a no-argument run:
-   the `layers` target has already run first, so next update the `project` target's routing table to match the
-   new list. A `conventions` path the accepted proposal newly names **joins the run's document set** — step 1
-   re-derives the set, (4a) classifies that path `action: write` because no skeleton exists at it, and step 4 sends it in the same waves, with the same argument
-   block and the same one-pass review, as every other document. The shape to compose a document with no file
-   behind it is `${CLAUDE_PLUGIN_ROOT}/agents/conventions-writer.md` → `## The document`, whose third case is
-   exactly that dispatch; this file does not restate it.
+   result and writes the `.bak`. **This step itself sends nothing.** On acceptance inside a no-argument run: the
+   `layers` target has already run first, so next update the `project` target's routing table to match the new
+   list. A `conventions` path the accepted proposal newly names **joins the run's document set** — step 1
+   re-derives the set, (4a) classifies that path `action: write` because no skeleton exists at it, and step 4 sends
+   it in the same waves, with the same argument block and the same one-pass review, as every other document. The
+   shape to compose a document with no file behind it is `${CLAUDE_PLUGIN_ROOT}/agents/conventions-writer.md` →
+   `## The document`, whose third case is exactly that dispatch; this file does not restate it.
 
    **Record the verdict, in all three outcomes.** Once the propose/apply decision is settled, record what
    this target concluded by running `npx autonomous-sdlc-harness config set detection.review '<json>'` and
@@ -421,17 +423,17 @@ docs/analyze.md — at that repository's root, outside the plugin — and are no
    `{"verdict": "<one of applied | considered-no-change | proposed-and-refused>", "rationale": "<one line: what was read, what was concluded, and — where a proposal was refused — what was proposed>", "at": "<YYYY-MM-DD>"}`
 
    The three verdicts are the three outcomes: **`applied`** after a successful `config set layers`;
-   **`considered-no-change`** when this target examined the tree and proposes nothing;
-   **`proposed-and-refused`** when a proposal was shown and the operator declined it. Three bounds hold on it.
-   **Recording a refusal is not applying it** — the record says the profile was examined and the answer was
-   no, `layers[]` is untouched on that arm and the run says so, and the record may never read as the change
-   having landed. And on the refused arm the `rationale`
-   **names the proposal that was refused**. And **any quantity the `rationale`
-   states is the output of a command run in this session before this `config set` call — or it is omitted**:
-   name what was read, the directory, the manifest, the file, rather than counting its contents, and state a
-   count only where the count is the reason for the verdict, where it is run and not recalled. `doctor`'s `layer-profile`
-   check (`cli/src/doctor/checks.ts` → `LAYER_PROFILE_CHECK`) reproduces the rationale verbatim as its evidence. This call shells the CLI out of the
-   session exactly as the `config set layers` call above it does, on `## Context`'s terms.
+   **`considered-no-change`** when this target examined the tree and proposes nothing; **`proposed-and-refused`**
+   when a proposal was shown and the operator declined it. Three bounds hold on it. **Recording a refusal is not
+   applying it** — the record says the profile was examined and the answer was no, `layers[]` is untouched on that
+   arm and the run says so, and the record may never read as the change having landed. And on the refused arm the
+   `rationale` **names the proposal that was refused**. And **any quantity the `rationale` states is the output of
+   a command run in this session before this `config set` call — or it is omitted**: name what was read, the
+   directory, the manifest, the file, rather than counting its contents, and state a count only where the count is
+   the reason for the verdict, where it is run and not recalled. `doctor`'s `layer-profile` check
+   (`cli/src/doctor/checks.ts` → `LAYER_PROFILE_CHECK`) reproduces the rationale verbatim as its evidence. This
+   call shells the CLI out of the session exactly as the `config set layers` call above it does, on `## Context`'s
+   terms.
 
    **What that record clears, and what it does not.** It clears `doctor`'s `layer-profile` warning about a
    profile that carries no row scoped below the repository root with provenance that does not account for it. It
