@@ -75,7 +75,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_docs
 2. [x] **Task 2** — Thin `docs-writer`'s `## Research methodology (apply every time)` _(layer: plugin)_ _(points: 10)_
 3. [x] **Task 3** — Thin `docs-writer`'s `## Mode 2`, template lead and `## Output contract` _(layer: plugin)_ _(points: 10)_
 4. [x] **Task 4** — Thin `docs-reviewer`'s intro, `## Invocation contract` and `## Project layout`, and narrow its read of `docs-writer.md` to six sections _(layer: plugin)_ _(points: 10)_
-5. [ ] **Task 5** — Thin `docs-reviewer`'s `## What to verify` and `## Output contract` _(layer: plugin)_ _(points: 10)_
+5. [x] **Task 5** — Thin `docs-reviewer`'s `## What to verify` and `## Output contract` _(layer: plugin)_ _(points: 10)_
 6. [ ] **Task 6** — Measure both definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
