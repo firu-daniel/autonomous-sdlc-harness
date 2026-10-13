@@ -112,7 +112,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_ui_t
 7. [x] **Task 7** — Thin `qa-tester`'s intro, gates, `## Invocation contract`, `## Read first` and `## Preconditions` _(layer: plugin)_ _(points: 20)_
 8. [x] **Task 8** — Thin `qa-tester`'s `## Which MCP to use` and `## How it tests` _(layer: plugin)_ _(points: 20)_
 9. [x] **Task 9** — Thin `qa-tester`'s `## Output contract` and `## What you must NOT do` _(layer: plugin)_ _(points: 15)_
-10. [ ] **Task 10** — Thin both mobile `qa-tester` stubs, identically except for their variant words _(layer: plugin)_ _(points: 15)_
+10. [x] **Task 10** — Thin both mobile `qa-tester` stubs, identically except for their variant words _(layer: plugin)_ _(points: 15)_
 11. [ ] **Task 11** — Measure the five definitions and their up-front reads, run the family check probe, and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
