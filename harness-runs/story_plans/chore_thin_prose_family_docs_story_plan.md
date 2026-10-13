@@ -76,7 +76,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_docs
 3. [x] **Task 3** — Thin `docs-writer`'s `## Mode 2`, template lead and `## Output contract` _(layer: plugin)_ _(points: 10)_
 4. [x] **Task 4** — Thin `docs-reviewer`'s intro, `## Invocation contract` and `## Project layout`, and narrow its read of `docs-writer.md` to six sections _(layer: plugin)_ _(points: 10)_
 5. [x] **Task 5** — Thin `docs-reviewer`'s `## What to verify` and `## Output contract` _(layer: plugin)_ _(points: 10)_
-6. [ ] **Task 6** — Measure both definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
+6. [x] **Task 6** — Measure both definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
@@ -148,5 +148,7 @@ Up-front words are the agent definition plus every plugin file or section it rea
 
 | Agent | Reads counted besides the definition | Before — definition | Before — up-front | After — definition | After — up-front | Δ up-front |
 |---|---|---|---|---|---|---|
-| docs-writer | none, before and after | 3433 | 3433 | _Task 6_ | _Task 6_ | _Task 6_ |
-| docs-reviewer | before: all of `plugin/agents/docs-writer.md` (3433); after: its six sections named in Task 4, as Tasks 1–3 leave them | 2422 | 5855 | _Task 6_ | _Task 6_ | _Task 6_ |
+| docs-writer | none, before and after | 3433 | 3433 | 2939 | 2939 | -494 |
+| docs-reviewer | before: all of `plugin/agents/docs-writer.md` (3433); after: its six sections named in Task 4, as Tasks 1–3 leave them | 2422 | 5855 | 2123 | 3460 | -2395 |
+
+Task 6: `bash scripts/scratch-run.sh harness-runs/scratch/docs_family_check.mjs` (no file argument) printed `PASS` and exited `0`; both `WORDS` `before=` figures and the `UPFRONT` `before=` (5855) match the `Before` cells, and its `UPFRONT` line gave `writer-sections=1337`.
