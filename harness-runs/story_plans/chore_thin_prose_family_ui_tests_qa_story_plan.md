@@ -103,7 +103,7 @@ The verification bar for the branch as a whole belongs to the Run gates phase, n
 
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_ui_tests_qa/task_<K>_plan.md`. Ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Thin `ui-tests-plan-writer`'s intro and `## Invocation contract`, and write the family check probe _(layer: plugin)_ _(points: 15)_
+1. [x] **Task 1** — Thin `ui-tests-plan-writer`'s intro and `## Invocation contract`, and write the family check probe _(layer: plugin)_ _(points: 15)_
 2. [ ] **Task 2** — Scope `ui-tests-plan-writer`'s read of the `qa-tester` variant, and thin `## No-UI determination` and `### Capability guidance` _(layer: plugin)_ _(points: 15)_
 3. [ ] **Task 3** — Thin `ui-tests-plan-writer`'s `## Process` and `### Test data` _(layer: plugin)_ _(points: 15)_
 4. [ ] **Task 4** — Thin `ui-tests-plan-writer` from `## Split output spec` to the end _(layer: plugin)_ _(points: 15)_
