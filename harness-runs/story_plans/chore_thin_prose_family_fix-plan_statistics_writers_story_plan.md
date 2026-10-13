@@ -77,7 +77,7 @@ The verification bar for the branch as a whole belongs to the Run gates phase, n
 
 Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_fix-plan_statistics_writers/task_<K>_plan.md`. Ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Thin `user-review-fix-plan-writer`'s intro, `## Invocation contract` and `## Read on demand`, and write the family check probe _(layer: plugin)_ _(points: 15)_
+1. [x] **Task 1** — Thin `user-review-fix-plan-writer`'s intro, `## Invocation contract` and `## Read on demand`, and write the family check probe _(layer: plugin)_ _(points: 15)_
 2. [ ] **Task 2** — Thin `user-review-fix-plan-writer`'s `## Process`, `## Output contract` and `## Revision mode` _(layer: plugin)_ _(points: 20)_
 3. [ ] **Task 3** — Thin `test-fix-plan-writer` and make its sample read on-demand _(layer: plugin)_ _(points: 10)_
 4. [ ] **Task 4** — Thin `statistics-plan-writer`'s intro, `## Read first`, `## Invocation contract` and `## Process` lead _(layer: plugin)_ _(points: 10)_
