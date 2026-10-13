@@ -642,6 +642,39 @@ hc_repo_root() {
   printf '%s\n' "$top"
 }
 
+# Print the MAIN checkout's root for the repository <root> belongs to — <root>
+# itself in an ordinary checkout, the checkout every worktree hangs off in a
+# linked worktree. Read from the shared git directory (`--git-common-dir`),
+# never from `$PWD` or a sibling-directory guess, so it answers the same from any
+# working copy of one repository. The common directory is asked of <root>
+# itself, where a relative answer is relative to <root> on every git version —
+# which is why <root> MUST be a checkout's toplevel, as `hc_repo_root` returns
+# it: from a subdirectory the relative `.git` would be joined to the wrong
+# directory. The answer is printed as a physical path (`pwd -P`), so a symlinked
+# spelling of <root> and the toplevel git reports name the same main checkout.
+# Return 1 when <root> is not in a repository or the common directory is not
+# `<dir>/.git` — a bare repository, a submodule, or a `--separate-git-dir`
+# layout, none of which has a main checkout this can name.
+hc_main_root() {
+  local root="${1-}" common
+  [ -n "$root" ] || return 1
+  common=$(git -C "$root" rev-parse --git-common-dir 2>/dev/null) || return 1
+  [ -n "$common" ] || return 1
+  case "$common" in
+    /*) ;;
+    *) common="$root/$common" ;;
+  esac
+  common=${common%/}
+  case "$common" in
+    */.git) common=${common%/.git} ;;
+    *) return 1 ;;
+  esac
+  [ -n "$common" ] && [ -d "$common" ] || return 1
+  common=$(cd "$common" 2>/dev/null && pwd -P) || return 1
+  [ -n "$common" ] || return 1
+  printf '%s\n' "$common"
+}
+
 # Apply the settled order to a command plus the payload's cwd, and print the
 # resolved repository root; return 1 when the chosen anchor is not in a
 # repository. The order picks ONE anchor — it does not fall through to the next
