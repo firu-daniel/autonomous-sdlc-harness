@@ -82,7 +82,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_fix-
 3. [x] **Task 3** — Thin `test-fix-plan-writer` and make its sample read on-demand _(layer: plugin)_ _(points: 10)_
 4. [x] **Task 4** — Thin `statistics-plan-writer`'s intro, `## Read first`, `## Invocation contract` and `## Process` lead _(layer: plugin)_ _(points: 10)_
 5. [x] **Task 5** — Thin `statistics-plan-writer`'s `## Process` steps 1–3, `## Output` and `## Output contract` _(layer: plugin)_ _(points: 20)_
-6. [ ] **Task 6** — Measure the three definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
+6. [x] **Task 6** — Measure the three definitions, run the family check probe and record the result in the story index _(layer: general)_ _(points: 10)_
 
 ## Scope register
 
@@ -166,6 +166,6 @@ Up-front words are the agent definition plus every plugin file or section it rea
 
 | Agent | Reads counted besides the definition | Before — definition | Before — up-front | After — definition | After — up-front | Δ up-front |
 |---|---|---|---|---|---|---|
-| user-review-fix-plan-writer | `plugin/samples/sample_user_review_fix_plan.md` + its three `finding_<N>.md` (1959), before and after | 4005 | 5964 | | | |
-| test-fix-plan-writer | before: `plugin/instructions/unit_loop_core.md` → `## The test-run rule` (597) + the same four sample files (1959); after: the test-run rule (597) only | 2391 | 4947 | | | |
-| statistics-plan-writer | `plugin/samples/sample_statistics.md` (1509), before and after | 2928 | 4437 | | | |
+| user-review-fix-plan-writer | `plugin/samples/sample_user_review_fix_plan.md` + its three `finding_<N>.md` (1959), before and after | 4005 | 5964 | 3390 | 5349 | -615 |
+| test-fix-plan-writer | before: `plugin/instructions/unit_loop_core.md` → `## The test-run rule` (597) + the same four sample files (1959); after: the test-run rule (597) only | 2391 | 4947 | 2251 | 2848 | -2099 |
+| statistics-plan-writer | `plugin/samples/sample_statistics.md` (1509), before and after | 2928 | 4437 | 2053 | 3562 | -875 |
