@@ -169,3 +169,5 @@ with
 - `git grep -n -F -e "Replace with your project's" -- plugin/agents/ui-tests-plan-writer.md` prints nothing.
 - `git grep -n -F -e '("QA techniques")' -- plugin/agents/ui-tests-plan-writer.md` prints one line. `.claude/qa_test_scenarios.md` and its template `cli/templates/claude/qa_test_scenarios.md` carry the section under that name.
 - `git diff -- plugin/agents/ui-tests-plan-writer.md` shows hunks only between `## Process` and `## Split output spec (mirror the `task-plan-writer` exactly)`.
+
+- **Deviations from plan:** The third verification bullet's claim that `.claude/qa_test_scenarios.md` carries the `QA techniques` section could not be checked as written: `.claude/qa_test_scenarios.md` does not exist in this checkout (`git ls-files | grep qa_test_scenarios` lists only `cli/templates/claude/qa_test_scenarios.md` and `examples/notes-app/.claude/qa_test_scenarios.md`). The template carries `## QA techniques — work around single-session and sparse-seed limits`; the `("QA techniques")` grep on the agent prints one line. The agent's `.claude/qa_test_scenarios.md` citation is an adopter path, so no edit was made.

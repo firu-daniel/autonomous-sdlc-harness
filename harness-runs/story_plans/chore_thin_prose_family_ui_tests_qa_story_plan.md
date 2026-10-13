@@ -105,7 +105,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_thin_prose_family_ui_t
 
 1. [x] **Task 1** — Thin `ui-tests-plan-writer`'s intro and `## Invocation contract`, and write the family check probe _(layer: plugin)_ _(points: 15)_
 2. [x] **Task 2** — Scope `ui-tests-plan-writer`'s read of the `qa-tester` variant, and thin `## No-UI determination` and `### Capability guidance` _(layer: plugin)_ _(points: 15)_
-3. [ ] **Task 3** — Thin `ui-tests-plan-writer`'s `## Process` and `### Test data` _(layer: plugin)_ _(points: 15)_
+3. [x] **Task 3** — Thin `ui-tests-plan-writer`'s `## Process` and `### Test data` _(layer: plugin)_ _(points: 15)_
 4. [ ] **Task 4** — Thin `ui-tests-plan-writer` from `## Split output spec` to the end _(layer: plugin)_ _(points: 15)_
 5. [ ] **Task 5** — Scope `ui-tests-plan-reviewer`'s reads of the writer and the `qa-tester` variant, and thin its intro through `## Process` _(layer: plugin)_ _(points: 15)_
 6. [ ] **Task 6** — Thin `ui-tests-plan-reviewer`'s `## What to check` _(layer: plugin)_ _(points: 15)_
