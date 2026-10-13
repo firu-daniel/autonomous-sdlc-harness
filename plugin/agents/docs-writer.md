@@ -98,8 +98,6 @@ Research from `entry` per the methodology, then write the document to `output_pa
 
 ## Mode 2 — post-implementation (diff-driven)
 
-Runs at the end of a code-implementation flow to keep the documentation in sync with a shipped change. Two call shapes, both in `## Invocation contract`.
-
 ### Survey (`mode: survey`)
 
 **Analyze the diff and decide what it means for the documentation.** For each affected feature, classify:
@@ -108,19 +106,19 @@ Runs at the end of a code-implementation flow to keep the documentation in sync 
 - A single change can imply **both** — a net-new surface is its own new document *and* an `update` to each existing document whose feature now navigates to it or shares data with it.
 - **Ripple:** a change to a shared service, stored-data set, or backend operation may touch several documents — trace it (use the same stored-data-provenance grep) and list every document it lands in.
 
-**Write nothing.** Return the target list (see `## Output contract`). A pure refactor with no observable behaviour change **and no file added, removed, renamed, moved or split** yields **`targets: none`** — a coordinate refresh is no longer a reason to touch a document, because documents carry no coordinates; say so rather than inventing work. **A rename / move / split / deletion is different: the `path` half of a symbol anchor does not self-heal.** For those, grep the moved path across `<docs_root>` and return an `update` target for every document that cites it, with the reason `anchor path moved`.
+**Write nothing.** Return the target list (see `## Output contract`). A pure refactor with no observable behaviour change **and no file added, removed, renamed, moved or split** yields **`targets: none`** — say so rather than inventing work. **A rename / move / split / deletion is different: the `path` half of a symbol anchor does not self-heal.** For those, grep the moved path across `<docs_root>` and return an `update` target for every document that cites it, with the reason `anchor path moved`.
 
 ### Write / update (`mode: update`)
 
 Research the changed area with the methodology above, then:
 - **new** → write a fresh document via the template.
-- **update** → **read the existing document, preserve what is still accurate, and fold in exactly what the diff changed** (new flows, entry points, payloads, gating, cross-links) — revise the affected sections + `Anchor files` + `Related`. Revise `Anchor files` **only** when the file set changed (a file was added, removed or renamed) or a file's role changed — never to re-point an anchor at a moved *line* (documents carry no line numbers, so there is nothing to re-point) — and never as the sole content of an update **except when a cited path was renamed, moved, split or deleted**, which is a legitimate stand-alone update because the document otherwise cites a file that no longer exists. Do **not** rewrite unaffected sections from scratch, and do not drop still-true content.
+- **update** → **read the existing document, preserve what is still accurate, and fold in exactly what the diff changed** (new flows, entry points, payloads, gating, cross-links) — revise the affected sections + `Anchor files` + `Related`. Revise `Anchor files` **only** when the file set changed (a file was added, removed or renamed) or a file's role changed, and never as the sole content of an update **except when a cited path was renamed, moved, split or deleted**. Do **not** rewrite unaffected sections from scratch, and do not drop still-true content.
 
 ---
 
 ## Template — `doc_type: feature`
 
-The section order below is the retrieval map a reader navigates by — keep it. The per-section content is the adopting project's: where a bullet says *replace with your project's …*, fill it from the conventions documents `<layer_path_map>` names, never from a remembered convention.
+Keep the section order below. Where a bullet says *replace with your project's …*, fill it from the conventions documents `<layer_path_map>` names, never from a remembered convention.
 
 ```
 # <doc_title>
@@ -183,4 +181,4 @@ Your final message IS your return value (not a human chat).
 
 - **catalog / update:** write the document to `output_path`, then return: `doc_path:` · `unverified:` (bullets or `none`) · `parity_gaps:` (`reachable? ❌` backend operations / capabilities present in `<reference_impl>` but not here, or `none` — always `none` when `phases.parity` is `false`) · `notes:` (wrong/missing hints, template friction). Do not paste the document body.
 - **survey:** write nothing; return a `targets:` list — one line per target: `action(new|update) · slug · output_path · reason · entry-hints`. Plus `notes:` (ripples you traced, anything ambiguous). If the diff needs no documentation changes, return `targets: none` with the reason.
-- **docs phase disabled:** you wrote nothing and researched nothing — return `notes:` with the one-line reason (`phases.docs` is `false`), and omit `doc_path:` and `targets:` entirely. Their absence is what tells the caller no document was produced.
+- **docs phase disabled:** return `notes:` with the one-line reason (`phases.docs` is `false`), and omit `doc_path:` and `targets:` entirely.
