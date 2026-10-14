@@ -58,6 +58,7 @@ import {
   appendFileSync,
   chmodSync,
   constants as fsConstants,
+  existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -76,6 +77,7 @@ import {
   PYTHON_RETRIEVAL_COMMAND,
   PYTHON_SERVE_SUB_COMMAND,
 } from '../dist/retrieval/pythonBackend.js';
+import { copySurfacePaths } from '../dist/generators/writeProtection.js';
 import {
   createFixture,
   INIT_SCRIPTS_DIR,
@@ -492,7 +494,7 @@ test('the artifact placement commits one path once, skips an identical re-drop a
   assert.equal(rel, `${STATE_DIR}/task_prompts/feat_x_task_prompt.md`);
   const place = [
     'hr_place_artifact "$PWD" watcher-test/prompt.md "$1" || exit 10',
-    `hr_commit_placed "$PWD/${SCRIPTS_DIR}/commit-on-branch.sh" "$PWD" "$1" "$(hr_task_prompt_subject feat_x)"`,
+    `hr_commit_placed "$PWD" "$PWD" "$1" "$(hr_task_prompt_subject feat_x)"`,
   ].join('; ');
 
   const before = await commits();
@@ -539,6 +541,167 @@ test('the artifact placement commits one path once, skips an identical re-drop a
     { PUSH_RETRY_DELAY_SECS: '0' },
   );
   assert.equal(moved.stdout, `2|${elsewhere}`, `a moved origin did not read as moved: ${moved.stderr}`);
+});
+
+/*
+ * The run library's contracts for a run's working copy: `hr_commit_placed` commits one path by
+ * plumbing and runs no hook, `hr_place_artifact` refuses a path through a symbolic link,
+ * `hr_git_env_drop` drops the wrappers' list, and `hr_run_protected_rel_paths` prints
+ * `copySurfacePaths`' lines.
+ *
+ * RED ONCE — each mutation applied once to `cli/templates/scripts/lib/harness-run-lib.sh`, this file
+ * run, the failure observed, the mutation reverted:
+ * - `hr_commit_placed`'s temporary-index `read-tree` / `update-index` / `write-tree` replaced with
+ *   `hr_run_copy_git update-index` and `hr_run_copy_git write-tree` → the commit case fails on
+ *   `git show --name-only`: `<rel>` and `unrelated.txt`.
+ * - `hr_commit_placed`'s `update-ref` replaced with a porcelain, unpinned
+ *   `git -C "$worktree" add -- "$rel" && git -C "$worktree" commit -q -m "$subject" -- "$rel"` →
+ *   the commit case fails `pre-commit.marker was written`. Plumbing runs no `pre-commit` whatever
+ *   `core.hooksPath` says, so only this mutation reaches the commit hook.
+ * - `-c core.hooksPath=/dev/null` dropped from the `update-ref` call `hr_commit_placed` makes through
+ *   `hr_run_main_git` → the commit case fails `ref-tx.marker was written`.
+ * - both `hr_run_path_safe` calls dropped from `hr_place_artifact` → the symlink case fails `the
+ *   placement wrote through the linked directory`: the outside directory holds the prompt.
+ * - `.mcp.json` dropped from `hr_run_protected_rel_paths` → the parity case fails on the default
+ *   configuration's lines, `.mcp.json` missing.
+ */
+
+/** The names `hr_git_env_drop` unsets outright; every `GIT_TRACE*` goes too. */
+const GIT_ENV_DROPPED = [
+  'GIT_DIR',
+  'GIT_COMMON_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_NAMESPACE',
+  'GIT_CEILING_DIRECTORIES',
+  'GIT_TEMPLATE_DIR',
+  'GIT_CONFIG_PARAMETERS',
+  'GIT_CONFIG_COUNT',
+  'GIT_CONFIG_GLOBAL',
+  'GIT_CONFIG_SYSTEM',
+  'GIT_EXEC_PATH',
+];
+
+/** An executable hook that records it ran by creating `marker`. */
+function plantMarkerHook(dir, relativePath, marker) {
+  plant(dir, relativePath, `#!/bin/sh\n: > '${marker}'\n`);
+  chmodSync(join(dir, relativePath), 0o755);
+}
+
+test('the artifact commit carries only its path and runs no hook', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  assert.equal((await runGit(dir, ['config', 'core.hooksPath'])).stdout.trim(), 'githooks');
+  const wt = `${dir}-wt`;
+  const markers = `${dir}-markers`;
+  t.after(() => rm(wt, { recursive: true, force: true }));
+  t.after(() => rm(markers, { recursive: true, force: true }));
+  mkdirSync(markers);
+  const preCommitMarker = join(markers, 'pre-commit.marker');
+  const refTxMarker = join(markers, 'ref-tx.marker');
+  const unpinned = (cwd, args) => runGit(cwd, ['-c', 'core.hooksPath=/dev/null', ...args]);
+
+  await unpinned(dir, ['worktree', 'add', '--quiet', '-b', 'feat_x', wt]);
+  plantMarkerHook(wt, 'githooks/pre-commit', preCommitMarker);
+  await unpinned(wt, ['add', 'githooks/pre-commit']);
+  await unpinned(wt, ['commit', '--quiet', '-m', 'a pre-commit hook in the copy']);
+  plant(wt, 'unrelated.txt', 'staged by the run\n');
+  await unpinned(wt, ['add', 'unrelated.txt']);
+  plantMarkerHook(dir, 'githooks/reference-transaction', refTxMarker);
+  plant(dir, 'watcher-test/prompt.md', 'do the thing\n');
+
+  const rel = `${STATE_DIR}/task_prompts/feat_x_task_prompt.md`;
+  const tipBefore = (await runGit(dir, ['rev-parse', 'refs/heads/feat_x'])).stdout.trim();
+  const committed = await libCall(
+    dir,
+    'hr_place_artifact "$1" watcher-test/prompt.md "$2" || exit 10; hr_commit_placed "$PWD" "$1" "$2" "$(hr_task_prompt_subject feat_x)"',
+    [wt, rel],
+  );
+  assert.equal(committed.status, 0, `the commit exited ${committed.status}: ${committed.stderr}`);
+  const tip = (await runGit(dir, ['rev-parse', 'refs/heads/feat_x'])).stdout.trim();
+  assert.equal((await runGit(dir, ['rev-parse', `${tip}^`])).stdout.trim(), tipBefore);
+  assert.equal((await runGit(dir, ['show', '--name-only', '--format=', tip])).stdout.trim(), rel);
+  assert.equal((await runGit(wt, ['diff', '--cached', '--name-only'])).stdout.trim(), 'unrelated.txt');
+  assert.equal(existsSync(preCommitMarker), false, 'pre-commit.marker was written');
+  assert.equal(existsSync(refTxMarker), false, 'ref-tx.marker was written');
+  const status = (await runGit(wt, ['status', '--porcelain'])).stdout;
+  assert.ok(!status.includes(rel), `the copy's status lists the committed path:\n${status}`);
+
+  const defaultBranch = (await runGit(dir, ['symbolic-ref', '--short', 'HEAD'])).stdout.trim();
+  const mainTip = (await runGit(dir, ['rev-parse', 'HEAD'])).stdout.trim();
+  const protectedCommit = await libCall(
+    dir,
+    'hr_place_artifact "$PWD" watcher-test/prompt.md "$1" || exit 10; hr_commit_placed "$PWD" "$PWD" "$1" subject',
+    [rel],
+  );
+  assert.equal(protectedCommit.status, 2, `a commit on ${defaultBranch} exited ${protectedCommit.status}: ${protectedCommit.stderr}`);
+  assert.equal((await runGit(dir, ['rev-parse', 'HEAD'])).stdout.trim(), mainTip, 'a protected branch gained a commit');
+});
+
+test('placement refuses a path through a symlink', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  const outside = `${dir}-outside`;
+  t.after(() => rm(outside, { recursive: true, force: true }));
+  mkdirSync(outside);
+  plant(dir, 'watcher-test/prompt.md', 'do the thing\n');
+  const rel = `${STATE_DIR}/task_prompts/feat_x_task_prompt.md`;
+  const place = 'hr_place_artifact "$PWD" watcher-test/prompt.md "$1"';
+  const prompts = join(dir, STATE_DIR, 'task_prompts');
+
+  await rm(prompts, { recursive: true, force: true });
+  symlinkSync(outside, prompts);
+  const throughDir = await libCall(dir, place, [rel]);
+  assert.deepEqual(readdirSync(outside), [], 'the placement wrote through the linked directory');
+  assert.equal(throughDir.status, 1, `placement through a linked directory exited ${throughDir.status}`);
+
+  await rm(prompts, { force: true });
+  mkdirSync(prompts);
+  const target = join(outside, 'target.md');
+  writeFileSync(target, 'the original\n');
+  symlinkSync(target, join(dir, rel));
+  const atLeaf = await libCall(dir, place, [rel]);
+  assert.equal(readFileSync(target, 'utf8'), 'the original\n', "the linked leaf's target was overwritten");
+  assert.equal(atLeaf.status, 1, `placement at a linked leaf exited ${atLeaf.status}`);
+});
+
+test("hr_git_env_drop drops exactly the wrappers' list", async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  const env = { GIT_TRACE_PACKET: '/nonexistent/trace', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' };
+  for (const name of GIT_ENV_DROPPED) env[name] = '/nonexistent/value';
+  const dropped = await libCall(dir, 'hr_git_env_drop; env', [], env);
+  assert.equal(dropped.status, 0, dropped.stderr);
+  const names = dropped.stdout.split('\n').map((line) => line.split('=')[0]);
+  for (const name of [...GIT_ENV_DROPPED, 'GIT_TRACE_PACKET']) {
+    assert.ok(!names.includes(name), `${name} survived hr_git_env_drop`);
+  }
+  assert.ok(dropped.stdout.split('\n').includes('GIT_SSH_COMMAND=ssh -o BatchMode=yes'), 'GIT_SSH_COMMAND was dropped');
+});
+
+test('hr_run_protected_rel_paths is copySurfacePaths', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  const lines = async () => {
+    const printed = await libCall(dir, 'hr_run_protected_rel_paths "$PWD"');
+    assert.equal(printed.status, 0, printed.stderr);
+    return printed.stdout.split('\n').filter((line) => line !== '');
+  };
+  const config = JSON.parse(text(dir, 'harness.config.json'));
+  assert.deepEqual(await lines(), [...copySurfacePaths(config)]);
+
+  const changed = {
+    ...config,
+    githooksDir: 'tools/hooks',
+    phases: { ...config.phases, docs: true },
+    docs: { ...config.docs, retrieval: true },
+  };
+  writeFileSync(join(dir, 'harness.config.json'), `${JSON.stringify(changed, null, 2)}\n`);
+  const expected = [...copySurfacePaths(JSON.parse(text(dir, 'harness.config.json')))];
+  assert.ok(expected.includes(`${SCRIPTS_DIR}/lib`), `the changed configuration projects no retrieval paths: ${expected}`);
+  assert.deepEqual(await lines(), expected);
 });
 
 test('hr_remote_record_init writes a remote record\'s starting fields, leaves status to its caller and resets the counters', async (t) => {

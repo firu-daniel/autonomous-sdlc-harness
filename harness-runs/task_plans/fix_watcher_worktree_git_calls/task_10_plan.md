@@ -45,3 +45,6 @@
 **Verification:**
 
 - `npm test --workspace cli -- test/outer-loop-scripts.test.mjs` passes, and each `RED ONCE` mutation was run and observed failing as recorded.
+- **Deviations from plan:**
+  - RED ONCE mutation 2 replaced only `hr_commit_placed`'s `update-ref` with the porcelain `git -C "$worktree" add -- "$rel" && git -C "$worktree" commit -q -m "$subject" -- "$rel"`; the earlier `read-tree` … `commit-tree` steps stayed and made an unreferenced commit. Observed failure: `pre-commit.marker was written`. The test header records the mutation as run.
+  - The symlink case asserts the bytes on disk before the exit status (cli conventions: a refusal is asserted on the bytes). Under mutation 4 the first failure is then `the placement wrote through the linked directory`, as the plan asks, and not the status assertion.
