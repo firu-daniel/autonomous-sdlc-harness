@@ -28,6 +28,10 @@
  *    substitution or embedded in a compound statement is a different string, which an
  *    unattended run refuses (`docs/config.md` §1).
  *
+ * Three reads compare a branch with the default branch without touching a working tree:
+ * {@link mergeBase}, {@link fileAtRef} and {@link changedPathsBetween}. Each runs no hook, no diff
+ * driver and no textconv, and returns `undefined` rather than throwing when git does not answer.
+ *
  * Most of what follows is read-only. The two exceptions — {@link initRepository} and
  * {@link commitAll} — are the only functions in the CLI that mutate a repository's history, and
  * each is called from one place, behind an explicit adopter decision.
@@ -155,12 +159,24 @@ const ORIGIN_PREFIX = 'origin/';
  * text never interleaves with the reporter's output.
  */
 function runGit(args: readonly string[], cwd: string): string {
+  return runGitUntrimmed(args, cwd).trim();
+}
+
+/**
+ * Above `execFileSync`'s 1 MiB default, which a shipped outer-loop script approaches: an overflow
+ * would read as an absent file to {@link fileAtRef}.
+ */
+const GIT_OUTPUT_MAX_BYTES = 64 * 1024 * 1024;
+
+/** {@link runGit}'s stdout as git printed it, for a caller whose answer is the bytes themselves. */
+function runGitUntrimmed(args: readonly string[], cwd: string): string {
   return execFileSync('git', [...args], {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
-  }).trim();
+    maxBuffer: GIT_OUTPUT_MAX_BYTES,
+  });
 }
 
 /** True when a thrown value is a failure to spawn `git` at all, rather than a non-zero status. */
@@ -659,4 +675,63 @@ export function pathIsIgnored(repoRoot: string, repoRelativePath: string): boole
   } catch (error) {
     return (error as { status?: number } | null)?.status === 1 ? false : undefined;
   }
+}
+
+/** A revision argument git could read as an option; refused before any call is made. */
+function looksLikeOption(revision: string): boolean {
+  return revision === '' || revision.startsWith('-');
+}
+
+/**
+ * The best common ancestor of `a` and `b` — `git merge-base <a> <b>` — or `undefined` when they
+ * share none, either does not resolve, or git fails.
+ */
+export function mergeBase(repoRoot: string, a: string, b: string): string | undefined {
+  if (looksLikeOption(a) || looksLikeOption(b)) return undefined;
+  let output: string;
+  try {
+    output = runGit(['merge-base', a, b], repoRoot);
+  } catch {
+    return undefined;
+  }
+  return output === '' ? undefined : output;
+}
+
+/**
+ * The blob at `repoRelativePath` in `ref` — `git show <ref>:<path>`'s stdout, untrimmed — or
+ * `undefined` when the ref or the path is absent or git fails. Without `--textconv` on the command
+ * line `git show` streams a blob's bytes as stored, so no configured driver runs.
+ */
+export function fileAtRef(repoRoot: string, ref: string, repoRelativePath: string): string | undefined {
+  if (looksLikeOption(ref)) return undefined;
+  try {
+    return runGitUntrimmed(['show', `${ref}:${repoRelativePath}`], repoRoot);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The paths under `pathspecs` that differ between the trees of `base` and `tip`, one per entry, or
+ * `undefined` when git fails. Tree to tree: no working tree or index is read, renames are reported as
+ * a deletion and an addition, and no external diff or textconv driver runs. An empty `pathspecs`
+ * compares the whole tree.
+ */
+export function changedPathsBetween(
+  repoRoot: string,
+  base: string,
+  tip: string,
+  pathspecs: readonly string[],
+): readonly string[] | undefined {
+  if (looksLikeOption(base) || looksLikeOption(tip)) return undefined;
+  let output: string;
+  try {
+    output = runGitUntrimmed(
+      ['diff', '--name-only', '--no-renames', '--no-ext-diff', '--no-textconv', base, tip, PATHSPEC_SEPARATOR, ...pathspecs],
+      repoRoot,
+    );
+  } catch {
+    return undefined;
+  }
+  return output.split('\n').filter((line) => line !== '');
 }

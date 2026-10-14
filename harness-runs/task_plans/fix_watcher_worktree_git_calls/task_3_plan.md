@@ -36,3 +36,8 @@ Add to `cli/src/core/git.ts`, the one module that invokes git, the three reads T
 - `git grep -nE "copySurfacePaths|jobSurfacePaths" -- cli/src` shows each defined once, in `writeProtection.ts`.
 - `git grep -nE "execFileSync|spawnSync" -- cli/src/generators/writeProtection.ts` finds nothing: the git reads live in `core/git.ts` alone.
 - No test runs here. Task 4's `cli/test/doctor-job-surfaces.test.mjs` and Task 10's parity case in `cli/test/outer-loop-scripts.test.mjs` exercise these exports.
+
+**Deviations from plan:**
+
+- `mergeBase`, `fileAtRef` and `changedPathsBetween` return `undefined` without calling git when a revision argument is empty or starts with `-`. The argument vector stays exactly as tabled, and git can no longer read a caller's ref as an option. `fileAtRef` and `changedPathsBetween` read through a new private `runGitUntrimmed`, which has a 64 MiB `maxBuffer`. The default is 1 MiB, and an overflow would have read as an absent file: `cli/templates/scripts/remote-run.sh` is already 394846 bytes (`wc -c`).
+- Each projection was checked by a probe of the compiled module (`harness-runs/scratch/task3_projections.mjs`, run through `bash scripts/scratch-run.sh`) against this repository's `harness.config.json`, against a variant with `scriptsDir: tools/harness` and `githooksDir: hooks/git`, and against a variant with retrieval on. `copySurfacePaths` printed the tabled four paths, plus `scripts/docs-search-server.sh` and `scripts/lib` with retrieval on, in `hr_run_protected_rel_paths`' order. `jobSurfacePaths` printed the tabled set. No test file was written, as the plan states.

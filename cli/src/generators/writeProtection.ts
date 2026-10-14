@@ -12,6 +12,15 @@
  * directory resolver, the MCP wiring's path, the profile's and the settings files' paths, the
  * configuration file's name — never joined by hand, so the file protected is the file the writer wrote. `doctor` grades a profile on disk against
  * {@link protectedPaths} and {@link fileToolDenyRules}, so they are the one statement of the set.
+ *
+ * Two relative sets are projections of {@link protectedPaths}, filtered and re-rooted from its answer
+ * and never listed again: {@link copySurfacePaths}, the paths an unsandboxed checkout of a run's
+ * branch refuses to install run-authored content at, and {@link jobSurfacePaths}, the paths a remote
+ * job's surface check compares against the default branch before the job runs or loads anything from
+ * its own checkout. The one mirror outside this package is `hr_run_protected_rel_paths` in
+ * `cli/templates/scripts/lib/harness-run-lib.sh`, which prints {@link copySurfacePaths}' lines in
+ * the same order; `cli/test/outer-loop-scripts.test.mjs` holds the two equal. A mirror this header
+ * does not declare is a defect.
  */
 
 import { isAbsolute, join, relative, sep } from 'node:path';
@@ -278,6 +287,69 @@ export function protectedPaths({
   }
 
   return paths;
+}
+
+/**
+ * Where the two projections below place the checkout and the worktree root. Neither is read from disk:
+ * each projection keeps only paths relative to one of them, so any pair that does not nest gives the
+ * same answer.
+ */
+const PLACEHOLDER_REPO_ROOT = join(sep, 'harness-placeholder', 'repo');
+const PLACEHOLDER_WORK_ROOT = join(sep, 'harness-placeholder', 'work');
+
+/** {@link protectedPaths} at the placeholder roots, with no plugin root: neither projection keeps one. */
+function placeholderProtectedPaths(config: HarnessConfig): readonly ProtectedPath[] {
+  return protectedPaths({
+    repoRoot: PLACEHOLDER_REPO_ROOT,
+    workRoot: PLACEHOLDER_WORK_ROOT,
+    config,
+    additionalDirectories: [],
+  });
+}
+
+/** `path` relative to `root` with `/` separators, or `undefined` when it is `root` itself or not under it. */
+function relativeUnder(root: string, path: string): string | undefined {
+  const rel = relative(root, path);
+  if (rel === '' || isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) return undefined;
+  return rel.split(sep).join('/');
+}
+
+/** Each distinct value once, in first-seen order. */
+function distinct(values: readonly string[]): readonly string[] {
+  return [...new Set(values)];
+}
+
+/**
+ * The worktree-relative protected set: {@link protectedPaths}' entries under the sibling-worktree
+ * glob, the glob prefix stripped and the worktree's `.git` pointer dropped — `<githooksDir>`,
+ * `.mcp.json`, `.claude/settings.json`, `.claude/settings.local.json`, then, where docs retrieval
+ * applies, `<scriptsDir>/docs-search-server.sh` and `<scriptsDir>/lib`. `/`-separated, no trailing
+ * `/`, in {@link protectedPaths}' order, which is the order `hr_run_protected_rel_paths` prints.
+ */
+export function copySurfacePaths(config: HarnessConfig): readonly string[] {
+  const glob = worktreeGlob(PLACEHOLDER_WORK_ROOT, config.projectName ?? defaultProjectName(PLACEHOLDER_REPO_ROOT));
+  const paths: string[] = [];
+  for (const { path } of placeholderProtectedPaths(config)) {
+    const rel = relativeUnder(glob, path);
+    if (rel !== undefined && rel !== GIT_DIR) paths.push(rel);
+  }
+  return distinct(paths);
+}
+
+/**
+ * The repo-relative set a remote job runs or loads from its own checkout: {@link protectedPaths}'
+ * entries under the checkout itself, minus everything inside `.git` and a `.git` at any scripts
+ * directory level. Plugin roots and the worktree entries lie outside the checkout and fall away.
+ * `/`-separated, deduplicated, in {@link protectedPaths}' order.
+ */
+export function jobSurfacePaths(config: HarnessConfig): readonly string[] {
+  const paths: string[] = [];
+  for (const { path } of placeholderProtectedPaths(config)) {
+    const rel = relativeUnder(PLACEHOLDER_REPO_ROOT, path);
+    if (rel === undefined || rel.split('/').includes(GIT_DIR)) continue;
+    paths.push(rel);
+  }
+  return distinct(paths);
 }
 
 /**

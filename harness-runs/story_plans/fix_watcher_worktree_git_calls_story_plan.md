@@ -60,7 +60,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_watcher_worktree_git_cal
 
 1. [x] **Task 1** — The run library's hardened git primitives for the watcher family _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — The two wrappers take the `GIT_*` drop from the library, and their headers stop restating residual 1 _(layer: cli)_ _(points: 8)_
-3. [ ] **Task 3** — The protected surfaces as two projections of `protectedPaths`, and the git reads they need _(layer: cli)_ _(points: 12)_
+3. [x] **Task 3** — The protected surfaces as two projections of `protectedPaths`, and the git reads they need _(layer: cli)_ _(points: 12)_
 4. [ ] **Task 4** — `doctor --job-surfaces=<branch>`: refuse a branch whose own commits changed the job's surfaces _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — `create-worktree.sh --existing` checks before it checks out, and bootstraps with the main checkout's `setup-worktree.sh` _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 6** — The watcher's review drop, artifact commits and stall watchdog on the hardened primitives _(layer: cli)_ _(points: 20)_
