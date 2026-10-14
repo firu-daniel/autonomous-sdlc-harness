@@ -69,7 +69,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_watcher_worktree_git_cal
 9. [x] **Task 9** — `harness-run.yml` refuses a branch that changed the job's surfaces before anything runs from it _(layer: cli)_ _(points: 14)_
 10. [x] **Task 10** — Library cases: the commit primitive, the placement refusal, the `GIT_*` drop and the protected-set parity _(layer: cli)_ _(points: 15)_
 11. [x] **Task 11** — Planted-payload fixtures for the watcher's review drop, local and remote _(layer: cli)_ _(points: 20)_
-12. [ ] **Task 12** — Planted-payload fixtures for the stall watchdog's reset, local and in job mode _(layer: cli)_ _(points: 20)_
+12. [x] **Task 12** — Planted-payload fixtures for the stall watchdog's reset, local and in job mode _(layer: cli)_ _(points: 20)_
 13. [ ] **Task 13** — Planted-payload fixtures for `remote-run.sh review` _(layer: cli)_ _(points: 17)_
 14. [ ] **Task 14** — `docs/cli.md` §6 and §7, and `docs/watcher.md`: residual 1 narrowed, and where the family runs git _(layer: general)_ _(points: 20)_
 15. [ ] **Task 15** — `docs/remote-execution.md`: the job's surfaces, the job-mode watchdog and the post-release check _(layer: general)_ _(points: 15)_
