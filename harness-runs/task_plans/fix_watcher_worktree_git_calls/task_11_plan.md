@@ -66,3 +66,12 @@ The registry `status` after a refusal is `failed`, and the inbox file is archive
 **Verification:**
 
 - `npm test --workspace cli -- test/watcher-review-drop-payloads.test.mjs` passes, and every `RED ONCE` mutation was run once and observed failing as recorded in the header.
+
+**Deviations from plan:**
+
+- **(L5)** The committed `.claude/settings.json` change, with the working-tree file untouched, leaves the copy unclean. On its own it would be refused by `hr_run_copy_clean`, so the case's mutation (drop the surface check) could not turn it red. The fixture therefore also sets `update-index --assume-unchanged` on the record's index, which a sandboxed session can write. With that, the clean test passes and only the surface check's tree comparison refuses. The case's mutation was then observed red.
+- **(R4)** A staged ordinary file fails `hr_run_copy_clean`'s `diff-index --cached` before the commit is reached. The extra entry is therefore a staged gitlink, the one kind the clean test's `--ignore-submodules` lets through. Under the R4 mutation, `extra` is committed.
+- **(L2), (L3), (L4)** The gitlink's nested repository, the submodule's checkout, `.gitattributes` and the attributed file are unprotected paths the sandbox can write, so they are written to the working tree. Only the commit goes through the record index, `commit-tree` and `update-ref`. (L3) stages through a pinned `submodule add`.
+- **(L8)** `user_reviews/README.md` is tracked. The fixture therefore commits the removal of the README and a `120000` symlink entry, and writes the matching symlink, so the copy reads clean and the placement is what refuses.
+- **(R1)** The push refusal comes after the placement. The drop has already been archived as placed (`<ts>_<name>`), so no `failed_` archive is written. That is today's behaviour of `fail_before_launch` after placement, and the case asserts it that way.
+- **RED ONCE** Each mutation was applied by `harness-runs/scratch/t11_mutate.py` through `scripts/scratch-run.sh`, run against the whole file, and reverted. No case needed a regression-guard entry.
