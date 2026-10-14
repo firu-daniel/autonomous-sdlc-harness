@@ -93,3 +93,21 @@
 - `git grep -n 'npx' -- cli/templates/scripts/autonomous-watcher.sh` shows the one job-surfaces call, inside the `cd "$scratch"` subshell, carrying `--cwd "$MAIN_REPO"` and `@$HARNESS_GITHUB_DEFAULT_COMMIT`.
 - `git grep -nE 'refs/remotes/origin/\$\{?(default|DEFAULT)' -- cli/templates/scripts/autonomous-watcher.sh` finds no hit: the watcher names no local ref of the default branch as a base.
 - The new REPRO rows, run by hand against a throwaway fixture with one `tick`, give the outcomes they state. An honest identical re-drop of a task prompt still logs *already committed (identical re-drop)* and makes no commit.
+
+- **Deviations from plan:**
+  - The commit sites call `watcher_commit "$worktree" "$rel" "$subject"`, a four-line function that calls `hr_commit_placed "$RUN_MAIN" …` and, on an empty `RUN_MAIN`, returns 1 with `RUN_MAIN_REFUSAL` on stderr. `hr_commit_placed` with an empty `<main>` returns 1 silently, and the plan requires the refusal to name *cannot place the watcher in a main checkout*. The rc mapping is unchanged. The log and notify text say *the watcher's commit*.
+  - The recreated copy (`create-worktree.sh --existing`) also gets `hr_run_copy_check_var` and the branch comparison, with its own `reuse_fail` messages. Without that check, `hr_run_fast_forward_var` and `hr_run_surface_check_var … copy` have no `HR_RUN_COPY_*` values to act on.
+  - The review placement now fails through `fail_before_launch` when `hr_place_artifact` returns 1 (an unsafe path or a copy failure). The plan does not say what a failed placement does. Before this change a failed `cp` was ignored and the run launched.
+  - The watchdog checks `hr_run_path_safe` both before and after its `mkdir -p` of the state directory, as `hr_place_artifact` does. Either failure gives up with the plan's `why`. Both checks run after the reset, because a reset can restore a committed symbolic link.
+  - `stall_job_surfaces_ok` makes its scratch directory with `mktemp -d "${TMPDIR:-/tmp}/watcher-job-surfaces.XXXXXX"`, the template form the library already uses, rather than a bare `mktemp -d`.
+  - The `a stall` REPRO row gains one sentence: the fixture needs `a drop`'s origin, because the reset's surface check now asks origin for the default branch's commit.
+  - **Evidence downgrade, identical task re-drop:** a second identical `feat_x_task_prompt.md` drop through `tick` never reaches the commit. `create-worktree.sh` refuses first with `fatal: a branch named 'feat_x' already exists`, and the run is failed. The same probe against the scripts at `HEAD` before this change gave the same refusal, so this is not caused by this unit. The rc-3 path was verified two other ways instead. A direct `watcher_commit` of the already-committed prompt returned `rc=3` and the commit count stayed at 2. A remote identical review re-drop logged `the user review for 'feat_x' is already committed (identical re-drop) — skipping the commit, pushing anyway`, and the commit count stayed at 6.
+  - **Evidence downgrade, job-surfaces check:** the job-mode `npx … doctor --job-surfaces` call was exercised against a stub `npx` placed on PATH (`harness-runs/scratch/task6_job_surfaces.py`), not the published CLI. With the env values missing it returned rc 1 and printed the message. With a stub exiting 0 it returned rc 0, ran from a `watcher-job-surfaces.*` directory that was removed afterwards, and passed `--yes autonomous-sdlc-harness@9.9.9 doctor --cwd <checkout> --job-surfaces=trunk@<40 hex>`. With a stub exiting 1 it returned rc 1. A real `doctor --job-surfaces` run inside a job needs a release and Task 9's workflow env.
+  - REPRO rows run with `bash scripts/scratch-run.sh harness-runs/scratch/task6_repro_rows.py <cli/templates/scripts>`:
+    - task drop: committed and pushed.
+    - honest local review reuse: launched.
+    - *refused reuse*: `failed`, with the log line naming `.mcp.json`.
+    - *refused reset*: `failed` with `the reset was refused (… .mcp.json)`, `stall_restarts` unchanged and no `PAUSE_PROGRESS.md` written.
+    - honest stall reset: an uncommitted edit was discarded, `stall_restarts` 1 and the reworded note written.
+    - honest remote review: fast-forwarded, committed and one `workflow run` recorded.
+    - *refused ff*: `failed`, the log naming `.mcp.json`, `refs/heads/feat_x` unchanged and no new `workflow run`.

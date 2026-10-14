@@ -63,7 +63,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_watcher_worktree_git_cal
 3. [x] **Task 3** — The protected surfaces as two projections of `protectedPaths`, and the git reads they need _(layer: cli)_ _(points: 12)_
 4. [x] **Task 4** — `doctor --job-surfaces=<branch>`: refuse a branch whose own commits changed the job's surfaces _(layer: cli)_ _(points: 20)_
 5. [x] **Task 5** — `create-worktree.sh --existing` checks before it checks out, and bootstraps with the main checkout's `setup-worktree.sh` _(layer: cli)_ _(points: 20)_
-6. [ ] **Task 6** — The watcher's review drop, artifact commits and stall watchdog on the hardened primitives _(layer: cli)_ _(points: 20)_
+6. [x] **Task 6** — The watcher's review drop, artifact commits and stall watchdog on the hardened primitives _(layer: cli)_ _(points: 20)_
 7. [ ] **Task 7** — `remote-run.sh review` and `start` on the hardened primitives _(layer: cli)_ _(points: 12)_
 8. [ ] **Task 8** — `cleanup-merged-worktrees.sh` removes only the run's own working copy _(layer: cli)_ _(points: 10)_
 9. [ ] **Task 9** — `harness-run.yml` refuses a branch that changed the job's surfaces before anything runs from it _(layer: cli)_ _(points: 14)_
