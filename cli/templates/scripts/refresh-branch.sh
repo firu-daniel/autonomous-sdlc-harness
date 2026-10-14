@@ -135,10 +135,11 @@
 # can only make the check accept a different
 # `core.hooksPath`, which the pin overrides on every call.
 #
-# THE INHERITED GIT ENVIRONMENT IS DROPPED. Before anything else this script
-# unsets the same `GIT_*` names `push-branch.sh` does, every `GIT_TRACE*`
-# included, and keeps `GIT_SSH_COMMAND`; `PATH` and `BASH_ENV` are trusted as
-# they arrive (the list and the reasoning: `push-branch.sh` → the paragraph of
+# THE INHERITED GIT ENVIRONMENT IS DROPPED. As its first statement after
+# sourcing the library, before any git call, this script drops through
+# `lib/harness-run-lib.sh` → `hr_git_env_drop` the same `GIT_*` names
+# `push-branch.sh` does, every `GIT_TRACE*` included, and keeps
+# `GIT_SSH_COMMAND`; `PATH` and `BASH_ENV` are trusted as they arrive (the list and the reasoning: `push-branch.sh` → the paragraph of
 # the same name). It sets `GIT_DIR`, `GIT_INDEX_FILE` and `GIT_WORK_TREE` itself
 # afterwards, for the working-tree calls only.
 #
@@ -294,16 +295,6 @@
 
 set -uo pipefail
 
-# THE INHERITED GIT ENVIRONMENT IS DROPPED (header). GIT_SSH_COMMAND is kept.
-# Each name is unset on its own; `${!GIT_TRACE*}` lists every set GIT_TRACE*
-# name, which bash 3.2 supports.
-unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
-  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES \
-  GIT_TEMPLATE_DIR GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_CONFIG_GLOBAL \
-  GIT_CONFIG_SYSTEM GIT_EXEC_PATH
-for hr_trace_var in ${!GIT_TRACE*}; do unset "$hr_trace_var"; done
-unset hr_trace_var
-
 # The library is reached by a path computed from this script's own location, so a
 # copy that was moved with its `lib/` still finds it, and no session root or
 # runtime-substituted token is assumed.
@@ -314,6 +305,8 @@ if [ ! -r "$hr_lib" ]; then
 fi
 # shellcheck source=lib/harness-run-lib.sh
 . "$hr_lib"
+# THE INHERITED GIT ENVIRONMENT IS DROPPED (header). GIT_SSH_COMMAND is kept.
+hr_git_env_drop
 
 use_local=0
 target=""

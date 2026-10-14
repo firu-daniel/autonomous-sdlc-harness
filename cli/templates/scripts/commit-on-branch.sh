@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# commit-on-branch.sh — the deterministic commit wrapper every unattended commit
-# point calls: stage exactly the paths it was given, refuse a branch this
+# commit-on-branch.sh — the deterministic commit wrapper every dispatched
+# agent's unattended commit point calls (the run watcher's own artifact commit
+# no longer goes through it: it commits through `lib/harness-run-lib.sh` →
+# `hr_commit_placed`, from plumbing, running no hook): stage exactly the paths
+# it was given, refuse a branch this
 # repository's own configuration protects, and commit with the message supplied
 # as ordinary positional arguments.
 #
