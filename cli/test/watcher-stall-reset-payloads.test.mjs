@@ -22,7 +22,7 @@
  * for itself. In job mode the job checkout is the fixture itself, on the run branch.
  *
  * RED ONCE — each mutation applied once to `cli/templates/scripts/autonomous-watcher.sh` (S2, S3's
- * first and S6: to `lib/harness-run-lib.sh`), the case run, the failure observed, the mutation
+ * first, S6 and S7: to `lib/harness-run-lib.sh`), the case run, the failure observed, the mutation
  * reverted:
  * - (honest) the watchdog's `hr_run_reset_var` call replaced by `:` → fails `the uncommitted edit
  *   survived the reset`.
@@ -54,6 +54,9 @@
  * - (J5) the same mutation → fails `a planted payload ran`, holding `node-modules.marker`.
  * - (J6) `--job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH"` without `@$HARNESS_GITHUB_DEFAULT_COMMIT`
  *   → the case resumes: fails on the record's `status`, `completed`, not `failed`.
+ * - (S7) `hr_run_worktree_diff_var` using `GIT_INDEX_FILE="$HR_RUN_COPY_GITDIR/index"` in place of
+ *   the temporary index → the case resumes: fails on the record's `status`, `completed`, not
+ *   `failed`.
  */
 
 import assert from 'node:assert/strict';
@@ -449,6 +452,21 @@ test('(S6) a forged base: the local default-branch refs pointed at a payload tip
   assertGivenUp(f, REFUSED(SETTINGS));
   assert.equal(readFileSync(join(f.copy, SETTINGS), 'utf8').trim(), defaultSettings);
   assert.equal(await f.originTip(defaultBranch), originDefault, "origin's default branch moved");
+});
+
+test('(S7) a session-written .claude/settings.json hidden by a skip-worktree bit in the copy\'s index is refused', async (t) => {
+  const f = await createStallFixture(t);
+  if (f === null) return;
+  let tip;
+
+  await f.localStall(async () => {
+    tip = await f.tip();
+    await writeFile(join(f.copy, SETTINGS), markerSettings(f, 'S7-session-start'), 'utf8');
+    await git(f.copy, ['update-index', '--skip-worktree', SETTINGS]);
+  });
+
+  assertGivenUp(f, REFUSED(SETTINGS));
+  assert.equal(await f.tip(), tip, `${f.ref} moved`);
 });
 
 // ---------------------------------------------------------------------------------------------

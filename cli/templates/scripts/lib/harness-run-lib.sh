@@ -134,11 +134,13 @@
 #   5. THE WATCHER FAMILY'S GIT IN A RUN'S COPY moves a copy's branch and tree.
 #      Fence: `refs/heads/<branch>`, moved only by a compare-and-swap
 #      `update-ref` against the tip `hr_run_copy_check_var` read, plus the
-#      copy's index (`<record>/index`) and working tree; and
+#      copy's index (`<record>/index`) and working tree; a `mktemp` temporary
+#      index, removed on every exit path; and
 #      `hr_run_trusted_base_var`'s fetch, which writes objects and `FETCH_HEAD`
 #      in the main repository and moves no ref. Written only by
-#      `hr_run_fast_forward_var`, `hr_run_reset_var` and
-#      `hr_run_trusted_base_var` (`hr_run_surface_check_var` through it).
+#      `hr_run_fast_forward_var`, `hr_run_reset_var`,
+#      `hr_run_trusted_base_var` (`hr_run_surface_check_var` through it) and
+#      `hr_run_worktree_diff_var` (the temporary index).
 #      `hr_run_main_git` and `hr_run_copy_git` are general-purpose runners that
 #      write only what their caller's arguments ask, so a caller that drives a
 #      writing git command through them (`create-worktree.sh`'s
@@ -287,7 +289,8 @@
 # (`hr_remote_move_aside`), and the watcher family's `HR_RUN_MAIN`,
 # `HR_RUN_REFUSAL`, `HR_RUN_TRUSTED_BASE`, `HR_RUN_COPY_TOP`,
 # `HR_RUN_COPY_GITDIR`, `HR_RUN_COPY_BRANCH`, `HR_RUN_COPY_TIP`,
-# `HR_RUN_SURFACE_REFUSAL`, `HR_RUN_FF_REFUSAL` and `HR_RUN_RESET_REFUSAL`.
+# `HR_RUN_SURFACE_REFUSAL`, `HR_RUN_WT_DIFF`, `HR_RUN_FF_REFUSAL` and
+# `HR_RUN_RESET_REFUSAL`.
 # Every one of them is assigned
 # before it is read by the function that owns it, so an inherited value from a
 # parent process is overwritten rather than believed — except
@@ -2670,17 +2673,53 @@ EOF
   return 0
 }
 
+# hr_run_worktree_diff_var <tip> <path>... — set `HR_RUN_WT_DIFF` to the paths
+# under <path>... where the copy's working tree differs from <tip>, plus every
+# file there <tip> does not hold, ignored ones included. Judged through a fresh
+# temporary index read from <tip>, never the record's `index`: a sandboxed
+# session can write that index's skip-worktree / assume-unchanged bits and stat
+# data, which make git skip a file. 0 compared (`HR_RUN_WT_DIFF` may be empty);
+# 1 the temporary index or a git call failed.
+hr_run_worktree_diff_var() {
+  local tip="${1-}" tmpdir out untracked status
+  HR_RUN_WT_DIFF=""
+  shift
+  [ -n "$tip" ] && [ "$#" -gt 0 ] && [ -n "${HR_RUN_MAIN-}" ] && [ -n "${HR_RUN_COPY_TOP-}" ] || return 1
+  tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/hr-surface-index.XXXXXX") || return 1
+  if ! GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
+    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false \
+    read-tree "$tip" >/dev/null 2>&1; then
+    rm -rf "$tmpdir"
+    return 1
+  fi
+  out=$(GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
+    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false \
+    diff --name-only --exit-code --no-renames --no-ext-diff --no-textconv --ignore-submodules -- "$@" 2>/dev/null)
+  status=$?
+  if [ "$status" -gt 1 ] || ! untracked=$(GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
+    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false \
+    ls-files --others -- "$@" 2>/dev/null); then
+    rm -rf "$tmpdir"
+    return 1
+  fi
+  rm -rf "$tmpdir"
+  HR_RUN_WT_DIFF="$out${out:+${untracked:+
+}}$untracked"
+  return 0
+}
+
 # hr_run_surface_check_var <tip> <mode> — 0 when the protected set
 # (`hr_run_protected_rel_paths`) is unchanged from the merge base of <tip> and
 # `HR_RUN_TRUSTED_BASE`; 1 otherwise, with `HR_RUN_SURFACE_REFUSAL` naming each
 # differing path and the base, never a file's contents. No trusted base or no
 # merge base is a refusal, never a fallback. <mode>:
 #   tree   the commit <tip> against the base;
-#   copy   `tree`, plus the copy's working tree against <tip>, plus no untracked
-#          file in the set, ignored ones included;
-#   reset  `tree`, plus that untracked test.
+#   copy   `tree`, plus the copy's working tree on the set against <tip>
+#          through a fresh index, untracked and ignored files included;
+#   reset  the same as `copy`: a reset cannot be relied on to overwrite a
+#          file the record's index marks skip-worktree.
 hr_run_surface_check_var() {
-  local tip="${1-}" mode="${2-}" set base out status p names="" untracked=""
+  local tip="${1-}" mode="${2-}" set base out status p names=""
   local -a paths
   paths=()
   HR_RUN_SURFACE_REFUSAL=""
@@ -2732,26 +2771,13 @@ EOF
       return 1
       ;;
   esac
-  if [ "$mode" = copy ]; then
-    out=$(hr_run_copy_git diff --name-only --exit-code --no-renames --no-ext-diff --no-textconv --ignore-submodules "$tip" -- "${paths[@]}" 2>/dev/null)
-    status=$?
-    case "$status" in
-      0) ;;
-      1) names="${names:+$names
-}$out" ;;
-      *)
-        HR_RUN_SURFACE_REFUSAL="cannot compare '$HR_RUN_COPY_TOP' with '$tip'"
-        return 1
-        ;;
-    esac
-  fi
   if [ "$mode" != tree ]; then
-    if ! untracked=$(hr_run_copy_git ls-files --others -- "${paths[@]}" 2>/dev/null); then
-      HR_RUN_SURFACE_REFUSAL="cannot list the untracked files of '$HR_RUN_COPY_TOP'"
+    if ! hr_run_worktree_diff_var "$tip" "${paths[@]}"; then
+      HR_RUN_SURFACE_REFUSAL="cannot compare '$HR_RUN_COPY_TOP' with '$tip' on the protected set"
       return 1
     fi
-    [ -z "$untracked" ] || names="${names:+$names
-}$untracked"
+    [ -z "$HR_RUN_WT_DIFF" ] || names="${names:+$names
+}$HR_RUN_WT_DIFF"
   fi
   [ -n "$names" ] || return 0
   HR_RUN_SURFACE_REFUSAL="the protected surface differs from the merge base $base with origin's default branch: $(printf '%s\n' "$names" | LC_ALL=C sort -u | tr '\n' ' ')"
@@ -2823,7 +2849,8 @@ hr_run_fast_forward_var() {
 # moves no ref, so no ref hook runs and no `ORIG_HEAD` is written.
 #   0  reset;
 #   1  refused with nothing written, `HR_RUN_RESET_REFUSAL` set from the
-#      `reset` surface check, an unreachable origin included;
+#      `reset` surface check, which also compares the copy's working tree on
+#      the protected set with the tip, an unreachable origin included;
 #   3  `read-tree` failed after the check passed.
 hr_run_reset_var() {
   HR_RUN_RESET_REFUSAL=""

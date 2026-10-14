@@ -17,7 +17,7 @@
  * filter driver, `sshCommand` and `uploadpack` writes a marker file named for itself.
  *
  * RED ONCE — each mutation applied once to `cli/templates/scripts/autonomous-watcher.sh` (L6, L8,
- * R2's second, R4, L9 and R5: to `lib/harness-run-lib.sh`), the file run, the failure observed, the
+ * R2's second, R4, L9, L10 and R5: to `lib/harness-run-lib.sh`), the file run, the failure observed, the
  * mutation reverted:
  * - (L1) `git -C "$worktree" status --short | grep -v '^??'` restored as the reuse path's clean test
  *   in place of `hr_run_copy_clean` → fails `a planted payload ran`, holding `L1-fsmonitor`.
@@ -26,7 +26,7 @@
  * - (L4) the same mutation → fails `a planted payload ran`, holding `L4-clean`.
  * - (L5) the reuse path's `hr_run_surface_check_var "refs/heads/$branch" copy` dropped → fails on
  *   the record's `status`: `completed`, not `failed`.
- * - (L6) the `ls-files --others` test dropped from `hr_run_surface_check_var` → fails on the
+ * - (L6) the `ls-files --others` test dropped from `hr_run_worktree_diff_var` → fails on the
  *   record's `status`: `completed`, not `failed`.
  * - (L7) the reuse path's compare of the inbox branch with `HR_RUN_COPY_BRANCH` dropped → fails on
  *   the record's `status`: `completed`, not `failed`.
@@ -35,6 +35,8 @@
  * - (L9) `hr_run_surface_check_var`'s merge base taken against the local
  *   `refs/remotes/origin/<defaultBranch>` in place of `HR_RUN_TRUSTED_BASE` → fails on the
  *   record's `status`: `completed`, not `failed`.
+ * - (L10) `hr_run_worktree_diff_var` using `GIT_INDEX_FILE="$HR_RUN_COPY_GITDIR/index"` in place
+ *   of the temporary index → fails on the record's `status`: `completed`, not `failed`.
  * - (R1) `git -C "$worktree" fetch origin "$branch"` restored in place of the pinned main-checkout
  *   fetch → fails `a planted payload ran`, holding `R1-uploadpack`.
  * - (R2) `git -C "$worktree" merge --ff-only "origin/$branch"` restored in place of
@@ -415,6 +417,23 @@ test('(L9) a forged base: the local default-branch refs pointed at a payload tip
 
   assertRefused(f, before, /files that run outside the sandbox.*\.claude\/settings\.json/);
   assert.equal(await f.originTip(defaultBranch), originDefault, "origin's default branch moved");
+});
+
+test("(L10) a session-written .claude/settings.json hidden by a skip-worktree bit in the copy's index is refused", async (t) => {
+  const f = await createReviewFixture(t);
+  if (f === null) return;
+  const before = f.prompts().length;
+  const settings = '.claude/settings.json';
+  const content = JSON.stringify({
+    hooks: { SessionStart: [{ hooks: [{ type: 'command', command: `: > '${join(f.markers, 'L10-session-start')}'` }] }] },
+  });
+  await writeFile(join(f.copy, settings), content, 'utf8');
+  await git(f.copy, ['update-index', '--skip-worktree', settings]);
+
+  await f.drop();
+  await f.tick();
+
+  assertRefused(f, before, /files that run outside the sandbox.*\.claude\/settings\.json/);
 });
 
 // ---------------------------------------------------------------------------------------------
