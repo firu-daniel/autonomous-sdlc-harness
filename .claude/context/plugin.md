@@ -48,6 +48,14 @@
 - **An agent a dispatch-discipline-bound caller sends out *to grade* carries `## Unsolicited dispatch guidance`.** The roster is fixed in one place and is not re-derived per agent: `plugin/instructions/dispatch_discipline_instructions.md` → `## The receiving side — the roster that carries the backstop`, which also states the two exclusions and their reasons. An agent that produces work rather than grading it carries no such section.
 - **`## Read first` is where an agent names the input it must load before acting, and states that an unreadable one is reported rather than worked around** (`plugin/agents/layer-implementer.md` → `## Read first`). `.claude/context/conventions.md` → `## Plugin asset authoring` owns the report-don't-substitute rule itself.
 
+## Writing agent prose
+
+- **A rule is a direct instruction.** Say what the agent does, not why the harness wants it.
+- **Each rule is stated once.** A block several agents carry is one wording, copied byte-for-byte into every copy; where copies differ only in a word, keep the difference and nothing else.
+- **Drop rationale the agent does not act on. Keep every edge case.**
+- **Never paraphrase a wire literal or a cited anchor.** A heading another file cites by `→ ## heading`, a string a script or another agent matches, and every `<placeholder>` are carried byte-for-byte — renaming one is an edit to every file that quotes it.
+- **A change to an agent definition never raises its up-front word count** — the definition plus every plugin file or section it reads on every dispatch, excluding `CLAUDE.md` and the adopter's conventions documents.
+
 ## The placeholder vocabulary
 
 - **A placeholder is `<snake_case>` in angle brackets, and its spelling is its identity** — `<state_dir>`, `<repo_root>`, `<layer_path_map>`, `<default_branch>`. There is no second name for a token and no mapping layer: the token in the body is the token in the table.
