@@ -12,7 +12,7 @@
 
 **This section is the single source of truth for the fix loop.** The loop walks the `[ ]` entries below from top to bottom, and only the committing role flips an entry to `[x]`. A `[ ]` marker anywhere else, such as a sub-step bullet inside a per-finding file, is informational only. Each entry resolves to a self-contained `finding_<K>.md` through its `**Finding K**` reference. The entries are sorted lowest blast-radius first. Finding 2 is the likely root cause of Finding 3, so it comes before it.
 
-1. [ ] **Finding 1** — Qualify the bare `/branch-user-review` spelling in the header of `cli/test/remote-review-payloads.test.mjs`. _(layer: cli)_
+1. [x] **Finding 1** — Qualify the bare `/branch-user-review` spelling in the header of `cli/test/remote-review-payloads.test.mjs`. _(layer: cli)_
 2. [ ] **Finding 2** — `hr_run_fast_forward_var` refuses a copy already ahead of `origin/<branch>`, so an identical re-drop after a refused push never pushes. _(layer: cli)_
 3. [ ] **Finding 3** — A refused re-push of a re-dropped review is failed by the fast-forward instead of by `push-branch.sh`. _(layer: cli)_
 

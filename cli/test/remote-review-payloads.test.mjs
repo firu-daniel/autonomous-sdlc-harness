@@ -1,6 +1,7 @@
 /**
- * `remote-run.sh review` — the verb the supervised `/branch-user-review` runs — driven against a
- * mirror or a cut copy carrying each payload a GitHub job's agent or a local session could plant.
+ * `remote-run.sh review` — the verb the supervised `/autonomous-sdlc-harness:branch-user-review`
+ * runs — driven against a mirror or a cut copy carrying each payload a GitHub job's agent or a local
+ * session could plant.
  *
  * **The rule these tests exist to enforce: placing a review round never runs code the run's job
  * committed or a session planted, and never installs a run-authored protected path.** Each case
