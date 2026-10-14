@@ -458,7 +458,9 @@ else
     echo "  (\`npx autonomous-sdlc-harness doctor\` reports a missing origin/$default_branch as a failing \`remote\` check)" >&2
     exit 2
   fi
-  git -C "$main_repo" worktree add -b "$branch" "$worktree_dir" "$HR_RUN_TRUSTED_BASE"
+  # History as stored: a replace ref or graft for the base would swap the tree cut here.
+  GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
+    git -C "$main_repo" worktree add -b "$branch" "$worktree_dir" "$HR_RUN_TRUSTED_BASE"
   git -C "$main_repo" branch --quiet --set-upstream-to="origin/$default_branch" "$branch"
 fi
 

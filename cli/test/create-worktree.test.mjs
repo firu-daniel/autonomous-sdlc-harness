@@ -6,7 +6,8 @@
  * nothing; an `--existing --no-bootstrap` copy checks the branch out, installs nothing and pushes
  * nothing; `--existing` writes no tree, and runs no hook, whose protected surface differs from
  * origin's default branch, and bootstraps with the main checkout's `setup-worktree.sh` and
- * configuration; and default mode cuts from the commit origin reports, never from a local ref.**
+ * configuration; and default mode cuts from the commit origin reports, read as stored, never from a
+ * local ref.**
  *
  * Each case builds the script header's REPRO fixture under the system temp directory: a bare
  * `origin`, a committed `harness.config.json` whose `commands.depInstall` writes `deps.marker`, and
@@ -41,6 +42,8 @@
  *   `origin/$default_branch` restored in place of the trusted-base refusal → fails on
  *   `.claude/settings.json` written under the copy. The `post-checkout` marker did not appear: for
  *   the hook, a regression guard: the pre-hardening default mode did not reach this payload.
+ * - (E9) the `GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null` prefix removed from default mode's
+ *   `worktree add` → fails on the copy's `.claude/settings.json` holding `{"planted":true}`.
  */
 
 import assert from 'node:assert/strict';
@@ -305,4 +308,20 @@ test('(E8) default mode refuses to cut from a forged origin/<default> when origi
 
   await assertRefusedClean(f, result, 'feat/f', '.claude/settings.json');
   assert.match(result.stderr, /origin/);
+});
+
+test('(E9) default mode cuts the trusted base as stored, past a replace ref planted on it', async (t) => {
+  const f = await reproFixture(t);
+  const originTip = (await runGit(f.b, ['rev-parse', 'refs/heads/trunk'])).stdout.trim();
+  const blob = await sh(f.d, 'printf "%s" "$1" | git hash-object -w --stdin', ['{"planted":true}']);
+  const claude = await sh(f.d, 'printf "100644 blob %s\tsettings.json\n" "$1" | git mktree', [blob]);
+  const root = await sh(f.d, 'printf "040000 tree %s\t.claude\n" "$1" | git mktree', [claude]);
+  const planted = await sh(f.d, 'git commit-tree "$1" -m planted', [root]);
+  await runGit(f.d, ['update-ref', `refs/replace/${originTip}`, planted]);
+
+  const result = await f.create(['--no-bootstrap', 'feat/r']);
+
+  assert.equal(result.status, 0, `create-worktree.sh exited ${result.status}\n${output(result)}`);
+  const settings = join(f.w, 'demo-feat-r', '.claude', 'settings.json');
+  assert.equal(existsSync(settings), false, `the copy holds ${existsSync(settings) ? readFileSync(settings, 'utf8') : ''}`);
 });

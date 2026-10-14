@@ -31,6 +31,8 @@
  * Three reads compare a branch with the default branch without touching a working tree:
  * {@link mergeBase}, {@link fileAtRef} and {@link changedPathsBetween}. Each runs no hook, no diff
  * driver and no textconv, and returns `undefined` rather than throwing when git does not answer.
+ * They read history as stored, with replace refs and grafts switched off, because a sandboxed
+ * session can write both.
  *
  * Most of what follows is read-only. The two exceptions — {@link initRepository} and
  * {@link commitAll} — are the only functions in the CLI that mutate a repository's history, and
@@ -38,6 +40,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { devNull } from 'node:os';
 
 import { HarnessError } from './errors.js';
 
@@ -176,6 +179,28 @@ function runGitUntrimmed(args: readonly string[], cwd: string): string {
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
     maxBuffer: GIT_OUTPUT_MAX_BYTES,
+  });
+}
+
+/** Git's switch-off for `refs/replace/`: a sandboxed session can write that namespace. */
+const NO_REPLACE_OBJECTS_ENV = 'GIT_NO_REPLACE_OBJECTS';
+/** Where git looks for `info/grafts`; pointed at the null device so no graft is read. */
+const GRAFT_FILE_ENV = 'GIT_GRAFT_FILE';
+
+/**
+ * {@link runGitUntrimmed} with history read as stored — no `refs/replace/` substitution and no
+ * `info/grafts` — for the reads that compare a run's branch with a trusted commit: a session that
+ * can write the common directory's `refs/` and `info/` could otherwise make the merge base read
+ * as a commit carrying the branch's own tree.
+ */
+function runGitAsStored(args: readonly string[], cwd: string): string {
+  return execFileSync('git', [...args], {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+    maxBuffer: GIT_OUTPUT_MAX_BYTES,
+    env: { ...process.env, [NO_REPLACE_OBJECTS_ENV]: '1', [GRAFT_FILE_ENV]: devNull },
   });
 }
 
@@ -690,7 +715,7 @@ export function mergeBase(repoRoot: string, a: string, b: string): string | unde
   if (looksLikeOption(a) || looksLikeOption(b)) return undefined;
   let output: string;
   try {
-    output = runGit(['merge-base', a, b], repoRoot);
+    output = runGitAsStored(['merge-base', a, b], repoRoot).trim();
   } catch {
     return undefined;
   }
@@ -705,7 +730,7 @@ export function mergeBase(repoRoot: string, a: string, b: string): string | unde
 export function fileAtRef(repoRoot: string, ref: string, repoRelativePath: string): string | undefined {
   if (looksLikeOption(ref)) return undefined;
   try {
-    return runGitUntrimmed(['show', `${ref}:${repoRelativePath}`], repoRoot);
+    return runGitAsStored(['show', `${ref}:${repoRelativePath}`], repoRoot);
   } catch {
     return undefined;
   }
@@ -713,7 +738,13 @@ export function fileAtRef(repoRoot: string, ref: string, repoRelativePath: strin
 
 /** Whether `revision` names a commit this repository holds — `rev-parse --verify --quiet <revision>^{commit}`. */
 export function commitResolves(repoRoot: string, revision: string): boolean {
-  return !looksLikeOption(revision) && refResolves(repoRoot, `${revision}^{commit}`);
+  if (looksLikeOption(revision)) return false;
+  try {
+    runGitAsStored([...GIT_VERIFY_REF_ARGS, `${revision}^{commit}`], repoRoot);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -731,7 +762,7 @@ export function changedPathsBetween(
   if (looksLikeOption(base) || looksLikeOption(tip)) return undefined;
   let output: string;
   try {
-    output = runGitUntrimmed(
+    output = runGitAsStored(
       ['diff', '--name-only', '--no-renames', '--no-ext-diff', '--no-textconv', base, tip, PATHSPEC_SEPARATOR, ...pathspecs],
       repoRoot,
     );

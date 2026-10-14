@@ -19,6 +19,10 @@
  * - `refs/remotes/origin/<defaultBranch>` as the base and `refs/remotes/origin/<branch>` as the
  *   configuration's ref even under `@<commit>` → "a forged base", subtest `.claude/settings.json`,
  *   fails: `expected exit 1, got 0`.
+ * - `runGitAsStored` in `cli/src/core/git.ts` → `changedPathsBetween` replaced by `runGitUntrimmed`
+ *   → "a replace ref on the trusted commit" fails: `expected exit 1, got 0`. The same swap in
+ *   `mergeBase` alone stays green: the merge base still names the trusted commit's id, whose tree
+ *   the as-stored diff reads.
  */
 
 import assert from 'node:assert/strict';
@@ -236,6 +240,17 @@ concurrentSuite('doctor --job-surfaces', () => {
         else assertPassed(result);
       });
     }
+  });
+
+  it('fails a branch changing a job surface when a replace ref swaps the trusted commit for its tree (a replace ref on the trusted commit)', async (t) => {
+    const changed = 'scripts/autonomous-watcher.sh';
+    const { clone } = await branchChanging(t, changed);
+    const trusted = (await runGit(clone, ['rev-parse', `refs/remotes/origin/${DEFAULT_BRANCH}`])).stdout.trim();
+    const fake = (
+      await runGit(clone, ['-c', 'user.name=s', '-c', 'user.email=s@example.invalid', 'commit-tree', 'HEAD^{tree}', '-m', 'fake'])
+    ).stdout.trim();
+    await runGit(clone, ['update-ref', `refs/replace/${trusted}`, fake]);
+    assertRefused(await jobSurfaces(clone, `${DEFAULT_BRANCH}@${trusted}`), changed);
   });
 
   it('fails an @<commit> the clone does not hold, naming it', async (t) => {

@@ -22,7 +22,7 @@
  * for itself. In job mode the job checkout is the fixture itself, on the run branch.
  *
  * RED ONCE — each mutation applied once to `cli/templates/scripts/autonomous-watcher.sh` (S2, S3's
- * first, S6 and S7: to `lib/harness-run-lib.sh`), the case run, the failure observed, the mutation
+ * first, S6 to S9: to `lib/harness-run-lib.sh`), the case run, the failure observed, the mutation
  * reverted:
  * - (honest) the watchdog's `hr_run_reset_var` call replaced by `:` → fails `the uncommitted edit
  *   survived the reset`.
@@ -57,6 +57,9 @@
  * - (S7) `hr_run_worktree_diff_var` using `GIT_INDEX_FILE="$HR_RUN_COPY_GITDIR/index"` in place of
  *   the temporary index → the case resumes: fails on the record's `status`, `completed`, not
  *   `failed`.
+ * - (S8) `GIT_NO_REPLACE_OBJECTS=1` removed from `hr_run_main_git` → the case resumes: fails on the
+ *   record's `status`, `completed`, not `failed`.
+ * - (S9) `GIT_GRAFT_FILE=/dev/null` removed from `hr_run_main_git` → the same failure.
  */
 
 import assert from 'node:assert/strict';
@@ -463,6 +466,46 @@ test('(S7) a session-written .claude/settings.json hidden by a skip-worktree bit
     tip = await f.tip();
     await writeFile(join(f.copy, SETTINGS), markerSettings(f, 'S7-session-start'), 'utf8');
     await git(f.copy, ['update-index', '--skip-worktree', SETTINGS]);
+  });
+
+  assertGivenUp(f, REFUSED(SETTINGS));
+  assert.equal(await f.tip(), tip, `${f.ref} moved`);
+});
+
+test('(S8) a replace ref on the merge base does not pass a payload tip', async (t) => {
+  const f = await createStallFixture(t);
+  if (f === null) return;
+  const originDefault = await f.originTip(f.config.defaultBranch);
+  let tip;
+
+  await f.localStall(async () => {
+    const payload = markerSettings(f, 'S8-session-start');
+    const commit = await f.commitInCopy([{ path: SETTINGS, content: payload }], 'run: add a session hook');
+    await writeFile(join(f.copy, SETTINGS), payload, 'utf8');
+    tip = commit;
+    const base = await git(f.dir, ['merge-base', commit, originDefault]);
+    const fake = await git(f.dir, ['commit-tree', `${commit}^{tree}`, '-m', 'fake']);
+    await git(f.dir, ['update-ref', `refs/replace/${base}`, fake]);
+  });
+
+  assertGivenUp(f, REFUSED(SETTINGS));
+  assert.equal(await f.tip(), tip, `${f.ref} moved`);
+});
+
+test('(S9) an info/grafts line on the tip and the base does not pass a payload tip', async (t) => {
+  const f = await createStallFixture(t);
+  if (f === null) return;
+  const originDefault = await f.originTip(f.config.defaultBranch);
+  let tip;
+
+  await f.localStall(async () => {
+    const payload = markerSettings(f, 'S9-session-start');
+    const commit = await f.commitInCopy([{ path: SETTINGS, content: payload }], 'run: add a session hook');
+    await writeFile(join(f.copy, SETTINGS), payload, 'utf8');
+    tip = commit;
+    const fake = await git(f.dir, ['commit-tree', `${commit}^{tree}`, '-m', 'fake']);
+    await mkdir(join(f.dir, '.git', 'info'), { recursive: true });
+    await writeFile(join(f.dir, '.git', 'info', 'grafts'), `${commit} ${fake}\n${originDefault} ${fake}\n`, 'utf8');
   });
 
   assertGivenUp(f, REFUSED(SETTINGS));

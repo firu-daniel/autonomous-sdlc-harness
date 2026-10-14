@@ -182,3 +182,9 @@ This is not `docs/cli.md` §6 residual 1, item 6. That item is about overwriting
       - `update-ref refs/replace/<origin default tip> <that commit>`.
 
       Run default-mode `create-worktree.sh --no-bootstrap feat/r`. Assert that the new copy holds no `.claude/settings.json` reading `{"planted":true}`: it is absent, or it equals the origin default tip's own copy. In `RED ONCE`, record: the env prefix removed from the default-mode `worktree add` → the copy holds `{"planted":true}`.
+
+- **Deviations from plan:**
+  - (cli layer) Fix steps 7 and 8 (`docs/watcher.md`, `docs/remote-execution.md`) lie outside `cli/`; left for the `general` dispatch this finding's `_(layer: cli, general)_` tag names.
+  - (S8)/(S9) as specified (plumbing commit only) stay green with the `GIT_NO_REPLACE_OBJECTS=1` / `GIT_GRAFT_FILE=/dev/null` mutation, because `hr_run_worktree_diff_var` (still pinned) refuses the copy's unchanged working-tree file. Both cases now also write the payload into the copy's working tree, so the tree diff is the only defence, and assert the branch tip unmoved (as (S7) does) in place of the copy's file equalling the default branch's; `f.defaultFile` itself reads through the planted replace ref when called after planting. RED ONCE observed for each: the record `completed`, not `failed`.
+  - Doctor case: the specified RED ONCE (`mergeBase` alone back on `runGit`) stays green — the merge base still names the trusted commit's id and the as-stored diff reads its real tree. Recorded instead: `changedPathsBetween` on `runGitUntrimmed` → `expected exit 1, got 0`, with the `mergeBase` observation beside it.
+  - create-worktree case named `(E9)`; the fixture's seed carries no `.claude/settings.json`, so the assertion is that the copy holds none.

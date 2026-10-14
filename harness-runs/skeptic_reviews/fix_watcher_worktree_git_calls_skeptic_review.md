@@ -39,7 +39,7 @@ Separately, the job-mode watchdog takes its merge base from the GitHub default b
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Read history as stored (`GIT_NO_REPLACE_OBJECTS=1`, `GIT_GRAFT_FILE=/dev/null`) in every pinned runner, the default-mode cut and `doctor`'s job-surface reads. _(layer: cli, general)_
+1. [x] **Finding 1** — Read history as stored (`GIT_NO_REPLACE_OBJECTS=1`, `GIT_GRAFT_FILE=/dev/null`) in every pinned runner, the default-mode cut and `doctor`'s job-surface reads. _(layer: cli, general)_
 2. [ ] **Finding 2** — Record the configured `defaultBranch`'s commit and take the job-mode watchdog's merge base from it (`--job-surfaces=<branch>@<commit>@<base>`). _(layer: cli, general)_
 
 ---

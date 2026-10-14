@@ -2485,13 +2485,19 @@ hr_derive_branch() {
 # THE WATCHER FAMILY'S GIT IN A RUN'S COPY.
 #
 # The watcher family runs git outside the sandbox in a working copy a run has
-# written, so every call made here holds three rules:
+# written, so every call made here holds four rules:
 #   - No hook runs: `core.hooksPath=/dev/null` holds none.
 #   - The copy's worktree record is read once, by the checks, and never again.
 #     Only `<record>/index` is borrowed, so git never reads the copy's `.git`
 #     pointer, the record's `commondir`, its `HEAD` or its `config.worktree`.
 #   - Every call names `refs/heads/<branch>`, never `HEAD`: under
 #     `GIT_DIR=<main>/.git`, `HEAD` is the main checkout's.
+#   - Git reads history as stored: `GIT_NO_REPLACE_OBJECTS=1` and
+#     `GIT_GRAFT_FILE=/dev/null`. A sandboxed session can write
+#     `refs/replace/` and `info/grafts` in the common directory, and either
+#     one makes the merge base read as a commit carrying the run's own tree,
+#     so every surface diff comes out empty while `read-tree` still writes
+#     the tip's real tree.
 # `hr_worktree_config_check_var` is skipped here because no runner below lets
 # git read the record's `config.worktree`; `push-branch.sh` and
 # `refresh-branch.sh` keep it under their own headers. Write exception 5 in the
@@ -2570,11 +2576,13 @@ hr_run_copy_check_var() {
 # returns 1 without running git when the globals it needs are not set.
 hr_run_main_git() {
   [ -n "${HR_RUN_MAIN-}" ] || return 1
-  git -C "$HR_RUN_MAIN" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false "$@"
+  GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
+    git -C "$HR_RUN_MAIN" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false "$@"
 }
 
 hr_run_copy_git() {
   [ -n "${HR_RUN_MAIN-}" ] && [ -n "${HR_RUN_COPY_GITDIR-}" ] && [ -n "${HR_RUN_COPY_TOP-}" ] || return 1
+  GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
   GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$HR_RUN_COPY_GITDIR/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
     git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false "$@"
 }
@@ -2686,17 +2694,17 @@ hr_run_worktree_diff_var() {
   shift
   [ -n "$tip" ] && [ "$#" -gt 0 ] && [ -n "${HR_RUN_MAIN-}" ] && [ -n "${HR_RUN_COPY_TOP-}" ] || return 1
   tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/hr-surface-index.XXXXXX") || return 1
-  if ! GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
+  if ! GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
     git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false \
     read-tree "$tip" >/dev/null 2>&1; then
     rm -rf "$tmpdir"
     return 1
   fi
-  out=$(GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
+  out=$(GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
     git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false \
     diff --name-only --exit-code --no-renames --no-ext-diff --no-textconv --ignore-submodules -- "$@" 2>/dev/null)
   status=$?
-  if [ "$status" -gt 1 ] || ! untracked=$(GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
+  if [ "$status" -gt 1 ] || ! untracked=$(GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
     git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false \
     ls-files --others -- "$@" 2>/dev/null); then
     rm -rf "$tmpdir"
