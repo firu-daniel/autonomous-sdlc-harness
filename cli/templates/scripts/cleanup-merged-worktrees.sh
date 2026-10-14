@@ -13,7 +13,7 @@
 #   1. removes the working copy checked out on it (`git worktree remove --force`;
 #      a failure is reported and the sweep continues, because a directory left
 #      behind is a smaller problem than a sweep that stops half-way through the
-#      set), then
+#      set) — only when it is that branch's OWN copy (below), then
 #   2. force-deletes the local branch (`git branch -D`),
 #
 # and then runs `git worktree prune` to drop the administrative records of
@@ -42,6 +42,20 @@
 #     back to: a parked run is waiting for a clarification answer, a `park_loop`
 #     one for an operator to clear it, and a paused one for a RESUME sentinel, and `worktree remove --force` would discard the pause
 #     note the resumed engine is pointed at.
+#
+# ONLY THE BRANCH'S OWN WORKING COPY IS REMOVED. Which directory `worktree list`
+# names for a branch comes from records a sandboxed run can write: a rewritten
+# `<main>/.git/worktrees/<name>/gitdir` names any directory, and a rewritten
+# record `HEAD` makes a live run's copy read as the gone branch's. So the copy is
+# removed only when it passes `hr_wrapper_target_check_var` against the main
+# checkout this script's own location gives (`hr_wrapper_main_of`), AND equals
+# `hr_worktree_dir "$main_repo" "$branch"` canonically. Otherwise one line —
+# `skip removing <dir> for '<branch>' — it is not that branch's working copy as
+# this repository derives it (<reason>)`, `[dry-run] would skip …` under
+# --dry-run — and the branch deletion still follows. A script that cannot be
+# placed in a main checkout, or whose placement differs from `worktree list`'s,
+# removes nothing: one line, exit 0. The inherited `GIT_*` environment is dropped
+# before the first git call (`hr_git_env_drop`).
 #
 # CAVEAT: `: gone` + force-delete also catches an ABANDONED branch whose remote
 # was deleted WITHOUT merging — its unmerged local commits would be lost. For a
@@ -132,6 +146,11 @@
 #                 -> one line, exit 0, nothing deleted
 #   offline       git -C "$d" remote set-url origin /nonexistent.git
 #                 -> the fetch message, exit 0, nothing deleted
+#   live copy     git -C "$d" worktree add -q "$w/demo-feat_live" feat_live
+#                 printf 'ref: refs/heads/feat_gone\n' \
+#                   > "$d/.git/worktrees/demo-feat_live/HEAD"
+#                 -> the skip line for "$w/demo-feat_live" (not the derived
+#                    path); that copy is still there
 
 set -uo pipefail
 
@@ -145,6 +164,7 @@ if [ ! -r "$hr_lib" ]; then
 fi
 # shellcheck source=lib/harness-run-lib.sh
 . "$hr_lib"
+hr_git_env_drop
 
 dry_run=0
 case "${1:-}" in
@@ -181,6 +201,16 @@ fi
 main_repo="$(hr_main_repo "$top")" || main_repo=""
 if [ -z "$main_repo" ]; then
   echo "cleanup-merged-worktrees.sh: could not determine the main checkout of '$top' — refusing to delete anything"
+  exit 0
+fi
+
+# The anchor the removal guard checks a working copy against: the main checkout
+# this script's own location gives, without asking git. It must be the one
+# `worktree list` named, or neither can be trusted.
+main_top="$(hr_wrapper_main_of "$script_dir")" || main_top=""
+main_canon="$( CDPATH= cd -P -- "$main_repo" 2>/dev/null && pwd -P )" || main_canon=""
+if [ -z "$main_top" ] || [ "$main_top" != "$main_canon" ]; then
+  echo "cleanup-merged-worktrees.sh: cannot place this script in a main checkout — removing no working copy"
   exit 0
 fi
 
@@ -361,6 +391,29 @@ EOF
   return 0
 }
 
+# Return 0 when <dir> is <branch>'s own working copy: a worktree the main
+# checkout lists by its own records, at the path this repository derives for
+# <branch>. Return 1 otherwise, with `guard_reason` set. Call it directly.
+own_worktree_check() {
+  local branch="${1-}" dir="${2-}" want dir_c want_c
+  guard_reason=""
+  if ! hr_wrapper_target_check_var "$main_top" "$dir"; then
+    guard_reason=$HR_TARGET_REFUSAL
+    return 1
+  fi
+  if ! want="$(hr_worktree_dir "$main_repo" "$branch")"; then
+    guard_reason="its derived working copy path could not be computed"
+    return 1
+  fi
+  dir_c="$(hr_canonical_path_nogit "$dir")" || dir_c=""
+  want_c="$(hr_canonical_path_nogit "$want")" || want_c=""
+  if [ -z "$dir_c" ] || [ "$dir_c" != "$want_c" ]; then
+    guard_reason="the derived path is $want"
+    return 1
+  fi
+  return 0
+}
+
 # One record per local branch as `<name><TAB><upstream track>`; the tab keeps the
 # two apart without splitting on whitespace.
 gone_list="$(git -C "$main_repo" for-each-ref --format='%(refname:short)%09%(upstream:track)' refs/heads/ 2>/dev/null)" || gone_list=""
@@ -406,6 +459,15 @@ while IFS= read -r record; do
   esac
 
   wt="$(worktree_for_branch "$branch")"
+  if [ -n "$wt" ] && ! own_worktree_check "$branch" "$wt"; then
+    skip_line="skip removing $wt for '$branch' — it is not that branch's working copy as this repository derives it ($guard_reason)"
+    if [ "$dry_run" -eq 1 ]; then
+      echo "cleanup-merged-worktrees.sh: [dry-run] would $skip_line"
+    else
+      echo "cleanup-merged-worktrees.sh: $skip_line"
+    fi
+    wt=""
+  fi
 
   if [ "$dry_run" -eq 1 ]; then
     if [ -n "$wt" ]; then
