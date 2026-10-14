@@ -27,3 +27,9 @@ On the re-drop, the local `feat_x` tip is the unpushed review commit, and `refs/
 - [ ] In `hr_run_fast_forward_var`, right after `[ "$new" != "$tip" ] || return 0`, add: when `hr_run_main_git merge-base --is-ancestor "$new" "$tip" 2>/dev/null` succeeds (the branch already contains `<ref>`), `return 0` with nothing written and `HR_RUN_COPY_TIP` unchanged. Keep the existing refusal for true divergence. If this branch is already present because another fix added it, there is nothing further to change here.
 - [ ] Make sure the function's header `0` line says that "already ahead of <ref>" is a no-op success.
 - [ ] Leave `cli/test/watcher-remote-dispatch.test.mjs` unchanged. Its expectations (a skipped commit, a `push-branch.sh` failure and no dispatch) are the contract this fix restores.
+
+## Already passing
+
+- **(a)** Named test: `a remote review drop fast-forwards, commits, pushes and dispatches; a refused re-push blocks` → subtest `a review whose push is refused, then re-dropped identically, never dispatches`, in `cli/test/watcher-remote-dispatch.test.mjs` (the only file run).
+- **(b)** `npm test --workspace cli -- test/watcher-remote-dispatch.test.mjs`, run from the repository root: `ok 2 - a review whose push is refused, then re-dropped identically, never dispatches` and its parent `ok 6 - a remote review drop fast-forwards, commits, pushes and dispatches; a refused re-push blocks`; file totals `# tests 15`, `# pass 15`, `# fail 0`. The fix landed with Finding 2 (commit `26720de7`): `hr_run_fast_forward_var` now carries `! hr_run_main_git merge-base --is-ancestor "$new" "$tip" 2>/dev/null || return 0` right after `[ "$new" != "$tip" ] || return 0`, and its header `0` line reads "moved, or already at or ahead of <ref> with nothing written (`merge --ff-only`'s "already up to date")" — both sub-steps of this finding's **Fix**.
+- **(c)** No code file was edited.

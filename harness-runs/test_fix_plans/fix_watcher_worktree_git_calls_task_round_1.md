@@ -14,7 +14,7 @@
 
 1. [x] **Finding 1** — Qualify the bare `/branch-user-review` spelling in the header of `cli/test/remote-review-payloads.test.mjs`. _(layer: cli)_
 2. [x] **Finding 2** — `hr_run_fast_forward_var` refuses a copy already ahead of `origin/<branch>`, so an identical re-drop after a refused push never pushes. _(layer: cli)_
-3. [ ] **Finding 3** — A refused re-push of a re-dropped review is failed by the fast-forward instead of by `push-branch.sh`. _(layer: cli)_
+3. [x] **Finding 3** — A refused re-push of a re-dropped review is failed by the fast-forward instead of by `push-branch.sh`. _(layer: cli)_
 
 ---
 
