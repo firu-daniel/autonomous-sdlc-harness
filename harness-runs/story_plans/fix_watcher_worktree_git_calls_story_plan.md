@@ -58,7 +58,7 @@ This branch closes residual 1 of `docs/cli.md` §6 (`**Residuals, stated rather 
 
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_watcher_worktree_git_calls/task_<K>_plan.md`. Entries are ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — The run library's hardened git primitives for the watcher family _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — The run library's hardened git primitives for the watcher family _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — The two wrappers take the `GIT_*` drop from the library, and their headers stop restating residual 1 _(layer: cli)_ _(points: 8)_
 3. [ ] **Task 3** — The protected surfaces as two projections of `protectedPaths`, and the git reads they need _(layer: cli)_ _(points: 12)_
 4. [ ] **Task 4** — `doctor --job-surfaces=<branch>`: refuse a branch whose own commits changed the job's surfaces _(layer: cli)_ _(points: 20)_

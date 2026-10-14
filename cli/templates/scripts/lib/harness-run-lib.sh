@@ -74,7 +74,17 @@
 # never re-reads the worktree's `.git` pointer and takes its configuration from
 # the main repository; the branch is read once (`hr_wrapper_branch_var`), and a
 # remote is used only when the main `.git/config` names its URL
-# (`hr_remote_url_configured`). Nothing
+# (`hr_remote_url_configured`). The watcher family's callers —
+# `autonomous-watcher.sh`, `create-worktree.sh --existing`, `remote-run.sh`,
+# `cleanup-merged-worktrees.sh` and `setup-worktree.sh --target` — also pass the
+# main checkout for every configured value and keep git off the target's
+# records. `setup-worktree.sh --target <dir>` places its own checkout with
+# `hr_wrapper_main_of`, checks `<dir>` with `hr_wrapper_target_check_var`, and
+# reads every configured value (`appDir`, `qa.credentialsPath`, `githooksDir`,
+# `commands.*`) from the main checkout. They skip
+# `hr_worktree_config_check_var` because no runner lets git read the record's
+# `config.worktree`; the section THE WATCHER FAMILY'S GIT IN A RUN'S COPY holds
+# the detail. Nothing
 # here reads an environment variable in place of a configured value, and nothing
 # here writes inside a repository except through the named write exceptions
 # below.
@@ -110,14 +120,30 @@
 #      `hr_remote_bundle_write`, `hr_remote_bundle_restore` and
 #      `hr_remote_move_aside`, and nothing there but a writer's own failed temp
 #      file is ever removed.
-#   4. THE ARTIFACT PLACEMENT writes one artifact into a working copy. Fence:
-#      the caller-named `<worktree>/<rel>`, its parent directories and that
-#      path's index entry, plus whatever the two caller-named wrappers do, plus
-#      one write of its own: `hr_push_landed`'s fetch, which force-writes
-#      `refs/remotes/origin/<branch>` in `<worktree>`, made only after a failed
-#      landing, to name the commit the remote moved to.
+#   4. THE ARTIFACT PLACEMENT writes one artifact into a working copy and
+#      commits it. Fence: the caller-named `<worktree>/<rel>` and its parent
+#      directories; the objects `hash-object -w` and `commit-tree` write to the
+#      main repository; a `mktemp` temporary index, removed on every exit path;
+#      `refs/heads/<branch>`, moved only by a compare-and-swap `update-ref`;
+#      the copy's index entry for `<rel>`; whatever the caller-named push
+#      wrapper does; and `hr_push_landed`'s fetch, which force-writes
+#      `refs/remotes/origin/<branch>` in the MAIN checkout, made only after a
+#      failed landing, to name the commit the remote moved to.
 #      Written only by `hr_place_artifact`, `hr_commit_placed` and
 #      `hr_push_landed`.
+#   5. THE WATCHER FAMILY'S GIT IN A RUN'S COPY moves a copy's branch and tree.
+#      Fence: `refs/heads/<branch>`, moved only by a compare-and-swap
+#      `update-ref` against the tip `hr_run_copy_check_var` read, plus the
+#      copy's index (`<record>/index`) and working tree; and
+#      `hr_run_trusted_base_var`'s fetch, which writes objects and `FETCH_HEAD`
+#      in the main repository and moves no ref. Written only by
+#      `hr_run_fast_forward_var`, `hr_run_reset_var` and
+#      `hr_run_trusted_base_var` (`hr_run_surface_check_var` through it).
+#      `hr_run_main_git` and `hr_run_copy_git` are general-purpose runners that
+#      write only what their caller's arguments ask, so a caller that drives a
+#      writing git command through them (`create-worktree.sh`'s
+#      `worktree add`, `read-tree` and cleanup `worktree remove`) owns that
+#      write.
 #
 # MIRRORS OF `cli/src/remote/githubActions.ts`, which owns these names; a
 # rename there is an edit here, byte for byte:
@@ -129,10 +155,16 @@
 # and its entry ids; `hr_ledger_phases` codes both, so renaming an id or a
 # header form there is an edit here.
 #
+# MIRROR OF `cli/src/generators/writeProtection.ts` → `copySurfacePaths`, which
+# owns a working copy's protected set; `hr_run_protected_rel_paths` is its shell
+# mirror, so a change to that set's order or spelling there is an edit here.
+#
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
 # `hr_remote_record_init`, `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
 # `hr_remote_bundle_write`, `hr_remote_bundle_restore`, `hr_remote_move_aside`, `hr_place_artifact`,
-# `hr_commit_placed` or `hr_push_landed` function still gets a library that only reads. The
+# `hr_commit_placed`, `hr_push_landed`, `hr_run_fast_forward_var`, `hr_run_reset_var`,
+# `hr_run_trusted_base_var`, `hr_run_surface_check_var` (through it), `hr_run_main_git` or
+# `hr_run_copy_git` function still gets a library that only reads. The
 # lane's ceilings are the only environment values here that carry policy, because
 # the lane is machine-scoped and has no configuration key to carry them; each is
 # named where it is used. `XDG_STATE_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`,
@@ -228,8 +260,11 @@
 # watcher's bodies they replaced did — that stream is the watcher's log — and
 # add one line of their own, naming the lock, when `hr_registry_set` cannot
 # take the registry lock. The artifact placement's three writers likewise leave
-# `mkdir`'s, `cp`'s, `git add`'s and both wrappers' own output on their stdout
-# and stderr for the caller to redirect into its log.
+# `mkdir`'s, `cp`'s, git's and the push wrapper's own output on their stdout
+# and stderr for the caller to redirect into its log, and `hr_commit_placed`
+# adds its own refusal lines on stderr. `hr_run_fast_forward_var` and
+# `hr_run_reset_var` leave the stderr of their writing git calls (`read-tree`,
+# `update-ref`) to the caller too.
 # That silence is why the lane reports a lock it BROKE through a
 # variable instead of a log line — the caller owns the log.
 #
@@ -249,9 +284,15 @@
 # names, which `hr_remote_names_var` assigns, with `HR_REMOTE_PLANNING_PATHS`
 # (`hr_remote_planning_paths`) and `HR_REMOTE_PLANNING_PLACED` /
 # `HR_REMOTE_PLANNING_KEPT` (`hr_remote_bundle_restore`) and `HR_REMOTE_ASIDE`
-# (`hr_remote_move_aside`). Every one of them is assigned
+# (`hr_remote_move_aside`), and the watcher family's `HR_RUN_MAIN`,
+# `HR_RUN_REFUSAL`, `HR_RUN_TRUSTED_BASE`, `HR_RUN_COPY_TOP`,
+# `HR_RUN_COPY_GITDIR`, `HR_RUN_COPY_BRANCH`, `HR_RUN_COPY_TIP`,
+# `HR_RUN_SURFACE_REFUSAL`, `HR_RUN_FF_REFUSAL` and `HR_RUN_RESET_REFUSAL`.
+# Every one of them is assigned
 # before it is read by the function that owns it, so an inherited value from a
-# parent process is overwritten rather than believed.
+# parent process is overwritten rather than believed — except
+# `HR_RUN_TRUSTED_BASE`, which `hr_run_trusted_base_var` reuses when set and
+# `hr_run_main_set_var` clears, so a caller sets its main checkout first.
 #
 # BASH 3.2 IS THE FLOOR. macOS ships `/bin/bash` 3.2, so nothing here uses an
 # associative array, `${var^^}` / `${var,,}`, `mapfile` or `local -n`. The cache
@@ -501,6 +542,26 @@ hr_default_project_name() {
 }
 
 # ---------------------------------------------------------------------------
+# The inherited git environment.
+# ---------------------------------------------------------------------------
+
+# Unset every `GIT_*` name that would point git at another repository, index,
+# object store, configuration or program, and every set `GIT_TRACE*`, which
+# would have git write a trace to a file the caller's environment names.
+# `GIT_SSH_COMMAND` is kept. This is the one statement of the list
+# `push-branch.sh` and `refresh-branch.sh` used to carry inline; a caller calls
+# it before its first git call. Returns 0.
+hr_git_env_drop() {
+  local hr_trace_var
+  unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+    GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES \
+    GIT_TEMPLATE_DIR GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_CONFIG_GLOBAL \
+    GIT_CONFIG_SYSTEM GIT_EXEC_PATH
+  for hr_trace_var in ${!GIT_TRACE*}; do unset "$hr_trace_var"; done
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # Git-free resolution and the per-working-copy configuration. A wrapper the
 # permission profile runs OUTSIDE the sandbox calls these before its first git
 # call: any git call loads the target's configuration, including
@@ -625,7 +686,8 @@ hr_main_checkout_of() {
 }
 
 # Print the canonical main checkout of the wrapper whose own directory is
-# <script_dir>, for `push-branch.sh` and `refresh-branch.sh` only. Return 1,
+# <script_dir>, for `push-branch.sh` and `refresh-branch.sh` and the watcher
+# family's callers the header's JURISDICTION lists, and no others. Return 1,
 # printing nothing, when it cannot be placed. The checkout `hr_checkout_top_nogit`
 # finds from <script_dir> is taken as it stands when its `.git` is a real
 # directory — not a symbolic link — holding no `commondir`; one whose `.git` is
@@ -664,7 +726,8 @@ hr_wrapper_main_of() {
   hr_main_checkout_of "$top"
 }
 
-# Judge whether <target_top> is a checkout an unsandboxed wrapper may run git in,
+# Judge whether <target_top> is a checkout an unsandboxed wrapper, or one of the
+# watcher family's callers the header's JURISDICTION lists, may run git in,
 # for the main checkout <main_top> the wrapper's own location gives
 # (`hr_wrapper_main_of`), and set `HR_TARGET_GITDIR` to its canonical gitdir —
 # `<main_top>/.git` for the main checkout, `<p>` below for a worktree — so the
@@ -2416,16 +2479,378 @@ hr_derive_branch() {
 }
 
 # ---------------------------------------------------------------------------
+# THE WATCHER FAMILY'S GIT IN A RUN'S COPY.
+#
+# The watcher family runs git outside the sandbox in a working copy a run has
+# written, so every call made here holds three rules:
+#   - No hook runs: `core.hooksPath=/dev/null` holds none.
+#   - The copy's worktree record is read once, by the checks, and never again.
+#     Only `<record>/index` is borrowed, so git never reads the copy's `.git`
+#     pointer, the record's `commondir`, its `HEAD` or its `config.worktree`.
+#   - Every call names `refs/heads/<branch>`, never `HEAD`: under
+#     `GIT_DIR=<main>/.git`, `HEAD` is the main checkout's.
+# `hr_worktree_config_check_var` is skipped here because no runner below lets
+# git read the record's `config.worktree`; `push-branch.sh` and
+# `refresh-branch.sh` keep it under their own headers. Write exception 5 in the
+# header is this section's.
+#
+# Every function suffixed `_var` sets globals and must be called directly, never
+# inside `$(…)`. `hr_run_main_set_var` or `hr_run_copy_check_var` comes first.
+# ---------------------------------------------------------------------------
+
+# hr_run_main_set_var <main> — set `HR_RUN_MAIN` to <main> canonical, and clear
+# `HR_RUN_TRUSTED_BASE` and the `HR_RUN_COPY_*` values, so nothing established
+# for another checkout or an earlier operation is reused. 0 only when
+# `<main>/.git` is a real directory, not a symbolic link, holding no
+# `commondir` (`hr_wrapper_main_of`'s directory arm); 1 otherwise, with
+# `HR_RUN_REFUSAL` set to one sentence.
+hr_run_main_set_var() {
+  local main="${1-}" c
+  HR_RUN_MAIN=""
+  HR_RUN_TRUSTED_BASE=""
+  HR_RUN_REFUSAL=""
+  HR_RUN_COPY_TOP=""
+  HR_RUN_COPY_GITDIR=""
+  HR_RUN_COPY_BRANCH=""
+  HR_RUN_COPY_TIP=""
+  if [ -z "$main" ] || ! c=$( CDPATH= cd -P -- "$main" 2>/dev/null && pwd -P ); then
+    HR_RUN_REFUSAL="the main checkout '$main' is not a directory"
+    return 1
+  fi
+  if [ -L "$c/.git" ] || [ ! -d "$c/.git" ]; then
+    HR_RUN_REFUSAL="'$c' is not a main checkout: its .git is not a real directory"
+    return 1
+  fi
+  if [ -e "$c/.git/commondir" ] || [ -L "$c/.git/commondir" ]; then
+    HR_RUN_REFUSAL="'$c' is not a main checkout: its .git directory holds a commondir"
+    return 1
+  fi
+  HR_RUN_MAIN=$c
+  return 0
+}
+
+# hr_run_copy_check_var <main> <copy> — judge <copy> against <main> and set
+# `HR_RUN_MAIN`, `HR_RUN_COPY_TOP` (canonical), `HR_RUN_COPY_GITDIR`
+# (`HR_TARGET_GITDIR`), `HR_RUN_COPY_BRANCH` (empty on a detached, unreadable
+# or invalid HEAD, or a name starting with `-`) and `HR_RUN_COPY_TIP`: the
+# copy's HEAD commit read from the main repository, empty when unborn. 0
+# trusted; 1 untrusted, with `HR_RUN_REFUSAL` set.
+hr_run_copy_check_var() {
+  local main="${1-}" copy="${2-}" top head
+  hr_run_main_set_var "$main" || return 1
+  if [ -z "$copy" ] || ! top=$(hr_checkout_top_nogit "$copy"); then
+    HR_RUN_REFUSAL="'$copy' is not inside a git checkout"
+    return 1
+  fi
+  if ! hr_wrapper_target_check_var "$HR_RUN_MAIN" "$top"; then
+    HR_RUN_REFUSAL=$HR_TARGET_REFUSAL
+    return 1
+  fi
+  HR_RUN_COPY_TOP=$top
+  HR_RUN_COPY_GITDIR=$HR_TARGET_GITDIR
+  if hr_wrapper_branch_var "$HR_RUN_MAIN" "$HR_RUN_COPY_GITDIR"; then
+    case "$HR_WRAPPER_BRANCH" in
+      -*) ;;
+      *) HR_RUN_COPY_BRANCH=$HR_WRAPPER_BRANCH ;;
+    esac
+  fi
+  if [ "$HR_RUN_COPY_GITDIR" = "$HR_RUN_MAIN/.git" ]; then
+    head=HEAD
+  else
+    head="worktrees/${HR_RUN_COPY_GITDIR##*/}/HEAD"
+  fi
+  HR_RUN_COPY_TIP=$(hr_run_main_git rev-parse --verify --quiet "$head^{commit}" 2>/dev/null) || HR_RUN_COPY_TIP=""
+  return 0
+}
+
+# The two pinned runners. Each writes only what its caller's arguments ask, and
+# returns 1 without running git when the globals it needs are not set.
+hr_run_main_git() {
+  [ -n "${HR_RUN_MAIN-}" ] || return 1
+  git -C "$HR_RUN_MAIN" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false "$@"
+}
+
+hr_run_copy_git() {
+  [ -n "${HR_RUN_MAIN-}" ] && [ -n "${HR_RUN_COPY_GITDIR-}" ] && [ -n "${HR_RUN_COPY_TOP-}" ] || return 1
+  GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$HR_RUN_COPY_GITDIR/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
+    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false "$@"
+}
+
+# 0 when the copy's working tree matches its index and its index matches
+# `HR_RUN_COPY_TIP`; 1 otherwise, including an empty tip.
+hr_run_copy_clean() {
+  [ -n "${HR_RUN_COPY_TIP-}" ] || return 1
+  hr_run_copy_git diff --quiet --no-ext-diff --ignore-submodules >/dev/null 2>&1 || return 1
+  hr_run_copy_git diff-index --cached --quiet --ignore-submodules "$HR_RUN_COPY_TIP" -- >/dev/null 2>&1 || return 1
+  return 0
+}
+
+# hr_run_protected_rel_paths <main> — print the worktree-relative protected set,
+# one path per line, from `<main>/harness.config.json` alone. The mirror of
+# `copySurfacePaths` the header's MIRROR block names: same order, same spelling.
+# 1, printing nothing, when the configuration cannot be read.
+hr_run_protected_rel_paths() {
+  local main="${1-}" hooks scripts="" status
+  [ -n "$main" ] || return 1
+  hr_config_load "$main" || return 1
+  hooks=$(hr_githooks_dir "$main") || return 1
+  hr_docs_retrieval_applies "$main"
+  status=$?
+  case "$status" in
+    0) scripts=$(hr_scripts_dir "$main") || return 1 ;;
+    1) ;;
+    *) return 1 ;;
+  esac
+  printf '%s\n' "$hooks" .mcp.json .claude/settings.json .claude/settings.local.json
+  [ -z "$scripts" ] || printf '%s\n' "$scripts/docs-search-server.sh" "$scripts/lib"
+  return 0
+}
+
+# Set `HR_RUN_TRUSTED_BASE` to the default branch's commit as origin reports it
+# now, from `HR_RUN_MAIN`. 0 at once, with no network call, when it is already
+# set; 1 with `HR_RUN_REFUSAL` naming the failed step otherwise, with no
+# fallback to a local ref.
+#
+# The base is origin's answer and never a ref: a sandboxed session can write
+# the common directory's `refs/`, `packed-refs` and `FETCH_HEAD`, so a run that
+# points `refs/remotes/origin/<defaultBranch>` at its own tip makes
+# `merge-base(tip, base)` the tip and every diff against it empty.
+# `ls-remote`'s answer is held in a shell variable no session can reach, and
+# `cat-file -e` proves the fetch brought that object. `--refmap=` with no
+# destination keeps the fetch from moving `refs/remotes/origin/<defaultBranch>`.
+# A run that cannot reach origin is refused: an unattended run needs the network
+# for its model API in any case.
+hr_run_trusted_base_var() {
+  local base out line oid found="" count=0 tab=$'\t' why="cannot establish the default branch's commit from origin"
+  [ -z "${HR_RUN_TRUSTED_BASE-}" ] || return 0
+  HR_RUN_REFUSAL=""
+  if [ -z "${HR_RUN_MAIN-}" ]; then
+    HR_RUN_REFUSAL="$why: no main checkout is set"
+    return 1
+  fi
+  base=$(hr_default_branch "$HR_RUN_MAIN") || base=""
+  case "$base" in
+    '' | -*)
+      HR_RUN_REFUSAL="$why: no usable defaultBranch in '$HR_RUN_MAIN/harness.config.json'"
+      return 1
+      ;;
+  esac
+  if ! hr_remote_url_configured "$HR_RUN_MAIN" origin; then
+    HR_RUN_REFUSAL="$why: $HR_RUN_MAIN/.git/config names no URL for remote 'origin'"
+    return 1
+  fi
+  if ! out=$(hr_run_main_git ls-remote --exit-code origin "refs/heads/$base" 2>/dev/null); then
+    HR_RUN_REFUSAL="$why: 'git ls-remote origin refs/heads/$base' failed or found no such branch"
+    return 1
+  fi
+  while IFS= read -r line; do
+    [ "${line#*"$tab"}" = "refs/heads/$base" ] || continue
+    count=$((count + 1))
+    found=${line%%"$tab"*}
+  done <<EOF
+$out
+EOF
+  oid=$found
+  case "$oid" in
+    '' | *[!0-9a-f]*) count=0 ;;
+  esac
+  if [ "$count" -ne 1 ] || { [ "${#oid}" -ne 40 ] && [ "${#oid}" -ne 64 ]; }; then
+    HR_RUN_REFUSAL="$why: origin's answer for refs/heads/$base is not one object id"
+    return 1
+  fi
+  if ! hr_run_main_git fetch --quiet --no-recurse-submodules --refmap= origin "refs/heads/$base" >/dev/null 2>&1; then
+    HR_RUN_REFUSAL="$why: 'git fetch origin refs/heads/$base' failed"
+    return 1
+  fi
+  if ! hr_run_main_git cat-file -e "$oid^{commit}" 2>/dev/null; then
+    HR_RUN_REFUSAL="$why: the fetch did not bring commit $oid"
+    return 1
+  fi
+  HR_RUN_TRUSTED_BASE=$oid
+  return 0
+}
+
+# hr_run_surface_check_var <tip> <mode> — 0 when the protected set
+# (`hr_run_protected_rel_paths`) is unchanged from the merge base of <tip> and
+# `HR_RUN_TRUSTED_BASE`; 1 otherwise, with `HR_RUN_SURFACE_REFUSAL` naming each
+# differing path and the base, never a file's contents. No trusted base or no
+# merge base is a refusal, never a fallback. <mode>:
+#   tree   the commit <tip> against the base;
+#   copy   `tree`, plus the copy's working tree against <tip>, plus no untracked
+#          file in the set, ignored ones included;
+#   reset  `tree`, plus that untracked test.
+hr_run_surface_check_var() {
+  local tip="${1-}" mode="${2-}" set base out status p names="" untracked=""
+  local -a paths
+  paths=()
+  HR_RUN_SURFACE_REFUSAL=""
+  case "$mode" in
+    tree | copy | reset) ;;
+    *)
+      HR_RUN_SURFACE_REFUSAL="unknown surface check mode '$mode'"
+      return 1
+      ;;
+  esac
+  if [ -z "$tip" ]; then
+    HR_RUN_SURFACE_REFUSAL="no commit to check the protected surface of"
+    return 1
+  fi
+  if [ "$mode" != tree ] && [ -z "${HR_RUN_COPY_TOP-}" ]; then
+    HR_RUN_SURFACE_REFUSAL="no checked working copy to check the protected surface in"
+    return 1
+  fi
+  if ! hr_run_trusted_base_var; then
+    HR_RUN_SURFACE_REFUSAL=$HR_RUN_REFUSAL
+    return 1
+  fi
+  base=$(hr_run_main_git merge-base "$tip" "$HR_RUN_TRUSTED_BASE" 2>/dev/null) || base=""
+  if [ -z "$base" ]; then
+    HR_RUN_SURFACE_REFUSAL="'$tip' has no merge base with origin's default-branch commit $HR_RUN_TRUSTED_BASE"
+    return 1
+  fi
+  if ! set=$(hr_run_protected_rel_paths "$HR_RUN_MAIN"); then
+    HR_RUN_SURFACE_REFUSAL="cannot read the protected set from '$HR_RUN_MAIN/harness.config.json'"
+    return 1
+  fi
+  while IFS= read -r p; do
+    [ -z "$p" ] || paths[${#paths[@]}]=$p
+  done <<EOF
+$set
+EOF
+  if [ "${#paths[@]}" -eq 0 ]; then
+    HR_RUN_SURFACE_REFUSAL="the protected set read from '$HR_RUN_MAIN/harness.config.json' is empty"
+    return 1
+  fi
+
+  out=$(hr_run_main_git diff --name-only --exit-code --no-renames --no-ext-diff --no-textconv "$base" "$tip" -- "${paths[@]}" 2>/dev/null)
+  status=$?
+  case "$status" in
+    0) ;;
+    1) names=$out ;;
+    *)
+      HR_RUN_SURFACE_REFUSAL="cannot compare '$tip' with the merge base $base"
+      return 1
+      ;;
+  esac
+  if [ "$mode" = copy ]; then
+    out=$(hr_run_copy_git diff --name-only --exit-code --no-renames --no-ext-diff --no-textconv --ignore-submodules "$tip" -- "${paths[@]}" 2>/dev/null)
+    status=$?
+    case "$status" in
+      0) ;;
+      1) names="${names:+$names
+}$out" ;;
+      *)
+        HR_RUN_SURFACE_REFUSAL="cannot compare '$HR_RUN_COPY_TOP' with '$tip'"
+        return 1
+        ;;
+    esac
+  fi
+  if [ "$mode" != tree ]; then
+    if ! untracked=$(hr_run_copy_git ls-files --others -- "${paths[@]}" 2>/dev/null); then
+      HR_RUN_SURFACE_REFUSAL="cannot list the untracked files of '$HR_RUN_COPY_TOP'"
+      return 1
+    fi
+    [ -z "$untracked" ] || names="${names:+$names
+}$untracked"
+  fi
+  [ -n "$names" ] || return 0
+  HR_RUN_SURFACE_REFUSAL="the protected surface differs from the merge base $base with origin's default branch: $(printf '%s\n' "$names" | LC_ALL=C sort -u | tr '\n' ' ')"
+  HR_RUN_SURFACE_REFUSAL=${HR_RUN_SURFACE_REFUSAL% }
+  return 1
+}
+
+# hr_run_fast_forward_var <ref> — move `refs/heads/$HR_RUN_COPY_BRANCH` and the
+# copy's index and tree from `HR_RUN_COPY_TIP` to <ref>'s commit, by
+# `refresh-branch.sh`'s sequence with no merge commit: the dry-run `read-tree`,
+# a compare-and-swap `update-ref`, the real `read-tree`, and a guarded put-back.
+#   0  moved, or already there with nothing written; `HR_RUN_COPY_TIP` is the
+#      new commit;
+#   1  refused or failed with nothing changed, `HR_RUN_FF_REFUSAL` set;
+#   5  the branch moved, the tree refused and the put-back failed too
+#      (`refresh-branch.sh`'s exit 5), `HR_RUN_FF_REFUSAL` set.
+hr_run_fast_forward_var() {
+  local ref="${1-}" tip="${HR_RUN_COPY_TIP-}" branch="${HR_RUN_COPY_BRANCH-}" new
+  HR_RUN_FF_REFUSAL=""
+  if [ -z "$branch" ] || [ -z "$tip" ]; then
+    HR_RUN_FF_REFUSAL="the working copy has no branch or no commit to fast-forward"
+    return 1
+  fi
+  case "$ref" in
+    '' | -*)
+      HR_RUN_FF_REFUSAL="'$ref' is not a revision to fast-forward to"
+      return 1
+      ;;
+  esac
+  new=$(hr_run_main_git rev-parse --verify --quiet "$ref^{commit}" 2>/dev/null) || new=""
+  if [ -z "$new" ]; then
+    HR_RUN_FF_REFUSAL="'$ref' does not resolve to a commit in '$HR_RUN_MAIN'"
+    return 1
+  fi
+  [ "$new" != "$tip" ] || return 0
+  if ! hr_run_main_git merge-base --is-ancestor "$tip" "$new" 2>/dev/null; then
+    HR_RUN_FF_REFUSAL="'$branch' is not an ancestor of '$ref', so it cannot be fast-forwarded"
+    return 1
+  fi
+  if ! hr_run_copy_clean; then
+    HR_RUN_FF_REFUSAL="uncommitted tracked changes in '$HR_RUN_COPY_TOP'"
+    return 1
+  fi
+  if ! hr_run_surface_check_var "$new" tree; then
+    HR_RUN_FF_REFUSAL=$HR_RUN_SURFACE_REFUSAL
+    return 1
+  fi
+  if ! hr_run_copy_git read-tree -n --no-recurse-submodules -m -u "$tip" "$new"; then
+    HR_RUN_FF_REFUSAL="'$HR_RUN_COPY_TOP' cannot be updated to '$ref' (an untracked or changed file is in the way)"
+    return 1
+  fi
+  if ! hr_run_main_git update-ref -m "fast-forward to $ref" "refs/heads/$branch" "$new" "$tip"; then
+    HR_RUN_FF_REFUSAL="'$branch' moved, or its ref could not be locked"
+    return 1
+  fi
+  if hr_run_copy_git read-tree --no-recurse-submodules -m -u "$tip" "$new"; then
+    HR_RUN_COPY_TIP=$new
+    return 0
+  fi
+  if hr_run_main_git update-ref -m "undo fast-forward to $ref" "refs/heads/$branch" "$tip" "$new"; then
+    HR_RUN_FF_REFUSAL="'$HR_RUN_COPY_TOP' could not be updated to '$ref'; '$branch' was put back"
+    return 1
+  fi
+  HR_RUN_FF_REFUSAL="'$HR_RUN_COPY_TOP' could not be updated to '$ref', and putting '$branch' back failed too"
+  return 5
+}
+
+# hr_run_reset_var — the watchdog's reset of the copy to `HR_RUN_COPY_TIP`. It
+# moves no ref, so no ref hook runs and no `ORIG_HEAD` is written.
+#   0  reset;
+#   1  refused with nothing written, `HR_RUN_RESET_REFUSAL` set from the
+#      `reset` surface check, an unreachable origin included;
+#   3  `read-tree` failed after the check passed.
+hr_run_reset_var() {
+  HR_RUN_RESET_REFUSAL=""
+  if [ -z "${HR_RUN_COPY_TIP-}" ]; then
+    HR_RUN_RESET_REFUSAL="the working copy has no commit to reset to"
+    return 1
+  fi
+  if ! hr_run_surface_check_var "$HR_RUN_COPY_TIP" reset; then
+    HR_RUN_RESET_REFUSAL=$HR_RUN_SURFACE_REFUSAL
+    return 1
+  fi
+  hr_run_copy_git read-tree --reset -u --no-recurse-submodules "$HR_RUN_COPY_TIP" || return 3
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # THE ARTIFACT PLACEMENT.
 #
 # THE CONTRACT. The one placement the watcher's inbox pass and a job starting a
-# run both perform: copy a dropped artifact into a working copy, stage exactly
-# that path, skip an identical re-drop, commit through the caller-named commit
-# wrapper, push through the caller-named push wrapper, and read "landed" as
-# `origin/<branch>` equal to `HEAD`. Every step reports by exit status only;
-# what a failure means — log and launch anyway, or block the dispatch — is the
-# caller's decision. The wrapper paths are arguments because this library
-# resolves no sibling script. Write exception 4 in the header is this section's.
+# run both perform: copy a dropped artifact into a working copy, skip an
+# identical re-drop, commit exactly that path by plumbing in the main
+# repository, push through the caller-named push wrapper, and read "landed" as
+# `refs/remotes/origin/<branch>` equal to `refs/heads/<branch>` in the main
+# checkout. Every step reports by exit status; what a failure means — log and
+# launch anyway, or block the dispatch — is the caller's decision. The push
+# wrapper's path is an argument because this library resolves no sibling
+# script. Write exception 4 in the header is this section's.
 # ---------------------------------------------------------------------------
 
 # hr_task_prompt_rel <state_rel> <branch> — print the task prompt's
@@ -2449,53 +2874,169 @@ hr_user_review_subject() {
   printf 'chore: add user review for %s\n' "${1-}"
 }
 
+# hr_run_path_safe <top> <rel> — 0 when no existing component of <top>/<rel>
+# strictly below <top> is a symbolic link and the leaf is absent or a regular
+# file; 1 otherwise, and for an absolute <rel> or a `..` segment. Git-free.
+hr_run_path_safe() {
+  local top="${1-}" rel="${2-}" rest seg cur
+  [ -n "$top" ] && [ -n "$rel" ] || return 1
+  case "$rel" in /*) return 1 ;; esac
+  cur=$top
+  rest=$rel
+  while [ -n "$rest" ]; do
+    seg=${rest%%/*}
+    if [ "$seg" = "$rest" ]; then rest=""; else rest=${rest#*/}; fi
+    case "$seg" in
+      '' | .) continue ;;
+      ..) return 1 ;;
+    esac
+    cur="$cur/$seg"
+    [ ! -L "$cur" ] || return 1
+    [ -e "$cur" ] || return 0
+    if [ -n "$rest" ]; then
+      [ -d "$cur" ] || return 1
+    fi
+  done
+  [ "$cur" != "$top" ] || return 1
+  [ -f "$cur" ]
+}
+
 # hr_place_artifact <worktree> <src_file> <rel> — copy <src_file> to
-# <worktree>/<rel>, creating its parent. 0, or 1 on a failure.
+# <worktree>/<rel>, creating its parent. 0, or 1 on a failure — copying nothing
+# when `hr_run_path_safe` refuses, before the `mkdir -p` or after it.
 hr_place_artifact() {
   local worktree="${1-}" src="${2-}" rel="${3-}" dest
   [ -n "$worktree" ] && [ -n "$src" ] && [ -n "$rel" ] || return 1
+  hr_run_path_safe "$worktree" "$rel" || return 1
   dest="$worktree/$rel"
   mkdir -p "${dest%/*}" || return 1
+  hr_run_path_safe "$worktree" "$rel" || return 1
   cp "$src" "$dest" || return 1
   return 0
 }
 
-# hr_commit_placed <commit_wrapper> <worktree> <rel> <subject> — stage <rel> and
-# commit it through <commit_wrapper>. 0 committed; 3 nothing staged for <rel> (an
-# identical re-drop — nothing committed); 1 staging or the wrapper failed.
+# hr_commit_placed <main> <worktree> <rel> <subject> — commit <worktree>/<rel>,
+# and nothing else the run staged, on the copy's branch by plumbing in <main>:
+# the blob, a tree built in a temporary index from the tip plus that one entry,
+# `commit-tree`, and a compare-and-swap `update-ref`; the copy's index entry
+# for <rel> is then set so the copy reads clean. No hook runs.
+#   0  committed; `committed <short sha> on <branch>` on stdout;
+#   3  the placed blob equals `<tip>:<rel>` (an identical re-drop), nothing
+#      committed;
+#   2  the branch is protected by <main>'s configuration;
+#   1  anything else: an untrusted copy, a detached HEAD, an unsafe path, an
+#      unresolvable configuration or a git failure.
+# The blob is hashed with `--no-filters`, so no filter driver a run-written
+# `.gitattributes` selects ever runs; the cost is that a CRLF artifact under an
+# eol-normalising attribute is stored as it is.
 hr_commit_placed() {
-  local wrapper="${1-}" worktree="${2-}" rel="${3-}" subject="${4-}"
-  [ -n "$wrapper" ] && [ -n "$worktree" ] && [ -n "$rel" ] && [ -n "$subject" ] || return 1
-  git -C "$worktree" add -- "$rel" || return 1
-  git -C "$worktree" diff --cached --quiet -- "$rel" && return 3
-  "$wrapper" --repo "$worktree" "$rel" -- "$subject" || return 1
+  local main="${1-}" worktree="${2-}" rel="${3-}" subject="${4-}"
+  local wt branch tip top blob old tmpdir tree commit short status patterns pattern protected_set=""
+  [ -n "$main" ] && [ -n "$worktree" ] && [ -n "$rel" ] && [ -n "$subject" ] || return 1
+  if ! hr_run_copy_check_var "$main" "$worktree"; then
+    echo "hr_commit_placed: refusing to commit: $HR_RUN_REFUSAL" >&2
+    return 1
+  fi
+  top=$HR_RUN_COPY_TOP
+  wt=$( CDPATH= cd -P -- "$worktree" 2>/dev/null && pwd -P ) || wt=""
+  if [ "$wt" != "$top" ]; then
+    echo "hr_commit_placed: '$worktree' is not the top of its checkout '$top' — refusing to commit" >&2
+    return 1
+  fi
+  branch=$HR_RUN_COPY_BRANCH
+  tip=$HR_RUN_COPY_TIP
+  if [ -z "$branch" ]; then
+    echo "hr_commit_placed: detached HEAD — refusing to commit" >&2
+    return 1
+  fi
+  if [ -z "$tip" ]; then
+    echo "hr_commit_placed: '$branch' has no commit yet — refusing to commit" >&2
+    return 1
+  fi
+  hr_branch_is_protected "$HR_RUN_MAIN" "$branch"
+  status=$?
+  case "$status" in
+    0)
+      patterns=$(hr_protected_patterns "$HR_RUN_MAIN") || patterns=""
+      while IFS= read -r pattern; do
+        [ -n "$pattern" ] || continue
+        protected_set="${protected_set:+$protected_set }$pattern"
+      done <<EOF
+$patterns
+EOF
+      echo "hr_commit_placed: branch '$branch' is protected — refusing to commit" >&2
+      echo "  protected set (from harness.config.json): $protected_set" >&2
+      return 2
+      ;;
+    2)
+      echo "hr_commit_placed: cannot resolve '$HR_RUN_MAIN/harness.config.json' — refusing to commit" >&2
+      echo "  (no configuration there, invalid JSON, more than one document, no defaultBranch, or jq missing/older than 1.5)" >&2
+      return 1
+      ;;
+  esac
+  if ! hr_run_path_safe "$top" "$rel" || [ ! -f "$top/$rel" ]; then
+    echo "hr_commit_placed: '$rel' is not a regular file reached without a symbolic link in '$top' — refusing to commit" >&2
+    return 1
+  fi
+  blob=$(hr_run_main_git hash-object -w --no-filters -- "$top/$rel") || return 1
+  [ -n "$blob" ] || return 1
+  old=$(hr_run_main_git rev-parse --verify --quiet "$tip:$rel" 2>/dev/null) || old=""
+  [ "$blob" != "$old" ] || return 3
+
+  tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/hr-commit-index.XXXXXX") || return 1
+  if GIT_INDEX_FILE="$tmpdir/index" hr_run_main_git read-tree "$tip" &&
+    GIT_INDEX_FILE="$tmpdir/index" hr_run_main_git update-index --add --cacheinfo "100644,$blob,$rel"; then
+    tree=$(GIT_INDEX_FILE="$tmpdir/index" hr_run_main_git write-tree) || tree=""
+  else
+    tree=""
+  fi
+  rm -rf "$tmpdir"
+  [ -n "$tree" ] || return 1
+  commit=$(hr_run_main_git commit-tree "$tree" -p "$tip" -m "$subject") || return 1
+  [ -n "$commit" ] || return 1
+  hr_run_main_git update-ref -m "hr_commit_placed: $subject" "refs/heads/$branch" "$commit" "$tip" || return 1
+  HR_RUN_COPY_TIP=$commit
+  hr_run_copy_git update-index --add --cacheinfo "100644,$blob,$rel" || return 1
+  short=$(hr_run_main_git rev-parse --short "$commit") || short=$commit
+  printf 'committed %s on %s\n' "$short" "$branch"
   return 0
 }
 
 # hr_push_landed <push_wrapper> <worktree> <branch> — run <push_wrapper>, then
-# answer from refs alone, because `push-branch.sh` exits 0 on every path:
-#   0  landed: `HEAD` and `refs/remotes/origin/<branch>` resolve and are equal,
-#      before or after that fetch;
+# answer from refs in the main checkout alone (`hr_wrapper_main_of` the
+# wrapper's own directory), because `push-branch.sh` exits 0 on every path:
+#   0  landed: `refs/heads/<branch>` and `refs/remotes/origin/<branch>` resolve
+#      and are equal, before or after that fetch;
 #   2  the remote moved: after the failed landing, a fetch of
 #      `refs/remotes/origin/<branch>` succeeds and it names a commit that is not
-#      an ancestor of `HEAD`. `HR_PUSH_REMOTE_TIP` is set to its short id;
-#   1  anything else — the push was refused, the fetch failed, or a ref did not
-#      resolve.
+#      an ancestor of `refs/heads/<branch>`. `HR_PUSH_REMOTE_TIP` is set to its
+#      short id;
+#   1  anything else — the main checkout cannot be placed, the push was
+#      refused, origin names no URL in the main `.git/config`, the fetch
+#      failed, or a ref did not resolve.
 # It never retries and never rebases; the retry is `push-branch.sh`'s.
 hr_push_landed() {
-  local wrapper="${1-}" worktree="${2-}" branch="${3-}" head upstream
+  local wrapper="${1-}" worktree="${2-}" branch="${3-}" main head upstream
   HR_PUSH_REMOTE_TIP=""
   [ -n "$wrapper" ] && [ -n "$worktree" ] && [ -n "$branch" ] || return 1
+  main=$(hr_wrapper_main_of "$(dirname "$wrapper")") || return 1
   "$wrapper" "$worktree"
-  head=$(git -C "$worktree" rev-parse --verify --quiet HEAD) || return 1
+  head=$(git -C "$main" -c core.hooksPath=/dev/null -c submodule.recurse=false \
+    rev-parse --verify --quiet "refs/heads/$branch^{commit}") || return 1
   [ -n "$head" ] || return 1
-  upstream=$(git -C "$worktree" rev-parse --verify --quiet "refs/remotes/origin/$branch") \
+  upstream=$(git -C "$main" -c core.hooksPath=/dev/null -c submodule.recurse=false \
+    rev-parse --verify --quiet "refs/remotes/origin/$branch^{commit}") \
     && [ "$head" = "$upstream" ] && return 0
-  git -C "$worktree" fetch --quiet origin "+refs/heads/$branch:refs/remotes/origin/$branch" || return 1
-  upstream=$(git -C "$worktree" rev-parse --verify --quiet "refs/remotes/origin/$branch") || return 1
+  hr_remote_url_configured "$main" origin || return 1
+  git -C "$main" -c core.hooksPath=/dev/null -c submodule.recurse=false \
+    fetch --quiet --no-recurse-submodules origin "+refs/heads/$branch:refs/remotes/origin/$branch" || return 1
+  upstream=$(git -C "$main" -c core.hooksPath=/dev/null -c submodule.recurse=false \
+    rev-parse --verify --quiet "refs/remotes/origin/$branch^{commit}") || return 1
   [ "$head" != "$upstream" ] || return 0
-  git -C "$worktree" merge-base --is-ancestor "$upstream" "$head" && return 1
-  HR_PUSH_REMOTE_TIP=$(git -C "$worktree" rev-parse --short "$upstream") || return 1
+  git -C "$main" -c core.hooksPath=/dev/null -c submodule.recurse=false \
+    merge-base --is-ancestor "$upstream" "$head" && return 1
+  HR_PUSH_REMOTE_TIP=$(git -C "$main" -c core.hooksPath=/dev/null -c submodule.recurse=false \
+    rev-parse --short "$upstream") || return 1
   return 2
 }
 
