@@ -33,6 +33,14 @@
  * the body, run under `bash -e -o pipefail`, passing `github-actions[bot]`, a listed login, `*` and the
  * owner of a user-owned repository under an empty list, and refusing every other actor with an
  * `::error::` line naming `RUN_ACTORS_VARIABLE`.
+ * The job's own files: the `run` job's `Refuse a branch that changed the job's own files` step runs
+ * the pinned `doctor --job-surfaces=` against the default branch, from `${{ runner.temp }}`, with no
+ * `continue-on-error`, after `Set up Node` and before `Read the configuration` and every step running
+ * a `$SCRIPTS_DIR` script; `Record the default branch's commit` right after it; `Read the
+ * configuration` the only step writing `SCRIPTS_DIR=` to `$GITHUB_ENV`, and every `always()` /
+ * `cancelled()` step gated on `env.SCRIPTS_DIR != ''`, so a refusal runs nothing from the refused
+ * tree; and every step invoking `npm` or `npx` run from `${{ runner.temp }}`, each `npx` naming
+ * `--cwd "$GITHUB_WORKSPACE"`.
  *
  * For `harness-resume.yml`: the `schedule` and `workflow_dispatch` triggers; `permissions: {}` at workflow
  * level and the `poll` job's grants exactly `contents: read`, `actions: write`, `issues: write` and
@@ -518,8 +526,123 @@ test('the preflight runs doctor --remote-job, after the profile is generated and
   assert.ok(at("Generate the job's permission profile") < preflight);
   assert.ok(preflight < at('Run the harness'));
   const [body] = runBodies(steps()[preflight].split('\n'));
-  assert.equal(body, 'npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --remote-job');
+  assert.equal(body, 'npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job');
 });
+
+/** A step's own top-level `<key>:` value, or `undefined` when the step does not set it. */
+function stepKey(step, key) {
+  const indent = step[1] === undefined ? 0 : indentOf(step[1]);
+  const line = step.slice(1).find((l) => indentOf(l) === indent && l.trim().startsWith(`${key}:`));
+  return line === undefined ? undefined : line.trim().slice(key.length + 1).trim();
+}
+
+/** A `run:` body with its common leading indentation removed. */
+function dedent(body) {
+  const lines = body.split('\n').filter((l) => l.trim() !== '');
+  const base = Math.min(...lines.map(indentOf));
+  return lines.map((l) => l.slice(base)).join('\n');
+}
+
+const REFUSAL_STEP = "Refuse a branch that changed the job's own files";
+const RECORD_STEP = "Record the default branch's commit";
+const REFUSAL_BODY = [
+  'npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \\',
+  '  || { echo "::error::this branch\'s own commits changed files the job runs or loads, named in this step\'s doctor report; nothing from it runs in this job."; exit 1; }',
+].join('\n');
+const RECORD_BODY = [
+  'sha=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$HARNESS_GITHUB_DEFAULT_BRANCH^{commit}") || { echo "::error::cannot read the default branch\'s commit from the job\'s fresh checkout; nothing from this branch runs in this job."; exit 1; }',
+  'echo "HARNESS_GITHUB_DEFAULT_COMMIT=$sha" >> "$GITHUB_ENV"',
+].join('\n');
+
+/** The `run` job's steps with their names, and a lookup that fails on a missing name. */
+function runJobSteps() {
+  const list = jobSteps('run');
+  const names = list.map((s) => /- name: (.*)$/.exec(s[0])[1]);
+  const at = (name) => {
+    const i = names.indexOf(name);
+    assert.notEqual(i, -1, `the run job has a step named ${name}`);
+    return i;
+  };
+  return { list, names, at };
+}
+
+test("the job's own files: the pinned doctor --job-surfaces refuses the branch from $RUNNER_TEMP before anything runs from it", () => {
+  const { list, at } = runJobSteps();
+  const refusal = at(REFUSAL_STEP);
+  const step = list[refusal];
+  assert.deepEqual(runBodies(step).map(dedent), [REFUSAL_BODY]);
+  assert.equal(ifOf(step.join('\n')), "env.HARNESS_STOPPED != '1'");
+  assert.equal(stepKey(step, 'working-directory'), '${{ runner.temp }}');
+  assert.equal(stepKey(step, 'continue-on-error'), undefined, 'the refusal never lets the job go on');
+
+  assert.ok(at('Set up Node') < refusal, 'npx exists by the time the refusal runs');
+  for (const later of ['Read the configuration', 'Install the pinned plugin', "Generate the job's permission profile", 'Bootstrap the checkout']) {
+    assert.ok(refusal < at(later), `the refusal precedes ${later}`);
+  }
+  list.forEach((s, i) => {
+    if (runBodies(s).some((b) => b.includes('$SCRIPTS_DIR'))) assert.ok(refusal < i, `the refusal precedes ${s[0].trim()}`);
+  });
+
+  assert.ok(
+    jobEnv('run').includes('HARNESS_GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}'),
+    'the run job passes the default branch through env',
+  );
+
+  const record = at(RECORD_STEP);
+  assert.deepEqual(runBodies(list[record]).map(dedent), [RECORD_BODY]);
+  assert.equal(ifOf(list[record].join('\n')), "env.HARNESS_STOPPED != '1'");
+  assert.equal(stepKey(list[record], 'continue-on-error'), undefined);
+  assert.equal(record, refusal + 1, 'the commit is recorded right after the refusal');
+  assert.ok(record < at('Read the configuration'), 'the commit is recorded before SCRIPTS_DIR is set');
+
+  for (const body of runBodies(blockUnder(jobStart('run')))) assert.ok(!body.includes('${{'), `expression in run: ${body}`);
+});
+
+test('on the refusal path no post-session step runs a $SCRIPTS_DIR script: only Read the configuration sets it, after the refusal', () => {
+  const { list, names, at } = runJobSteps();
+  const refusal = at(REFUSAL_STEP);
+  const writers = list.flatMap((s, i) =>
+    runBodies(s).some((b) => b.includes('SCRIPTS_DIR=') && b.includes('$GITHUB_ENV')) ? [names[i]] : [],
+  );
+  assert.deepEqual(writers, ['Read the configuration']);
+  const config = at('Read the configuration');
+  assert.equal(ifOf(list[config].join('\n')), "env.HARNESS_STOPPED != '1'", 'implicit success(): skipped after a failed step');
+  assert.ok(refusal < config, 'SCRIPTS_DIR is set only after the refusal passed');
+  list.forEach((s, i) => {
+    const cond = ifOf(s.join('\n'));
+    const unconditional = /always\(\)|cancelled\(\)/.test(cond);
+    if (unconditional) assert.ok(cond.includes("env.SCRIPTS_DIR != ''"), `${names[i]} runs after a failure only when SCRIPTS_DIR is set`);
+    const code = s.slice(1).filter((l) => !/^\s*#/.test(l)).join('\n');
+    if (!unconditional && code.includes('SCRIPTS_DIR')) assert.ok(refusal < i, `${names[i]} names SCRIPTS_DIR and runs after the refusal`);
+  });
+});
+
+test('no run-job step runs npm or npx in the checkout: each runs from $RUNNER_TEMP and names it with --cwd', () => {
+  const { list, names } = runJobSteps();
+  let invoking = 0;
+  list.forEach((s, i) => {
+    // An invocation opens its line; an `npx …` quoted inside a message is a remedy for a person.
+    const calls = runBodies(s).flatMap((b) => b.split('\n')).filter((l) => /^\s*(?:npx|npm) /.test(l));
+    if (calls.length === 0) return;
+    invoking++;
+    assert.equal(stepKey(s, 'working-directory'), '${{ runner.temp }}', `${names[i]} runs npm or npx outside the checkout`);
+    for (const line of calls.filter((l) => /^\s*npx /.test(l))) {
+      assert.ok(line.includes('--cwd "$GITHUB_WORKSPACE"'), `${names[i]} names the checkout: ${line.trim()}`);
+    }
+  });
+  assert.equal(invoking, 4, 'the refusal, the claude CLI install, the profile and the preflight');
+});
+
+// RED ONCE, each mutation of harness-run.yml run once, observed failing as recorded, and reverted:
+//   the refusal step moved below `Install the pinned plugin`  -> the first case's order assertion fails (and the second case's)
+//   the refusal step moved to right after `Read the configuration` -> the second case's "after the refusal" fails (and the first case's order)
+//   `&& env.SCRIPTS_DIR != ''` dropped from `Push the branch`'s if: -> the second case's always() assertion fails
+//   `continue-on-error: true` added to the refusal step       -> the first case's continue-on-error assertion fails
+//   `echo "SCRIPTS_DIR=scripts" >> "$GITHUB_ENV"` added to `Check for jq and gh` -> the second case's one-writer assertion fails
+//   `working-directory` dropped from the refusal step          -> the first case's working-directory assertion and the third case fail
+//   `working-directory` dropped from `Preflight with doctor`  -> the third case fails
+//   `--cwd "$GITHUB_WORKSPACE"` dropped from `Generate the job's permission profile` -> the third case's --cwd assertion fails
+//   `Record the default branch's commit` moved below `Read the configuration` -> the first case's record-step order assertion fails
 
 test('no configured directory is frozen into the file', () => {
   assert.doesNotMatch(TEXT, /(^|[^A-Za-z0-9_])scripts\//m);

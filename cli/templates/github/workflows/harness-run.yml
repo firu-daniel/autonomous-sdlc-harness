@@ -112,6 +112,37 @@
 #   * Resolved before it: the job-level HARNESS_PUSH_URL secret, at job start.
 #     The credential secrets and HARNESS_GIT_TOKEN are read only by later steps.
 #
+# THE JOB'S OWN FILES. `Check out the run's branch` checks out the run's branch,
+# and every later step runs or loads that tree's files: its scriptsDir scripts,
+# harness.config.json, .claude/settings.json and .mcp.json. A previous job's
+# agent can commit any of them. `Refuse a branch that changed the job's own
+# files` runs the pinned CLI's `doctor --job-surfaces=<default branch>`, which
+# reads the trusted configuration from the GitHub default branch, the branch
+# the `collect` job already reads its configuration from, and fails when the
+# branch's own commits changed a job surface, naming each path.
+#   * It runs before `Read the configuration`, the only `run` step that sets
+#     SCRIPTS_DIR: a refusal, or any other failure of the step, leaves it unset,
+#     so no `always()`, `!cancelled()` or `cancelled()` step runs a script from
+#     the refused tree, as with THE RUN-ACTOR GATE.
+#   * A refused job ends `failure`, with one `::error::` annotation over the
+#     doctor report. It saves no state bundle, so `remote-run.sh sync` and
+#     `status` map the run by their no-bundle rule and nothing chains, and it
+#     sends no notification: every notify path is a script in the refused tree.
+#   * `Record the default branch's commit` writes that branch's commit id to
+#     HARNESS_GITHUB_DEFAULT_COMMIT before any session: the session can later
+#     rewrite the checkout's refs/remotes/origin/*, and the watcher's job-mode
+#     watchdog takes its check's configuration and base from that id.
+#   * Every `run` step running npm or npx runs from $RUNNER_TEMP and names the
+#     checkout with `--cwd "$GITHUB_WORKSPACE"`: a branch's .npmrc or
+#     node_modules/ is not a job surface, and npm would read it from the checkout.
+#   * Stated residuals. This file itself runs as the branch carries it
+#     (docs/remote-execution.md, section 9). `Bootstrap the checkout`'s
+#     configured commands.depInstall and commands.build run against the
+#     branch's own manifest, unsandboxed: a package manager runs a manifest's
+#     lifecycle and script entries by nature, and no out-of-session sandbox
+#     runtime ships. They are the npm runs left in the checkout, so both still
+#     read a branch-written .npmrc or node_modules/.
+#
 # ACTION PINS.
 #   actions/checkout          v5.1.0
 #   actions/setup-node        v5.0.0
@@ -358,6 +389,7 @@ jobs:
       HARNESS_CLI_VERSION: '{{cliVersion}}'
       HARNESS_JOB_MODE: '1'
       HARNESS_REMOTE_SLUG: ${{ github.repository }}
+      HARNESS_GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       HARNESS_INPUT_BRANCH: ${{ inputs.branch }}
       HARNESS_INPUT_ENGINE: ${{ inputs.engine }}
       HARNESS_INPUT_RESUME: ${{ inputs.resume }}
@@ -497,6 +529,28 @@ jobs:
             exit 1
           fi
 
+      - name: Set up Node
+        if: env.HARNESS_STOPPED != '1'
+        # actions/setup-node v5.0.0
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '22'
+          # v5 caches by package.json's packageManager; the job installs nothing through npm's cache, and a lockfile-less repository must not fail this step.
+          package-manager-cache: false
+
+      - name: Refuse a branch that changed the job's own files
+        if: env.HARNESS_STOPPED != '1'
+        working-directory: ${{ runner.temp }}
+        run: |
+          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH" \
+            || { echo "::error::this branch's own commits changed files the job runs or loads, named in this step's doctor report; nothing from it runs in this job."; exit 1; }
+
+      - name: Record the default branch's commit
+        if: env.HARNESS_STOPPED != '1'
+        run: |
+          sha=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$HARNESS_GITHUB_DEFAULT_BRANCH^{commit}") || { echo "::error::cannot read the default branch's commit from the job's fresh checkout; nothing from this branch runs in this job."; exit 1; }
+          echo "HARNESS_GITHUB_DEFAULT_COMMIT=$sha" >> "$GITHUB_ENV"
+
       - name: Read the configuration
         id: config
         if: env.HARNESS_STOPPED != '1'
@@ -509,17 +563,9 @@ jobs:
           } >> "$GITHUB_ENV"
           echo "retrieval=$retrieval" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Node
-        if: env.HARNESS_STOPPED != '1'
-        # actions/setup-node v5.0.0
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
-        with:
-          node-version: '22'
-          # v5 caches by package.json's packageManager; the job installs nothing through npm's cache, and a lockfile-less repository must not fail this step.
-          package-manager-cache: false
-
       - name: Install the claude CLI when absent
         if: env.HARNESS_STOPPED != '1'
+        working-directory: ${{ runner.temp }}
         run: |
           if ! command -v claude >/dev/null 2>&1; then
             npm install -g @anthropic-ai/claude-code
@@ -576,9 +622,10 @@ jobs:
 
       - name: Generate the job's permission profile
         if: env.HARNESS_STOPPED != '1'
+        working-directory: ${{ runner.temp }}
         run: |
-          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" init --plugin-root-entries
-          changed=$(git status --porcelain --untracked-files=no)
+          npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" --cwd "$GITHUB_WORKSPACE" init --plugin-root-entries
+          changed=$(git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=no)
           if [ -n "$changed" ]; then
             printf '%s\n' "$changed"
             echo "::error::init $HARNESS_CLI_VERSION changed tracked files. Run 'npx autonomous-sdlc-harness@$HARNESS_CLI_VERSION init' locally and commit the result."
@@ -587,7 +634,8 @@ jobs:
 
       - name: Preflight with doctor
         if: env.HARNESS_STOPPED != '1'
-        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --remote-job
+        working-directory: ${{ runner.temp }}
+        run: npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$GITHUB_WORKSPACE" --remote-job
 
       - name: Bootstrap the checkout
         if: env.HARNESS_STOPPED != '1'
