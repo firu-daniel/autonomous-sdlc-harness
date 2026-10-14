@@ -2797,8 +2797,9 @@ EOF
 # copy's index and tree from `HR_RUN_COPY_TIP` to <ref>'s commit, by
 # `refresh-branch.sh`'s sequence with no merge commit: the dry-run `read-tree`,
 # a compare-and-swap `update-ref`, the real `read-tree`, and a guarded put-back.
-#   0  moved, or already there with nothing written; `HR_RUN_COPY_TIP` is the
-#      new commit;
+#   0  moved, or already at or ahead of <ref> with nothing written (`merge
+#      --ff-only`'s "already up to date"); `HR_RUN_COPY_TIP` is the branch's
+#      commit;
 #   1  refused or failed with nothing changed, `HR_RUN_FF_REFUSAL` set;
 #   5  the branch moved, the tree refused and the put-back failed too
 #      (`refresh-branch.sh`'s exit 5), `HR_RUN_FF_REFUSAL` set.
@@ -2821,6 +2822,7 @@ hr_run_fast_forward_var() {
     return 1
   fi
   [ "$new" != "$tip" ] || return 0
+  ! hr_run_main_git merge-base --is-ancestor "$new" "$tip" 2>/dev/null || return 0
   if ! hr_run_main_git merge-base --is-ancestor "$tip" "$new" 2>/dev/null; then
     HR_RUN_FF_REFUSAL="'$branch' is not an ancestor of '$ref', so it cannot be fast-forwarded"
     return 1

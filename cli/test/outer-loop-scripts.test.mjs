@@ -640,6 +640,31 @@ test('the artifact commit carries only its path and runs no hook', async (t) => 
   assert.equal((await runGit(dir, ['rev-parse', 'HEAD'])).stdout.trim(), mainTip, 'a protected branch gained a commit');
 });
 
+test('the copy fast-forward leaves a copy already ahead of the target as it is, and refuses a diverged one', async (t) => {
+  const dir = await fixtureFor(t, { files: nodeProjectFiles() });
+  await initOk(dir);
+  const wt = `${dir}-wt`;
+  t.after(() => rm(wt, { recursive: true, force: true }));
+  await runGit(dir, ['worktree', 'add', '--quiet', '-b', 'feat_x', wt]);
+  const base = (await runGit(dir, ['rev-parse', 'refs/heads/feat_x'])).stdout.trim();
+  await runGit(wt, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', 'unpushed round']);
+  const ahead = (await runGit(dir, ['rev-parse', 'refs/heads/feat_x'])).stdout.trim();
+  const fastForward = `hr_run_copy_check_var "$PWD" "$1" || exit 10; hr_run_fast_forward_var "$2"; printf '%s|%s|%s' "$?" "$HR_RUN_COPY_TIP" "$HR_RUN_FF_REFUSAL"`;
+
+  const behind = await libCall(dir, fastForward, [wt, base]);
+  assert.equal(behind.stdout, `0|${ahead}|`, `a copy ahead of its target was not left as it is: ${behind.stderr}`);
+  assert.equal((await runGit(dir, ['rev-parse', 'refs/heads/feat_x'])).stdout.trim(), ahead, 'the branch moved');
+
+  await runGit(dir, ['branch', 'elsewhere', base]);
+  const other = `${dir}-other`;
+  t.after(() => rm(other, { recursive: true, force: true }));
+  await runGit(dir, ['worktree', 'add', '--quiet', other, 'elsewhere']);
+  await runGit(other, ['commit', '--quiet', '--no-verify', '--allow-empty', '-m', 'diverged']);
+  const diverged = await libCall(dir, fastForward, [wt, 'refs/heads/elsewhere']);
+  assert.match(diverged.stdout, /^1\|/, `a diverged target was not refused: ${diverged.stdout}`);
+  assert.equal((await runGit(dir, ['rev-parse', 'refs/heads/feat_x'])).stdout.trim(), ahead, 'the branch moved');
+});
+
 test('placement refuses a path through a symlink', async (t) => {
   const dir = await fixtureFor(t, { files: nodeProjectFiles() });
   await initOk(dir);
