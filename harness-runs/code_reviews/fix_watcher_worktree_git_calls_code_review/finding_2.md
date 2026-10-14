@@ -26,3 +26,5 @@ This is a read past the sandbox's denies rather than code execution. The branch 
 2. In `docs/cli.md`, residual 1, add this item after item 4 (`hr_remote_bundle_restore` …), renumbering the object-store item to 6:
 
    > 5. **`lib/harness-run-lib.sh` → `hr_remote_bundle_write` reads a run's state directory through paths it does not test for a symbolic link.** `remote-run.sh save` runs it unsandboxed in the job's checkout after the session. Each `cp` of `PAUSE_PROGRESS.md`, `.flow_walker_state`, `autonomous_logs/<branch>.log`, `autonomous_logs/remote_status.json` and each planning file follows a link the session planted there. So does each `[ -f ]` test before it. The bundle can therefore carry a file the session's own `Read` denies withheld from it. The bundle is uploaded as the `harness-state` artifact and restored into the next job's checkout.
+
+**Deviations from plan:** Also updated `docs/watcher.md` → the sentence "What this leaves open — … — is `docs/cli.md` §6, residual 1." to list "the bundle save's reads", so its enumeration of residual 1's items stays complete after the new item 5.

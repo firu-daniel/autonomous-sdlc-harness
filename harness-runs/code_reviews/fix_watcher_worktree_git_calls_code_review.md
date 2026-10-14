@@ -45,7 +45,7 @@ The one Must Fix comes from a probe this review ran. The working-tree side of th
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 3** — Point the watcher header's job-mode bullet at `JOB MODE` without the wrong direction word. _(layer: cli)_
-2. [ ] **Finding 2** — State that `remote-run.sh save` follows a session-planted symbolic link and uploads its target. _(layer: general)_
+2. [x] **Finding 2** — State that `remote-run.sh save` follows a session-planted symbolic link and uploads its target. _(layer: general)_
 3. [ ] **Finding 1** — Judge the copy's working tree on the protected set through a fresh index, in both `copy` and `reset` mode. _(layer: cli, general)_
 
 ---
