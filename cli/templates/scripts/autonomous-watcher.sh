@@ -257,7 +257,7 @@
 #   * READS ON REGISTRY ROOTS (`footprint_grade`) stay as they are: those are
 #     adopters' main checkouts, and `rev-parse` runs no hook or fsmonitor.
 #   * IN JOB MODE, the watchdog's job-surfaces check runs `npx` outside the
-#     checkout (JOB MODE above).
+#     checkout (see JOB MODE).
 #
 # The rules every hardened call holds are lib/harness-run-lib.sh's, in the
 # section THE WATCHER FAMILY'S GIT IN A RUN'S COPY.
