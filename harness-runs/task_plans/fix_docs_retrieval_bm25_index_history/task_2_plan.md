@@ -1,0 +1,39 @@
+### Task 2 — Find where the index scan's stray score comes from, and stop if it is in `pg_textsearch`
+
+**Goal:** Meet the task prompt's `## A second defect, found while implementing Task 1` → **What is wanted:**, points 2 to 4. On the compose Postgres, the score statement sometimes returns, through the `chunks_bm25` index scan, one (query, key) score that no other run returns. Find where that value comes from, with a reproducible sequence of statements recorded beside the figures, as goal 1 requires. Check whether it is the same mechanism as the near-tie ordering of goal 5. Then take exactly one of the three exits under **The gate** below. This task changes no shipped behaviour.
+
+**Depends on:** Task 1, which makes `evals/docs-retrieval/bm25-history.mjs` read two score columns through the index scan, `scan` (the bare `BM25_ORDER_CLAUSE` column, which the planner replaces with the index scan's own score) and `operator` (`round((BM25_ORDER_CLAUSE)::numeric, 6)`, the standalone operator's value), and records `### The index's history, measured`, naming each stray its runs of record carried. This task reuses that module's engines, chunk loading and two-column scoring rather than a second copy of them.
+
+**What is known before this task, as leads.**
+
+- The three strays the first attempt captured, all on Postgres, `self-docs` as A: `q-sd-search-abstains` → `docs/analyze.md#8-how-this-is-verified` −0.221485 against −0.735353; `q-sd-cross-asset-reference` → `docs/github-run-control.md#5-lifecycle-comments-and-state-labels` −0.341426 against −1.891997; `q-sd-analyze-writes` → `docs/development.md#7-releasing` −1.629181 against −4.567675. Those were read in the `operator` column only, because the probe had only that column.
+- On one unchanged table, 20 queries run 15 times each gave one stray through the index scan, and none with the index scan off. PGlite showed none. These are the task prompt's figures, not figures of record.
+- **Two computations, in the 1.3.1 source.** The scan ranks by a score computed in `src/access/scan.c` (`tp_gettuple` sets `xs_orderbyvals` and `tp_cached_score` from `so->result_scores`, produced by `tp_execute_scoring_query`, with the block-max WAND path in `src/scoring/bmw.c`). The `operator` column runs `src/types/query.c` → `bm25_text_bm25query_score`, which reads term frequencies and length from the row's own text and caches per-query IDF values in `fn_extra` (`QueryScoreCache`, valid while `index_oid`, `first_segment` and `total_docs` are unchanged: `cache_is_valid`). With the index scan off, both the order and the projection come from the standalone operator, which may be why no stray appeared there.
+- **Candidate mechanisms, none verified:** the `fn_extra` IDF cache surviving a change in the index's state it does not key on; the scan's limit-doubling re-score in `tp_gettuple` ("Re-scoring can reorder concurrent results"), which the `LIMIT` value reaches; a concurrent spill by autovacuum (the first attempt read `autovacuum_count` 0 at every step, which argues against it); the planner choosing a different plan between runs.
+
+**The gate, decided with the maintainer: measure both columns, and stop on a wrong value in either.**
+
+- **Cause in `pg_textsearch` itself, in either column.** If the stray traces into the extension's own code, whether the scan's score or the standalone operator's, **stop the branch** and ask the maintainer how to proceed. Do not plan or implement a workaround: no retry, no re-scoring, no averaging, no tolerance, and no switching the column the probes and tests read in order to avoid it. Record what was found in `### The index's history, measured` → `#### The stray score` before stopping.
+- **Cause in this repository, in the probe's or a test's column shape only.** If the stray comes from how our statement asks for the score, and the store's own search (`SELECT id … ORDER BY … LIMIT`, which reads no projected score) is shown unaffected, the fix is the column shape the probes and tests read. Record it, and state it in `#### The stray score` in one sentence that Tasks 6 and 8 cite. Then the branch continues with Task 3.
+- **Cause in this repository, in a store's statement, configuration or how a store calls the extension.** Stop before Task 4 and report to the maintainer with the reproduction. The plan is then extended with one fix task and one test task per affected backend, before Task 5, which is the maintainer's to approve (task prompt → the same section, point 3).
+
+### Targets
+
+- `evals/docs-retrieval/bm25-history.mjs`: a second exported function, the repeat harness, with its launcher flag.
+- `docs/retrieval-eval.md`: the run command for the repeat harness, in the subsection Task 1 added.
+- `docs/retrieval-eval-results.md` → `### The index's history, measured`: a `#### The stray score` part.
+
+**Work:**
+
+- [ ] The repeat harness: on each engine, build one table of a corpus (`self-docs` first, because the strays appeared there) and leave it unchanged. Run every query of the corpus's query set R times (start at R = 15, as the prompt's figure did) through the index scan, reading three things each time: the `scan` column, the `operator` column, and the store's own ordering, the result of `cli/dist/retrieval/store.js`'s lexical `SELECT id … ORDER BY … LIMIT` statement composed from the exported constants. Report every (query, key, column) value that differs from that pair's modal value, every query whose store ordering differs between runs, and `autovacuum_count`, `bm25_summarize_index` and `EXPLAIN (COSTS OFF)` before the first and after the last run.
+- [ ] Vary one factor at a time, each as a fixed, named harness mode, never chosen at run time: the `LIMIT` value (the store's own `k`, and one large enough that the scan's limit-doubling path in `tp_gettuple` runs); one psql connection for all runs against a fresh connection per statement (the `fn_extra` cache lives per call site within one statement, so a difference here points elsewhere); `VACUUM chunks` before the runs against none. Record per mode the stray count per column and per ordering.
+- [ ] Narrow it to a reproducible sequence: the shortest list of statements, with its setup, after which the stray appears at a stated rate, or deterministically. Read the functions it reaches at tag `v1.3.1` (`src/access/scan.c` → `tp_gettuple`, `tp_execute_scoring_query`; `src/scoring/bmw.c`; `src/types/query.c` → `bm25_text_bm25query_score`, `cache_is_valid`; `src/planner/hooks.c` → `replace_scores_in_targetlist`) and cite the one the evidence points at, by path and name.
+- [ ] Check against goal 5: do the near-tie pairs of Task 3's queries (`q-fc-token-lifetime`, `q-fc-unreadable-label`) show the `scan` column ordering one way and the `operator` column scoring the other? State whether the stray and the near-tie inversion are one mechanism, two, or not yet known. Task 3 settles the near-tie itself.
+- [ ] Record `#### The stray score`: the setup, the repeat harness's statements verbatim, the per-mode table, the reproducible sequence and its rate, the cited source, and which exit of **The gate** was taken and why. Then take that exit.
+
+**Verification:**
+
+- The recorded part names the column each stray appeared in, and whether the store's own ordering moved with it, from a capture of this run.
+- The exit taken is stated in one sentence and follows from a row of the per-mode table and a cited function, not from prose alone. If the evidence cannot place the cause in this repository, the exit is the stop.
+- No statement in the harness disables the index scan: `grep -n 'enable_indexscan' evals/docs-retrieval/bm25-history.mjs` finds nothing. No retry, re-score, averaging or tolerance appears in the module or the record.
+- `bash scripts/run-gates.sh` passes, and `bash scripts/check-eval-artifacts.sh` passes.
