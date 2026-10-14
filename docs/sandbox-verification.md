@@ -183,7 +183,7 @@ The record's own `HEAD` is refused too (`dd` → `Operation not permitted`), whi
 |---|---|---|---|---|
 | T1 | `bash scripts/test.sh` (→ `scripts/run-gates.sh`) in a sandboxed session in a worktree | green | as F2 | **fail**: F2 |
 
-Unsandboxed, `scripts/run-gates.sh` passes on this branch's final tree.
+Unsandboxed, on this branch's final tree, `scripts/run-gates.sh` reports every gate `ok` except two. Gate 6a is red in a self-adopted checkout by design (`run-gates.sh`'s own note): the machine-local profile names this checkout's paths. Gate 13 is `BLOCKED` because this host has no synced `uv` environment. Neither is caused by the sandbox.
 
 ---
 
