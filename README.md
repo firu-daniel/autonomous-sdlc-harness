@@ -255,6 +255,7 @@ What this harness does not do, in three groups: the shape of the system as desig
 - [`docs/development.md`](docs/development.md) — changing a file in this repository: running the plugin from a working copy, what that forces on references between assets, and which commands decide whether a change is good.
 - [`docs/outer-loop-verification.md`](docs/outer-loop-verification.md) — what the outer-loop scripts do when driven, and which paths ship unexercised.
 - [`docs/guard-verification.md`](docs/guard-verification.md) — the composed `PreToolUse` guard set's decision matrices and its per-call cost.
+- [`docs/sandbox-verification.md`](docs/sandbox-verification.md) — what the unattended profile's sandbox block does when measured under Claude Code's own sandbox, and which rows fail.
 - [`docs/typecheck-key-decision.md`](docs/typecheck-key-decision.md) — whether `commands.typecheck` stays a required key, with option (b), the explicit `none` sentinel, ratified and implemented.
 - [`docs/second-runtime-port-decision.md`](docs/second-runtime-port-decision.md) — why the second-runtime reference port was withdrawn: the planning loop as a graph the orchestrator already walks, the frameworks considered, the checkpointer and cost reasoning, and the maintainer's arguments.
 - [`plugin/docs/AUTONOMOUS_FLOW.md`](plugin/docs/AUTONOMOUS_FLOW.md) — the canonical statement of the inner loop, with [`plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md`](plugin/docs/AUTONOMOUS_FLOW_WHITEBOARD.md) as its narrative companion.
