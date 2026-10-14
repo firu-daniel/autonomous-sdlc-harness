@@ -78,3 +78,8 @@
 - `git grep -n "JSON.parse\|is not valid JSON" -- cli/src/core/json.ts cli/src/config/io.ts` shows the parse and the sentence only in `cli/src/core/json.ts`: no hit is in `cli/src/config/io.ts`.
 - `git grep -n "export function parseJsonText" -- cli/src` is non-empty, every hit is in `cli/src/core/json.ts`, and `readJsonFile`'s body calls it.
 - `node cli/dist/cli.js doctor --job-surfaces=` exits non-zero with a message naming the option, and so do `doctor --job-surfaces=-x` and `doctor --job-surfaces=@0123456789abcdef0123456789abcdef01234567`.
+
+- **Deviations from plan:**
+  - `cli/src/core/git.ts` gained `commitResolves(repoRoot, revision)` (`rev-parse --verify --quiet <revision>^{commit}`), outside the Targets list: the `@<commit>` "does not resolve" grade needs a git probe, and `core/git.ts`'s header makes it the only home for one. No existing export answered it.
+  - *Merged default* case: the plan's fixture alone does not go red under the "compare from `refs/remotes/origin/<defaultBranch>`" mutation — measured: 17 pass, 0 fail with the mutation applied, because a branch that merged the default's tip has the same `.mcp.json` as that tip. The case now also advances the default branch with a second `.mcp.json` change after the merge; under the mutation it fails with `expected exit 0, got 1`.
+  - RED ONCE mutation 2 was applied as a filter over `jobSurfacePaths`' answer inside `checks.ts` rather than as an edit to `writeProtection.ts`; the observed failures are recorded in the test file's header.

@@ -8,6 +8,11 @@
  * {@link runChecks} therefore evaluates every entry of {@link CHECKS} in order and turns a thrown
  * value into that check's own `fail`, so the count at the end is always over the whole list.
  *
+ * {@link JOB_SURFACES_CHECK} is declared beside {@link CHECKS} rather than in it: it reads a ref only
+ * a remote job's checkout carries, and the job runs it before the plugin and the permission profile
+ * exist, so a plain `doctor` run would grade it against nothing. `doctor --job-surfaces=<branch>`
+ * runs it alone, through the same {@link runChecks}.
+ *
  * ## Three non-obvious choices, and where each comes from
  *
  * 1. **Nothing here is re-derived from a second copy.** The backend detection and the watcher path
@@ -89,8 +94,8 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { accessSync, constants as fsConstants, existsSync, readFileSync, statSync } from 'node:fs';
 import { delimiter, join, posix, resolve as resolvePath } from 'node:path';
 
-import { formatProblem, type ConfigProblem } from '../config/check.js';
-import { loadConfig } from '../config/io.js';
+import { formatProblem, hasErrors, type ConfigProblem } from '../config/check.js';
+import { loadConfig, loadConfigText } from '../config/io.js';
 import {
   answersNone,
   browserWiringApplies,
@@ -113,11 +118,15 @@ import {
 } from '../config/model.js';
 import {
   branchResolves,
+  changedPathsBetween,
   checkedOutBranch,
+  commitResolves,
   commitsAhead,
   configuredRemotes,
+  fileAtRef,
   hasCommits,
   mainWorktreeRoot,
+  mergeBase,
   pathAtRef,
   pathIsIgnored,
   remoteTrackingBranchResolves,
@@ -211,7 +220,7 @@ import {
   SANDBOX_OPT_OUT_MARKER,
   shippedSandboxSettings,
 } from '../generators/sandboxProfile.js';
-import { fileToolDenyRules, protectedPaths } from '../generators/writeProtection.js';
+import { fileToolDenyRules, jobSurfacePaths, protectedPaths } from '../generators/writeProtection.js';
 import {
   configKeyPath,
   configuredWrapperFile,
@@ -471,6 +480,20 @@ export interface CheckContext {
    * `permissions.additionalDirectories`. `false` in every default run.
    */
   readonly remoteJob: boolean;
+  /** What `doctor --job-surfaces=<branch>[@<commit>]` asked {@link JOB_SURFACES_CHECK} about; absent otherwise. */
+  readonly jobSurfaces?: JobSurfacesTarget;
+}
+
+/** The value of `doctor --job-surfaces=`, split at its last `@`. */
+export interface JobSurfacesTarget {
+  /** The default branch the job was dispatched against. Without {@link commit}, its ref is the trusted one. */
+  readonly branch: string;
+  /**
+   * The default branch's commit recorded before any session had the checkout. When present it is the
+   * trusted configuration's tree and the merge-base side, no `refs/remotes/origin/*` ref is read, and
+   * {@link branch} only labels the messages.
+   */
+  readonly commit?: string;
 }
 
 /** The permission lists a generated profile carries, in the order the template writes them. */
@@ -758,12 +781,14 @@ function serversStartedByProfile(profile: JsonObject): readonly string[] {
  * default to `false`: a context built without them is the context every default run gets, and no
  * check here reaches a network unless the command was asked to. `remoteJob` is the caller's too, and
  * defaults to `false` for the same reason: only the remote job's preflight asks for its grading.
+ * `jobSurfaces` is carried through untouched for {@link JOB_SURFACES_CHECK}.
  */
 export function buildCheckContext(
   cwd: string,
   probeRegistry = false,
   probeGithub = false,
   remoteJob = false,
+  jobSurfaces?: JobSurfacesTarget,
 ): CheckContext {
   let repoRoot: string | undefined;
   let repoProblem: string | undefined;
@@ -773,7 +798,10 @@ export function buildCheckContext(
     repoProblem = messageOf(error);
   }
 
-  if (repoRoot === undefined) return { cwd, repoProblem, configProblems: [], probeRegistry, probeGithub, remoteJob };
+  const job = jobSurfaces === undefined ? {} : { jobSurfaces };
+  if (repoRoot === undefined) {
+    return { cwd, repoProblem, configProblems: [], probeRegistry, probeGithub, remoteJob, ...job };
+  }
 
   const loaded = loadConfig(repoRoot);
   const profileRoot = mainWorktreeRoot(repoRoot) ?? repoRoot;
@@ -810,6 +838,7 @@ export function buildCheckContext(
     probeRegistry,
     probeGithub,
     remoteJob,
+    ...job,
   };
 }
 
@@ -5801,14 +5830,94 @@ export const CHECKS: readonly Check[] = Object.freeze([
 ]);
 
 /**
- * Evaluate every check in order and return one result each.
+ * Whether the run branch's **own** commits — those between `merge-base(HEAD, <base>)` and `HEAD` —
+ * changed any path in {@link jobSurfacePaths}, the files a remote job runs or loads from its checkout.
+ *
+ * Every value it grades by is the trusted side's: the configuration, its `defaultBranch` and the
+ * surface list derived from it come from `<trusted ref>:harness.config.json`, never from `HEAD`, so a
+ * branch cannot widen what it may change by rewriting its own configuration. The trusted ref and the
+ * base are `refs/remotes/origin/<branch>` and `refs/remotes/origin/<defaultBranch>`, or the recorded
+ * commit for both under `@<commit>`, where a session that wrote the checkout's refs could have moved
+ * them. Comparing from the merge base rather than the default branch's tip is what lets a branch that
+ * merged a newer default branch pass: those changes are not its own.
+ */
+export const JOB_SURFACES_CHECK: Check = {
+  id: 'job-surfaces',
+  title: "the run branch's own commits leave every path the remote job runs or loads unchanged",
+  run: (ctx) => {
+    const target = ctx.jobSurfaces;
+    if (target === undefined) return unevaluated('no --job-surfaces value was given');
+    if (ctx.repoRoot === undefined) {
+      return unevaluated(`the repository root did not resolve: ${ctx.repoProblem ?? 'git gave no reason'}`);
+    }
+    const root = ctx.repoRoot;
+    const { branch, commit } = target;
+
+    let trustedRef: string;
+    if (commit !== undefined) {
+      if (!commitResolves(root, commit)) {
+        return fail(
+          `the trusted commit ${commit} given for ${branch} is not a commit this checkout holds (${commit}^{commit} does not resolve), so neither the trusted configuration nor the merge base can be read — pass the commit ${branch} pointed at before any session had the checkout`,
+        );
+      }
+      trustedRef = commit;
+    } else {
+      trustedRef = `refs/remotes/origin/${branch}`;
+      if (!remoteTrackingBranchResolves(root, branch)) {
+        return fail(
+          `${trustedRef} does not resolve, so the trusted ${CONFIG_FILENAME} cannot be read — fetch origin/${branch} into this checkout first`,
+        );
+      }
+    }
+
+    const origin = `${trustedRef}:${CONFIG_FILENAME}`;
+    const loaded = loadConfigText(fileAtRef(root, trustedRef, CONFIG_FILENAME), origin);
+    if (loaded.config === undefined || hasErrors(loaded.problems)) {
+      const errors = loaded.problems.filter((problem) => problem.severity === 'error').map(formatProblem);
+      return fail(
+        `the trusted configuration ${origin} is not usable, so no surface list can be derived from it: ${errors.length === 0 ? 'it is not a JSON object' : errors.join('; ')}`,
+      );
+    }
+    const trusted = loaded.config;
+    const defaultBranch = trusted.defaultBranch;
+    if (typeof defaultBranch !== 'string' || defaultBranch === '') {
+      return fail(`the trusted configuration ${origin} carries no defaultBranch, so no merge base can be computed`);
+    }
+
+    const baseRef = commit ?? `refs/remotes/origin/${defaultBranch}`;
+    const base = mergeBase(root, 'HEAD', baseRef);
+    if (base === undefined) {
+      return fail(
+        `HEAD and ${baseRef} have no merge base, or one of them does not resolve, so the run branch's own commits cannot be told apart from the default branch's`,
+      );
+    }
+
+    const surfaces = jobSurfacePaths(trusted);
+    const changed = changedPathsBetween(root, base, 'HEAD', surfaces);
+    if (changed === undefined) {
+      return fail(`git could not compare ${base} with HEAD over the job's surfaces, so whether the run branch changed them is unknown`);
+    }
+    if (changed.length > 0) {
+      return fail(
+        `the run branch's own commits since ${base} changed ${changed.length === 1 ? 'a path' : 'paths'} the remote job runs or loads from its checkout: ${changed.join(', ')} — land that change on ${defaultBranch} through a supervised route, then re-dispatch`,
+      );
+    }
+    return pass(
+      `the run branch's own commits since ${base} change none of the ${surfaces.length} paths the remote job runs or loads (configuration read from ${origin})`,
+    );
+  },
+};
+
+/**
+ * Evaluate every check in order — {@link CHECKS} unless the caller names another list — and return
+ * one result each.
  *
  * **The try/catch is here rather than in each check**, so the property the module header states is
  * structural: a check cannot forget to catch, because it is not the thing catching. A thrown value
  * becomes that check's `fail` naming the check that threw, and the rest of the list still runs.
  */
-export function runChecks(ctx: CheckContext): CheckResult[] {
-  return CHECKS.map((check) => {
+export function runChecks(ctx: CheckContext, checks: readonly Check[] = CHECKS): CheckResult[] {
+  return checks.map((check) => {
     let outcome: CheckOutcome;
     try {
       outcome = check.run(ctx);

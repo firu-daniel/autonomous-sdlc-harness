@@ -43,6 +43,11 @@
  *   run daemon before it starts a run — would cost the command every property above.
  *   {@link REMOTE_JOB_FLAG} reaches no network either: it changes five profile checks' grades, and what `plugin-permissions` grades,
  *   and nothing else.
+ * - **{@link JOB_SURFACES_FLAG} replaces the check list rather than adding to it.** The remote job
+ *   runs it from the pinned CLI before it trusts anything the run's branch carries, so it runs the
+ *   one `job-surfaces` check and nothing else, reaches no network, and takes no other option. It is a
+ *   flag value rather than a probe of the job's environment for {@link REMOTE_JOB_FLAG}'s reason: an
+ *   operator's own shell cannot trip it by inheriting a variable.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -52,10 +57,13 @@ import { EXIT, HarnessError } from '../core/errors.js';
 import { currentBranch } from '../core/git.js';
 import {
   buildCheckContext,
+  CHECKS,
   countByStatus,
+  JOB_SURFACES_CHECK,
   runChecks,
   type CheckContext,
   type CheckStatus,
+  type JobSurfacesTarget,
 } from '../doctor/checks.js';
 import { NOTIFY_SCRIPT_NAME, outerLoopScriptPath } from '../generators/outerLoopScripts.js';
 import type { CommandContext, Subcommand } from './registry.js';
@@ -102,6 +110,20 @@ const CHECK_GITHUB_FLAG = '--check-github';
 const REMOTE_JOB_FLAG = '--remote-job';
 
 /**
+ * An option this command takes of its own, as `--job-surfaces=<branch>` or
+ * `--job-surfaces=<branch>@<commit>`: run only the `job-surfaces` check, which fails when the run
+ * branch's own commits changed a path the remote job runs or loads, grading by `<branch>`'s
+ * configuration — or `<commit>`'s, with no `refs/remotes/origin/*` ref read.
+ *
+ * A flag rather than a probe of the job's environment, for {@link REMOTE_JOB_FLAG}'s reason; the
+ * remote workflow and the job-mode watchdog pass it.
+ */
+const JOB_SURFACES_FLAG = '--job-surfaces';
+
+/** A full object id after the last `@` of {@link JOB_SURFACES_FLAG}'s value: SHA-1 or SHA-256, lower-case. */
+const COMMIT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+/**
  * Every option this command takes of its own, in the order `--help` lists them.
  *
  * Declared as the list rather than spelled into the refusal message, so the message a mistyped flag
@@ -112,6 +134,7 @@ const OWN_FLAGS: readonly string[] = Object.freeze([
   CHECK_REGISTRY_FLAG,
   CHECK_GITHUB_FLAG,
   REMOTE_JOB_FLAG,
+  `${JOB_SURFACES_FLAG}=<branch>[@<commit>]`,
 ]);
 
 /**
@@ -160,6 +183,9 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   '                       complete, inside the remote-github check',
   `  ${REMOTE_JOB_FLAG}         Grade the permission profile for a remote job, where an unusable one`,
   '                       fails rather than warns',
+  `  ${JOB_SURFACES_FLAG}=<branch>[@<commit>]`,
+  "                       Run only the job-surfaces check: fail when the run branch's own",
+  '                       commits changed a path the remote job runs or loads',
   '',
   'A default run sends nothing: the notifications check reads which settings file the notifier',
   `resolves and prints no value from it, and only ${TEST_NOTIFICATION_FLAG} delivers a message. The`,
@@ -191,6 +217,15 @@ const DOCTOR_USAGE: readonly string[] = Object.freeze([
   'also requires every plugin root in permissions.additionalDirectories. The remote workflow passes it,',
   'so its preflight stops before a session whose missing entries would be refused at once under the',
   'default dontAsk mode. It reaches no network.',
+  '',
+  `${JOB_SURFACES_FLAG}=<branch> runs one check, job-surfaces, instead of the list, and takes no other`,
+  "doctor option. It reads harness.config.json from refs/remotes/origin/<branch>, never from the run",
+  "branch, and fails when the run branch's own commits — those since its merge base with",
+  'origin/<defaultBranch> — changed any path the remote job runs or loads from its checkout. With',
+  '@<commit> (a full 40- or 64-character lower-case id), the configuration is read from <commit> and the',
+  'merge base is taken with it, and no refs/remotes/origin/ ref is read: <branch> only labels the',
+  "messages. A flag rather than a probe of the job's environment, so an operator's shell cannot trip",
+  'it by inheriting a variable. It reaches no network.',
   '',
   'Exit status is the contract — branch on it rather than on the report text:',
   '  0  no check failed: every check passed, or the only findings were warnings',
@@ -231,6 +266,29 @@ interface DoctorOptions {
   readonly checkGithub: boolean;
   /** Whether {@link REMOTE_JOB_FLAG} was given: the permission profile graded for a remote job. */
   readonly remoteJob: boolean;
+  /** {@link JOB_SURFACES_FLAG}'s value, when given: the only check the run makes. */
+  readonly jobSurfaces?: JobSurfacesTarget;
+}
+
+/**
+ * {@link JOB_SURFACES_FLAG}'s value split at its **last** `@`: a full object id after it is the
+ * commit, and anything else leaves the whole value the branch — a branch name may hold `@`, never
+ * `@{`. An empty value, an empty branch and a leading `-` are refused naming the option.
+ */
+function parseJobSurfaces(value: string): JobSurfacesTarget {
+  const refuse = (why: string): HarnessError =>
+    new HarnessError(
+      `doctor: ${JOB_SURFACES_FLAG}=${value} ${why} — it takes ${JOB_SURFACES_FLAG}=<branch> or ${JOB_SURFACES_FLAG}=<branch>@<commit>, where <commit> is a full 40- or 64-character lower-case object id`,
+    );
+  if (value === '') throw refuse('has no value');
+  if (value.startsWith('-')) throw refuse('starts with "-", which git would read as an option');
+  const at = value.lastIndexOf('@');
+  const after = at < 0 ? '' : value.slice(at + 1);
+  const target: JobSurfacesTarget = COMMIT_ID_PATTERN.test(after)
+    ? { branch: value.slice(0, at), commit: after }
+    : { branch: value };
+  if (target.branch === '') throw refuse('names no branch');
+  return target;
 }
 
 /**
@@ -249,7 +307,15 @@ function parseOptions(argv: readonly string[]): DoctorOptions {
   let checkRegistry = false;
   let checkGithub = false;
   let remoteJob = false;
+  let jobSurfaces: JobSurfacesTarget | undefined;
   for (const token of argv) {
+    if (token === JOB_SURFACES_FLAG || token.startsWith(`${JOB_SURFACES_FLAG}=`)) {
+      if (jobSurfaces !== undefined) {
+        throw new HarnessError(`doctor: ${JOB_SURFACES_FLAG}= was given more than once; it takes one branch`);
+      }
+      jobSurfaces = parseJobSurfaces(token.slice(JOB_SURFACES_FLAG.length + 1));
+      continue;
+    }
     if (token === TEST_NOTIFICATION_FLAG) {
       testNotification = true;
       continue;
@@ -271,6 +337,22 @@ function parseOptions(argv: readonly string[]): DoctorOptions {
         ? `doctor: unknown option ${JSON.stringify(token)} — the options doctor takes of its own are ${OWN_FLAGS.join(', ')}; run \`npx autonomous-sdlc-harness doctor --help\` for them and for the global options it accepts`
         : `doctor: unexpected argument ${JSON.stringify(token)} — doctor takes no arguments, and checks the repository containing the current directory (or --cwd)`,
     );
+  }
+  if (jobSurfaces !== undefined) {
+    const others = [
+      [TEST_NOTIFICATION_FLAG, testNotification],
+      [CHECK_REGISTRY_FLAG, checkRegistry],
+      [CHECK_GITHUB_FLAG, checkGithub],
+      [REMOTE_JOB_FLAG, remoteJob],
+    ]
+      .filter(([, given]) => given)
+      .map(([flag]) => flag);
+    if (others.length > 0) {
+      throw new HarnessError(
+        `doctor: ${JOB_SURFACES_FLAG}= runs only the job-surfaces check and takes no other doctor option, but ${others.join(', ')} was given too`,
+      );
+    }
+    return { testNotification, checkRegistry, checkGithub, remoteJob, jobSurfaces };
   }
   return { testNotification, checkRegistry, checkGithub, remoteJob };
 }
@@ -434,8 +516,14 @@ function sendTestNotification(ctx: CommandContext, checks: CheckContext): void {
 async function run(ctx: CommandContext): Promise<number> {
   const options = parseOptions(ctx.argv);
 
-  const checks = buildCheckContext(ctx.cwd, options.checkRegistry, options.checkGithub, options.remoteJob);
-  const results = runChecks(checks);
+  const checks = buildCheckContext(
+    ctx.cwd,
+    options.checkRegistry,
+    options.checkGithub,
+    options.remoteJob,
+    options.jobSurfaces,
+  );
+  const results = runChecks(checks, options.jobSurfaces === undefined ? CHECKS : [JOB_SURFACES_CHECK]);
   const width = Math.max(...results.map((result) => result.id.length));
 
   ctx.report.step(`checks (${ctx.cwd})`);

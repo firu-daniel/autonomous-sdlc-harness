@@ -711,6 +711,11 @@ export function fileAtRef(repoRoot: string, ref: string, repoRelativePath: strin
   }
 }
 
+/** Whether `revision` names a commit this repository holds — `rev-parse --verify --quiet <revision>^{commit}`. */
+export function commitResolves(repoRoot: string, revision: string): boolean {
+  return !looksLikeOption(revision) && refResolves(repoRoot, `${revision}^{commit}`);
+}
+
 /**
  * The paths under `pathspecs` that differ between the trees of `base` and `tip`, one per entry, or
  * `undefined` when git fails. Tree to tree: no working tree or index is read, renames are reported as
