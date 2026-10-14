@@ -32,15 +32,15 @@
 
 **Work:**
 
-- [ ] **Place the main checkout once.** At the point `script_dir` and `root` are both known, set `run_main` from `hr_wrapper_main_of "$script_dir"`. Have `verb_review` and `verb_start` refuse (`review_fail` / `placement_fail` "placing the main checkout") unless it equals `root` canonically. Every other verb is untouched.
-- [ ] **`verb_review`.**
+- [x] **Place the main checkout once.** At the point `script_dir` and `root` are both known, set `run_main` from `hr_wrapper_main_of "$script_dir"`. Have `verb_review` and `verb_start` refuse (`review_fail` / `placement_fail` "placing the main checkout") unless it equals `root` canonically. Every other verb is untouched.
+- [x] **`verb_review`.**
   - **Mirror detection:** the first table row's replacement. A mirror that fails the check is not used, so the verb falls through to cutting its own copy, as for a mirror on another branch today.
   - **The `fetch` and `merge --ff-only` lines:** the table's two replacements, then `hr_run_surface_check_var "refs/heads/$branch" copy`. Each failure is `review_fail` naming the step, the refusal sentence included.
   - **The round listing and `pushed`:** read from `refs/heads/$branch` through `hr_run_main_git`.
   - **`state_rel`:** from `hr_state_dir "$root"`. Refuse when `hr_state_dir "$worktree"` answers something else.
   - **The commit:** `hr_commit_placed "$run_main" "$worktree" "$rel" "$(hr_user_review_subject "$branch")"`, where any status but 0 is `review_fail "committing '$rel'"` as today.
-- [ ] **`verb_start`:** the same `state_rel` rule, and `hr_commit_placed "$run_main" "$worktree" "$rel" "$subject"`, with 1 or 2 → `placement_fail "committing '$rel'"`. The `[ "$status" -ne 1 ]` test becomes `[ "$status" -eq 0 ] || [ "$status" -eq 3 ]`, so a protected refusal (2) is not read as success.
-- [ ] **Header.** Update the `review` paragraph and the paragraph on the copy `start` cuts so they state the pins, the surface refusal and the plumbing commit, and say `lineage_commits_var` and the `refs/remotes/origin/*` reads are reads only. Add a REPRO line for a `review` refused on a mirror whose branch tip committed `.claude/settings.json` through plumbing.
+- [x] **`verb_start`:** the same `state_rel` rule, and `hr_commit_placed "$run_main" "$worktree" "$rel" "$subject"`, with 1 or 2 → `placement_fail "committing '$rel'"`. The `[ "$status" -ne 1 ]` test becomes `[ "$status" -eq 0 ] || [ "$status" -eq 3 ]`, so a protected refusal (2) is not read as success.
+- [x] **Header.** Update the `review` paragraph and the paragraph on the copy `start` cuts so they state the pins, the surface refusal and the plumbing commit, and say `lineage_commits_var` and the `refs/remotes/origin/*` reads are reads only. Add a REPRO line for a `review` refused on a mirror whose branch tip committed `.claude/settings.json` through plumbing.
 
 **Verification:**
 
@@ -48,3 +48,6 @@
 - `git grep -nE 'git -C "\$(worktree|record_wt)"' -- cli/templates/scripts/remote-run.sh` finds no hit.
 - `git grep -n 'commit-on-branch.sh' -- cli/templates/scripts/remote-run.sh` finds only comment text, if any.
 - The new REPRO line, run by hand against a throwaway fixture with `gh` stubbed, refuses with exit 4. It leaves the mirror's `refs/heads/<branch>` unchanged and the planted settings file absent from its working tree.
+- **Deviations from plan:**
+  - The REPRO verification rests on `harness-runs/scratch/task7_repro.py`, run through `bash scripts/scratch-run.sh harness-runs/scratch/task7_repro.py <repo>/cli/templates/scripts`. Its fixture is a hand-written `harness.config.json` with the shipped `cli/templates/scripts/` copied in, not an `init`-written tree; a direct shell fixture was refused by the permission layer. Result: an honest `start` exits 0 and leaves no copy or local branch, an honest mirror `review --allow-no-run` exits 0, the planted mirror (`refs/heads/feat_x` moved by plumbing to a commit changing `.claude/settings.json`, pushed) exits 4 at the protected-surface check with `refs/heads/feat_x` unchanged, the planted settings absent from the mirror's working tree and no further `workflow run`, and `--repo` naming another clone exits 4 at "placing the main checkout".
+  - Behaviour change carried by `hr_run_fast_forward_var`, not chosen here: a mirror whose `refs/heads/<branch>` is strictly ahead of `origin/<branch>` is now refused (4, "not an ancestor"), where `git merge --ff-only` answered "Already up to date".
