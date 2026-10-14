@@ -57,3 +57,9 @@
 - Re-running the story index's derivation entries 1 and 2 verbatim gives `docs/remote-execution.md` hits that are a subset of the register rows (`⊆ the register rows`). Rows 9–13 keep their `no-change` reasons true against the edited text.
 - Every command in the new paragraph sits in its own fenced block. No line number is cited.
 - `git grep -n "RUNNER_TEMP\|runner.temp" -- docs/remote-execution.md` hits the new `## 11` paragraph, and the steps it names as running from there match the steps carrying `working-directory` in `cli/templates/github/workflows/harness-run.yml`.
+
+**Deviations from plan:**
+
+- Re-running derivation entry 2 verbatim over `docs/remote-execution.md` adds two hits no register row names: the new `## 11` paragraph's `**Every run-job npm / npx runs outside the checkout.**` bullet (`Preflight with doctor`) and its `Bootstrap the checkout` residual bullet. Both are this task's own new text, not a pre-existing restatement, so the closure invariant holds over the sites that existed before the edit; every other hit is rows 9–13, 21 or 22, and rows 7 and 8 no longer match (their `reset --hard HEAD` was reworded away).
+- `## 1`, item 4 also names `Record the default branch's commit` after the refusal ("then record the default branch's commit"), so the listed order matches the template's step order in `cli/templates/github/workflows/harness-run.yml`.
+- Step 2 of the post-release check fences `git add <every path on the git add line the upgrade's report prints>` and points to §7, *Upgrading*, for the commit and push commands rather than repeating them.
