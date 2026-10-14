@@ -1,0 +1,28 @@
+# Architecture review — iteration 0
+
+## Must Fix
+
+1. **Task 1 adds new writers and new shell mirrors to `harness-run-lib.sh` but leaves the file header's write-exception list, its read-only roster, its JURISDICTION paragraph and its MIRRORS block stating the old contract** — `task_1_plan.md`. Rule source: `.claude/context/cli.md` → `## What "done" means here` → **A reviewer holds a change to its module's own header.** ("Where the header states a rule, the change either satisfies it or amends the header in the same edit").
+
+   The library's file header states rules that Task 1's new code breaks, and Task 1 amends only the *THE ARTIFACT PLACEMENT* section header:
+   - `THE WRITE EXCEPTIONS TO "WRITES NOTHING", AND THEIR FENCES.` says *"Nothing outside this list writes at all; a section that adds a writer adds its entry here."* The new section *The watcher family's git in a run's copy* adds writers: `hr_run_fast_forward_var` (`update-ref` on `refs/heads/<branch>`, `read-tree -m -u` into the copy's index and tree) and `hr_run_reset_var` (`read-tree --reset -u`). Neither section gets an entry. Write exception 4's fence also goes stale. It still says *"plus whatever the two caller-named wrappers do"*, but after the rewrite `hr_commit_placed` names no commit wrapper. It now writes objects (`hash-object -w`, `commit-tree`), a `mktemp` temporary index, `refs/heads/<branch>` and the copy's index entry. And `hr_push_landed`'s fetch now writes `refs/remotes/origin/<branch>` in the **main** checkout, not "in `<worktree>`".
+   - The paragraph beginning *"A caller that calls no `hr_lane_*`, … `hr_commit_placed` or `hr_push_landed` function still gets a library that only reads"* omits `hr_run_fast_forward_var` and `hr_run_reset_var`. The general-purpose runners `hr_run_main_git` / `hr_run_copy_git` are missing too, and Task 5 drives `worktree add`, `read-tree` and `worktree remove` through them.
+   - `JURISDICTION` names only *"the two wrappers the permission profile runs unsandboxed, `push-branch.sh` and `refresh-branch.sh`"* as callers that pass the MAIN checkout and keep git off the target's records. After this branch, the watcher, `create-worktree.sh --existing`, `remote-run.sh` and `cleanup-merged-worktrees.sh` do the same through new primitives that skip `hr_worktree_config_check_var` on purpose. The paragraph's claim about which callers do what no longer holds.
+   - The header declares this file's mirrors in its own blocks (`MIRRORS OF \`cli/src/remote/githubActions.ts\`…`, `MIRROR OF \`plugin/instructions/autonomous_pause_and_ledger.md\`…`). Task 1 makes `hr_run_protected_rel_paths` the shell mirror of `cli/src/generators/writeProtection.ts` → `copySurfacePaths`, but declares it only in the function's own comment.
+   - `hr_wrapper_main_of`'s comment reads *"for `push-branch.sh` and `refresh-branch.sh` only"*. Tasks 5, 6, 7 and 8 call it from `create-worktree.sh`, `autonomous-watcher.sh`, `remote-run.sh` and `cleanup-merged-worktrees.sh`. `hr_wrapper_target_check_var`'s comment likewise scopes it to "an unsandboxed wrapper".
+
+   **Fix:** In `task_1_plan.md` → `**Work:**`, add a sub-step that amends the library's file header in the same edit:
+   - (i) Add write exception 5 for the section *The watcher family's git in a run's copy*. Name `hr_run_fast_forward_var` and `hr_run_reset_var` as its writers and fence them: `refs/heads/<branch>` by compare-and-swap, plus the copy's index and working tree. State that `hr_run_main_git` / `hr_run_copy_git` write only what their caller's arguments ask.
+   - (ii) Rewrite exception 4's fence for the new `hr_commit_placed` (objects, a temporary index removed on every exit path, `refs/heads/<branch>`, the copy's index entry, no commit wrapper) and for `hr_push_landed`'s fetch now landing in the main checkout.
+   - (iii) Add the new writers to the *"still gets a library that only reads"* roster.
+   - (iv) Extend `JURISDICTION` to the watcher family's callers. Say they skip `hr_worktree_config_check_var` because no runner lets git read `config.worktree`, and point at the new section.
+   - (v) Add a `MIRROR OF \`cli/src/generators/writeProtection.ts\` → \`copySurfacePaths\`` block naming `hr_run_protected_rel_paths`.
+   - (vi) Widen the *"for `push-branch.sh` and `refresh-branch.sh` only"* scope in `hr_wrapper_main_of`'s comment, and the "wrapper" scope in `hr_wrapper_target_check_var`'s, to the watcher-family callers.
+
+   Add a matching `**Verification:**` bullet: a grep of the header for `hr_run_fast_forward_var`, `hr_run_reset_var` and `copySurfacePaths` hits the write-exception list, the read-only roster and the mirror block.
+
+## Should Fix
+
+1. **`hr_run_main_set_var` re-implements "the directory arm of `hr_wrapper_main_of`" as a second copy** — `task_1_plan.md`, the `hr_run_main_set_var` row. `.claude/context/conventions.md` → `### Where a new responsibility goes` → **Before adding a copy of anything, grep for it.** Factor the real-directory, not-a-symlink, no-`commondir` test into one private helper that both `hr_wrapper_main_of` and `hr_run_main_set_var` call, so the two cannot drift.
+
+2. **`hr_push_landed`'s new fetch spells its own pin set inline instead of going through `hr_run_main_git`** — `task_1_plan.md` → **Placement, the commit and the landed test.** The fetch is spelled `git -C <main> -c core.hooksPath=/dev/null -c submodule.recurse=false fetch …`. It omits `-c core.fsmonitor=false`, so the pin set gets a second, already divergent statement. Have `hr_push_landed` call `hr_run_main_set_var` on the placed main checkout and run its reads and fetch through `hr_run_main_git`, so the section's three pins are stated once.
