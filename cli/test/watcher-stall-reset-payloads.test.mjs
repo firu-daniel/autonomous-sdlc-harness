@@ -52,8 +52,8 @@
  * - (J4) the `npx` run from `$MAIN_REPO` in place of the scratch directory → fails `a planted payload
  *   ran`, holding `npmrc.marker` (npm 10.9.8, beside node v22.23.2).
  * - (J5) the same mutation → fails `a planted payload ran`, holding `node-modules.marker`.
- * - (J6) `--job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH"` without `@$HARNESS_GITHUB_DEFAULT_COMMIT`
- *   → the case resumes: fails on the record's `status`, `completed`, not `failed`.
+ * - (J6) `--job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH"` without
+ *   `@$HARNESS_GITHUB_DEFAULT_COMMIT@$HARNESS_DEFAULT_BRANCH_COMMIT` → the case resumes: fails on the record's `status`, `completed`, not `failed`.
  * - (S7) `hr_run_worktree_diff_var` using `GIT_INDEX_FILE="$HR_RUN_COPY_GITDIR/index"` in place of
  *   the temporary index → the case resumes: fails on the record's `status`, `completed`, not
  *   `failed`.
@@ -265,6 +265,7 @@ async function createStallFixture(t, { job = false } = {}) {
           HARNESS_CLI_VERSION: CLI_VERSION,
           HARNESS_GITHUB_DEFAULT_BRANCH: config.defaultBranch,
           HARNESS_GITHUB_DEFAULT_COMMIT: defaultCommit,
+          HARNESS_DEFAULT_BRANCH_COMMIT: defaultCommit,
           NPX_LOG: join(rec, 'npx-argv.txt'),
           NPX_PWD: join(rec, 'npx-pwd.txt'),
           PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
@@ -547,7 +548,11 @@ test('(J3) job mode on an honest branch runs the pinned check from a scratch dir
   const githubDefault = `gh-${f.config.defaultBranch}`;
   const commit = await f.originTip(f.config.defaultBranch);
 
-  await f.jobStall(() => f.edit(), { HARNESS_GITHUB_DEFAULT_BRANCH: githubDefault, HARNESS_GITHUB_DEFAULT_COMMIT: commit });
+  await f.jobStall(() => f.edit(), {
+    HARNESS_GITHUB_DEFAULT_BRANCH: githubDefault,
+    HARNESS_GITHUB_DEFAULT_COMMIT: commit,
+    HARNESS_DEFAULT_BRANCH_COMMIT: commit,
+  });
 
   assertResumed(f);
   assert.deepEqual(f.npxArgv(), [
@@ -556,7 +561,7 @@ test('(J3) job mode on an honest branch runs the pinned check from a scratch dir
     'doctor',
     '--cwd',
     f.dir,
-    `--job-surfaces=${githubDefault}@${commit}`,
+    `--job-surfaces=${githubDefault}@${commit}@${commit}`,
   ]);
   const pwd = f.npxPwd();
   assert.ok(pwd !== f.dir && !pwd.startsWith(`${f.dir}/`), `npx ran inside the job checkout: ${pwd}`);

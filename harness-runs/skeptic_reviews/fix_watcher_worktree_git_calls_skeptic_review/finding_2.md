@@ -122,3 +122,9 @@ In a clone checked out on `feat`:
       - In `(J3)`, change the expected last argument to `` `--job-surfaces=${githubDefault}@${commit}@${commit}` `` and pass `HARNESS_DEFAULT_BRANCH_COMMIT: commit` in its env.
       - Update the `(J6)` `RED ONCE` line to name the three-part argument.
    3. **`cli/test/workflow-templates.test.mjs`.** In the `RECORD_STEP` expectation beside `'echo "HARNESS_GITHUB_DEFAULT_COMMIT=$sha" >> "$GITHUB_ENV"'`, add the three new lines in order. Assert that `HARNESS_DEFAULT_BRANCH_COMMIT` is written by that step and by no other.
+
+- **Deviations from plan:**
+  - (cli layer) Fix steps 5 and 6 (`docs/cli.md`, `docs/remote-execution.md`) lie outside `cli/`; left for the `general` dispatch this finding's `_(layer: cli, general)_` tag names.
+  - `JOB_SURFACES_CHECK`'s existing local `base` (the merge-base id) is renamed `mergeBaseId`, since step 1.2 destructures `base` from the target in the same scope.
+  - Beyond the listed text edits: the `CheckContext.jobSurfaces` and `JobSurfacesTarget` doc comments in `checks.ts`, `parseJobSurfaces`' and `COMMIT_ID_PATTERN`'s doc comments in `doctor.ts`, the workflow header bullet's "configuration and base from that id" sentence, and the watcher function comment's "The commit id sits" sentence were amended to the three-part form so none still states the old one.
+  - The three single-file runs were read through a `grep` over their TAP summary lines rather than as one plain command; the counts and pass/fail lines are what was read.

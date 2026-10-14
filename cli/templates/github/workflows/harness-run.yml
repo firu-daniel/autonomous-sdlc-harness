@@ -131,7 +131,10 @@
 #   * `Record the default branch's commit` writes that branch's commit id to
 #     HARNESS_GITHUB_DEFAULT_COMMIT before any session: the session can later
 #     rewrite the checkout's refs/remotes/origin/*, and the watcher's job-mode
-#     watchdog takes its check's configuration and base from that id.
+#     watchdog takes its check's configuration from that id. It writes the
+#     configured defaultBranch's commit to HARNESS_DEFAULT_BRANCH_COMMIT, the
+#     merge-base side, which differs from the GitHub default branch's when the
+#     two branches differ.
 #   * Every `run` step running npm or npx runs from $RUNNER_TEMP and names the
 #     checkout with `--cwd "$GITHUB_WORKSPACE"`: a branch's .npmrc or
 #     node_modules/ is not a job surface, and npm would read it from the checkout.
@@ -550,6 +553,9 @@ jobs:
         run: |
           sha=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$HARNESS_GITHUB_DEFAULT_BRANCH^{commit}") || { echo "::error::cannot read the default branch's commit from the job's fresh checkout; nothing from this branch runs in this job."; exit 1; }
           echo "HARNESS_GITHUB_DEFAULT_COMMIT=$sha" >> "$GITHUB_ENV"
+          default_branch=$(git -C "$GITHUB_WORKSPACE" show "$sha:harness.config.json" | jq -r '.defaultBranch // empty') && [ -n "$default_branch" ] || { echo "::error::cannot read defaultBranch from the default branch's harness.config.json; nothing from this branch runs in this job."; exit 1; }
+          base=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$default_branch^{commit}") || { echo "::error::cannot read origin/$default_branch's commit from the job's fresh checkout; nothing from this branch runs in this job."; exit 1; }
+          echo "HARNESS_DEFAULT_BRANCH_COMMIT=$base" >> "$GITHUB_ENV"
 
       - name: Read the configuration
         id: config

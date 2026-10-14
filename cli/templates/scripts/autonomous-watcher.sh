@@ -363,12 +363,12 @@
 #     developer's checkout it would discard work. Only the workflow sets it.
 #   * THE WATCHDOG'S RESET IS GATED ON THE JOB SURFACES. Before it, the job runs
 #     `npx --yes autonomous-sdlc-harness@$HARNESS_CLI_VERSION doctor --cwd
-#     <checkout> --job-surfaces=<default branch>@<commit>` from a fresh empty
-#     temporary directory, never from the checkout, whose `.npmrc` and
-#     `node_modules` the session can write. The branch and commit are
-#     HARNESS_GITHUB_DEFAULT_BRANCH and HARNESS_GITHUB_DEFAULT_COMMIT, recorded
-#     by harness-run.yml before any session ran, so no ref the session could move
-#     is the base. A non-zero exit, or any of those values or HARNESS_CLI_VERSION
+#     <checkout> --job-surfaces=<default branch>@<commit>@<base>` from a fresh
+#     empty temporary directory, never from the checkout, whose `.npmrc` and
+#     `node_modules` the session can write. The branch, commit and base are
+#     HARNESS_GITHUB_DEFAULT_BRANCH, HARNESS_GITHUB_DEFAULT_COMMIT and
+#     HARNESS_DEFAULT_BRANCH_COMMIT, recorded by harness-run.yml before any
+#     session ran, so no ref the session could move is the base. A non-zero exit, or any of those values or HARNESS_CLI_VERSION
 #     empty, gives the run up as `failed`.
 #   * OFF: the inbox pass, the cleanup sweep, the live-log window, and the
 #     machine lane (both halves). The lane is local-only, and on a hosted runner
@@ -2984,24 +2984,25 @@ stall_human_time() {
 # The stall watchdog's job-surfaces check, in job mode, before its reset: 0 when
 # the branch's own commits change no job surface; non-zero when they do, when
 # the check fails, when no scratch directory can be made, or when a value it
-# needs is empty. The base is HARNESS_GITHUB_DEFAULT_COMMIT, the default
-# branch's commit harness-run.yml recorded from the fresh checkout before any
-# session ran, never a ref: the session has been writing MAIN_REPO's
+# needs is empty. The configuration is read from HARNESS_GITHUB_DEFAULT_COMMIT
+# and the merge base taken with HARNESS_DEFAULT_BRANCH_COMMIT, the configured
+# default branch's commit; harness-run.yml recorded both from the fresh checkout
+# before any session ran, never a ref: the session has been writing MAIN_REPO's
 # `.git/refs` and `packed-refs`, so `refs/remotes/origin/<default>` there could
 # name the session's own tip, which makes the merge base the tip and the check
-# pass. The commit id sits in this process's environment, which the session
+# pass. The commit ids sit in this process's environment, which the session
 # cannot change.
 stall_job_surfaces_ok() {
   local scratch rc=0
   if [ -z "${HARNESS_CLI_VERSION:-}" ] || [ -z "${HARNESS_GITHUB_DEFAULT_BRANCH:-}" ] ||
-    [ -z "${HARNESS_GITHUB_DEFAULT_COMMIT:-}" ] || [ -z "$MAIN_REPO" ]; then
-    echo "stall-watchdog: the job-surfaces check needs HARNESS_CLI_VERSION, HARNESS_GITHUB_DEFAULT_BRANCH, HARNESS_GITHUB_DEFAULT_COMMIT and MAIN_REPO set" >&2
+    [ -z "${HARNESS_GITHUB_DEFAULT_COMMIT:-}" ] || [ -z "${HARNESS_DEFAULT_BRANCH_COMMIT:-}" ] || [ -z "$MAIN_REPO" ]; then
+    echo "stall-watchdog: the job-surfaces check needs HARNESS_CLI_VERSION, HARNESS_GITHUB_DEFAULT_BRANCH, HARNESS_GITHUB_DEFAULT_COMMIT, HARNESS_DEFAULT_BRANCH_COMMIT and MAIN_REPO set" >&2
     return 1
   fi
   scratch="$(mktemp -d "${TMPDIR:-/tmp}/watcher-job-surfaces.XXXXXX")" || return 1
   # Never from MAIN_REPO: npm reads a project `.npmrc` there and npx prefers a local
   # node_modules copy, both of which the session can write. `--cwd` still names the checkout.
-  (cd "$scratch" && npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$MAIN_REPO" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH@$HARNESS_GITHUB_DEFAULT_COMMIT") || rc=$?
+  (cd "$scratch" && npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$MAIN_REPO" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH@$HARNESS_GITHUB_DEFAULT_COMMIT@$HARNESS_DEFAULT_BRANCH_COMMIT") || rc=$?
   rm -rf "$scratch"
   return "$rc"
 }

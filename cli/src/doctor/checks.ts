@@ -480,11 +480,11 @@ export interface CheckContext {
    * `permissions.additionalDirectories`. `false` in every default run.
    */
   readonly remoteJob: boolean;
-  /** What `doctor --job-surfaces=<branch>[@<commit>]` asked {@link JOB_SURFACES_CHECK} about; absent otherwise. */
+  /** What `doctor --job-surfaces=<branch>[@<commit>[@<base>]]` asked {@link JOB_SURFACES_CHECK} about; absent otherwise. */
   readonly jobSurfaces?: JobSurfacesTarget;
 }
 
-/** The value of `doctor --job-surfaces=`, split at its last `@`. */
+/** The value of `doctor --job-surfaces=`, split at its last `@`, and at the one before it when both ids are given. */
 export interface JobSurfacesTarget {
   /** The default branch the job was dispatched against. Without {@link commit}, its ref is the trusted one. */
   readonly branch: string;
@@ -494,6 +494,11 @@ export interface JobSurfacesTarget {
    * {@link branch} only labels the messages.
    */
   readonly commit?: string;
+  /**
+   * The configured `defaultBranch`'s commit, recorded before any session had the checkout. When present
+   * it is the merge-base side in place of {@link commit}, which still supplies the configuration.
+   */
+  readonly base?: string;
 }
 
 /** The permission lists a generated profile carries, in the order the template writes them. */
@@ -5836,8 +5841,9 @@ export const CHECKS: readonly Check[] = Object.freeze([
  * Every value it grades by is the trusted side's: the configuration, its `defaultBranch` and the
  * surface list derived from it come from `<trusted ref>:harness.config.json`, never from `HEAD`, so a
  * branch cannot widen what it may change by rewriting its own configuration. The trusted ref and the
- * base are `refs/remotes/origin/<branch>` and `refs/remotes/origin/<defaultBranch>`, or the recorded
- * commit for both under `@<commit>`, where a session that wrote the checkout's refs could have moved
+ * base are `refs/remotes/origin/<branch>` and `refs/remotes/origin/<defaultBranch>`, or, under
+ * `@<commit>`, the recorded commit for the configuration and — under `@<commit>@<base>` — the recorded
+ * `defaultBranch` commit for the merge base, where a session that wrote the checkout's refs could have moved
  * them. Comparing from the merge base rather than the default branch's tip is what lets a branch that
  * merged a newer default branch pass: those changes are not its own.
  */
@@ -5851,7 +5857,7 @@ export const JOB_SURFACES_CHECK: Check = {
       return unevaluated(`the repository root did not resolve: ${ctx.repoProblem ?? 'git gave no reason'}`);
     }
     const root = ctx.repoRoot;
-    const { branch, commit } = target;
+    const { branch, commit, base } = target;
 
     let trustedRef: string;
     if (commit !== undefined) {
@@ -5869,6 +5875,11 @@ export const JOB_SURFACES_CHECK: Check = {
         );
       }
     }
+    if (base !== undefined && !commitResolves(root, base)) {
+      return fail(
+        `the recorded base commit ${base} is not a commit this checkout holds (${base}^{commit} does not resolve), so the merge base cannot be taken — pass the commit the workflow recorded`,
+      );
+    }
 
     const origin = `${trustedRef}:${CONFIG_FILENAME}`;
     const loaded = loadConfigText(fileAtRef(root, trustedRef, CONFIG_FILENAME), origin);
@@ -5884,26 +5895,26 @@ export const JOB_SURFACES_CHECK: Check = {
       return fail(`the trusted configuration ${origin} carries no defaultBranch, so no merge base can be computed`);
     }
 
-    const baseRef = commit ?? `refs/remotes/origin/${defaultBranch}`;
-    const base = mergeBase(root, 'HEAD', baseRef);
-    if (base === undefined) {
+    const baseRef = base ?? commit ?? `refs/remotes/origin/${defaultBranch}`;
+    const mergeBaseId = mergeBase(root, 'HEAD', baseRef);
+    if (mergeBaseId === undefined) {
       return fail(
         `HEAD and ${baseRef} have no merge base, or one of them does not resolve, so the run branch's own commits cannot be told apart from the default branch's`,
       );
     }
 
     const surfaces = jobSurfacePaths(trusted);
-    const changed = changedPathsBetween(root, base, 'HEAD', surfaces);
+    const changed = changedPathsBetween(root, mergeBaseId, 'HEAD', surfaces);
     if (changed === undefined) {
-      return fail(`git could not compare ${base} with HEAD over the job's surfaces, so whether the run branch changed them is unknown`);
+      return fail(`git could not compare ${mergeBaseId} with HEAD over the job's surfaces, so whether the run branch changed them is unknown`);
     }
     if (changed.length > 0) {
       return fail(
-        `the run branch's own commits since ${base} changed ${changed.length === 1 ? 'a path' : 'paths'} the remote job runs or loads from its checkout: ${changed.join(', ')} — land that change on ${defaultBranch} through a supervised route, then re-dispatch`,
+        `the run branch's own commits since ${mergeBaseId} changed ${changed.length === 1 ? 'a path' : 'paths'} the remote job runs or loads from its checkout: ${changed.join(', ')} — land that change on ${defaultBranch} through a supervised route, then re-dispatch`,
       );
     }
     return pass(
-      `the run branch's own commits since ${base} change none of the ${surfaces.length} paths the remote job runs or loads (configuration read from ${origin})`,
+      `the run branch's own commits since ${mergeBaseId} change none of the ${surfaces.length} paths the remote job runs or loads (configuration read from ${origin})`,
     );
   },
 };

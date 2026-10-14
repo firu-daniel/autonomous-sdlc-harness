@@ -552,6 +552,9 @@ const REFUSAL_BODY = [
 const RECORD_BODY = [
   'sha=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$HARNESS_GITHUB_DEFAULT_BRANCH^{commit}") || { echo "::error::cannot read the default branch\'s commit from the job\'s fresh checkout; nothing from this branch runs in this job."; exit 1; }',
   'echo "HARNESS_GITHUB_DEFAULT_COMMIT=$sha" >> "$GITHUB_ENV"',
+  'default_branch=$(git -C "$GITHUB_WORKSPACE" show "$sha:harness.config.json" | jq -r \'.defaultBranch // empty\') && [ -n "$default_branch" ] || { echo "::error::cannot read defaultBranch from the default branch\'s harness.config.json; nothing from this branch runs in this job."; exit 1; }',
+  'base=$(git -C "$GITHUB_WORKSPACE" rev-parse --verify --quiet "refs/remotes/origin/$default_branch^{commit}") || { echo "::error::cannot read origin/$default_branch\'s commit from the job\'s fresh checkout; nothing from this branch runs in this job."; exit 1; }',
+  'echo "HARNESS_DEFAULT_BRANCH_COMMIT=$base" >> "$GITHUB_ENV"',
 ].join('\n');
 
 /** The `run` job's steps with their names, and a lookup that fails on a missing name. */
@@ -594,6 +597,10 @@ test("the job's own files: the pinned doctor --job-surfaces refuses the branch f
   assert.equal(stepKey(list[record], 'continue-on-error'), undefined);
   assert.equal(record, refusal + 1, 'the commit is recorded right after the refusal');
   assert.ok(record < at('Read the configuration'), 'the commit is recorded before SCRIPTS_DIR is set');
+  const baseWriters = list.flatMap((s, i) =>
+    runBodies(s).some((b) => b.includes('HARNESS_DEFAULT_BRANCH_COMMIT=')) ? [i] : [],
+  );
+  assert.deepEqual(baseWriters, [record], 'only the record step writes HARNESS_DEFAULT_BRANCH_COMMIT');
 
   for (const body of runBodies(blockUnder(jobStart('run')))) assert.ok(!body.includes('${{'), `expression in run: ${body}`);
 });

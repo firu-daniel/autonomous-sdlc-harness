@@ -1,5 +1,5 @@
 /**
- * `doctor --job-surfaces=<branch>[@<commit>]`, against the compiled CLI on a clone checked out on a
+ * `doctor --job-surfaces=<branch>[@<commit>[@<base>]]`, against the compiled CLI on a clone checked out on a
  * pushed run branch.
  *
  * **The rule this suite enforces: a branch whose own commits changed a path the job runs or loads is
@@ -23,6 +23,8 @@
  *   → "a replace ref on the trusted commit" fails: `expected exit 1, got 0`. The same swap in
  *   `mergeBase` alone stays green: the merge base still names the trusted commit's id, whose tree
  *   the as-stored diff reads.
+ * - `base ??` dropped from `baseRef` → "the @<commit>@<base> form takes the merge base from the
+ *   configured default branch", subtest `src/app.txt`, fails: `expected exit 0, got 1`.
  */
 
 import assert from 'node:assert/strict';
@@ -127,6 +129,34 @@ async function branchChanging(t, relative) {
   await writeFiles(fixture.work, { [relative]: `${SEED_FILES[relative] ?? ''}changed on the run branch\n` });
   await commit(fixture.work, `change ${relative}`);
   return { ...fixture, clone: await cloneOnRunBranch(fixture) };
+}
+
+/**
+ * A GitHub default `main` whose configuration names `dev` as `defaultBranch`, `dev` changing an
+ * outer-loop script on top of it, and the run branch cut from `dev` with one commit editing
+ * `relative`, cloned. Returns the clone and both default-side commits.
+ */
+async function forkedDefaultBranch(t, relative) {
+  const integration = 'dev';
+  const fixture = await originFixture(t, {
+    ...SEED_FILES,
+    [CONFIG_FILE]: `${JSON.stringify({ ...CONFIG, defaultBranch: integration }, null, 2)}\n`,
+  });
+  const { work } = fixture;
+  await runGit(work, ['checkout', '--quiet', '-b', integration, DEFAULT_BRANCH]);
+  await writeFiles(work, { 'scripts/autonomous-watcher.sh': '#!/usr/bin/env bash\necho v2\n' });
+  await commit(work, `${integration} changes an outer-loop script`);
+  await runGit(work, ['push', '--quiet', 'origin', integration]);
+  await runGit(work, ['checkout', '--quiet', '-B', RUN_BRANCH, integration]);
+  await writeFiles(work, { [relative]: `${SEED_FILES[relative] ?? ''}changed on the run branch\n` });
+  await commit(work, `change ${relative}`);
+  const clone = await cloneOnRunBranch(fixture);
+  const rev = async (ref) => (await runGit(clone, ['rev-parse', ref])).stdout.trim();
+  return {
+    clone,
+    configCommit: await rev(`refs/remotes/origin/${DEFAULT_BRANCH}`),
+    baseCommit: await rev(`refs/remotes/origin/${integration}`),
+  };
 }
 
 /** `doctor --job-surfaces=<value>` in `clone`. */
@@ -251,6 +281,19 @@ concurrentSuite('doctor --job-surfaces', () => {
     ).stdout.trim();
     await runGit(clone, ['update-ref', `refs/replace/${trusted}`, fake]);
     assertRefused(await jobSurfaces(clone, `${DEFAULT_BRANCH}@${trusted}`), changed);
+  });
+
+  it('the @<commit>@<base> form takes the merge base from the configured default branch', async (t) => {
+    await t.test('src/app.txt', async (st) => {
+      const { clone, configCommit, baseCommit } = await forkedDefaultBranch(st, 'src/app.txt');
+      assertPassed(await jobSurfaces(clone, `${DEFAULT_BRANCH}@${configCommit}@${baseCommit}`));
+      // The two-part form takes the merge base with the GitHub default's commit, so dev's own change counts.
+      assertRefused(await jobSurfaces(clone, `${DEFAULT_BRANCH}@${configCommit}`), 'scripts/autonomous-watcher.sh');
+    });
+    await t.test('.claude/settings.json', async (st) => {
+      const { clone, configCommit, baseCommit } = await forkedDefaultBranch(st, '.claude/settings.json');
+      assertRefused(await jobSurfaces(clone, `${DEFAULT_BRANCH}@${configCommit}@${baseCommit}`), '.claude/settings.json');
+    });
   });
 
   it('fails an @<commit> the clone does not hold, naming it', async (t) => {
