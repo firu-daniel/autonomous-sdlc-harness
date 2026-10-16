@@ -18,7 +18,7 @@ It cites rather than restates [`ARCHITECTURE.md`](../ARCHITECTURE.md) §5–§9 
 2. **Inference** — this document's conclusion, which no single source states.
 3. **Unconfirmed** — no page checked states it, the pages checked contradict one another, or only a secondary source states it. Every such claim is marked **Unconfirmed** and is a candidate for the hands-on test in §7.
 
-No measurement was run for this document. Nothing here is `verified` in the sense [`github-integration-research.md`](github-integration-research.md) uses.
+One measurement was taken, on 2026-10-16: the per-run cost recorded in autonomous runs' stream logs, in §5.4, which states its method. Nothing else here is `verified` in the sense [`github-integration-research.md`](github-integration-research.md) uses.
 
 ---
 
@@ -26,7 +26,7 @@ No measurement was run for this document. Nothing here is `verified` in the sens
 
 **Yes, with a route that depends on what else the company has.**
 
-- **If the company has an Azure, AWS or Google Cloud tenant** — common in a Microsoft-centric "Copilot-only" shop — Claude Code runs on Claude models billed to that cloud, with no Anthropic contract. The harness runs unchanged locally; the GitHub Actions path needs a small credential change (§5, §6). **This is the recommended route.**
+- **If the company has an Azure, AWS or Google Cloud tenant** — common in a Microsoft-centric "Copilot-only" shop — Claude Code runs on Claude models billed to that cloud, with no Anthropic contract. The harness runs unchanged locally; the GitHub Actions path needs a small credential change (§5, §6). **This is the recommended route when the company will not buy from Anthropic.** It bills per token, and a harness run measures at about $55–$86 at Opus 5.5 list rates (§5.4). Where the company can buy from Anthropic, a Team plan's Premium seat is a flat $100–$125 per member per month and is far cheaper for regular use.
 - **If it has only Copilot**, Copilot CLI is now close enough to Claude Code — headless `-p`, per-agent tool allowlists, subagents, Claude-format plugin manifests, `.claude/settings.json` hooks with a Claude-compatible `PreToolUse` contract, MCP, an OS sandbox — that it is a realistic **second engine**, but adopting it is the open *Engine / provider abstraction* row of [`ROADMAP.md`](../ROADMAP.md) → *Engines, environments and integrations*, not a configuration change (§4.1).
 - **Running Claude Code itself on a Copilot token through a proxy is not recommended**: nothing permits it, and the usage pattern of a daemon is the one GitHub's acceptable-use policy names (§4.5).
 
@@ -186,6 +186,38 @@ The constraints:
 3. **Hosting option.** *Hosted on Azure* keeps prompts and completions inside Azure and serves Opus 5.5 and 5, Opus 4.8, Sonnet 5.5 and 5, and Haiku. It does not support server-side code execution, newer web-search and web-fetch tool versions, API Agent Skills, programmatic tool calling, or the Files API. Claude Code detects an Azure-hosted deployment and adapts, and the harness depends on none of those features. Fable 5.1 requires *Hosted on Anthropic*. **Documented** (platform page).
 4. **Not supported on Foundry at all:** the Message Batches API, the Models API, the Admin and Compliance APIs, server-side fallback, and the current computer-use and browser-use toolsets. **Documented** (platform page). The harness uses none of them; its QA phase drives a browser through MCP servers, not the API toolset.
 
+### 5.4 What a harness run costs at API rates
+
+Foundry, like the Console API, bills every token, so the cost of one autonomous run is the number that decides the route.
+
+**What was measured, and how.** Every unattended run tees its headless stream to `<state_dir>/autonomous_logs/<branch>.stream.jsonl`. Each session in it ends with a `result` event whose `total_cost_usd` is Claude Code's own figure for that session. A run resumed across sessions writes one `result` per session, so a run's cost is the sum of `total_cost_usd` over every `result` event in its file:
+
+```
+grep '"total_cost_usd"' <branch>.stream.jsonl | jq -s 'map(.total_cost_usd) | add'
+```
+
+**What the figure is.** Checked on 2026-10-16 against the stream logs, as follows:
+
+- **It includes the subagents.** `modelUsage` lists every model the session used, subagents included, and its per-model `costUSD` values add up exactly to `total_cost_usd`. Its token totals are larger than the main session's own `usage` block.
+- **It prices each token type separately.** Uncached input, output (thinking included), cache reads and cache writes each get their own list price.
+- **It is an estimate at list prices, not an amount Anthropic billed.** Each model entry carries `"costBasis": "list"`. On a subscription nothing is charged per token; the figure is what the same tokens would cost on the API or on Foundry, where the CCU conversion uses the same list rates (§5.2).
+
+**Results.** These are lower bounds: a session the watcher kills writes no `result` event, so its spend is missing from its file. One of the thirty files in the first set is such a session.
+
+| Set | Runs | Median | Mean | Range | Mean duration |
+|---|---|---|---|---|---|
+| A private adopter's repository, the last 30 stream logs: product features and harness fixes. **Estimated** at Opus 5.5 list rates from each run's recorded token counts by type. | 29 with a `result` | **$86** | **$84** | $27–$152 (middle half $57–$106) | ~4.7 h |
+| This repository's own runs on Opus 5.5, `harness-runs/autonomous_logs/`: smaller branches | 11 | **$55** | **$62** | $21–$114 | ~2.1 h |
+
+**Where the cost comes from**, in the first set: cache reads ~45%, cache writes ~30%, output ~25%, uncached input under 1%. **Inference:** a run is expensive because every turn of every agent re-reads a large instruction, conventions and code context, not because of what it writes. Prompt caching already absorbs most of that, so the context each agent loads is the lever on cost, more than the volume of output.
+
+**What it means for the routes.**
+
+- **Foundry or the Console API.** At $55–$86 per run, one autonomous branch per developer per working day comes to roughly **$1,100–$1,700 per developer per month**.
+- **Copilot.** An Enterprise seat's 3,900 included AI Credits (§3.8) cover less than one median run.
+- **An Anthropic Team plan.** A Premium seat is a flat **$100–$125 per member per month**, with 6.25× the Pro plan's per-session allowance and a weekly limit; a Standard seat is $20–$25 for 1.25× ([`team-accounts-research.md`](team-accounts-research.md) → P1, retrieved 2026-10-02). Limits are per member and not pooled. Usage past a seat's limit can continue on usage credits, which bill at API rates. **Inference:** for a developer who runs the harness regularly, a Premium seat is far cheaper than per-token billing, as long as the runs fit its five-hour and weekly windows. The usage gate exists to pace runs to exactly those windows. **Not measured:** how many runs fit in one Premium seat's windows. A real Team seat would measure it.
+- **The caveat on that inference.** Anthropic announced a separate Agent SDK credit for headless use, then paused it ("For now, nothing has changed"; [`team-accounts-research.md`](team-accounts-research.md) → P5). If it returns, `claude -p` usage could move off the seat allowance onto metered credits.
+
 ---
 
 ## 6. What route 4.2 would change in the harness
@@ -193,7 +225,19 @@ The constraints:
 None of this is decided here. Each item is a later branch's.
 
 - **Local runs need no code change** — only the §5.1 environment variables and the model pin from §5.3.
-- **`cli/templates/github/workflows/harness-run.yml`** and `harness-control.yml` require `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`. They would need to accept the Foundry variables, or Azure OIDC, in their place. `claude-code-action` already has a provider input for Foundry using OIDC, which shows the shape (https://code.claude.com/docs/en/github-actions).
+- **Remote runs on GitHub Actions do not work on Foundry today.** Claude Code reads the Foundry variables on any machine, a runner included, so nothing in the engine blocks it. What blocks it is the workflow:
+  - `cli/templates/github/workflows/harness-run.yml`'s *Check the credentials* step fails the job unless the `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` secret is set.
+  - Its *Run the harness* step exports only those two before `autonomous-watcher.sh job`.
+  - `harness-control.yml` passes the same two to the mention session.
+
+  Supporting Foundry would take three changes:
+  1. **Accept a Foundry credential** as a third option, by one of two routes:
+     - **Key** — an `ANTHROPIC_FOUNDRY_API_KEY` secret, exported with `CLAUDE_CODE_USE_FOUNDRY=1` and `ANTHROPIC_FOUNDRY_RESOURCE`.
+     - **Keyless, preferred** — Azure workload identity federation: `permissions: id-token: write` and an `azure/login` step before the run. Claude Code's default Azure credential chain then picks up the Azure CLI sign-in, and no secret is stored.
+  2. **Export the model pins** (`ANTHROPIC_DEFAULT_OPUS_MODEL` and its Sonnet and Haiku siblings) from repository variables, for the reason in §5.3.
+  3. **Make the same change in `harness-control.yml`** for the mention session.
+
+  `claude-code-action` already has a provider input for Foundry using OIDC, which shows the shape (https://code.claude.com/docs/en/github-actions). The usage gate is as inert on a runner as it is locally, and per-run cost is §5.4's.
 - **`doctor`** could warn when a provider is selected and the `opus` alias is unpinned.
 - **The usage-gate documentation** ([`watcher.md`](watcher.md)) would need to state that the gate is inert on a cloud provider. The spend cap is the *Budget governor* row of [`ROADMAP.md`](../ROADMAP.md).
 
