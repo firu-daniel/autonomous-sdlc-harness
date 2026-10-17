@@ -39,7 +39,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Add `hr_remote_copy_tree` to the library header's write-exception entry 3 and to its "calls no … still only reads" list _(layer: cli)_
+1. [x] **Finding 1** — Add `hr_remote_copy_tree` to the library header's write-exception entry 3 and to its "calls no … still only reads" list _(layer: cli)_
 2. [ ] **Finding 4** — Remove the never-read `HR_REMOTE_STATE_WHY` global from `hr_remote_state_dir_var` and the header's NAMING list _(layer: cli)_
 3. [ ] **Finding 2** — Blank `HARNESS_GITHUB_DEFAULT_COMMIT` in the test helper's `ISOLATED_ENV` _(layer: cli)_
 4. [ ] **Finding 5** — Print `save`'s own status-source skip line only when no bundle is written, and assert one line in `(F)` _(layer: cli, general)_

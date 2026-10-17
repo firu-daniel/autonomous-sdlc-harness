@@ -113,12 +113,14 @@
 #      `autonomous_logs/remote_superseded/` and, only where nothing exists yet,
 #      files under the eight planning paths `hr_remote_planning_paths` assigns;
 #      outside it, only the caller-named `<out_dir>` (its `planning/` included)
-#      of `hr_remote_bundle_write` and the caller-named `<out_json>`
+#      of `hr_remote_bundle_write`, the caller-named `<dst>` of
+#      `hr_remote_copy_tree` (which `hr_remote_bundle_write` names under
+#      `<out_dir>`) and the caller-named `<out_json>`
 #      of `hr_remote_status_write`. The move-aside directory receives the
 #      clarification directory and `PAUSE_PROGRESS.md`, both moved there by
 #      `hr_remote_move_aside` alone. Written only by `hr_remote_status_write`,
-#      `hr_remote_bundle_write`, `hr_remote_bundle_restore` and
-#      `hr_remote_move_aside`, and nothing there but a writer's own failed temp
+#      `hr_remote_bundle_write`, `hr_remote_copy_tree`, `hr_remote_bundle_restore`
+#      and `hr_remote_move_aside`, and nothing there but a writer's own failed temp
 #      file is ever removed. Also `hr_remote_state_dir_var`'s private
 #      `mktemp -d` directory and the one `harness.config.json` it holds, removed
 #      (`rm -f`, then `rmdir`) before it returns.
@@ -165,8 +167,8 @@
 #
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
 # `hr_remote_record_init`, `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
-# `hr_remote_bundle_write`, `hr_remote_bundle_restore`, `hr_remote_move_aside`,
-# `hr_remote_state_dir_var`, `hr_place_artifact`,
+# `hr_remote_bundle_write`, `hr_remote_copy_tree`, `hr_remote_bundle_restore`,
+# `hr_remote_move_aside`, `hr_remote_state_dir_var`, `hr_place_artifact`,
 # `hr_commit_placed`, `hr_push_landed`, `hr_run_fast_forward_var`, `hr_run_reset_var`,
 # `hr_run_trusted_base_var`, `hr_run_surface_check_var` (through it), `hr_run_main_git` or
 # `hr_run_copy_git` function still gets a library that only reads. The
