@@ -25,4 +25,4 @@ Source: harness-runs/task_prompts/fix_remote_bundle_save_symlinks_task_prompt.md
 - [x] C2f.    Skeptic findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [-] E.      QA passed (UI-test index all [x], or only blocked tests left / no_ui)
 - [x] G.      Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
-- [ ] D.      Branch statistics committed & pushed
+- [x] D.      Branch statistics committed & pushed
