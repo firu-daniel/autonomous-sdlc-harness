@@ -31,7 +31,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_remote_bundle_save_symli
 
 1. [x] **Task 1** — Skip linked bundle sources and resolve the trusted `stateDir` in `harness-run-lib.sh` _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Make `remote-run.sh save` and `restore` read the trusted `stateDir` and skip a linked status or registry file _(layer: cli)_ _(points: 15)_
-3. [ ] **Task 3** — Add the planted-link suite `cli/test/remote-save-links.test.mjs` with its red-once record _(layer: cli)_ _(points: 20)_
+3. [x] **Task 3** — Add the planted-link suite `cli/test/remote-save-links.test.mjs` with its red-once record _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Narrow the bundle-save residual in `docs/` and write the post-release checks file _(layer: general)_ _(points: 15)_
 
 ## Scope register
