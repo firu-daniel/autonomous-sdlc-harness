@@ -43,7 +43,7 @@
 2. [x] **Finding 4** — Remove the never-read `HR_REMOTE_STATE_WHY` global from `hr_remote_state_dir_var` and the header's NAMING list _(layer: cli)_
 3. [x] **Finding 2** — Blank `HARNESS_GITHUB_DEFAULT_COMMIT` in the test helper's `ISOLATED_ENV` _(layer: cli)_
 4. [x] **Finding 5** — Print `save`'s own status-source skip line only when no bundle is written, and assert one line in `(F)` _(layer: cli, general)_
-5. [ ] **Finding 3** — Add a `(TR)` case proving `hr_remote_bundle_restore` writes under the trusted `stateDir`, with its red-once mutation _(layer: cli)_
+5. [x] **Finding 3** — Add a `(TR)` case proving `hr_remote_bundle_restore` writes under the trusted `stateDir`, with its red-once mutation _(layer: cli)_
 
 ---
 

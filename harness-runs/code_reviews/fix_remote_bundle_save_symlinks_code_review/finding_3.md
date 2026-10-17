@@ -46,3 +46,5 @@ Extend the header in three places:
 - Widen the opening rule sentence so it covers the restore too, changing *"and `save` reads the state directory the trusted configuration names."* to *"and `save` reads, and `restore` writes, the state directory the trusted configuration names."*
 
 Apply M7 once, run this file, see `(TR)` fail with that message, then revert. This file is the one the fix edits, so it is the only test the fix runs: `npm test --workspace cli -- test/remote-save-links.test.mjs`.
+
+- **Deviations from plan:** The finding's M7 bullet predicted `(TR)` would fail with `restore wrote under the checkout's stateDir`. M7 was applied (`state=$(hr_state_dir "$root")` in `hr_remote_bundle_restore`) and the file run: `(TR)` failed on its first assertion, `PAUSE_PROGRESS.md was not restored under sdlc-harness`, so the planted-state assertion was never reached. The header's M7 bullet quotes the observed message. The mutation was reverted with `git checkout`, and the file then ran 15/15 pass. The header sentence "every case but (T) passes `HARNESS_GITHUB_DEFAULT_COMMIT` empty" was also reworded because `(TR)` sets that variable for its restore.

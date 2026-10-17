@@ -5,8 +5,8 @@
  *
  * **The rule these tests exist to enforce: a symbolic link a sandboxed session planted under the
  * state directory never carries a byte of its target, or a link, into the `harness-state` bundle, an
- * honest source beside it is still saved byte-for-byte, and `save` reads the state directory the
- * trusted configuration names.**
+ * honest source beside it is still saved byte-for-byte, and `save` reads, and `restore` writes, the
+ * state directory the trusted configuration names.**
  *
  * The sentinel is one file **outside** the fixture's state directory whose bytes carry a random
  * token. It is shaped as a registry whose `feat_x` record's `engine` is the token, so a status
@@ -14,8 +14,8 @@
  * outside directory holding it. The bundle is then walked with `lstat`, following nothing: no entry
  * may be a link, no file may contain the token, and the file set and each file's bytes must be
  * exactly the honest sources the case left in place. `gh` is a recorder stub through
- * `HARNESS_GH_CLI`, and every case but (T) passes `HARNESS_GITHUB_DEFAULT_COMMIT` empty so that an
- * ambient value cannot select trusted mode.
+ * `HARNESS_GH_CLI`, and every `save` but (T)'s passes `HARNESS_GITHUB_DEFAULT_COMMIT` empty so that
+ * an ambient value cannot select trusted mode; (TR) sets it only for the restore it drives.
  *
  * RED ONCE — each mutation applied once to `cli/templates/scripts/lib/harness-run-lib.sh` (M3 and
  * M4's second half: to `remote-run.sh`), the file run, the failure observed, the mutation reverted:
@@ -23,7 +23,7 @@
  *   ahead of its `hr_remote_link_free_var`) → (F) fails on each of its four sources, `the
  *   sentinel's bytes are in the bundle: PAUSE_PROGRESS.md` (`flow_walker_state`, `run.log`,
  *   `status.json`), and (P)'s file half on `planning/story_plans/feat_x_story_plan.md`. (D), (N),
- *   (P)'s directory half, (U), (R) and (T) stay green.
+ *   (P)'s directory half, (U), (R), (T) and (TR) stay green.
  * - (M2) `cp -R … 2>/dev/null` restored in place of both `hr_remote_copy_tree` calls, the link
  *   test intact → (N) fails, `a link is in the bundle: clarifications/feat_x/question_2.md`. Every
  *   other case stays green: the link test refuses (D), (U) and (P)'s directory half first.
@@ -41,11 +41,14 @@
  *   directory half fail too, though not on a leak: `hr_remote_copy_tree` refuses a linked top-level
  *   source by returning 1 with no skip line, so `hr_remote_bundle_write` stops there. (D) fails on
  *   `the bundle's file set`, holding only `status.json`; (P)'s directory half on `no skip line for
- *   …/sdlc-harness/task_plans/feat_x`. (F), (N), (P)'s file half, (R) and (T) stay green.
+ *   …/sdlc-harness/task_plans/feat_x`. (F), (N), (P)'s file half, (R), (T) and (TR) stay green.
  * - (M6) M5 and M2 together → (D) fails, `a link is in the bundle: clarifications/feat_x`; (P)'s
  *   directory half, `a link is in the bundle: planning/task_plans/feat_x`; (N), `a link is in the
  *   bundle: clarifications/feat_x/question_2.md`; (U), `the sentinel's bytes are in the bundle:
- *   clarifications/feat_x/question_1.md`. (F), (P)'s file half, (R) and (T) stay green.
+ *   clarifications/feat_x/question_1.md`. (F), (P)'s file half, (R), (T) and (TR) stay green.
+ * - (M7) `state=$(hr_state_dir "$root")` in place of `hr_remote_bundle_restore`'s
+ *   `state=$HR_REMOTE_STATE_DIR` → (TR) fails, `PAUSE_PROGRESS.md was not restored under
+ *   sdlc-harness`: the bundle went to `planted-state` instead. Every other case stays green.
  */
 
 import assert from 'node:assert/strict';
@@ -332,4 +335,29 @@ test('(T) save reads the stateDir of the trusted configuration, not the checkout
     result.stderr.includes(`remote-run.sh: save: the checkout's harness.config.json names stateDir 'planted-state', the trusted configuration at ${commit} names '${STATE_DIR}'; using '${STATE_DIR}'`),
     `no difference line\n${result.stderr}`,
   );
+});
+
+test('(TR) restore places the bundle under the trusted stateDir, not the checkout\'s', async (t) => {
+  const fx = await saveFixture(t);
+  const saved = await fx.save();
+  assert.equal(saved.status, 0, saved.stderr);
+  const bundlePause = readFileSync(join(fx.out, 'PAUSE_PROGRESS.md'));
+  for (const args of [['add', 'harness.config.json'], ['commit', '--quiet', '--no-verify', '-m', 'fixture: trusted configuration']]) {
+    const ran = await runGit(fx.dir, args);
+    assert.equal(ran.status, 0, ran.stderr);
+  }
+  const commit = (await runGit(fx.dir, ['rev-parse', 'HEAD'])).stdout.trim();
+
+  const configPath = join(fx.dir, 'harness.config.json');
+  const config = JSON.parse(readFileSync(configPath, 'utf8'));
+  config.stateDir = 'planted-state';
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  writeFileSync(join(fx.base, 'PAUSE_PROGRESS.md'), 'stale\n');
+
+  const result = await runBash(fx.dir, ['-c',
+    `. ${INIT_SCRIPTS_DIR}/lib/harness-run-lib.sh && hr_remote_bundle_restore "$1" "$2" feat_x job`,
+    '_', fx.out, fx.dir], { HARNESS_GITHUB_DEFAULT_COMMIT: commit, GITHUB_RUN_ID: '' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(readFileSync(join(fx.base, 'PAUSE_PROGRESS.md')).equals(bundlePause), `PAUSE_PROGRESS.md was not restored under ${STATE_DIR}\n${result.stderr}`);
+  assert.equal(existsSync(join(fx.dir, 'planted-state')), false, `restore wrote under the checkout's stateDir\n${result.stderr}`);
 });
