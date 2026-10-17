@@ -22,7 +22,7 @@ Source: harness-runs/task_prompts/fix_remote_bundle_save_symlinks_task_prompt.md
 - [x] C.      Code-review findings fixed
 - [x] C2g.    Skeptic review resolved (index committed — or PASS with no net-new findings, no file written)
 - [x] C2m.    Skeptic meta-review PASS — or not owed (C2.1 returned PASS, so C2.2 never ran)
-- [ ] C2f.    Skeptic findings fixed (findings index all [x] — or no index, the review having passed clean)
+- [x] C2f.    Skeptic findings fixed (findings index all [x] — or no index, the review having passed clean)
 - [-] E.      QA passed (UI-test index all [x], or only blocked tests left / no_ui)
 - [ ] G.      Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
 - [ ] D.      Branch statistics committed & pushed
