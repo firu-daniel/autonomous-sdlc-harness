@@ -433,11 +433,12 @@ else
     echo "create-worktree.sh: no defaultBranch in '$main_repo/harness.config.json' — refusing" >&2
     exit 1
   fi
-  # The working copy is branched FROM `origin/<default branch>`, so the remote
-  # is a precondition and not a step. Refuse both states `doctor`'s `remote`
-  # check grades, in this script's own voice: unguarded, `set -e` would end the
-  # run at four lines of git naming neither this script, nor a remedy, nor the
-  # check that would have said so first.
+  # The working copy is branched from the default branch's commit as origin
+  # reports it, so the remote is a precondition and not a step. Refuse a missing
+  # origin here, and below an origin that cannot say what that commit is, in
+  # this script's own voice: unguarded, `set -e` would end the run at four
+  # lines of git naming neither this script, nor a remedy, nor the check that
+  # would have said so first.
   if ! git -C "$main_repo" remote get-url origin >/dev/null 2>&1; then
     echo "create-worktree.sh: '$main_repo' has no 'origin' remote — a working copy is created from origin/$default_branch, so there is nothing to branch from" >&2
     echo "  add one: git remote add origin <url> && git push -u origin $default_branch" >&2
@@ -453,9 +454,9 @@ else
     exit 1
   fi
   if ! hr_run_trusted_base_var; then
-    echo "create-worktree.sh: no $default_branch on origin to branch from — $HR_RUN_REFUSAL; nothing was created" >&2
+    echo "create-worktree.sh: cannot establish $default_branch on origin to branch from — $HR_RUN_REFUSAL; nothing was created" >&2
     echo "  reach origin, or push the default branch: git push -u origin $default_branch" >&2
-    echo "  (\`npx autonomous-sdlc-harness doctor\` reports a missing origin/$default_branch as a failing \`remote\` check)" >&2
+    echo "  (\`npx autonomous-sdlc-harness doctor\` reports a missing origin/$default_branch as a failing \`remote\` check; it does not contact origin, so an unreachable one passes there)" >&2
     exit 2
   fi
   # History as stored: a replace ref or graft for the base would swap the tree cut here.

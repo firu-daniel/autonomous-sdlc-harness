@@ -47,8 +47,8 @@
  *    **The remote is the one condition that qualifies that sentence, and it is deliberately a
  *    `fail`** — do not soften it back to a warning. A repository adopted by `init --git-init` has no
  *    remote by construction, so it is freshly wired and still exits non-zero: `create-worktree.sh`
- *    creates every run's checkout from `origin/<defaultBranch>`, so with no such ref the flow does
- *    not start at all and the report would otherwise be all-green about a repository nothing can run
+ *    creates every run's checkout from the commit origin reports for `<defaultBranch>`, so with no
+ *    origin the flow does not start at all and the report would otherwise be all-green about a repository nothing can run
  *    in. That is what separates it from the two checks whose remedies are also hand steps and which
  *    never fail (`notifications`, `repo-registry`): neither of those is a precondition for a run to
  *    begin, and this one is. The remedy is an adopter's to take — add a remote, push the branch —
@@ -1079,17 +1079,20 @@ const DEFAULT_BRANCH_CHECK: Check = {
  * `fatal: 'origin' does not appear to be a git repository`.
  *
  * The precondition is `create-worktree.sh`'s, and it is two steps rather than one: the new-branch
- * arm fetches `origin/<defaultBranch>` and then creates the worktree **from that ref**, and pushes
- * the new branch to `origin` afterwards. That script refuses both bad states itself, before it
- * creates anything (`exit 2`, naming the remedy and this check), so a repository missing one gets no
- * worktree and nothing downstream — no phase, no agent, no commit — runs. This check is what says so
+ * arm creates the worktree from the default branch's commit as origin reports it
+ * (`hr_run_trusted_base_var`) and pushes the new branch to `origin` afterwards. That script refuses
+ * a missing `origin`, and one it cannot reach or that does not report exactly one commit for the
+ * branch, itself, before it creates anything (`exit 2`, naming the remedy and this check), so such
+ * a repository gets no worktree and nothing downstream — no phase, no agent, no commit — runs. This check is what says so
  * before a prompt is dropped rather than in the run log of the drop that failed.
  *
  * Both bad states are a `fail`, for the reason choice 2 in the module header spells out: this is the
  * one hand-remediable condition that is a precondition for a run to begin, which is what separates
  * it from `notifications` and `repo-registry`. The second state is the one worth having a check for
- * — a remote is configured, so `git remote -v` reassures, and the ref the script actually names is
- * still not there.
+ * — a remote is configured, so `git remote -v` reassures, and the branch the script asks origin for
+ * may still not be there. The check reads the remote-tracking ref as this checkout last fetched it,
+ * so it is an offline proxy: a stale ref with an unreachable `origin` passes here and is refused by
+ * the script.
  *
  * It asks {@link remoteTrackingBranchResolves} rather than {@link branchResolves}: the latter stops
  * at the local spelling, which the checkout of an integration line always has, so it would answer
@@ -1115,32 +1118,33 @@ const REMOTE_CHECK: Check = {
     const remotes = configuredRemotes(ctx.repoRoot);
     if (remotes.length === 0) {
       return fail(
-        `this repository has no remote configured, so no run can be started in it: ${WORKTREE_SCRIPT} fetches origin/${branch} and creates every run's checkout from that ref, and with no origin it refuses before a worktree exists — the flow stops before any phase begins. Add one and push the branch (\`git remote add origin <url> && git push -u origin ${branch}\`), or run the flow in a checkout that already has a remote`,
+        `this repository has no remote configured, so no run can be started in it: ${WORKTREE_SCRIPT} creates every run's checkout from the commit origin reports for ${branch}, and with no origin it refuses before a worktree exists — the flow stops before any phase begins. Add one and push the branch (\`git remote add origin <url> && git push -u origin ${branch}\`), or run the flow in a checkout that already has a remote`,
       );
     }
 
     if (!remoteTrackingBranchResolves(ctx.repoRoot, branch)) {
       return fail(
-        `this repository has a remote (${nameList(remotes)}) but no origin/${branch} remote-tracking ref, so no run can be started in it: ${WORKTREE_SCRIPT} creates every run's checkout from origin/${branch}, and a local branch of that name does not satisfy it. Push the branch with \`git push -u origin ${branch}\`, or fetch it with \`git fetch origin ${branch}\` if it is already on the remote — and if the remote here is not called origin, add one that is`,
+        `this repository has a remote (${nameList(remotes)}) but no origin/${branch} remote-tracking ref, so no run can be started in it: ${WORKTREE_SCRIPT} creates every run's checkout from the commit origin reports for ${branch}, and a local branch of that name does not satisfy it. Push the branch with \`git push -u origin ${branch}\`, or fetch it with \`git fetch origin ${branch}\` if it is already on the remote — and if the remote here is not called origin, add one that is`,
       );
     }
 
     return pass(
-      `origin is configured (${nameList(remotes)}) and origin/${branch} resolves as a remote-tracking ref, which is what ${WORKTREE_SCRIPT} branches a run's checkout from`,
+      `origin is configured (${nameList(remotes)}) and origin/${branch} resolves as a remote-tracking ref, as this checkout last fetched it; ${WORKTREE_SCRIPT} cuts a run's checkout from the commit origin reports for ${branch} when the run starts`,
     );
   },
 };
 
 /**
- * Is the ref a run's working copy would be cut from **current** — or has this checkout got commits
- * on the integration line that were never pushed?
+ * Is the default branch as this checkout last saw it on origin **current** — or has this checkout
+ * got commits on the integration line that were never pushed?
  *
  * **The question `remote` above cannot answer.** That one asks whether `origin/<defaultBranch>`
  * exists at all; a ref that exists and is behind the local branch satisfies it completely. So the
  * repository this reports on is one where every other line is green: `create-worktree.sh` branches
- * every run's working copy from `origin/<defaultBranch>`, and a run started there gets a base
- * missing whatever was not pushed — commonly the harness wiring itself, which is discovered only
- * after a planning phase has been paid for and the run has parked.
+ * every run's working copy from the commit origin reports for `<defaultBranch>`, which that ref
+ * records as of the last fetch, and a run started there gets a base missing whatever was not
+ * pushed — commonly the harness wiring itself, which is discovered only after a planning phase has
+ * been paid for and the run has parked.
  *
  * **A `warn`, never a `fail`, and do not promote it.** The run does start and parks cleanly, so
  * this is not a precondition in the sense the module header's choice 2 reserves `fail` for — and a
@@ -1167,7 +1171,7 @@ const REMOTE_CHECK: Check = {
  */
 const BASE_FRESHNESS_CHECK: Check = {
   id: 'base-freshness',
-  title: "the ref a run's working copy is branched from is not behind this checkout",
+  title: 'the default branch as this checkout last saw it on origin is not behind the local one',
   run: (ctx) => {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     if (ctx.config === undefined) return unevaluated(`${CONFIG_FILENAME} could not be read (see the config check)`);
@@ -1203,12 +1207,12 @@ const BASE_FRESHNESS_CHECK: Check = {
 
     if (ahead > 0) {
       return warn(
-        `${branch} is ${ahead} commit${ahead === 1 ? '' : 's'} ahead of origin/${branch}, so a run started now gets a stale base: ${WORKTREE_SCRIPT} branches every run's working copy from origin/${branch}, and nothing in those commits would be in it — which is how a whole planning phase gets paid for before anything discovers what is missing from the worktree. Push them from this checkout with \`git push origin ${branch}\`; a working copy that already exists catches up with \`${scriptInvocation(outerLoopScriptsDir(ctx.config), REFRESH_SCRIPT)} --local\`, the one refresh route the protected-branch guard permits. A warning rather than a failure because the run does start and parks cleanly`,
+        `${branch} is ${ahead} commit${ahead === 1 ? '' : 's'} ahead of origin/${branch}, so a run started now gets a stale base: ${WORKTREE_SCRIPT} branches every run's working copy from the commit origin reports for ${branch}, which origin/${branch} records as of the last fetch, and nothing in those commits would be in it — which is how a whole planning phase gets paid for before anything discovers what is missing from the worktree. Push them from this checkout with \`git push origin ${branch}\`; a working copy that already exists catches up with \`${scriptInvocation(outerLoopScriptsDir(ctx.config), REFRESH_SCRIPT)} --local\`, the one refresh route the protected-branch guard permits. A warning rather than a failure because the run does start and parks cleanly`,
       );
     }
 
     return pass(
-      `origin/${branch} contains every commit ${branch} has, as this checkout last saw the remote, so a working copy ${WORKTREE_SCRIPT} cuts from origin/${branch} carries everything this checkout has of the integration line`,
+      `origin/${branch} contains every commit ${branch} has, as this checkout last saw the remote, so a working copy ${WORKTREE_SCRIPT} cuts from the commit origin reports for ${branch} carries everything this checkout has of the integration line`,
     );
   },
 };
@@ -4564,7 +4568,7 @@ const PROFILE_CHECK: Check = {
  * branch, so the job's create-if-absent `init` finds none and generates its own.
  *
  * The commit must land on the **default branch**, because every run's branch is cut from
- * `origin/<defaultBranch>` (`create-worktree.sh` → `worktree add … "origin/$default_branch"`): an
+ * `origin/<defaultBranch>` (`create-worktree.sh` → `hr_run_trusted_base_var`): an
  * untrack pushed only to a run branch covers that one run, and the next branch carries the profile
  * again. The push and its `--no-verify` reason are `core/defaultBranchPush.ts`'s, spelled nowhere here.
  *
