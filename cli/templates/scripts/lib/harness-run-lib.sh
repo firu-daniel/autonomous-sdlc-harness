@@ -298,8 +298,8 @@
 # names, which `hr_remote_names_var` assigns, with `HR_REMOTE_PLANNING_PATHS`
 # (`hr_remote_planning_paths`) and `HR_REMOTE_PLANNING_PLACED` /
 # `HR_REMOTE_PLANNING_KEPT` (`hr_remote_bundle_restore`), `HR_REMOTE_ASIDE`
-# (`hr_remote_move_aside`), `HR_REMOTE_STATE_DIR`, `HR_REMOTE_STATE_FROM`,
-# `HR_REMOTE_STATE_WHY` and `HR_REMOTE_STATE_CHECKOUT`
+# (`hr_remote_move_aside`), `HR_REMOTE_STATE_DIR`, `HR_REMOTE_STATE_FROM`
+# and `HR_REMOTE_STATE_CHECKOUT`
 # (`hr_remote_state_dir_var`) and `HR_REMOTE_LINKED`
 # (`hr_remote_link_free_var`), and the watcher family's `HR_RUN_MAIN`,
 # `HR_RUN_REFUSAL`, `HR_RUN_TRUSTED_BASE`, `HR_RUN_COPY_TOP`,
@@ -3344,7 +3344,6 @@ hr_remote_status_get() {
 #   HR_REMOTE_STATE_DIR       the repo-relative state directory, normalised as
 #                             `hr_state_dir` prints it
 #   HR_REMOTE_STATE_FROM      `trusted` or `checkout`
-#   HR_REMOTE_STATE_WHY       one sentence naming the source and why it applies
 #   HR_REMOTE_STATE_CHECKOUT  the checkout's own `hr_state_dir "$root"` value
 #                             (empty when unreadable); equal to
 #                             HR_REMOTE_STATE_DIR in `checkout` mode
@@ -3374,7 +3373,6 @@ hr_remote_state_dir_var() {
   local root="${1-}" commit="${HARNESS_GITHUB_DEFAULT_COMMIT-}" tmp value rc=0
   HR_REMOTE_STATE_DIR=''
   HR_REMOTE_STATE_FROM=''
-  HR_REMOTE_STATE_WHY=''
   HR_REMOTE_STATE_CHECKOUT=''
   [ -n "$root" ] || return 1
   if [ -n "$commit" ]; then
@@ -3392,7 +3390,6 @@ hr_remote_state_dir_var() {
         && value=$(hr_state_dir "$tmp"); then
         HR_REMOTE_STATE_DIR=$value
         HR_REMOTE_STATE_FROM='trusted'
-        HR_REMOTE_STATE_WHY="stateDir is read from harness.config.json at the recorded default-branch commit $commit (HARNESS_GITHUB_DEFAULT_COMMIT), because inside a job the checkout's own copy is the session's to rewrite"
       else
         rc=2
       fi
@@ -3412,7 +3409,6 @@ hr_remote_state_dir_var() {
   HR_REMOTE_STATE_DIR=$value
   HR_REMOTE_STATE_FROM='checkout'
   HR_REMOTE_STATE_CHECKOUT=$value
-  HR_REMOTE_STATE_WHY="stateDir is read from the checkout's own harness.config.json, because HARNESS_GITHUB_DEFAULT_COMMIT is unset outside a job and the checkout is the user's own mirror or main checkout"
   return 0
 }
 
