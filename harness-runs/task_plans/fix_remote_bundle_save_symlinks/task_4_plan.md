@@ -58,3 +58,8 @@
 - `grep -n 'follows a symbolic link' docs/remote-execution.md` prints no hit inside the post-session bullet. In `docs/cli.md`, that phrase survives only in item 4, whose subject this branch leaves alone.
 - Every fact the edited sentences state about measurement or mutations matches `hr_remote_bundle_write`'s header and the suite's `RED ONCE` list word for word in substance. No line coordinate is written into any document.
 - Every command added to a document sits in its own fenced block, one command per line (the lessons ledger's adopter-facing documentation rule).
+
+- **Deviations from plan:**
+  - Item 5's test-to-copy window is not recorded in `hr_remote_bundle_write`'s header. It is kept because it is still true on reading the function body (`hr_remote_bundle_source_ok`, the `[ -f ]` / `[ -d ]` test and the `cp` are separate steps, as are `hr_remote_copy_tree`'s per-entry test and `cp`). The plan's "the runner reaps orphans only at job end" is not stated: nothing in this session measured it, so the item says whether such a process survives into `Save the state bundle` is not measured, and the checks file's check 4 asks for that observation.
+  - Item 5 restates the header's `cp -R` measurement with its command split one per line in a fenced block (the lessons ledger's adopter-facing documentation rule); the header's own text joins commands with `;`.
+  - Verification rests on reading and on the configured typecheck: `bash scripts/typecheck.sh` printed `PASS: typecheck`; both scope-register derivation commands were re-run after the edits, and every hit falls in rows 1–10 (the new hits on `docs/cli.md` sit inside item 5, row 1). `grep -n 'follows a symbolic link'` hits only `docs/cli.md` item 4.
