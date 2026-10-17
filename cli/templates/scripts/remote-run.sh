@@ -909,7 +909,10 @@
 # bundle's `planning/` drafts at their paths under the state directory, never
 # over a file the checkout already has, and when it placed or kept any prints
 # `placed <n> planning file(s) for <branch>; kept <n> the checkout already
-# carries`. Then, under --resume answer, it
+# carries`. Every path it writes — the download directory, the answers, the
+# park-loop clear — is under the same state directory `hr_remote_bundle_restore`
+# places the bundle in, resolved as `save`'s is below. Then, under --resume
+# answer, it
 # writes each `"<n>": "<text>"` entry to `clarifications/<branch>/answer_<n>.md`
 # with the exact bytes, after checking every entry first; and with
 # `HARNESS_INPUT_PARK_LOOP_CLEAR` exactly `true` it sets `park_loop_cycles` to
@@ -941,6 +944,19 @@
 # if it were absent. It never
 # fails the job: every problem, a usage error included, is one line on stderr
 # and exit 0.
+#
+# THE STATE DIRECTORY `save` AND `restore` USE IS `hr_remote_state_dir_var`'s:
+# in a job, `stateDir` from `harness.config.json` at
+# `HARNESS_GITHUB_DEFAULT_COMMIT`, because the checkout's own copy is the
+# session's to rewrite and could point the bundle at any directory; outside a
+# job, the checkout's own. Where the two differ in a job, each prints
+# `the checkout's harness.config.json names stateDir '<checkout>', the trusted
+# configuration at <commit> names '<trusted>'; using '<trusted>'` on stderr.
+# A LINKED SOURCE IS SKIPPED, NEVER FOLLOWED: `save` tests the status file and
+# `autonomous_logs/registry.json` component by component before reading
+# either, and the library tests every source it copies. A linked one gets one
+# stderr line, `skipped <path>: <linked> is a symbolic link`, and is treated as
+# absent; it never fails the save.
 #
 # `continue` AND `poll` CLOSE THE LOOP WITHOUT THIS MACHINE, and like `restore`
 # and `save` test neither `execution.target` nor a registry record. `continue`
@@ -2044,7 +2060,11 @@ hr_config_load "$root" || :
 registry=""
 status_no_record=0
 case "$verb" in
-  restore|save|continue|poll|discard)
+  restore|save)
+    # The state directory the bundle library resolves, trusted inside a job.
+    hr_remote_state_dir_var "$root" || setup_fail "cannot resolve '$root/harness.config.json'"
+    ;;
+  continue|poll|discard)
     hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/harness.config.json'"
     ;;
   pause-requested|run-created-at)
@@ -2886,8 +2906,24 @@ JQ_DEF_FENCE='def fence:
   (([match("`+"; "g") | .length] | max) // 0) as $m
   | "`" * ([$m + 1, 3] | max);'
 
+# remote_state_difference <verb> — after `hr_remote_state_dir_var`: one stderr
+# line when the trusted stateDir differs from the checkout's own.
+remote_state_difference() {
+  local checkout="$HR_REMOTE_STATE_CHECKOUT"
+  [ "$HR_REMOTE_STATE_FROM" = trusted ] && [ "$checkout" != "$HR_REMOTE_STATE_DIR" ] || return 0
+  if [ -n "$checkout" ]; then
+    checkout="stateDir '$checkout'"
+  else
+    checkout="no readable stateDir"
+  fi
+  echo "remote-run.sh: ${1-}: the checkout's harness.config.json names $checkout, the trusted configuration at ${HARNESS_GITHUB_DEFAULT_COMMIT-} names '$HR_REMOTE_STATE_DIR'; using '$HR_REMOTE_STATE_DIR'" >&2
+}
+
 verb_restore() {
-  local id download status_file clar n tmp status_source
+  local id download status_file clar n tmp status_source state
+  hr_remote_state_dir_var "$root" || restore_fail "cannot resolve '$root/harness.config.json'"
+  remote_state_difference restore
+  state="$root/$HR_REMOTE_STATE_DIR"
   if [ "$resume" = answer ]; then
     HARNESS_INPUT_ANSWERS="${HARNESS_INPUT_ANSWERS-}"
     export HARNESS_INPUT_ANSWERS
@@ -2912,8 +2948,7 @@ verb_restore() {
       || restore_refuse "--resume answer, but no finished run of $branch's current lineage carries a state bundle; nothing written"
     echo "remote-run.sh: no previous bundle for $branch; this is its first job"
   else
-    download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$id") \
-      || restore_fail "cannot resolve '$root/harness.config.json'"
+    download="$state/autonomous_logs/remote_download/$branch/$id"
     status_file="$download/$HR_REMOTE_STATUS_FILE"
     if [ ! -f "$status_file" ]; then
       mkdir -p "$download" || restore_fail "cannot create '$download'"
@@ -2940,8 +2975,7 @@ verb_restore() {
   fi
 
   if [ "$resume" = answer ]; then
-    clar=$(hr_state_path "$root" "$HR_REMOTE_CLARIFY_DIR/$branch") \
-      || restore_fail "cannot resolve '$root/harness.config.json'"
+    clar="$state/$HR_REMOTE_CLARIFY_DIR/$branch"
     for n in $(jq -n -r 'env.HARNESS_INPUT_ANSWERS | fromjson | keys_unsorted[]'); do
       tmp=$(mktemp "$clar/answer_$n.md.tmp.XXXXXX") || restore_fail "cannot write in '$clar'"
       if jq -n -j --arg k "$n" 'env.HARNESS_INPUT_ANSWERS | fromjson | .[$k]' >"$tmp" \
@@ -2955,8 +2989,7 @@ verb_restore() {
   fi
 
   if [ "${HARNESS_INPUT_PARK_LOOP_CLEAR-}" = true ]; then
-    status_source=$(hr_state_path "$root" "$HR_REMOTE_STATUS_SOURCE") \
-      || restore_fail "cannot resolve '$root/harness.config.json'"
+    status_source="$state/$HR_REMOTE_STATUS_SOURCE"
     if [ -f "$status_source" ]; then
       tmp=$(mktemp "$status_source.tmp.XXXXXX") || restore_fail "cannot write beside '$status_source'"
       if jq '.park_loop_cycles = "0"' "$status_source" >"$tmp" && mv "$tmp" "$status_source"; then
@@ -2979,14 +3012,28 @@ md_cell() {
   printf '%s' "${s//|/\\|}"
 }
 
+# save_link_free <rel> — 0 when no component of `<state_dir>/<rel>` is a link;
+# 1 after printing the skip line, and the caller treats the file as absent.
+save_link_free() {
+  hr_remote_link_free_var "$root" "$HR_REMOTE_STATE_DIR/$1" && return 0
+  echo "remote-run.sh: save: skipped $root/$HR_REMOTE_STATE_DIR/$1: $HR_REMOTE_LINKED is a symbolic link" >&2
+  return 1
+}
+
 verb_save() {
-  local registry_file status_source status decision detail
+  local registry_file status_source status decision detail registry_absent=0
   hr_remote_names_var
-  registry_file=$(hr_state_path "$root" autonomous_logs/registry.json) || {
+  hr_remote_state_dir_var "$root" || {
     echo "remote-run.sh: save: cannot resolve '$root/harness.config.json'; no bundle written" >&2
     return 0
   }
-  status_source=$(hr_state_path "$root" "$HR_REMOTE_STATUS_SOURCE") || status_source=""
+  remote_state_difference save
+  registry_file="$root/$HR_REMOTE_STATE_DIR/autonomous_logs/registry.json"
+  status_source="$root/$HR_REMOTE_STATE_DIR/$HR_REMOTE_STATUS_SOURCE"
+  # A linked registry stays named: `hr_remote_bundle_write` needs the argument,
+  # and reads it only when no unlinked status source exists.
+  save_link_free autonomous_logs/registry.json || registry_absent=1
+  save_link_free "$HR_REMOTE_STATUS_SOURCE" || status_source=""
   # `restore` places the previous job's status.json at this same path; one whose
   # run_id is not this job's means this job's harness step never wrote its own,
   # and re-uploading it would replay the previous job's decision and chain.
@@ -3003,7 +3050,8 @@ verb_save() {
   fi
   # Without either file the harness step never started; the library's registry
   # fallback would create a registry in the checkout to find nothing in it.
-  if { [ -z "$status_source" ] || [ ! -f "$status_source" ]; } && { [ -z "$registry_file" ] || [ ! -f "$registry_file" ]; }; then
+  if { [ -z "$status_source" ] || [ ! -f "$status_source" ]; } \
+    && { [ -z "$registry_file" ] || [ "$registry_absent" = 1 ] || [ ! -f "$registry_file" ]; }; then
     mkdir -p "$out_dir" 2>/dev/null \
       || echo "remote-run.sh: save: cannot create '$out_dir'" >&2
     echo "remote-run.sh: save: the harness step never started for $branch; the bundle carries no status.json" >&2
