@@ -115,12 +115,17 @@ const MAX_BUFFER = 16 * 1024 * 1024;
  * default. Without that third value, a case on one of those hosts asserts that two coincidentally
  * equal values are equal, and would go on passing against detection that had stopped reading the
  * repository entirely.
+ *
+ * `HARNESS_GITHUB_DEFAULT_COMMIT` is blanked because the remote bundle library switches to the
+ * trusted configuration whenever it is non-empty, and a `harness-run` job exports it to every later
+ * step, a session's gate runs included; a case that exercises trusted mode passes it explicitly.
  */
 const ISOLATED_ENV = Object.freeze({
   GIT_CONFIG_GLOBAL: '/dev/null',
   GIT_CONFIG_NOSYSTEM: '1',
   GIT_CONFIG_SYSTEM: '/dev/null',
   GIT_TERMINAL_PROMPT: '0',
+  HARNESS_GITHUB_DEFAULT_COMMIT: '',
 });
 
 /**
