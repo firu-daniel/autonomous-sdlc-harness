@@ -45,3 +45,6 @@ In `cli/test/remote-save-links.test.mjs`, case `(F)`'s `STATUS_SOURCE` subtest, 
 ```
 
 That test file is the only one this fix edits, so run it alone: `npm test --workspace cli -- test/remote-save-links.test.mjs`.
+
+- **Deviations from plan:** The `docs/cli.md` residual 1 item 5 sentence replacement lies outside this dispatch's `cli` layer path scope (`docs/` falls to the `general` catch-all layer), so the `cli`-layer implementer did not edit it; the `cli/templates/scripts/remote-run.sh` and `cli/test/remote-save-links.test.mjs` edits are made as specified. The docs sentence still needs a `general`-layer dispatch.
+- **Deviations from plan:** The `general`-layer dispatch applied the `docs/cli.md` residual 1 item 5 sentence replacement exactly as specified; the `cli`-layer edits already in the working tree were left untouched. The `npm test --workspace cli -- test/remote-save-links.test.mjs` run is not repeated by this dispatch, which edited no test file.

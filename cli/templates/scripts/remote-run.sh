@@ -3021,7 +3021,7 @@ save_link_free() {
 }
 
 verb_save() {
-  local registry_file status_source status decision detail registry_absent=0
+  local registry_file status_source status decision detail registry_absent=0 status_linked=''
   hr_remote_names_var
   hr_remote_state_dir_var "$root" || {
     echo "remote-run.sh: save: cannot resolve '$root/harness.config.json'; no bundle written" >&2
@@ -3033,7 +3033,12 @@ verb_save() {
   # A linked registry stays named: `hr_remote_bundle_write` needs the argument,
   # and reads it only when no unlinked status source exists.
   save_link_free autonomous_logs/registry.json || registry_absent=1
-  save_link_free "$HR_REMOTE_STATUS_SOURCE" || status_source=""
+  # Its skip line is printed below only when no bundle is written; otherwise
+  # `hr_remote_bundle_write` tests the same source and prints its own.
+  if ! hr_remote_link_free_var "$root" "$HR_REMOTE_STATE_DIR/$HR_REMOTE_STATUS_SOURCE"; then
+    status_linked=$HR_REMOTE_LINKED
+    status_source=""
+  fi
   # `restore` places the previous job's status.json at this same path; one whose
   # run_id is not this job's means this job's harness step never wrote its own,
   # and re-uploading it would replay the previous job's decision and chain.
@@ -3052,6 +3057,8 @@ verb_save() {
   # fallback would create a registry in the checkout to find nothing in it.
   if { [ -z "$status_source" ] || [ ! -f "$status_source" ]; } \
     && { [ -z "$registry_file" ] || [ "$registry_absent" = 1 ] || [ ! -f "$registry_file" ]; }; then
+    [ -z "$status_linked" ] \
+      || echo "remote-run.sh: save: skipped $root/$HR_REMOTE_STATE_DIR/$HR_REMOTE_STATUS_SOURCE: $status_linked is a symbolic link" >&2
     mkdir -p "$out_dir" 2>/dev/null \
       || echo "remote-run.sh: save: cannot create '$out_dir'" >&2
     echo "remote-run.sh: save: the harness step never started for $branch; the bundle carries no status.json" >&2

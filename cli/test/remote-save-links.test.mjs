@@ -234,6 +234,7 @@ test('(F) a linked file source is skipped, and every other source is saved', asy
     assert.equal(status.status, 'parked');
     assert.ok(!found['status.json'].equals(readFileSync(fx.sentinel)), 'status.json is the sentinel');
     assertSkipped(result.stderr, path);
+    assert.equal(result.stderr.split(`skipped ${path}: `).length - 1, 1, `the skip line for ${path} is not printed exactly once\n${result.stderr}`);
   });
 });
 
