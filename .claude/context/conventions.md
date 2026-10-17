@@ -105,7 +105,7 @@ There is no navigation surface in this project; its analogue is the set of table
 - **A guard hook uses `set -u` and never `set -e`**, plus `set -f` where it handles an unquoted target: a guard that aborts mid-decision emits nothing useful, and failing open into the permission system is the designed outcome (`plugin/hooks/README.md` → `## Prerequisites`).
 - **A sourced library sets no shell options at all** — `plugin/hooks/lib/harness-config-lib.sh` and `cli/templates/scripts/lib/harness-run-lib.sh` both leave the sourcing script's shell exactly as they found it.
 - **Never shell out to a recursive removal.** A user-level `permissions.deny` on `rm -rf` is realistic, deny is evaluated before any allow and cannot be overridden, so a teardown implemented as a shelled-out `rm -rf` is silently blocked with no useful error. Use an in-process removal (`cli/src/cli.ts` header; `cli/src/core/writer.ts`, whose single removal is called without `recursive`).
-- **Never `git add -A` or `git add .`.** Staging is always an explicit repo-relative path set, passed to the commit wrapper, which stages exactly those paths (`plugin/agents/committer.md`).
+- **Never `git add -A` or `git add .`.** Staging is always an explicit repo-relative path set. A dispatched agent's commit point passes it to the commit wrapper, which stages exactly those paths (`plugin/agents/committer.md`); the run watcher's and `remote-run.sh`'s artifact commits commit exactly one path, through `hr_commit_placed`, which builds the commit in a temporary index from the branch tip plus that one entry — leaving whatever the run has staged out of it — and runs no hook (`cli/templates/scripts/lib/harness-run-lib.sh`); `refresh-branch.sh` stages nothing — its merge commit is built by `git merge-tree --write-tree` and `commit-tree`, and runs no hook either.
 - **A command an unattended run issues must be spellable as a literal.** A `$(…)`, a backtick, a pipe, a `<`, a `>` that is not a descriptor duplication or `/dev/null`, or a braced expansion other than a bare `${IDENT}` anywhere in the command string — a commit subject included — withdraws the script-allowlist guard's permit, and the call, left without one, is refused at once in an unattended run (`plugin/hooks/autonomous-script-allowlist-guard.sh`).
 
 ## Plugin asset authoring
@@ -164,11 +164,13 @@ There is no navigation surface in this project; its analogue is the set of table
 | **Fixing existing work** — the class the review-fix loops commit in | **`none`**, on the same terms. |
 | A run artifact the flow emits on its own behalf | The fixed form below, each of which carries `chore:`. |
 
+A merge commit `refresh-branch.sh` writes is outside this table and every rule below but the trailer ban: its message is `Merge branch '<base>' into <branch>` or `Merge remote-tracking branch 'origin/<base>' into <branch>`, fixed by the script as `git merge` would spell it.
+
 **Capitalisation.** The first word after the prefix is **capitalized**. Where the prefix is `none`, the rule applies to the description's first word instead.
 
 **Subject-length cap: 72 characters.** No source in this tree states a cap; this document sets it, and every subject in the repository's history clears it.
 
-**Attribution trailers are forbidden.** No trailer naming an agent, a model or a session — no `Co-Authored-By:`, no `Claude-Session:`. This repository keeps a single commit identity, its history carries no such trailer, and the autonomous flows say so at every commit point they own (`plugin/instructions/task_plan_writing_instructions_autonomous.md`, `plugin/instructions/user_review_fixes_instructions_autonomous.md`: *"no `Co-Authored-By:` / trailer"*), enforced by the commit wrapper, which builds the message from the positional arguments after `--` only.
+**Attribution trailers are forbidden.** No trailer naming an agent, a model or a session — no `Co-Authored-By:`, no `Claude-Session:`. This repository keeps a single commit identity, its history carries no such trailer, and the autonomous flows say so at every commit point they own (`plugin/instructions/task_plan_writing_instructions_autonomous.md`, `plugin/instructions/user_review_fixes_instructions_autonomous.md`: *"no `Co-Authored-By:` / trailer"*). A dispatched agent's commit point has it enforced by the commit wrapper, which builds the message from the positional arguments after `--` only; the run watcher's and `remote-run.sh`'s artifact commits by `hr_commit_placed`, whose message is the single fixed subject its caller passes — `hr_task_prompt_subject` or `hr_user_review_subject` in `cli/templates/scripts/lib/harness-run-lib.sh`, or the watcher's own docs-checklist literal — and nothing else; `refresh-branch.sh`'s merge commit by its own fixed message, the one `git merge` would have used.
 
 **Fixed-form subjects — exempt from the capitalisation rule and from the length cap, and passed byte-for-byte by the commit point that owns each.** Re-casing or truncating one breaks that commit point.
 
@@ -180,6 +182,7 @@ There is no navigation surface in this project; its analogue is the set of table
 - `chore: add code review for <branch>`
 - `chore: add docs checklist for <branch>`
 - `chore: add task prompt for <branch>`
+- `chore: add user review for <branch>`
 - `chore: Flow progress <entry-id> for <branch>`
 - `chore: Log dispatch additions for <branch>`
 - `chore: Log improvement observations for <branch>`
