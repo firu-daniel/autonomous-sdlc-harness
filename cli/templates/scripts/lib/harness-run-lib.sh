@@ -107,7 +107,7 @@
 #      `hr_registry_set`) and the `hr_registry_lock` / `hr_registry_unlock`
 #      pair `hr_registry_set` calls.
 #   3. THE REMOTE STATE BUNDLE writes the files its format lists. Fence: inside
-#      `<root>/<state_dir>/` (resolved through `hr_state_dir`), only
+#      `<root>/<state_dir>/` (resolved through `hr_remote_state_dir_var`), only
 #      `autonomous_logs/remote_status.json`, `clarifications/<branch>/`,
 #      `PAUSE_PROGRESS.md`, `.flow_walker_state`, the move-aside directory
 #      `autonomous_logs/remote_superseded/` and, only where nothing exists yet,
@@ -119,7 +119,9 @@
 #      `hr_remote_move_aside` alone. Written only by `hr_remote_status_write`,
 #      `hr_remote_bundle_write`, `hr_remote_bundle_restore` and
 #      `hr_remote_move_aside`, and nothing there but a writer's own failed temp
-#      file is ever removed.
+#      file is ever removed. Also `hr_remote_state_dir_var`'s private
+#      `mktemp -d` directory and the one `harness.config.json` it holds, removed
+#      (`rm -f`, then `rmdir`) before it returns.
 #   4. THE ARTIFACT PLACEMENT writes one artifact into a working copy and
 #      commits it. Fence: the caller-named `<worktree>/<rel>` and its parent
 #      directories; the objects `hash-object -w` and `commit-tree` write to the
@@ -163,7 +165,8 @@
 #
 # A caller that calls no `hr_lane_*`, `hr_registry_init`, `hr_registry_set`,
 # `hr_remote_record_init`, `hr_registry_lock`, `hr_registry_unlock`, `hr_remote_status_write`,
-# `hr_remote_bundle_write`, `hr_remote_bundle_restore`, `hr_remote_move_aside`, `hr_place_artifact`,
+# `hr_remote_bundle_write`, `hr_remote_bundle_restore`, `hr_remote_move_aside`,
+# `hr_remote_state_dir_var`, `hr_place_artifact`,
 # `hr_commit_placed`, `hr_push_landed`, `hr_run_fast_forward_var`, `hr_run_reset_var`,
 # `hr_run_trusted_base_var`, `hr_run_surface_check_var` (through it), `hr_run_main_git` or
 # `hr_run_copy_git` function still gets a library that only reads. The
@@ -176,6 +179,9 @@
 # `GITHUB_REPOSITORY` and `HARNESS_INPUT_CHAIN` are read by
 # `hr_remote_status_write` alone, as provenance values copied into
 # `status.json` — never a configured value and never policy.
+# `HARNESS_GITHUB_DEFAULT_COMMIT` is read by `hr_remote_state_dir_var` alone, to
+# choose WHICH `harness.config.json` is read — the one at that commit — never
+# as a value in place of one.
 #
 # CONFIGURATION IS READ AT RUN TIME, NOT FROZEN AT GENERATION TIME. That is the
 # whole reason the shipped scripts carry no `{{token}}`: a guard whose protected
@@ -264,7 +270,11 @@
 # take the registry lock. The artifact placement's three writers likewise leave
 # `mkdir`'s, `cp`'s, git's and the push wrapper's own output on their stdout
 # and stderr for the caller to redirect into its log, and `hr_commit_placed`
-# adds its own refusal lines on stderr. `hr_run_fast_forward_var` and
+# adds its own refusal lines on stderr. `hr_remote_bundle_write` (through
+# `hr_remote_bundle_source_ok`) and `hr_remote_copy_tree` print one
+# `remote state bundle: skipped …` line on stderr per source or entry they
+# skip, because a skipped source still yields a written bundle and the job's
+# log is the only place the skip can be seen. `hr_run_fast_forward_var` and
 # `hr_run_reset_var` leave the stderr of their writing git calls (`read-tree`,
 # `update-ref`) to the caller too.
 # That silence is why the lane reports a lock it BROKE through a
@@ -285,8 +295,11 @@
 # `HR_LANE_OWNER_AT` and `HR_LANE_BROKEN_OWNER`, and the remote state bundle's
 # names, which `hr_remote_names_var` assigns, with `HR_REMOTE_PLANNING_PATHS`
 # (`hr_remote_planning_paths`) and `HR_REMOTE_PLANNING_PLACED` /
-# `HR_REMOTE_PLANNING_KEPT` (`hr_remote_bundle_restore`) and `HR_REMOTE_ASIDE`
-# (`hr_remote_move_aside`), and the watcher family's `HR_RUN_MAIN`,
+# `HR_REMOTE_PLANNING_KEPT` (`hr_remote_bundle_restore`), `HR_REMOTE_ASIDE`
+# (`hr_remote_move_aside`), `HR_REMOTE_STATE_DIR`, `HR_REMOTE_STATE_FROM`,
+# `HR_REMOTE_STATE_WHY` and `HR_REMOTE_STATE_CHECKOUT`
+# (`hr_remote_state_dir_var`) and `HR_REMOTE_LINKED`
+# (`hr_remote_link_free_var`), and the watcher family's `HR_RUN_MAIN`,
 # `HR_RUN_REFUSAL`, `HR_RUN_TRUSTED_BASE`, `HR_RUN_COPY_TOP`,
 # `HR_RUN_COPY_GITDIR`, `HR_RUN_COPY_BRANCH`, `HR_RUN_COPY_TIP`,
 # `HR_RUN_SURFACE_REFUSAL`, `HR_RUN_WT_DIFF`, `HR_RUN_FF_REFUSAL` and
@@ -3321,20 +3334,191 @@ hr_remote_status_get() {
   esac
 }
 
+# hr_remote_state_dir_var <root>
+#
+# Resolves the state directory `hr_remote_bundle_write`, `hr_remote_bundle_restore`
+# and `hr_remote_move_aside` use under <root>. Call it directly, never inside
+# `$(…)`. Assigns, all empty at entry:
+#   HR_REMOTE_STATE_DIR       the repo-relative state directory, normalised as
+#                             `hr_state_dir` prints it
+#   HR_REMOTE_STATE_FROM      `trusted` or `checkout`
+#   HR_REMOTE_STATE_WHY       one sentence naming the source and why it applies
+#   HR_REMOTE_STATE_CHECKOUT  the checkout's own `hr_state_dir "$root"` value
+#                             (empty when unreadable); equal to
+#                             HR_REMOTE_STATE_DIR in `checkout` mode
+# 0 resolved; 1 a missing argument; 2 unresolvable.
+#
+# IN A JOB (`HARNESS_GITHUB_DEFAULT_COMMIT` non-empty) THE SOURCE IS TRUSTED:
+# `harness.config.json` at that commit, which the workflow records before any
+# session, because the checkout's own copy is the session's to rewrite. The
+# value must be a full 40- or 64-character lower-case object id. The blob is
+# read through `hr_run_main_git` (no hook, no replace refs, no grafts) into a
+# private `mktemp -d` directory and resolved there by `hr_state_dir`, so there
+# is no second configuration parser; the file is removed and the directory
+# `rmdir`ed. A bad id, or a commit, blob or configuration that cannot be read,
+# is 2 with no fallback to the checkout. The read still goes through the
+# object store the session shares, whose loose-object substitution is
+# `docs/cli.md` §6 residual 1, item 6.
+#
+# OUTSIDE A JOB (the variable empty or unset: a local `sync` into a mirror, or
+# the watcher locally) THE SOURCE IS THE CHECKOUT: there is no recorded commit,
+# and the checkout is the user's own mirror or main checkout.
+#
+# `hr_run_main_set_var` runs in a subshell, so every `HR_RUN_*` global — which
+# the watcher's job mode holds when it calls `hr_remote_move_aside` — is left
+# exactly as found, set or unset. The checkout's configuration is read last, so
+# the per-process cache ends keyed on <root>, never on the removed directory.
+hr_remote_state_dir_var() {
+  local root="${1-}" commit="${HARNESS_GITHUB_DEFAULT_COMMIT-}" tmp value rc=0
+  HR_REMOTE_STATE_DIR=''
+  HR_REMOTE_STATE_FROM=''
+  HR_REMOTE_STATE_WHY=''
+  HR_REMOTE_STATE_CHECKOUT=''
+  [ -n "$root" ] || return 1
+  if [ -n "$commit" ]; then
+    case "$commit" in
+      *[!0-9a-f]*) rc=2 ;;
+    esac
+    [ "${#commit}" -eq 40 ] || [ "${#commit}" -eq 64 ] || rc=2
+    tmp=''
+    if [ "$rc" -eq 0 ]; then
+      tmp=$(mktemp -d "${TMPDIR:-/tmp}/hr-remote-state.XXXXXX" 2>/dev/null) || { tmp=''; rc=2; }
+    fi
+    if [ "$rc" -eq 0 ]; then
+      if ( hr_run_main_set_var "$root" \
+        && hr_run_main_git cat-file blob "$commit:harness.config.json" >"$tmp/harness.config.json" ) 2>/dev/null \
+        && value=$(hr_state_dir "$tmp"); then
+        HR_REMOTE_STATE_DIR=$value
+        HR_REMOTE_STATE_FROM='trusted'
+        HR_REMOTE_STATE_WHY="stateDir is read from harness.config.json at the recorded default-branch commit $commit (HARNESS_GITHUB_DEFAULT_COMMIT), because inside a job the checkout's own copy is the session's to rewrite"
+      else
+        rc=2
+      fi
+    fi
+    if [ -n "$tmp" ]; then
+      rm -f "$tmp/harness.config.json"
+      rmdir "$tmp" 2>/dev/null
+    fi
+    hr_config_load "$root" >/dev/null 2>&1 || :
+    if [ "$rc" -eq 0 ]; then
+      HR_REMOTE_STATE_CHECKOUT=$(hr_state_dir "$root") || HR_REMOTE_STATE_CHECKOUT=''
+    fi
+    return "$rc"
+  fi
+  hr_config_load "$root" >/dev/null 2>&1 || :
+  value=$(hr_state_dir "$root") || return 2
+  HR_REMOTE_STATE_DIR=$value
+  HR_REMOTE_STATE_FROM='checkout'
+  HR_REMOTE_STATE_CHECKOUT=$value
+  HR_REMOTE_STATE_WHY="stateDir is read from the checkout's own harness.config.json, because HARNESS_GITHUB_DEFAULT_COMMIT is unset outside a job and the checkout is the user's own mirror or main checkout"
+  return 0
+}
+
+# hr_remote_link_free_var <root> <rel>
+#
+# 0 when no component of `<root>/<rel>` below <root> is a symbolic link, each
+# prefix from <rel>'s first segment down to the leaf tested with `[ -L ]`; a
+# component that does not exist is not a link. 1 otherwise, with
+# `HR_REMOTE_LINKED` (empty at entry) the absolute path of the first linked
+# component; also 1, with it empty, on a missing argument. Builtins only.
+hr_remote_link_free_var() {
+  local root="${1-}" rest="${2-}" path seg
+  HR_REMOTE_LINKED=''
+  [ -n "$root" ] && [ -n "$rest" ] || return 1
+  path=${root%/}
+  while [ -n "$rest" ]; do
+    seg=${rest%%/*}
+    if [ "$seg" = "$rest" ]; then
+      rest=''
+    else
+      rest=${rest#*/}
+    fi
+    [ -n "$seg" ] || continue
+    path="$path/$seg"
+    if [ -L "$path" ]; then
+      HR_REMOTE_LINKED=$path
+      return 1
+    fi
+  done
+  return 0
+}
+
+# hr_remote_copy_tree <src> <dst>
+#
+# Recreates the directory <src> at <dst>: every directory, empty ones included,
+# and every regular file, dot-files included, each with a plain `cp`. A
+# symbolic link at any depth is neither copied nor followed, and gets one
+# stderr line, `remote state bundle: skipped <path>: <path> is a symbolic link`;
+# any other non-regular entry gets the same form ending `is not a regular
+# file`. `find` runs with no `-L` / `-H`, so on BSD and GNU alike the walk
+# never descends through a link. 0 copied; 1 a missing argument, a <src> that is
+# not a directory or is a link, or a failed `mkdir` / `cp`.
+hr_remote_copy_tree() {
+  local src="${1-}" dst="${2-}" entry target
+  [ -n "$src" ] && [ -n "$dst" ] || return 1
+  src=${src%/}
+  dst=${dst%/}
+  [ -d "$src" ] && [ ! -L "$src" ] || return 1
+  # Process substitution, not a pipe: `return 1` must reach the caller.
+  while IFS= read -r -d '' entry; do
+    target="$dst${entry#"$src"}"
+    if [ -L "$entry" ]; then
+      printf 'remote state bundle: skipped %s: %s is a symbolic link\n' "$entry" "$entry" >&2
+    elif [ -d "$entry" ]; then
+      mkdir -p "$target" 2>/dev/null || return 1
+    elif [ -f "$entry" ]; then
+      cp "$entry" "$target" 2>/dev/null || return 1
+    else
+      printf 'remote state bundle: skipped %s: %s is not a regular file\n' "$entry" "$entry" >&2
+    fi
+  done < <(find "$src" -print0 2>/dev/null)
+  return 0
+}
+
 # hr_remote_bundle_write <root> <branch> <registry_file> <out_dir>
 #
 # Assembles the format above in <out_dir>, which must be absent or empty, from
-# <root>'s configured state directory. `status.json` is the job's own
-# `autonomous_logs/remote_status.json` when present; otherwise it is written
-# from <branch>'s registry record with decision `stop`, because a job that never
-# wrote its status never decided to continue. Each planning path present is
-# copied under `planning/`, whether or not the branch tracks it: the restore
-# never overwrites, so a tracked copy is inert. 0 written; 1 a missing argument,
-# a non-empty <out_dir> or a failed copy; 2 <root>'s configuration unresolvable.
+# the state directory `hr_remote_state_dir_var` resolves for <root>.
+# `status.json` is the job's own `autonomous_logs/remote_status.json` when
+# present; otherwise it is written from <branch>'s registry record with decision
+# `stop`, because a job that never wrote its status never decided to continue.
+# Each planning path present is copied under `planning/`, whether or not the
+# branch tracks it: the restore never overwrites, so a tracked copy is inert.
+# 0 written; 1 a missing argument, a non-empty <out_dir> or a failed copy; 2
+# <root>'s configuration, or the trusted one, unresolvable.
+#
+# A LINKED SOURCE IS SKIPPED, AND THE REST IS STILL WRITTEN. Before a source is
+# tested or copied, `hr_remote_link_free_var` checks every component of
+# `<state_dir>/<source>`; on a link the source is skipped with one stderr line,
+# `remote state bundle: skipped <path>: <linked> is a symbolic link`, both
+# absolute. A linked `remote_status.json` falls through to the registry-derived
+# `status.json`, as an absent one does. Directory sources go through
+# `hr_remote_copy_tree`, so no link inside one is copied or followed either:
+# the bundle holds no link at all.
+#
+# WHY NOT `cp -R`, MEASURED 2026-10-17. Command, in a fresh `mktemp -d`:
+#   mkdir -p src/sub; echo secret > sentinel; echo hi > src/a
+#   ln -s "$PWD/sentinel" src/sub/link; ln -s "$PWD/src" argl
+#   cp -R src out1; ls -l out1/sub/link | cut -c1
+#   cp -R argl out2; ls -ld out2 | cut -c1
+#   - macOS 15.7.4, `/bin/cp`: `inside: l`, `arg: l` — both copied AS links.
+#   - GNU coreutils 9.7 (`cp (GNU coreutils) 9.7`, the local
+#     `python:3.12-slim` image under `docker run --network none`): `inside: l`,
+#     `arg: l` — the same.
+# Neither follows, but both put a link into the bundle, and whether
+# `actions/upload-artifact` then follows it is not measured: it cannot be run
+# locally. The copy here writes no link, so that answer no longer decides what
+# is published.
 hr_remote_bundle_write() {
-  local root="${1-}" branch="${2-}" registry="${3-}" out="${4-}" state base clarify rel dst
+  local root="${1-}" branch="${2-}" registry="${3-}" out="${4-}" state base rel dst rc=0
   [ -n "$root" ] && [ -n "$branch" ] && [ -n "$registry" ] && [ -n "$out" ] || return 1
-  state=$(hr_state_dir "$root") || return 2
+  hr_remote_state_dir_var "$root" || rc=$?
+  case "$rc" in
+    0) ;;
+    2) return 2 ;;
+    *) return 1 ;;
+  esac
+  state=$HR_REMOTE_STATE_DIR
   hr_remote_names_var
   base="${root%/}/$state"
   out=${out%/}
@@ -3344,41 +3528,55 @@ hr_remote_bundle_write() {
   fi
   mkdir -p "$out" 2>/dev/null || return 1
 
-  if [ -f "$base/$HR_REMOTE_STATUS_SOURCE" ]; then
+  if hr_remote_bundle_source_ok "$root" "$state/$HR_REMOTE_STATUS_SOURCE" \
+    && [ -f "$base/$HR_REMOTE_STATUS_SOURCE" ]; then
     cp "$base/$HR_REMOTE_STATUS_SOURCE" "$out/$HR_REMOTE_STATUS_FILE" 2>/dev/null || return 1
   else
     hr_remote_status_write "$registry" "$branch" "$out/$HR_REMOTE_STATUS_FILE" stop \
       "the job wrote no status; derived from the registry record when the bundle was saved" || return 1
   fi
-  if [ -d "$base/$HR_REMOTE_CLARIFY_DIR/$branch" ]; then
-    clarify="$out/$HR_REMOTE_CLARIFY_DIR/$branch"
-    mkdir -p "${clarify%/*}" 2>/dev/null || return 1
-    # No trailing slash on the source: BSD `cp -R dir/` copies the contents instead.
-    cp -R "$base/$HR_REMOTE_CLARIFY_DIR/$branch" "$clarify" 2>/dev/null || return 1
+  if hr_remote_bundle_source_ok "$root" "$state/$HR_REMOTE_CLARIFY_DIR/$branch" \
+    && [ -d "$base/$HR_REMOTE_CLARIFY_DIR/$branch" ]; then
+    dst="$out/$HR_REMOTE_CLARIFY_DIR/$branch"
+    mkdir -p "${dst%/*}" 2>/dev/null || return 1
+    hr_remote_copy_tree "$base/$HR_REMOTE_CLARIFY_DIR/$branch" "$dst" || return 1
   fi
-  if [ -f "$base/$HR_REMOTE_PAUSE_FILE" ]; then
+  if hr_remote_bundle_source_ok "$root" "$state/$HR_REMOTE_PAUSE_FILE" \
+    && [ -f "$base/$HR_REMOTE_PAUSE_FILE" ]; then
     cp "$base/$HR_REMOTE_PAUSE_FILE" "$out/$HR_REMOTE_PAUSE_FILE" 2>/dev/null || return 1
   fi
-  if [ -f "$base/$HR_REMOTE_WALKER_SOURCE" ]; then
+  if hr_remote_bundle_source_ok "$root" "$state/$HR_REMOTE_WALKER_SOURCE" \
+    && [ -f "$base/$HR_REMOTE_WALKER_SOURCE" ]; then
     cp "$base/$HR_REMOTE_WALKER_SOURCE" "$out/$HR_REMOTE_WALKER_FILE" 2>/dev/null || return 1
   fi
-  if [ -f "$base/$HR_REMOTE_LOGS_DIR/$branch.log" ]; then
+  if hr_remote_bundle_source_ok "$root" "$state/$HR_REMOTE_LOGS_DIR/$branch.log" \
+    && [ -f "$base/$HR_REMOTE_LOGS_DIR/$branch.log" ]; then
     cp "$base/$HR_REMOTE_LOGS_DIR/$branch.log" "$out/$HR_REMOTE_LOG_FILE" 2>/dev/null || return 1
   fi
   hr_remote_planning_paths "$branch" || return 1
   while IFS= read -r rel; do
+    hr_remote_bundle_source_ok "$root" "$state/$rel" || continue
     dst="$out/$HR_REMOTE_PLANNING_DIR/$rel"
     if [ -f "$base/$rel" ]; then
       mkdir -p "${dst%/*}" 2>/dev/null || return 1
       cp "$base/$rel" "$dst" 2>/dev/null || return 1
     elif [ -d "$base/$rel" ]; then
       mkdir -p "${dst%/*}" 2>/dev/null || return 1
-      cp -R "$base/$rel" "$dst" 2>/dev/null || return 1
+      hr_remote_copy_tree "$base/$rel" "$dst" || return 1
     fi
   done <<EOF
 $HR_REMOTE_PLANNING_PATHS
 EOF
   return 0
+}
+
+# hr_remote_bundle_source_ok <root> <rel> — `hr_remote_bundle_write`'s per-source
+# gate: 0 when `hr_remote_link_free_var` passes; 1 after printing the skip line.
+hr_remote_bundle_source_ok() {
+  hr_remote_link_free_var "${1-}" "${2-}" && return 0
+  [ -n "$HR_REMOTE_LINKED" ] || return 1
+  printf 'remote state bundle: skipped %s: %s is a symbolic link\n' "${1%/}/${2-}" "$HR_REMOTE_LINKED" >&2
+  return 1
 }
 
 # hr_remote_move_aside <root> <rel_path>
@@ -3402,7 +3600,8 @@ hr_remote_move_aside() {
   case "/$rel/" in
     */../*) return 1 ;;
   esac
-  state=$(hr_state_dir "$root") || return 2
+  hr_remote_state_dir_var "$root" || return 2
+  state=$HR_REMOTE_STATE_DIR
   hr_remote_names_var
   base="${root%/}/$state"
   [ -e "$base/$rel" ] || [ -L "$base/$rel" ] || return 3
@@ -3459,7 +3658,8 @@ hr_remote_bundle_restore() {
   bundle=${bundle%/}
   named=$(hr_remote_status_get "$bundle/$HR_REMOTE_STATUS_FILE" branch) || return 2
   [ "$named" = "$branch" ] || return 2
-  state=$(hr_state_dir "$root") || return 2
+  hr_remote_state_dir_var "$root" || return 2
+  state=$HR_REMOTE_STATE_DIR
   base="${root%/}/$state"
 
   if [ -d "$bundle/$HR_REMOTE_CLARIFY_DIR/$branch" ]; then
