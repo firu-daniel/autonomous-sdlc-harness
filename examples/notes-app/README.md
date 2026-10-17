@@ -108,9 +108,12 @@ file to land in — **`.claude/settings.autonomous.json`, and nothing else**. Be
 `grep -rln "/Users/\|/home/" .` over the copied tree returned that path alone; the run's own
 artifacts quote no machine path, so clauses (2) and (3) had nothing left to rewrite after clause (1)
 and the home-directory and account-name fallbacks never fired. In that file 28 machine-path
-occurrences became 0, and it now carries 28 `/workspace`-rooted occurrences across 23 lines: 27
-`/workspace/notes-app`, eleven of them the sibling worktree glob `/workspace/notes-app-*`, and one
-bare `/workspace`. Every occurrence was substituted, **prose included** — the two `_comment`
+occurrences became 0. A later re-render of its sandbox, permission-mode and `deny` entries ran the
+same three clauses, and on that pass the home-directory clause fired: the credential `Read` denies
+name the generating machine's home directory, which became `/workspace`. The file now carries 220
+`/workspace`-rooted occurrences across 179 lines: 189 `/workspace/notes-app`, 33 of them the
+sibling worktree glob `/workspace/notes-app-*`; 30 home-directory ones, the
+`Read(//workspace/.ssh)` family; and one bare `/workspace`. Every occurrence was substituted, **prose included** — the two `_comment`
 sentences that quote the file rules and the sibling-glob relation, every `Read` / `Edit` / `Write`
 file rule, every wrapper `Bash` entry, and the state-directory entry under `additionalDirectories` —
 and the derived relation `init` wrote is preserved: the work root is the repository root's parent

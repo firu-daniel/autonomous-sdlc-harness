@@ -10,7 +10,7 @@
 #
 # WHY IT EXISTS. An unattended run is driven by a task prompt the flow did not
 # write. It must be able to run the repository's own version-controlled wrapper
-# scripts without an interactive approval — an unanswerable prompt is a stall —
+# scripts without an interactive approval — an unattended run refuses the call —
 # but it must NOT be able to run an arbitrary script a prompt points it at: a
 # downloaded payload, a script somewhere outside the workspace, or a deployment.
 # This guard is what separates those two cases.
@@ -135,8 +135,8 @@
 # binaries because it judges tiny commands (`cat <path>`), where a false positive
 # costs nothing. This guard judges commands carrying prose and paths — a commit
 # subject mentioning `sed`, a path component `node` — and in an allow-only guard
-# a false positive is silence, which is a prompt, which in an unattended run is a
-# stall. A token list also enumerates the attacker's tools, an open-ended set in
+# a false positive is silence, which is a prompt, which an unattended run
+# refuses. A token list also enumerates the attacker's tools, an open-ended set in
 # which every unlisted binary is a gap; the construct set is closed and specified
 # by POSIX. Adding a SHORT list of unambiguous network and interpreter names
 # (`curl`, `wget`, `nc`, `base64`) on top of this scan is deferred, not rejected —
@@ -252,7 +252,7 @@
 # quotes is stripped. A quoted path (`"…/<wrapper>.sh"`) MUST resolve identically
 # to a bare one — otherwise the trailing quote makes the token end in `.sh"`,
 # defeats the suffix match, and a legitimately-quoted wrapper invocation falls
-# through to `ask` and STALLS an unattended run. That is a real escape this
+# through to `ask`, which an unattended run refuses. That is a real escape this
 # normalization was added to fix, and it must survive every future edit.
 # Strip-then-match is allow-only-safe: a stripped token that still does not sit
 # under an allowed scripts directory simply fails the checks below and falls
@@ -370,7 +370,7 @@
 #
 #     bash <repo>/<scripts dir>/<wrapper>.sh          absolute
 #     cd <repo> && bash <scripts dir>/<wrapper>.sh    relative to a leading `cd`
-#     bash "<repo>/<scripts dir>/<wrapper>.sh"        quoted (the stall escape)
+#     bash "<repo>/<scripts dir>/<wrapper>.sh"        quoted (the refused-wrapper escape)
 #     bash <work_root>/<project_name>-<branch>/<scripts dir>/<wrapper>.sh
 #                                                     sibling worktree of <repo>
 #     bash <repo>/<scripts dir>/<wrapper>.sh 2>&1     descriptor duplication

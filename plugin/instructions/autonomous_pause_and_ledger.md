@@ -27,6 +27,7 @@ ordinary path placeholder, exactly as it uses `<branch>`, `<entry-id>` and `<n>`
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this run is executing in — in an autonomous run, the run's **own worktree**, not the main checkout. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to, the ledger and the four pause sentinels included. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the project-command wrapper scripts live in. The three outer-loop scripts this file names (`autonomous-watcher.sh`, `commit-on-branch.sh`, `push-branch.sh`) are written into it by setup as well — copied verbatim rather than rendered from a detected command line, since each reads the configuration at run time — so every `<scripts_dir>/…` invocation below resolves in a wired repository. The two guard hooks it names (`allow-safe-compounds.sh`, `git-commit-branch-guard.sh`) ship as plugin hooks and are **not** under it either: they are named bare and take no prefix. |
+| `<MAIN_REPO>` | derived at runtime | The main checkout — the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into. Never a remembered branch name. Bound for completeness — no step in this file consumes it. |
 | `<protected_branches>` | config value | `protectedBranches` — the branches the commit wrapper and the `git-commit-branch-guard.sh` hook refuse to commit or push to, and the set the guard quotes back in its refusal message (§1.6). The effective set is these together with `<default_branch>`. |
 | `<worktree_glob>` | derived at runtime | The **parent directory of `<repo_root>`** (the work root) joined to the configured `projectName` stem and a `-*` suffix — the sibling-worktree pattern an autonomous run's per-branch worktrees match, and the pattern the generated permission profile is materialized with. It is **absolute**, so a permission rule written over it takes one leading slash of its own — `Write(/<worktree_glob>/**)`, two slashes in the rendered rule, never three; §2.2 sub-step (a) states that rule where it is used. |
@@ -82,7 +83,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - [ ] C2g.    Skeptic review resolved (index committed — or PASS with no net-new findings, no file written)
 - [ ] C2m.    Skeptic meta-review PASS — or not owed (C2.1 returned PASS, so C2.2 never ran)
 - [ ] C2f.    Skeptic findings fixed (findings index all [x] — or no index, the review having passed clean)
-- [ ] E.      QA passed (UI-test index all [x] / no_ui)
+- [ ] E.      QA passed (UI-test index all [x], or only blocked tests left / no_ui)
 - [ ] G.      Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
 - [ ] D.      Branch statistics committed & pushed
 ```
@@ -103,7 +104,7 @@ Source: <state_dir>/task_prompts/<branch>_task_prompt.md → `### Run mode`
 - [ ] R2. Fix plan + source review committed
 ## Fixing
 - [ ] R3. All fix-plan findings implemented (fix-plan index all [x])
-- [ ] R4. QA passed (UI-test index all [x] / no_ui / no-op augment)
+- [ ] R4. QA passed (UI-test index all [x], or only blocked tests left / no_ui / no-op augment)
 - [ ] RG. Run gates passed (the Run gates wrapper printed pass: test passed, typecheck passed or not run for <none>)
 - [ ] R5. Post-user-review statistics committed
 ```
@@ -284,8 +285,13 @@ should have been `[-]` and was seeded `[ ]` is corrected by fixing the **seeding
 
 ### 1.6 How to flip / create — direct `commit-on-branch.sh`, NEVER a committer dispatch
 Each flip (and the initial creation) is: **Edit the ledger file, then commit and push via the wrapper** —
-`<scripts_dir>/commit-on-branch.sh`, then `<scripts_dir>/push-branch.sh`, using the `$REPO_ROOT` the fork
-resolved at session start (both wrapper paths are repo-relative and take no app-root prefix). Fixed subject `chore: Flow progress <entry-id> for <branch>`
+`<scripts_dir>/commit-on-branch.sh`, then `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>`, the commit using
+the `$REPO_ROOT` the fork resolved at session start (the commit wrapper's path is repo-relative and takes no
+app-root prefix; the push names `<MAIN_REPO>`'s copy, because that copy is the one the unattended permission
+profile runs outside the sandbox). Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the
+absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a worktree, the script-allowlist
+guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only
+grant, and a command carrying a shell expansion does not match it. Fixed subject `chore: Flow progress <entry-id> for <branch>`
 (e.g. `chore: Flow progress A1.5f for <branch>`; for creation, `chore: Add flow-progress ledger for
 <branch>`). No `Co-Authored-By:` / trailer, no `--no-verify` — the wrapper enforces both.
 
@@ -293,8 +299,8 @@ resolved at session start (both wrapper paths are repo-relative and take no app-
 push on the commit's exit code with a shell conditional** (`commit … ; if [ "$?" -eq 0 ]; then push … ; fi`).
 That compound is a headless trap: `allow-safe-compounds.sh` splits on `;` and the ` then bash push-branch.sh …`
 piece begins with a non-allow-listed `then`/`bash` prefix, so the whole command falls through the safe-compound
-allow — and nothing else matches it either, so the run **stalls on a permission prompt it cannot answer
-headlessly** and the commit is never made. No guard rescues it and none refuses it:
+allow — and nothing else matches it either, so the call **is refused at once rather than prompting**
+and the commit is never made. No guard rescues it and none refuses it:
 `git-commit-branch-guard.sh` judges only a piece whose own command word is `git`, and it judges the repository
 that command names, so a `bash <scripts_dir>/commit-on-branch.sh …` piece is outside its scope by construction
 and it stays silent — its own protected-branch `ask`, which quotes the configured set back, is reserved for a
@@ -306,7 +312,7 @@ those out of the command itself and not only out of the compound (`$?` and `${br
 exit-0 gate is needed anyway:
 `push-branch.sh` is non-fatal and only fast-forwards already-committed work, so an unconditional push is a
 harmless no-op ("Everything up-to-date") whenever the wrapper made no new commit — including the idempotent
-exit-3 re-flip. If a flip ever does hang on an unanswerable permission prompt, treat the commit as **not
+exit-3 re-flip. If a flip is ever refused, treat the commit as **not
 landed** and re-run it as a plain single-statement command.
 
 This is **NOT** a `committer` agent dispatch, for three reasons — the same rationale the task flow's Override
@@ -322,7 +328,7 @@ D uses for `statistics.md`:
 3. **Nothing to infer.** The fork already knows exactly which entry it just completed.
 
 `commit-on-branch.sh` is the same wrapper the committer uses internally, so the fork inherits identical
-safety (no shell-expansion stall on `${branch}`, explicit-path staging — never `git add -A`/`.`,
+safety (no shell-expansion refusal on `${branch}`, explicit-path staging — never `git add -A`/`.`,
 protected-branch refusal, the exit-code 0/1/2/3 contract). **Idempotency:** re-flipping an already-`[x]`
 entry stages no diff → the wrapper returns **exit 3** (nothing to commit) → no commit is made, and the
 unconditional push that follows is a harmless "Everything up-to-date" no-op (there is **no** exit-0 gate —
@@ -465,7 +471,7 @@ The safety contract runs **before every Agent dispatch** and already does the pe
    — only a **bare** `git status …` matches the `Bash(git status:*)` allow entry, whereas
    `git -C <worktree-root> status` matches **no** allow entry (the generated permission profile at
    `.claude/settings.autonomous.json` allow-lists `Bash(git status:*)` and carries no `git -C …` entry at all, so
-   any `-C` form falls through to neither `allow` nor `deny`) and stalls. The bare form is correct because the
+   any `-C` form matches no `allow` or `deny` rule) and is refused. The bare form is correct because the
    run's cwd is the worktree root (the engine never `cd`s) and `git status` reports the whole worktree's tracked
    state regardless. Read its lines: if every line begins with `??` (untracked) or there is no output, the
    **tracked** tree is clean; any line NOT beginning with `??` (a staged/modified/renamed/deleted tracked
@@ -489,13 +495,13 @@ The safety contract runs **before every Agent dispatch** and already does the pe
         third gives the same silent nothing from the other side.
      b. Create the ack marker `<state_dir>/PAUSE_ACK` with the **`Write` tool** (an empty/one-char file) or
         `echo "" > <state_dir>/PAUSE_ACK`. **Do NOT use `touch`** — `Bash(touch:*)` is **not** on the allow list
-        and stalls in the headless `-p` profile (same trap as the `-C` form above).
+        and is refused in the headless `-p` profile (same trap as the `-C` form above).
      c. Emit a one-line `PAUSED: <branch> — <phase>` to the run log (ordinary assistant output — no shell).
      d. **End the session** — truly stop and yield. Do NOT spin, poll, sleep, or re-dispatch. Ending the
         session is what makes the pause free of dispatch cost (same rule as a clarification park).
 
 Do **not** delete `<state_dir>/PAUSE` yourself (the watcher owns its lifecycle, and `rm` is not allow-listed in
-the generated profile — only `rm -rf` is on its deny floor, so a bare `rm` stalls rather than being refused). The
+the generated profile — only `rm -rf` is on its deny floor, so a bare `rm` is refused). The
 `PAUSE_PROGRESS.md` append and `PAUSE_ACK` write are ordinary `<state_dir>/…` writes (allowed under the profile)
 and are the run's only actions before ending.
 

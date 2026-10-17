@@ -65,7 +65,7 @@ import { isJsonObject, type JsonObject, type JsonValue } from '../core/json.js';
 import { packageRoot, parseRepoSlug } from '../core/paths.js';
 import { PLUGIN_NAME } from '../core/pluginIdentity.js';
 import type { WritePlan } from '../core/writer.js';
-import { PROFILE_PATH } from './permissionProfile.js';
+import { PROFILE_PATH } from './profileEntries.js';
 
 /** The marketplace's name, mirroring `.claude-plugin/marketplace.json`'s `name`. */
 export const MARKETPLACE_NAME = 'autonomous-sdlc-harness';
@@ -111,6 +111,9 @@ const CLAUDE_DIR = '.claude';
  * commit, and `doctor` reads it to check that both keys are still there.
  */
 export const SETTINGS_PATH = `${CLAUDE_DIR}/settings.json`;
+
+/** The adopter's local settings file; never written here, named so `writeProtection.ts` can protect it. */
+export const SETTINGS_LOCAL_PATH = `${CLAUDE_DIR}/settings.local.json`;
 
 /**
  * The flag that supplies the slug when this package's manifest cannot, and the shape it takes —

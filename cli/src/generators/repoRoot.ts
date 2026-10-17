@@ -92,7 +92,7 @@ import {
   PROFILE_PATH,
   QA_TEMPLATE_PATH as QA_PROFILE_FRAGMENT,
   RETRIEVAL_TEMPLATE_PATH as RETRIEVAL_PROFILE_FRAGMENT,
-} from './permissionProfile.js';
+} from './profileEntries.js';
 import { invokedPath, scriptInvocation } from './scripts.js';
 import { STATE_DIR_ENTRIES } from './stateDir.js';
 

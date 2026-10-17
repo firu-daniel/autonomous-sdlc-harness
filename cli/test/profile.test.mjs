@@ -2,13 +2,13 @@
  * The generated permission profile — the artifact whose failure modes are the reason it is generated
  * at all.
  *
- * **The rule these tests exist to enforce: an entry that matches neither `allow` nor `deny` stalls an
- * unattended run, and nothing about a stall is loud.** There is no error, no prompt and no log line —
- * the run parks. So each assertion below pins one shape that has already cost a run: a quoted path
- * that fails the guard's literal match, a compound command that matches no entry, a wrapper listed
- * for the checkout but not for its sibling worktrees, and a browser tool named in `deny`, which is
- * evaluated before any allow and would revoke the interactive-test agent's own grant. A later edit to
- * the shipped template cannot silently reintroduce any of them without failing here.
+ * **The rule these tests exist to enforce: a call that matches neither `allow` nor `deny` is refused
+ * in an unattended run, and a refused step is a missing step.** The step does not happen, and nothing
+ * else in the run announces it. So each assertion below pins one shape that has already cost a run:
+ * a quoted path that fails the guard's literal match, a compound command that matches no entry, a
+ * wrapper listed for the checkout but not for its sibling worktrees, and a browser tool named in
+ * `deny`, which is evaluated before any allow and would revoke the interactive-test agent's own
+ * grant. A later edit to the shipped template cannot silently reintroduce any of them without failing here.
  *
  * These run against the **compiled** CLI at `dist/cli.js`, so `npm run build` precedes `npm test`.
  *
@@ -52,8 +52,8 @@
 
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
@@ -87,10 +87,16 @@ async function built(relativePath) {
 
 const { OUTER_LOOP_SCRIPTS, outerLoopRelativePath } = await built('generators/outerLoopScripts.js');
 const { scriptInvocation } = await built('generators/scripts.js');
-const { bashScriptRule, pluginRootEntryTarget, readRule, renderProfile } = await built(
-  'generators/permissionProfile.js',
-);
+const { pluginRootEntryTarget, readRule, renderProfile } = await built('generators/permissionProfile.js');
+const { bashScriptRule } = await built('generators/profileEntries.js');
 const { pluginScriptsDir } = await built('machine/plugins.js');
+const { LOOPBACK_ALLOWED_HOST, SANDBOX_OPT_OUT_MARKER, shippedSandboxSettings } = await built(
+  'generators/sandboxProfile.js',
+);
+const { CONFIG_FILENAME, DEFAULTS } = await built('config/model.js');
+const { MCP_PATH } = await built('generators/repoRoot.js');
+const { PLUGIN_KEY } = await built('generators/projectSettings.js');
+const { DOCS_SEARCH_SERVER_SCRIPT_NAME } = await built('generators/outerLoopScripts.js');
 
 /** The generated profile, and the template it is generated from. */
 const PROFILE_FILE = '.claude/settings.autonomous.json';
@@ -141,7 +147,7 @@ const PERMISSION_LISTS = ['allow', 'deny', 'ask'];
  * slashes and the prefix below is the one the template adds. Spelling the whole entry out is the
  * point, and it is why the prefix is asserted rather than assumed: a one-slash `Edit` rule asks for
  * a file under `<settings root>/Users/…`, which no checkout has, and a rule that matches nothing
- * stalls exactly like a rule that is missing — the same silent nothing a third slash gives.
+ * is refused exactly like a rule that is missing — the same silent nothing a third slash gives.
  */
 const FILE_RULE_KINDS = [
   ['Edit', '/'],
@@ -168,7 +174,7 @@ const HELPER_SCRIPTS_README = /^THE PHASE'S OWN HELPER SCRIPTS ARE NOT ALLOW-LIS
  * The one way that line can be reworded and still cost a run: a phrase reading as a pointer to an
  * entry the profile already carries. It carries none — that is the whole reason the line exists — so
  * an adopter who follows the pointer scans `allow`, finds browser tools and a port probe, concludes
- * the wiring is there and adds nothing, and the phase stalls at the first helper. This is the
+ * the wiring is there and adds nothing, and the phase is refused at the first helper. This is the
  * anti-pattern rather than the sentence verbatim, for the reason {@link HELPER_SCRIPTS_README} gives:
  * the prose is meant to be improved, and only a claim that the entry is *here* is a defect. A
  * reference to an entry the adopter writes ("the entry you add …") is not one, and neither is the
@@ -284,7 +290,7 @@ function assertEntriesRunnable(profile) {
         assert.ok(
           !entry.includes(needle),
           `permissions.${list} carries ${JSON.stringify(entry)}, which contains ${JSON.stringify(needle)}: the ` +
-            'guard matches an entry literally, so it would fall through to a prompt and stall an unattended run',
+            'guard matches an entry literally, so it would match no call and an unattended run\'s call would be refused',
         );
       }
     }
@@ -309,6 +315,14 @@ test('with the interactive-test phase off, the profile carries no browser wiring
   for (const entry of floor) {
     assert.ok(entries(profile, 'deny').includes(entry), 'the generated deny list dropped an entry the template ships');
   }
+});
+
+test('the profile carries the shipped template\'s permission mode', async (t) => {
+  const { profile } = await profileFor(t);
+  // Read from the template rather than restated, choice 2's reason.
+  const shipped = JSON.parse(readFileSync(PROFILE_TEMPLATE, 'utf8')).permissions.defaultMode;
+  assert.ok(typeof shipped === 'string' && shipped.length > 0, 'the shipped template declares no defaultMode');
+  assert.equal(profile.permissions.defaultMode, shipped);
 });
 
 test('every permission entry is a single unquoted command, with the phase off and on', async (t) => {
@@ -358,7 +372,9 @@ test('an outer-loop script an agent runs is allow-listed in three forms, and eve
       const seeded = scriptsDir === INIT_SCRIPTS_DIR ? {} : { 'harness.config.json': seededConfig({ scriptsDir }) };
       const { dir, profile } = await profileFor(subtest, [], seeded);
       const worktreeGlob = worktreeGlobFor(dir);
-      const everyEntry = allEntries(profile);
+      // The grant lists only: `deny` carries the write protection's `Edit`/`Write` rules for the
+      // unsandboxed wrappers, which refuse a write rather than grant a run.
+      const everyEntry = [...entries(profile, 'allow'), ...entries(profile, 'ask')];
 
       assert.ok(OUTER_LOOP_SCRIPTS.length > 0, 'the shipped table declares no outer-loop scripts to check');
 
@@ -382,7 +398,7 @@ test('an outer-loop script an agent runs is allow-listed in three forms, and eve
         assert.deepEqual(
           naming,
           expected,
-          `${relative} is not allow-listed in exactly the three forms a caller may use: a caller using a missing spelling matches neither allow nor deny, which parks an unattended run`,
+          `${relative} is not allow-listed in exactly the three forms a caller may use: a caller using a missing spelling matches neither allow nor deny, which an unattended run refuses`,
         );
 
         // Form (i) is the invocation producer's own return value rather than a lookalike: the corpus
@@ -401,7 +417,7 @@ test('an outer-loop script an agent runs is allow-listed in three forms, and eve
 
 /**
  * The one row whose entries *are* a capability rather than a convenience: without all three, an
- * agent reaching for the spelling that is missing draws a prompt no unattended run answers, and the
+ * agent reaching for the spelling that is missing is refused in an unattended run, and the
  * probe or mutation check it was going to run is silently downgraded to a claim nobody executed.
  */
 const SCRATCH_FILE = 'scratch-run.sh';
@@ -411,7 +427,7 @@ test('the scratch runner is allow-listed in exactly its three forms, and asked a
   const naming = (list) => entries(profile, list).filter((entry) => entry.includes(SCRATCH_FILE));
 
   // Exactly three rather than at least one: the count is the invariant, and a dropped form is
-  // invisible until the run that happened to use that spelling parks.
+  // invisible until the run that happened to use that spelling is refused.
   assert.deepEqual(
     naming('allow').sort(),
     expectedForms({
@@ -423,9 +439,9 @@ test('the scratch runner is allow-listed in exactly its three forms, and asked a
     `${SCRATCH_FILE} is not allow-listed in the repo-relative, repo-root-absolute and sibling-worktree forms`,
   );
 
-  // And in `ask` in none of them: an `ask` entry is a prompt by another name, so it stalls a run
-  // exactly as a missing entry does — while reading, in review, like a grant that was made.
-  assert.deepEqual(naming('ask'), [], `${SCRATCH_FILE} is named in permissions.ask, which prompts an unattended run`);
+  // And in `ask` in none of them: an `ask` entry is refused in an unattended run exactly as a
+  // missing entry is — while reading, in review, like a grant that was made.
+  assert.deepEqual(naming('ask'), [], `${SCRATCH_FILE} is named in permissions.ask, which an unattended run refuses`);
 });
 
 test('the three-form emission holds for a written outer-loop row an agent runs, and drops one it must not', async (t) => {
@@ -470,6 +486,13 @@ test('the three-form emission holds for a written outer-loop row an agent runs, 
           [],
           `${script.file} is not agent-invocable and reached the profile anyway`,
         );
+      }
+
+      // A `.git` at any level between the main checkout and the scripts directory would become the
+      // checkout the unsandboxed wrappers place themselves in, so each level is protected.
+      const levels = scriptsDir.split('/');
+      for (let depth = 1; depth <= levels.length; depth += 1) {
+        assertProtected(profile, join(repoRoot, ...levels.slice(0, depth), '.git'), 'entry');
       }
 
       assertEntriesRunnable(profile);
@@ -571,7 +594,7 @@ test('reading, changing and creating a file are each granted, for this checkout 
     // Creating a file and changing one are different grants, and it is creating that the flow does
     // most: a plan, a review, a ledger entry and a new source file are all written, not edited. A
     // profile carrying only the `Edit` pair leaves the commonest operation in the flow matching
-    // neither `allow` nor `deny`, which in print mode parks the run instead of refusing the call.
+    // neither `allow` nor `deny`, which an unattended run refuses.
     for (const path of [dir, worktreeGlobFor(dir)]) {
       const expected = `${kind}(${prefix}${path}/**)`;
       assert.ok(allow.includes(expected), `no allow entry is ${expected}`);
@@ -662,7 +685,7 @@ async function retrievalProfileFor(t, { docsPhase, retrieval }) {
   await plantRetrievalRuntime(cacheHome);
   const result = await runCli(dir, ['init'], retrievalEnv(cacheHome));
   assert.equal(result.status, 0, `init exited ${result.status}\n${result.stdout}\n${result.stderr}`);
-  return { profile: readJson(join(dir, PROFILE_FILE)), text: readFileSync(join(dir, PROFILE_FILE), 'utf8') };
+  return { dir, profile: readJson(join(dir, PROFILE_FILE)), text: readFileSync(join(dir, PROFILE_FILE), 'utf8') };
 }
 
 /**
@@ -718,13 +741,13 @@ test('the phase carries the one instruction an adopter must act on by hand, and 
     stated.length,
     1,
     `the phase-on profile states the helper-script gap ${stated.length} times, not once: an entry for those ` +
-      'scripts is not generated, so the only thing standing between an adopter and a stalled phase is ' +
-      'this line telling them to add one',
+      'scripts is not generated, so the only thing standing between an adopter and a phase whose ' +
+      'helpers are refused is this line telling them to add one',
   );
 
   // And it has to send them to an entry they write, never to one in the file: the profile carries no
   // helper entry and generates none, so a pointer at an entry "below" is read as "already wired", which ends
-  // in the same silent stall the line is there to prevent. The line carried such a pointer once.
+  // in the same refusal the line is there to prevent. The line carried such a pointer once.
   const misdirection = ENTRY_ALREADY_HERE.exec(stated[0]);
   assert.equal(
     misdirection,
@@ -876,4 +899,312 @@ test('a plugin root reads back out of either entry form, and an entry naming no 
       );
     }
   });
+});
+
+/** The value at a dotted path under an object, or `undefined`. */
+function valueAt(object, dotted) {
+  return dotted.split('.').reduce((node, key) => (node !== null && typeof node === 'object' ? node[key] : undefined), object);
+}
+
+/** The two outer-loop rows the table marks as running unsandboxed, read from the table. */
+const UNSANDBOXED_ROWS = OUTER_LOOP_SCRIPTS.filter((script) => script.runsUnsandboxed === true);
+
+/** A domain the adopter allows, with its reason. */
+const ALLOWED_DOMAIN = { domain: 'registry.example.org', reason: 'the fixture installs packages from it' };
+
+test('the sandbox block is strict, excludes only the main checkout\'s two git wrappers, and grants the state directory', async (t) => {
+  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
+
+  // Each graded leaf against the shipped template, never a restated value.
+  const template = JSON.parse(readFileSync(PROFILE_TEMPLATE, 'utf8'));
+  const settings = shippedSandboxSettings();
+  assert.ok(settings.length > 0, 'shippedSandboxSettings() names no leaf, so nothing is graded');
+  for (const { path, value } of settings) {
+    assert.equal(valueAt(template, path), value, `shippedSandboxSettings() reports ${path} unlike the template`);
+    assert.equal(valueAt(profile, path), value, `the generated ${path} is not the template's ${value}`);
+  }
+
+  assert.equal(UNSANDBOXED_ROWS.length, 2, 'the outer-loop table does not mark exactly two rows as running unsandboxed');
+  const excluded = profile.sandbox.excludedCommands;
+  const mainForms = UNSANDBOXED_ROWS.map((row) => bashScriptRule(join(dir, SCRIPTS_DIR, outerLoopRelativePath(row))));
+  assert.deepEqual(excluded, mainForms, 'sandbox.excludedCommands is not exactly the main checkout\'s two wrapper spellings');
+
+  // The sandbox-writable spellings never run unsandboxed.
+  const worktreeGlob = worktreeGlobFor(dir);
+  for (const row of UNSANDBOXED_ROWS) {
+    const relative = outerLoopRelativePath(row);
+    for (const form of [`Bash(${scriptInvocation(SCRIPTS_DIR, relative)}:*)`, bashScriptRule(join(worktreeGlob, SCRIPTS_DIR, relative))]) {
+      assert.ok(!excluded.includes(form), `${form} is excluded from the sandbox, and a sandboxed command can rewrite its file`);
+    }
+  }
+
+  // The excluded spelling and the allow-listed form (ii) are one string.
+  for (const entry of excluded) {
+    assert.ok(entries(profile, 'allow').includes(entry), `${entry} is excluded but not allow-listed`);
+  }
+
+  // The prefix the corpus push spelling has to start with, and the one it must not be.
+  const push = mainForms[0].slice('Bash('.length, -':*)'.length);
+  assert.ok(`${push} "${join(worktreeGlob, 'x')}"`.startsWith(push));
+  assert.ok(!`bash ${SCRIPTS_DIR}/${outerLoopRelativePath(UNSANDBOXED_ROWS[0])}`.startsWith(push));
+
+  const stateDirAbs = join(dir, 'sdlc-harness');
+  assert.deepEqual(profile.sandbox.filesystem.allowWrite, [stateDirAbs], 'allowWrite does not name the state directory');
+
+  for (const tool of ['WebFetch', 'WebSearch']) {
+    assert.ok(entries(profile, 'deny').includes(tool), `permissions.deny does not hold ${tool}`);
+  }
+  assert.deepEqual(profile.sandbox.network.allowedDomains, [], 'a profile with no configured domain allows one');
+});
+
+test('a configured domain is allowed with its reason, and the loopback host only with the browser wiring', async (t) => {
+  const sandbox = { allowedDomains: [ALLOWED_DOMAIN] };
+  const { profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ sandbox }) });
+  assert.deepEqual(profile.sandbox.network.allowedDomains, [ALLOWED_DOMAIN.domain]);
+  assert.ok(
+    profile._README.some((line) => line.includes(ALLOWED_DOMAIN.domain) && line.includes(ALLOWED_DOMAIN.reason)),
+    'no _README line repeats the configured domain with its reason',
+  );
+
+  const { profile: withPhase } = await profileFor(t, ['--qa']);
+  assert.ok(withPhase.sandbox.network.allowedDomains.includes(LOOPBACK_ALLOWED_HOST), 'the browser wiring lacks the loopback host');
+  const { profile: withoutPhase } = await profileFor(t);
+  assert.ok(!withoutPhase.sandbox.network.allowedDomains.includes(LOOPBACK_ALLOWED_HOST), 'the loopback host is allowed with the phase off');
+});
+
+test('the opt-out shows in the profile, and keeps every deny entry', async (t) => {
+  const sandbox = { optOut: { reason: 'the fixture runner has no sandbox support' } };
+  const { profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ sandbox }) });
+  assert.equal(profile.sandbox.enabled, false);
+  assert.equal(profile.sandbox.failIfUnavailable, false);
+  assert.ok(profile._README.some((line) => line.startsWith(SANDBOX_OPT_OUT_MARKER)), 'no _README line starts with the opt-out marker');
+  for (const tool of ['WebFetch', 'WebSearch']) {
+    assert.ok(entries(profile, 'deny').includes(tool), `the opt-out dropped the ${tool} deny`);
+  }
+});
+
+/** The `Read` deny pair a credential path owes, built from `os.homedir()` rather than the generator's helper. */
+function credentialReadPair(path) {
+  const absolute = join(homedir(), path.slice('~/'.length));
+  return [`Read(/${absolute})`, `Read(/${absolute}/**)`];
+}
+
+test('credentials are denied to sandboxed commands and to the file tools, with the sandbox on or off', async (t) => {
+  const template = JSON.parse(readFileSync(PROFILE_TEMPLATE, 'utf8'));
+  const shipped = template.sandbox.credentials;
+  assert.ok(shipped.files.length > 0 && shipped.envVars.length > 0, 'the template denies no credential');
+
+  const { profile } = await profileFor(t);
+  assert.deepEqual(profile.sandbox.credentials.files, shipped.files, 'sandbox.credentials.files is not the template\'s list');
+  assert.deepEqual(profile.sandbox.credentials.envVars, shipped.envVars, 'sandbox.credentials.envVars is not the template\'s list');
+
+  const deny = entries(profile, 'deny');
+  const ssh = credentialReadPair('~/.ssh');
+  assert.deepEqual(ssh, [`Read(/${homedir()}/.ssh)`, `Read(/${homedir()}/.ssh/**)`]);
+  for (const rule of ssh) assert.ok(deny.includes(rule), `permissions.deny does not hold ${rule}`);
+  for (const rule of deny) {
+    assert.ok(!rule.startsWith('Read(///') && !rule.startsWith('Read(~'), `${rule} is not in the \`//\` absolute form`);
+  }
+  for (const { path } of shipped.files) {
+    for (const rule of credentialReadPair(path)) assert.ok(deny.includes(rule), `${path} lacks ${rule} in permissions.deny`);
+  }
+
+  const sandbox = { optOut: { reason: 'the fixture runner has no sandbox support' } };
+  const { profile: optedOut } = await profileFor(t, [], { 'harness.config.json': seededConfig({ sandbox }) });
+  const optedOutDeny = entries(optedOut, 'deny');
+  for (const { path } of shipped.files) {
+    for (const rule of credentialReadPair(path)) assert.ok(optedOutDeny.includes(rule), `the opt-out dropped ${rule}`);
+  }
+});
+
+test('a domain carrying a quote is the adopter\'s to fix, never this CLI\'s fault', async (t) => {
+  const quoted = { domain: "evil'host", reason: 'a fixture' };
+
+  // End to end, the configuration check refuses it before the generator runs: that refusal is
+  // asserted here, and the generator's own screen is asserted below.
+  const dir = await fixtureFor(t, { 'harness.config.json': seededConfig({ sandbox: { allowedDomains: [quoted] } }) });
+  const result = await runCli(dir, ['init']);
+  assert.equal(result.status, 1, `init exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+  assert.match(`${result.stdout}${result.stderr}`, /sandbox\.allowedDomains/);
+  assert.ok(!existsSync(join(dir, PROFILE_FILE)), 'a refused init wrote the profile');
+
+  // Past the check, the generator's screen exits 1 too, naming the key.
+  assert.throws(
+    () =>
+      renderProfile({
+        repoRoot: join('/', 'fixture-work-root', 'fixture-project'),
+        workRoot: join('/', 'fixture-work-root'),
+        config: seededConfig({ scriptsDir: SCRIPTS_DIR, sandbox: { allowedDomains: [quoted] } }),
+        written: [],
+      }),
+    (error) => {
+      assert.equal(error.exitCode, 1, `a quoted domain exited ${error.exitCode}:\n${error.message}`);
+      assert.match(error.message, /sandbox\.allowedDomains/);
+      assert.doesNotMatch(error.message, INTERNAL_SUFFIX);
+      return true;
+    },
+  );
+});
+
+/**
+ * Both sides of one protected path: its `denyWrite` entry and its `Edit`/`Write` deny rules — on the
+ * path for a `file` or a `name` (a globbed directory protected against creation, moving and removal
+ * while the files in it stay writable), under it for a `directory`, and both for an `entry`, a path
+ * that must not come to exist as either.
+ */
+function assertProtected(profile, path, kind) {
+  const targets = kind === 'entry' ? [path, `${path}/**`] : [kind === 'directory' ? `${path}/**` : path];
+  assert.ok(profile.sandbox.filesystem.denyWrite.includes(path), `sandbox.filesystem.denyWrite does not hold ${path}`);
+  for (const target of targets) {
+    for (const rule of [`Edit(/${target})`, `Write(/${target})`]) {
+      assert.ok(entries(profile, 'deny').includes(rule), `permissions.deny does not hold ${rule}`);
+    }
+  }
+}
+
+/** Neither side of one path: no `denyWrite` entry, and no `Edit`/`Write` deny naming it. */
+function assertUnprotected(profile, path) {
+  assert.ok(!profile.sandbox.filesystem.denyWrite.includes(path), `sandbox.filesystem.denyWrite holds ${path}`);
+  for (const rule of entries(profile, 'deny')) {
+    if (!rule.startsWith('Edit(') && !rule.startsWith('Write(')) continue;
+    assert.ok(rule !== `Edit(/${path})` && !rule.startsWith(`Edit(/${path}/`), `permissions.deny holds ${rule}`);
+    assert.ok(rule !== `Write(/${path})` && !rule.startsWith(`Write(/${path}/`), `permissions.deny holds ${rule}`);
+  }
+}
+
+/** The run library's directory, read from the outer-loop table. */
+const LIB_SUBDIR = OUTER_LOOP_SCRIPTS.find((script) => script.file === 'harness-run-lib.sh').subdir;
+
+test('every path that runs outside the sandbox is write-protected on both sides', async (t) => {
+  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
+  const glob = worktreeGlobFor(dir);
+  const githooks = DEFAULTS.githooksDir;
+
+  for (const row of UNSANDBOXED_ROWS) {
+    assertProtected(profile, join(dir, SCRIPTS_DIR, outerLoopRelativePath(row)), 'file');
+    // The worktree's copy runs sandboxed, so it needs no protection.
+    assertUnprotected(profile, join(glob, SCRIPTS_DIR, outerLoopRelativePath(row)));
+  }
+  // The watcher, the remote job or a person runs the main checkout's other top-level scripts unsandboxed.
+  const topLevelRows = OUTER_LOOP_SCRIPTS.filter(
+    (script) =>
+      script.subdir === undefined && script.runsUnsandboxed !== true && script.file !== DOCS_SEARCH_SERVER_SCRIPT_NAME,
+  );
+  assert.ok(
+    topLevelRows.some((row) => row.file === 'autonomous-notify.sh'),
+    'the outer-loop table has no top-level autonomous-notify.sh row',
+  );
+  for (const row of topLevelRows) {
+    assertProtected(profile, join(dir, SCRIPTS_DIR, row.file), 'file');
+    assertUnprotected(profile, join(glob, SCRIPTS_DIR, row.file));
+  }
+  assertProtected(profile, join(dir, SCRIPTS_DIR, LIB_SUBDIR), 'directory');
+  assertProtected(profile, join(dir, githooks), 'directory');
+  assertProtected(profile, join(glob, githooks), 'directory');
+  assertProtected(profile, join(dir, '.git', 'hooks'), 'directory');
+  assertProtected(profile, join(dir, MCP_PATH), 'file');
+  assertProtected(profile, join(glob, MCP_PATH), 'file');
+  assertProtected(profile, join(dir, '.claude', 'settings.autonomous.json'), 'file');
+  assertProtected(profile, join(dir, '.claude', 'settings.json'), 'file');
+  assertProtected(profile, join(glob, '.claude', 'settings.json'), 'file');
+  assertProtected(profile, join(dir, '.claude', 'settings.local.json'), 'file');
+  assertProtected(profile, join(glob, '.claude', 'settings.local.json'), 'file');
+  assertProtected(profile, join(dir, '.git', 'config'), 'file');
+  assertProtected(profile, join(dir, '.git', 'config.worktree'), 'file');
+  // The wrappers place their main checkout from their own location: a planted `commondir` would
+  // redirect it, and so would a nearer `.git` between the main checkout and the scripts directory.
+  assertProtected(profile, join(dir, '.git', 'commondir'), 'file');
+  assertProtected(profile, join(dir, SCRIPTS_DIR, '.git'), 'entry');
+  // The worktree records git and the wrappers follow: each record can be neither created nor moved,
+  // and the three files in it that point elsewhere are protected, while the record's own HEAD,
+  // index and logs stay writable for a run's git.
+  const records = join(dir, '.git', 'worktrees');
+  assertProtected(profile, join(records, '*'), 'name');
+  assert.ok(!profile.sandbox.filesystem.denyWrite.includes(records), 'denyWrite holds the whole worktrees directory');
+  for (const file of ['commondir', 'gitdir', 'config.worktree']) assertProtected(profile, join(records, '*', file), 'file');
+  for (const file of ['HEAD', 'index', 'logs']) assertUnprotected(profile, join(records, '*', file));
+  assert.ok(
+    !profile.permissions.deny.some((rule) => rule.endsWith(`${join(records, '*')}/**)`)),
+    'a deny rule covers everything under a worktree record',
+  );
+  assertProtected(profile, join(glob, '.git'), 'file');
+  // A remote with no configured URL is read from these.
+  assertProtected(profile, join(dir, '.git', 'remotes'), 'entry');
+  assertProtected(profile, join(dir, '.git', 'branches'), 'entry');
+  assertProtected(profile, join(dir, CONFIG_FILENAME), 'file');
+  assertUnprotected(profile, join(glob, CONFIG_FILENAME));
+
+  // Retrieval is off here, so its launcher is not in the set.
+  assert.ok(
+    !JSON.stringify(profile.sandbox.filesystem.denyWrite).includes(DOCS_SEARCH_SERVER_SCRIPT_NAME),
+    `denyWrite names ${DOCS_SEARCH_SERVER_SCRIPT_NAME} with retrieval off`,
+  );
+
+  const stateDirAbs = join(dir, 'sdlc-harness');
+  assert.ok(profile.sandbox.filesystem.allowWrite.includes(stateDirAbs), 'allowWrite does not name the state directory');
+  assertUnprotected(profile, stateDirAbs);
+
+  assert.ok(
+    profile._README.some((line) => line.startsWith('WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN') && line.includes('Linux')),
+    'no _README line names the write-protected set and its Linux residual',
+  );
+  assertEntriesRunnable(profile);
+});
+
+test('the docs-search launcher and its worktree library are write-protected only when retrieval applies', async (t) => {
+  const { dir, profile } = await retrievalProfileFor(t, { docsPhase: true, retrieval: true });
+  const glob = worktreeGlobFor(dir);
+  assertProtected(profile, join(dir, SCRIPTS_DIR, DOCS_SEARCH_SERVER_SCRIPT_NAME), 'file');
+  assertProtected(profile, join(glob, SCRIPTS_DIR, DOCS_SEARCH_SERVER_SCRIPT_NAME), 'file');
+  assertProtected(profile, join(glob, SCRIPTS_DIR, LIB_SUBDIR), 'directory');
+
+  const off = await retrievalProfileFor(t, { docsPhase: true, retrieval: false });
+  const offGlob = worktreeGlobFor(off.dir);
+  assertUnprotected(off.profile, join(off.dir, SCRIPTS_DIR, DOCS_SEARCH_SERVER_SCRIPT_NAME));
+  assertUnprotected(off.profile, join(offGlob, SCRIPTS_DIR, DOCS_SEARCH_SERVER_SCRIPT_NAME));
+  assertUnprotected(off.profile, join(offGlob, SCRIPTS_DIR, LIB_SUBDIR));
+});
+
+test('a scriptsDir with a trailing slash protects the library the writer wrote', async (t) => {
+  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: `${SCRIPTS_DIR}/` }) });
+  assert.ok(existsSync(join(dir, SCRIPTS_DIR, LIB_SUBDIR)), 'the fixture wrote no library directory');
+  assertProtected(profile, `${dir}/${SCRIPTS_DIR}/${LIB_SUBDIR}`, 'directory');
+});
+
+test('each plugin root in additionalDirectories is write-protected, and the state directory is not', async (t) => {
+  // A throwaway install root and the agent runner's record of it, as init.test.mjs plants them.
+  const root = await fixtureFor(t);
+  await mkdir(join(root, 'scripts'), { recursive: true });
+  await writeFile(join(root, 'scripts', PLUGIN_HELPER), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  const home = await fixtureFor(t);
+  await mkdir(join(home, 'plugins'), { recursive: true });
+  await writeFile(
+    join(home, 'plugins', 'installed_plugins.json'),
+    `${JSON.stringify({ version: 2, plugins: { [PLUGIN_KEY]: [{ scope: 'user', installPath: root }] } }, null, 2)}\n`,
+  );
+
+  const dir = await fixtureFor(t);
+  const result = await runCli(dir, ['init', '--plugin-root-entries'], { CLAUDE_CONFIG_DIR: home });
+  assert.equal(result.status, 0, `init exited ${result.status}\n${result.stdout}\n${result.stderr}`);
+  const profile = readJson(join(dir, PROFILE_FILE));
+
+  const directories = profile.permissions.additionalDirectories;
+  assert.ok(directories.includes(root), `the plugin root is not in additionalDirectories:\n${directories.join('\n')}`);
+  const stateDirAbs = directories[0];
+  assert.ok(profile.sandbox.filesystem.allowWrite.includes(stateDirAbs), 'the first additionalDirectories entry is not the state directory');
+  for (const directory of directories.slice(1)) assertProtected(profile, directory, 'directory');
+  assertUnprotected(profile, stateDirAbs);
+});
+
+test('with the sandbox opted out the file-tool write protection still applies', async (t) => {
+  const sandbox = { optOut: { reason: 'the fixture runner has no sandbox support' } };
+  const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR, sandbox }) });
+  for (const row of UNSANDBOXED_ROWS) {
+    const path = join(dir, SCRIPTS_DIR, outerLoopRelativePath(row));
+    for (const rule of [`Edit(/${path})`, `Write(/${path})`]) {
+      assert.ok(entries(profile, 'deny').includes(rule), `the opt-out dropped ${rule}`);
+    }
+  }
+  const config = join(dir, CONFIG_FILENAME);
+  assert.ok(entries(profile, 'deny').includes(`Edit(/${config})`), `the opt-out dropped the ${CONFIG_FILENAME} Edit rule`);
 });

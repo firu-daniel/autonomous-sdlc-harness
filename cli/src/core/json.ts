@@ -1,5 +1,5 @@
 /**
- * Reading, serializing and merging JSON, for every JSON file the CLI touches.
+ * Reading, parsing, serializing and merging JSON, for every JSON file the CLI touches.
  *
  * **The rule this module exists to enforce: {@link mergeMissing} is the CLI's only JSON-merge
  * primitive, and it is non-destructive by construction.** `init` writes into files the adopter
@@ -16,6 +16,15 @@
  * them. The machine-scoped registry `machine/registry.ts` owns is the single exception: it
  * writes {@link formatJson} output itself, outside any plan and outside `--dry-run`, and states
  * why in its own header.
+ *
+ * {@link parseJsonText} is the CLI's one parse of an adopter's JSON, whoever read the bytes — a file
+ * {@link readJsonFile} read from disk or a blob `core/git.ts` read from a ref — so the failure
+ * sentence a caller reports has one wording.
+ *
+ * It also owns the walk by key path — {@link valueAt}, its throwing forms {@link objectAt} and
+ * {@link listAt}, {@link stringsAt} and {@link appendUnique} — so the generators and `doctor` share
+ * one body rather than private copies. A throwing form takes its error from the caller: the fault's
+ * wording, and whether it is this CLI's fault, belong to the call site.
  */
 
 import { readFileSync } from 'node:fs';
@@ -54,16 +63,32 @@ export function formatJson(value: JsonValue): string {
 }
 
 /**
+ * Parse `text` as JSON, or throw a `HarnessError` reading `<label> is not valid JSON: <detail>`.
+ *
+ * Unparsable is not absent: text that exists but does not parse throws rather than answering
+ * `undefined`, because treating unreadable JSON as absent would let a later write clobber a file
+ * the adopter merely mistyped. `label` names where the text came from — a disk path, or a
+ * `<ref>:<file>` name.
+ *
+ * The type parameter is an assertion about the text's shape, not a validation of it; a caller
+ * that needs the shape guaranteed validates the parsed value itself.
+ */
+export function parseJsonText<T extends JsonValue = JsonValue>(text: string, label: string): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new HarnessError(`${label} is not valid JSON: ${detail}`);
+  }
+}
+
+/**
  * Read and parse a JSON file.
  *
  * Returns `undefined` when the file does not exist — absence is an ordinary answer here, since
  * the create-if-absent contract asks "is it there?" before every write. A file that exists but
- * does not parse is *not* ordinary: it throws a `HarnessError` naming the file, because
- * treating unreadable JSON as absent would let a later write clobber a file the adopter merely
- * mistyped.
- *
- * The type parameter is an assertion about the file's shape, not a validation of it; a caller
- * that needs the shape guaranteed validates the parsed value itself.
+ * does not parse throws {@link parseJsonText}'s `HarnessError` naming the file, for the reason
+ * stated there.
  */
 export function readJsonFile<T extends JsonValue = JsonValue>(path: string): T | undefined {
   let text: string;
@@ -73,12 +98,7 @@ export function readJsonFile<T extends JsonValue = JsonValue>(path: string): T |
     if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') return undefined;
     throw error;
   }
-  try {
-    return JSON.parse(text) as T;
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new HarnessError(`${path} is not valid JSON: ${detail}`);
-  }
+  return parseJsonText<T>(text, path);
 }
 
 /**
@@ -132,4 +152,35 @@ function mergeMissingInto(target: JsonObject, source: JsonObject, prefix: string
     // Anything else: `target` already has a value here and keeps it.
   }
   return added;
+}
+
+/** The value at `path` under `root`, or `undefined` where any segment is missing or not an object. */
+export function valueAt(root: JsonObject, path: readonly string[]): JsonValue | undefined {
+  let current: JsonValue | undefined = root;
+  for (const key of path) current = isJsonObject(current) ? current[key] : undefined;
+  return current;
+}
+
+/** The object at `path` under `root`; otherwise throws what `fault` returns. */
+export function objectAt(root: JsonObject, path: readonly string[], fault: () => Error): JsonObject {
+  const value = valueAt(root, path);
+  if (!isJsonObject(value)) throw fault();
+  return value;
+}
+
+/** The list at `path` under `root`, mutable in place; otherwise throws what `fault` returns. */
+export function listAt(root: JsonObject, path: readonly string[], fault: () => Error): JsonValue[] {
+  const value = valueAt(root, path);
+  if (!Array.isArray(value)) throw fault();
+  return value;
+}
+
+/** The string members of `value` when it is a list, or none when it is not. */
+export function stringsAt(value: JsonValue | undefined): readonly string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+/** Append `values` to `list`, adding none twice and leaving existing members where they are. */
+export function appendUnique(list: JsonValue[], values: readonly string[]): void {
+  for (const value of values) if (!list.includes(value)) list.push(value);
 }

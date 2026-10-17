@@ -37,7 +37,7 @@
  * 2. **The wrapper ↔ profile invariant is asserted in both directions**, because the two failures
  *    are different and neither is loud: a written wrapper missing one of its three allow forms
  *    leaves a caller using that spelling matching neither `allow` nor `deny`, which in an unattended
- *    run is a stall; an allow entry naming a wrapper that was never written grants a path to nothing.
+ *    run is a refusal; an allow entry naming a wrapper that was never written grants a path to nothing.
  *    The second direction is checked on each entry's trailing `<scriptsDir>/<name>.sh` segment
  *    rather than by resolving the entry to a file, because the sibling-worktree form is a glob and
  *    resolves to no file in a single-checkout fixture by construction.
@@ -6077,7 +6077,7 @@ test('the closing report names both run settings and the verb that sets them', a
  * said that an inbox nobody watches polls nothing, or that the `permissions.allow` entries those
  * helpers need are hand-added. The **consequence** is asserted with each verb, not only the verb,
  * because that is what decides whether an adopter acts before the first unattended run or after one
- * has parked with no error.
+ * has been refused at a helper.
  *
  * The uniqueness assertion rides along: the analyze step is found by being the one numbered line
  * naming the command, and a clause added to another step must not make that two.
@@ -6092,7 +6092,7 @@ test('the closing report names both operator steps when the interactive-test pha
     assert.ok(step.includes(fragment), `the closing step never names ${fragment}:\n${step}`);
   }
   assert.match(step, /inbox/, `the daemon half names no consequence, so it reads as optional:\n${step}`);
-  assert.match(step, /no error/, `the permissions half does not say the run stalls silently:\n${step}`);
+  assert.match(step, /refused/, `the permissions half does not say the run is refused:\n${step}`);
 
   const naming = stdout.split('\n').filter((line) => /^\d+\. /.test(line) && line.includes(ANALYZE_COMMAND));
   assert.equal(naming.length, 1, `${naming.length} numbered steps name ${ANALYZE_COMMAND}, which must identify one:\n${stdout}`);

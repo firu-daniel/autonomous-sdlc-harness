@@ -1,6 +1,6 @@
 # test_fix_plan_reviews/
 
-One `<branch>_<gate_key>_round_<gate_round>/review_<i>.md` per failed plan review, holding the findings against one round's test fix plan. The folder name repeats the suffix of the fix-plan index it reviews, under `<state_dir>/test_fix_plans/`. Inside it, `<i>` starts at `review_0.md` and increments once per failed review; a later number is added beside the earlier files, never written over them.
+One `<branch>_<gate_key>_round_<gate_round>/review_<i>.md` per failed plan review, holding the findings against one round's test fix plan. The folder name repeats the suffix of the fix-plan index it reviews, under `<state_dir>/test_fix_plans/`. Inside it, `<i>` is the **next free** index — one past the highest `review_<n>.md` already in the folder, or `0` when it is absent or holds none — so a re-run on a round that never converged continues the series: a later number is added beside the earlier files, never written over them.
 
 A file here is written by the architecture reviewer at its fourth insertion point, and read by the test fix-plan writer on its next iteration, which applies the Must Fix items to the index or to the named finding files. The reviewer creates the folder itself and only when it has findings to write, so a plan approved on the first pass leaves no folder behind.
 

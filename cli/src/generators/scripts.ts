@@ -5,9 +5,9 @@
  * wrapper set, and {@link scriptInvocation} is the single producer of the string that names *any*
  * script `init` writes into `scriptsDir`.** The generated config, the wrapper files and the
  * generated permission profile are three views of one string; drift between them is invisible until
- * an unattended run stalls on a command that matches neither `allow` nor `deny`, which in `-p` mode
- * is a stall rather than a prompt. So the config generator and the profile generator import from
- * here rather than formatting `bash …/….sh` themselves; {@link wrapperInvocation} is the typed
+ * an unattended run's command matches neither `allow` nor `deny`, which under the default `dontAsk`
+ * mode is refused at once rather than prompting a session nobody can answer. So the config
+ * generator and the profile generator import from here rather than formatting `bash …/….sh` themselves; {@link wrapperInvocation} is the typed
  * wrapper-only spelling of the same producer, and `generators/outerLoopScripts.ts` — whose files
  * land in the same directory and whose agent-invocable rows reach the same profile — calls
  * {@link scriptInvocation} directly rather than becoming a second producer of the shape.
@@ -28,8 +28,8 @@
  *    rationale block states. Wrapping them would hand an agent a script path it is allowed to
  *    run, which is exactly what those two must not have.
  * 3. **Each script prints its own verdict line** — `PASS: <name>` / `FAIL: <name> (exit n)` —
- *    so a caller never appends `; echo $?` to it. That compound form is what stalls an
- *    unattended run on a permission prompt, and a wrapper that reports its own result removes
+ *    so a caller never appends `; echo $?` to it. That compound form matches no entry, so an
+ *    unattended run's call is refused, and a wrapper that reports its own result removes
  *    the reason to write one.
  *
  * ## Scope

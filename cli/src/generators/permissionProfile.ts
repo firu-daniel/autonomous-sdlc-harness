@@ -2,13 +2,14 @@
  * Generator: the unattended-run permission profile — the renderer, and the write that lands it.
  *
  * **The rule this module exists to enforce: the generator must be incapable of producing an entry
- * that stalls an unattended run.** In print mode a tool call that matches neither `allow` nor
- * `deny` does not prompt and does not fail — it hangs, and the run parks with no diagnostic. Every
+ * that costs an unattended run a step.** Under the default `dontAsk` mode a tool call that matches
+ * neither `allow` nor `deny` is refused at once rather than prompting a session nobody can answer:
+ * the call does not run, and the run carries on without that step. Every
  * shape below is the way it is because some run already paid for the alternative, and each of those
  * three prices is stated once here and once in the template's own `_README`:
  *
  * 1. **Wrapper paths are unquoted literals.** The allow-list guard matches the raw command string,
- *    so a quoted path fails a `*.sh` match, falls through to a prompt and stalls.
+ *    so a quoted path fails a `*.sh` match and the call is refused.
  * 2. **One command per entry, never a compound.** A single `mkdir && cp && rm` block is refused
  *    where each of those commands succeeds on its own, because the joined string matches no entry.
  * 3. **The checkout *and* its sibling worktrees.** A glob that misses the worktree a run is
@@ -29,9 +30,9 @@
  * 1. **Every wrapper is allow-listed in three forms, not one.** `commands.*` is repo-relative —
  *    every path in `harness.config.json` is (`docs/config.md` §5) — while a profile entry is
  *    conventionally absolute. A profile carrying only the absolute form would leave the configured
- *    verification command matching neither `allow` nor `deny`. So each selected wrapper contributes
- *    the repo-relative invocation an agent runs verbatim from the repository root, its
- *    repo-root-absolute twin for a caller that resolves the path first, and its sibling-worktree
+ *    verification command matching neither `allow` nor `deny`, and so refused. So each selected
+ *    wrapper contributes the repo-relative invocation an agent runs verbatim from the repository
+ *    root, its repo-root-absolute twin for a caller that resolves the path first, and its sibling-worktree
  *    twin for a run executing in a second working copy. The agent-invocable outer-loop scripts land
  *    in the same directory and are emitted through the same row family, so they take the same three
  *    forms for the same reason rather than a shape of their own.
@@ -95,7 +96,7 @@
  *   it is about to replace; under `init --plugin-root-entries`, the agent runner's plugin records.**
  *   {@link writePermissionProfile} enqueues the rendered profile into the
  *   command's write plan under the `create-if-absent` contract — the profile is hand-tuned after
- *   generation, and an overwrite silently drops the allow entries an adopter added to close a stall —
+ *   generation, and an overwrite silently drops the allow entries an adopter added to close a gap —
  *   and the write itself belongs to the write engine. `--force` is the one flag that suspends that
  *   contract, and therefore the one run under which those hand-added entries can be lost, so
  *   {@link carriedPluginRootEntries} reads the profile back and {@link renderProfile} carries forward
@@ -164,9 +165,9 @@
  * Two properties of those entries are load-bearing:
  *
  * - **They are `allow`, never `ask`.** The corpus invokes them on the unattended commit path, and
- *   `ask` is evaluated before `allow`, so an `ask` there is precisely the stall this module exists to
- *   prevent. The deploy wrapper's `ask` treatment is unaffected — it is a wrapper row, and a deploy
- *   is a decision a person makes.
+ *   `ask` is evaluated before `allow`, so an `ask` there is a refusal under the default `dontAsk`
+ *   mode — precisely the missing step this module exists to prevent. The deploy wrapper's `ask`
+ *   treatment is unaffected — it is a wrapper row, and a deploy is a decision a person makes.
  * - **Every other row gets nothing, deliberately.** The shared library is only ever sourced, and
  *   every remaining row — the watcher, the worktree and cleanup scripts, the notification helpers —
  *   is run by the watcher process or by a person. An entry for one of those would hand a dispatched
@@ -187,13 +188,23 @@
  * neither; and the guard withholds on properties of the *command* — the constructs above — that
  * these rows, written as literal invocation prefixes, do not range over at all. Neither mechanism
  * is derivable from the other, so removing either narrows what an unattended run can spell.
+ *
+ * ## The sandbox block
+ *
+ * The template ships the `sandbox` block's static half; `sandboxProfile.ts` → `applySandbox` fills
+ * the configuration-dependent half — the two excluded commands, the allowed domains, the opt-out —
+ * and owns the rule for which command may run unsandboxed. {@link assertRunnable} scans the block's
+ * lists with the same table it scans the permission lists with. `writeProtection.ts` →
+ * `applyWriteProtection` adds the write protection last, once `permissions.additionalDirectories` is
+ * final. Both modules take the profile primitives they share with this one from `profileEntries.ts`
+ * and import nothing from here.
  */
 
 import { basename, dirname, isAbsolute, join, sep } from 'node:path';
 
 import { browserWiringApplies, CONFIG_FILENAME, DEFAULTS, retrievalApplies, type HarnessConfig } from '../config/model.js';
 import { HarnessError, internal } from '../core/errors.js';
-import { isJsonObject, readJsonFile, type JsonObject, type JsonValue } from '../core/json.js';
+import { isJsonObject, readJsonFile, valueAt, type JsonObject, type JsonValue } from '../core/json.js';
 import { defaultProjectName, readTemplate, workRoot as resolveWorkRoot, worktreeGlob } from '../core/paths.js';
 import { normalizeRepoDir } from '../core/repoPaths.js';
 import { containsToken, renderTemplate } from '../core/templating.js';
@@ -214,6 +225,19 @@ import {
   type WrittenOuterLoopScript,
 } from './outerLoopScripts.js';
 import {
+  appendReadme,
+  assertUsableInEntry,
+  bashScriptRule,
+  FORBIDDEN_IN_ENTRY,
+  INVOCATION_PREFIX,
+  normalizedRoot,
+  PROFILE_PATH,
+  QA_TEMPLATE_PATH,
+  RETRIEVAL_TEMPLATE_PATH,
+  TEMPLATE_PATH,
+} from './profileEntries.js';
+import { applySandbox, SANDBOX_KEY } from './sandboxProfile.js';
+import {
   scriptInvocation,
   selectWrapper,
   WRAPPER_SCRIPTS,
@@ -222,55 +246,7 @@ import {
   type WrapperKey,
   type WrittenWrapper,
 } from './scripts.js';
-
-/**
- * The template's home under `cli/templates/`, addressed as {@link readTemplate} wants it.
- *
- * Exported for the same reason {@link QA_TEMPLATE_PATH} is: the shipped template is the single
- * declaration of the profile's own floor, and `doctor` compares an adopter's `permissions.deny`
- * against it rather than keeping a second copy of the entries that must be there
- * (`doctor/checks.ts`).
- */
-export const TEMPLATE_PATH = 'claude/settings.autonomous.json';
-
-/**
- * The interactive-test fragment, merged into the base only when the phase is on and its driver is
- * the browser one — see the module header.
- *
- * A **partial** profile — see the module header. It is stored beside the base under the same
- * dot-less directory, and neither file is ever named with the adopter's leading dot inside this
- * repository (`cli/templates/claude/README.md`).
- *
- * Exported because the fragment's `enabledMcpjsonServers` list is the single declaration of which
- * browser servers a run starts, and the generator that writes the repository's own MCP wiring
- * checks its declared servers against it rather than keeping a second copy of the names
- * (`generators/repoRoot.ts`).
- */
-export const QA_TEMPLATE_PATH = 'claude/settings.autonomous.qa.json';
-
-/**
- * The docs-retrieval fragment, merged into the base only when `phases.docs` and `docs.retrieval` are
- * both on — see the module header.
- *
- * Exported for the reason {@link QA_TEMPLATE_PATH} is: its `enabledMcpjsonServers` list is the
- * declaration `generators/repoRoot.ts` checks the retrieval half of `.mcp.json` against.
- */
-export const RETRIEVAL_TEMPLATE_PATH = 'claude/settings.autonomous.retrieval.json';
-
-/** The adopter-side directory the rendered profile lands in. The dot is added here, at `init` time. */
-const CLAUDE_DIR = '.claude';
-
-/**
- * Where the rendered profile is written, relative to the adopting repository's root — and the path
- * an unattended run names in its own `--settings` flag.
- *
- * Exported because more than one caller has to say it: `init`'s summary points at it, and `doctor`
- * checks that the file is there and that the absolute paths inside it still resolve.
- */
-export const PROFILE_PATH = `${CLAUDE_DIR}/settings.autonomous.json`;
-
-/** The profile's rationale block: the array every generated explanation is appended to. */
-const README_KEY = '_README';
+import { applyWriteProtection } from './writeProtection.js';
 
 /** The key that starts the repository's declared MCP servers for the run. Absent unless a fragment adds it. */
 const ENABLED_SERVERS_KEY = 'enabledMcpjsonServers';
@@ -278,9 +254,6 @@ const ENABLED_SERVERS_KEY = 'enabledMcpjsonServers';
 /** The prefix every MCP tool entry carries, and the pattern its server name is read out of. */
 const MCP_ENTRY_PREFIX = 'mcp__';
 const MCP_SERVER_PATTERN = /^mcp__(.+?)__/;
-
-/** The interpreter every wrapper invocation starts with, per {@link wrapperInvocation}. */
-const INVOCATION_PREFIX = 'bash ';
 
 /** The three token names one row family marks its rows with — one per wrapper form. */
 interface RowTokens {
@@ -341,32 +314,22 @@ function tokenNames(tokens: RowTokens): readonly string[] {
   return [tokens.invocation, tokens.file, tokens.path];
 }
 
-/**
- * What may never appear in a permission entry, and how a message names it.
- *
- * The quote characters are failure mode 1 and the operators are failure mode 2 (module header).
- * `$` is on the list for the same reason as the operators: a substitution is a different string to
- * whatever the guard matched, so an entry containing one cannot be relied on to match anything.
- * `///` is the third: a file rule marks an absolute path with a `//` prefix and the substituted
- * path brings its own leading slash, so a template row that adds a second one produces a rule that
- * silently matches no file — the same class of failure as a missed worktree glob, and just as quiet.
- */
-const FORBIDDEN_IN_ENTRY: ReadonlyArray<readonly [needle: string, described: string]> = Object.freeze([
-  ['///', 'a third slash on the `//` absolute-path prefix, which leaves a rule matching no file'],
-  ['"', 'a double quote'],
-  ["'", 'a single quote'],
-  ['`', 'a backquote'],
-  ['&', 'a shell operator (&)'],
-  [';', 'a shell operator (;)'],
-  ['|', 'a shell operator (|)'],
-  ['$', 'a shell substitution ($)'],
-  ['>', 'a shell redirect (>)'],
-  ['<', 'a shell redirect (<)'],
-  ['\n', 'a newline'],
-] as const);
-
 /** The permission lists checked by {@link assertRunnable}, in the order the template writes them. */
 const PERMISSION_LISTS: readonly string[] = Object.freeze(['allow', 'deny', 'ask']);
+
+/** The `sandbox` block's lists {@link assertRunnable} checks, as dotted paths under `sandbox`. */
+const SANDBOX_LISTS: readonly string[] = Object.freeze([
+  'excludedCommands',
+  'filesystem.allowWrite',
+  'filesystem.denyWrite',
+  'network.allowedDomains',
+]);
+
+/** The `sandbox.credentials` lists {@link assertRunnable} checks, each with the field it names an entry by. */
+const CREDENTIAL_LISTS: ReadonlyArray<readonly [list: string, field: string]> = Object.freeze([
+  ['files', 'path'],
+  ['envVars', 'name'],
+] as const);
 
 /** How many `allow` entries one selected script must contribute — the three forms of choice 1. */
 const FORMS_PER_SCRIPT = 3;
@@ -671,7 +634,7 @@ function usesAny(text: string, tokens: readonly string[]): boolean {
  *
  * `assertNoneSurvive` is off: the post-substitution sweep for this generator is
  * {@link assertRunnable}, which runs over every rendered *entry* rather than each string as it is
- * produced, and reports a leftover token as the stall it would cause.
+ * produced, and reports a leftover token as the refusal it would cause.
  */
 function substitute(text: string, values: Readonly<Record<string, string>>, known: ReadonlySet<string>): string {
   return renderTemplate(text, values, { describe: 'the permission-profile template', known });
@@ -743,7 +706,7 @@ function permissionsOf(profile: JsonObject): JsonObject {
   const permissions = profile['permissions'];
   if (permissions === null || typeof permissions !== 'object' || Array.isArray(permissions)) {
     throw internal(
-      'the permission-profile template has no `permissions` object, so nothing could be checked for the shapes that stall an unattended run',
+      'the permission-profile template has no `permissions` object, so nothing could be checked for the shapes that get a call refused in an unattended run',
     );
   }
   return permissions;
@@ -776,17 +739,8 @@ export function readRule(absolutePath: string): string {
 }
 
 /**
- * A wrapper-script rule, in the unquoted `Bash(bash <path>:*)` form every generated one uses — and
- * the other plugin-root form, for a helper under the plugin's own scripts directory. Same consumers,
- * and the same decision, as {@link readRule}.
- */
-export function bashScriptRule(absolutePath: string): string {
-  return `Bash(${INVOCATION_PREFIX}${absolutePath}:*)`;
-}
-
-/**
- * The fixed halves of the two builders above, taken from the builders themselves over a path none of
- * those halves can contain — so the inverse below recognises each form rather than spelling it a
+ * The fixed halves of {@link readRule} and {@link bashScriptRule}, taken from the builders themselves
+ * over a path none of those halves can contain — so the inverse below recognises each form rather than spelling it a
  * second time, and a change to either builder cannot leave that inverse matching the old shape. Same
  * derivation, and the same reason, as `doctor/checks.ts`'s `HELPER_RULE_OPEN`.
  */
@@ -842,15 +796,6 @@ export function pluginRootEntryTarget(entry: string): string | undefined {
 }
 
 /**
- * A directory in the one spelling {@link isUnderDirectory} compares against: no trailing separator,
- * no `.` or `..` segment. Exported so the normalisation the predicate assumes is stated once, beside
- * the predicate, rather than at each root a caller happens to resolve.
- */
-export function normalizedRoot(path: string): string {
-  return join(path, '.');
-}
-
-/**
  * Is `directory` `root` itself, or a path below it? Matched on the separator, so no sibling counts.
  *
  * Exported beside {@link pluginRootEntryTarget} because that function deliberately does not decide
@@ -884,19 +829,42 @@ export function entryWord(count: number): string {
  */
 function assertRunnable(profile: JsonObject): void {
   const permissions = permissionsOf(profile);
+  const lists: Array<readonly [where: string, entries: readonly string[]]> = PERMISSION_LISTS.map((list) => [
+    `permissions.${list}`,
+    entriesOf(permissions, list),
+  ]);
+  for (const dotted of SANDBOX_LISTS) {
+    const where = `${SANDBOX_KEY}.${dotted}`;
+    const value = valueAt(profile, where.split('.'));
+    if (value === undefined) continue;
+    if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+      throw internal(`the generated \`${where}\` is not a list of strings`);
+    }
+    lists.push([where, value as string[]]);
+  }
+  for (const [list, field] of CREDENTIAL_LISTS) {
+    const where = `${SANDBOX_KEY}.credentials.${list}`;
+    const value = valueAt(profile, where.split('.'));
+    if (value === undefined) continue;
+    const named = Array.isArray(value) ? value.map((entry) => (isJsonObject(entry) ? entry[field] : undefined)) : [];
+    if (!Array.isArray(value) || named.some((name) => typeof name !== 'string')) {
+      throw internal(`the generated \`${where}\` is not a list of entries each with a string \`${field}\``);
+    }
+    lists.push([`${where}[].${field}`, named as string[]]);
+  }
 
-  for (const list of PERMISSION_LISTS) {
-    for (const entry of entriesOf(permissions, list)) {
+  for (const [where, list] of lists) {
+    for (const entry of list) {
       for (const [needle, described] of FORBIDDEN_IN_ENTRY) {
         if (entry.includes(needle)) {
           throw internal(
-            `the generated permission entry ${JSON.stringify(entry)} in \`permissions.${list}\` contains ${described}, which the guard matches literally: the entry would fall through to a prompt and stall an unattended run`,
+            `the generated permission entry ${JSON.stringify(entry)} in \`${where}\` contains ${described}, which the guard matches literally: the entry would match no call, so an unattended run's call would be refused`,
           );
         }
       }
       if (containsToken(entry)) {
         throw internal(
-          `the generated permission entry ${JSON.stringify(entry)} in \`permissions.${list}\` still carries an unsubstituted token`,
+          `the generated permission entry ${JSON.stringify(entry)} in \`${where}\` still carries an unsubstituted token`,
         );
       }
     }
@@ -909,7 +877,7 @@ function assertRunnable(profile: JsonObject): void {
  * entries.
  *
  * Checked rather than assumed because the three forms live in the template, where a well-meaning
- * edit can drop one — and a dropped form is invisible until the run that used that spelling hangs.
+ * edit can drop one — and a dropped form is invisible until the run that used that spelling is refused.
  * The other direction (no entry names a script that was not written, and none names one an agent
  * must not run) is the fixture tests', which can see the filesystem this module deliberately never
  * touches.
@@ -1060,34 +1028,6 @@ function assertBrowserWiring(profile: JsonObject): void {
 /** The flag supplying the reference toolchain's directory, as a message should name it. */
 const TOOLCHAIN_FLAG = '--reference-toolchain-path';
 
-/**
- * {@link FORBIDDEN_IN_ENTRY} minus its `///` row, which is about a **file** rule's `//` absolute-path
- * prefix and says nothing about a command entry. Every other row applies to both.
- */
-const FORBIDDEN_IN_COMMAND = FORBIDDEN_IN_ENTRY.filter(([needle]) => needle !== '///');
-
-/** The fix for a *command* value: the one place a command carrying shell syntax can still live. */
-const COMMAND_REMEDY =
-  "Take it out of the value, or put the command in a wrapper script and let that script's literal path be what is allow-listed";
-
-/**
- * Refuse an adopter-supplied value that cannot be made into an entry the guard will match.
- *
- * The same shapes {@link assertRunnable} catches, raised **before** the entry is built and with the
- * ordinary exit code: a toolchain path, a configured command or a configured directory carrying a
- * quote or a shell operator is a repository-side mistake with a repository-side fix, not the
- * packaging fault that check reports. `remedy` is what makes the message actionable, and it differs
- * per value — a command moves into a wrapper, a directory is renamed — so it is the caller's.
- */
-function assertUsableInEntry(value: string, described: string, remedy: string = COMMAND_REMEDY): void {
-  for (const [needle, why] of FORBIDDEN_IN_COMMAND) {
-    if (!value.includes(needle)) continue;
-    throw new HarnessError(
-      `${described} contains ${why}, and the permission guard matches an entry literally: an entry built from it would match neither allow nor deny, which stalls an unattended run rather than failing it. ${remedy}`,
-    );
-  }
-}
-
 /** The repository-side values {@link assertRepositoryValuesUsable} screens, as `renderProfile` resolved them. */
 interface RepositoryValues {
   readonly repoRoot: string;
@@ -1133,17 +1073,6 @@ function assertRepositoryValuesUsable({ repoRoot, projectName, scriptsDir, state
     `the configured stateDir ${JSON.stringify(stateDir)}`,
     `Set stateDir in ${CONFIG_FILENAME} to a directory whose path carries no such character (\`config set stateDir <dir>\`), then run init again`,
   );
-}
-
-/** Append a generated line to the profile's rationale block. */
-function appendReadme(profile: JsonObject, line: string): void {
-  const readme = profile[README_KEY];
-  if (!Array.isArray(readme)) {
-    throw internal(
-      `the permission-profile template has no \`${README_KEY}\` list, so a generated group of entries could not be explained in the file it was written into`,
-    );
-  }
-  readme.push(line);
 }
 
 /** Append `values` to one `permissions` list after the template's own, adding none twice; returns how many were added. */
@@ -1668,6 +1597,13 @@ export function renderProfile({
     });
   }
 
+  applySandbox(profile, { repoRoot, config });
+
+  // Last, after the plugin roots and the carry-forward, so `additionalDirectories` is final; and
+  // under the opt-out too. Its `deny` entries name the wrapper files, which `assertEveryScriptListed`
+  // above never sees: it counts `allow` only.
+  applyWriteProtection(profile, { repoRoot, workRoot, config });
+
   assertRunnable(profile);
   assertNoBrowserDeny(profile);
   assertBrowserWiring(profile);
@@ -1705,7 +1641,7 @@ export interface PermissionProfileResult {
  * Render the profile and enqueue it at {@link PROFILE_PATH} under the `create-if-absent` contract.
  *
  * That contract is the whole reason this is a separate step from rendering. The profile is
- * **hand-tuned after generation** — the entry an adopter adds to close a stall is the most valuable
+ * **hand-tuned after generation** — the entry an adopter adds to close a gap is the most valuable
  * line in the file and the least reproducible — so a second `init` leaves an existing one
  * byte-identical, and `--force` regenerates it only after the write engine has copied it to a `.bak`
  * sibling — carrying the plugin-root entries of the file it replaces into the one it writes, which is

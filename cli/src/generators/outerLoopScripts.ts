@@ -95,6 +95,11 @@ export interface OuterLoopScript {
    * path that resolves to nothing.
    */
   readonly agentInvocable: boolean;
+  /**
+   * The main checkout's copy of this script is a named `sandbox.excludedCommands` entry
+   * (`generators/sandboxProfile.ts`). Absent means it runs sandboxed in every spelling.
+   */
+  readonly runsUnsandboxed?: true;
 }
 
 /**
@@ -127,6 +132,16 @@ export const NOTIFY_SCRIPT_NAME = 'autonomous-notify.sh';
 export const DOCS_SEARCH_SERVER_SCRIPT_NAME = 'docs-search-server.sh';
 
 /**
+ * The run library's file name, named on its own for the same reason {@link WATCHER_SCRIPT_NAME} is:
+ * `generators/writeProtection.ts` → `libraryDir` looks its row up to take the `subdir` it joins into
+ * the write-protected paths, and a literal there would let a rename here surface only as an `init`
+ * fault.
+ *
+ * The row below is built from it, so the file is renamed here and nowhere else.
+ */
+export const RUN_LIBRARY_SCRIPT_NAME = 'harness-run-lib.sh';
+
+/**
  * The whole outer-loop set, in the order `init` writes it: the shared library first, because every
  * other row sources it, and each further library or data file before the script that sources or
  * reads it.
@@ -135,10 +150,10 @@ export const DOCS_SEARCH_SERVER_SCRIPT_NAME = 'docs-search-server.sh';
  * row — no condition threaded through the writer, no second list to keep in step.
  */
 export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze([
-  Object.freeze({ file: 'harness-run-lib.sh', subdir: 'lib', mode: 0o644, agentInvocable: false }),
+  Object.freeze({ file: RUN_LIBRARY_SCRIPT_NAME, subdir: 'lib', mode: 0o644, agentInvocable: false }),
   Object.freeze({ file: 'commit-on-branch.sh', mode: 0o755, agentInvocable: true }),
-  Object.freeze({ file: 'push-branch.sh', mode: 0o755, agentInvocable: true }),
-  Object.freeze({ file: 'refresh-branch.sh', mode: 0o755, agentInvocable: true }),
+  Object.freeze({ file: 'push-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
+  Object.freeze({ file: 'refresh-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
   // The one row that executes an ARGUMENT, so its safety is in the script rather than in this flag:
   // it runs a file only from `<state_dir>/scratch/` and refuses every other path. It carries NO
   // `DENY_SCRIPT_BASENAMES` entry in the script-allowlist guard, and that omission is the decision —

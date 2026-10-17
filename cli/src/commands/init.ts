@@ -41,7 +41,7 @@
  *    and then the outer-loop set, both into the configured `scriptsDir`. The permission profile
  *    allow-lists their literal paths, so a run that wrote the profile without them would allow-list
  *    files that do not exist, leaving the configured verification commands matching neither `allow`
- *    nor `deny` — which in an unattended run is a stall rather than a refusal
+ *    nor `deny` — which in an unattended run is a refusal
  *    (`generators/scripts.ts`, `generators/outerLoopScripts.ts`, `generators/permissionProfile.ts`).
  *
  * ## The refusals, and why they come before the plan is built
@@ -1097,7 +1097,7 @@ function unusableScriptsDirReason(value: string): string | undefined {
  * Refuse a `--scripts-dir` the plugin's script-allowlist guard would grant nothing under — empty,
  * absolute, `..`-bearing, or normalising to `.` (`plugin/hooks/autonomous-script-allowlist-guard.sh`,
  * the header's outcome table) — before anything is assembled from it, so the shape is an
- * adopter-fixable usage error rather than an unattended run that stalls on every wrapper.
+ * adopter-fixable usage error rather than an unattended run refused at every wrapper.
  */
 function assertUsableScriptsDir(value: string | undefined): void {
   if (value === undefined) return;
@@ -1105,7 +1105,7 @@ function assertUsableScriptsDir(value: string | undefined): void {
   if (reason === undefined) return;
 
   throw new HarnessError(
-    `${SCRIPTS_DIR_FLAG} ${JSON.stringify(value)} ${reason}, and scriptsDir has to be a repo-relative directory below the repository root: the plugin's script-allowlist guard grants nothing for a scriptsDir that is empty, absolute, '.' or '..'-bearing, so an unattended run would stall on every wrapper. Pass a repo-relative directory name`,
+    `${SCRIPTS_DIR_FLAG} ${JSON.stringify(value)} ${reason}, and scriptsDir has to be a repo-relative directory below the repository root: the plugin's script-allowlist guard grants nothing for a scriptsDir that is empty, absolute, '.' or '..'-bearing, so an unattended run would be refused at every wrapper. Pass a repo-relative directory name`,
   );
 }
 
@@ -3032,8 +3032,8 @@ function analyzeRecordSentence(
  * closing list stops being read; the daemon half rides the same gate because it is already reported
  * to everyone by `doctor`'s `repo-registry` check. **Each half names its consequence, not just its
  * verb**, because the two fail differently: an uninstalled daemon is inert and legible — the file
- * dropped into the inbox sits there — while a missing permission entry is a silent stall on the first
- * unattended run, which is the one an adopter has to act on *before* that run rather than after it. The entry
+ * dropped into the inbox sits there — while a missing permission entry is a refusal at the first helper
+ * the first unattended run reaches, which is the one an adopter has to act on *before* that run rather than after it. The entry
  * form is not restated: those lines carry a machine-local root this command cannot see, which is why
  * only the daemon half has a constant here ({@link DAEMON_INSTALL_COMMAND}), and
  * `plugin/scripts/README.md` and `doctor`'s `plugin-permissions` check own it — so this step points
@@ -3114,7 +3114,7 @@ function reportNextSteps(
   // The clause is the phase's, not the driver's: every interactive-test driver reaches the same
   // helper scripts under the plugin's root.
   const operatorSteps = qaPhase
-    ? ` Two of the things it reports are an operator's and neither is done from here: \`${DAEMON_INSTALL_COMMAND}\`, without which nothing polls this repository's inbox and a file dropped into it simply sits there; and hand-adding the \`permissions.allow\` entries this machine's plugin roots need, without which an unattended run with the interactive-test phase on parks at the first helper script it reaches, with no error. Running it is how you find out which of the two is still outstanding, and it prints the entries to paste.`
+    ? ` Two of the things it reports are an operator's and neither is done from here: \`${DAEMON_INSTALL_COMMAND}\`, without which nothing polls this repository's inbox and a file dropped into it simply sits there; and hand-adding the \`permissions.allow\` entries this machine's plugin roots need, without which an unattended run with the interactive-test phase on is refused at the first helper script it reaches. Running it is how you find out which of the two is still outstanding, and it prints the entries to paste.`
     : '';
   // A second gate, deliberately not folded into the one above: that clause is the phase's, this one
   // is the browser wiring's. A mobile-driver run turns the phase on, owes the operator steps, and

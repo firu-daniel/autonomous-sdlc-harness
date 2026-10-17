@@ -28,7 +28,7 @@
  *    {@link wrapperInvocation}, and the file name from its {@link WRAPPER_SCRIPTS} table — because
  *    the value written here, the wrapper file that generator writes, and the permission profile's
  *    repo-relative allow entry are three views of one string, and drift between them is invisible
- *    until an unattended run stalls on a command matching neither `allow` nor `deny`.
+ *    until an unattended run's command matching neither `allow` nor `deny` is refused.
  *
  * **Every path written into this file is repo-relative** (`docs/config.md` §5), `commands.*`
  * included: commands are executed from the repository root. The profile's absolute and

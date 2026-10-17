@@ -2,19 +2,30 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "_README": [
     "UNATTENDED SETTINGS PROFILE - written by `autonomous-sdlc-harness init`, and yours from there on: edit it freely, a re-run keeps your copy. It is selected per run with `--settings .claude/settings.autonomous.json` and is never installed as the interactive default, so dropping that flag reverts every grant below with nothing to undo.",
-    "COMPLETENESS IS LOAD-BEARING: in print mode a tool that is neither allowed nor denied stalls rather than prompting, so `allow` has to cover the whole flow end to end. A gap surfaces as a hang, not as an error - add the missing entry here rather than relaxing the permission mode.",
-    "SCRIPT PATHS ARE UNQUOTED LITERALS: the guard matches the raw command string, so a quoted path fails a `*.sh` match, falls through to a prompt and stalls an unattended run. Never put quotes around one of the wrapper paths below.",
+    "COMPLETENESS IS LOAD-BEARING: a tool call that is neither allowed nor denied is refused at once, so `allow` has to cover the whole flow end to end. A gap surfaces as a refused step - add the missing entry here rather than relaxing the permission mode.",
+    "THE PERMISSION MODE IS dontAsk: a call that matches neither `allow` nor `deny`, or that matches an `ask` rule, is refused at once instead of prompting a session nobody is there to answer. The run watcher passes `--permission-mode` from its `PERMISSION_MODE` tunable, which overrides `defaultMode` below. `PERMISSION_MODE=acceptEdits` in the watcher's `watcher.env` restores prompting, and under it every such call stalls the run instead of being refused.",
+    "SCRIPT PATHS ARE UNQUOTED LITERALS: the guard matches the raw command string, so a quoted path fails a `*.sh` match and is refused. Never put quotes around one of the wrapper paths below.",
     "ONE COMMAND PER ENTRY, NEVER A COMPOUND: a single `mkdir && cp && rm` block is refused where each of those commands succeeds on its own, because the joined string matches no entry. Keep every entry a single command.",
     "THE CHECKOUT AND ITS SIBLING WORKTREES BOTH: every file glob and every wrapper path is listed for {{repoRoot}} and for the sibling pattern {{worktreeGlob}} under {{workRoot}}. A run in a second working copy that matches neither does not fail loudly - it silently skips whatever phase needed the path. A single-checkout repository simply has no sibling for the second entry to match, which costs nothing.",
-    "EVERY WRAPPER IN {{scriptsDir}} IS LISTED IN ALL THREE FORMS A CALLER MAY USE: the repo-relative invocation `commands.*` holds and an agent runs verbatim from the repository root, its repo-root-absolute twin for a caller that resolves the path first, and its sibling-worktree twin. Listing only one form leaves the other two matching neither `allow` nor `deny`, which is the stall this profile exists to prevent. THE DEPLOY WRAPPER IS ONE OF THEM, SO ITS THREE FORMS ARE IN `allow` HERE AND AGAIN IN `ask` BELOW: `ask` is evaluated before `allow` and returns first, so the ask is what a deploy hits and the allow rows never decide it. Deleting the `ask` deploy rows as duplicates therefore leaves a deploy an unattended run makes on its own - remove deploy from both blocks or from neither.",
-    "THE OUTER-LOOP SCRIPTS AN AGENT RUNS ARE LISTED THE SAME THREE WAYS, AND THE REST GET NOTHING: `autonomous-sdlc-harness init` writes a second family of scripts into {{scriptsDir}} whose bodies ship fixed and read `harness.config.json` at run time rather than carrying a command line of yours. Only the ones a dispatched agent or the orchestrating session is itself the thing that runs are listed here - the orchestrating session runs two of them, the flow walker `flow-walker.sh` and the test-suite runner `run-test-suite.sh` - and they are in `allow` rather than `ask` because they sit on the unattended commit, planning or gate-run path, where an `ask` is evaluated first and parks the run with nothing to answer it. The run watcher, the worktree tooling and the cleanup sweep are started by the watcher process or by you, and `remote-run.sh` by the watcher, the remote job or you; they carry no entry on purpose: one would hand a dispatched agent a path to a branch deletion, a daemon restart or a remote run dispatch. The docs-retrieval server launcher carries no entry either, for a different reason: the agent runner starts it from `.mcp.json` when docs.retrieval is on, never a dispatched agent's Bash call, and the one tool it serves, `search_docs` on the `harness-docs` server, is granted by the retrieval fragment's entry for it instead. Adding an entry for one of them is a decision to let an agent run it - make it deliberately, in the same three forms as everything else here.",
+    "EVERY WRAPPER IN {{scriptsDir}} IS LISTED IN ALL THREE FORMS A CALLER MAY USE: the repo-relative invocation `commands.*` holds and an agent runs verbatim from the repository root, its repo-root-absolute twin for a caller that resolves the path first, and its sibling-worktree twin. Listing only one form leaves the other two matching neither `allow` nor `deny`, which is the refusal of a needed step this profile exists to prevent. THE DEPLOY WRAPPER IS ONE OF THEM, SO ITS THREE FORMS ARE IN `allow` HERE AND AGAIN IN `ask` BELOW: `ask` is evaluated before `allow` and returns first, so the ask is what a deploy hits and the allow rows never decide it; under `dontAsk` those `ask` entries refuse an unattended deploy outright. Deleting the `ask` deploy rows as duplicates therefore leaves a deploy an unattended run makes on its own - remove deploy from both blocks or from neither.",
+    "THE OUTER-LOOP SCRIPTS AN AGENT RUNS ARE LISTED THE SAME THREE WAYS, AND THE REST GET NOTHING: `autonomous-sdlc-harness init` writes a second family of scripts into {{scriptsDir}} whose bodies ship fixed and read `harness.config.json` at run time rather than carrying a command line of yours. Only the ones a dispatched agent or the orchestrating session is itself the thing that runs are listed here - the orchestrating session runs two of them, the flow walker `flow-walker.sh` and the test-suite runner `run-test-suite.sh` - and they are in `allow` rather than `ask` because they sit on the unattended commit, planning or gate-run path, where an `ask` is evaluated first and refuses the call. The run watcher, the worktree tooling and the cleanup sweep are started by the watcher process or by you, and `remote-run.sh` by the watcher, the remote job or you; they carry no entry on purpose: one would hand a dispatched agent a path to a branch deletion, a daemon restart or a remote run dispatch. The docs-retrieval server launcher carries no entry either, for a different reason: the agent runner starts it from `.mcp.json` when docs.retrieval is on, never a dispatched agent's Bash call, and the one tool it serves, `search_docs` on the `harness-docs` server, is granted by the retrieval fragment's entry for it instead. Adding an entry for one of them is a decision to let an agent run it - make it deliberately, in the same three forms as everything else here.",
     "THE PACKAGE MANAGER, THE BUILD AND THE DEPENDENCY INSTALL ARE DELIBERATELY NOT ALLOW-LISTED: `commands.build` and `commands.depInstall` are raw command lines with no wrapper, because they are run by a person or by the outer loop rather than by an agent, and granting an agent a package manager grants it every script that package manager can run. An adopter who wants one of them agent-run adds a wrapper script for it and one literal entry here, in the same three forms as the wrappers above. That stance leaves an ad-hoc probe a route, and it needs no entry here either - the next paragraph is that route, and the trade it makes rather than an exception it satisfies.",
     "THE PROBE ROUTE GRANTS AN INTERPRETER AT ONE REMOVE, AND IT IS BROADER THAN THE GRANT ABOVE REFUSES, NOT NARROWER: an ad-hoc probe or a mutation check is written into the run-artifact tree's `scratch/` directory and run through `bash {{scriptsDir}}/scratch-run.sh`, an outer-loop script whose three forms are already listed above. It runs a FILE from that one directory rather than a string on the command line, which fences WHICH FILE runs and nothing about what that file does: the file is one the agent composed a tool call earlier, it runs with the session's own privileges, and it reaches everything the `deny` floor below, the `ask` list below and the plugin guard's own deny list withhold from a COMMAND STRING. The trade is deliberate and is recorded here rather than left to be discovered: the alternative is a run with no permitted way to execute anything, which silently downgrades a verification claim from executed to reasoned. What still holds for a subprocess is the `pre-push` git hook, because git runs it however git was invoked. Removing the route means deleting `scratch-run.sh`'s `agentInvocable` row in the generator and adding its basename to the plugin guard's deny list - both, since either alone leaves it reachable.",
-    "CREATING A FILE AND CHANGING ONE ARE TWO DIFFERENT GRANTS: `Edit` covers a change to a file that already exists, `Write` covers creating one - and almost every artifact a run produces is a new file, from a plan to a review to a ledger entry to whatever source file an implementer adds. Dropping the `Write` pair therefore leaves the most common operation in the whole flow matching neither `allow` nor `deny`, which in print mode is a stall and not a refusal. `defaultMode` does not close that gap: its auto-accept is scoped to the session's own working directory, and the entry that matters most here is the sibling-worktree one.",
+    "CREATING A FILE AND CHANGING ONE ARE TWO DIFFERENT GRANTS: `Edit` covers a change to a file that already exists, `Write` covers creating one - and almost every artifact a run produces is a new file, from a plan to a review to a ledger entry to whatever source file an implementer adds. Dropping the `Write` pair therefore leaves the most common operation in the whole flow matching neither `allow` nor `deny`, which is a refusal of the most common operation in the flow. `dontAsk` auto-accepts nothing, so the `Write` pair is the only grant.",
     "EVERY FILE RULE MARKS AN ABSOLUTE PATH WITH A `//` PREFIX - `Read`, `Edit` AND `Write` ALIKE - AND THE PATH BRINGS ITS OWN LEADING SLASH: the entries `Read(/{{repoRoot}}/**)`, `Edit(/{{repoRoot}}/**)` and `Write(/{{repoRoot}}/**)` above are that prefix immediately followed by the absolute path {{repoRoot}}, which is why each carries two slashes and not three. One tool syntax governs all three: a rule content starting with `//` is anchored at the filesystem root, while a single leading `/` is resolved relative to the root of the settings file the rule came from, so a one-slash rule names a path nobody has and matches no file. Adding a slash of its own to a path that already starts with one gives the same silent nothing from the other side.",
     "NO `hooks` KEY, DELIBERATELY: the harness plugin ships its own guard hooks; they fire from the plugin, resolve their own root and append to whatever hooks you already have. Writing them here as well would run each guard twice and would replace your own hook configuration. This omission is a decision, not an oversight.",
     "`deny` IS A FLOOR, NOT A PREFERENCE: it is evaluated before `allow` and cannot be overridden by one, which is what makes a broad `allow` beside it safe - the destructive commands below stay refused however widely the rest is granted. Add to it freely; do not weaken it, and do not try to re-enable one of its entries by adding an allow rule, because the allow will not win. What a deny entry holds back is what its pattern literally matches: each is a PREFIX match anchored at the START of the command string, so `Bash(git branch -D:*)` refuses `git branch -D <x>` and does not fire on the same words inside a compound such as `git status && git branch -D <x>`. It does not fire on `git -C <dir> branch -D <x>` either - the directory sits ahead of the words the pattern anchors on. Both gaps are closed on the plugin side rather than here - the guard hooks that auto-allow a compound, or a single directory-scoped statement, refuse to vouch for a piece that deletes, renames or overwrites a branch ref, whichever safe prefix it otherwise matches, and they parse the `-C` form rather than matching it as a prefix - so keep the two in step when you add an entry that names one of those prefixes. It is also why no `Bash(git -C:*)` entry is added above: it would grant the `-C` spelling of every verb this floor refuses, with no deny entry able to fire on it.",
-    "NO BROWSER-NAMESPACE ENTRY IN `deny`: a deny is evaluated before any allow and cannot be overridden, so denying the browser-automation namespaces would revoke the interactive-test agent's own grant along with everyone else's. That closure is done per agent, by the `tools:` allowlist on each agent definition - the one agent that drives a browser lists those tools and no other agent does."
+    "NO BROWSER-NAMESPACE ENTRY IN `deny`: a deny is evaluated before any allow and cannot be overridden, so denying the browser-automation namespaces would revoke the interactive-test agent's own grant along with everyone else's. That closure is done per agent, by the `tools:` allowlist on each agent definition - the one agent that drives a browser lists those tools and no other agent does.",
+    "THE SANDBOX IS STRICT: every Bash command a run issues, and every process it starts, runs inside Claude Code's OS-level sandbox. `failIfUnavailable` makes a session whose sandbox cannot start exit at startup rather than run its commands unsandboxed, and with `allowUnsandboxedCommands` false the `dangerouslyDisableSandbox` parameter is ignored. A `false` there, set from `--settings`, also makes the sandbox admin-required on Claude Code v2.1.285 or later, which then ignores `excludedCommands`, `network.allowedDomains` and `filesystem.allowWrite` in the repository's own `.claude/settings.json` and `.claude/settings.local.json`: a sandbox setting an unattended run needs goes in this file.",
+    "`autoAllowBashIfSandboxed` IS false ON PURPOSE: the `allow` list above stays the grant surface for Bash, sandboxed or not, and the permission mode decides every call it does not list. Its default is true, and neither documentation page states how that default interacts with `dontAsk`; setting it explicitly takes that open point out of every outcome.",
+    "THE NETWORK ALLOWLIST IS EMPTY BUT FOR THIS REPOSITORY'S OWN PART: git's network traffic leaves through the two excluded wrappers named below, and Claude Code's own API traffic, `WebFetch`, `WebSearch` and local MCP servers run outside the sandbox, so none of them needs an entry. What a sandboxed command may reach is `sandbox.allowedDomains` in harness.config.json, each domain with its reason, repeated here as an ALLOWED DOMAIN line. Add one narrowly: the sandbox's proxy decides on the hostname the client supplies and does not inspect TLS, so a broad domain such as `github.com` is an exfiltration path.",
+    "`strictAllowlist` IS SET, AND SETTING IT FROM THIS FILE IS HONOURED: the settings reference scopes the key to user or managed settings, while the sandboxing page also admits CLI `--settings`, which is how this profile is loaded. Measured on Claude Code 2.1.299 on macOS in a headless session, a host outside the allowlist was refused at once under both the `dontAsk` mode this profile ships with and the `PERMISSION_MODE=acceptEdits` override THE PERMISSION MODE IS dontAsk line names, with no prompt (docs/sandbox-verification.md, rows N1 and N2).",
+    "WHETHER A HEADLESS `-p` SESSION HONOURS ALL OF THIS EXACTLY AS AN INTERACTIVE ONE DOES IS UNRESOLVED: neither documentation page says, and an unattended run is a `-p` session.",
+    "TWO COMMANDS RUN OUTSIDE THE SANDBOX, EACH IN ONE SPELLING: `sandbox.excludedCommands` names the main checkout's own `push-branch.sh` and `refresh-branch.sh` under {{scriptsDirAbs}}, because on macOS an SSH push or fetch fails inside the sandbox. An excluded command runs with full access and reaches any host, so the file it runs has to be one the sandbox cannot write - and the worktree's copy is not: a run's worktree is sandbox-writable, the only spelling a profile has for a sibling worktree is a glob, and how the Linux sandbox treats a `denyWrite` entry carrying one is unverified. The repo-relative and sibling-worktree spellings of both wrappers stay in `allow` above and stay sandboxed, as does a call that compounds the excluded spelling with anything else. The excluded rule's `:*` accepts any argument, so both wrappers refuse any target but the main checkout or a worktree it lists.",
+    "`allowLocalBinding` IS macOS ONLY: it is set so a test suite or dev server a sandboxed command starts can bind loopback. On Linux each sandboxed command has a private loopback and cannot reach a server another one started.",
+    "THE NETWORK-CLIENT DENIES ARE A SECOND LAYER: `WebFetch` and `WebSearch` are denied as tools, because they run outside the sandbox. The `Bash(<client>:*)` entries for `curl`, `wget`, `nc`, `ncat`, `socat`, `ssh`, `scp`, `sftp`, `ftp`, `telnet` and `rsync` are prefix matches on the start of the command string like every other deny entry, so a client reached any other way passes them: without the sandbox they are cosmetic.",
+    "TWO RESIDUALS, STATED RATHER THAN HIDDEN: how the Linux sandbox treats the globbed `denyWrite` entries is unverified - it may skip one, or expand it to the paths that exist when the sandbox starts - so the protection they add - the worktree's hooks directory, MCP wiring, settings files and `.git` pointer, the worktree records and the files in them, and the worktree's copy of `docs-search-server.sh` and its library when docs retrieval applies - is relied on against sandboxed commands on macOS only, while the `Edit` and `Write` deny rules carry the same globs and hold everywhere. And the interactive-test phase is unmeasured under the sandbox: on Linux each sandboxed command has a private loopback, so the dev server and the readiness poll cannot meet.",
+    "CREDENTIALS ARE DENIED ON BOTH SIDES: `sandbox.credentials` below names credential files and shell startup files, each read-denied to a sandboxed command, and token variables, each unset before every sandboxed command. It reaches sandboxed Bash commands only, so the two excluded wrappers above keep the environment an HTTPS push needs. `Read`, `Grep` and `Glob` run outside the sandbox, so every file that block names is also a pair of `Read` rules in `deny` - the path itself and everything under it, with the home directory of the machine that generated this file in place of `~` - and those rules hold in every permission mode, the `PERMISSION_MODE=acceptEdits` override included. A credentials `deny` entry from any settings scope merges with these, and no scope can remove one another added. Three files are left out on purpose: `~/.npmrc` and `~/.gitconfig`, which npm and git read on every invocation, and `~/.zshenv`, which zsh reads on every invocation. Whether denying them breaks a run is not yet measured, so they are left readable until measured (roadmap item 21)."
   ],
   "permissions": {
     "allow": [
@@ -63,7 +74,20 @@
       "Bash(git branch -D:*)",
       "Bash(git branch -d:*)",
       "Bash(git branch -M:*)",
-      "Bash(git branch -m:*)"
+      "Bash(git branch -m:*)",
+      "WebFetch",
+      "WebSearch",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(nc:*)",
+      "Bash(ncat:*)",
+      "Bash(socat:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(sftp:*)",
+      "Bash(ftp:*)",
+      "Bash(telnet:*)",
+      "Bash(rsync:*)"
     ],
     "ask": [
       "Bash(git checkout:*)",
@@ -86,8 +110,51 @@
       "Bash(bash {{scriptsDirAbs}}/{{deployFile}}:*)",
       "Bash(bash {{worktreeGlob}}/{{deployPath}}:*)"
     ],
-    "defaultMode": "acceptEdits",
+    "defaultMode": "dontAsk",
     "additionalDirectories": ["{{stateDirAbs}}"]
   },
-  "model": "{{agentModel}}"
+  "model": "{{agentModel}}",
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "autoAllowBashIfSandboxed": false,
+    "excludedCommands": [],
+    "filesystem": {
+      "allowWrite": ["{{stateDirAbs}}"],
+      "denyWrite": []
+    },
+    "network": {
+      "strictAllowlist": true,
+      "allowLocalBinding": true,
+      "allowedDomains": []
+    },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws", "mode": "deny" },
+        { "path": "~/.config/gh", "mode": "deny" },
+        { "path": "~/.gnupg", "mode": "deny" },
+        { "path": "~/.netrc", "mode": "deny" },
+        { "path": "~/.git-credentials", "mode": "deny" },
+        { "path": "~/.docker/config.json", "mode": "deny" },
+        { "path": "~/.kube", "mode": "deny" },
+        { "path": "~/.config/gcloud", "mode": "deny" },
+        { "path": "~/.azure", "mode": "deny" },
+        { "path": "~/.bashrc", "mode": "deny" },
+        { "path": "~/.bash_profile", "mode": "deny" },
+        { "path": "~/.profile", "mode": "deny" },
+        { "path": "~/.zshrc", "mode": "deny" },
+        { "path": "~/.zprofile", "mode": "deny" }
+      ],
+      "envVars": [
+        { "name": "GH_TOKEN", "mode": "deny" },
+        { "name": "GITHUB_TOKEN", "mode": "deny" },
+        { "name": "HARNESS_PR_TOKEN", "mode": "deny" },
+        { "name": "NPM_TOKEN", "mode": "deny" },
+        { "name": "ANTHROPIC_API_KEY", "mode": "deny" },
+        { "name": "CLAUDE_CODE_OAUTH_TOKEN", "mode": "deny" }
+      ]
+    }
+  }
 }

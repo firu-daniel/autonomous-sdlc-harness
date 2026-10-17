@@ -51,7 +51,7 @@ Applies on the answer-1 path only, between the answer and the invocation; a sess
 
 If the request names material a detached run cannot reach — a path outside this checkout, an attachment or pasted image, a URL or a file on another host, or context that exists only in this conversation — tell the user before invoking anything:
 
-- Name it, and say the unattended run reads only this repository, so it will not be able to open it. A remote address is worse: the run has no web access granted at all, so it would hang rather than fail.
+- Name it, and say the unattended run reads only this repository, so it will not be able to open it. A remote address is no better: the unattended profile denies web access, so the fetch is refused.
 - **Prescribe no remedy** — in particular, do not tell them to commit the material into the repository.
 - **Queue nothing** in the meantime, and let their next turn decide, including re-sending the request with the details typed into the message, which is their own words and passes through unchanged.
 - This is a plain reply: spend no second `AskUserQuestion` on it.

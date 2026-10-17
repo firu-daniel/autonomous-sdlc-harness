@@ -941,6 +941,53 @@ test('a jq whose version string is unrecognizable warns and leaves the exit stat
   assert.match(stdout, CLEAN_SUMMARY);
 });
 
+/**
+ * A temp directory holding a `git` that prints one chosen line for `git --version` and hands every
+ * other call to the real git, to be put **first** on `PATH` — so the version floor is graded on a
+ * real executable while every repository check keeps answering from the real git.
+ *
+ * @param {import('node:test').TestContext} t
+ * @param {string} line what the stub prints for `git --version`.
+ * @returns {Promise<string>} a `PATH` value with the stub ahead of everything else.
+ */
+async function gitVersionStubPath(t, line) {
+  const real = resolveOnPath('git');
+  assert.ok(real, 'git does not resolve on PATH, so a git version stub cannot be built for this test');
+  const dir = await mkdtemp(join(tmpdir(), 'harness-git-stub-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  writeFileSync(
+    join(dir, 'git'),
+    `#!/bin/sh\nif [ "$#" -eq 1 ] && [ "$1" = --version ]; then printf '%s\\n' ${JSON.stringify(line)}; exit 0; fi\nexec ${JSON.stringify(real)} "$@"\n`,
+    { mode: 0o755 },
+  );
+  return `${dir}${delimiter}${process.env.PATH ?? ''}`;
+}
+
+test('a git at or above the 2.38 floor passes and names the version', async (t) => {
+  const dir = await wiredFixture(t);
+  const PATH = await gitVersionStubPath(t, 'git version 2.38.0');
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor'], { PATH });
+
+  assert.equal(status, 0, `doctor exited ${status} with a git at the floor\n${stdout}\n${stderr}`);
+  assert.match(stdout, passLine('git'));
+  assert.match(stdout, /git 2\.38 answered/);
+});
+
+test('a git below the 2.38 floor warns, names refresh-branch.sh, and leaves the exit status at 0', async (t) => {
+  const dir = await wiredFixture(t);
+  const PATH = await gitVersionStubPath(t, 'git version 2.37.9');
+
+  const { status, stdout, stderr } = await runCli(dir, ['doctor'], { PATH });
+
+  // A warning: only the stale-base repair needs the floor, so a run still starts on this git.
+  assert.equal(status, 0, `doctor exited ${status} on a condition that only warns\n${stdout}\n${stderr}`);
+  assert.match(stderr, warnLine('git'));
+  assert.match(stderr, /2\.37/);
+  assert.match(stderr, /refresh-branch\.sh/);
+  assert.match(stderr, /merge-tree --write-tree/);
+});
+
 test('the jq check answers the same in a repository whose config is gone', async (t) => {
   const dir = await wiredFixture(t);
   await rm(join(dir, CONFIG_FILE));
@@ -4742,7 +4789,7 @@ function reportLines(output) {
  *
  * **The pasteable lines are asserted verbatim, as whole lines**, because that is the entire value of
  * the check: an entry whose form drifted by one character matches nothing at run time and costs a
- * silent stall, and a substring assertion would go on passing through exactly that drift.
+ * refusal, and a substring assertion would go on passing through exactly that drift.
  */
 test('the plugin-permissions check prints the entries to paste, and never above a warning', { concurrency: CASE_CONCURRENCY }, async (t) => {
   const subtests = [];
@@ -5134,10 +5181,15 @@ test('doctor --remote-job fails an unusable profile where a default run warns', 
     return { root, env: home.env };
   }
 
-  /** Add directories to the generated profile's `permissions.additionalDirectories`. */
+  /**
+   * Add directories to the generated profile's `permissions.additionalDirectories`, write-protected as
+   * `init --plugin-root-entries` writes them, so `profile-write-protection` passes the edit.
+   */
   function grantDirectories(dir, directories) {
     editJson(dir, PROFILE_FILE, (profile) => {
       profile.permissions.additionalDirectories = [...(profile.permissions.additionalDirectories ?? []), ...directories];
+      profile.sandbox.filesystem.denyWrite.push(...directories);
+      profile.permissions.deny.push(...directories.flatMap((root) => [`Edit(/${root}/**)`, `Write(/${root}/**)`]));
     });
   }
 
@@ -5394,15 +5446,15 @@ const PYTHON_INSTALL_REMEDY_TEXT = 'install the package with its `models` extra'
 const COMPOSE_DEFAULT_DATABASE_URL = 'postgresql://harness:harness@127.0.0.1:5432/docs_retrieval';
 const DATABASE_URL_VARIABLE = 'HARNESS_DOCS_RETRIEVAL_DATABASE_URL';
 
-/** The ids `CHECKS` held before `docs.retrievalBackend` existed, frozen so an added id is visible. */
+/** The ids `CHECKS` holds other than the Python backend's, frozen so an added id is visible. */
 const PRE_BRANCH_CHECK_IDS = Object.freeze([
   'git', 'jj-repository', 'default-branch', 'remote', 'base-freshness', 'pre-push-guard', 'protected-set', 'jq',
   'worktrees', 'daemon-backend', 'run-watcher', 'notifications', 'repo-registry', 'machine-footprint', 'daemon-path',
   'remote-execution', 'remote-github', 'forge', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
   'state-dir', 'artifact-tree', 'setup-analysis', 'task-offer-rules', 'layer-profile', 'layer-drift', 'ignore-rules',
   'plugin-wiring', 'permission-profile', 'profile-paths', 'profile-tracked', 'profile-browser-deny',
-  'profile-deny-floor', 'plugin-permissions', 'browser-wiring', 'retrieval-dependencies', 'retrieval-model-cache',
-  'retrieval-index',
+  'profile-deny-floor', 'profile-sandbox', 'profile-write-protection', 'plugin-permissions', 'browser-wiring',
+  'retrieval-dependencies', 'retrieval-model-cache', 'retrieval-index',
 ]);
 
 /** A real `harness-docs-retrieval` on a directory the check always searches, which no case may run. */
