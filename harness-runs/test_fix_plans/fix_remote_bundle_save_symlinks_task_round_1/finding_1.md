@@ -31,3 +31,5 @@ Neither line needs the literal to make its point. Each one names the watcher's f
 - [ ] Leave the rest of each line untouched. Afterwards, `grep -nE '(^|[^A-Za-z0-9_.}/:-])/(branch-|harness-analyze)' docs/copilot-foundry-research.md` should print nothing.
 
 Do not edit `scripts/check-command-spelling.sh` or `docs/development.md`.
+
+- **Deviations from plan:** Evidence downgrade — the finding's failing test is the gate script `scripts/check-command-spelling.sh` (gate 6d), which a row-`G.4` unit never runs; the fix-site fallback applied. The fix site did not carry the fix, so both respellings were implemented as specified. The close rests on the finding's own probe, run from the repository root: `grep -nE '(^|[^A-Za-z0-9_.}/:-])/(branch-|harness-analyze)' docs/copilot-foundry-research.md` printed nothing (exit 1). Gate 6d itself is deferred to the Run gates phase: `commands.test` (`bash scripts/run-gates.sh`) invokes it as `gate "6d plugin command spellings carry the prefix" bash scripts/check-command-spelling.sh`.
