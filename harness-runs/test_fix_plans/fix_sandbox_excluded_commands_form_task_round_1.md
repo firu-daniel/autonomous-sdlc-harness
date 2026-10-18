@@ -10,7 +10,7 @@
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Task prompt quotes an absolute home-directory path, failing gate 6a. _(layer: general)_
+1. [x] **Finding 1** — Task prompt quotes an absolute home-directory path, failing gate 6a. _(layer: general)_
 
 ## Must Fix
 
