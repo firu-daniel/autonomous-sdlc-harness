@@ -30,7 +30,7 @@ import { internal } from '../core/errors.js';
 import { appendUnique, isJsonObject, listAt, objectAt, type JsonObject, type JsonValue } from '../core/json.js';
 import { homeRoot, readTemplate } from '../core/paths.js';
 import { OUTER_LOOP_SCRIPTS, outerLoopRelativePath, outerLoopScriptPath } from './outerLoopScripts.js';
-import { appendReadme, assertUsableInEntry, bashScriptRule, TEMPLATE_PATH } from './profileEntries.js';
+import { appendReadme, assertUsableInEntry, bashScriptRule, sandboxExcludedCommand, TEMPLATE_PATH } from './profileEntries.js';
 
 /** The profile's top-level key for the sandbox block. */
 export const SANDBOX_KEY = 'sandbox';
@@ -68,6 +68,8 @@ export interface ExpectedSandbox {
   readonly optedOut: boolean;
   readonly optOutReason?: string;
   readonly excludedCommands: readonly string[];
+  /** The `Bash(…)` spelling earlier releases generated; index `i` is the stale form of `excludedCommands[i]`. */
+  readonly staleExcludedCommands: readonly string[];
   readonly allowedDomains: readonly string[];
 }
 
@@ -79,13 +81,15 @@ interface SandboxInput {
 
 /**
  * The sandbox block's configuration-dependent values: one excluded command per
- * `runsUnsandboxed` row of the outer-loop table, in the `bashScriptRule` form `permissions.allow`'s
- * repo-root-absolute spelling also takes; and the configured domains in order, then
- * {@link LOOPBACK_ALLOWED_HOST} when the browser wiring applies, de-duplicated.
+ * `runsUnsandboxed` row of the outer-loop table, in the `sandboxExcludedCommand` form
+ * `bash <path>:*` — never the `Bash(…)` rule form, which matches no call there and leaves the
+ * wrapper sandboxed — with that `bashScriptRule` spelling kept as the stale list `doctor` reports;
+ * and the configured domains in order, then {@link LOOPBACK_ALLOWED_HOST} when the browser wiring
+ * applies, de-duplicated.
  */
 export function expectedSandbox({ repoRoot, config }: SandboxInput): ExpectedSandbox {
-  const excludedCommands = OUTER_LOOP_SCRIPTS.filter((script) => script.runsUnsandboxed === true).map((script) =>
-    bashScriptRule(outerLoopScriptPath(repoRoot, config, outerLoopRelativePath(script))),
+  const wrapperPaths = OUTER_LOOP_SCRIPTS.filter((script) => script.runsUnsandboxed === true).map((script) =>
+    outerLoopScriptPath(repoRoot, config, outerLoopRelativePath(script)),
   );
   const domains = sandboxAllowedDomains(config).map(({ domain }) => domain);
   if (browserWiringApplies(config)) domains.push(LOOPBACK_ALLOWED_HOST);
@@ -95,7 +99,8 @@ export function expectedSandbox({ repoRoot, config }: SandboxInput): ExpectedSan
   return {
     optedOut,
     ...(optedOut && typeof reason === 'string' ? { optOutReason: reason.trim() } : {}),
-    excludedCommands,
+    excludedCommands: wrapperPaths.map(sandboxExcludedCommand),
+    staleExcludedCommands: wrapperPaths.map(bashScriptRule),
     allowedDomains: [...new Set(domains)],
   };
 }

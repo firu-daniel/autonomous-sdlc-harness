@@ -926,25 +926,30 @@ test('the sandbox block is strict, excludes only the main checkout\'s two git wr
 
   assert.equal(UNSANDBOXED_ROWS.length, 2, 'the outer-loop table does not mark exactly two rows as running unsandboxed');
   const excluded = profile.sandbox.excludedCommands;
-  const mainForms = UNSANDBOXED_ROWS.map((row) => bashScriptRule(join(dir, SCRIPTS_DIR, outerLoopRelativePath(row))));
+  const mainForms = UNSANDBOXED_ROWS.map((row) => `bash ${join(dir, SCRIPTS_DIR, outerLoopRelativePath(row))}:*`);
   assert.deepEqual(excluded, mainForms, 'sandbox.excludedCommands is not exactly the main checkout\'s two wrapper spellings');
+  for (const entry of excluded) {
+    assert.ok(!entry.startsWith('Bash('), `${entry} is in the Bash(…) rule form, which excludes no call`);
+  }
 
   // The sandbox-writable spellings never run unsandboxed.
   const worktreeGlob = worktreeGlobFor(dir);
   for (const row of UNSANDBOXED_ROWS) {
     const relative = outerLoopRelativePath(row);
-    for (const form of [`Bash(${scriptInvocation(SCRIPTS_DIR, relative)}:*)`, bashScriptRule(join(worktreeGlob, SCRIPTS_DIR, relative))]) {
-      assert.ok(!excluded.includes(form), `${form} is excluded from the sandbox, and a sandboxed command can rewrite its file`);
+    for (const bare of [`${scriptInvocation(SCRIPTS_DIR, relative)}:*`, `bash ${join(worktreeGlob, SCRIPTS_DIR, relative)}:*`]) {
+      for (const form of [bare, `Bash(${bare})`]) {
+        assert.ok(!excluded.includes(form), `${form} is excluded from the sandbox, and a sandboxed command can rewrite its file`);
+      }
     }
   }
 
-  // The excluded spelling and the allow-listed form (ii) are one string.
+  // Each excluded entry, wrapped as a rule, is the allow-listed form (ii).
   for (const entry of excluded) {
-    assert.ok(entries(profile, 'allow').includes(entry), `${entry} is excluded but not allow-listed`);
+    assert.ok(entries(profile, 'allow').includes(`Bash(${entry})`), `${entry} is excluded but Bash(${entry}) is not allow-listed`);
   }
 
   // The prefix the corpus push spelling has to start with, and the one it must not be.
-  const push = mainForms[0].slice('Bash('.length, -':*)'.length);
+  const push = mainForms[0].slice(0, -':*'.length);
   assert.ok(`${push} "${join(worktreeGlob, 'x')}"`.startsWith(push));
   assert.ok(!`bash ${SCRIPTS_DIR}/${outerLoopRelativePath(UNSANDBOXED_ROWS[0])}`.startsWith(push));
 
