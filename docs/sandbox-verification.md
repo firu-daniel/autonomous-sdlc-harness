@@ -7,7 +7,7 @@
 **The headline, before the rows.** Three defects stop an unattended macOS run under this profile as shipped:
 
 - **No sandboxed git call in a linked worktree can write that worktree's record**, so no run can commit. The full flow parked at its first commit. See §2 G1 and §5 F1.
-- **The two `excludedCommands` entries match nothing**, so the main checkout's wrappers run sandboxed and every SSH push and refresh fails. See §3 P1 and R0.
+- **The two `excludedCommands` entries match nothing**, so the main checkout's wrappers run sandboxed and every SSH push and refresh fails. See §3 P1 and R0. `fix_sandbox_excluded_commands_form` changes the generated form to P2's; the rows it affects are owed a re-run (§3).
 - **`run-gates.sh` fails every status-graded gate sandboxed.** See §5 F2.
 
 Each one has its own follow-up. The write protection, the credential denial and the network allowlist all held.
@@ -69,7 +69,7 @@ Every sandbox write probe carries a positive control in the same session: the wo
 | D2 | `doctor`, profile with no `sandbox` block | warn without `--remote-job`, fail with it | `! WARN profile-sandbox … has no sandbox object` and `! WARN profile-write-protection` (all 37 paths listed) → `!! FAIL` for both under `--remote-job` | **pass** |
 | D3 | `doctor`, the `harness.config.json` entries removed (its `denyWrite` entry and its `Edit`/`Write` denies) | warn without, fail with | `profile-sandbox` `PASS`; `profile-write-protection` `! WARN` naming the missing `denyWrite` entry and both file-tool rules → `!! FAIL` under `--remote-job` | **pass** |
 
-D1 grades the `excludedCommands` spelling P1 shows to be inert, and it requires `Write` deny rules W5 shows to be inert. A pass here is not evidence that either works.
+D1 grades the `excludedCommands` spelling P1 shows to be inert, and it requires `Write` deny rules W5 shows to be inert. A pass here is not evidence that either works. Since `fix_sandbox_excluded_commands_form`, `profile-sandbox` grades the corrected `bash <main>/scripts/<wrapper>.sh:*` form and reports the `Bash(…)` one as stale.
 
 ---
 
@@ -84,6 +84,8 @@ D1 grades the `excludedCommands` spelling P1 shows to be inert, and it requires 
 ---
 
 ## 3. The wrappers
+
+**Owed a re-run.** This table's cells are the 2026-10-14 record, taken against the `Bash(…)` form of the `excludedCommands` entries. `fix_sandbox_excluded_commands_form` changes the generated form to `bash <main>/scripts/<wrapper>.sh:*`, so P1, P3, R0–R4, C1, C2, K2, L1 and L2 are owed a re-run on a profile carrying it. C1, C2 and K2 ran through the main wrapper while it was sandboxed; under the corrected entry it runs unsandboxed, which is the case their refusals exist for.
 
 | # | Check | Expected | Observed | Verdict |
 |---|---|---|---|---|
@@ -174,7 +176,7 @@ The record's own `HEAD` is refused too (`dd` → `Operation not permitted`), whi
 |---|---|---|---|
 | F1 | A sandboxed git call cannot write a linked worktree's record. Every unattended run's commits fail, and so do `--local` refreshes and `switch`. No profile entry measured opens it. | G1, G3, R4 | `fix_sandbox_worktree_record_writes` (task prompt `sandbox1d`) |
 | F2 | `run-gates.sh` fails all 24 status-graded gates sandboxed (`run-gates: 24 failed, 4 passed`). `log="$(mktemp -t harness-gates)"` gets `mkstemp failed on /var/folders/…/T/harness-gates.…: Operation not permitted`: macOS `mktemp -t` ignores `TMPDIR`, and the per-user temp directory is not writable, while the sandbox's own `TMPDIR` (`/tmp/claude-501`) is. Setting `TMPDIR` on the command line does not help, for the same reason. | gates row below | `fix_run_gates_sandbox_tmpdir` (`sandbox1f`) |
-| F3 | The `excludedCommands` entries in `Bash(…:*)` form are inert. Both main-checkout wrappers run sandboxed, and every SSH push and refresh fails. | P1, P1a, R0 | `fix_sandbox_excluded_commands_form` (`sandbox1e`) |
+| F3 | The `excludedCommands` entries in `Bash(…:*)` form are inert. Both main-checkout wrappers run sandboxed, and every SSH push and refresh fails. | P1, P1a, R0 | `fix_sandbox_excluded_commands_form` (`sandbox1e`): the generator now writes P2's `bash <main>/scripts/<wrapper>.sh:*` form, and `doctor`'s `profile-sandbox` reports an entry in the `Bash(…)` form as stale. |
 | F4 | `Write(...)` rules are inert, and the `Bash(bash <main>-*/scripts/<x>.sh:*)` allow rules are literal prefixes (`--debug`: "the * is not expanded"). Protection holds through `Edit`, but `doctor` grades the dead rules. | D1, W5 | `fix_profile_inert_permission_rules` (`sandbox1g`) |
 
 **The gates row.**
