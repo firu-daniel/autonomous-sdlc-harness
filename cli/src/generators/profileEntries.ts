@@ -147,8 +147,11 @@ export function sandboxExcludedCommand(absolutePath: string): string {
  * A wrapper-script rule, in the unquoted `Bash(bash <path>:*)` form every generated one uses — and
  * the other plugin-root form, for a helper under the plugin's own scripts directory. Same consumers,
  * and the same decision, as `permissionProfile.ts`'s `readRule`. Built from
- * {@link sandboxExcludedCommand} so the two forms cannot drift; its output is byte-identical to the
- * `Bash(bash <path>:*)` literal it replaced.
+ * {@link sandboxExcludedCommand} only because the two share `bash <path>:*` today; its output is
+ * byte-identical to the `Bash(bash <path>:*)` literal it replaced. The two follow separate grammars —
+ * this one the `permissions.allow` rule grammar, that one a measured excluded-command pattern — and
+ * `profile.test.mjs` pins each on its own, so a change to either fails a test rather than moving the
+ * other.
  */
 export function bashScriptRule(absolutePath: string): string {
   return `Bash(${sandboxExcludedCommand(absolutePath)})`;
