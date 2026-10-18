@@ -140,7 +140,8 @@
 # `lib/harness-run-lib.sh` → `hr_git_env_drop` the same `GIT_*` names
 # `push-branch.sh` does, every `GIT_TRACE*` included, and keeps
 # `GIT_SSH_COMMAND`; `PATH` and `BASH_ENV` are trusted as they arrive (the list and the reasoning: `push-branch.sh` → the paragraph of
-# the same name). It sets `GIT_DIR`, `GIT_INDEX_FILE` and `GIT_WORK_TREE` itself
+# the same name, which also carries the measured basis for keeping
+# `GIT_SSH_COMMAND`). It sets `GIT_DIR`, `GIT_INDEX_FILE` and `GIT_WORK_TREE` itself
 # afterwards, for the working-tree calls only.
 #
 # Usage: refresh-branch.sh [--local] [<repo-dir>]

@@ -60,7 +60,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_excluded_command
 
 1. [x] **Task 1** — Generate `sandbox.excludedCommands` as `bash <main>/<scriptsDir>/<wrapper>.sh:*` and expose the stale `Bash(…)` form _(layer: cli)_ _(points: 15)_
 2. [x] **Task 2** — Have `doctor`'s `profile-sandbox` expect the new form and report the old one as stale _(layer: cli)_ _(points: 15)_
-3. [ ] **Task 3** — Restate the excluded spelling in the profile template's `_README` and record the `GIT_SSH_COMMAND` answer in both wrapper headers _(layer: cli)_ _(points: 10)_
+3. [x] **Task 3** — Restate the excluded spelling in the profile template's `_README` and record the `GIT_SSH_COMMAND` answer in both wrapper headers _(layer: cli)_ _(points: 10)_
 4. [ ] **Task 4** — Update `docs/cli.md` §6 and §7, `ARCHITECTURE.md` and `docs/sandbox-verification.md` for the corrected form _(layer: general)_ _(points: 15)_
 5. [ ] **Task 5** — Re-render the worked example's profile for the corrected form _(layer: general)_ _(points: 8)_
 
