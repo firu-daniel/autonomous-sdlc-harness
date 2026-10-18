@@ -187,8 +187,7 @@
 # set — an assignment prefix or a compound is a different command string,
 # which stays sandboxed — and an operator may rely on it for the SSH push this
 # script exists to make outside the sandbox. Measured on Claude Code 2.1.299,
-# macOS, headless (docs/sandbox-verification.md -> P1a; a re-confirmation on a
-# regenerated profile lands in that file too): a sandboxed command carries
+# macOS, headless (docs/sandbox-verification.md -> P1a): a sandboxed command carries
 # `GIT_SSH_COMMAND=ssh ... -o ProxyCommand='nc -X 5 -x localhost:<port> %h %p'`,
 # and an excluded call inherits none of the sandbox's proxy variables. A call
 # that does carry that value is running sandboxed, where SSH has no route but

@@ -12,7 +12,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 2** — Drop the pending-work parenthetical from `push-branch.sh`'s `GIT_SSH_COMMAND` header paragraph _(layer: cli)_
+1. [x] **Finding 2** — Drop the pending-work parenthetical from `push-branch.sh`'s `GIT_SSH_COMMAND` header paragraph _(layer: cli)_
 2. [ ] **Finding 1** — Correct `bashScriptRule`'s doc-comment rationale for building on `sandboxExcludedCommand` _(layer: cli)_
 3. [ ] **Finding 3** — Call the excluded entries "entries", not "rules", in `profile-sandbox`'s pass line and doc comment _(layer: cli)_
 
