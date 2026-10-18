@@ -23,7 +23,7 @@
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — Name the unmeasured assignment-prefix and compound boundaries in `docs/sandbox-verification.md`'s owed-re-run note _(layer: general)_
+1. [x] **Finding 1** — Name the unmeasured assignment-prefix and compound boundaries in `docs/sandbox-verification.md`'s owed-re-run note _(layer: general)_
 
 ---
 
