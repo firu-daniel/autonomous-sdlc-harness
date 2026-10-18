@@ -4735,6 +4735,9 @@ const PROFILE_DENY_FLOOR_CHECK: Check = {
  * item 20 (`docs/development.md` → `## 6. The roadmap this tree defers to`). **Under `--remote-job`**
  * ({@link CheckContext.remoteJob}) every finding is a `fail`, except the taken opt-out, which stays a
  * `warn` because it is the repository's choice. Every non-pass names `init --force` as the remedy.
+ * An excluded entry in an earlier release's `Bash(…)` form ({@link expectedSandbox}'s `staleExcludedCommands`)
+ * is reported as stale by name, under the same grading, instead of as an unnamed extra: that form
+ * matches no command (`docs/sandbox-verification.md` → P1a), so its wrapper runs sandboxed.
  */
 const PROFILE_SANDBOX_CHECK: Check = {
   id: 'profile-sandbox',
@@ -4786,12 +4789,22 @@ const PROFILE_SANDBOX_CHECK: Check = {
 
     const excludedPath = `${SANDBOX_KEY}.excludedCommands`;
     const excluded = stringsAt(valueAt(ctx.profile, excludedPath.split('.')));
-    for (const entry of expected.excludedCommands.filter((rule) => !excluded.includes(rule))) {
+    const staleHeld = expected.staleExcludedCommands.filter((rule) => excluded.includes(rule));
+    for (const stale of staleHeld) {
+      const paired = expected.excludedCommands[expected.staleExcludedCommands.indexOf(stale)];
+      findings.push(
+        `\`${excludedPath}\` carries ${stale}, the \`Bash(…)\` spelling an earlier release generated, which matches no command: ${paired} is the spelling that runs outside the sandbox, and without it that wrapper runs sandboxed and its SSH push or fetch fails`,
+      );
+    }
+    const missing = expected.excludedCommands.filter(
+      (rule, i) => !excluded.includes(rule) && !staleHeld.includes(expected.staleExcludedCommands[i] ?? ''),
+    );
+    for (const entry of missing) {
       findings.push(
         `\`${excludedPath}\` lacks ${entry}: that wrapper's SSH push or fetch fails inside the sandbox on macOS, and the push wrapper still exits 0`,
       );
     }
-    for (const entry of excluded.filter((rule) => !expected.excludedCommands.includes(rule))) {
+    for (const entry of excluded.filter((rule) => !expected.excludedCommands.includes(rule) && !staleHeld.includes(rule))) {
       findings.push(`\`${excludedPath}\` carries ${entry}, which the configuration does not name: it runs with full access and reaches any host`);
     }
 

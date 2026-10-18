@@ -4,7 +4,8 @@
  *
  * **The rules this suite enforces: a profile whose sandbox block is not what the configuration asks
  * for is reported, naming what differs — a `warn` in a default run, a `fail` under `--remote-job` —
- * and a taken opt-out is reported as a `warn` carrying its reason; and a path that runs outside the
+ * an excluded entry in an earlier release's `Bash(…)` spelling is named as stale under the same
+ * grades rather than as an unnamed extra, and a taken opt-out is reported as a `warn` carrying its reason; and a path that runs outside the
  * sandbox but lacks its `denyWrite` entry or a file-tool deny rule is reported by path and side, with
  * the same grades, `denyWrite` going ungraded under a taken opt-out.** Every case is one edit to a
  * freshly wired repository, so the edit is what the line is about; each suite's case (a) is the
@@ -97,6 +98,16 @@ function dropDenyWrite(dir, path) {
   });
 }
 
+/** Rewrite each `sandbox.excludedCommands` entry `e` as `Bash(e)`, returning the rewritten entries. */
+function staleExcludedSpelling(dir) {
+  let stale = [];
+  editJson(dir, PROFILE_FILE, (profile) => {
+    stale = profile.sandbox.excludedCommands.map((entry) => `Bash(${entry})`);
+    profile.sandbox.excludedCommands = stale;
+  });
+  return stale;
+}
+
 /** Delete `path`'s `Edit` deny rule from the profile, returning the rule. */
 function dropEditRule(dir, path) {
   const rule = `Edit(/${path})`;
@@ -159,6 +170,27 @@ concurrentSuite('doctor profile-sandbox', () => {
     editJson(dir, PROFILE_FILE, (profile) => {
       delete profile.sandbox;
     });
+    const { line, status } = await doctorLine(dir, 'FAIL', ['--remote-job']);
+    assert.equal(status, 1, line);
+  });
+
+  it("(g) warns on the earlier release's Bash(…) excluded spelling, naming it as stale", async (t) => {
+    const dir = await wiredFixture(t);
+    const stale = staleExcludedSpelling(dir);
+    const push = stale.find((entry) => entry.includes(`/${PUSH_SCRIPT}`));
+    assert.ok(push !== undefined, `no stale entry for ${PUSH_SCRIPT}`);
+    const { line, status } = await doctorLine(dir, 'WARN');
+    assert.ok(line.includes(push), line);
+    assert.ok(line.includes('matches no command'), line);
+    assert.ok(line.includes('init --force'), line);
+    assert.ok(!line.includes('runs with full access'), line);
+    assert.ok(!line.includes('excludedCommands` lacks'), line);
+    assert.equal(status, 0, line);
+  });
+
+  it('(h) fails case (g) under --remote-job', async (t) => {
+    const dir = await wiredFixture(t);
+    staleExcludedSpelling(dir);
     const { line, status } = await doctorLine(dir, 'FAIL', ['--remote-job']);
     assert.equal(status, 1, line);
   });
