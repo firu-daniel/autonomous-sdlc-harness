@@ -4723,7 +4723,7 @@ const PROFILE_DENY_FLOOR_CHECK: Check = {
 
 /**
  * Is the profile's `sandbox` block what the configuration asks for: on, strict, excluding exactly
- * the expected wrapper rules, allowing exactly the expected domains — or, under a taken
+ * the expected wrapper entries, allowing exactly the expected domains — or, under a taken
  * `sandbox.optOut`, off with the opt-out marker in `_README`?
  *
  * Every expected value is {@link expectedSandbox}'s or {@link shippedSandboxSettings}', computed for
@@ -4823,7 +4823,7 @@ const PROFILE_SANDBOX_CHECK: Check = {
 
     if (findings.length > 0) return grade(`${PROFILE_PATH}: ${findings.join('; ')}. ${regenerate}`);
     return pass(
-      `${PROFILE_PATH}'s \`${SANDBOX_KEY}\` block is on and strict, excludes exactly the ${expected.excludedCommands.length} expected wrapper rules and allows exactly the ${expected.allowedDomains.length} expected domains`,
+      `${PROFILE_PATH}'s \`${SANDBOX_KEY}\` block is on and strict, excludes exactly the ${expected.excludedCommands.length} expected wrapper entries and allows exactly the ${expected.allowedDomains.length} expected domains`,
     );
   },
 };
