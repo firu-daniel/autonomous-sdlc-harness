@@ -144,19 +144,31 @@
 #      failed landing, to name the commit the remote moved to.
 #      Written only by `hr_place_artifact`, `hr_commit_placed`,
 #      `hr_commit_paths_var`, `hr_run_blob_var` (objects only) and
-#      `hr_push_landed`. A path's parent swapped for a symbolic link between
+#      `hr_push_landed`. On a clone, `hr_commit_paths_var` also syncs the
+#      moved ref out to the clone's `refs/heads/<branch>` through
+#      `hr_copy_sync_out_var` (exception 6). A path's parent swapped for a symbolic link between
 #      `hr_run_blob_var`'s walk and its hash is the same race
 #      `hr_commit_placed` already carried.
 #   5. THE WATCHER FAMILY'S GIT IN A RUN'S COPY moves a copy's branch and tree.
-#      Fence: `refs/heads/<branch>`, moved only by a compare-and-swap
-#      `update-ref` against the tip `hr_run_copy_check_var` read, plus the
-#      copy's index (`<record>/index`) and working tree; a `mktemp` temporary
-#      index, removed on every exit path; and
+#      Fence: `refs/heads/<branch>`, moved on a worktree or the main checkout
+#      only by a compare-and-swap `update-ref` against the tip
+#      `hr_run_copy_check_var` read; on a clone the copy check itself first
+#      moves that ref, by `hr_copy_sync_in_var`'s compare-and-swap against the
+#      main checkout's previous value (writing objects there too), and every
+#      later move in this section is a compare-and-swap against the tip the
+#      copy check read after that sync-in; plus the copy's index
+#      (`<record>/index`, `<clone>/.git/index`) and working tree; a `mktemp`
+#      temporary index, removed on every exit path;
 #      `hr_run_trusted_base_var`'s fetch, which writes objects and `FETCH_HEAD`
-#      in the main repository and moves no ref. Written only by
+#      in the main repository and moves no ref; and, on a clone, the clone's
+#      `refs/heads/<branch>` through `hr_copy_sync_out_var`. Written only by
 #      `hr_run_fast_forward_var`, `hr_run_reset_var`,
-#      `hr_run_trusted_base_var` (`hr_run_surface_check_var` through it) and
-#      `hr_run_worktree_diff_var` (the temporary index).
+#      `hr_run_trusted_base_var` (`hr_run_surface_check_var` through it),
+#      `hr_run_worktree_diff_var` (the temporary index) and
+#      `hr_run_copy_check_var`, which on a clone only, through
+#      `hr_copy_sync_in_var`, writes objects into the main repository and
+#      moves the main checkout's `refs/heads/<branch>` by compare-and-swap, and
+#      on `main` and `worktree` writes nothing.
 #      `hr_run_main_git` and `hr_run_copy_git` are general-purpose runners that
 #      write only what their caller's arguments ask, so a caller that drives a
 #      writing git command through them (`create-worktree.sh`'s
@@ -196,7 +208,8 @@
 # `hr_remote_bundle_write`, `hr_remote_copy_tree`, `hr_remote_bundle_restore`,
 # `hr_remote_move_aside`, `hr_remote_state_dir_var`, `hr_place_artifact`,
 # `hr_commit_placed`, `hr_commit_paths_var`, `hr_run_blob_var`, `hr_push_landed`,
-# `hr_run_fast_forward_var`, `hr_run_reset_var`,
+# `hr_run_fast_forward_var`, `hr_run_reset_var`, `hr_run_copy_check_var` (on a
+# clone only),
 # `hr_run_trusted_base_var`, `hr_run_surface_check_var` (through it), `hr_run_main_git`,
 # `hr_run_copy_git`, `hr_copy_sync_in_var`, `hr_copy_sync_out_var`,
 # `hr_registry_drop`, `hr_clone_create_var` or `hr_clone_remove_var` function
@@ -2875,11 +2888,16 @@ hr_derive_branch() {
 # THE WATCHER FAMILY'S GIT IN A RUN'S COPY.
 #
 # The watcher family runs git outside the sandbox in a working copy a run has
-# written, so every call made here holds four rules:
+# written — a worktree, the main checkout or a clone — so every call made here
+# holds four rules on every arm:
 #   - No hook runs: `core.hooksPath=/dev/null` holds none.
-#   - The copy's worktree record is read once, by the checks, and never again.
-#     Only `<record>/index` is borrowed, so git never reads the copy's `.git`
-#     pointer, the record's `commondir`, its `HEAD` or its `config.worktree`.
+#   - The copy's record is read once, by the checks, and never again. For a
+#     worktree only `<record>/index` is borrowed, so git never reads the copy's
+#     `.git` pointer, the record's `commondir`, its `HEAD` or its
+#     `config.worktree`. For a clone the registry, `HEAD`, `alternates` and
+#     `.git/config` are read once, and only `<clone>/.git/index` is borrowed:
+#     objects and refs are read from the main checkout alone, never through
+#     the clone's own store.
 #   - Every call names `refs/heads/<branch>`, never `HEAD`: under
 #     `GIT_DIR=<main>/.git`, `HEAD` is the main checkout's.
 #   - Git reads history as stored: `GIT_NO_REPLACE_OBJECTS=1` and
@@ -2890,6 +2908,12 @@ hr_derive_branch() {
 #     the tip's real tree. Each call also sets
 #     `-c advice.graftFileDeprecated=false`, because a set graft file makes
 #     git print its deprecation hint on stderr; an older git ignores the key.
+# On a clone, the main checkout's `refs/heads/<branch>` is synced in by the
+# copy check (`hr_copy_sync_in_var`) and out after every ref this section moves
+# (`hr_copy_sync_out_var`). `hr_run_surface_check_var` and
+# `hr_run_worktree_diff_var` need no arm of their own: they read refs and
+# objects from the main checkout and the copy's working tree through a fresh
+# index, which holds for a clone as for a worktree.
 # `hr_worktree_config_check_var` is skipped here because no runner below lets
 # git read the record's `config.worktree`; `push-branch.sh` and
 # `refresh-branch.sh` keep it under their own headers. Write exception 5 in the
@@ -2914,6 +2938,7 @@ hr_run_main_set_var() {
   HR_RUN_COPY_GITDIR=""
   HR_RUN_COPY_BRANCH=""
   HR_RUN_COPY_TIP=""
+  HR_RUN_COPY_KIND=""
   if [ -z "$main" ] || ! c=$( CDPATH= cd -P -- "$main" 2>/dev/null && pwd -P ); then
     HR_RUN_REFUSAL="the main checkout '$main' is not a directory"
     return 1
@@ -2932,10 +2957,13 @@ hr_run_main_set_var() {
 
 # hr_run_copy_check_var <main> <copy> — judge <copy> against <main> and set
 # `HR_RUN_MAIN`, `HR_RUN_COPY_TOP` (canonical), `HR_RUN_COPY_GITDIR`
-# (`HR_TARGET_GITDIR`), `HR_RUN_COPY_BRANCH` (empty on a detached, unreadable
-# or invalid HEAD, or a name starting with `-`) and `HR_RUN_COPY_TIP`: the
-# copy's HEAD commit read from the main repository, empty when unborn. 0
-# trusted; 1 untrusted, with `HR_RUN_REFUSAL` set.
+# (`HR_TARGET_GITDIR`), `HR_RUN_COPY_KIND` (`HR_TARGET_KIND`),
+# `HR_RUN_COPY_BRANCH` (empty on a detached, unreadable or invalid HEAD, or a
+# name starting with `-`) and `HR_RUN_COPY_TIP`: the copy's HEAD commit read
+# from the main repository, empty when unborn. On a clone with a branch it
+# first syncs that branch in (`hr_copy_sync_in_var`), so the tip is the main
+# checkout's `refs/heads/<branch>` after the sync. 0 trusted; 1 untrusted or
+# the sync-in refused, with `HR_RUN_REFUSAL` set.
 hr_run_copy_check_var() {
   local main="${1-}" copy="${2-}" top head
   hr_run_main_set_var "$main" || return 1
@@ -2949,11 +2977,21 @@ hr_run_copy_check_var() {
   fi
   HR_RUN_COPY_TOP=$top
   HR_RUN_COPY_GITDIR=$HR_TARGET_GITDIR
+  HR_RUN_COPY_KIND=$HR_TARGET_KIND
   if hr_wrapper_branch_var "$HR_RUN_MAIN" "$HR_RUN_COPY_GITDIR"; then
     case "$HR_WRAPPER_BRANCH" in
       -*) ;;
       *) HR_RUN_COPY_BRANCH=$HR_WRAPPER_BRANCH ;;
     esac
+  fi
+  if [ "$HR_RUN_COPY_KIND" = clone ]; then
+    [ -n "$HR_RUN_COPY_BRANCH" ] || return 0
+    if ! hr_copy_sync_in_var "$HR_RUN_MAIN" "$HR_RUN_COPY_GITDIR" "$HR_RUN_COPY_BRANCH"; then
+      HR_RUN_REFUSAL=$HR_SYNC_REFUSAL
+      return 1
+    fi
+    HR_RUN_COPY_TIP=$(hr_run_main_git rev-parse --verify --quiet "refs/heads/$HR_RUN_COPY_BRANCH^{commit}" 2>/dev/null) || HR_RUN_COPY_TIP=""
+    return 0
   fi
   if [ "$HR_RUN_COPY_GITDIR" = "$HR_RUN_MAIN/.git" ]; then
     head=HEAD
@@ -3194,7 +3232,9 @@ EOF
 #      commit;
 #   1  refused or failed with nothing changed, `HR_RUN_FF_REFUSAL` set;
 #   5  the branch moved, the tree refused and the put-back failed too
-#      (`refresh-branch.sh`'s exit 5), `HR_RUN_FF_REFUSAL` set.
+#      (`refresh-branch.sh`'s exit 5), or, on a clone, the branch and the tree
+#      moved but the clone's `refs/heads/<branch>` could not be synced out;
+#      `HR_RUN_FF_REFUSAL` set.
 hr_run_fast_forward_var() {
   local ref="${1-}" tip="${HR_RUN_COPY_TIP-}" branch="${HR_RUN_COPY_BRANCH-}" new
   HR_RUN_FF_REFUSAL=""
@@ -3237,6 +3277,10 @@ hr_run_fast_forward_var() {
   fi
   if hr_run_copy_git read-tree --no-recurse-submodules -m -u "$tip" "$new"; then
     HR_RUN_COPY_TIP=$new
+    if ! hr_copy_sync_out_var "$HR_RUN_MAIN" "$HR_RUN_COPY_GITDIR" "refs/heads/$branch" "$tip"; then
+      HR_RUN_FF_REFUSAL="'$HR_RUN_COPY_TOP' and '$branch' moved to '$ref', but the clone's refs/heads/$branch could not be synced out: $HR_SYNC_REFUSAL"
+      return 5
+    fi
     return 0
   fi
   if hr_run_main_git update-ref -m "undo fast-forward to $ref" "refs/heads/$branch" "$tip" "$new"; then
@@ -3248,7 +3292,9 @@ hr_run_fast_forward_var() {
 }
 
 # hr_run_reset_var — the watchdog's reset of the copy to `HR_RUN_COPY_TIP`. It
-# moves no ref, so no ref hook runs and no `ORIG_HEAD` is written.
+# moves no ref, so no ref hook runs, no `ORIG_HEAD` is written and a clone needs
+# no sync-out: the copy check's sync-in already made `HR_RUN_COPY_TIP` the
+# clone's tip.
 #   0  reset;
 #   1  refused with nothing written, `HR_RUN_RESET_REFUSAL` set from the
 #      `reset` surface check, which also compares the copy's working tree on
@@ -3348,7 +3394,10 @@ hr_run_blob_var() {
 #   4  the swap was lost or could not be locked: only objects were written;
 #   1  anything else, `HR_COMMIT_REFUSAL` set to one sentence naming a path,
 #      never a file's contents — including the copy's index failing to take the
-#      records after a moved ref, when `HR_COMMIT_NEW` is still set.
+#      records after a moved ref, when `HR_COMMIT_NEW` is still set, and, on a
+#      clone, the clone's `refs/heads/<branch>` failing to sync out after a
+#      moved ref, when `HR_COMMIT_NEW` is set and `HR_COMMIT_SYNC_FAILED` is 1
+#      (empty on every other path).
 # <sync> `committed` syncs the copy's index on 0 only; `always` also on 3 and 4.
 # The temporary directory is removed on every return path. git's own stderr is
 # left to the caller.
@@ -3367,6 +3416,7 @@ hr_commit_paths_var() {
   msg_args=()
   HR_COMMIT_REFUSAL=""
   HR_COMMIT_NEW=""
+  HR_COMMIT_SYNC_FAILED=""
   if [ "$#" -lt 8 ]; then
     HR_COMMIT_REFUSAL="hr_commit_paths_var needs <main> <top> <gitdir> <branch> <tip> <file_mode> <sync> <reflog_subject>"
     return 1
@@ -3497,6 +3547,12 @@ hr_commit_paths_var() {
   fi
   HR_RUN_COPY_TIP=$commit
   HR_COMMIT_NEW=$commit
+  if ! hr_copy_sync_out_var "$HR_RUN_MAIN" "$gitdir" "refs/heads/$branch" "$tip_c"; then
+    rm -rf "$tmpdir"
+    HR_COMMIT_SYNC_FAILED=1
+    HR_COMMIT_REFUSAL="'$branch' moved to $commit in '$HR_RUN_MAIN', but the clone's refs/heads/$branch in '$gitdir' could not be synced out"
+    return 1
+  fi
   if ! hr_run_copy_git update-index -z --index-info <"$records"; then
     rm -rf "$tmpdir"
     HR_COMMIT_REFUSAL="'$branch' moved to $commit, but the index of '$top' could not take the committed paths"
