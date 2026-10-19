@@ -131,11 +131,12 @@ function libraryDir(): string {
  * script (the unsandboxed wrappers first) and the wrappers' library, the hooks
  * directories, the MCP launch surface, the profile and the project settings files, the plugin roots, the main repository's git configuration and
  * its `commondir`, the linked worktrees' records, the legacy remote definitions, the main checkout's
- * configuration file, the run registry by its exact path — the clone arm of the wrappers' target
- * check reads which run copy a branch has from it — and a `.git` at each level of the scripts directory — the last two kinds
- * because the wrappers place their main checkout from their own location, as the nearest directory
- * holding a `.git` that is a real directory without a `commondir`
- * (`cli/templates/scripts/lib/harness-run-lib.sh` → `hr_wrapper_main_of`).
+ * configuration file, the run registry by its exact path, and a `.git` at each level of the scripts
+ * directory. The configuration file and the `.git` levels are protected because the wrappers place
+ * their main checkout from their own location, as the nearest directory holding a `.git` that is a
+ * real directory without a `commondir` (`cli/templates/scripts/lib/harness-run-lib.sh` →
+ * `hr_wrapper_main_of`); the run registry because the clone arm of the wrappers' target check reads
+ * which run copy a branch has from it.
  *
  * The worktree records are protected file by file, never as a directory: no `denyWrite` covers a
  * whole record, because the change that measured why a run could not commit was barred from changing

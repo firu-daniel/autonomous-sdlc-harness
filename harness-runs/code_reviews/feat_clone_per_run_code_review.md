@@ -14,7 +14,7 @@ The three library functions that create, remove and drop (`hr_clone_create_var`,
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 5** — Re-attribute the reasons in `protectedPaths`' doc comment so the run registry is not covered by "the last two kinds" _(layer: cli)_
+1. [x] **Finding 5** — Re-attribute the reasons in `protectedPaths`' doc comment so the run registry is not covered by "the last two kinds" _(layer: cli)_
 2. [ ] **Finding 6** — Name the six new `HR_`-prefixed globals in the run library's NAMING list _(layer: cli)_
 3. [ ] **Finding 7** — Add `push-branch.sh`'s new mirror-failure stdout line to `docs/cli.md`'s list of exit-contract and stdout exceptions _(layer: general)_
 4. [ ] **Finding 4** — State sync-in's `git-upload-pack` re-read of the clone in the library's read-once rule and in `docs/cli.md` residual 1's item 3 _(layer: cli, general)_
