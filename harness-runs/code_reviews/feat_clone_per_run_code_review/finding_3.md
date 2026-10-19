@@ -25,3 +25,5 @@
 ```
 
 The refusal sentence that follows (`its .git is not a regular pointer file, and the run registry records no clone of $main at that path`) stays byte-identical, so `cli/test/clone-trust-check.test.mjs` and `cli/test/wrapper-target-check.test.mjs` keep matching it. The fix edits no test file, so it runs none.
+
+- **Deviations from plan:** The fix stops calling `hr_registry_peek`, so the function header's *"the registry is only peeked at (`hr_registry_peek`), never created"* would no longer describe the code. Amended in the same edit to *"Every record is read once — the registry's two keys in one `jq` call, under `hr_registry_peek`'s guards — and the registry is never created"* (`.claude/context/cli.md` → `## What "done" means here`, last bullet). The library's opening header (*"… once each"*) needed no change. Its claim now holds.

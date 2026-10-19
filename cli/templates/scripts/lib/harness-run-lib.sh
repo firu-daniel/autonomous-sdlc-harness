@@ -918,8 +918,8 @@ hr_wrapper_target_check_var() {
 #   5. `hr_clone_config_check_var <main> <target>` passes.
 # Each comparison is canonical. Return 1 otherwise, with `HR_TARGET_REFUSAL`
 # one sentence naming the condition and the key or file, never a file's
-# contents. Every record is read once, and the registry is only peeked at
-# (`hr_registry_peek`), never created.
+# contents. Every record is read once — the registry's two keys in one `jq`
+# call, under `hr_registry_peek`'s guards — and the registry is never created.
 #
 # Condition 3 is load-bearing: the runtime leaves a clone's `objects/info/`,
 # `info/` and new top-level `.git` files sandbox-writable
@@ -929,6 +929,7 @@ hr_wrapper_target_check_var() {
 hr_clone_target_check_var() {
   local main="${1-}" target="${2-}" refused="${3-}" gd hf head_line="" extra=""
   local branch="" registry kind wt wt_c want name alt alt_line="" alt_c main_obj
+  local line="" tab=$'\t'
   gd="$target/.git"
   hf="$gd/HEAD"
   if [ -f "$hf" ] && [ ! -L "$hf" ] && [ -r "$hf" ]; then
@@ -942,9 +943,19 @@ hr_clone_target_check_var() {
   kind=""
   wt_c=""
   if [ -n "$branch" ] && registry=$(hr_state_path "$main" autonomous_logs/registry.json) \
-    && kind=$(hr_registry_peek "$registry" "$branch" copy_kind) \
-    && wt=$(hr_registry_peek "$registry" "$branch" worktree) && [ -n "$wt" ]; then
-    wt_c=$(hr_canonical_path_nogit "$wt") || wt_c=""
+    && [ -f "$registry" ] && [ -r "$registry" ] \
+    && line=$(jq -r --arg b "$branch" '
+      .runs[$b] | if type == "object"
+        then [(.copy_kind // "" | tostring), (.worktree // "" | tostring)] | @tsv
+        else error("absent") end
+    ' "$registry" 2>/dev/null); then
+    hr_tsv_unescape_var "${line%%"$tab"*}"
+    kind=$HR_CFG_VALUE
+    hr_tsv_unescape_var "${line#*"$tab"}"
+    wt=$HR_CFG_VALUE
+    if [ -n "$wt" ]; then
+      wt_c=$(hr_canonical_path_nogit "$wt") || wt_c=""
+    fi
   fi
   if [ "$kind" != clone ] || [ "$wt_c" != "$target" ]; then
     HR_TARGET_REFUSAL="$refused: its .git is not a regular pointer file, and the run registry records no clone of $main at that path"
