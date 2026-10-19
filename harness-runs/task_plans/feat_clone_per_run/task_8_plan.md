@@ -59,3 +59,5 @@ Clones come from Task 3's `hr_clone_create_var <main> <branch> <start>`, which s
 - Mutate once by hand, then revert, with `git diff` clean afterwards:
   - point `hr_run_copy_git`'s `GIT_DIR` at `$HR_RUN_COPY_GITDIR` when the kind is `clone`. Case (h) must then fail;
   - drop the fast-forward's sync-out. Case (e) must then fail on the clone's own ref.
+
+- **Deviations from plan:** Case (c) asserts `git -C <clone> status --porcelain` is empty after removing the two hook files it placed in the clone's tracked `githooks/` directory, since they are untracked files there; it also sets the clone's `core.hooksPath` to `<clone>/githooks` (an allow-listed key) and proves the hook armed with an unpinned `update-ref` before the call. The two mutation runs wrote their output to a scratchpad file to read the counts back; the verifying run of the file was the plain foreground command (`# tests 11`, `# pass 11`, `# fail 0`, exit 0).
