@@ -92,7 +92,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_worktree_record_
 6. [x] **Task 6** — Move the canonical commit mechanics to the main checkout's literal spelling: `autonomous_pause_and_ledger.md` §1.6, the docs engine's single source, dispatch discipline and `AUTONOMOUS_FLOW.md` _(layer: plugin)_ _(points: 15)_
 7. [x] **Task 7** — Move the committer and the two artifact commit points to the new spelling, and replace the bare `git add` re-stage and the `git mv` rename _(layer: plugin)_ _(points: 20)_
 8. [x] **Task 8** — Move the four autonomous forks' commit points, the fix-plan core's wrapper statement and the user-review-fix command to the new spelling _(layer: plugin)_ _(points: 15)_
-9. [ ] **Task 9** — Update `docs/cli.md` §6 and §7 and `docs/watcher.md` for three excluded wrappers and the plumbing commit _(layer: general)_ _(points: 15)_
+9. [x] **Task 9** — Update `docs/cli.md` §6 and §7 and `docs/watcher.md` for three excluded wrappers and the plumbing commit _(layer: general)_ _(points: 15)_
 10. [ ] **Task 10** — Add goal 1's owed measurement rows and the commit-wrapper rows to `docs/sandbox-verification.md`, and the owed note to `docs/outer-loop-verification.md` _(layer: general)_ _(points: 15)_
 11. [ ] **Task 11** — Re-render the worked example's profile for the third excluded wrapper _(layer: general)_ _(points: 8)_
 
