@@ -350,9 +350,12 @@
 # `HR_RUN_COPY_GITDIR`, `HR_RUN_COPY_BRANCH`, `HR_RUN_COPY_TIP`,
 # `HR_RUN_SURFACE_REFUSAL`, `HR_RUN_WT_DIFF`, `HR_RUN_FF_REFUSAL`,
 # `HR_RUN_RESET_REFUSAL`, `HR_RUN_BLOB` and `HR_RUN_BLOB_MODE`, and the shared
-# commit's `HR_COMMIT_REFUSAL` and `HR_COMMIT_NEW`, and the clone arm's sync's
-# `HR_SYNC_TIP` and `HR_SYNC_REFUSAL`, and the clone creation's `HR_CLONE_DIR`
-# and `HR_CLONE_REFUSAL`.
+# commit's `HR_COMMIT_REFUSAL`, `HR_COMMIT_NEW` and `HR_COMMIT_SYNC_FAILED`,
+# the target check's clone arm's `HR_TARGET_KIND`, `HR_TARGET_BRANCH`,
+# `HR_CLONE_CONFIG_REFUSAL` and `HR_CLONE_RULE`, the watcher family's
+# `HR_RUN_COPY_KIND`, and the clone arm's sync's `HR_SYNC_TIP` and
+# `HR_SYNC_REFUSAL`, and the clone creation's `HR_CLONE_DIR` and
+# `HR_CLONE_REFUSAL`.
 # Every one of them is assigned
 # before it is read by the function that owns it, so an inherited value from a
 # parent process is overwritten rather than believed — except
