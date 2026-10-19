@@ -17,3 +17,5 @@ The rebuilt `commit-on-branch.sh` runs no `git add` at all. It builds the commit
 - At all six "and never passes `--no-verify`" sites, replace that substring with "and runs no commit hook". Leave the leading "No `Co-Authored-By:` / trailer and no `--no-verify` / hook-skip flag — the wrapper enforces both:" unchanged.
 
 These are prose edits to instruction files and run no test.
+
+- **Deviations from plan:** The finding's site list omits three more sentences in the same commit points that make the same stale claim: "the wrapper stages them with `git add -- <path>` and never `git add -A` / `git add .`" in `task_plan_writing_instructions_autonomous.md` (Override 3 and Override 4 **Exact staging + commit.**) and in `user_review_fix_plan_writing_instructions_autonomous.md` (**Exact staging + commit.**). Without them the finding's title would still hold, so they were rewritten in the plural form of the finding's wording: "the wrapper commits exactly those paths, never a blanket staging". The verification sweep `grep -rn 'git add -- <path>\|never passes `--no-verify`' plugin` now returns no matches.
