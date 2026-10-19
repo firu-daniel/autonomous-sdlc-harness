@@ -8,7 +8,7 @@ Headline: the layering holds. The commit has a single owner. `hr_commit_paths_va
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 1** — `runsUnsandboxed` doc comment cites a rule `sandboxProfile.ts`'s header does not hold _(layer: cli)_
+1. [x] **Finding 1** — `runsUnsandboxed` doc comment cites a rule `sandboxProfile.ts`'s header does not hold _(layer: cli)_
 
 ## Must Fix
 

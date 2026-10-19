@@ -102,7 +102,11 @@ export interface OuterLoopScript {
    * Set on the git wrappers an agent commits, pushes and refreshes through: sandboxed on macOS, a
    * commit cannot write a linked worktree's record (`docs/sandbox-verification.md` G1, F1) and a push
    * or fetch cannot reach an SSH remote (P1, F3). Set it only on a script carrying the
-   * excluded-wrapper checks `generators/sandboxProfile.ts`'s header requires.
+   * excluded-wrapper checks `templates/scripts/lib/harness-run-lib.sh` → the header's `JURISDICTION`
+   * paragraph names (`hr_wrapper_main_of`, `hr_wrapper_target_check_var`,
+   * `hr_worktree_config_check_var`, `hr_pinned_hooks_path`, `hr_wrapper_branch_var`), plus
+   * `hr_git_env_drop` and the main checkout's protected set, as `commit-on-branch.sh`'s header
+   * applies them.
    */
   readonly runsUnsandboxed?: true;
 }
