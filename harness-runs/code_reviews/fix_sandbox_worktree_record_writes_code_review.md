@@ -31,7 +31,7 @@ What remains:
 
 ## Phase 2 Readiness — Ordered Fix List
 
-1. [ ] **Finding 4** — Replace `docs/cli.md`'s stale "left writable because a run's own git writes" record rationale _(layer: general)_
+1. [x] **Finding 4** — Replace `docs/cli.md`'s stale "left writable because a run's own git writes" record rationale _(layer: general)_
 2. [ ] **Finding 5** — Correct `plugin/hooks/README.md`'s claim that the corpus's commit invocation carries `${branch}` _(layer: plugin)_
 3. [ ] **Finding 2** — Make the four autonomous forks' `<repo_root>` rows say the wrapper invocations spell it literally _(layer: plugin)_
 4. [ ] **Finding 3** — Replace the stale `git add -- <path>` and "never passes `--no-verify`" wrapper descriptions _(layer: plugin)_
