@@ -19,6 +19,11 @@
 # `harness.config.json`, runs each step in <dir>, and writes the main
 # checkout's `githooksDir` under <dir> as the copy's `core.hooksPath`.
 #
+# A registered clone as <dir> takes that `core.hooksPath` in its own
+# `.git/config`, at the value the library's clone allow-list admits
+# (`hr_clone_config_spec`), and nothing is written to the main checkout's
+# configuration. Nothing creates a clone yet.
+#
 # THE RESIDUAL `--target` DOES NOT CLOSE. The main checkout's
 # `commands.depInstall` and `commands.build` still run in the copy, against the
 # copy's own `package.json`: an install runs the manifest's lifecycle scripts,
@@ -164,6 +169,7 @@ if [ "$target_mode" -eq 1 ]; then
     exit 1
   fi
   target_gitdir="$HR_TARGET_GITDIR"
+  target_kind="$HR_TARGET_KIND"
   top="$( CDPATH= cd -P -- "$2" && pwd -P )"
   cfg_root="$main_repo"
 else
@@ -252,7 +258,8 @@ fi
 # Under `--target` the value is `<dir>/<the main checkout's githooksDir>`, and
 # both writes go through the main checkout and the record
 # `hr_wrapper_target_check_var` checked, so git reads none of the copy's own
-# records or configuration.
+# records or configuration. A clone has no record and its own `.git/config`,
+# so its one write goes to that file and the main checkout's is left alone.
 if [ "$target_mode" -eq 1 ]; then
   hooks_rel="$(hr_githooks_dir "$main_repo")" || hooks_rel=""
   hooks_dir=""
@@ -261,7 +268,9 @@ else
   hooks_dir="$(hr_worktree_hooks_path "$top")" || hooks_dir=""
 fi
 hooks_config_write() {
-  if [ "$target_mode" -eq 1 ]; then
+  if [ "$target_mode" -eq 1 ] && [ "$target_kind" = clone ]; then
+    git -C / config --file "$target_gitdir/config" core.hooksPath "$hooks_dir"
+  elif [ "$target_mode" -eq 1 ]; then
     git -C "$main_repo" -c core.hooksPath=/dev/null -c core.fsmonitor=false config extensions.worktreeConfig true &&
       git -C / config --file "$target_gitdir/config.worktree" core.hooksPath "$hooks_dir"
   else
