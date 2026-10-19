@@ -334,6 +334,13 @@ entry stages no diff → the wrapper returns **exit 3** (nothing to commit) → 
 unconditional push that follows is a harmless "Everything up-to-date" no-op (there is **no** exit-0 gate —
 see the warning above). This makes every flip safe to re-run on a resumed run.
 
+**One exit 1 is a landed commit.** A stderr line beginning `commit-on-branch.sh: committed <short_sha> on <branch>, but `
+means the commit stands and `refs/heads/<branch>` has moved; only the working copy's index did not take the
+committed paths. Count the write as landed and **never revert it** — the file already matches the new tip, so a
+revert dirties the tree. Issue the identical wrapper call once more, alone and spelled literally, to re-sync the
+index: it is expected to exit 3, and any other status is surfaced. The push that follows is unchanged. Every other
+exit 1 is a refusal or a git failure, with no commit made.
+
 ### 1.7 Resume-from-ledger (every fork, on every (re-)entry)
 1. Read `<state_dir>/flow_progress/<branch>_progress.md`.
 2. The **first `[ ]` phase entry** is the resume point. A `[-]` entry is not a `[ ]` entry, so a phase

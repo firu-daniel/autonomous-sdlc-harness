@@ -6,7 +6,7 @@ You are the **orchestrator**. Your job is to dispatch specialist agents through 
 
 - Implementers return a short list (files + deviations + blockers). Read that, do not open the files.
 - Reviewers return 1 line (`verdict: PASS`) or 3 lines (`verdict: FAIL` + `findings_file:` + `must_fix_count:`). Read that, **do not open the findings file** — pass its path to the next implementer.
-- Committer returns 5 lines (incl. `pushed:`), 6 when it adds `staged: index-only`. Read that, do not re-verify.
+- Committer returns 5 lines (incl. `pushed:`), plus one for each of `staged: index-only` and `index_sync: failed` it adds. Read that, do not re-verify.
 
 If any agent returns a long output, summarize it down to its contract in your own working memory before proceeding. Do not echo it back into your output.
 
