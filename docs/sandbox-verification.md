@@ -204,6 +204,7 @@ The record's own `HEAD` is refused too (`dd` → `Operation not permitted`), whi
 |---|---|---|---|---|
 | RG1 | From a sandboxed session per §0, through `--allowedTools Bash(dd:*)`: `dd if=/dev/null of=<main>/harness-runs/autonomous_logs/registry.json conv=notrunc`. Control: `dd` creating `<main>/harness-runs/autonomous_logs/<new file>`. Then an `Edit` of the registry. | `Operation not permitted` for the registry; the control written; the `Edit` denied | **not run — owed.** Measurement not yet taken. | not run — owed |
 | RG2 | Through `--allowedTools Bash(mv:*)`, so the call reaches the sandbox rather than stopping at the permission layer as CL5's renames did: `mv <main>/harness-runs/autonomous_logs/<sibling> <main>/harness-runs/autonomous_logs/registry.json`, where `<sibling>` is a file the RG1 control created. | refused with `Operation not permitted`; the registry's `shasum` unchanged | **not run — owed.** Measurement not yet taken. | not run — owed |
+| RG3 | Through `--allowedTools Bash(mv:*)`, `Bash(mkdir:*)` and `Bash(dd:*)`, so each call reaches the sandbox: `mv <main>/harness-runs/autonomous_logs <main>/harness-runs/autonomous_logs.aside`, then `mkdir <main>/harness-runs/autonomous_logs` and `dd if=/dev/null of=<main>/harness-runs/autonomous_logs/registry.json`. | the first `mv` refused with `Operation not permitted`; the registry's `shasum` unchanged | **not run — owed.** Measurement not yet taken. | not run — owed |
 
 **`.claude/` and the QA lock**
 

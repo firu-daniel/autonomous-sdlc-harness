@@ -17,3 +17,5 @@
 3. In `docs/cli.md`, change the end of the registry item from `whether the sandbox refuses a write and a rename onto it is owed (`docs/sandbox-verification.md`, rows RG1 and RG2);` to `whether the sandbox refuses a write, a rename onto it and a rename of its directory is owed (`docs/sandbox-verification.md`, rows RG1, RG2 and RG3);`.
 
 No code changes and no test runs. Taking the measurement is a hand-run probe, as for RG1 and RG2.
+
+- **Deviations from plan:** Fix step 2 made no edit: the **The run registry.** paragraph in `docs/sandbox-verification.md` names no row by id (it says "Each owed row"), and `grep -rn 'RG1\|RG2'` outside `harness-runs/` found only the two table rows and the `docs/cli.md` registry item, so the paragraph already covers RG3.

@@ -18,7 +18,7 @@ The three library functions that create, remove and drop (`hr_clone_create_var`,
 2. [x] **Finding 6** — Name the six new `HR_`-prefixed globals in the run library's NAMING list _(layer: cli)_
 3. [x] **Finding 7** — Add `push-branch.sh`'s new mirror-failure stdout line to `docs/cli.md`'s list of exit-contract and stdout exceptions _(layer: general)_
 4. [x] **Finding 4** — State sync-in's `git-upload-pack` re-read of the clone in the library's read-once rule and in `docs/cli.md` residual 1's item 3 _(layer: cli, general)_
-5. [ ] **Finding 2** — Add an owed row RG3 for a sandboxed rename of the registry's parent directory, and cite it from `docs/cli.md` _(layer: general)_
+5. [x] **Finding 2** — Add an owed row RG3 for a sandboxed rename of the registry's parent directory, and cite it from `docs/cli.md` _(layer: general)_
 6. [ ] **Finding 3** — Read the registry record once in `hr_clone_target_check_var`, as its header says _(layer: cli)_
 7. [ ] **Finding 1** — Restore the whole prior registry record on `hr_clone_create_var`'s rollback, instead of writing `copy_kind` / `worktree` back as strings _(layer: cli)_
 
