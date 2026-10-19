@@ -76,3 +76,7 @@ It also depends on **Task 2**, which edits the same file. Task 2 adds the sectio
   - `hr_wrapper_target_check_var` accepts the clone;
   - `find <clone>/.git/objects -type f` lists only `info/alternates`, so the object store is borrowed, not copied;
   - removing the registry's directory makes a second creation for another branch refuse with nothing written.
+
+**Deviations from plan:**
+
+- The git 2.23 floor was checked by reading the flags against git's release history, not by execution: the probe ran on the local git 2.50.1 only. Flags used: `clone --shared --no-checkout --template= --no-tags`, `update-ref --no-deref --stdin`, `update-ref <ref> <new> ""`, `update-ref -d <ref> <old>`, `for-each-ref %(symref)`, `symbolic-ref`, `read-tree --reset -u --no-recurse-submodules`, `worktree list --porcelain`, `show-ref --verify --quiet`. The bash 3.2 floor was executed: the probe ran under `/bin/bash` 3.2.
