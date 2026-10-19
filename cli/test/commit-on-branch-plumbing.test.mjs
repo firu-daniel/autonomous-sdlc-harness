@@ -9,7 +9,7 @@
  * It never asks git to read the worktree's `.git` pointer, its record's `HEAD`, its `commondir` or
  * its `config.worktree` after its checks, and it runs no commit hook.** Cases (a)–(f) re-prove
  * `docs/outer-loop-verification.md` §1.1 on a worktree; (g) is the hooks; (k) the filter refusal;
- * (m) a landed commit whose index sync failed.
+ * (l) a submodule under a passed directory; (m) a landed commit whose index sync failed.
  *
  * A race cannot be staged reliably, so cases (h)–(j) and (m) stage its outcome deterministically
  * instead, as `cli/test/wrapper-target-check.test.mjs`'s header explains for its (i)–(k): a `git`
@@ -182,6 +182,18 @@ test('(d) A deletion is committed by passing its parent directory', async (t) =>
   assert.equal(await changed(f, await f.tip()), 'D\tdir/gone.txt');
   assert.equal(await f.wtGit('ls-files', 'dir/gone.txt'), '');
   assert.equal(await f.wtGit('status', '--porcelain', '--', 'dir'), '');
+});
+
+test('(l) A submodule under a passed directory is carried unchanged', async (t) => {
+  const f = await fixture(t);
+  await runGit(f.wt, ['update-index', '--add', '--cacheinfo', `160000,${await f.tip()},dir/sub`]);
+  await runGit(f.wt, ['commit', '--quiet', '--no-verify', '-m', 'fixture: gitlink']);
+  await mkdir(join(f.wt, 'dir', 'sub'));
+  await rm(join(f.wt, 'dir', 'gone.txt'));
+  const result = await f.commit(['dir']);
+  assert.equal(result.status, 0, output(result));
+  assert.equal(await changed(f, await f.tip()), 'D\tdir/gone.txt');
+  assert.match(await f.mainGit('ls-tree', await f.tip(), 'dir/sub'), /^160000 commit /);
 });
 
 test('(e) A path staged earlier is not swept into the commit, and stays staged', async (t) => {

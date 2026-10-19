@@ -174,7 +174,9 @@
 # restore one. The existence check is made against `<repo_top>/<path>`, never a
 # cwd-relative path. A directory (not a symbolic link) stands for every path
 # the tip holds under it plus every tracked or untracked, not ignored, path the
-# working copy holds there; anything else stands for itself. THE TRAP: a path
+# working copy holds there — except a gitlink (a submodule), which is carried
+# from the tip unchanged, and an untracked embedded repository, which is left
+# out; anything else stands for itself. THE TRAP: a path
 # that was DELETED does not exist either, so passing the exact deleted path
 # commits nothing and the deletion is silently left out. Pass the PARENT
 # DIRECTORY of a deletion instead — the tip's entries under it that the working
@@ -493,14 +495,34 @@ if [ "${#paths[@]}" -gt 0 ]; then
     done
     if [ -d "$top/$p" ] && [ ! -L "$top/$p" ]; then
       [ -n "$rel" ] || rel=.
-      if ! main_git ls-tree -r -z --name-only "$old_tip" -- "$rel" >>"$work/paths"; then
+      # A gitlink (a submodule) under a passed directory is carried from the tip
+      # unchanged: this wrapper never commits one, and an unchanged one must not
+      # refuse the rest of the directory. An untracked embedded repository,
+      # which `ls-files --others` lists as `<path>/`, is left out the same way.
+      if ! main_git ls-tree -r -z "$old_tip" -- "$rel" >"$work/listing"; then
         echo "commit-on-branch.sh: refusing to commit: git could not list '$p' at '$branch' (see output above)" >&2
         exit 1
       fi
-      if ! wt_git ls-files -z --cached --others --exclude-standard -- "$rel" >>"$work/paths"; then
+      while IFS= read -r -d '' entry; do
+        case "$entry" in 160000\ *) continue ;; esac
+        printf '%s\0' "${entry#*	}" >>"$work/paths"
+      done <"$work/listing"
+      if ! wt_git ls-files -z --stage -- "$rel" >"$work/listing"; then
         echo "commit-on-branch.sh: refusing to commit: git could not list '$p' in '$top' (see output above)" >&2
         exit 1
       fi
+      while IFS= read -r -d '' entry; do
+        case "$entry" in 160000\ *) continue ;; esac
+        printf '%s\0' "${entry#*	}" >>"$work/paths"
+      done <"$work/listing"
+      if ! wt_git ls-files -z --others --exclude-standard -- "$rel" >"$work/listing"; then
+        echo "commit-on-branch.sh: refusing to commit: git could not list '$p' in '$top' (see output above)" >&2
+        exit 1
+      fi
+      while IFS= read -r -d '' entry; do
+        case "$entry" in */) continue ;; esac
+        printf '%s\0' "$entry" >>"$work/paths"
+      done <"$work/listing"
     else
       printf '%s\0' "$rel" >>"$work/paths"
     fi

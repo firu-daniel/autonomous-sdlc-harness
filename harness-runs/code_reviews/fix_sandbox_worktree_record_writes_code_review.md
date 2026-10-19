@@ -36,7 +36,7 @@ What remains:
 3. [x] **Finding 2** — Make the four autonomous forks' `<repo_root>` rows say the wrapper invocations spell it literally _(layer: plugin)_
 4. [x] **Finding 3** — Replace the stale `git add -- <path>` and "never passes `--no-verify`" wrapper descriptions _(layer: plugin)_
 5. [x] **Finding 6** — Report a landed commit whose index sync failed as committed, not as a refusal _(layer: cli)_
-6. [ ] **Finding 1** — Leave gitlinks and untracked embedded repositories out of a passed directory's expansion _(layer: cli)_
+6. [x] **Finding 1** — Leave gitlinks and untracked embedded repositories out of a passed directory's expansion _(layer: cli)_
 
 ---
 
