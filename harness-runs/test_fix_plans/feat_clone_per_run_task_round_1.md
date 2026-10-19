@@ -12,7 +12,7 @@ Gate 13a–13c reported `BLOCKED` (Python service environment not provisioned) a
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan or its per-finding files are informational only.
 
-1. [ ] **Finding 1** — Replace the machine path in the round-2 architecture review artifact. _(layer: general)_
+1. [x] **Finding 1** — Replace the machine path in the round-2 architecture review artifact. _(layer: general)_
 
 ## Must Fix
 

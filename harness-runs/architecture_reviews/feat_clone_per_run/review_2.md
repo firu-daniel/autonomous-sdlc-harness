@@ -18,7 +18,7 @@ None. Every task file and the story index were re-read in full. That includes Ta
 
   Each task also checks that in its **Verification:**. Task 7 corrects exception 5's fence for the clone arm.
 - **Accompanying set.** Every new suite opens with its rule. Task 12's generator change lands with a `profile.test.mjs` case and a `doctor-profile-sandbox.test.mjs` case.
-- **Test-run rule** (`/Users/daniel/Work/autonomous-sdlc-harness/plugin/instructions/unit_loop_core.md` → `## The test-run rule`).
+- **Test-run rule** (`${CLAUDE_PLUGIN_ROOT}/instructions/unit_loop_core.md` → `## The test-run rule`).
   - Each **Verification:** names only the unit's own new or edited suite.
   - Tasks 7, 9 and 11 leave the existing suites to Run gates by name.
   - Task 17's `npm run build` and fixture `init` are not test runs.
