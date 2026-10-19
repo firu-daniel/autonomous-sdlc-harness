@@ -135,6 +135,24 @@
 # can only make the check accept a different
 # `core.hooksPath`, which the pin overrides on every call.
 #
+# A CLONE IS A TARGET TOO. The target may also be a run copy made as a clone,
+# accepted only on the library's clone conditions (`lib/harness-run-lib.sh` →
+# `hr_clone_target_check_var`). Those conditions already refuse a
+# `config.worktree` and hold `.git/config` to an allow-list, so
+# `hr_worktree_config_check_var` is skipped on that arm alone. The refresh goes
+# sync-in, operate, sync-out: after the protected-branch decision, and before
+# the branch's tip is read, the main checkout takes the clone's
+# `refs/heads/<branch>` (`hr_copy_sync_in_var`, a refusal reported as
+# `refusing to refresh:`, exit 1); the merge then runs exactly as for a
+# worktree; and once the ref update and the working tree have both taken the
+# merge result, the clone's `refs/heads/<branch>` is set to match
+# (`hr_copy_sync_out_var`, guarded by the old tip) before the `merged` line.
+# Without `--local`, the fetched `refs/remotes/origin/<base>` is also mirrored
+# into the clone, and a mirror that fails prints one line and changes nothing
+# else. A put-back needs no sync-out: the clone's ref never moved. Every
+# refusal in this header holds on that arm too. No shipped script creates such
+# a clone yet.
+#
 # THE INHERITED GIT ENVIRONMENT IS DROPPED. As its first statement after
 # sourcing the library, before any git call, this script drops through
 # `lib/harness-run-lib.sh` → `hr_git_env_drop` the same `GIT_*` names
@@ -181,6 +199,10 @@
 #      one row of this map on which the "leaves the branch and the working copy
 #      as they were" guarantee does not hold, and the one that needs a human
 #      before anything else runs in this checkout
+#      On a clone (A CLONE IS A TARGET TOO above) exit 5 also covers a failed
+#      sync-out: the merge landed in the main checkout and the working copy,
+#      and the clone's `refs/heads/<branch>` could not follow — the same state,
+#      named in one stderr line
 #
 # Conditions outside that list land on 1 as well, for the same reason every
 # other row of it does — the script cannot proceed and changed nothing: the base
@@ -355,7 +377,8 @@ if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
   echo "refresh-branch.sh: refusing to refresh: $HR_TARGET_REFUSAL" >&2
   exit 1
 fi
-if ! hr_worktree_config_check_var "$top_nogit"; then
+# A CLONE IS A TARGET TOO (header): the clone arm judged its configuration.
+if [ "$HR_TARGET_KIND" != clone ] && ! hr_worktree_config_check_var "$top_nogit"; then
   echo "refresh-branch.sh: refusing to refresh: $HR_WT_CONFIG_REFUSAL" >&2
   exit 1
 fi
@@ -485,6 +508,13 @@ EOF
     ;;
 esac
 
+# A CLONE IS A TARGET TOO (header): sync in before the branch's tip is read; a
+# no-op on the main checkout and a worktree.
+if ! hr_copy_sync_in_var "$main_top" "$HR_TARGET_GITDIR" "$branch"; then
+  echo "refresh-branch.sh: refusing to refresh: $HR_SYNC_REFUSAL" >&2
+  exit 1
+fi
+
 # The tip the merge is built on, read once: every later step names this commit,
 # and the ref moves only if it still points here.
 old_tip="$(main_git rev-parse --verify --quiet "refs/heads/$branch^{commit}")" || old_tip=""
@@ -539,6 +569,12 @@ if [ -z "$base_tip" ]; then
     echo "  push the default branch (git push -u origin $base), or pass --local to merge the local one" >&2
   fi
   exit 1
+fi
+# A CLONE IS A TARGET TOO (header): the fetched base mirrored into the clone,
+# non-fatally; a no-op on the main checkout and a worktree.
+if [ "$use_local" -eq 0 ] &&
+  ! hr_copy_sync_out_var "$main_top" "$wt_gitdir" "refs/remotes/origin/$base"; then
+  echo "refresh-branch.sh: the clone's origin/$base could not follow the fetch: $HR_SYNC_REFUSAL" >&2
 fi
 
 # Already contained => a distinct, dedicated status, so a caller can tell "the
@@ -598,6 +634,12 @@ fi
 # writes one, so a refusal here — something changed in the tree since the dry
 # run — has written nothing, and the branch is put back.
 if wt_git read-tree --no-recurse-submodules -m -u "$old_tip" "$new_tip"; then
+  # A CLONE IS A TARGET TOO (header): sync out; a no-op on the main checkout
+  # and a worktree.
+  if ! hr_copy_sync_out_var "$main_top" "$wt_gitdir" "refs/heads/$branch" "$old_tip"; then
+    echo "refresh-branch.sh: merged $base_ref into $branch in '$main_top' and the working copy, but $HR_SYNC_REFUSAL — the clone's refs/heads/$branch does not point at the commit the working copy holds" >&2
+    exit 5
+  fi
   echo "refresh-branch.sh: merged $base_ref into $branch"
   exit 0
 fi

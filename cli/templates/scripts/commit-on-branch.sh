@@ -87,6 +87,21 @@
 # carries `-c submodule.recurse=false` (the reasoning: `push-branch.sh` → the
 # paragraph of the same name).
 #
+# A CLONE IS A TARGET TOO. The target may also be a run copy made as a clone,
+# accepted only on the library's clone conditions (`lib/harness-run-lib.sh` →
+# `hr_clone_target_check_var`). Those conditions already refuse a
+# `config.worktree` and hold `.git/config` to an allow-list, so
+# `hr_worktree_config_check_var` is skipped on that arm alone. The commit goes
+# sync-in, operate, sync-out: after the protected-branch decision the main
+# checkout takes the clone's `refs/heads/<branch>` (`hr_copy_sync_in_var`, a
+# refusal reported as `refusing to commit:`, exit 1); the commit then runs in
+# the main checkout exactly as for a worktree; and `hr_commit_paths_var` sets
+# the clone's ref to match. A clone ref that cannot follow is a second exit 1
+# after which `refs/heads/<branch>` has moved, reported on stderr as
+# `committed <short_sha> on <branch>, but … — the commit stands`. Every refusal
+# in this header holds on that arm too. No shipped script creates such a clone
+# yet.
+#
 # THE INHERITED GIT ENVIRONMENT IS DROPPED. As its first statement after
 # sourcing the library, before any git call, this script drops through
 # `lib/harness-run-lib.sh` → `hr_git_env_drop` the same `GIT_*` names
@@ -359,7 +374,8 @@ if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
   exit 1
 fi
 wt_gitdir="$HR_TARGET_GITDIR"
-if ! hr_worktree_config_check_var "$top_nogit"; then
+# A CLONE IS A TARGET TOO (header): the clone arm judged its configuration.
+if [ "$HR_TARGET_KIND" != clone ] && ! hr_worktree_config_check_var "$top_nogit"; then
   echo "commit-on-branch.sh: refusing to commit: $HR_WT_CONFIG_REFUSAL" >&2
   exit 1
 fi
@@ -443,6 +459,13 @@ EOF
     exit 1
     ;;
 esac
+
+# A CLONE IS A TARGET TOO (header): sync in before the branch's tip is read; a
+# no-op on the main checkout and a worktree.
+if ! hr_copy_sync_in_var "$main_top" "$HR_TARGET_GITDIR" "$branch"; then
+  echo "commit-on-branch.sh: refusing to commit: $HR_SYNC_REFUSAL" >&2
+  exit 1
+fi
 
 # The tip the commit is built on, read once: the ref moves only if it still
 # points here.
@@ -576,7 +599,11 @@ case "$status" in
   *)
     if [ -n "$HR_COMMIT_NEW" ]; then
       sha="$(main_git rev-parse --short "$HR_COMMIT_NEW")" || sha="$HR_COMMIT_NEW"
-      echo "commit-on-branch.sh: committed $sha on $branch, but the index of '$top' could not take the committed paths — the commit stands; the same call again re-syncs the index and exits 3" >&2
+      if [ "${HR_COMMIT_SYNC_FAILED-}" = 1 ]; then
+        echo "commit-on-branch.sh: committed $sha on $branch, but $HR_COMMIT_REFUSAL — the commit stands" >&2
+      else
+        echo "commit-on-branch.sh: committed $sha on $branch, but the index of '$top' could not take the committed paths — the commit stands; the same call again re-syncs the index and exits 3" >&2
+      fi
     else
       echo "commit-on-branch.sh: refusing to commit: $HR_COMMIT_REFUSAL" >&2
     fi

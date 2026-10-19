@@ -171,6 +171,23 @@
 # a tree that changes a protected path (`lib/harness-run-lib.sh` → the section
 # THE WATCHER FAMILY'S GIT IN A RUN'S COPY; `docs/cli.md` §6).
 #
+# A CLONE IS A TARGET TOO. The target may also be a run copy made as a clone,
+# accepted only on the library's clone conditions (`lib/harness-run-lib.sh` →
+# `hr_clone_target_check_var`). Those conditions already refuse a
+# `config.worktree` and hold `.git/config` to an allow-list, so
+# `hr_worktree_config_check_var` is skipped on that arm alone. The push goes
+# sync-in, operate, sync-out: after the protected-branch decision, and before
+# the deleted-on-its-remote check, the main checkout takes the clone's
+# `refs/heads/<branch>` (`hr_copy_sync_in_var`, a refusal reported as
+# `refusing to push:`, exit 0), so it pushes the commits the run made in its
+# clone; the push then runs from the main checkout exactly as for a worktree.
+# After a successful push to `origin` only, the main checkout's
+# `refs/remotes/origin/<branch>` is mirrored into the clone
+# (`hr_copy_sync_out_var`), so `origin/<branch>` means there what it means in a
+# worktree; a mirror that fails prints one line after the success line and
+# still exits 0. Every refusal in this header holds on that arm too. No shipped
+# script creates such a clone yet.
+#
 # THE INHERITED GIT ENVIRONMENT IS DROPPED. As its first statement after
 # sourcing the library, before any git call, this script drops through
 # `lib/harness-run-lib.sh` → `hr_git_env_drop` the names `GIT_DIR`,
@@ -363,7 +380,8 @@ if ! hr_wrapper_target_check_var "$main_top" "$top_nogit"; then
   echo "push-branch.sh: refusing to push: $HR_TARGET_REFUSAL"
   exit 0
 fi
-if ! hr_worktree_config_check_var "$top_nogit"; then
+# A CLONE IS A TARGET TOO (header): the clone arm judged its configuration.
+if [ "$HR_TARGET_KIND" != clone ] && ! hr_worktree_config_check_var "$top_nogit"; then
   echo "push-branch.sh: refusing to push: $HR_WT_CONFIG_REFUSAL"
   exit 0
 fi
@@ -421,6 +439,13 @@ case "$protected" in
     exit 0
     ;;
 esac
+
+# A CLONE IS A TARGET TOO (header): sync in before the deleted-on-its-remote
+# check and the push; a no-op on the main checkout and a worktree.
+if ! hr_copy_sync_in_var "$main_top" "$HR_TARGET_GITDIR" "$branch"; then
+  echo "push-branch.sh: refusing to push: $HR_SYNC_REFUSAL"
+  exit 0
+fi
 
 # The remote: the branch's own `branch.<branch>.remote`, else `origin`. It must
 # be a name, not an option, and the main `.git/config` must name its URL
@@ -487,6 +512,12 @@ while :; do
 
   if [ "$push_status" -eq 0 ]; then
     echo "push-branch.sh: pushed $branch to $remote"
+    # A CLONE IS A TARGET TOO (header): the mirror; a no-op on the main
+    # checkout and a worktree.
+    if [ "$remote" = origin ] &&
+      ! hr_copy_sync_out_var "$main_top" "$HR_TARGET_GITDIR" "refs/remotes/$remote/$branch"; then
+      echo "push-branch.sh: pushed $branch to $remote, but the clone's origin/$branch could not follow: $HR_SYNC_REFUSAL"
+    fi
     break
   fi
   # A here-string, not a pipe: `grep -q` exiting early would fail a pipeline

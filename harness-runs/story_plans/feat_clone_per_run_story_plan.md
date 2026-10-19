@@ -69,7 +69,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run/task_<K>_
 6. [x] **Task 6** — Add `cli/test/clone-create-remove.test.mjs`: creation's invariants, the second-copy refusal, rollback, and the removal guard _(layer: cli)_ _(points: 15)_
 7. [x] **Task 7** — Give the watcher family's git its clone arm: the copy check syncs in, the commit and the fast-forward sync out _(layer: cli)_ _(points: 20)_
 8. [x] **Task 8** — Add `cli/test/run-copy-clone-arm.test.mjs`: the copy check, the artifact commit, the fast-forward, the reset and the surface check on a clone _(layer: cli)_ _(points: 15)_
-9. [ ] **Task 9** — Give `commit-on-branch.sh`, `push-branch.sh` and `refresh-branch.sh` their clone arm through sync-in, operate, sync-out _(layer: cli)_ _(points: 20)_
+9. [x] **Task 9** — Give `commit-on-branch.sh`, `push-branch.sh` and `refresh-branch.sh` their clone arm through sync-in, operate, sync-out _(layer: cli)_ _(points: 20)_
 10. [ ] **Task 10** — Add `cli/test/wrapper-clone-arm.test.mjs`: the three wrappers against a clone, with exit contracts and stdout lines unchanged _(layer: cli)_ _(points: 20)_
 11. [ ] **Task 11** — Give `setup-worktree.sh --target` its clone arm, and add `cli/test/setup-worktree-clone-target.test.mjs` _(layer: cli)_ _(points: 15)_
 12. [ ] **Task 12** — Write-protect the run registry by exact path on both sides, keep it out of the job surfaces, and prove `doctor` grades the entry _(layer: cli)_ _(points: 15)_
