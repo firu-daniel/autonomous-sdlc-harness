@@ -460,8 +460,9 @@ else
     exit 2
   fi
   # History as stored: a replace ref or graft for the base would swap the tree cut here.
+  # The advice key silences the hint git prints when a graft file is set.
   GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
-    git -C "$main_repo" worktree add -b "$branch" "$worktree_dir" "$HR_RUN_TRUSTED_BASE"
+    git -C "$main_repo" -c advice.graftFileDeprecated=false worktree add -b "$branch" "$worktree_dir" "$HR_RUN_TRUSTED_BASE"
   git -C "$main_repo" branch --quiet --set-upstream-to="origin/$default_branch" "$branch"
 fi
 
