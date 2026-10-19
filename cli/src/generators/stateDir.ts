@@ -52,6 +52,14 @@ import { readTemplate } from '../core/paths.js';
 import { normalizeRepoDir } from '../core/repoPaths.js';
 import type { WritePlan } from '../core/writer.js';
 
+/**
+ * Where one repository keeps its run registry: {@link RUN_LOGS_DIR} beneath `stateDir`, and
+ * {@link RUN_REGISTRY_FILENAME} inside it. `autonomous-watcher.sh`'s `REGISTRY="$LOGS_DIR/registry.json"`
+ * is the definition of record.
+ */
+export const RUN_LOGS_DIR = 'autonomous_logs';
+export const RUN_REGISTRY_FILENAME = 'registry.json';
+
 /** The phase a directory belongs to. A row without one is written whatever the phases are. */
 export type StateDirPhase = keyof HarnessPhases;
 
@@ -93,7 +101,7 @@ export const STATE_DIR_ENTRIES: ReadonlyArray<StateDirEntry> = Object.freeze([
   Object.freeze({ dir: 'flow_progress' }),
   Object.freeze({ dir: 'branch_statistics' }),
   Object.freeze({ dir: 'autonomous_inbox' }),
-  Object.freeze({ dir: 'autonomous_logs' }),
+  Object.freeze({ dir: RUN_LOGS_DIR }),
   Object.freeze({ dir: 'clarifications' }),
   // The fourth of the runtime surfaces whose contents are machine-local, and the reason it sits with
   // the three above rather than under a phase: an implementer or a reviewer in *any* phase may need

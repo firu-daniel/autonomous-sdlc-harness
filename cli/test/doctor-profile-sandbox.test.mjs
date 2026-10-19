@@ -293,4 +293,24 @@ concurrentSuite('doctor profile-write-protection', () => {
     assert.ok(line.includes(`lacks the file-tool deny rule ${rule}`), line);
     assert.equal(status, 0, line);
   });
+
+  it('(h) warns when the run registry loses its denyWrite entry and both rules, and fails under --remote-job', async (t) => {
+    const dir = await wiredFixture(t);
+    const config = JSON.parse(readFileSync(join(dir, CONFIG_FILE), 'utf8'));
+    const path = join(dir, config.stateDir.replace(/\/$/, ''), 'autonomous_logs', 'registry.json');
+    assert.equal(mainCheckoutEntry(dir, 'registry.json'), path);
+    dropDenyWrite(dir, path);
+    dropEditRule(dir, path);
+    editJson(dir, PROFILE_FILE, (profile) => {
+      const rule = `Write(/${path})`;
+      assert.ok(profile.permissions.deny.includes(rule), `no ${rule} in the profile's deny list`);
+      profile.permissions.deny = profile.permissions.deny.filter((entry) => entry !== rule);
+    });
+    const { line, status } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
+    assert.ok(line.includes(`${path} (`), line);
+    assert.equal(status, 0, line);
+    const failed = await doctorLine(dir, 'FAIL', ['--remote-job'], WRITE_CHECK_ID);
+    assert.ok(failed.line.includes(`${path} (`), failed.line);
+    assert.equal(failed.status, 1, failed.line);
+  });
 });

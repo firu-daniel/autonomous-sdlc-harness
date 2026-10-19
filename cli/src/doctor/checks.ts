@@ -231,7 +231,7 @@ import {
   WRAPPER_SCRIPTS,
   wrapperCommandLine,
 } from '../generators/scripts.js';
-import { selectedStateDirs } from '../generators/stateDir.js';
+import { RUN_LOGS_DIR, RUN_REGISTRY_FILENAME, selectedStateDirs } from '../generators/stateDir.js';
 import { machineConfigDir } from '../machine/paths.js';
 import {
   installedPluginsPath,
@@ -1822,15 +1822,6 @@ const DEFAULT_MAX_PARALLEL_RUNS = '5';
 
 /** One `MAX_PARALLEL_RUNS=` assignment, `export`ed or not, with the value as it was written. */
 const MAX_PARALLEL_RUNS_ASSIGNMENT = new RegExp(`^[ \\t]*(?:export[ \\t]+)?${MAX_PARALLEL_RUNS_VARIABLE}[ \\t]*=(.*)$`);
-
-/**
- * Where one repository keeps its **run** registry, relative to that repository's `stateDir`.
- *
- * `autonomous-watcher.sh`'s `REGISTRY="$LOGS_DIR/registry.json"` is the definition of record — this
- * is the first TypeScript reader of that file, and it reads it for a *report* only.
- */
-const RUN_LOGS_DIR = 'autonomous_logs';
-const RUN_REGISTRY_FILENAME = 'registry.json';
 
 /** The record status that counts toward a repository's live runs. Half of the predicate; see below. */
 const RUNNING_STATUS = 'running';

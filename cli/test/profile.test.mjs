@@ -1076,11 +1076,16 @@ function assertProtected(profile, path, kind) {
   }
 }
 
-/** Neither side of one path: no `denyWrite` entry, and no `Edit`/`Write` deny naming it. */
-function assertUnprotected(profile, path) {
+/**
+ * Neither side of one path: no `denyWrite` entry, and no `Edit`/`Write` deny naming it or anything
+ * under it but the `file` rules of the paths in `except`.
+ */
+function assertUnprotected(profile, path, except = []) {
+  const excepted = new Set(except.flatMap((file) => [`Edit(/${file})`, `Write(/${file})`]));
   assert.ok(!profile.sandbox.filesystem.denyWrite.includes(path), `sandbox.filesystem.denyWrite holds ${path}`);
   for (const rule of entries(profile, 'deny')) {
     if (!rule.startsWith('Edit(') && !rule.startsWith('Write(')) continue;
+    if (excepted.has(rule)) continue;
     assert.ok(rule !== `Edit(/${path})` && !rule.startsWith(`Edit(/${path}/`), `permissions.deny holds ${rule}`);
     assert.ok(rule !== `Write(/${path})` && !rule.startsWith(`Write(/${path}/`), `permissions.deny holds ${rule}`);
   }
@@ -1156,7 +1161,7 @@ test('every path that runs outside the sandbox is write-protected on both sides'
 
   const stateDirAbs = join(dir, 'sdlc-harness');
   assert.ok(profile.sandbox.filesystem.allowWrite.includes(stateDirAbs), 'allowWrite does not name the state directory');
-  assertUnprotected(profile, stateDirAbs);
+  assertUnprotected(profile, stateDirAbs, [join(stateDirAbs, 'autonomous_logs', 'registry.json')]);
 
   assert.ok(
     profile._README.some((line) => line.startsWith('WHAT RUNS OUTSIDE THE SANDBOX CANNOT BE WRITTEN') && line.includes('Linux')),
@@ -1185,6 +1190,18 @@ test('a scriptsDir with a trailing slash protects the library the writer wrote',
   assertProtected(profile, `${dir}/${SCRIPTS_DIR}/${LIB_SUBDIR}`, 'directory');
 });
 
+test('the run registry is write-protected by its exact path, under the configured state directory', async (t) => {
+  // Spelled as `autonomous-watcher.sh` spells it, not read from the generator's constants.
+  for (const stateDir of ['sdlc-harness/', 'run-state']) {
+    const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ stateDir }) });
+    const logs = join(dir, stateDir.replace(/\/$/, ''), 'autonomous_logs');
+    const registry = join(logs, 'registry.json');
+    assertProtected(profile, registry, 'file');
+    // The exact path only: the rest of the log directory stays writable.
+    assertUnprotected(profile, logs, [registry]);
+  }
+});
+
 test('each plugin root in additionalDirectories is write-protected, and the state directory is not', async (t) => {
   // A throwaway install root and the agent runner's record of it, as init.test.mjs plants them.
   const root = await fixtureFor(t);
@@ -1207,7 +1224,7 @@ test('each plugin root in additionalDirectories is write-protected, and the stat
   const stateDirAbs = directories[0];
   assert.ok(profile.sandbox.filesystem.allowWrite.includes(stateDirAbs), 'the first additionalDirectories entry is not the state directory');
   for (const directory of directories.slice(1)) assertProtected(profile, directory, 'directory');
-  assertUnprotected(profile, stateDirAbs);
+  assertUnprotected(profile, stateDirAbs, [join(stateDirAbs, 'autonomous_logs', 'registry.json')]);
 });
 
 test('with the sandbox opted out the file-tool write protection still applies', async (t) => {

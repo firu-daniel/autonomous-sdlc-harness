@@ -10,14 +10,14 @@
  *
  * Every path is built through its owner — the outer-loop table and its path builders, the hooks
  * directory resolver, the MCP wiring's path, the profile's and the settings files' paths, the
- * configuration file's name — never joined by hand, so the file protected is the file the writer wrote. `doctor` grades a profile on disk against
+ * configuration file's name, the run registry's two segments — never joined by hand, so the file protected is the file the writer wrote. `doctor` grades a profile on disk against
  * {@link protectedPaths} and {@link fileToolDenyRules}, so they are the one statement of the set.
  *
  * Two relative sets are projections of {@link protectedPaths}, filtered and re-rooted from its answer
  * and never listed again: {@link copySurfacePaths}, the paths an unsandboxed checkout of a run's
  * branch refuses to install run-authored content at, and {@link jobSurfacePaths}, the paths a remote
  * job's surface check compares against the default branch before the job runs or loads anything from
- * its own checkout. The one mirror outside this package is `hr_run_protected_rel_paths` in
+ * its own checkout, which leaves out the run registry: a remote job neither runs nor loads it. The one mirror outside this package is `hr_run_protected_rel_paths` in
  * `cli/templates/scripts/lib/harness-run-lib.sh`, which prints {@link copySurfacePaths}' lines in
  * the same order; `cli/test/outer-loop-scripts.test.mjs` holds the two equal. A mirror this header
  * does not declare is a defect.
@@ -44,6 +44,7 @@ import { appendReadme, assertUsableInEntry, normalizedRoot, PROFILE_PATH } from 
 import { SETTINGS_LOCAL_PATH, SETTINGS_PATH } from './projectSettings.js';
 import { MCP_PATH } from './repoRoot.js';
 import { SANDBOX_KEY } from './sandboxProfile.js';
+import { RUN_LOGS_DIR, RUN_REGISTRY_FILENAME } from './stateDir.js';
 
 /** One path the profile write-protects. */
 export interface ProtectedPath {
@@ -94,6 +95,11 @@ const GIT_RECORD_GITDIR = 'gitdir';
 const GIT_LEGACY_REMOTES = 'remotes';
 const GIT_LEGACY_BRANCHES = 'branches';
 
+/** The main checkout's run registry, under the configured `stateDir`. */
+function runRegistryPath(repoRoot: string, config: HarnessConfig): string {
+  return join(repoRoot, normalizeRepoDir(config.stateDir ?? DEFAULTS.stateDir), RUN_LOGS_DIR, RUN_REGISTRY_FILENAME);
+}
+
 /**
  * Every directory strictly below `repoRoot` on the way to the scripts directory, that directory
  * included — `scripts` for the default, `tools` and `tools/harness` for `tools/harness`. None when
@@ -125,7 +131,8 @@ function libraryDir(): string {
  * script (the unsandboxed wrappers first) and the wrappers' library, the hooks
  * directories, the MCP launch surface, the profile and the project settings files, the plugin roots, the main repository's git configuration and
  * its `commondir`, the linked worktrees' records, the legacy remote definitions, the main checkout's
- * configuration file, and a `.git` at each level of the scripts directory — the last two kinds
+ * configuration file, the run registry by its exact path — the clone arm of the wrappers' target
+ * check reads which run copy a branch has from it — and a `.git` at each level of the scripts directory — the last two kinds
  * because the wrappers place their main checkout from their own location, as the nearest directory
  * holding a `.git` that is a real directory without a `commondir`
  * (`cli/templates/scripts/lib/harness-run-lib.sh` → `hr_wrapper_main_of`).
@@ -280,6 +287,11 @@ export function protectedPaths({
       kind: 'file',
       reason: 'the unsandboxed wrappers take githooksDir, defaultBranch and protectedBranches from it',
     },
+    {
+      path: runRegistryPath(repoRoot, config),
+      kind: 'file',
+      reason: "the unsandboxed wrappers' clone trust check reads which run copy each branch has from it",
+    },
   );
   for (const level of scriptsDirLevels(repoRoot, scriptsDir)) {
     paths.push({
@@ -341,13 +353,15 @@ export function copySurfacePaths(config: HarnessConfig): readonly string[] {
 
 /**
  * The repo-relative set a remote job runs or loads from its own checkout: {@link protectedPaths}'
- * entries under the checkout itself, minus everything inside `.git` and a `.git` at any scripts
- * directory level. Plugin roots and the worktree entries lie outside the checkout and fall away.
+ * entries under the checkout itself, minus everything inside `.git`, a `.git` at any scripts
+ * directory level, and the run registry. Plugin roots and the worktree entries lie outside the checkout and fall away.
  * `/`-separated, deduplicated, in {@link protectedPaths}' order.
  */
 export function jobSurfacePaths(config: HarnessConfig): readonly string[] {
+  const registry = runRegistryPath(PLACEHOLDER_REPO_ROOT, config);
   const paths: string[] = [];
   for (const { path } of placeholderProtectedPaths(config)) {
+    if (path === registry) continue;
     const rel = relativeUnder(PLACEHOLDER_REPO_ROOT, path);
     if (rel === undefined || rel.split('/').includes(GIT_DIR)) continue;
     paths.push(rel);
