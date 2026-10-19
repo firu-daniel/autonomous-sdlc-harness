@@ -12,7 +12,7 @@ Gate 13a–13c are reported `BLOCKED` (the Python environment is not provisioned
 
 This list is the **single source of truth** for the fix loop. `[ ]` markers anywhere else in this plan are informational only.
 
-1. [ ] **Finding 1** — Replace the home-directory path in this branch's task prompt with `<home>/…`. _(layer: general)_
+1. [x] **Finding 1** — Replace the home-directory path in this branch's task prompt with `<home>/…`. _(layer: general)_
 
 ## Must Fix
 
