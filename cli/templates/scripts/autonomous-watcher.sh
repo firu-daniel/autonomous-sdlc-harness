@@ -971,10 +971,11 @@ FORMAT_STREAM="$SCRIPT_DIR/autonomous-format-stream.sh"
 # IS ACTED ON — create-worktree.sh and cleanup-merged-worktrees.sh derive the main
 # checkout for themselves through the shared library, and the push wrapper is
 # always handed the working copy to operate in explicitly. The artifact commit
-# is not routed through `commit-on-branch.sh`: that wrapper runs the copy's own
-# hooks and stages in the run's index, so the watcher commits by plumbing in
-# the main checkout instead (`hr_commit_placed`), which applies the same
-# protected-branch refusal from the main checkout's configuration.
+# is not routed through `commit-on-branch.sh`: that wrapper stages its paths
+# into the run's own index and judges the run's working copy, so the watcher
+# commits one placed path by plumbing in the main checkout instead
+# (`hr_commit_placed`), which applies the same protected-branch refusal from
+# the main checkout's configuration.
 CREATE_WORKTREE="$SCRIPT_DIR/create-worktree.sh"
 CLEANUP_SCRIPT="$SCRIPT_DIR/cleanup-merged-worktrees.sh"
 PUSH_BRANCH="$SCRIPT_DIR/push-branch.sh"

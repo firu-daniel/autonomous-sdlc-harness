@@ -192,7 +192,7 @@
  * ## The sandbox block
  *
  * The template ships the `sandbox` block's static half; `sandboxProfile.ts` → `applySandbox` fills
- * the configuration-dependent half — the two excluded commands, the allowed domains, the opt-out —
+ * the configuration-dependent half — the excluded commands, the allowed domains, the opt-out —
  * and owns the rule for which command may run unsandboxed. {@link assertRunnable} scans the block's
  * lists with the same table it scans the permission lists with. `writeProtection.ts` →
  * `applyWriteProtection` adds the write protection last, once `permissions.additionalDirectories` is

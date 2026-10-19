@@ -88,7 +88,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_worktree_record_
 2. [x] **Task 2** — Add `cli/test/commit-on-branch-target-check.test.mjs`: the commit wrapper's refusals, hooks pin and protected set _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Add `cli/test/commit-on-branch-plumbing.test.mjs`: the commit wrapper's exit contract, index sync, no commit hook, and records rewritten after its checks _(layer: cli)_ _(points: 15)_
 4. [x] **Task 4** — Mark `commit-on-branch.sh` `runsUnsandboxed`, and adjust `doctor`'s missing-entry message, the write-protection header and the profile tests _(layer: cli)_ _(points: 15)_
-5. [ ] **Task 5** — Restate the excluded set in the profile template's `_README`, and correct the two code comments that describe the old wrapper _(layer: cli)_ _(points: 10)_
+5. [x] **Task 5** — Restate the excluded set in the profile template's `_README`, and correct the two code comments that describe the old wrapper _(layer: cli)_ _(points: 10)_
 6. [ ] **Task 6** — Move the canonical commit mechanics to the main checkout's literal spelling: `autonomous_pause_and_ledger.md` §1.6, the docs engine's single source, dispatch discipline and `AUTONOMOUS_FLOW.md` _(layer: plugin)_ _(points: 15)_
 7. [ ] **Task 7** — Move the committer and the two artifact commit points to the new spelling, and replace the bare `git add` re-stage and the `git mv` rename _(layer: plugin)_ _(points: 20)_
 8. [ ] **Task 8** — Move the four autonomous forks' commit points, the fix-plan core's wrapper statement and the user-review-fix command to the new spelling _(layer: plugin)_ _(points: 15)_
