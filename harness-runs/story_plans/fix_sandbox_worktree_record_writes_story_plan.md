@@ -94,7 +94,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_worktree_record_
 8. [x] **Task 8** — Move the four autonomous forks' commit points, the fix-plan core's wrapper statement and the user-review-fix command to the new spelling _(layer: plugin)_ _(points: 15)_
 9. [x] **Task 9** — Update `docs/cli.md` §6 and §7 and `docs/watcher.md` for three excluded wrappers and the plumbing commit _(layer: general)_ _(points: 15)_
 10. [x] **Task 10** — Add goal 1's owed measurement rows and the commit-wrapper rows to `docs/sandbox-verification.md`, and the owed note to `docs/outer-loop-verification.md` _(layer: general)_ _(points: 15)_
-11. [ ] **Task 11** — Re-render the worked example's profile for the third excluded wrapper _(layer: general)_ _(points: 8)_
+11. [x] **Task 11** — Re-render the worked example's profile for the third excluded wrapper _(layer: general)_ _(points: 8)_
 
 ## Scope register
 
