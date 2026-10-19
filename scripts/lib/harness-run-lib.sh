@@ -2525,7 +2525,9 @@ hr_derive_branch() {
 #     `refs/replace/` and `info/grafts` in the common directory, and either
 #     one makes the merge base read as a commit carrying the run's own tree,
 #     so every surface diff comes out empty while `read-tree` still writes
-#     the tip's real tree.
+#     the tip's real tree. Each call also sets
+#     `-c advice.graftFileDeprecated=false`, because a set graft file makes
+#     git print its deprecation hint on stderr; an older git ignores the key.
 # `hr_worktree_config_check_var` is skipped here because no runner below lets
 # git read the record's `config.worktree`; `push-branch.sh` and
 # `refresh-branch.sh` keep it under their own headers. Write exception 5 in the
@@ -2605,14 +2607,14 @@ hr_run_copy_check_var() {
 hr_run_main_git() {
   [ -n "${HR_RUN_MAIN-}" ] || return 1
   GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
-    git -C "$HR_RUN_MAIN" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false "$@"
+    git -C "$HR_RUN_MAIN" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false "$@"
 }
 
 hr_run_copy_git() {
   [ -n "${HR_RUN_MAIN-}" ] && [ -n "${HR_RUN_COPY_GITDIR-}" ] && [ -n "${HR_RUN_COPY_TOP-}" ] || return 1
   GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
   GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$HR_RUN_COPY_GITDIR/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
-    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false "$@"
+    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false "$@"
 }
 
 # 0 when the copy's working tree matches its index and its index matches
@@ -2723,17 +2725,17 @@ hr_run_worktree_diff_var() {
   [ -n "$tip" ] && [ "$#" -gt 0 ] && [ -n "${HR_RUN_MAIN-}" ] && [ -n "${HR_RUN_COPY_TOP-}" ] || return 1
   tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/hr-surface-index.XXXXXX") || return 1
   if ! GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
-    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false \
+    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false \
     read-tree "$tip" >/dev/null 2>&1; then
     rm -rf "$tmpdir"
     return 1
   fi
   out=$(GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
-    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false \
+    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false \
     diff --name-only --exit-code --no-renames --no-ext-diff --no-textconv --ignore-submodules -- "$@" 2>/dev/null)
   status=$?
   if [ "$status" -gt 1 ] || ! untracked=$(GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$tmpdir/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
-    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false \
+    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false \
     ls-files --others -- "$@" 2>/dev/null); then
     rm -rf "$tmpdir"
     return 1
