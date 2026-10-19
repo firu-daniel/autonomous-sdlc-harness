@@ -87,7 +87,10 @@
 # `commands.*`) from the main checkout. They skip
 # `hr_worktree_config_check_var` because no runner lets git read the record's
 # `config.worktree`; the section THE WATCHER FAMILY'S GIT IN A RUN'S COPY holds
-# the detail. Nothing
+# the detail. The target check's clone arm reads the main checkout's
+# registry and configuration, plus the clone's `HEAD`,
+# `objects/info/alternates`, `.git/config` and the absence of the three
+# planted files, once each. Nothing
 # here reads an environment variable in place of a configured value, and nothing
 # here writes inside a repository except through the named write exceptions
 # below.
@@ -801,10 +804,17 @@ hr_wrapper_main_of() {
 # record's `gitdir`, each worktree's `.git` pointer and the record directories
 # themselves (`cli/src/generators/writeProtection.ts`); how the Linux sandbox
 # treats those globbed entries is unverified.
+#
+# It also sets `HR_TARGET_KIND` — `main`, `worktree` or `clone` — and, on the
+# clone arm only, `HR_TARGET_BRANCH`. The clone arm is taken only when
+# `<target_top>/.git` is a real directory, not a symbolic link; it is
+# `hr_clone_target_check_var`, whose header lists its conditions.
 hr_wrapper_target_check_var() {
   local main="${1-}" target="${2-}" p common line="" back back_c want
   HR_TARGET_REFUSAL=""
   HR_TARGET_GITDIR=""
+  HR_TARGET_KIND=""
+  HR_TARGET_BRANCH=""
   if ! main=$( CDPATH= cd -P -- "$main" 2>/dev/null && pwd -P ); then
     HR_TARGET_REFUSAL="the main checkout '${1-}' is not a directory"
     return 1
@@ -815,9 +825,14 @@ hr_wrapper_target_check_var() {
   fi
   if [ "$target" = "$main" ]; then
     HR_TARGET_GITDIR="$main/.git"
+    HR_TARGET_KIND=main
     return 0
   fi
   local refused="'$target' is neither the main checkout $main nor a worktree it lists"
+  if [ -d "$target/.git" ] && [ ! -L "$target/.git" ]; then
+    hr_clone_target_check_var "$main" "$target" "$refused"
+    return
+  fi
   if [ ! -f "$target/.git" ] || [ -L "$target/.git" ]; then
     HR_TARGET_REFUSAL="$refused: its .git is not a regular pointer file"
     return 1
@@ -846,6 +861,101 @@ hr_wrapper_target_check_var() {
     return 1
   fi
   HR_TARGET_GITDIR=$p
+  HR_TARGET_KIND=worktree
+  return 0
+}
+
+# The clone arm of `hr_wrapper_target_check_var`, for a canonical <main> and a
+# canonical <target> whose `.git` is a real directory; <refused> is that
+# function's refusal prefix. Return 0 with `HR_TARGET_GITDIR` (`<target>/.git`),
+# `HR_TARGET_KIND` (`clone`) and `HR_TARGET_BRANCH` set when, in order:
+#   1. `<target>/.git/HEAD` is one line `ref: refs/heads/<branch>`, and the
+#      registry at `hr_state_path <main> autonomous_logs/registry.json` gives
+#      `copy_kind` `clone` for <branch> and a `worktree` that is <target>;
+#   2. <target> is `hr_worktree_dir <main> <branch>`;
+#   3. `.git/commondir`, `.git/config.worktree` and
+#      `.git/objects/info/http-alternates` are absent, symbolic links included,
+#      and `.git/objects` and `.git/objects/info` are real directories;
+#   4. `.git/objects/info/alternates` is a regular file holding one line,
+#      `<main>/.git/objects`;
+#   5. `hr_clone_config_check_var <main> <target>` passes.
+# Each comparison is canonical. Return 1 otherwise, with `HR_TARGET_REFUSAL`
+# one sentence naming the condition and the key or file, never a file's
+# contents. Every record is read once, and the registry is only peeked at
+# (`hr_registry_peek`), never created.
+#
+# Condition 3 is load-bearing: the runtime leaves a clone's `objects/info/`,
+# `info/` and new top-level `.git` files sandbox-writable
+# (`docs/sandbox-verification.md`, row CL5), so a sandboxed command could plant
+# a `commondir` that redirects git's ref store, a `config.worktree` git layers
+# over `.git/config`, or an `http-alternates` that borrows objects from a host.
+hr_clone_target_check_var() {
+  local main="${1-}" target="${2-}" refused="${3-}" gd hf head_line="" extra=""
+  local branch="" registry kind wt wt_c want name alt alt_line="" alt_c main_obj
+  gd="$target/.git"
+  hf="$gd/HEAD"
+  if [ -f "$hf" ] && [ ! -L "$hf" ] && [ -r "$hf" ]; then
+    { IFS= read -r head_line || :; IFS= read -r extra || :; } <"$hf" 2>/dev/null
+  fi
+  if [ -z "$extra" ]; then
+    case "$head_line" in
+      'ref: refs/heads/'?*) branch=${head_line#ref: refs/heads/} ;;
+    esac
+  fi
+  kind=""
+  wt_c=""
+  if [ -n "$branch" ] && registry=$(hr_state_path "$main" autonomous_logs/registry.json) \
+    && kind=$(hr_registry_peek "$registry" "$branch" copy_kind) \
+    && wt=$(hr_registry_peek "$registry" "$branch" worktree) && [ -n "$wt" ]; then
+    wt_c=$(hr_canonical_path_nogit "$wt") || wt_c=""
+  fi
+  if [ "$kind" != clone ] || [ "$wt_c" != "$target" ]; then
+    HR_TARGET_REFUSAL="$refused: its .git is not a regular pointer file, and the run registry records no clone of $main at that path"
+    return 1
+  fi
+
+  want=$(hr_worktree_dir "$main" "$branch") && want=$(hr_canonical_path_nogit "$want") || want=""
+  if [ -z "$want" ] || [ "$want" != "$target" ]; then
+    HR_TARGET_REFUSAL="'$target' is a clone the run registry records, but not at the path hr_worktree_dir derives from $main for the branch its HEAD names"
+    return 1
+  fi
+
+  for name in commondir config.worktree objects/info/http-alternates; do
+    if [ -e "$gd/$name" ] || [ -L "$gd/$name" ]; then
+      HR_TARGET_REFUSAL="'$target' is a clone, but $gd/$name exists, and a clone the harness made has none"
+      return 1
+    fi
+  done
+  for name in objects objects/info; do
+    if [ ! -d "$gd/$name" ] || [ -L "$gd/$name" ]; then
+      HR_TARGET_REFUSAL="'$target' is a clone, but $gd/$name is not a real directory"
+      return 1
+    fi
+  done
+
+  alt="$gd/objects/info/alternates"
+  alt_c=""
+  if [ -f "$alt" ] && [ ! -L "$alt" ] && [ -r "$alt" ]; then
+    extra=""
+    { IFS= read -r alt_line || :; IFS= read -r extra || :; } <"$alt" 2>/dev/null
+    if [ -n "$alt_line" ] && [ -z "$extra" ]; then
+      case "$alt_line" in /*) ;; *) alt_line="$gd/objects/$alt_line" ;; esac
+      alt_c=$(hr_canonical_path_nogit "$alt_line") || alt_c=""
+    fi
+  fi
+  main_obj=$(hr_canonical_path_nogit "$main/.git/objects") || main_obj=""
+  if [ -z "$alt_c" ] || [ -z "$main_obj" ] || [ "$alt_c" != "$main_obj" ]; then
+    HR_TARGET_REFUSAL="'$target' is a clone, but $alt is not a regular file holding one line naming $main/.git/objects"
+    return 1
+  fi
+
+  if ! hr_clone_config_check_var "$main" "$target"; then
+    HR_TARGET_REFUSAL=$HR_CLONE_CONFIG_REFUSAL
+    return 1
+  fi
+  HR_TARGET_GITDIR=$gd
+  HR_TARGET_KIND=clone
+  HR_TARGET_BRANCH=$branch
   return 0
 }
 
@@ -863,19 +973,28 @@ hr_wrapper_target_check_var() {
 # `refs/heads/<branch>` in every later call, so a HEAD rewritten afterwards
 # changes nothing it does. A name starting with `-` is returned, not refused:
 # each wrapper refuses it under its own exit contract.
+#
+# A clone's branch is `HR_TARGET_BRANCH`, taken when `HR_TARGET_KIND` is
+# `clone` and <gitdir> is `HR_TARGET_GITDIR`: the target check already read
+# the clone's `HEAD`, and reading it again would break the read-once rule.
 hr_wrapper_branch_var() {
   local main="${1-}" gitdir="${2-}" head ref
   HR_WRAPPER_BRANCH=""
   [ -n "$main" ] && [ -n "$gitdir" ] || return 1
-  if [ "$gitdir" = "$main/.git" ]; then
-    head=HEAD
+  if [ "${HR_TARGET_KIND-}" = clone ] && [ "$gitdir" = "${HR_TARGET_GITDIR-}" ]; then
+    [ -n "${HR_TARGET_BRANCH-}" ] || return 1
+    ref="refs/heads/$HR_TARGET_BRANCH"
   else
-    case "$gitdir" in
-      "$main/.git/worktrees/"?*) head="worktrees/${gitdir##*/}/HEAD" ;;
-      *) return 1 ;;
-    esac
+    if [ "$gitdir" = "$main/.git" ]; then
+      head=HEAD
+    else
+      case "$gitdir" in
+        "$main/.git/worktrees/"?*) head="worktrees/${gitdir##*/}/HEAD" ;;
+        *) return 1 ;;
+      esac
+    fi
+    ref=$(git -C "$main" symbolic-ref -q "$head" 2>/dev/null) || return 1
   fi
-  ref=$(git -C "$main" symbolic-ref -q "$head" 2>/dev/null) || return 1
   case "$ref" in
     refs/heads/?*) ;;
     *) return 1 ;;
@@ -886,6 +1005,29 @@ hr_wrapper_branch_var() {
   esac
   HR_WRAPPER_BRANCH=${ref#refs/heads/}
   return 0
+}
+
+# Print which run copy the gitdir <gitdir> of the main checkout <main> is:
+# `main` for `<main>/.git`, `worktree` for a path directly under
+# `<main>/.git/worktrees/`, `clone` otherwise. Purely lexical: call it only on
+# a gitdir `hr_wrapper_target_check_var` has already accepted.
+hr_copy_kind() {
+  local main="${1-}" gitdir="${2-}" rest
+  [ -n "$main" ] && [ -n "$gitdir" ] || return 1
+  if [ "$gitdir" = "$main/.git" ]; then
+    printf 'main\n'
+    return 0
+  fi
+  case "$gitdir" in
+    "$main/.git/worktrees/"?*)
+      rest=${gitdir#"$main/.git/worktrees/"}
+      case "$rest" in
+        */*) ;;
+        *) printf 'worktree\n'; return 0 ;;
+      esac
+      ;;
+  esac
+  printf 'clone\n'
 }
 
 # Return 0 when the main checkout <main>'s own `.git/config` names a URL for
@@ -1003,6 +1145,166 @@ hr_worktree_config_check_var() {
   fi
   [ -n "$parts" ] || return 0
   HR_WT_CONFIG_REFUSAL="$parts; remove the file, then re-run setup-worktree.sh in that working copy"
+  return 1
+}
+
+# THE CLONE CONFIGURATION ALLOW-LIST — one contract. `hr_clone_create_var`
+# writes a clone's `.git/config` from exactly this set, and
+# `setup-worktree.sh --target` adds only `core.hooksPath`; the check below
+# holds a clone to it. Required keys: `core.repositoryformatversion`,
+# `core.bare`, `remote.origin.fetch`, and `remote.origin.url` whenever the spec
+# lists it.
+#
+# `hr_clone_config_spec <main> <top>` prints one line per allowed key,
+# `<lowercase key><TAB><rule>`, `<rule>` being `=<exact value>` or `bool`
+# (`true` or `false`). `remote.origin.url` is listed, with the value the main
+# checkout's `.git/config` names, only when it names one; `core.hooksPath` is
+# `<top>/<githooksDir>`, with `githooksDir` read from the MAIN checkout. Return
+# 1, printing nothing, when `githooksDir` cannot be read or a value holds a
+# newline the line format cannot carry.
+hr_clone_config_spec() {
+  local main="${1-}" top="${2-}" rel url nl
+  nl='
+'
+  [ -n "$main" ] && [ -n "$top" ] || return 1
+  rel=$(hr_githooks_dir "$main") || return 1
+  url=$(git -C / config --file "$main/.git/config" --get remote.origin.url 2>/dev/null) || url=""
+  case "$top/$rel$url" in *"$nl"*) return 1 ;; esac
+  printf '%s\t%s\n' \
+    core.repositoryformatversion =0 \
+    core.bare =false \
+    core.logallrefupdates =true \
+    core.filemode bool \
+    core.ignorecase bool \
+    core.precomposeunicode bool \
+    core.symlinks bool \
+    remote.origin.fetch '=+refs/heads/*:refs/remotes/origin/*' \
+    core.hookspath "=$top/$rel"
+  [ -z "$url" ] || printf 'remote.origin.url\t=%s\n' "$url"
+}
+
+# Set `HR_CLONE_RULE` to the rule <spec> (`hr_clone_config_spec`'s output)
+# gives <key>; return 1, the variable empty, when <spec> lists no <key>.
+hr_clone_spec_rule_var() {
+  local spec="${1-}" key="${2-}" rest line nl tab=$'\t'
+  nl='
+'
+  HR_CLONE_RULE=""
+  rest="$spec$nl"
+  while [ -n "$rest" ]; do
+    line=${rest%%"$nl"*}
+    rest=${rest#*"$nl"}
+    if [ "${line%%"$tab"*}" = "$key" ]; then
+      HR_CLONE_RULE=${line#*"$tab"}
+      return 0
+    fi
+  done
+  return 1
+}
+
+# `hr_clone_config_check_var <main> <top>` judges `<top>/.git/config` against
+# `hr_clone_config_spec <main> <top>`. Return 0 only when every key is in the
+# spec, appears once and passes its rule, and every required key is present;
+# return 1 otherwise — including a file that is absent, not a regular file, a
+# symbolic link, or one git cannot parse — with `HR_CLONE_CONFIG_REFUSAL` set to
+# one sentence naming each offending, duplicated or missing key, never a value.
+# Prints nothing. Call it directly, never inside `$(…)`.
+#
+# Read as `hr_worktree_config_check_var` reads its file: one
+# `git -C / config --file <f> --null --list` call, a trailing `hr-status=<n>`
+# record carrying git's exit status. Section and variable names are compared
+# case-insensitively and a subsection name exactly, as git compares them, so
+# `remote.ORIGIN.url` is not `remote.origin.url`.
+hr_clone_config_check_var() {
+  local main="${1-}" top="${2-}" f spec entry name lname key value has_value status="" nl
+  local seen="" offending="" duplicated="" wrong="" missing="" parts="" req mid
+  HR_CLONE_CONFIG_REFUSAL=""
+  nl='
+'
+  f="$top/.git/config"
+  if [ -L "$f" ] || [ ! -f "$f" ] || [ ! -r "$f" ]; then
+    HR_CLONE_CONFIG_REFUSAL="$f is absent, not a readable regular file, or a symbolic link, so this clone's configuration is not trusted"
+    return 1
+  fi
+  if ! spec=$(hr_clone_config_spec "$main" "$top"); then
+    HR_CLONE_CONFIG_REFUSAL="cannot build the clone configuration allow-list from the main checkout $main, so $f is not trusted"
+    return 1
+  fi
+
+  while IFS= read -r -d '' entry; do
+    case "$entry" in
+      hr-status=*)
+        status=${entry#hr-status=}
+        continue
+        ;;
+      *"$nl"*)
+        name=${entry%%"$nl"*}
+        value=${entry#*"$nl"}
+        has_value=1
+        ;;
+      *)
+        name=$entry
+        value=""
+        has_value=0
+        ;;
+    esac
+    lname=$(printf '%s' "$name" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
+    case "$name" in
+      *.*.*)
+        mid=${name#*.}
+        mid=${mid%.*}
+        key="${lname%%.*}.$mid.${lname##*.}"
+        ;;
+      *) key=$lname ;;
+    esac
+    case "$seen" in
+      *"$nl$key$nl"*)
+        case ", $duplicated, " in
+          *", $name, "*) ;;
+          *) duplicated="${duplicated:+$duplicated, }$name" ;;
+        esac
+        continue
+        ;;
+    esac
+    seen="${seen:-$nl}$key$nl"
+    if ! hr_clone_spec_rule_var "$spec" "$key"; then
+      offending="${offending:+$offending, }$name"
+      continue
+    fi
+    case "$HR_CLONE_RULE" in
+      bool)
+        case "$has_value:$value" in
+          1:true | 1:false) ;;
+          *) wrong="${wrong:+$wrong, }$name" ;;
+        esac
+        ;;
+      =*)
+        if [ "$has_value" -ne 1 ] || [ "$value" != "${HR_CLONE_RULE#=}" ]; then
+          wrong="${wrong:+$wrong, }$name"
+        fi
+        ;;
+    esac
+  done < <(git -C / config --file "$f" --null --list 2>/dev/null; printf 'hr-status=%s\0' "$?")
+
+  if [ "$status" != 0 ]; then
+    HR_CLONE_CONFIG_REFUSAL="git cannot parse $f, so this clone's configuration is not trusted"
+    return 1
+  fi
+  for req in core.repositoryformatversion core.bare remote.origin.fetch remote.origin.url; do
+    if [ "$req" = remote.origin.url ]; then
+      hr_clone_spec_rule_var "$spec" "$req" || continue
+    fi
+    case "$seen" in
+      *"$nl$req$nl"*) ;;
+      *) missing="${missing:+$missing, }$req" ;;
+    esac
+  done
+  [ -z "$offending" ] || parts="$f sets $offending, which the clone allow-list does not hold"
+  [ -z "$duplicated" ] || parts="${parts:+$parts; }$f sets $duplicated more than once"
+  [ -z "$wrong" ] || parts="${parts:+$parts; }$f sets $wrong to a value the clone allow-list does not allow"
+  [ -z "$missing" ] || parts="${parts:+$parts; }$f lacks $missing, which the clone allow-list requires"
+  [ -n "$parts" ] || return 0
+  HR_CLONE_CONFIG_REFUSAL="$parts, so this clone's configuration is not trusted"
   return 1
 }
 
@@ -2245,6 +2547,21 @@ hr_registry_branches() {
   local file="${1-}"
   hr_registry_init "$file" || :
   jq -r '.runs | keys[]' "$file" 2>/dev/null
+}
+
+# hr_registry_peek <file> <branch> <key> — print `.runs[<branch>][<key>]`
+# (nothing for an absent or null key) and return 0; return 1, printing nothing,
+# when <file> is not a readable regular file or `jq` fails or finds no
+# `.runs[<branch>]`. The read a check makes: unlike `hr_registry_get` and
+# `hr_registry_branches` it never calls `hr_registry_init`, takes no lock and
+# creates neither the file nor its directory.
+hr_registry_peek() {
+  local file="${1-}" out
+  [ -n "$file" ] && [ -f "$file" ] && [ -r "$file" ] || return 1
+  out=$(jq -r --arg b "${2-}" --arg k "${3-}" '
+    .runs[$b] | if type == "object" then (if .[$k] == null then empty else .[$k] end) else error("absent") end
+  ' "$file" 2>/dev/null) || return 1
+  [ -z "$out" ] || printf '%s\n' "$out"
 }
 
 # hr_remote_record_init <file> <branch> <worktree> <log_path> <engine>

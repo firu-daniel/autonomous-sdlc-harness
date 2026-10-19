@@ -61,7 +61,7 @@ A clone is recorded in the run registry, `<main>/<stateDir>/autonomous_logs/regi
 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, with the catch-all layer last.
 
-1. [ ] **Task 1** — Add the clone trust check to the run library: the `.git/config` allow-list contract, a non-creating registry read, and the clone arm of `hr_wrapper_target_check_var` and `hr_wrapper_branch_var` _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Add the clone trust check to the run library: the `.git/config` allow-list contract, a non-creating registry read, and the clone arm of `hr_wrapper_target_check_var` and `hr_wrapper_branch_var` _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Add the sync pair `hr_copy_sync_in_var` / `hr_copy_sync_out_var`: objects reach the main checkout only by a pinned fetch _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Add `hr_clone_create_var`, `hr_clone_remove_var` and `hr_registry_drop`: a `--shared` clone recorded before any check reads it, a guarded removal, and a full rollback _(layer: cli)_ _(points: 20)_
 4. [ ] **Task 4** — Add `cli/test/clone-trust-check.test.mjs`: every acceptance condition and every refusal of the clone arm _(layer: cli)_ _(points: 20)_
