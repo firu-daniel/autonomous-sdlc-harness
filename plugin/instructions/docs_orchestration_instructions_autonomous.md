@@ -8,7 +8,7 @@ The tokens below are neither Mode-contract **bindings** (this file declares none
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<repo_root>` | derived at runtime | The absolute root of the checkout this run is executing in — the run's **own worktree**, not the main checkout. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. It is written `$REPO_ROOT` in the invocations below. |
+| `<repo_root>` | derived at runtime | The absolute root of the checkout this run is executing in — the run's **own worktree**, not the main checkout. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. It is written `$REPO_ROOT` in the dispatch paths below; the wrapper invocations in `## Commit mechanics (single source of truth)` spell it literally. |
 | `<docs_root>` | config value | `docs.root` — the repo-relative directory holding the documentation corpus this loop builds. Read **only** when `phases.docs` is `true`, which is the same gate that decides whether this loop runs at all. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the wrapper scripts this file invokes by path live in. The commit / push / watcher scripts named by path here are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles it. |
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
@@ -27,7 +27,7 @@ This loop is deliberately lean — no planner, no code/parity/architecture/skept
 
 ## Setup (once, at session start)
 
-1. **Paths (Override-A equivalent).** Resolve `<repo_root>` exactly as `## Resolved values` above states — a **bare** `git rev-parse --show-toplevel` (this worktree, not the main repo) — and write it `$REPO_ROOT` below. Every path you pass to an agent is **absolute** under `$REPO_ROOT` — worktree agents otherwise write to the main repo. `<MAIN_REPO>` (for the global kill switch and the push wrapper) is the first entry of `git worktree list`.
+1. **Paths (Override-A equivalent).** Resolve `<repo_root>` exactly as `## Resolved values` above states — a **bare** `git rev-parse --show-toplevel` (this worktree, not the main repo) — and write it `$REPO_ROOT` below. Every path you pass to an agent is **absolute** under `$REPO_ROOT` — worktree agents otherwise write to the main repo. `<MAIN_REPO>` (for the global kill switch and the commit and push wrappers) is the first entry of `git worktree list`.
 2. **Kill switch (Override-B equivalent).** If `<MAIN_REPO>/<state_dir>/AUTONOMOUS_STOP` exists, halt before dispatching anything and report it. Do NOT delete it.
 3. **Branch.** `git branch --show-current` → `<branch>`.
 4. **Read + parse the checklist** at `$REPO_ROOT/<state_dir>/docs_catalog/<branch>_docs.md`. It is an ordered list of entries; each entry is one doc and carries: a `[ ]`/`[x]` box, `slug`, `type` (`feature`|`concept`), `output_path`, `title`, and an `entry` blob. The **final** entry is always the `INDEX` (see below). See **Checklist entry format**.
@@ -97,12 +97,10 @@ Immediately after the `<state_dir>/STOP` check, apply `${CLAUDE_PLUGIN_ROOT}/ins
 
 ## Commit mechanics (single source of truth)
 
-Commit **only** through the wrapper — never a raw `git add` / `git commit` (a raw `git commit` carrying a `<branch>` expansion is refused headless at the branch guard). Two rules keep the wrapper reliably auto-allowed by the script-allowlist guard: **(1) write the script-path token UNQUOTED and repo-relative** (`<scripts_dir>/commit-on-branch.sh`, resolved against the ambient worktree cwd) — a surrounding quote makes the token end in `.sh"`, and an absolute-variable path segment (a `$REPO_ROOT/…` prefix, say) can't be resolved textually by the guard; either one defeats its `*.sh`/path match, so the whole invocation lands on `ask` and **is refused** in a headless run. **(2) The args after the script path may be quoted and may carry a plain `$VAR` or `${VAR}`** (`--repo "$REPO_ROOT"`, paths, message) — but nothing the guard's whole-string construct scan reads: `$(…)`, a backtick, `|` (hence `||`), `>`, `<` (hence a subject naming a `<placeholder>`) or a braced expansion other than a bare `${IDENT}` withholds the allow wherever it sits, subject included. Do **not** prefix a `cd "$REPO_ROOT" &&` (the guard reads that quoted-variable cwd literally and misresolves the relative path) — just rely on the worktree cwd the run already starts in:
+Commit **only** through the wrapper — never a raw `git add` / `git commit` (a raw `git commit` carrying a `<branch>` expansion is refused headless at the branch guard). Name the main checkout's copy, as the call's only command:
 
 ```zsh
-bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
-  "<output_path>" "<state_dir>/docs_catalog/<branch>_docs.md" [<other changed paths…>] \
-  -- "docs: <doc_title>"
+bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> "<output_path>" "<state_dir>/docs_catalog/<branch>_docs.md" [<other changed paths…>] -- "docs: <doc_title>"
 ```
 
 Then issue the push as its **own** Bash call, never in the same call as the commit:
@@ -111,15 +109,13 @@ Then issue the push as its **own** Bash call, never in the same call as the comm
 bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>
 ```
 
-Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a worktree, the script-allowlist guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only grant, and a command carrying a shell expansion does not match it.
+Spell both calls literally — `<MAIN_REPO>`, `<repo_root>` and `<branch>` each as the text it resolves to, with no `$` anywhere in the command: never `"$REPO_ROOT"`, `${branch}` or any other variable. Each call names `<MAIN_REPO>`'s copy of its wrapper because that copy is the one the unattended permission profile runs outside the sandbox; the worktree's own copy stays sandboxed, where the commit cannot write a linked worktree's record and an SSH push can fail while the wrapper still exits 0. From a worktree, the script-allowlist guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is each call's only grant, and a command carrying a shell expansion does not match it. No argument, subject included, carries `$(…)`, a backtick, `|`, `>` or `<`, quoted or not (`<scripts_dir>/commit-on-branch.sh` → `MESSAGE ARGUMENTS`).
 
-The profile runs this spelling outside the sandbox only when it is the call's only command; issued in one call with the commit, it runs sandboxed, where an SSH push can fail on macOS while the wrapper still exits 0.
+The profile runs either spelling outside the sandbox only when it is the call's only command; compounded with anything, the other wrapper included, it runs sandboxed.
 
 > ⚠️ **No exit-code gate — deliberate.** Do **not** wrap the push in `if [ "$?" -eq 0 ]; then … fi`. Per `${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6 that control-flow block is a headless trap: `allow-safe-compounds.sh` splits on `;` and the ` then bash …` piece begins with a non-allow-listed prefix, so the command falls through the safe-compound allow, nothing else matches it, and the call **is refused at once rather than prompting** — **the commit does not land**, with that refusal as its only sign. `$?` is unreliable across Bash calls anyway (each runs in a fresh shell). No gate is needed: an unconditional push is a harmless no-op whenever no commit landed.
 
-The wrapper stages **only** the explicit paths listed before `--` (`git add -- …`, never `git add -A`/`.`), builds the message from the args after `--` (subject only — no `Co-Authored-By`/trailer, no `--no-verify`), and returns: 0 committed, 1 error (surface it), 2 protected-branch refusal (surface it), 3 nothing-to-commit. `push-branch.sh` is best-effort, non-fatal, only fast-forwards already-committed work, and reaches only the run's **own non-protected** branch — the protected-branch hard boundary is unchanged.
-
-The push names `<MAIN_REPO>`'s copy of the wrapper, spelled as a literal absolute path rather than through a variable, because that copy is the one the unattended permission profile runs outside the sandbox: the worktree's own copy stays sandboxed, where an SSH push can fail while the wrapper still exits 0.
+The wrapper stages **only** the explicit paths listed before `--` (`git add -- …`, never `git add -A`/`.`), builds the message from the args after `--` (subject only — no `Co-Authored-By`/trailer, no `--no-verify`), runs no commit hook, and returns: 0 committed, 1 error (surface it; a branch moved under the commit is an exit 1 that leaves the given paths staged), 2 protected-branch refusal (surface it), 3 nothing-to-commit. `push-branch.sh` is best-effort, non-fatal, only fast-forwards already-committed work, and reaches only the run's **own non-protected** branch — the protected-branch hard boundary is unchanged.
 
 ---
 
@@ -133,7 +129,7 @@ The flow ends at **"branch ready for review"** and must **never**:
 
 Two layers enforce it at the harness level — the `pre-push` git hook, and above it the plugin's `PreToolUse` protected-branch guard together with the generated permission profile's `Bash(git push:*)` **`ask`** entry, which is evaluated before any `allow` and which an unattended run's permission mode refuses — and this instruction restates the intent so the orchestrator never *attempts* it. Push only the run's own non-protected worktree branch (per commit, above).
 
-**Done summary** (final message, no PR): docs written (count), any `needs_review.md` entries, the `parity_gaps.md` count, and the mandatory `📌 Dispatch additions: …` disclosure line in the exact form `${CLAUDE_PLUGIN_ROOT}/instructions/dispatch_discipline_instructions.md` → `## The disclosure line` gives it (including its `none` form, which is a normal outcome). If any dispatch above owes a block under that file's `## The entry format`, run that file's record step **once, before this summary** — never per entry — and commit it by this flow's own **Commit mechanics (single source of truth)** conventions above (the unquoted repo-relative wrapper token, no exit-code gate), which that section owns in full. It is best-effort and never a gate: a failure there is logged and the summary is emitted unchanged. Stop there.
+**Done summary** (final message, no PR): docs written (count), any `needs_review.md` entries, the `parity_gaps.md` count, and the mandatory `📌 Dispatch additions: …` disclosure line in the exact form `${CLAUDE_PLUGIN_ROOT}/instructions/dispatch_discipline_instructions.md` → `## The disclosure line` gives it (including its `none` form, which is a normal outcome). If any dispatch above owes a block under that file's `## The entry format`, run that file's record step **once, before this summary** — never per entry — and commit it by this flow's own **Commit mechanics (single source of truth)** conventions above (the main checkout's copy of the wrapper, spelled literally, no exit-code gate), which that section owns in full. It is best-effort and never a gate: a failure there is logged and the summary is emitted unchanged. Stop there.
 
 ---
 

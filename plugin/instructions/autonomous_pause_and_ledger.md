@@ -26,7 +26,7 @@ ordinary path placeholder, exactly as it uses `<branch>`, `<entry-id>` and `<n>`
 |---|---|---|
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this run is executing in — in an autonomous run, the run's **own worktree**, not the main checkout. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to, the ledger and the four pause sentinels included. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
-| `<scripts_dir>` | config value | `scriptsDir` — the directory the project-command wrapper scripts live in. The three outer-loop scripts this file names (`autonomous-watcher.sh`, `commit-on-branch.sh`, `push-branch.sh`) are written into it by setup as well — copied verbatim rather than rendered from a detected command line, since each reads the configuration at run time — so every `<scripts_dir>/…` invocation below resolves in a wired repository. The two guard hooks it names (`allow-safe-compounds.sh`, `git-commit-branch-guard.sh`) ship as plugin hooks and are **not** under it either: they are named bare and take no prefix. |
+| `<scripts_dir>` | config value | `scriptsDir` — the directory the project-command wrapper scripts live in. The three outer-loop scripts this file names (`autonomous-watcher.sh`, `commit-on-branch.sh`, `push-branch.sh`) are written into it by setup as well — copied verbatim rather than rendered from a detected command line, since each reads the configuration at run time — so every `<scripts_dir>/…` invocation below resolves in a wired repository. `commit-on-branch.sh` and `push-branch.sh` are both invoked as the main checkout's copy, `<MAIN_REPO>/<scripts_dir>/…`. The two guard hooks it names (`allow-safe-compounds.sh`, `git-commit-branch-guard.sh`) ship as plugin hooks and are **not** under it either: they are named bare and take no prefix. |
 | `<MAIN_REPO>` | derived at runtime | The main checkout — the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into. Never a remembered branch name. Bound for completeness — no step in this file consumes it. |
 | `<protected_branches>` | config value | `protectedBranches` — the branches the commit wrapper and the `git-commit-branch-guard.sh` hook refuse to commit or push to, and the set the guard quotes back in its refusal message (§1.6). The effective set is these together with `<default_branch>`. |
@@ -285,12 +285,13 @@ should have been `[-]` and was seeded `[ ]` is corrected by fixing the **seeding
 
 ### 1.6 How to flip / create — direct `commit-on-branch.sh`, NEVER a committer dispatch
 Each flip (and the initial creation) is: **Edit the ledger file, then commit and push via the wrapper** —
-`<scripts_dir>/commit-on-branch.sh`, then `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>`, the commit using
-the `$REPO_ROOT` the fork resolved at session start (the commit wrapper's path is repo-relative and takes no
-app-root prefix; the push names `<MAIN_REPO>`'s copy, because that copy is the one the unattended permission
-profile runs outside the sandbox). Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the
-absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a worktree, the script-allowlist
-guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only
+`bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> <path>... -- "<subject>"`, then
+`bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>`. Both name `<MAIN_REPO>`'s copy, because that copy
+is the one the unattended permission profile runs outside the sandbox: the worktree's own copy stays sandboxed,
+where the commit cannot write a linked worktree's record. Spell both commands literally — `<MAIN_REPO>`,
+`<repo_root>` and `<branch>` (in a path or in the subject) each as the text it resolves to, with no `$` anywhere
+in the command: never `"$REPO_ROOT"`, `${branch}` or any other variable. From a worktree, the script-allowlist
+guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is each call's only
 grant, and a command carrying a shell expansion does not match it. Fixed subject `chore: Flow progress <entry-id> for <branch>`
 (e.g. `chore: Flow progress A1.5f for <branch>`; for creation, `chore: Add flow-progress ledger for
 <branch>`). No `Co-Authored-By:` / trailer, no `--no-verify` — the wrapper enforces both.
@@ -302,14 +303,13 @@ piece begins with a non-allow-listed `then`/`bash` prefix, so the whole command 
 allow — and nothing else matches it either, so the call **is refused at once rather than prompting**
 and the commit is never made. No guard rescues it and none refuses it:
 `git-commit-branch-guard.sh` judges only a piece whose own command word is `git`, and it judges the repository
-that command names, so a `bash <scripts_dir>/commit-on-branch.sh …` piece is outside its scope by construction
+that command names, so a `bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> …` piece is outside its scope by construction
 and it stays silent — its own protected-branch `ask`, which quotes the configured set back, is reserved for a
 real `git … commit` on a protected branch. Any
 `if …; then … ; fi` / `for …; do … done` control-flow block trips the same trap; plain and newline-separated
-single statements do not — but a wrapper invocation carrying `$(…)`, a backtick, `|` (hence `||`), `>`, `<` or a
-braced expansion other than a bare `${IDENT}` loses `autonomous-script-allowlist-guard.sh`'s allow, so keep
-those out of the command itself and not only out of the compound (`$?` and `${branch}` are fine). No
-exit-0 gate is needed anyway:
+single statements do not — but the commit and the push carry no `$` at all, since any shell expansion loses
+the profile's literal `allow` entry, so keep expansions out of the command itself and not only out of the
+compound. No exit-0 gate is needed anyway:
 `push-branch.sh` is non-fatal and only fast-forwards already-committed work, so an unconditional push is a
 harmless no-op ("Everything up-to-date") whenever the wrapper made no new commit — including the idempotent
 exit-3 re-flip. If a flip is ever refused, treat the commit as **not
@@ -328,8 +328,8 @@ D uses for `statistics.md`:
 3. **Nothing to infer.** The fork already knows exactly which entry it just completed.
 
 `commit-on-branch.sh` is the same wrapper the committer uses internally, so the fork inherits identical
-safety (no shell-expansion refusal on `${branch}`, explicit-path staging — never `git add -A`/`.`,
-protected-branch refusal, the exit-code 0/1/2/3 contract). **Idempotency:** re-flipping an already-`[x]`
+safety (explicit-path staging — never `git add -A`/`.`, protected-branch refusal, the exit-code 0/1/2/3
+contract), and it commits by plumbing, so no commit hook runs. **Idempotency:** re-flipping an already-`[x]`
 entry stages no diff → the wrapper returns **exit 3** (nothing to commit) → no commit is made, and the
 unconditional push that follows is a harmless "Everything up-to-date" no-op (there is **no** exit-0 gate —
 see the warning above). This makes every flip safe to re-run on a resumed run.
