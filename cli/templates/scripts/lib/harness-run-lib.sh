@@ -169,7 +169,8 @@
 #      `hr_copy_sync_in_var`, writes objects into the main repository and
 #      moves the main checkout's `refs/heads/<branch>` by compare-and-swap, and
 #      on `main` and `worktree` writes nothing.
-#      `hr_run_main_git` and `hr_run_copy_git` are general-purpose runners that
+#      `hr_run_main_git`, `hr_run_copy_git` and `hr_copy_git_at` are
+#      general-purpose runners that
 #      write only what their caller's arguments ask, so a caller that drives a
 #      writing git command through them (`create-worktree.sh`'s
 #      `worktree add`, `read-tree` and cleanup `worktree remove`) owns that
@@ -211,7 +212,7 @@
 # `hr_run_fast_forward_var`, `hr_run_reset_var`, `hr_run_copy_check_var` (on a
 # clone only),
 # `hr_run_trusted_base_var`, `hr_run_surface_check_var` (through it), `hr_run_main_git`,
-# `hr_run_copy_git`, `hr_copy_sync_in_var`, `hr_copy_sync_out_var`,
+# `hr_run_copy_git`, `hr_copy_git_at`, `hr_copy_sync_in_var`, `hr_copy_sync_out_var`,
 # `hr_registry_drop`, `hr_clone_create_var` or `hr_clone_remove_var` function
 # still gets a library that only reads. The
 # lane's ceilings are the only environment values here that carry policy, because
@@ -3004,17 +3005,31 @@ hr_run_copy_check_var() {
 
 # The two pinned runners. Each writes only what its caller's arguments ask, and
 # returns 1 without running git when the globals it needs are not set.
+# `hr_run_main_git` is `hr_copy_sync_main_git` on `HR_RUN_MAIN`, whose header
+# states the main-side pins.
 hr_run_main_git() {
   [ -n "${HR_RUN_MAIN-}" ] || return 1
-  GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
-    git -C "$HR_RUN_MAIN" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false "$@"
+  hr_copy_sync_main_git "$HR_RUN_MAIN" "$@"
 }
 
 hr_run_copy_git() {
   [ -n "${HR_RUN_MAIN-}" ] && [ -n "${HR_RUN_COPY_GITDIR-}" ] && [ -n "${HR_RUN_COPY_TOP-}" ] || return 1
+  hr_copy_git_at "$HR_RUN_MAIN" "$HR_RUN_COPY_GITDIR" "$HR_RUN_COPY_TOP" "$@"
+}
+
+# hr_copy_git_at <canonical-main> <copy-gitdir> <copy-top> <git-args>... — the
+# one body of the copy-side pins: objects and refs from `<main>/.git`, the
+# index borrowed from `<copy-gitdir>/index`, the working tree <copy-top>, and
+# the main-side pins `hr_copy_sync_main_git` states. `hr_run_copy_git` calls it
+# on the `HR_RUN_*` globals; `hr_clone_create_var` calls it directly because
+# those globals are not set while a clone is being created. Reads no global.
+hr_copy_git_at() {
+  local main="${1-}" gd="${2-}" top="${3-}"
+  [ -n "$main" ] && [ -n "$gd" ] && [ -n "$top" ] || return 1
+  shift 3
   GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
-  GIT_DIR="$HR_RUN_MAIN/.git" GIT_INDEX_FILE="$HR_RUN_COPY_GITDIR/index" GIT_WORK_TREE="$HR_RUN_COPY_TOP" \
-    git -C "$HR_RUN_COPY_TOP" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false "$@"
+  GIT_DIR="$main/.git" GIT_INDEX_FILE="$gd/index" GIT_WORK_TREE="$top" \
+    git -C "$top" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false "$@"
 }
 
 # 0 when the copy's working tree matches its index and its index matches
@@ -3580,12 +3595,11 @@ hr_commit_paths_var() {
 # `HR_WRAPPER_*` or `HR_COMMIT_*` global. Each takes its main checkout from its
 # own <main> argument, canonicalized on the clone arm by the predicate
 # `hr_run_main_set_var` applies, and drives the main side through
-# `hr_copy_sync_main_git`, which carries `hr_run_main_git`'s pins. They set only
+# `hr_copy_sync_main_git`, the one body of the main-side pins, which
+# `hr_run_main_git` wraps. They set only
 # `HR_SYNC_TIP` (sync-in) and `HR_SYNC_REFUSAL`, both cleared at entry.
 #
-# THE PINS. Main side: `GIT_NO_REPLACE_OBJECTS=1`, `GIT_GRAFT_FILE=/dev/null`,
-# `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c
-# submodule.recurse=false -c advice.graftFileDeprecated=false`. The fetch and
+# THE PINS. Main side: `hr_copy_sync_main_git`'s, stated in its header. The fetch and
 # the `ls-remote` that reads the clone's tip add `--upload-pack` running the
 # clone side's `git-upload-pack` under `-c core.hooksPath=/dev/null -c
 # core.fsmonitor=false`; the fetch adds `--no-tags --no-recurse-submodules`
@@ -3599,7 +3613,8 @@ hr_commit_paths_var() {
 # with `GIT_DIR` and `GIT_COMMON_DIR` both the clone's gitdir, so a
 # `commondir` planted after the check cannot redirect the write, and
 # `GIT_OBJECT_DIRECTORY` the main repository's store, so the object-existence
-# test reads that store. Nothing here needs more than git 2.23; no `fetch
+# test reads that store: it runs through `hr_clone_git`, whose header states
+# the clone-side pins. Nothing here needs more than git 2.23; no `fetch
 # --no-write-fetch-head`. Write exception 6 in the header is this section's.
 #
 # Both functions set globals and must be called directly, never inside `$(…)`.
@@ -3618,8 +3633,12 @@ hr_copy_sync_main_of() {
   printf '%s\n' "$c"
 }
 
-# hr_copy_sync_main_git <canonical-main> <git-args>... — `hr_run_main_git`'s
-# pins, on the main checkout named by the argument rather than `HR_RUN_MAIN`.
+# hr_copy_sync_main_git <canonical-main> <git-args>... — the one body of the
+# main-side pins, on the main checkout named by the argument; `hr_run_main_git`
+# is its `HR_RUN_MAIN` wrapper. The pins: `GIT_NO_REPLACE_OBJECTS=1`,
+# `GIT_GRAFT_FILE=/dev/null`, `-c core.hooksPath=/dev/null -c
+# core.fsmonitor=false -c submodule.recurse=false -c
+# advice.graftFileDeprecated=false`. Reads no `HR_RUN_*` global.
 hr_copy_sync_main_git() {
   local main="${1-}"
   [ -n "$main" ] || return 1
@@ -3789,8 +3808,7 @@ hr_copy_sync_out_var() {
     HR_SYNC_REFUSAL="cannot sync '$ref' out to '$gitdir': it names no commit in the main checkout '$cmain'"
     return 1
   fi
-  if ! GIT_NO_REPLACE_OBJECTS=1 GIT_DIR="$gitdir" GIT_COMMON_DIR="$gitdir" GIT_OBJECT_DIRECTORY="$cmain/.git/objects" \
-    git -C "$gitdir" -c core.hooksPath=/dev/null -c core.fsmonitor=false update-ref "$ref" "$oid" ${old[@]+"${old[@]}"} >/dev/null 2>&1; then
+  if ! hr_clone_git "$cmain" "$gitdir" update-ref "$ref" "$oid" ${old[@]+"${old[@]}"} >/dev/null 2>&1; then
     HR_SYNC_REFUSAL="cannot sync '$ref' out to '$gitdir': update-ref to ${oid:0:12} failed"
     return 1
   fi
@@ -3803,8 +3821,9 @@ hr_copy_sync_out_var() {
 # `hr_clone_create_var` makes the clone `hr_clone_target_check_var` accepts and
 # runs that check last, as the judge of its own result; `hr_clone_remove_var`
 # deletes one. No script calls either. Creation runs git in the main checkout
-# under `hr_run_main_git`'s pins, and in the clone it has just made only through
-# `hr_clone_git`. Removal runs no git and no check that reads the clone's
+# through `hr_run_main_git`, in the clone it has just made only through
+# `hr_clone_git`, and populates the clone's working tree through
+# `hr_copy_git_at`. Removal runs no git and no check that reads the clone's
 # records, so a registered clone whose configuration was tampered with can
 # still be removed. Write exception 6 in the header is this section's. Flags
 # and constructs hold to git 2.23 and bash 3.2.
@@ -3812,10 +3831,13 @@ hr_copy_sync_out_var() {
 # Both functions set globals and must be called directly, never inside `$(…)`.
 # ---------------------------------------------------------------------------
 
-# hr_clone_git <canonical-main> <clone-gitdir> <git-args>... — git in a clone
-# with sync-out's pins: `GIT_DIR` and `GIT_COMMON_DIR` both the clone's gitdir,
-# so a planted `commondir` is not followed, and the main repository's object
-# store as `GIT_OBJECT_DIRECTORY`.
+# hr_clone_git <canonical-main> <clone-gitdir> <git-args>... — the one body of
+# the clone-side pins, used by sync-out and by creation: `GIT_DIR` and
+# `GIT_COMMON_DIR` both the clone's gitdir, so a planted `commondir` is not
+# followed, the main repository's object store as `GIT_OBJECT_DIRECTORY`,
+# `GIT_NO_REPLACE_OBJECTS=1`, `GIT_GRAFT_FILE=/dev/null`, and `-c
+# core.hooksPath=/dev/null -c core.fsmonitor=false -c
+# advice.graftFileDeprecated=false`.
 hr_clone_git() {
   local main="${1-}" gd="${2-}"
   [ -n "$main" ] && [ -n "$gd" ] || return 1
@@ -4071,9 +4093,7 @@ EOF
       break
     fi
 
-    if ! GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null GIT_DIR="$main/.git" GIT_INDEX_FILE="$gd/index" GIT_WORK_TREE="$dir" \
-      git -C "$dir" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c submodule.recurse=false -c advice.graftFileDeprecated=false \
-      read-tree --reset -u --no-recurse-submodules "$tip" >/dev/null 2>&1; then
+    if ! hr_copy_git_at "$main" "$gd" "$dir" read-tree --reset -u --no-recurse-submodules "$tip" >/dev/null 2>&1; then
       failed="populating $dir from $tip"
       break
     fi

@@ -9,7 +9,7 @@ Headline: the layering holds. Every change sits in the layer its path belongs to
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 1** — Import `RUN_LOGS_DIR` in `repoRoot.ts` instead of retyping `'autonomous_logs'` _(layer: cli)_
-2. [ ] **Finding 2** — Give the run library's main-side and clone-side git pins one body each _(layer: cli)_
+2. [x] **Finding 2** — Give the run library's main-side and clone-side git pins one body each _(layer: cli)_
 
 ## Must Fix
 
