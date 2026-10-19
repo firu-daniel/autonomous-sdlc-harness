@@ -2898,10 +2898,13 @@ hr_derive_branch() {
 #   - The copy's record is read once, by the checks, and never again. For a
 #     worktree only `<record>/index` is borrowed, so git never reads the copy's
 #     `.git` pointer, the record's `commondir`, its `HEAD` or its
-#     `config.worktree`. For a clone the registry, `HEAD`, `alternates` and
-#     `.git/config` are read once, and only `<clone>/.git/index` is borrowed:
-#     objects and refs are read from the main checkout alone, never through
-#     the clone's own store.
+#     `config.worktree`. For a clone the checks read the registry, `HEAD`,
+#     `alternates` and `.git/config` once; the copy check's sync-in then runs
+#     `git-upload-pack` in the clone, which reads the clone's `.git/config`,
+#     refs and objects (through `alternates`) again under the measured fetch
+#     pins (`docs/cli.md` §6), and after that only `<clone>/.git/index` is
+#     borrowed: every runner reads objects and refs from the main checkout
+#     alone, never through the clone's own store.
 #   - Every call names `refs/heads/<branch>`, never `HEAD`: under
 #     `GIT_DIR=<main>/.git`, `HEAD` is the main checkout's.
 #   - Git reads history as stored: `GIT_NO_REPLACE_OBJECTS=1` and
