@@ -94,7 +94,7 @@ import {
   RETRIEVAL_TEMPLATE_PATH as RETRIEVAL_PROFILE_FRAGMENT,
 } from './profileEntries.js';
 import { invokedPath, scriptInvocation } from './scripts.js';
-import { STATE_DIR_ENTRIES } from './stateDir.js';
+import { RUN_LOGS_DIR, STATE_DIR_ENTRIES } from './stateDir.js';
 
 /** The templates' subdirectory under `cli/templates/`, addressed as {@link readTemplate} wants it. */
 const TEMPLATE_DIR = 'repo';
@@ -145,13 +145,14 @@ export const GITIGNORE_BLOCK_HEADER =
 /**
  * The run daemon's log directory, whose contents are machine-local.
  *
- * This and {@link INBOX_DIR} are named here as strings and checked against {@link STATE_DIR_ENTRIES}
- * by {@link treeDirectory} rather than imported as rows, because that table has no "is this directory
+ * Its name is imported from `stateDir.ts`, which owns it. {@link INBOX_DIR}, which has no exported
+ * constant, is named here as a string. Both are checked against {@link STATE_DIR_ENTRIES} by
+ * {@link treeDirectory} rather than imported as rows, because that table has no "is this directory
  * machine-local" column and inventing one would put the ignore decision in the generator that writes
- * the tree. The check is what keeps the two in step: rename a directory there and this generator
- * fails loudly instead of ignoring a path the tree no longer has.
+ * the tree. The check is what keeps a string-named directory in step: rename it there and this
+ * generator fails loudly instead of ignoring a path the tree no longer has.
  */
-const LOGS_DIR = 'autonomous_logs';
+const LOGS_DIR = RUN_LOGS_DIR;
 
 /** The unattended loop's drop point for prompts, whose contents are machine-local likewise. */
 const INBOX_DIR = 'autonomous_inbox';
