@@ -906,13 +906,13 @@ function valueAt(object, dotted) {
   return dotted.split('.').reduce((node, key) => (node !== null && typeof node === 'object' ? node[key] : undefined), object);
 }
 
-/** The two outer-loop rows the table marks as running unsandboxed, read from the table. */
+/** The outer-loop rows the table marks as running unsandboxed, read from the table. */
 const UNSANDBOXED_ROWS = OUTER_LOOP_SCRIPTS.filter((script) => script.runsUnsandboxed === true);
 
 /** A domain the adopter allows, with its reason. */
 const ALLOWED_DOMAIN = { domain: 'registry.example.org', reason: 'the fixture installs packages from it' };
 
-test('the sandbox block is strict, excludes only the main checkout\'s two git wrappers, and grants the state directory', async (t) => {
+test('the sandbox block is strict, excludes only the main checkout\'s git wrappers, and grants the state directory', async (t) => {
   const { dir, profile } = await profileFor(t, [], { 'harness.config.json': seededConfig({ scriptsDir: SCRIPTS_DIR }) });
 
   // Each graded leaf against the shipped template, never a restated value.
@@ -924,10 +924,17 @@ test('the sandbox block is strict, excludes only the main checkout\'s two git wr
     assert.equal(valueAt(profile, path), value, `the generated ${path} is not the template's ${value}`);
   }
 
-  assert.equal(UNSANDBOXED_ROWS.length, 2, 'the outer-loop table does not mark exactly two rows as running unsandboxed');
+  assert.ok(UNSANDBOXED_ROWS.length > 0, 'the outer-loop table marks no row as running unsandboxed');
   const excluded = profile.sandbox.excludedCommands;
   const mainForms = UNSANDBOXED_ROWS.map((row) => `bash ${join(dir, SCRIPTS_DIR, outerLoopRelativePath(row))}:*`);
-  assert.deepEqual(excluded, mainForms, 'sandbox.excludedCommands is not exactly the main checkout\'s two wrapper spellings');
+  assert.deepEqual(excluded, mainForms, 'sandbox.excludedCommands is not exactly the main checkout\'s wrapper spellings, in table order');
+
+  // The commit wrapper is excluded in its main-checkout spelling only.
+  const commit = `bash ${join(dir, SCRIPTS_DIR, 'commit-on-branch.sh')}:*`;
+  assert.ok(excluded.includes(commit), `sandbox.excludedCommands lacks ${commit}`);
+  for (const form of [`${scriptInvocation(SCRIPTS_DIR, 'commit-on-branch.sh')}:*`, `bash ${join(worktreeGlobFor(dir), SCRIPTS_DIR, 'commit-on-branch.sh')}:*`]) {
+    assert.ok(!excluded.includes(form), `${form} is excluded from the sandbox, and a sandboxed command can rewrite its file`);
+  }
   for (const entry of excluded) {
     assert.ok(!entry.startsWith('Bash('), `${entry} is in the Bash(…) rule form, which excludes no call`);
   }
@@ -949,9 +956,11 @@ test('the sandbox block is strict, excludes only the main checkout\'s two git wr
   }
 
   // The prefix the corpus push spelling has to start with, and the one it must not be.
-  const push = mainForms[0].slice(0, -':*'.length);
+  const pushIndex = UNSANDBOXED_ROWS.findIndex((row) => row.file === 'push-branch.sh');
+  assert.ok(pushIndex >= 0, 'the outer-loop table does not mark push-branch.sh as running unsandboxed');
+  const push = mainForms[pushIndex].slice(0, -':*'.length);
   assert.ok(`${push} "${join(worktreeGlob, 'x')}"`.startsWith(push));
-  assert.ok(!`bash ${SCRIPTS_DIR}/${outerLoopRelativePath(UNSANDBOXED_ROWS[0])}`.startsWith(push));
+  assert.ok(!`bash ${SCRIPTS_DIR}/${outerLoopRelativePath(UNSANDBOXED_ROWS[pushIndex])}`.startsWith(push));
 
   const stateDirAbs = join(dir, 'sdlc-harness');
   assert.deepEqual(profile.sandbox.filesystem.allowWrite, [stateDirAbs], 'allowWrite does not name the state directory');

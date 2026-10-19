@@ -130,10 +130,13 @@ function libraryDir(): string {
  * holding a `.git` that is a real directory without a `commondir`
  * (`cli/templates/scripts/lib/harness-run-lib.sh` → `hr_wrapper_main_of`).
  *
- * The worktree records are protected file by file, never as a directory: a sandboxed git command in
- * a worktree writes its record's `HEAD`, `index`, `logs/` and merge state on every commit, checkout
- * and merge, so a `denyWrite` on the record would stop a run's own git. What the wrappers and git
- * follow out of a record — its `commondir`, its `gitdir` back-pointer and its `config.worktree` — is
+ * The worktree records are protected file by file, never as a directory: no `denyWrite` covers a
+ * whole record, because the change that measured why a run could not commit was barred from changing
+ * a protection. On Claude Code 2.1.299, macOS, the runtime keeps a record outside the session's cwd
+ * closed to sandboxed git whatever the profile says (`docs/sandbox-verification.md` G1, G2), so a
+ * run's commits go through the excluded `commit-on-branch.sh`, which writes only the record's
+ * `index`. The per-file entries stay because git and the excluded wrappers follow exactly those
+ * files: what they follow out of a record — its `commondir`, its `gitdir` back-pointer and its `config.worktree` — is
  * protected, as is each worktree's `.git` pointer; `<main>/.git/worktrees/*` is protected as a
  * `name`, so a record cannot be created, renamed, replaced or removed, which keeps a record prepared
  * elsewhere from being moved into place past the per-file entries. Only `git worktree add` and

@@ -26,6 +26,7 @@ const PROFILE_FILE = '.claude/settings.autonomous.json';
 const CHECK_ID = 'profile-sandbox';
 const WRITE_CHECK_ID = 'profile-write-protection';
 const PUSH_SCRIPT = 'push-branch.sh';
+const COMMIT_SCRIPT = 'commit-on-branch.sh';
 const DOCS_SERVER_SCRIPT = 'docs-search-server.sh';
 const DOMAIN = { domain: 'registry.npmjs.org', reason: 'npm install fetches packages from the public registry' };
 const OPT_OUT_REASON = 'the toolchain needs a socket the sandbox blocks';
@@ -193,6 +194,24 @@ concurrentSuite('doctor profile-sandbox', () => {
     staleExcludedSpelling(dir);
     const { line, status } = await doctorLine(dir, 'FAIL', ['--remote-job']);
     assert.equal(status, 1, line);
+  });
+
+  it('(i) warns on a missing commit-wrapper entry, fails it under --remote-job, and claims no SSH push', async (t) => {
+    const dir = await wiredFixture(t);
+    let commit;
+    editJson(dir, PROFILE_FILE, (profile) => {
+      commit = profile.sandbox.excludedCommands.find((entry) => entry.endsWith(`/${COMMIT_SCRIPT}:*`));
+      profile.sandbox.excludedCommands = profile.sandbox.excludedCommands.filter((entry) => entry !== commit);
+    });
+    assert.ok(commit !== undefined, `no excludedCommands entry for ${COMMIT_SCRIPT}`);
+    const warned = await doctorLine(dir, 'WARN');
+    assert.ok(warned.line.includes(`excludedCommands\` lacks ${commit}`), warned.line);
+    assert.ok(!warned.line.includes('SSH push'), warned.line);
+    assert.equal(warned.status, 0, warned.line);
+    const failed = await doctorLine(dir, 'FAIL', ['--remote-job']);
+    assert.ok(failed.line.includes(commit), failed.line);
+    assert.ok(!failed.line.includes('SSH push'), failed.line);
+    assert.equal(failed.status, 1, failed.line);
   });
 });
 

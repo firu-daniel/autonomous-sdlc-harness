@@ -4739,6 +4739,13 @@ const PROFILE_DENY_FLOOR_CHECK: Check = {
  * is reported as stale by name, under the same grading, instead of as an unnamed extra: that form
  * matches no command (`docs/sandbox-verification.md` → P1a), so its wrapper runs sandboxed.
  */
+/**
+ * What a `runsUnsandboxed` wrapper loses when its excluded entry is missing or inert — true of the
+ * commit, the push and the refresh wrapper alike (`docs/sandbox-verification.md` F1, F3).
+ */
+const SANDBOXED_WRAPPER_CONSEQUENCE =
+  "that wrapper runs sandboxed, where a linked worktree's git record and an SSH remote are both out of reach on macOS";
+
 const PROFILE_SANDBOX_CHECK: Check = {
   id: 'profile-sandbox',
   title: "the permission profile's sandbox block is what the configuration asks for",
@@ -4793,7 +4800,7 @@ const PROFILE_SANDBOX_CHECK: Check = {
     for (const stale of staleHeld) {
       const paired = expected.excludedCommands[expected.staleExcludedCommands.indexOf(stale)];
       findings.push(
-        `\`${excludedPath}\` carries ${stale}, the \`Bash(…)\` spelling an earlier release generated, which matches no command: ${paired} is the spelling that runs outside the sandbox, and without it that wrapper runs sandboxed and its SSH push or fetch fails`,
+        `\`${excludedPath}\` carries ${stale}, the \`Bash(…)\` spelling an earlier release generated, which matches no command: ${paired} is the spelling that runs outside the sandbox, and without it ${SANDBOXED_WRAPPER_CONSEQUENCE}`,
       );
     }
     const missing = expected.excludedCommands.filter(
@@ -4801,7 +4808,7 @@ const PROFILE_SANDBOX_CHECK: Check = {
     );
     for (const entry of missing) {
       findings.push(
-        `\`${excludedPath}\` lacks ${entry}: that wrapper's SSH push or fetch fails inside the sandbox on macOS, and the push wrapper still exits 0`,
+        `\`${excludedPath}\` lacks ${entry}: without it ${SANDBOXED_WRAPPER_CONSEQUENCE}`,
       );
     }
     for (const entry of excluded.filter((rule) => !expected.excludedCommands.includes(rule) && !staleHeld.includes(rule))) {

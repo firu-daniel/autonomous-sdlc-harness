@@ -98,6 +98,11 @@ export interface OuterLoopScript {
   /**
    * The main checkout's copy of this script is a named `sandbox.excludedCommands` entry
    * (`generators/sandboxProfile.ts`). Absent means it runs sandboxed in every spelling.
+   *
+   * Set on the git wrappers an agent commits, pushes and refreshes through: sandboxed on macOS, a
+   * commit cannot write a linked worktree's record (`docs/sandbox-verification.md` G1, F1) and a push
+   * or fetch cannot reach an SSH remote (P1, F3). Set it only on a script carrying the
+   * excluded-wrapper checks `generators/sandboxProfile.ts`'s header requires.
    */
   readonly runsUnsandboxed?: true;
 }
@@ -151,7 +156,7 @@ export const RUN_LIBRARY_SCRIPT_NAME = 'harness-run-lib.sh';
  */
 export const OUTER_LOOP_SCRIPTS: ReadonlyArray<OuterLoopScript> = Object.freeze([
   Object.freeze({ file: RUN_LIBRARY_SCRIPT_NAME, subdir: 'lib', mode: 0o644, agentInvocable: false }),
-  Object.freeze({ file: 'commit-on-branch.sh', mode: 0o755, agentInvocable: true }),
+  Object.freeze({ file: 'commit-on-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
   Object.freeze({ file: 'push-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
   Object.freeze({ file: 'refresh-branch.sh', mode: 0o755, agentInvocable: true, runsUnsandboxed: true }),
   // The one row that executes an ARGUMENT, so its safety is in the script rather than in this flag:
