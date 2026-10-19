@@ -45,3 +45,7 @@ This task asserts that contract and changes no script. The commit mechanics — 
 
 - `npm test --workspace cli -- test/commit-on-branch-target-check.test.mjs`, from the repository root, as one plain foreground command. Read the `# tests`, `# pass` and `# fail` counts and the exit status (`.claude/context/conventions.md` → `## The testing bar`). Every case passes, and `# fail 0`.
 - Mutate once by hand, then revert: comment out the `hr_wrapper_target_check_var` call in the fixture's copy of the script. Cases (a)–(c) must then fail, which shows they test the check and not something incidental.
+
+- **Deviations from plan:**
+  - The mutation check edited `cli/templates/scripts/commit-on-branch.sh` itself (the fixture copies it per case), then `git checkout --` reverted it; the tree was clean afterwards. Commenting out the whole `if ! hr_wrapper_target_check_var …; then … fi` block trips `set -u` on `HR_TARGET_GITDIR` and fails 11 of 12 cases, which proves nothing about (a)–(c). The applied mutation instead kept the call and dropped its refusal (`hr_wrapper_target_check_var "$main_top" "$top_nogit" || : ; if false; then`). Result under `npm test --workspace cli -- test/commit-on-branch-target-check.test.mjs`: `# tests 12`, `# pass 9`, `# fail 3`, with exactly (a), (b) and (c) failing. After the revert: `# tests 12`, `# pass 12`, `# fail 0`, exit 0.
+  - Case (k) is split into two tests: (k) uses the pinned `<main>/githooks` and commits (exit 0, no marker), and (k2) uses a foreign `core.hooksPath` and is refused (exit 1, target byte-identical, no marker).

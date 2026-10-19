@@ -85,7 +85,7 @@ No flow calls `git fetch`, `git stash`, `git switch` or `git checkout`. The latt
 Each entry resolves 1:1 to `harness-runs/task_plans/fix_sandbox_worktree_record_writes/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, with the catch-all layer last.
 
 1. [x] **Task 1** — Rebuild `commit-on-branch.sh` as an excluded main-checkout wrapper: the target and per-working-copy checks, then a plumbing commit through the core it now shares with `hr_commit_placed` _(layer: cli)_ _(points: 20)_
-2. [ ] **Task 2** — Add `cli/test/commit-on-branch-target-check.test.mjs`: the commit wrapper's refusals, hooks pin and protected set _(layer: cli)_ _(points: 15)_
+2. [x] **Task 2** — Add `cli/test/commit-on-branch-target-check.test.mjs`: the commit wrapper's refusals, hooks pin and protected set _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Add `cli/test/commit-on-branch-plumbing.test.mjs`: the commit wrapper's exit contract, index sync, no commit hook, and records rewritten after its checks _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Mark `commit-on-branch.sh` `runsUnsandboxed`, and adjust `doctor`'s missing-entry message, the write-protection header and the profile tests _(layer: cli)_ _(points: 15)_
 5. [ ] **Task 5** — Restate the excluded set in the profile template's `_README`, and correct the two code comments that describe the old wrapper _(layer: cli)_ _(points: 10)_
