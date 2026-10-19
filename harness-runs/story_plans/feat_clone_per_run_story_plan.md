@@ -77,7 +77,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run/task_<K>_
 14. [x] **Task 14** — Record the 2026-10-19 clone measurement as rows CL1–CL5, and add the owed registry rows RG1 and RG2, in `docs/sandbox-verification.md` _(layer: general)_ _(points: 15)_
 15. [x] **Task 15** — Describe the wrappers' clone arm, the registry protection and the object-store residual in `docs/cli.md` §6 _(layer: general)_ _(points: 15)_
 16. [x] **Task 16** — Describe the watcher family's git on both arms in `docs/watcher.md` §2 _(layer: general)_ _(points: 10)_
-17. [ ] **Task 17** — Re-render the worked example's profile for the registry entry and the restated target sentence _(layer: general)_ _(points: 8)_
+17. [x] **Task 17** — Re-render the worked example's profile for the registry entry and the restated target sentence _(layer: general)_ _(points: 8)_
 
 ## Scope register
 
