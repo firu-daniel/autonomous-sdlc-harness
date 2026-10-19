@@ -1204,26 +1204,34 @@ hr_worktree_config_check_var() {
 # writes a clone's `.git/config` from exactly this set, and
 # `setup-worktree.sh --target` adds only `core.hooksPath`; the check below
 # holds a clone to it. Required keys: `core.repositoryformatversion`,
-# `core.bare`, `remote.origin.fetch`, and `remote.origin.url` whenever the spec
-# lists it.
+# `core.bare`, `remote.origin.fetch`, and `remote.origin.url` and
+# `extensions.objectformat` whenever the spec lists them.
 #
 # `hr_clone_config_spec <main> <top>` prints one line per allowed key,
 # `<lowercase key><TAB><rule>`, `<rule>` being `=<exact value>` or `bool`
 # (`true` or `false`). `remote.origin.url` is listed, with the value the main
-# checkout's `.git/config` names, only when it names one; `core.hooksPath` is
+# checkout's `.git/config` names, only when it names one;
+# `extensions.objectformat` is listed, with the main checkout's value and
+# `core.repositoryformatversion` `=1`, only when the main checkout's
+# `.git/config` names one, and the version is `=0` otherwise; `core.hooksPath` is
 # `<top>/<githooksDir>`, with `githooksDir` read from the MAIN checkout. Return
 # 1, printing nothing, when `githooksDir` cannot be read or a value holds a
 # newline the line format cannot carry.
 hr_clone_config_spec() {
-  local main="${1-}" top="${2-}" rel url nl
+  local main="${1-}" top="${2-}" rel url fmt nl
   nl='
 '
   [ -n "$main" ] && [ -n "$top" ] || return 1
   rel=$(hr_githooks_dir "$main") || return 1
   url=$(git -C / config --file "$main/.git/config" --get remote.origin.url 2>/dev/null) || url=""
-  case "$top/$rel$url" in *"$nl"*) return 1 ;; esac
+  fmt=$(git -C / config --file "$main/.git/config" --get extensions.objectformat 2>/dev/null) || fmt=""
+  case "$top/$rel$url$fmt" in *"$nl"*) return 1 ;; esac
+  if [ -n "$fmt" ]; then
+    printf 'core.repositoryformatversion\t=1\nextensions.objectformat\t=%s\n' "$fmt"
+  else
+    printf 'core.repositoryformatversion\t=0\n'
+  fi
   printf '%s\t%s\n' \
-    core.repositoryformatversion =0 \
     core.bare =false \
     core.logallrefupdates =true \
     core.filemode bool \
@@ -1342,8 +1350,8 @@ hr_clone_config_check_var() {
     HR_CLONE_CONFIG_REFUSAL="git cannot parse $f, so this clone's configuration is not trusted"
     return 1
   fi
-  for req in core.repositoryformatversion core.bare remote.origin.fetch remote.origin.url; do
-    if [ "$req" = remote.origin.url ]; then
+  for req in core.repositoryformatversion extensions.objectformat core.bare remote.origin.fetch remote.origin.url; do
+    if [ "$req" = remote.origin.url ] || [ "$req" = extensions.objectformat ]; then
       hr_clone_spec_rule_var "$spec" "$req" || continue
     fi
     case "$seen" in
@@ -4065,7 +4073,7 @@ EOF
       failed="emptying $gd/config"
       break
     fi
-    for key in core.repositoryformatversion core.bare remote.origin.fetch remote.origin.url \
+    for key in core.repositoryformatversion extensions.objectformat core.bare remote.origin.fetch remote.origin.url \
       core.filemode core.ignorecase core.precomposeunicode core.symlinks; do
       hr_clone_spec_rule_var "$spec" "$key" || continue
       case "$HR_CLONE_RULE" in

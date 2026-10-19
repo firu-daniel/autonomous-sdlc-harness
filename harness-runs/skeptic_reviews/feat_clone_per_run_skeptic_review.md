@@ -28,7 +28,7 @@ It also covers the clone arm of `commit-on-branch.sh`, `push-branch.sh`, `refres
 ## Phase 2 Readiness — Ordered Fix List
 
 1. [x] **Finding 2** — Name sync-in's and sync-out's reads of the clone in `docs/watcher.md`'s **The pins.** sentence about clones _(layer: general)_
-2. [ ] **Finding 1** — List `extensions.objectformat` (with `core.repositoryformatversion` `=1`) in the clone allow-list when the main checkout names one, and write it on creation _(layer: cli)_
+2. [x] **Finding 1** — List `extensions.objectformat` (with `core.repositoryformatversion` `=1`) in the clone allow-list when the main checkout names one, and write it on creation _(layer: cli)_
 
 ---
 

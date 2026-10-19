@@ -95,16 +95,18 @@ async function listing(dir) {
  * directory made and the registry seeded with {@link BYSTANDER} in `jq`'s own layout.
  *
  * @param {import('node:test').TestContext} t
+ * @param {{ objectFormat?: string }} [options] `objectFormat` is passed to both `init` calls.
  */
-async function fixture(t) {
+async function fixture(t, { objectFormat } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'clone-create-')));
   t.after(() => rm(root, { recursive: true, force: true }));
   const origin = join(root, 'origin.git');
   const main = join(root, 'main');
   await mkdir(origin);
   await mkdir(main);
-  await runGit(origin, ['init', '--bare', '--quiet']);
-  await runGit(main, ['init', '--quiet', '-b', 'trunk']);
+  const format = objectFormat ? [`--object-format=${objectFormat}`] : [];
+  await runGit(origin, ['init', '--bare', '--quiet', ...format]);
+  await runGit(main, ['init', '--quiet', '-b', 'trunk', ...format]);
   await runGit(main, ['config', 'user.email', 'fixture@example.invalid']);
   await runGit(main, ['config', 'user.name', 'Harness Fixture']);
   await writeFile(join(main, 'harness.config.json'), `${JSON.stringify(CONFIG)}\n`);
@@ -263,6 +265,22 @@ test('(a2) An existing branch is cloned at its own tip, not at the start point',
   assert.equal(await f.tip(REF, clone), own);
   assert.equal(await readFile(join(clone, 'feature.txt'), 'utf8'), 'feature work\n');
   assert.equal((await runGit(clone, ['status', '--porcelain'])).stdout, '');
+});
+
+test('(sha256) A SHA-256 main checkout gets a clone the trust check accepts', async (t) => {
+  const probe = await realpath(await mkdtemp(join(tmpdir(), 'clone-sha256-probe-')));
+  t.after(() => rm(probe, { recursive: true, force: true }));
+  // git older than 2.29 has no --object-format.
+  if ((await runBash(probe, ['-c', 'git init --bare --quiet --object-format=sha256'])).status !== 0) {
+    t.skip('this git cannot create a SHA-256 repository');
+    return;
+  }
+  const f = await fixture(t, { objectFormat: 'sha256' });
+  const g = await f.create();
+  assert.equal(g.status, '0', g.refusal);
+  assert.equal((await f.check(g.dir)).kind, 'clone');
+  const fmt = await runGit(f.root, ['-C', '/', 'config', '--file', join(g.dir, '.git', 'config'), '--get', 'extensions.objectformat']);
+  assert.equal(fmt.stdout.trim(), 'sha256');
 });
 
 // ---------------------------------------------------------------------------
