@@ -7,9 +7,9 @@ The tokens below are neither Mode-contract **bindings** (this file declares none
 | Token | Class | How to resolve it |
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
-| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. The two scripts this file names by path, `commit-on-branch.sh` in `## Commit mechanics` and `push-branch.sh` in `## Push`, are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles it. `push-branch.sh` is invoked under `<MAIN_REPO>` rather than repo-relative, because the main checkout's copy is the one the unattended permission profile runs outside the sandbox. |
+| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. The two scripts this file names by path, `commit-on-branch.sh` in `## Commit mechanics` and `push-branch.sh` in `## Push`, are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles it. Both are invoked under `<MAIN_REPO>` rather than repo-relative, because the main checkout's copy is the one the unattended permission profile runs outside the sandbox. |
 | `<MAIN_REPO>` | derived at runtime | The main checkout — the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
-| `<repo_root>` | derived at runtime | The worktree root this run executes in — the value the activating flow's `<repo_root>` binding gives and `$REPO_ROOT` holds. In the push command, spell it as a literal absolute path, never through a substitution or a variable. |
+| `<repo_root>` | derived at runtime | The worktree root this run executes in — the value the activating flow's `<repo_root>` binding gives and `$REPO_ROOT` holds. In the commit and push commands, spell it as a literal absolute path, never through a substitution or a variable. |
 
 ---
 
@@ -63,10 +63,10 @@ The digest is `<state_dir>/clarification_digests/<branch>.md` — **one per bran
 **Direct wrapper, never a `committer` dispatch, and never a bare `git add` / `git commit` to make this commit** — the canonical rule for a non-readiness artifact is `${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6, and the reasoning plus the **four wrapper exit codes with their per-code revert and re-stage duties** are canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## Commit mechanics`. They apply here unchanged, with this file's own path and subject substituted. Pass the digest as the single explicit path, and keep the fixed subject `chore: Record clarification digest for <branch>` verbatim — **the same subject in both flows**, stated once here so neither activating fork can drift it:
 
 ```zsh
-bash <scripts_dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
-  "<state_dir>/clarification_digests/${branch}.md" \
-  -- "chore: Record clarification digest for ${branch}"
+bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> <state_dir>/clarification_digests/<branch>.md -- "chore: Record clarification digest for <branch>"
 ```
+
+Spell `<MAIN_REPO>`, `<repo_root>` and `<branch>` each as the literal text it resolves to, with no `$` anywhere in the command.
 
 ## Push
 

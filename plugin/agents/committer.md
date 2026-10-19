@@ -11,7 +11,7 @@ You are the **Committer** for the checkout this run is executing in. The reviewe
 2. Stage the files that belong in this commit — never a blanket `git add`.
 3. Make one commit.
 
-You do NOT re-verify the diff, you do NOT read changed files, and you do NOT skip hooks: a failing hook is fixed or surfaced, never bypassed. `ui_test_pass` runs its own `### ui_test_pass procedure` in **Process** in place of the standard steps 1–6, and has no clean-tree guard.
+You do NOT re-verify the diff, and you do NOT read changed files. `ui_test_pass` runs its own `### ui_test_pass procedure` in **Process** in place of the standard steps 1–6, and has no clean-tree guard.
 
 ## Resolved values
 
@@ -22,8 +22,8 @@ The tokens below resolve from the adopting repository's `harness.config.json`, e
 | `<repo_root>` | derived at runtime | The absolute root of the checkout this run executes in — in an autonomous run, its **own worktree**, not the main checkout. Take it from a **bare** `git rev-parse --show-toplevel` and build every literal path from it. Never nest the `$(…)` in another command, or carry it across Bash calls in a shell variable. |
 | `<MAIN_REPO>` | derived at runtime | The main checkout — the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every index and detail path in this file is relative to. Default `sdlc-harness/`; no path segment of it begins with a dot. |
-| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the wrapper scripts live in, `commit-on-branch.sh` and `push-branch.sh` among them. `push-branch.sh` is invoked under `<MAIN_REPO>` rather than repo-relative, because the main checkout's copy is the one the unattended permission profile runs outside the sandbox. |
-| `<commit_conventions>` | generated at init | The adopting project's commit-**message** policy — the commit-policy section of the shared conventions document `init` generates for the catch-all layer. It supplies the subject-prefix vocabulary, whether the first word after the prefix is capitalized, the subject-length cap, the fixed-form subjects it enumerates, the attribution-trailer policy, and the per-commit-class prefix designation — including a class that carries none — that a caller's `commit_prefix` is read from. It is the **only** configured policy you consult; you open no conventions rule about code. The commit *discipline* in `## Process` — one commit per readiness entry, flipping only the readiness checkbox, the explicit stage-path set, never skipping hooks, never a partial commit — is not configurable. |
+| `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the wrapper scripts live in, `commit-on-branch.sh` and `push-branch.sh` among them. Both are invoked under `<MAIN_REPO>` (`${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6). |
+| `<commit_conventions>` | generated at init | The adopting project's commit-**message** policy — the commit-policy section of the shared conventions document `init` generates for the catch-all layer. It supplies the subject-prefix vocabulary, whether the first word after the prefix is capitalized, the subject-length cap, the fixed-form subjects it enumerates, the attribution-trailer policy, and the per-commit-class prefix designation — including a class that carries none — that a caller's `commit_prefix` is read from. It is the **only** configured policy you consult; you open no conventions rule about code. The commit *discipline* in `## Process` — one commit per readiness entry, flipping only the readiness checkbox, the explicit stage-path set, never a partial commit — is not configurable. |
 
 ---
 
@@ -60,7 +60,7 @@ The subject **text** — prefix vocabulary, capitalisation, length cap, fixed-fo
 
 - **Free-form subject** (`task` / `review_item`) — `<commit_prefix>: <short description of the task or fix>`, **or that description alone — no prefix, no `: ` separator — when `commit_prefix` is `none`**, formatted per `<commit_conventions>`. The description is the unit's title without its `Task N — ` / `Finding N — ` prefix, **when Subject reconciliation below leaves it standing**.
 - **Fixed-form subjects** — `review_plan_file` and `ui_test_pass` each emit one exact string, and no caller may ask for another: `chore: add code review for <branch>` and `chore: Mark UI test K passing for <branch>`, with `<branch>` and `K` (the test number from the flipped `**Test K**` entry) substituted verbatim and nothing else varied. Other commit points in the flow emit their own fixed subjects, which `<commit_conventions>` enumerates.
-- **Wrapper-safe subjects — normalise, never paraphrase.** Every message argument is a shell argument and may carry none of `$(…)`, a backtick, `|`, `>`, `<`, or a braced expansion other than a bare `${IDENT}`, which is expanded. A `>` in a message is refused whole, even though the guard admits a descriptor duplication (`2>&1`, `>&2`, `2>&-`) and `/dev/null` in a command. The wrapper validates and rewrites nothing (`<scripts_dir>/commit-on-branch.sh`'s **MESSAGE ARGUMENTS** header).
+- **Wrapper-safe subjects — normalise, never paraphrase.** Every message argument is a shell argument and may carry no `$` at all, and none of a backtick, `|`, `>` or `<`; `<branch>` is substituted as literal text. A `>` in a message is refused whole, even though the guard admits a descriptor duplication (`2>&1`, `>&2`, `2>&-`) and `/dev/null` in a command. The wrapper validates and rewrites nothing (`<scripts_dir>/commit-on-branch.sh`'s **MESSAGE ARGUMENTS** header).
   **(a) Normalise, never paraphrase.** Strip the marks and keep every word: a backtick-quoted identifier loses its backticks, an angle-bracketed placeholder loses its brackets, a `$` is dropped and its token spelled as a word. Re-wording is not normalising.
   **(b) The identifier survives.** When the normalised title is not recognisable — a mark sat inside a word — or exceeds `<commit_conventions>`'s length cap, the subject carries the entry's unit token (`Task K` / `Finding K`, as step 2 resolved it). **Every subject either matches its entry's title verbatim or names that entry's identifier.**
   Never escape a mark and pass it anyway — the guard scans the raw command string, so the escaped byte still matches. Never route the message through a file or stdin — `<` is in the same scanned set.
@@ -87,23 +87,24 @@ The subject **text** — prefix vocabulary, capitalisation, length cap, fixed-fo
    - **`[ ]`** → change it to `[x]` on that one line.
    - **Already `[x]`** → no edit. If step 1 found the tree clean, return `error: nothing to commit` and stop; otherwise continue to steps 3–6 and report `plan_flipped:` as `already-[x]: <entry> — not flipped by this committer`. The refusal fires exactly when neither the tree nor the entry moved.
    - Flip nothing outside the readiness list.
-3. **Compute the stage-path set** (step 4's wrapper stages it; run no `git add`). Every path is repo-relative, taken from `git status --short` and the arguments as given — never absolute and never from another checkout: the wrapper skips such a path, and if none remains it exits 3. Never `git add -A` / `git add .`.
+3. **Compute the stage-path set** (step 4's wrapper stages it; run no `git add`). Every path is relative to `<repo_root>`, taken from `git status --short` and the arguments as given — never absolute and never from another checkout: the wrapper skips such a path, and if none remains it exits 3. Never `git add -A` / `git add .`.
    - **`task` / `review_item`:** `plan_path`, flipped or not; `task_file` only if `git status --short` shows it modified; for `review_item`, the unit's detail file only if `git status --short` reports it — whatever path it reports for the index `plan_path` names; and the work files `git status --short` shows.
    - **`unit_findings_folder` passed (`task` / `review_item`):** add the folder as its own path, unconditionally, with no existence guard, and exclude from the work files every `git status --short` entry at or under it — the collapsed `?? <dir>/` line of an untracked parent included.
+   - **A deletion** (` D` / `D `) is passed as its **parent directory**, never as the file — the wrapper skips a missing path (`<scripts_dir>/commit-on-branch.sh`'s **STAGING POLICY, AND THE ONE TRAP IN IT** header). This carries a rename's old half; the `unit_findings_folder` exclusion above still holds.
    - **`review_plan_file`:** `plan_path` and its per-finding folder — `${plan_path%.md}/` for a sibling-`.md` index, `${plan_path%/*}/` for the QA merged index named `qa_review_<iteration>.md` — plus `meta_findings_folder` when passed, all unconditionally: the wrapper warns and skips a missing path, and a caller-side existence check is refused in an unattended run.
 4. **Stage + commit via the wrapper:**
    - Build the subject per `## Commit-message policy`, after step 3 — for `review_plan_file`, its fixed string with `<branch>` substituted — and the body line **Subject reconciliation** requires, when it requires one.
-   - Call the wrapper once, with exactly step 3's paths:
+   - Resolve `<repo_root>` and `<MAIN_REPO>` per `## Resolved values`, then call the wrapper once, alone, with exactly step 3's paths and every placeholder as literal text:
      ```
-     bash <scripts_dir>/commit-on-branch.sh <path1> <path2> ... -- "<subject line>"
+     bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> <path1> <path2> ... -- "<subject line>"
      ```
-     With a body line: `… -- "<subject line>" "<body line>"`. The wrapper stages and commits: run no separate `git add` or `git commit`, add no trailer beyond `<commit_conventions>`, and never skip hooks.
+     With a body line: `… -- "<subject line>" "<body line>"`. The wrapper stages and commits: run no separate `git add` or `git commit`, and add no trailer beyond `<commit_conventions>`.
    - Map its exit — no partial commit, no retry:
      - **exit 0** — read `<short_sha>` for `commit_sha:` from its stdout line `commit-on-branch.sh: committed <short_sha> on <branch>`; go to step 5.
      - **exit 3** — return `error: nothing to commit`.
-     - **any other non-zero** (2 protected branch; 1 detached HEAD, not a git dir, or hook failure) — return `error: <one-line description>` surfacing its stderr.
+     - **any other non-zero** (2 protected branch; 1 a refusal or a git failure, including a branch that moved under the wrapper) — return `error: <one-line description>` surfacing its stderr.
 5. **Verify:** `git status --short` is clean, and `git log -1 --oneline` matches `<short_sha>`.
-6. **Push:** only when `push == true` and step 4 committed — resolve `<repo_root>` with a bare `git rev-parse --show-toplevel` and `<MAIN_REPO>` from the first `worktree ` line of a bare `git worktree list --porcelain`, and run `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>` with both paths spelled literally — the main checkout's copy is the one the unattended profile runs outside the sandbox, where an SSH push works; report `pushed: yes`, or `pushed: failed` when the helper reports a failure, which is not a commit failure. Otherwise `pushed: no`.
+6. **Push:** only when `push == true` and step 4 committed — run `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>` with both spelled literally; report `pushed: yes`, or `pushed: failed` when the helper reports a failure, which is not a commit failure. Otherwise `pushed: no`.
 
 ### ui_test_pass procedure
 
@@ -119,11 +120,11 @@ d. **Flip:** change that one `[ ]` to `[x]`, and nothing else — no other marke
 
 e. **Sanity, after the flip:** `git status --short` shows only `plan_path` modified.
 
-f. **Commit:** the subject is this mode's string from **Fixed-form subjects**, with `K` and `<branch>` substituted. Call the wrapper once:
+f. **Commit:** the subject is this mode's string from **Fixed-form subjects**, with `K` and `<branch>` substituted. Resolve `<repo_root>` and `<MAIN_REPO>` as step 4 does, and call the wrapper once:
    ```
-   bash <scripts_dir>/commit-on-branch.sh <plan_path> -- "<the fixed ui_test_pass subject>"
+   bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> <plan_path> -- "<the fixed ui_test_pass subject>"
    ```
-   `plan_path` is the only path, passed exactly as the dispatch gave it — repo-relative, as step 3 requires, even though step b read it by an absolute path. Never `git add -A` / `git add .`, and no separate `git add` or `git commit`. Map the exit as step 4 does, exit 0 continuing to step g; exit 3 here means the flip produced no diff.
+   `plan_path` is the only path, passed as the dispatch gave it — repo-relative, as step 3 requires, though step b read it by an absolute path. Never `git add -A` / `git add .`, and no separate `git add` or `git commit`. Map the exit as step 4 does, exit 0 continuing to step g; exit 3 here means the flip produced no diff.
 
 g. **Verify** as step 5 does.
 
