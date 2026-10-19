@@ -42,12 +42,54 @@ This branch reaches only the unsandboxed side: the library, the excluded wrapper
 
 ## The goal
 
-1. **The measurement that gates the whole series is the maintainer's.** Sandboxed ordinary git in a clone can only be measured by a headless session launched under the profile being measured, which a sandboxed run cannot start. List it as the first manual setup step, with the exact procedure, under the profile as `sandbox1e` left it:
-   - `git clone --shared` the main checkout to a path under the profile's sibling glob;
-   - from a session whose cwd is that clone, run `git add`, `git commit`, `git fetch`, `git stash push`/`pop` and `git switch -c`;
-   - add a row to `docs/sandbox-verification.md` for each, owed until the maintainer fills it in.
+1. **Record the measurement that gates the whole series.** The maintainer took it by hand on 2026-10-19, before this branch launched, because a sandboxed run cannot start the headless session it needs. Write it into `docs/sandbox-verification.md` as rows, under that file's `## 0. Method` conventions: one row per probe, the commands verbatim, and the stamp below.
 
-   If `git add` or `git commit` fails, this branch is not merged and the follow-up branches are not launched.
+   **Setup.**
+   - **Stamp:** Claude Code 2.1.303, git 2.50.1 (Apple Git-155), macOS, arm64.
+   - **Clone:** `git clone --shared` of the main checkout, made from an ordinary terminal at `<work_root>/autonomous-sdlc-harness-sbx_clone_probe`, inside the profile's sibling glob.
+   - **Launch:** `## 0. Method`'s launch line, cwd = the clone, `--add-dir <clone> --add-dir <main>/harness-runs`, with `--allowedTools` for `git switch`, `dd`, `mv` and `git config` where a call needed it.
+   - **Calls:** one exact call each:
+     - `git add <file>`
+     - `git commit -m "<subject>"`
+     - `git fetch origin` (the clone's origin is the main checkout's path)
+     - `git stash push`, then `git stash pop`
+     - `git switch -c <x>`
+   - **Controls:** `dd` creating a new file in `<clone>/.git` and in `<main>/.git`, and a zero-byte `dd … conv=notrunc` open of `<clone>/.git/config`.
+
+   **Results.**
+   - **Probe 1, the real profile as `sandbox1e` left it, with the clone on `dev`:**
+     - every git write was refused with `Operation not permitted`: `<clone>/.git/index.lock`, `.git/FETCH_HEAD`, `could not write index`, and the `refs/heads/<x>.lock` for `switch`;
+     - the new-file control in `<clone>/.git` was refused;
+     - the one in `<main>/.git` was **written**;
+     - `git commit` was refused by `git-commit-branch-guard.sh` because the clone was on a protected branch, before it reached the sandbox. That is a setup error, not a finding.
+   - **Probe 2, a scratch profile with only the sandbox `denyWrite` entry `<work_root>/autonomous-sdlc-harness-*/.git` removed, with the clone on a non-protected branch:** every git write was refused exactly as in probe 1, `git commit` included, and so was the `<clone>/.git/config` open.
+   - **Probe 3, the same scratch profile, one `git add` with `--debug-file`, once with cwd = the clone and once with cwd = the main checkout:**
+     - refused in the clone;
+     - **succeeded** in the main checkout.
+   - **Probe 4, probe 2's scratch profile with the permission pair `Edit(//<work_root>/autonomous-sdlc-harness-*/.git)` / `Write(…)` also removed:**
+     - **every git call succeeded:** add, commit (`9ea0349b`), fetch, stash push and pop with the change restored, and `switch -c`;
+     - the new-file controls in `<clone>/.git` and `<main>/.git` were both written;
+     - the zero-byte open of `<clone>/.git/config` was **still refused**, with no remaining profile entry naming that path.
+   - **Probe 5, probe 4's scratch profile; every write inert** (a zero-byte `dd … conv=notrunc`, an empty non-executable marker, or a key git never reads):
+     - **refused** with `Operation not permitted`:
+       - a new file in `<clone>/.git/hooks/`;
+       - opening the existing `hooks/pre-commit.sample`;
+       - opening `objects/info/alternates`;
+       - `git config sbx.probe true` (`could not lock config file .git/config`);
+     - **written:**
+       - a new file in `objects/info/`, which is where an `http-alternates` would go;
+       - a new file in `info/`;
+       - a new file directly in `.git`, which is where a planted `commondir` or `config.worktree` would go.
+
+     Two renames of byte-identical copies back onto `config` and onto a hook sample were refused at the **permission layer** (`… denied because Claude Code is running in don't ask mode`, with no profile rule naming `mv`). They never reached the sandbox, so a rename onto a protected path is **unmeasured**. A first probe-5 session made no call at all: its model declined a sequence that installed a hook and redirected `core.hooksPath`, which is why every probe-5 write is inert.
+
+   **What the rows settle.**
+   - Sandboxed ordinary git works in a clone. What closed it in probes 1–3 was the profile's own sibling-glob `.git` rules, written for a worktree's `.git` pointer file.
+   - An `Edit(…)` **permission deny rule alone** closes that path to sandboxed commands, not only to the file tools.
+   - The runtime itself refuses sandboxed writes to the cwd repository's `.git/config`, `.git/hooks/` and `objects/info/alternates`.
+   - It leaves the rest of that `.git` open, `objects/info/`, `info/` and new top-level files included. So the clone arm's refusal of `commondir`, `objects/info/http-alternates` and any other planted file is load-bearing, and not a redundant check.
+
+   This branch changes no profile entry; the switch branch does.
 2. **A trust check for a clone.** Rebuild the wrappers' target check so it also accepts a run copy that is a clone, on all of these:
    - it sits at the path the run registry records for the branch its `HEAD` names;
    - that path is the derived `hr_worktree_dir <main> <branch>`;
