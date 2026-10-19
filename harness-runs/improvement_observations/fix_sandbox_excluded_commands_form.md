@@ -9,8 +9,7 @@
 - **evidence:** at session start `git status` showed `harness-runs/task_prompts/fix_sandbox_excluded_commands_form_task_prompt.md` untracked. In the manual entry point no step commits it; the clean-tree register's entry 1 is the watcher's. Every committer return from Task 1 onward reported the tree not clean because of that file. `bash scripts/run-test-suite.sh task_round_1` printed `fail harness-runs/test_run_logs/fix_sandbox_excluded_commands_form/task_round_1.log`. The round-1 test fix plan's one fixable finding was "Task prompt quotes an absolute home-directory path, failing gate 6a". Its fix commit a4cac861 also brought the prompt under version control. Round 2 printed `pass`.
 - **cost this run:** one Run gates round and 5 dispatches (test-fix-plan-writer, architecture-reviewer, committer, layer-implementer, committer).
 
-## Three round-1 gate failures judged not fixable on the branch passed in round 2 with no fix for them
-- **category:** flow-efficiency
-- **evidence:** `test-fix-plan-writer`'s return for `harness-runs/test_fix_plans/fix_sandbox_excluded_commands_form_task_round_1.md` carried `fixable: 1` and `not_fixable: 3`. Only the one fixable finding was implemented (a4cac861), and `bash scripts/run-test-suite.sh task_round_2` printed `pass`.
-- **cost this run:** none beyond round 1 itself. The round-1 index records three failures as not fixable on this branch, and nothing in round 2 reproduces them.
-- **hypothesis:** the three were transient, or were caused by the same untracked task prompt.
+## The test fix plan counts BLOCKED gates as not-fixable failures
+- **category:** agent-contract
+- **evidence:** `test-fix-plan-writer`'s return for `harness-runs/test_fix_plans/fix_sandbox_excluded_commands_form_task_round_1.md` carried `fixable: 1` and `not_fixable: 3`. Its `## Not fixable on this branch` section lists gates 13a, 13b and 13c, which are BLOCKED because the Python environment is not provisioned on this host. The same section says `run-gates` does not count them as failures (`1 failed, 24 passed`). Round 2's log reports them BLOCKED again, and round 2 printed `pass`.
+- **cost this run:** the return's `not_fixable: 3` reads as three failures. The orchestrator relayed them as such in its Done summary, and it took a manual read to correct that.
