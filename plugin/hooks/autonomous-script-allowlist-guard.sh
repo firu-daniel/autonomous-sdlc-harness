@@ -48,21 +48,22 @@
 # `${`, and `>` with its superstrings `>>`, `>(`, `2>` and `&>`.
 #
 # `${` IS THE FIFTH CONSTRUCT AND IT IS SCANNED BY SHAPE, NOT AS A SEQUENCE.
-# Refusing every `${` was measured silencing the shipped instruction corpus's
-# own canonical commit invocation, which carries `${branch}` in a path and again
-# in its subject. Deleting the arm was measured too and is worse: it releases
-# `${x@P}`, whose bash 4.4+ prompt expansion performs command substitution on a
-# `$(` held INSIDE the variable's value — a `$(` that is not in the command
-# string, so the `$(` arm cannot see it. macOS's bash 3.2 floor makes that inert
-# where this file is authored and live on the Linux an adopter runs. So the arm
-# is NARROWED rather than kept or dropped: a bare parameter expansion `${IDENT}`
-# — an ASCII letter or `_`, then letters, digits or `_`, then `}` — is admitted,
-# and every other braced form is refused, `@`, `!`, `#`, `[`, `:`, `/` and a
-# nested `$(` among them, as is an unterminated `${`. The walk is a `while` over
-# builtin parameter expansion plus one `=~`, so it stays config-independent and
-# fork-free like the `case` above it. What it is no longer is a single `case`
-# glob — the same trade the `>` arm below now makes, for the same measured
-# reason.
+# Refusing every `${` was measured silencing a wrapper call carrying `${branch}`
+# in a path and again in its subject — the spelling the shipped instruction
+# corpus's commit calls had when it was measured; they now carry no `$` at all
+# (see cost class (ii) below). Deleting the arm was measured too and is worse:
+# it releases `${x@P}`, whose bash 4.4+ prompt expansion performs command
+# substitution on a `$(` held INSIDE the variable's value — a `$(` that is not
+# in the command string, so the `$(` arm cannot see it. macOS's bash 3.2 floor
+# makes that inert where this file is authored and live on the Linux an adopter
+# runs. So the arm is NARROWED rather than kept or dropped: a bare parameter
+# expansion `${IDENT}` — an ASCII letter or `_`, then letters, digits or `_`,
+# then `}` — is admitted, and every other braced form is refused, `@`, `!`, `#`,
+# `[`, `:`, `/` and a nested `$(` among them, as is an unterminated `${`. The
+# walk is a `while` over builtin parameter expansion plus one `=~`, so it stays
+# config-independent and fork-free like the `case` above it. What it is no
+# longer is a single `case` glob — the same trade the `>` arm below now makes,
+# for the same measured reason.
 #
 # `>` IS THE SIXTH CONSTRUCT AND IT IS SCANNED BY SHAPE TOO. Refusing every `>`
 # was measured silencing `bash <scripts dir>/<wrapper>.sh 2>&1` — the flow's own
@@ -171,10 +172,13 @@
 #       as the reason this guard refuses no binary by name; here it is accepted,
 #       because the alternative is parsing quoting. The `${…}` half of the class
 #       was NOT accepted: it was measured against the shipped corpus and bought
-#       back by the narrowed `${` arm, so the corpus's canonical commit
-#       invocation — `${branch}` in a path and in its subject — is auto-allowed
-#       by THIS GUARD and does not fall through to the permission profile's
-#       literal `commit-on-branch.sh` forms.
+#       back by the narrowed `${` arm, so a wrapper call this guard vouches for
+#       may still carry `${branch}` in a path and in its subject. The corpus's
+#       own commit calls no longer lean on that: they name the main checkout's
+#       copy of `commit-on-branch.sh`, a `sandbox.excludedCommands` entry this
+#       guard does not vouch for from a linked worktree, spelled with no `$`
+#       anywhere, and are granted by the permission profile's literal `allow`
+#       entry rather than by THIS GUARD.
 #
 # `<<` IS NOT IN THE SCANNED SET, AND ITS ABSENCE IS COVERED TWICE. A
 # here-document was measured SILENT before this scan existed — incidentally, not
@@ -452,9 +456,9 @@
 #     bash <repo>/<scripts dir>/commit-on-branch.sh --repo "$REPO_ROOT" \
 #       "<state dir>/branch_statistics/${branch}/statistics.md" \
 #       -- "chore: Add branch statistics for ${branch}"
-#                                                     the corpus's own commit
-#                                                     invocation — `${IDENT}` in
-#                                                     a path and in a subject
+#                                                     `${IDENT}` in a path and in
+#                                                     a subject — the shape the
+#                                                     `${` narrowing exists for
 
 set -u
 set -f
@@ -497,8 +501,8 @@ esac
 
 # The sixth construct, `${`, scanned BY SHAPE rather than as a byte sequence —
 # see the header paragraph carrying the measurement. A bare `${IDENT}` is
-# admitted because the shipped instruction corpus's own commit invocation spells
-# one; every other braced form is refused, `${x@P}` above all, because its
+# admitted because a vouched-for wrapper call may spell one in a path or a
+# subject; every other braced form is refused, `${x@P}` above all, because its
 # prompt expansion runs a `$(` that never appears in the command string. The
 # whole walk is builtin parameter expansion plus one `=~`: no fork, no
 # configuration, and it is bounded by the number of `${` in the string.
