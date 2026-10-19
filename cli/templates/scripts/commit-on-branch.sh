@@ -133,8 +133,12 @@
 #      yet / a path whose attributes select a filter driver / a path reached
 #      through a symbolic link, or that is neither a regular file nor a
 #      symbolic link (a submodule, a special file) / a git failure / the branch
-#      moving under this script. Only the last leaves the given paths staged,
-#      the same residue a failed `git commit` left
+#      moving under this script / a commit that landed but whose working
+#      copy's index could not take the committed paths — the only exit 1 after
+#      which `refs/heads/<branch>` has moved, reported on stderr as
+#      `committed <short_sha> on <branch>, but …`. Only the branch moving under
+#      this script leaves the given paths staged, the same residue a failed
+#      `git commit` left
 #   2  protected-branch refusal, with nothing staged
 #   3  nothing to commit: the given paths match the branch's tip. The paths are
 #      still synced into the working copy's index, so a second call re-stages a
@@ -147,6 +151,8 @@
 # (followed by its `protected set` line) and `cannot resolve
 # '<main>/harness.config.json' — refusing to commit` (followed by its
 # parenthesised causes). A usage error keeps its own line and its usage hint.
+# The exit-1 `committed <short_sha> on <branch>, but …` line is not a refusal
+# and does not begin with that prefix.
 #
 # WHAT IT NEVER DOES. It never pushes (that is push-branch.sh, called as a
 # SEPARATE statement — an `if …; then push; fi` block is a compound the guards
@@ -546,7 +552,12 @@ case "$status" in
     exit 1
     ;;
   *)
-    echo "commit-on-branch.sh: refusing to commit: $HR_COMMIT_REFUSAL" >&2
+    if [ -n "$HR_COMMIT_NEW" ]; then
+      sha="$(main_git rev-parse --short "$HR_COMMIT_NEW")" || sha="$HR_COMMIT_NEW"
+      echo "commit-on-branch.sh: committed $sha on $branch, but the index of '$top' could not take the committed paths — the commit stands; the same call again re-syncs the index and exits 3" >&2
+    else
+      echo "commit-on-branch.sh: refusing to commit: $HR_COMMIT_REFUSAL" >&2
+    fi
     exit 1
     ;;
 esac

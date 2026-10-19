@@ -8,12 +8,13 @@
  * index after exit 3 — except that it runs no filter driver and refuses a path that selects one.
  * It never asks git to read the worktree's `.git` pointer, its record's `HEAD`, its `commondir` or
  * its `config.worktree` after its checks, and it runs no commit hook.** Cases (a)–(f) re-prove
- * `docs/outer-loop-verification.md` §1.1 on a worktree; (g) is the hooks; (k) the filter refusal.
+ * `docs/outer-loop-verification.md` §1.1 on a worktree; (g) is the hooks; (k) the filter refusal;
+ * (m) a landed commit whose index sync failed.
  *
- * A race cannot be staged reliably, so cases (h)–(j) stage its outcome deterministically instead,
- * as `cli/test/wrapper-target-check.test.mjs`'s header explains for its (i)–(k): a `git` shim first
- * on `PATH` rewrites the records, or moves the branch, once, at a chosen git call of the wrapper's
- * and before handing that call to the real git.
+ * A race cannot be staged reliably, so cases (h)–(j) and (m) stage its outcome deterministically
+ * instead, as `cli/test/wrapper-target-check.test.mjs`'s header explains for its (i)–(k): a `git`
+ * shim first on `PATH` rewrites the records, or moves the branch, once, at a chosen git call of the
+ * wrapper's and before handing that call to the real git.
  *
  * Not covered here: the target, `config.worktree`, hooks-pin and protected-branch refusals. Those
  * are `cli/test/commit-on-branch-target-check.test.mjs`'s. The fixture is built by hand rather than
@@ -295,4 +296,25 @@ test('(k) A path whose attributes select a filter is refused, and the filter nev
   );
   assert.equal(await f.tip(), before);
   assert.deepEqual(await f.markers(), [], output(result));
+});
+
+test('(m) A commit whose index sync fails is reported as landed', async (t) => {
+  const f = await fixture(t);
+  const before = await f.tip();
+  // The record's index lock appears just before the ref moves, so the commit lands and the sync fails.
+  const lock = join(f.record, 'index.lock');
+  const race = await racingGit(f, [[lock, '']], '*" update-ref "*');
+  const result = await f.commit(['new.txt'], undefined, race.env);
+  assert.ok(await race.flipped(), `the shim never ran\n${output(result)}`);
+  assert.equal(result.status, 1, output(result));
+  assert.match(result.stderr, /^commit-on-branch\.sh: committed [0-9a-f]+ on feat_w, but the index of /m, output(result));
+  const after = await f.tip();
+  assert.notEqual(after, before);
+  assert.equal((await f.mainGit('rev-parse', `${after}^`)).trim(), before);
+
+  await rm(lock);
+  const again = await f.commit(['new.txt']);
+  assert.equal(again.status, 3, output(again));
+  assert.equal(await f.tip(), after);
+  assert.equal(await f.wtGit('status', '--porcelain', '--', 'new.txt'), '');
 });
