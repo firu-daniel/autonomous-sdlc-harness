@@ -16,7 +16,7 @@ These are the only shipped assets that mutate a repository — `git commit`, `gi
 - `cleanup-merged-worktrees.sh` — `run_bounded()` and the `HARNESS_FETCH_TIMEOUT`-bounded `fetch --prune` with its changed skip line (PR #15, *cleanup fetch hang*), and `park_loop` added to the active-status `jq` selection (PR #9, *watcher multi question resume loop*).
 - `autonomous-notify.sh` — the `park_loop)` case and its usage line (PR #9, *watcher multi question resume loop*).
 
-The other two — `commit-on-branch.sh`, `setup-worktree.sh` — have comment-only diffs since the stamp, so no §1 row's mechanism moved. Any later touch to a template re-stales this count; re-run the recipe rather than editing the number.
+The other two — `commit-on-branch.sh`, `setup-worktree.sh` — have comment-only diffs since the stamp, so no §1 row's mechanism moved. Any later touch to a template re-stales this count; re-run the recipe rather than editing the number. Since that sentence was written, `fix_sandbox_worktree_record_writes` moved the commit wrapper's mechanism — a target check, a `config.worktree` check and a plumbing commit with no hook — so §1.1 is owed a re-drive; the count above has not been re-derived.
 
 **Not re-confirmed by a run:** §2 in full — except §2.4's machine-lane block, re-driven whole on 2026-09-03 and stamped there — and every §1 row that reads configuration through the run library. §0's write precondition is the exception the §1.8 round closed — its generator, `cli/src/generators/outerLoopScripts.ts`, changed after the stamp too, and that round re-ran the precondition for all eleven files on a real `init` fixture. No row here measures the effort flag at all. Restamping means re-running §0's recipe whole; this note is what the re-run deletes, never what it edits. Three cells — the shim-reach sentence in §1.6, the `hr_main_repo` row of §2.4 and §1.2's deleted-on-origin row — rest on a `node:test` case against an `init`-built fixture rather than a §0 recipe row, and are marked as such where they appear.
 
@@ -59,6 +59,8 @@ Every fixture is built that way and they differ only in what their rows need: a 
 One row per (script, condition, outcome). "Effect" is what was observed in the repository, not what the message says.
 
 ### 1.1 `commit-on-branch.sh` — refuses **loudly**
+
+**Owed a re-drive.** These eleven rows were driven against the wrapper as it stood before `fix_sandbox_worktree_record_writes` rebuilt it. They are owed a re-drive against the rebuilt wrapper, with the main checkout and then a linked worktree as the target. Until then, `cli/test/commit-on-branch-target-check.test.mjs` and `cli/test/commit-on-branch-plumbing.test.mjs` assert the same rows automatically.
 
 | Condition | Exit | Effect | Perturbation |
 |---|---|---|---|
