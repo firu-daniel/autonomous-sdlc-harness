@@ -70,3 +70,10 @@ It also depends on Task 3's `hr_clone_create_var <main> <branch> <start>`, which
 
 - `npm test --workspace cli -- test/clone-trust-check.test.mjs`, from the repository root, as one plain foreground command. Read the `# tests`, `# pass` and `# fail` counts and the exit status (`.claude/context/conventions.md` → `## The testing bar`). Every case passes, and `# fail 0`.
 - Mutate once by hand, then revert, with `git diff` clean afterwards. In the library, drop condition 4's alternates comparison. Case (i) must then fail. The other cases still pass, which shows (i) tests that condition and not something incidental. Record the counts observed in the per-task deviation notes.
+
+**Deviations from plan:**
+
+- Verification counts observed (Node 22, macOS, git 2.50.1): `npm test --workspace cli -- test/clone-trust-check.test.mjs` from the repository root, plain foreground — `# tests 38`, `# pass 38`, `# fail 0`, exit 0.
+- Mutation, applied by hand and reverted: the whole `if [ -z "$alt_c" ] || [ -z "$main_obj" ] || [ "$alt_c" != "$main_obj" ]` block of `hr_clone_target_check_var` deleted. Same command: `# tests 38`, `# pass 34`, `# fail 4` (exit 1) — the parent (i) and its subtests "a second directory", "another repository's objects", "a symbolic link to a file with the right content"; (i)'s "objects/info a symbolic link" still passes, as condition 3 refuses it. `git checkout -- cli/templates/scripts/lib/harness-run-lib.sh` reverted it; `git diff` clean afterwards.
+- Case (p) reads "every line is satisfied" as: every key the created clone sets has a spec line and passes its rule; every required key is present; each `bool` key is present exactly when the main checkout's `.git/config` sets it, with its value. `core.logallrefupdates` and `core.hooksPath` are spec lines `hr_clone_create_var` does not write, so they are checked only when present ((a2) covers `core.hooksPath`).
+- Case (n) runs one subtest per required key (four), and (a) additionally rewrites the clone's `HEAD` between the check and `hr_wrapper_branch_var` to show the clone arm does not re-read it.
