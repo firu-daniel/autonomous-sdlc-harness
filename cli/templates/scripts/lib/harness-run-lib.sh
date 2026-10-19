@@ -110,9 +110,10 @@
 #      and the temp files
 #      `.registry.*` in the registry's own directory. Written only by
 #      `hr_registry_init`, `hr_registry_set`, `hr_registry_drop`,
-#      `hr_remote_record_init` (through `hr_registry_set`) and the
-#      `hr_registry_lock` / `hr_registry_unlock` pair `hr_registry_set` and
-#      `hr_registry_drop` call.
+#      `hr_registry_restore`, `hr_remote_record_init` (through
+#      `hr_registry_set`) and the `hr_registry_lock` / `hr_registry_unlock`
+#      pair `hr_registry_set`, `hr_registry_drop` and `hr_registry_restore`
+#      call.
 #   3. THE REMOTE STATE BUNDLE writes the files its format lists. Fence: inside
 #      `<root>/<state_dir>/` (resolved through `hr_remote_state_dir_var`), only
 #      `autonomous_logs/remote_status.json`, `clarifications/<branch>/`,
@@ -185,7 +186,8 @@
 #      `refs/heads/<branch>` in <main> only when it cut that ref, created
 #      against an empty old value and deleted on rollback only by a
 #      compare-and-swap from the commit it cut; and the registry, through
-#      `hr_registry_set` and `hr_registry_drop` alone. Removal deletes only the
+#      `hr_registry_set`, `hr_registry_drop` and `hr_registry_restore` alone.
+#      Removal deletes only the
 #      derived path of a clone the registry records. Written only by
 #      `hr_copy_sync_in_var`, `hr_copy_sync_out_var`, `hr_clone_create_var`
 #      and `hr_clone_remove_var`.
@@ -213,7 +215,8 @@
 # clone only),
 # `hr_run_trusted_base_var`, `hr_run_surface_check_var` (through it), `hr_run_main_git`,
 # `hr_run_copy_git`, `hr_copy_git_at`, `hr_copy_sync_in_var`, `hr_copy_sync_out_var`,
-# `hr_registry_drop`, `hr_clone_create_var` or `hr_clone_remove_var` function
+# `hr_registry_drop`, `hr_registry_restore`, `hr_clone_create_var` or
+# `hr_clone_remove_var` function
 # still gets a library that only reads. The
 # lane's ceilings are the only environment values here that carry policy, because
 # the lane is machine-scoped and has no configuration key to carry them; each is
@@ -308,12 +311,13 @@
 # the write exceptions named above, and no diagnostics on stdout OR stderr:
 # every reader is silent on failure and signals through its return status,
 # because callers capture stdout. The one pass-through is the registry's
-# writers, `hr_registry_init`, `hr_registry_set` and `hr_registry_drop`, which
-# leave the shell's, `mktemp`'s and `jq`'s own stderr on a failed write to the
-# caller, as the watcher's bodies they replaced did — that stream is the
-# watcher's log — and add one line of their own, naming the lock, when
-# `hr_registry_set` or `hr_registry_drop` cannot take the registry lock.
-# `hr_clone_create_var` silences all three. The artifact placement's three
+# writers, `hr_registry_init`, `hr_registry_set`, `hr_registry_drop` and
+# `hr_registry_restore`, which leave the shell's, `mktemp`'s and `jq`'s own
+# stderr on a failed write to the caller, as the watcher's bodies they replaced
+# did — that stream is the watcher's log — and add one line of their own,
+# naming the lock, when `hr_registry_set`, `hr_registry_drop` or
+# `hr_registry_restore` cannot take the registry lock.
+# `hr_clone_create_var` silences all four. The artifact placement's three
 # writers likewise leave `mkdir`'s, `cp`'s, git's and the push wrapper's own
 # output on their stdout and stderr for the caller to redirect into its log,
 # and `hr_commit_placed` adds its own refusal lines on stderr.
@@ -2606,6 +2610,32 @@ hr_registry_drop() {
   return "$status"
 }
 
+# hr_registry_restore <file> <branch> <json> — set `.runs[<branch>]` back to
+# <json>, the compact record a caller read from the same file, under
+# `hr_registry_set`'s lock, temp file and `mv`; only `hr_clone_create_var`'s
+# rollback calls it. 0 restored; 1, writing nothing, when <file> is absent,
+# <json> is not an object, the lock cannot be taken or the write fails.
+hr_registry_restore() {
+  local file="${1-}" branch="${2-}" rec="${3-}" dir tmp status=0 written=0
+  [ -n "$file" ] && [ -f "$file" ] && [ -n "$rec" ] || return 1
+  dir=$(hr_registry_dir "$file")
+  tmp=$(mktemp "$dir/.registry.XXXXXX") || return 1
+  if ! hr_registry_lock "$file" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if jq --arg b "$branch" --arg r "$rec" \
+    '($r | fromjson) as $p | if ($p | type) == "object" then .runs[$b] = $p else error("not a record") end' \
+    "$file" >"$tmp"; then
+    mv "$tmp" "$file" && written=1 || status=1
+  else
+    status=1
+  fi
+  [ "$written" -eq 1 ] || rm -f "$tmp"
+  hr_registry_unlock "$file" "$tmp"
+  return "$status"
+}
+
 # hr_registry_get <file> <branch> <key>   -> the value, or nothing
 hr_registry_get() {
   local file="${1-}"
@@ -3889,13 +3919,13 @@ hr_clone_git() {
 #
 # Any failure after the record undoes what this call created and nothing else:
 # the directory, the ref (a compare-and-swap from the commit it cut), and the
-# record (`hr_registry_drop` when there was none, else its previous `worktree`
-# and `copy_kind` in one `hr_registry_set`). 0 created; 1 with
+# record (`hr_registry_drop` when there was none, else the whole previous record
+# through `hr_registry_restore`). 0 created; 1 with
 # `HR_CLONE_REFUSAL` naming the refused condition or the failed step, and
 # anything the rollback could not undo.
 hr_clone_create_var() {
   local branch="${2-}" start="${3-}" why main ref registry regdir derived dir gd p
-  local out line cur wt existed=0 prev_wt="" prev_kind="" made=0 cut=0 start_oid="" tip=""
+  local out line cur wt existed=0 prev_json="" made=0 cut=0 start_oid="" tip=""
   local failed="" detail="" undo="" spec key value alt oid rest name sym keep input="" syms="" nl
   nl='
 '
@@ -3974,8 +4004,10 @@ EOF
 
   if hr_registry_peek "$registry" "$branch" branch >/dev/null; then
     existed=1
-    prev_wt=$(hr_registry_peek "$registry" "$branch" worktree) || prev_wt=""
-    prev_kind=$(hr_registry_peek "$registry" "$branch" copy_kind) || prev_kind=""
+    if ! prev_json=$(jq -c --arg b "$branch" '.runs[$b]' "$registry" 2>/dev/null) || [ -z "$prev_json" ]; then
+      HR_CLONE_REFUSAL="$why: reading its existing record in $registry failed"
+      return 1
+    fi
   fi
   if ! hr_registry_set "$registry" "$branch" worktree "$dir" copy_kind clone 2>/dev/null; then
     HR_CLONE_REFUSAL="$why: recording it in $registry failed"
@@ -4132,7 +4164,7 @@ EOF
     undo="${undo:+$undo, }$ref in $main"
   fi
   if [ "$existed" -eq 1 ]; then
-    hr_registry_set "$registry" "$branch" worktree "$prev_wt" copy_kind "$prev_kind" 2>/dev/null \
+    hr_registry_restore "$registry" "$branch" "$prev_json" 2>/dev/null \
       || undo="${undo:+$undo, }the registry record of '$branch'"
   else
     hr_registry_drop "$registry" "$branch" 2>/dev/null || undo="${undo:+$undo, }the registry record of '$branch'"

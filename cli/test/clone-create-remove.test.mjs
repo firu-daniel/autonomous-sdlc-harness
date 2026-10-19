@@ -1,5 +1,5 @@
 /**
- * `hr_clone_create_var`, `hr_clone_remove_var` and `hr_registry_drop` in
+ * `hr_clone_create_var`, `hr_clone_remove_var`, `hr_registry_drop` and `hr_registry_restore` in
  * `cli/templates/scripts/lib/harness-run-lib.sh`.
  *
  * **The rule these tests exist to enforce: a clone is created only for an unprotected branch with no
@@ -367,6 +367,22 @@ test('(i) Population failing, with an existing branch and a prior record: branch
   const doc = await f.readRegistry();
   assert.equal(doc.runs[BRANCH].worktree, stale);
   assert.equal(doc.runs[BRANCH].copy_kind, 'worktree');
+  assert.deepEqual(doc.runs.other, BYSTANDER.other);
+  assert.equal(await exists(f.derived()), false);
+});
+
+test('(i2) Population failing, with a prior record carrying no copy_kind: the record restored byte for byte', async (t) => {
+  const f = await fixture(t);
+  await f.commitOn(REF, 'feature.txt', 'feature work\n');
+  const seeded = { branch: BRANCH, worktree: join(f.root, 'gone-copy'), status: 'completed', updated_at: '2026-01-01T00:00:00' };
+  await f.writeRegistry({ ...BYSTANDER, [BRANCH]: seeded });
+  const shim = await gitShim(f, ' read-tree --reset -u ', 'exit 1');
+  const g = await f.create(BRANCH, 'trunk', shim.env);
+  assert.ok(await shim.fired(), 'the shim never ran');
+  assert.equal(g.status, '1');
+  assert.match(g.refusal, /populating .* failed, and everything this call created was rolled back$/);
+  const doc = await f.readRegistry();
+  assert.deepEqual(doc.runs[BRANCH], seeded);
   assert.deepEqual(doc.runs.other, BYSTANDER.other);
   assert.equal(await exists(f.derived()), false);
 });
