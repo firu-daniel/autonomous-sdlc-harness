@@ -86,12 +86,14 @@
 #        review, the listing failed, or the dispatch failed AFTER the review
 #        was pushed. For
 #        list, the listing or `git ls-remote` failed; nothing written
-#     4  start: placement failed — the branch cut, the copy, the commit or the
-#        push — and nothing was dispatched; the working copy and the local
-#        branch the cut created were removed. review: placement failed — the
-#        copy (the branch checked out in another working copy included), the
-#        fast-forward, the commit or the push — and nothing was dispatched; a
-#        copy it cut was removed
+#     4  start: placement failed — the main checkout's placement, the branch
+#        cut, the copy, the state directory, the commit or the push — and
+#        nothing was dispatched; the working copy and the local branch the cut
+#        created were removed. review: placement failed — the main checkout's
+#        placement, the copy (the branch checked out in another working copy
+#        included), the fetch, the fast-forward, the protected-surface check,
+#        the state directory, the commit or the push — and nothing was
+#        dispatched; a copy it cut was removed
 #     5  pause-requested only: the read succeeded and found no such run
 #
 # `start` IS THE ADAPTERS' ONE ENTRY: every trigger (an issue event, a forge
@@ -100,9 +102,8 @@
 # a prompt file that is not a readable regular file (2); cut the branch from
 # `origin/<defaultBranch>` with `create-worktree.sh --no-bootstrap`; place the
 # file at `<state_dir>/task_prompts/<branch>_task_prompt.md` in that working
-# copy (the state directory resolved there, never in the main checkout), commit
-# it as `chore: add task prompt for <branch>` and confirm `origin/<branch>`
-# equals `HEAD` (each failure 4); then remove the working copy and the local
+# copy, commit it as `chore: add task prompt for <branch>` and confirm
+# `origin/<branch>` equals `refs/heads/<branch>` (each failure 4); then remove the working copy and the local
 # branch it created — on every exit after the cut, success included and
 # wherever `start` runs, because nothing reads the copy once the push has landed
 # and a leftover branch makes the next cut of that name refuse; a copy or branch
@@ -110,7 +111,13 @@
 # --resume none --chain 0`, composed by `verb_dispatch` itself. The placement is the library's
 # (`hr_task_prompt_rel`, `hr_place_artifact`, `hr_commit_placed`,
 # `hr_push_landed`), the same calls the watcher's inbox pass makes, so nothing
-# downstream can tell where a task came from. It writes no registry record: a
+# downstream can tell where a task came from. The main checkout is the one this
+# script's own location gives (`hr_wrapper_main_of`), and anything but the root
+# checkout is refused (4) before the cut. `<state_dir>` is the main checkout's
+# `stateDir`; a copy whose own resolvable `stateDir` differs is refused (4).
+# The commit is `hr_commit_placed`'s plumbing in the main checkout, with
+# `core.hooksPath=/dev/null`, so no hook runs, and its protected-branch refusal
+# is a failure (4). It writes no registry record: a
 # trigger job has no registry, and such a run needs no local record: the local
 # commands act on it through GitHub.
 #
@@ -156,15 +163,29 @@
 # checkout's remote record's mirror when its `worktree` exists and is on the
 # branch, never removed; otherwise `create-worktree.sh --existing
 # --no-bootstrap` into `hr_worktree_dir`, removed with the local branch it
-# DWIM-created on every exit, as `start` removes its cut. Either copy is
-# fast-forwarded to `origin/<branch>`. No bootstrap runs: the copy holds one
-# placed file. The round comes from `git ls-tree` of the copy's `HEAD` under
+# DWIM-created on every exit, as `start` removes its cut. The mirror is used
+# only when `hr_run_copy_check_var` trusts it against the main checkout this
+# script's own location gives and its branch, read from the main repository,
+# is <branch>; a mirror that fails falls through to a cut copy, and the cut
+# copy must pass the same check (4). A main checkout that is not the root
+# checkout is refused first (4). Every git call in either copy runs from the
+# main checkout with `core.hooksPath=/dev/null`, `core.fsmonitor=false` and
+# `submodule.recurse=false`, naming `refs/heads/<branch>`, never `HEAD`: origin's
+# <branch> is fetched only when the main `.git/config` names origin's URL, the
+# copy is fast-forwarded by `hr_run_fast_forward_var`, which refuses a target
+# commit that changes a protected path, and then `hr_run_surface_check_var
+# copy` refuses a branch, a working tree or an untracked file that differs
+# from origin's default branch on the protected set (each 4). No bootstrap
+# runs: the copy holds one placed file. `<state_dir>` is the main checkout's
+# `stateDir`, and a copy whose own resolvable one differs is refused (4). The
+# round comes from `git ls-tree` of `refs/heads/<branch>` under
 # `<state_dir>/user_reviews/` — the engine's own round source: each basename
 # matching `^(.+)_review(_[0-9]+)?\.md$` whose captured branch EQUALS <branch>,
 # the unsuffixed file being round 1; next is `<branch>_review.md` when none
 # matched, else `<branch>_review_<max+1>.md`. It is placed, committed as
-# `hr_user_review_subject`'s `chore: add user review for <branch>` and pushed
-# (each failure 4); the cut copy is removed; then `dispatch --engine
+# `hr_user_review_subject`'s `chore: add user review for <branch>` by
+# `hr_commit_placed`'s plumbing in the main checkout, running no hook, and
+# pushed (each failure 4); the cut copy is removed; then `dispatch --engine
 # user_review --resume none --chain 0`, after which it holds until a `harness run
 # <branch>` run whose `headSha` is the pushed commit is listed — `run_by_sha_var`,
 # `trigger`'s bounded lookup — so a review job serialized behind it never reads
@@ -177,6 +198,10 @@
 # after it under --source. Otherwise it is `Round <round>`, plus ` from <source>`
 # under --source, and ` by @<actor>` under --actor (a login, as for `stop`),
 # else ` from a local session`.
+# Every other git call this script makes in a checkout a run wrote is a read
+# that runs no code: `lineage_commits_var`'s `rev-parse` / `rev-list` in the
+# job's checkout, and every `show`, `ls-tree`, `cat-file` and `log` of
+# `refs/remotes/origin/*` in the root checkout.
 # --allow-no-run EXISTS FOR A LOCALLY EXECUTED BRANCH REVIEWED ON GITHUB: such
 # a branch has no `harness run <branch>` run, and its round runs through
 # `WORKFLOW_RUN_FILE` because a GitHub-started round always does. Its local
@@ -884,7 +909,10 @@
 # bundle's `planning/` drafts at their paths under the state directory, never
 # over a file the checkout already has, and when it placed or kept any prints
 # `placed <n> planning file(s) for <branch>; kept <n> the checkout already
-# carries`. Then, under --resume answer, it
+# carries`. Every path it writes — the download directory, the answers, the
+# park-loop clear — is under the same state directory `hr_remote_bundle_restore`
+# places the bundle in, resolved as `save`'s is below. Then, under --resume
+# answer, it
 # writes each `"<n>": "<text>"` entry to `clarifications/<branch>/answer_<n>.md`
 # with the exact bytes, after checking every entry first; and with
 # `HARNESS_INPUT_PARK_LOOP_CLEAR` exactly `true` it sets `park_loop_cycles` to
@@ -916,6 +944,19 @@
 # if it were absent. It never
 # fails the job: every problem, a usage error included, is one line on stderr
 # and exit 0.
+#
+# THE STATE DIRECTORY `save` AND `restore` USE IS `hr_remote_state_dir_var`'s:
+# in a job, `stateDir` from `harness.config.json` at
+# `HARNESS_GITHUB_DEFAULT_COMMIT`, because the checkout's own copy is the
+# session's to rewrite and could point the bundle at any directory; outside a
+# job, the checkout's own. Where the two differ in a job, each prints
+# `the checkout's harness.config.json names stateDir '<checkout>', the trusted
+# configuration at <commit> names '<trusted>'; using '<trusted>'` on stderr.
+# A LINKED SOURCE IS SKIPPED, NEVER FOLLOWED: `save` tests the status file and
+# `autonomous_logs/registry.json` component by component before reading
+# either, and the library tests every source it copies. A linked one gets one
+# stderr line, `skipped <path>: <linked> is a symbolic link`, and is treated as
+# absent; it never fails the save.
 #
 # `continue` AND `poll` CLOSE THE LOOP WITHOUT THIS MACHINE, and like `restore`
 # and `save` test neither `execution.target` nor a registry record. `continue`
@@ -1201,7 +1242,8 @@
 # the round committed on `origin/<branch>`, through the record's mirror or a
 # copy and a local branch it removes, and, after a push that did not land, the
 # same `hr_push_landed` fetch force-writing `refs/remotes/origin/<branch>` in
-# that mirror or copy, the record's `status` / `engine`, the bundle download
+# the main checkout, its own fetch force-writing that ref before the
+# fast-forward, the record's `status` / `engine`, the bundle download
 # directory `sync` uses, and `report`'s writes for the round. Its settledness
 # read, when the newest run's job GitHub never started, also fetches origin's
 # <branch>, force-writing `refs/remotes/origin/<branch>` in the root checkout:
@@ -1321,6 +1363,14 @@
 #                 dispatch; no copy or local feat_x is left; the stub lists no
 #                 run of the pushed `headSha`, so one `::warning::` line follows
 #                 (export HARNESS_TRIGGER_LOOKUP_SECS=0 to skip the waits)
+#   planted    review's setup, plus a registry record of feat_x with `execution:
+#              github-actions` whose `worktree` is a copy on feat_x, then feat_x
+#              moved by plumbing (a temporary-index `read-tree` / `update-index`
+#              / `write-tree`, `commit-tree`, `update-ref`) to a commit changing
+#              `.claude/settings.json`: review ... --allow-no-run -> 4 naming
+#              the protected surface; that copy's refs/heads/feat_x unchanged,
+#              its working tree without the planted settings, nothing pushed
+#              or sent
 #   in flight  the newest run `in_progress`, its jobs listing no completed
 #              `run` job -> 2, nothing pushed or sent
 #   no run     no `harness run feat_x` run listed -> 2, nothing pushed; with
@@ -2002,11 +2052,19 @@ else
   root=$(hr_main_repo "${PWD-.}") || setup_fail "'${PWD-.}' is not inside a git repository"
 fi
 
+# The main checkout `review` and `start` run git from, placed without git from
+# this script's own location; empty when it cannot be placed.
+run_main=$(hr_wrapper_main_of "$script_dir") || run_main=""
+
 hr_config_load "$root" || :
 registry=""
 status_no_record=0
 case "$verb" in
-  restore|save|continue|poll|discard)
+  restore|save)
+    # The state directory the bundle library resolves, trusted inside a job.
+    hr_remote_state_dir_var "$root" || setup_fail "cannot resolve '$root/harness.config.json'"
+    ;;
+  continue|poll|discard)
     hr_state_path "$root" >/dev/null || setup_fail "cannot resolve '$root/harness.config.json'"
     ;;
   pause-requested|run-created-at)
@@ -2848,8 +2906,24 @@ JQ_DEF_FENCE='def fence:
   (([match("`+"; "g") | .length] | max) // 0) as $m
   | "`" * ([$m + 1, 3] | max);'
 
+# remote_state_difference <verb> — after `hr_remote_state_dir_var`: one stderr
+# line when the trusted stateDir differs from the checkout's own.
+remote_state_difference() {
+  local checkout="$HR_REMOTE_STATE_CHECKOUT"
+  [ "$HR_REMOTE_STATE_FROM" = trusted ] && [ "$checkout" != "$HR_REMOTE_STATE_DIR" ] || return 0
+  if [ -n "$checkout" ]; then
+    checkout="stateDir '$checkout'"
+  else
+    checkout="no readable stateDir"
+  fi
+  echo "remote-run.sh: ${1-}: the checkout's harness.config.json names $checkout, the trusted configuration at ${HARNESS_GITHUB_DEFAULT_COMMIT-} names '$HR_REMOTE_STATE_DIR'; using '$HR_REMOTE_STATE_DIR'" >&2
+}
+
 verb_restore() {
-  local id download status_file clar n tmp status_source
+  local id download status_file clar n tmp status_source state
+  hr_remote_state_dir_var "$root" || restore_fail "cannot resolve '$root/harness.config.json'"
+  remote_state_difference restore
+  state="$root/$HR_REMOTE_STATE_DIR"
   if [ "$resume" = answer ]; then
     HARNESS_INPUT_ANSWERS="${HARNESS_INPUT_ANSWERS-}"
     export HARNESS_INPUT_ANSWERS
@@ -2874,8 +2948,7 @@ verb_restore() {
       || restore_refuse "--resume answer, but no finished run of $branch's current lineage carries a state bundle; nothing written"
     echo "remote-run.sh: no previous bundle for $branch; this is its first job"
   else
-    download=$(hr_state_path "$root" "autonomous_logs/remote_download/$branch/$id") \
-      || restore_fail "cannot resolve '$root/harness.config.json'"
+    download="$state/autonomous_logs/remote_download/$branch/$id"
     status_file="$download/$HR_REMOTE_STATUS_FILE"
     if [ ! -f "$status_file" ]; then
       mkdir -p "$download" || restore_fail "cannot create '$download'"
@@ -2902,8 +2975,7 @@ verb_restore() {
   fi
 
   if [ "$resume" = answer ]; then
-    clar=$(hr_state_path "$root" "$HR_REMOTE_CLARIFY_DIR/$branch") \
-      || restore_fail "cannot resolve '$root/harness.config.json'"
+    clar="$state/$HR_REMOTE_CLARIFY_DIR/$branch"
     for n in $(jq -n -r 'env.HARNESS_INPUT_ANSWERS | fromjson | keys_unsorted[]'); do
       tmp=$(mktemp "$clar/answer_$n.md.tmp.XXXXXX") || restore_fail "cannot write in '$clar'"
       if jq -n -j --arg k "$n" 'env.HARNESS_INPUT_ANSWERS | fromjson | .[$k]' >"$tmp" \
@@ -2917,8 +2989,7 @@ verb_restore() {
   fi
 
   if [ "${HARNESS_INPUT_PARK_LOOP_CLEAR-}" = true ]; then
-    status_source=$(hr_state_path "$root" "$HR_REMOTE_STATUS_SOURCE") \
-      || restore_fail "cannot resolve '$root/harness.config.json'"
+    status_source="$state/$HR_REMOTE_STATUS_SOURCE"
     if [ -f "$status_source" ]; then
       tmp=$(mktemp "$status_source.tmp.XXXXXX") || restore_fail "cannot write beside '$status_source'"
       if jq '.park_loop_cycles = "0"' "$status_source" >"$tmp" && mv "$tmp" "$status_source"; then
@@ -2941,14 +3012,33 @@ md_cell() {
   printf '%s' "${s//|/\\|}"
 }
 
+# save_link_free <rel> — 0 when no component of `<state_dir>/<rel>` is a link;
+# 1 after printing the skip line, and the caller treats the file as absent.
+save_link_free() {
+  hr_remote_link_free_var "$root" "$HR_REMOTE_STATE_DIR/$1" && return 0
+  echo "remote-run.sh: save: skipped $root/$HR_REMOTE_STATE_DIR/$1: $HR_REMOTE_LINKED is a symbolic link" >&2
+  return 1
+}
+
 verb_save() {
-  local registry_file status_source status decision detail
+  local registry_file status_source status decision detail registry_absent=0 status_linked=''
   hr_remote_names_var
-  registry_file=$(hr_state_path "$root" autonomous_logs/registry.json) || {
+  hr_remote_state_dir_var "$root" || {
     echo "remote-run.sh: save: cannot resolve '$root/harness.config.json'; no bundle written" >&2
     return 0
   }
-  status_source=$(hr_state_path "$root" "$HR_REMOTE_STATUS_SOURCE") || status_source=""
+  remote_state_difference save
+  registry_file="$root/$HR_REMOTE_STATE_DIR/autonomous_logs/registry.json"
+  status_source="$root/$HR_REMOTE_STATE_DIR/$HR_REMOTE_STATUS_SOURCE"
+  # A linked registry stays named: `hr_remote_bundle_write` needs the argument,
+  # and reads it only when no unlinked status source exists.
+  save_link_free autonomous_logs/registry.json || registry_absent=1
+  # Its skip line is printed below only when no bundle is written; otherwise
+  # `hr_remote_bundle_write` tests the same source and prints its own.
+  if ! hr_remote_link_free_var "$root" "$HR_REMOTE_STATE_DIR/$HR_REMOTE_STATUS_SOURCE"; then
+    status_linked=$HR_REMOTE_LINKED
+    status_source=""
+  fi
   # `restore` places the previous job's status.json at this same path; one whose
   # run_id is not this job's means this job's harness step never wrote its own,
   # and re-uploading it would replay the previous job's decision and chain.
@@ -2965,7 +3055,10 @@ verb_save() {
   fi
   # Without either file the harness step never started; the library's registry
   # fallback would create a registry in the checkout to find nothing in it.
-  if { [ -z "$status_source" ] || [ ! -f "$status_source" ]; } && { [ -z "$registry_file" ] || [ ! -f "$registry_file" ]; }; then
+  if { [ -z "$status_source" ] || [ ! -f "$status_source" ]; } \
+    && { [ -z "$registry_file" ] || [ "$registry_absent" = 1 ] || [ ! -f "$registry_file" ]; }; then
+    [ -z "$status_linked" ] \
+      || echo "remote-run.sh: save: skipped $root/$HR_REMOTE_STATE_DIR/$HR_REMOTE_STATUS_SOURCE: $status_linked is a symbolic link" >&2
     mkdir -p "$out_dir" 2>/dev/null \
       || echo "remote-run.sh: save: cannot create '$out_dir'" >&2
     echo "remote-run.sh: save: the harness step never started for $branch; the bundle carries no status.json" >&2
@@ -3622,6 +3715,30 @@ start_remove_copy() {
   return 0
 }
 
+# run_main_is_root — 0 when `run_main` is set and is `root`, compared
+# canonically: `review` and `start` commit in the main checkout their own
+# location gives, so a `--repo` naming another checkout is refused.
+run_main_is_root() {
+  local r
+  [ -n "$run_main" ] || return 1
+  r=$( CDPATH= cd -P -- "$root" 2>/dev/null && pwd -P ) || return 1
+  [ "$r" = "$run_main" ]
+}
+
+# placed_state_rel_var <copy> — set PLACED_STATE_REL to the main checkout's
+# `stateDir`, without its trailing `/`. 1 when that is unresolvable, or when
+# <copy>'s own resolvable `stateDir` differs: a branch-written `stateDir` never
+# chooses where a file is placed.
+placed_state_rel_var() {
+  local own
+  PLACED_STATE_REL=$(hr_state_dir "$root") || PLACED_STATE_REL=""
+  PLACED_STATE_REL="${PLACED_STATE_REL%/}"
+  [ -n "$PLACED_STATE_REL" ] || return 1
+  own=$(hr_state_dir "$1") || own=""
+  own="${own%/}"
+  [ -z "$own" ] || [ "$own" = "$PLACED_STATE_REL" ]
+}
+
 verb_start() {
   local protected=0 status=0 state_rel rel subject
   hr_branch_is_protected "$root" "$branch" || protected=$?
@@ -3638,6 +3755,8 @@ verb_start() {
     exit "$EXIT_REFUSED"
   fi
 
+  run_main_is_root || placement_fail "placing the main checkout"
+
   # Global, not local: the EXIT trap runs after this function's frame is gone.
   worktree=$(hr_worktree_dir "$root" "$branch") || placement_fail "resolving the working copy"
   had_copy=0
@@ -3650,16 +3769,16 @@ verb_start() {
   bash "$script_dir/create-worktree.sh" --no-bootstrap "$branch" >&2 || status=$?
   [ "$status" -eq 0 ] || placement_fail "the branch cut (create-worktree.sh exited $status)"
 
-  state_rel=$(hr_state_dir "$worktree") || placement_fail "resolving the state directory in '$worktree'"
-  [ -n "$state_rel" ] || placement_fail "resolving the state directory in '$worktree'"
+  placed_state_rel_var "$worktree" || placement_fail "resolving the state directory for '$worktree'"
+  state_rel="$PLACED_STATE_REL"
   rel=$(hr_task_prompt_rel "$state_rel" "$branch")
   subject=$(hr_task_prompt_subject "$branch")
 
   hr_place_artifact "$worktree" "$prompt_file" "$rel" || placement_fail "copying the prompt to '$worktree/$rel'"
-  # 3 (nothing staged) cannot happen on a freshly cut branch, so it reads as 0.
+  # 3 (identical) cannot happen on a freshly cut branch, so it reads as 0.
   status=0
-  hr_commit_placed "$script_dir/commit-on-branch.sh" "$worktree" "$rel" "$subject" >&2 || status=$?
-  [ "$status" -ne 1 ] || placement_fail "committing '$rel'"
+  hr_commit_placed "$run_main" "$worktree" "$rel" "$subject" >&2 || status=$?
+  [ "$status" -eq 0 ] || [ "$status" -eq 3 ] || placement_fail "committing '$rel'"
   status=0
   hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 || status=$?
   [ "$status" -ne 2 ] \
@@ -3761,13 +3880,16 @@ verb_review() {
     exit "$EXIT_REFUSED"
   fi
 
-  # The copy: the remote record's mirror when it is on the branch, never
-  # removed; else a copy this verb cuts and removes on every exit.
+  run_main_is_root || review_fail "placing the main checkout"
+
+  # The copy: the remote record's mirror when the main checkout lists it and it
+  # is on the branch, never removed; else a copy this verb cuts and removes on
+  # every exit.
   reg=$(hr_state_path "$root" autonomous_logs/registry.json) || reg=""
   if remote_record_exists "$reg"; then
     record_wt=$(hr_registry_get "$reg" "$branch" worktree)
     if [ -n "$record_wt" ] && [ -d "$record_wt" ] \
-      && [ "$(git -C "$record_wt" symbolic-ref --short HEAD 2>/dev/null)" = "$branch" ]; then
+      && hr_run_copy_check_var "$run_main" "$record_wt" && [ "$HR_RUN_COPY_BRANCH" = "$branch" ]; then
       use_mirror=1
     fi
   fi
@@ -3783,16 +3905,27 @@ verb_review() {
     trap start_remove_copy EXIT
     bash "$script_dir/create-worktree.sh" --existing --no-bootstrap "$branch" >&2 || status=$?
     [ "$status" -eq 0 ] || review_fail "the working copy (create-worktree.sh exited $status)"
+    hr_run_copy_check_var "$run_main" "$worktree" \
+      || review_fail "checking the working copy '$worktree': $HR_RUN_REFUSAL"
+    [ "$HR_RUN_COPY_BRANCH" = "$branch" ] \
+      || review_fail "checking the working copy '$worktree': it is on '${HR_RUN_COPY_BRANCH:-a detached HEAD}', not $branch"
   fi
   # Also for a cut copy: a local branch that existed before may be behind origin.
-  git -C "$worktree" fetch origin "$branch" >&2 || review_fail "git fetch origin $branch in '$worktree'"
-  git -C "$worktree" merge --ff-only "origin/$branch" >&2 || review_fail "git merge --ff-only origin/$branch in '$worktree'"
+  hr_remote_url_configured "$run_main" origin \
+    || review_fail "git fetch origin $branch: $run_main/.git/config names no URL for remote 'origin'"
+  hr_run_main_git fetch --no-recurse-submodules origin "+refs/heads/$branch:refs/remotes/origin/$branch" >&2 \
+    || review_fail "git fetch origin $branch in '$run_main'"
+  status=0
+  hr_run_fast_forward_var "refs/remotes/origin/$branch" >&2 || status=$?
+  [ "$status" -eq 0 ] \
+    || review_fail "the fast-forward of '$worktree' to origin/$branch (exit $status): $HR_RUN_FF_REFUSAL"
+  hr_run_surface_check_var "refs/heads/$branch" copy \
+    || review_fail "the protected-surface check of $branch in '$worktree': $HR_RUN_SURFACE_REFUSAL"
 
   # The round, from the branch tip: the engine's own round source.
-  state_rel=$(hr_state_dir "$worktree") || review_fail "resolving the state directory in '$worktree'"
-  [ -n "$state_rel" ] || review_fail "resolving the state directory in '$worktree'"
-  state_rel="${state_rel%/}"
-  names=$(git -C "$worktree" ls-tree --name-only HEAD -- "$state_rel/user_reviews/") \
+  placed_state_rel_var "$worktree" || review_fail "resolving the state directory for '$worktree'"
+  state_rel="$PLACED_STATE_REL"
+  names=$(hr_run_main_git ls-tree --name-only "refs/heads/$branch" -- "$state_rel/user_reviews/") \
     || review_fail "listing $state_rel/user_reviews/ on $branch"
   while IFS= read -r name; do
     name="${name##*/}"
@@ -3816,7 +3949,7 @@ NAMES
   hr_place_artifact "$worktree" "$review_file" "$rel" || review_fail "copying the review to '$worktree/$rel'"
   # 3 (nothing staged) cannot happen for a new round's file, so it reads as a failure.
   status=0
-  hr_commit_placed "$script_dir/commit-on-branch.sh" "$worktree" "$rel" "$(hr_user_review_subject "$branch")" >&2 || status=$?
+  hr_commit_placed "$run_main" "$worktree" "$rel" "$(hr_user_review_subject "$branch")" >&2 || status=$?
   [ "$status" -eq 0 ] || review_fail "committing '$rel'"
   status=0
   hr_push_landed "$script_dir/push-branch.sh" "$worktree" "$branch" >&2 || status=$?
@@ -3824,7 +3957,7 @@ NAMES
     || review_fail "pushing $branch: origin/$branch moved to $HR_PUSH_REMOTE_TIP, which this branch does not have (something else pushed)"
   [ "$status" -eq 0 ] \
     || review_fail "pushing $branch: the remote refused the push (push-branch.sh's lines in this job's log name why)"
-  pushed=$(git -C "$worktree" rev-parse HEAD 2>/dev/null) || pushed=""
+  pushed=$(hr_run_main_git rev-parse --verify --quiet "refs/heads/$branch^{commit}" 2>/dev/null) || pushed=""
   if [ "$use_mirror" -eq 0 ]; then
     start_remove_copy
     trap - EXIT

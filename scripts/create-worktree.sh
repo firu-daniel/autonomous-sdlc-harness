@@ -4,11 +4,16 @@
 #
 # THE TWO MODES, AND WHEN EACH IS USED.
 #
-#   default      Start a NEW branch: fetch the configured default branch, add a
-#                worktree with `-b <branch>` off `origin/<default branch>`,
-#                bootstrap it, then PUSH the branch so the remote has it from
-#                the first moment. This is what the watcher calls when a prompt
-#                arrives for a branch that does not exist yet.
+#   default      Start a NEW branch: add a worktree with `-b <branch>` off the
+#                default branch's commit AS ORIGIN REPORTS IT
+#                (`hr_run_trusted_base_var`: `ls-remote`, then a fetch of that
+#                object), never off a local ref a sandboxed session can write;
+#                set its upstream to `origin/<default branch>`, bootstrap it
+#                with its own setup-worktree.sh, then PUSH the branch so the
+#                remote has it from the first moment. Origin unreachable, or
+#                carrying no such branch, is a refusal. This is what the watcher
+#                calls when a prompt arrives for a branch that does not exist
+#                yet.
 #   --no-bootstrap  Skip the bootstrap. Alone, a variant of default mode: cut
 #                and push the new branch the same way. With `--existing`, check
 #                out the existing branch and never push. Its callers are
@@ -31,8 +36,20 @@
 #                merged-and-cleaned-up branch coming back for a follow-up run),
 #                and the asymmetry is the point: the branch already has a
 #                history somebody else may have advanced, so this mode reads the
-#                remote and never writes to it. It also never names the default
-#                branch.
+#                remote and never writes to it. The branch is one a run wrote,
+#                and a run's commits can carry any content at any path, so it
+#                runs only from the main checkout's own scripts directory and,
+#                in order: reads the tip once; refuses it unless the protected
+#                set (`hr_run_surface_check_var … tree`) equals origin's
+#                default branch at their merge base; adds the copy with
+#                `--no-checkout` under the pins (no hook runs); checks the copy
+#                is on the branch at that tip; populates it with `read-tree`
+#                from that same object id; and bootstraps it with THIS
+#                checkout's `setup-worktree.sh --target <copy>`, so every
+#                configured value comes from the main checkout's
+#                `harness.config.json`. A failure after the copy is added
+#                removes the copy, and the local branch when `worktree add`
+#                DWIM-created it, and exits 2.
 #
 # WHERE THE WORKTREE GOES. `<work_root>/<projectName>-<sanitized branch>`,
 # derived by the shared library rather than assembled here — the SAME
@@ -52,7 +69,9 @@
 # sequence). So a failing step aborts the script with that step's own status —
 # and the worktree it had already created is LEFT IN PLACE for inspection,
 # because removing a working copy is a decision this script does not get to
-# make silently.
+# make silently. The one exception is `--existing` between `worktree add` and
+# the population: an unpopulated copy of an unchecked branch is not something
+# to inspect, so it is removed and the exit is 2.
 #
 # FAIL CLOSED ON A CONFIGURATION IT CANNOT READ. The directory name, the default
 # branch and the bootstrap path all come from `harness.config.json` at run time,
@@ -62,9 +81,13 @@
 # match. An unreadable or absent configuration is therefore a refusal that
 # creates nothing.
 #
-# WHAT IT NEVER DOES. It never pushes in `--existing` mode. It never deletes,
-# empties, reuses or moves an existing directory, and never passes a force flag
-# to `git worktree add`. It never checks out a branch that is already checked
+# WHAT IT NEVER DOES. It never pushes in `--existing` mode. In `--existing`
+# mode it never writes a branch's tree before the protected-surface check has
+# passed on the tip it read, never runs a hook from that tree, and never runs
+# the branch's own `setup-worktree.sh` or `commands.*`. It never deletes,
+# empties, reuses or moves an existing directory — the `--existing` cleanup
+# removes only the copy this run added — and never passes a force flag to
+# `git worktree add`. It never checks out a branch that is already checked
 # out somewhere — it names that working copy and refuses, because git would
 # refuse anyway and a bare git error does not say what to do about it. It is run
 # by the watcher or by a person, not by a dispatched agent, so it has no entry
@@ -89,11 +112,18 @@
 #
 #   0  the worktree is ready (and, in default mode or under `--no-bootstrap`
 #      without `--existing`, the branch was pushed)
-#   1  usage error / the library or the configuration could not be read
-#   2  refusal — nothing was created: `--existing` and the branch is nowhere;
-#      the branch is already checked out in another working copy (which is
-#      named); or default mode with no `origin` remote, or no
-#      `origin/<default branch>` to branch from
+#   1  usage error / the library or the configuration could not be read /
+#      `--existing` run from anywhere but the main checkout's own scripts
+#      directory, or a main checkout whose `.git` is not a real directory
+#   2  refusal — nothing was created, or what was created was removed:
+#      `--existing` and the branch is nowhere; the branch is already checked
+#      out in another working copy (which is named); `--existing` and the tip's
+#      protected surface differs from origin's default branch at their merge
+#      base, or that base cannot be established (the refusal names each path);
+#      `--existing` and the added copy failed its check or its population (the
+#      copy, and a DWIM-created local branch, are removed); or default mode with
+#      no `origin` remote, or no default-branch commit origin reports — origin
+#      unreachable included
 #   4  the working copy was created but could not be bootstrapped (never under
 #      `--no-bootstrap`, with or without `--existing`, which resolves no
 #      bootstrap) — it has no
@@ -131,22 +161,36 @@
 #   existing, no bootstrap   git -C "$d" worktree remove "$w/demo-feat-q"
 #                  git -C "$d" branch -D feat/q
 #                  bash "$d/scripts/create-worktree.sh" --existing --no-bootstrap feat/q
-#                  -> "$w/demo-feat-q" on feat/q, no deps.marker, "$b" UNCHANGED
+#                  -> "$w/demo-feat-q" on feat/q, populated, no deps.marker,
+#                     "$b" UNCHANGED
 #   already there  bash "$d/scripts/create-worktree.sh" --existing feat/x
 #                  -> exit 2 naming "$w/demo-feat-x"; nothing created
 #   recreate       git -C "$d" worktree remove "$w/demo-feat-x"
 #                  bash "$d/scripts/create-worktree.sh" --existing feat/x
-#                  -> re-created from origin/feat/x, and "$b" is UNCHANGED
+#                  -> re-created at the local feat/x, bootstrapped by
+#                     "$d/scripts/setup-worktree.sh --target", and "$b" is
+#                     UNCHANGED
 #   no remote      git -C "$d" remote remove origin
 #                  bash "$d/scripts/create-worktree.sh" feat/y
 #                  -> exit 2 naming the missing remote; nothing created
 #                  (git -C "$d" remote add origin "$b" restores the fixture)
 #   no base ref    git -C "$b" update-ref -d refs/heads/trunk
-#                  git -C "$d" update-ref -d refs/remotes/origin/trunk
 #                  bash "$d/scripts/create-worktree.sh" feat/y
-#                  -> exit 2 naming origin/trunk; the failed fetch is tolerated
-#                     and the absent ref is what refuses
+#                  -> exit 2 naming origin; the failed fetch is no longer what
+#                     is judged — `ls-remote` finding no refs/heads/trunk is
+#                     what refuses; nothing created
 #                  (git -C "$d" push -q origin trunk restores the fixture)
+#   payload        # commit .claude/settings.json through plumbing, never
+#                  # writing it to "$d"'s working tree, on a pushed branch
+#                  o=$(printf '{}' | git -C "$d" hash-object -w --stdin)
+#                  i="$w/idx"; GIT_INDEX_FILE="$i" git -C "$d" read-tree trunk
+#                  GIT_INDEX_FILE="$i" git -C "$d" update-index --add --cacheinfo "100644,$o,.claude/settings.json"
+#                  t=$(GIT_INDEX_FILE="$i" git -C "$d" write-tree)
+#                  c=$(git -C "$d" commit-tree "$t" -p trunk -m payload)
+#                  git -C "$d" push -q origin "$c:refs/heads/feat/p"
+#                  bash "$d/scripts/create-worktree.sh" --existing feat/p
+#                  -> exit 2 naming .claude/settings.json; no "$w/demo-feat-p",
+#                     and no local feat/p
 #   no bootstrap   # drop it from the COMMITTED tree only, so the copy this
 #                  # script runs from stays on disk — `--cached` is the point
 #                  git -C "$d" rm -qr --cached scripts
@@ -270,11 +314,28 @@ else
 fi
 
 if [ "$existing" -eq 1 ]; then
+  # The bootstrap below runs THIS directory's setup-worktree.sh against the new
+  # copy, so this copy must be the main checkout's own. Refused before anything
+  # is created.
+  placed="$(hr_wrapper_main_of "$script_dir")" || placed=""
+  main_c="$( CDPATH= cd -P -- "$main_repo" 2>/dev/null && pwd -P )" || main_c=""
+  top_c="$( CDPATH= cd -P -- "$top" 2>/dev/null && pwd -P )" || top_c=""
+  if [ -z "$placed" ] || [ "$placed" != "$main_c" ] || [ "$placed" != "$top_c" ]; then
+    echo "create-worktree.sh: --existing runs only from the main checkout's own scripts directory, and '$script_dir' does not place as $main_repo — refusing" >&2
+    exit 1
+  fi
+  if ! hr_run_main_set_var "$main_repo"; then
+    echo "create-worktree.sh: $HR_RUN_REFUSAL — refusing" >&2
+    exit 1
+  fi
+
   # Existing-branch mode: tolerate a failed fetch (offline) iff the local branch
   # already exists; otherwise the branch must be on the remote.
   fetch_ok=1
   git -C "$main_repo" fetch origin "$branch" || fetch_ok=0
+  local_existed=1
   if ! git -C "$main_repo" show-ref --verify --quiet "refs/heads/$branch"; then
+    local_existed=0
     if [ "$fetch_ok" -ne 1 ] || ! git -C "$main_repo" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
       echo "create-worktree.sh: branch '$branch' is not local and not on origin — cannot check out an existing branch" >&2
       exit 2
@@ -306,56 +367,120 @@ EOF
     exit 2
   fi
 
-  # No `-b`: this checks out the existing local branch, or DWIM-creates a local
-  # branch tracking origin/<branch> when only the remote ref exists.
-  git -C "$main_repo" worktree add "$worktree_dir" "$branch"
+  # The tip is read ONCE; the check, the ref test after `worktree add` and the
+  # population all name this object id, so a ref moved in between is refused
+  # rather than checked out.
+  if [ "$local_existed" -eq 1 ]; then
+    tip_ref="refs/heads/$branch"
+  else
+    tip_ref="refs/remotes/origin/$branch"
+  fi
+  tip="$(hr_run_main_git rev-parse --verify --quiet "$tip_ref^{commit}" 2>/dev/null)" || tip=""
+  if [ -z "$tip" ]; then
+    echo "create-worktree.sh: $tip_ref does not name a commit — refusing; nothing was created" >&2
+    exit 2
+  fi
+  if ! hr_run_surface_check_var "$tip" tree; then
+    echo "create-worktree.sh: refusing to check out '$branch' at $tip — $HR_RUN_SURFACE_REFUSAL" >&2
+    echo "  nothing was created: a run's commits can carry any content at a protected path, and this copy would be bootstrapped outside the sandbox" >&2
+    exit 2
+  fi
+
+  # No `-b`: this adds the existing local branch, or DWIM-creates a local branch
+  # tracking origin/<branch> when only the remote ref exists. `--no-checkout`
+  # under the pins: nothing of the branch's tree is written and no hook runs.
+  hr_run_main_git worktree add --no-checkout "$worktree_dir" "$branch"
+
+  # From here every failure removes what this run created — the copy, and the
+  # local branch when `worktree add` DWIM-created it — and exits 2.
+  existing_undo() {
+    trap - EXIT HUP INT TERM
+    hr_run_main_set_var "$main_repo" || :
+    echo "create-worktree.sh: removing the working copy this run added at $worktree_dir" >&2
+    hr_run_main_git worktree remove --force "$worktree_dir" >/dev/null 2>&1 ||
+      echo "  could not remove it: run 'git -C $main_repo worktree remove --force $worktree_dir'" >&2
+    hr_run_main_git worktree prune >/dev/null 2>&1 || :
+    if [ "$local_existed" -eq 0 ]; then
+      hr_run_main_git branch -D "$branch" >/dev/null 2>&1 ||
+        echo "  could not delete the local branch '$branch' it created: run 'git -C $main_repo branch -D $branch'" >&2
+    fi
+    exit 2
+  }
+  trap existing_undo EXIT
+  trap 'exit 2' HUP INT TERM
+
+  if ! hr_run_copy_check_var "$main_repo" "$worktree_dir"; then
+    echo "create-worktree.sh: the working copy just added is not one this script trusts — $HR_RUN_REFUSAL" >&2
+    exit 2
+  fi
+  if [ "$HR_RUN_COPY_BRANCH" != "$branch" ]; then
+    echo "create-worktree.sh: the working copy just added at $worktree_dir is not on '$branch' — refusing" >&2
+    exit 2
+  fi
+  now="$(hr_run_main_git rev-parse --verify --quiet "refs/heads/$branch^{commit}" 2>/dev/null)" || now=""
+  if [ "$now" != "$tip" ]; then
+    echo "create-worktree.sh: refs/heads/$branch is ${now:-unreadable}, not the checked tip $tip — refusing" >&2
+    exit 2
+  fi
+  if ! hr_run_copy_git read-tree --reset -u --no-recurse-submodules "$tip"; then
+    echo "create-worktree.sh: could not populate $worktree_dir from $tip — refusing" >&2
+    exit 2
+  fi
+  trap - EXIT HUP INT TERM
 else
   default_branch="$(hr_default_branch "$main_repo")" || default_branch=""
   if [ -z "$default_branch" ]; then
     echo "create-worktree.sh: no defaultBranch in '$main_repo/harness.config.json' — refusing" >&2
     exit 1
   fi
-  # The working copy is branched FROM `origin/<default branch>`, so the remote
-  # is a precondition and not a step. Refuse both states `doctor`'s `remote`
-  # check grades, in this script's own voice: unguarded, `set -e` would end the
-  # run at four lines of git naming neither this script, nor a remedy, nor the
-  # check that would have said so first.
+  # The working copy is branched from the default branch's commit as origin
+  # reports it, so the remote is a precondition and not a step. Refuse a missing
+  # origin here, and below an origin that cannot say what that commit is, in
+  # this script's own voice: unguarded, `set -e` would end the run at four
+  # lines of git naming neither this script, nor a remedy, nor the check that
+  # would have said so first.
   if ! git -C "$main_repo" remote get-url origin >/dev/null 2>&1; then
     echo "create-worktree.sh: '$main_repo' has no 'origin' remote — a working copy is created from origin/$default_branch, so there is nothing to branch from" >&2
     echo "  add one: git remote add origin <url> && git push -u origin $default_branch" >&2
     echo "  (\`npx autonomous-sdlc-harness doctor\` reports this as a failing \`remote\` check)" >&2
     exit 2
   fi
-  # Tolerate a failed fetch the way the `--existing` arm above does — offline,
-  # with the ref already present, is still a working copy this can create — and
-  # judge the ref the next line names rather than the fetch. git's own fetch
-  # stderr still reaches the log above whichever outcome follows.
+  # This fetch only keeps origin/<default branch> current for the upstream set
+  # below; the cut is from the commit origin reports, never from a local ref a
+  # sandboxed session can write, so an unreachable origin is a refusal.
   git -C "$main_repo" fetch origin "$default_branch" || true
-  if ! git -C "$main_repo" show-ref --verify --quiet "refs/remotes/origin/$default_branch"; then
-    echo "create-worktree.sh: '$main_repo' has an 'origin' remote but no origin/$default_branch to branch from" >&2
-    echo "  push the default branch: git push -u origin $default_branch" >&2
-    echo "  (\`npx autonomous-sdlc-harness doctor\` reports this as a failing \`remote\` check)" >&2
+  if ! hr_run_main_set_var "$main_repo"; then
+    echo "create-worktree.sh: $HR_RUN_REFUSAL — refusing" >&2
+    exit 1
+  fi
+  if ! hr_run_trusted_base_var; then
+    echo "create-worktree.sh: cannot establish $default_branch on origin to branch from — $HR_RUN_REFUSAL; nothing was created" >&2
+    echo "  reach origin, or push the default branch: git push -u origin $default_branch" >&2
+    echo "  (\`npx autonomous-sdlc-harness doctor\` reports a missing origin/$default_branch as a failing \`remote\` check; it does not contact origin, so an unreachable one passes there)" >&2
     exit 2
   fi
-  git -C "$main_repo" worktree add -b "$branch" "$worktree_dir" "origin/$default_branch"
+  # History as stored: a replace ref or graft for the base would swap the tree cut here.
+  GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null \
+    git -C "$main_repo" worktree add -b "$branch" "$worktree_dir" "$HR_RUN_TRUSTED_BASE"
+  git -C "$main_repo" branch --quiet --set-upstream-to="origin/$default_branch" "$branch"
 fi
 
-# --- Bootstrap by running the NEW checkout's own setup-worktree.sh, which is
-# the single source for what bootstrapping means (it also installs the
-# worktree-scoped pre-push backstop). Its scripts directory is read from the new
-# checkout's configuration, falling back to this script's own repo-relative path
-# when that configuration is unreadable; the resolution is then judged on the
-# BOOTSTRAP PATH, and an unreadable one is retried once at this script's own
-# repo-relative path.
+# --- Bootstrap. setup-worktree.sh is the single source for what bootstrapping
+# means (it also installs the worktree-scoped pre-push backstop).
 #
-# WHAT THE RETRY COVERS, AND WHAT IT DOES NOT. It covers a working copy whose
-# configuration names a DIFFERENT `scriptsDir` than this checkout's — the only
-# case in which the two spellings differ at all. It does NOT rescue a working
-# copy that carries no scripts directory: both spellings then resolve inside the
-# same absent tree, and that case is the refusal below, not a skip. The origin
-# checkout's own copy is not run instead — setup-worktree.sh anchors on its own
-# location and takes no arguments, so running it would bootstrap THIS checkout
-# rather than the new one.
+# `--existing` runs THIS checkout's setup-worktree.sh — the main checkout's, as
+# the placement check above established — with `--target`, so every configured
+# value and the script itself come from the main checkout, never from the branch.
+#
+# Default mode runs the NEW checkout's own copy: its tree is origin's default
+# branch. Its scripts directory is read from the new checkout's configuration,
+# falling back to this script's own repo-relative path when that configuration
+# is unreadable; the resolution is then judged on the BOOTSTRAP PATH, and an
+# unreadable one is retried once at this script's own repo-relative path. The
+# retry covers a working copy whose configuration names a DIFFERENT `scriptsDir`
+# than this checkout's; it does NOT rescue a copy that carries no scripts
+# directory — both spellings then resolve inside the same absent tree, and that
+# case is the refusal below, not a skip.
 if [ "$no_bootstrap" -eq 1 ]; then
   if [ "$existing" -eq 1 ]; then
     echo "create-worktree.sh: worktree ready at $worktree_dir (not bootstrapped)"
@@ -365,6 +490,19 @@ if [ "$no_bootstrap" -eq 1 ]; then
     echo "create-worktree.sh: worktree ready at $worktree_dir (not bootstrapped)"
     echo "create-worktree.sh: branch $branch (pushed to origin)"
   fi
+  exit 0
+fi
+if [ "$existing" -eq 1 ]; then
+  bootstrap="$script_dir/setup-worktree.sh"
+  if [ ! -r "$bootstrap" ]; then
+    echo "create-worktree.sh: no bootstrap script at '$bootstrap', this main checkout's own" >&2
+    echo "  the working copy at $worktree_dir was created but NOT bootstrapped: no dependency install, so it cannot satisfy any commit gate, and no pre-push backstop" >&2
+    echo "  it is left in place for inspection; restore setup-worktree.sh beside this script, then 'git -C $main_repo worktree remove $worktree_dir' and re-run" >&2
+    exit 4
+  fi
+  bash "$bootstrap" --target "$worktree_dir"
+  echo "create-worktree.sh: worktree ready at $worktree_dir"
+  echo "create-worktree.sh: branch $branch (existing branch; not pushed)"
   exit 0
 fi
 scripts_rel="$(hr_scripts_dir "$worktree_dir")" || scripts_rel=""
@@ -386,17 +524,12 @@ else
     echo "  nor at '$bootstrap_retry' (this checkout's own repo-relative path)" >&2
   fi
   echo "  the working copy at $worktree_dir was created but NOT bootstrapped: no dependency install, so it cannot satisfy any commit gate, and no pre-push backstop" >&2
-  echo "  it is left in place for inspection, and this exit precedes the push step, so in default mode '$branch' was not pushed" >&2
-  echo "  commit a scripts directory carrying setup-worktree.sh (and its lib/) on the base this copy was cut from, then clear BOTH things this exit left behind before re-creating: 'git -C $main_repo worktree remove $worktree_dir' and, in default mode, 'git -C $main_repo branch -D $branch' — the copy was created with 'worktree add -b', so the local branch outlives the directory and 'worktree remove' does not delete it; a re-run that skips the second command refuses with git's own \"a branch named '$branch' already exists\"" >&2
+  echo "  it is left in place for inspection, and this exit precedes the push step, so '$branch' was not pushed" >&2
+  echo "  commit a scripts directory carrying setup-worktree.sh (and its lib/) on the base this copy was cut from, then clear BOTH things this exit left behind before re-creating: 'git -C $main_repo worktree remove $worktree_dir' and 'git -C $main_repo branch -D $branch' — the copy was created with 'worktree add -b', so the local branch outlives the directory and 'worktree remove' does not delete it; a re-run that skips the second command refuses with git's own \"a branch named '$branch' already exists\"" >&2
   exit 4
 fi
 
-if [ "$existing" -eq 1 ]; then
-  echo "create-worktree.sh: worktree ready at $worktree_dir"
-  echo "create-worktree.sh: branch $branch (existing branch; not pushed)"
-else
-  git -C "$worktree_dir" push -u origin "$branch"
-  echo "create-worktree.sh: worktree ready at $worktree_dir"
-  echo "create-worktree.sh: branch $branch (pushed to origin)"
-fi
+git -C "$worktree_dir" push -u origin "$branch"
+echo "create-worktree.sh: worktree ready at $worktree_dir"
+echo "create-worktree.sh: branch $branch (pushed to origin)"
 exit 0

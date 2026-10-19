@@ -84,11 +84,19 @@
 #     proceed into classify_run_exit and stamp a status this teardown did not
 #     intend — and the pre-captured descendants are signalled after it.
 #   * THE RESET-AND-RESUME IS SAFE BECAUSE OF THE FLOWS' COMMIT-PER-UNIT
-#     INVARIANT: HEAD is always a valid checkpoint, so `git reset --hard HEAD`
-#     discards only the dead dispatch's UNCOMMITTED work, which the resumed run
-#     re-does from the committed ledger or checklist. Restarts are counted per
-#     run and capped; past the cap, or with the working copy gone, the run is
-#     marked `failed` with the reason in the notification instead of restarted.
+#     INVARIANT: the branch tip is always a valid checkpoint, so resetting the
+#     copy's index and tree to it discards only the dead dispatch's UNCOMMITTED
+#     work, which the resumed run re-does from the committed ledger or
+#     checklist. Restarts are counted per run and capped; past the cap, or with
+#     the working copy gone, the run is marked `failed` with the reason in the
+#     notification instead of restarted.
+#   * THE RESET IS PINNED AND CAN BE REFUSED. The copy is first checked against
+#     the main checkout's own records; the reset (`hr_run_reset_var`) runs no
+#     hook and moves no ref, and refuses a tip whose commits change a protected
+#     path against origin's default branch, an unreachable origin included. In
+#     job mode a job-surfaces check comes first (see JOB MODE). A refusal gives
+#     the run up as `failed`, naming the reason, and the recovery note is
+#     written only to a state directory reached without a symbolic link.
 #   * IT IS SKIPPED ENTIRELY WHILE A USAGE HOLD IS IN EFFECT, because the usage
 #     machinery owns run state for as long as that marker is there.
 #
@@ -169,8 +177,9 @@
 #
 # WHAT IT COMMITS, AND WHAT IT POINTEDLY DOES NOT. A dropped task prompt and a
 # dropped docs checklist are copied into the run's working copy and COMMITTED
-# there before the run starts, through the same commit wrapper every other
-# unattended commit point calls: the engine's own "working tree clean"
+# there before the run starts, by the watcher's own commit — plumbing in the main
+# checkout that runs no hook, commits that one path and nothing else the run
+# staged, and refuses a protected branch: the engine's own "working tree clean"
 # precondition has to be honest from its very first step, and a prompt left
 # uncommitted is lost when the branch reaches a pull request. A dropped REVIEW
 # file is placed and NEVER committed — the flow's own commits pick it up — on a
@@ -199,13 +208,17 @@
 #     `origin/<branch>`, so a review left uncommitted would not reach it, and a
 #     job boundary before the flow's own commit would lose it. The working copy
 #     is first fast-forwarded to `origin/<branch>`, because the job, not this
-#     copy, is where the branch advanced.
+#     copy, is where the branch advanced: fetched in the main checkout, pinned,
+#     only when its `.git/config` names origin's URL, and moved by the library's
+#     fast-forward, which refuses a target that changes a protected path. The
+#     commit is the watcher's, with no hook (WHAT IT COMMITS above).
 #   * A FAILED COMMIT OR PUSH BLOCKS A REMOTE DISPATCH, for all three artifacts,
 #     while it never blocks a local launch. A local run executes in the working
 #     copy that holds the file; a remote job sees only what was pushed. An
 #     identical re-drop still skips the commit, but its push must still land —
 #     the earlier drop's push may be the one that failed. push-branch.sh exits
-#     0 on every path, so "landed" is read as `origin/<branch>` equal to HEAD.
+#     0 on every path, so "landed" is read in the main checkout as
+#     `refs/remotes/origin/<branch>` equal to `refs/heads/<branch>`.
 #   * NOTHING LOCAL WATCHES, GATES, RESTARTS OR RESUMES A REMOTE RUN ON ITS
 #     OWN. Skipped for such a record: the vanished-process reconcile, the cap
 #     count, the stall watchdog, both halves of the usage gate, and the lane's
@@ -217,6 +230,37 @@
 #
 # A remote run's local working copy is a MIRROR that `remote-run.sh sync`
 # fills; it is stopped through `remote-run.sh stop`.
+#
+# THE WATCHER'S GIT IN A RUN'S COPY. A run's working copy is written by a
+# sandboxed session, and this script runs unsandboxed, so a git call made in
+# that copy would load what the session wrote there: its `config.worktree`
+# (`core.fsmonitor`, `core.sshCommand`, `remote.*`), its hooks, `.gitattributes`
+# drivers, submodule configuration, and its `.git` pointer or worktree record.
+# The watcher therefore makes none. RUN_MAIN, the main checkout placed from this
+# script's location without git, anchors every call, and a call that cannot be
+# anchored refuses. Class by class:
+#
+#   * READS that used to ask the copy — the reused copy's branch — are made once,
+#     from the main checkout, by `hr_run_copy_check_var`, which also refuses a
+#     copy this repository does not list.
+#   * CALLS THAT RUN CODE — the clean test, the remote arm's fetch and
+#     fast-forward, the artifact commits, the watchdog's reset — go through the
+#     library's pinned runners: no hook, no fsmonitor, no submodule recursion,
+#     never the copy's `.git`, and a remote only when the main `.git/config`
+#     names its URL. The fast-forward, the reset and the reused copy's surface
+#     check refuse a branch that changes a protected path against origin's
+#     default-branch commit. The artifact commit is plumbing that commits one
+#     path, and the landed test reads the main checkout's refs.
+#   * A FRESH COPY create-worktree.sh has just cut is a trusted tree: it is cut
+#     from the commit origin reported, and no session has run there; only the
+#     commit call changed. Its command lines, and `--existing`'s, are unchanged.
+#   * READS ON REGISTRY ROOTS (`footprint_grade`) stay as they are: those are
+#     adopters' main checkouts, and `rev-parse` runs no hook or fsmonitor.
+#   * IN JOB MODE, the watchdog's job-surfaces check runs `npx` outside the
+#     checkout (see JOB MODE).
+#
+# The rules every hardened call holds are lib/harness-run-lib.sh's, in the
+# section THE WATCHER FAMILY'S GIT IN A RUN'S COPY.
 #
 # THE AGENT BINARY IS REACHED THROUGH ONE VARIABLE, `${HARNESS_AGENT_CLI:-claude}`,
 # resolved once below. It defaults to the real CLI, so an operator sees no
@@ -313,10 +357,19 @@
 # stream tee, classify_run_exit, park-loop guard, stall watchdog and usage gate
 # a local run gets — the job does for itself what this daemon does locally.
 #
-#   * REFUSED UNLESS HARNESS_JOB_MODE=1. The stall watchdog's `git reset --hard
-#     HEAD` acts on the checkout the job runs in, and job mode treats that
+#   * REFUSED UNLESS HARNESS_JOB_MODE=1. The stall watchdog's reset to the last
+#     commit acts on the checkout the job runs in, and job mode treats that
 #     checkout as both the main one and the working copy; run by accident in a
 #     developer's checkout it would discard work. Only the workflow sets it.
+#   * THE WATCHDOG'S RESET IS GATED ON THE JOB SURFACES. Before it, the job runs
+#     `npx --yes autonomous-sdlc-harness@$HARNESS_CLI_VERSION doctor --cwd
+#     <checkout> --job-surfaces=<default branch>@<commit>@<base>` from a fresh
+#     empty temporary directory, never from the checkout, whose `.npmrc` and
+#     `node_modules` the session can write. The branch, commit and base are
+#     HARNESS_GITHUB_DEFAULT_BRANCH, HARNESS_GITHUB_DEFAULT_COMMIT and
+#     HARNESS_DEFAULT_BRANCH_COMMIT, recorded by harness-run.yml before any
+#     session ran, so no ref the session could move is the base. A non-zero exit, or any of those values or HARNESS_CLI_VERSION
+#     empty, gives the run up as `failed`.
 #   * OFF: the inbox pass, the cleanup sweep, the live-log window, and the
 #     machine lane (both halves). The lane is local-only, and on a hosted runner
 #     its directory would not outlive the job. They are forced off AFTER the
@@ -610,6 +663,9 @@
 #                    ALIVE afterwards. STALL_MAX_RESTARTS=0 -> `failed`, the
 #                    reason in the notification, no restart — as does removing
 #                    "$w/demo-feat_x" first, naming the missing working copy.
+#                    The reset asks origin for the default branch's commit, so
+#                    the fixture needs `a drop`'s origin; without one the run
+#                    is given up, naming that.
 #                    `touch "$d/sdlc-harness/autonomous_logs/.usage_hold"` ->
 #                    the whole pass is skipped even past the kill threshold, and
 #                    STALL_CHECK_ENABLED=0 does the same
@@ -742,6 +798,31 @@
 #                    `git -C "$w/demo-feat_x" log -1 --format=%s` is
 #                    `chore: add user review for feat_x`, pushed, and ONE
 #                    `-f engine=user_review` dispatch recorded
+#   refused reuse `a drop`'s fixture with feat_x completed and its copy in
+#                 place; commit `.mcp.json` onto feat_x by plumbing, with no
+#                 hook or checkout:
+#                   b=$(git -C "$d" hash-object -w --stdin </dev/null)
+#                   t=$( (git -C "$d" ls-tree feat_x; printf '100644 blob %s\t.mcp.json\n' "$b") | git -C "$d" mktree)
+#                   git -C "$d" update-ref refs/heads/feat_x "$(git -C "$d" commit-tree "$t" -p feat_x -m payload)"
+#                 then bring the copy level with it
+#                 (`git -C "$w/demo-feat_x" read-tree -u -m HEAD`), drop
+#                 feat_x_review.md and tick
+#                 -> the record `failed`, the inbox file archived as
+#                    failed_<ts>_feat_x_review.md, ONE `failed` notification
+#                    saying the branch carries changes to files that run outside
+#                    the sandbox and naming .mcp.json, and the stub NOT launched
+#   refused reset `a stall`'s kill setup, with the same plumbing commit of
+#                 `.mcp.json` onto the running branch first
+#                 -> the record `failed`, ONE `failed` notification naming
+#                    `the reset was refused` and .mcp.json, stall_restarts
+#                    unchanged, PAUSE_PROGRESS.md not written, and the stub NOT
+#                    relaunched
+#   refused ff    `remote review`'s fixture, with the commit pushed to origin's
+#                 feat_x from elsewhere adding `.mcp.json`
+#                 -> no `workflow run` recorded, the record `failed`, ONE
+#                    `failed` notification naming the fast-forward and
+#                    .mcp.json, and refs/heads/feat_x and the copy's tree as
+#                    they were
 #   remote skips  that record `running` with an empty pid -> tick after tick it
 #                 stays `running` with no `failed` notification, a local drop in
 #                 the same tick still launches under MAX_PARALLEL_RUNS=1, its
@@ -837,6 +918,18 @@ fi
 MAIN_REPO="$(hr_main_repo "$SCRIPT_DIR")" || MAIN_REPO=""
 [ -n "$MAIN_REPO" ] || fatal "'$SCRIPT_DIR' is not inside a git repository — refusing to start"
 
+# The main checkout every git call in a run's copy is anchored on, placed from
+# this script's own location without git (`hr_wrapper_main_of`). Empty when that
+# fails or names another directory than MAIN_REPO; never fatal, because only the
+# hardened sites need it, and each refuses on an empty value with
+# RUN_MAIN_REFUSAL (THE WATCHER'S GIT IN A RUN'S COPY in the header).
+RUN_MAIN_REFUSAL="cannot place the watcher in a main checkout"
+RUN_MAIN="$(hr_wrapper_main_of "$SCRIPT_DIR")" || RUN_MAIN=""
+if [ -n "$RUN_MAIN" ] &&
+  [ "$RUN_MAIN" != "$( CDPATH= cd -P -- "$MAIN_REPO" 2>/dev/null && pwd -P)" ]; then
+  RUN_MAIN=""
+fi
+
 # Warm the library's per-process cache once, unsubstituted, and make the refusal
 # here rather than letting each reader below fail separately with its own message.
 hr_config_load "$MAIN_REPO" ||
@@ -872,18 +965,19 @@ USAGE_HOLD="$LOGS_DIR/.usage_hold"
 NOTIFY="$SCRIPT_DIR/autonomous-notify.sh"
 FORMAT_STREAM="$SCRIPT_DIR/autonomous-format-stream.sh"
 
-# The working-copy lifecycle scripts and the two git wrappers, resolved as
+# The working-copy lifecycle scripts and the push wrapper, resolved as
 # siblings for the same reason: they are written into the same configured
 # `scriptsDir` this script is. WHICH COPY EXECUTES NEVER DECIDES WHICH REPOSITORY
 # IS ACTED ON — create-worktree.sh and cleanup-merged-worktrees.sh derive the main
-# checkout for themselves through the shared library, and the two wrappers are
-# always handed the working copy to operate in explicitly. Routing the prompt
-# commit through the wrapper rather than issuing `git commit` here is what makes
-# this commit point inherit the wrapper's protected-branch refusal instead of
-# re-implementing it.
+# checkout for themselves through the shared library, and the push wrapper is
+# always handed the working copy to operate in explicitly. The artifact commit
+# is not routed through `commit-on-branch.sh`: that wrapper stages its paths
+# into the run's own index and judges the run's working copy, so the watcher
+# commits one placed path by plumbing in the main checkout instead
+# (`hr_commit_placed`), which applies the same protected-branch refusal from
+# the main checkout's configuration.
 CREATE_WORKTREE="$SCRIPT_DIR/create-worktree.sh"
 CLEANUP_SCRIPT="$SCRIPT_DIR/cleanup-merged-worktrees.sh"
-COMMIT_ON_BRANCH="$SCRIPT_DIR/commit-on-branch.sh"
 PUSH_BRANCH="$SCRIPT_DIR/push-branch.sh"
 # The one route to GitHub — job mode's two read verbs, and the inbox pass's
 # `dispatch` and `sync` (REMOTE DISPATCH) — resolved the same way.
@@ -1524,6 +1618,7 @@ footprint_machine_cap() {
 footprint_grade() {
   local root="${1-}" unit="${2-}" out top rc
   [ -d "$root" ] || { printf 'root-missing\n'; return 0; }
+  # A read on an adopter's main checkout, never a run's copy; `rev-parse` runs no hook or fsmonitor.
   out="$(git -C "$root" rev-parse --show-toplevel 2>&1)"
   rc=$?
   if [ "$rc" -eq 0 ]; then
@@ -1673,21 +1768,24 @@ kill_switch_active() {
 
 # The configured `stateDir` of ONE working copy, as a repo-relative name with no
 # trailing slash — the prefix every artifact path a run reads or writes hangs
-# off. It is resolved in the run's OWN working copy, because that is the checkout
-# the engine resolves its paths in and a branch may legitimately carry a
-# different `harness.config.json` than the main one; the main checkout answers
-# when that copy's configuration cannot be read, so a launch does not turn on a
-# transient. Returns 1, printing nothing, when neither answers — and every caller
-# has a closed outcome for that.
+# off. The MAIN checkout's value is the answer: the watcher writes into that
+# directory of the copy unsandboxed, so the name must not be one the run chose.
+# The copy's own configuration is still read, because the engine resolves its
+# paths from it: when it names a different `stateDir`, this returns 1, since an
+# artifact placed where the engine does not look reads to it as an empty task.
+# A copy whose configuration cannot be read takes the main checkout's, so a
+# launch does not turn on a transient. Returns 1, printing nothing, when the
+# main checkout's cannot be read either — and every caller has a closed outcome
+# for that. The copy is read first so the library's one-root cache ends on the
+# main checkout.
 run_state_dir() {
-  local root="${1:-}" name=""
+  local root="${1:-}" name="" own=""
   if [ -n "$root" ]; then
-    name="$(hr_state_dir "$root")" || name=""
+    own="$(hr_state_dir "$root")" || own=""
   fi
-  if [ -z "$name" ]; then
-    name="$(hr_state_dir "$MAIN_REPO")" || name=""
-  fi
+  name="$(hr_state_dir "$MAIN_REPO")" || name=""
   [ -n "$name" ] || return 1
+  [ -z "$own" ] || [ "$own" = "$name" ] || return 1
   printf '%s\n' "$name"
 }
 
@@ -2884,6 +2982,32 @@ stall_human_time() {
   printf '%s\n' "$out"
 }
 
+# The stall watchdog's job-surfaces check, in job mode, before its reset: 0 when
+# the branch's own commits change no job surface; non-zero when they do, when
+# the check fails, when no scratch directory can be made, or when a value it
+# needs is empty. The configuration is read from HARNESS_GITHUB_DEFAULT_COMMIT
+# and the merge base taken with HARNESS_DEFAULT_BRANCH_COMMIT, the configured
+# default branch's commit; harness-run.yml recorded both from the fresh checkout
+# before any session ran, never a ref: the session has been writing MAIN_REPO's
+# `.git/refs` and `packed-refs`, so `refs/remotes/origin/<default>` there could
+# name the session's own tip, which makes the merge base the tip and the check
+# pass. The commit ids sit in this process's environment, which the session
+# cannot change.
+stall_job_surfaces_ok() {
+  local scratch rc=0
+  if [ -z "${HARNESS_CLI_VERSION:-}" ] || [ -z "${HARNESS_GITHUB_DEFAULT_BRANCH:-}" ] ||
+    [ -z "${HARNESS_GITHUB_DEFAULT_COMMIT:-}" ] || [ -z "${HARNESS_DEFAULT_BRANCH_COMMIT:-}" ] || [ -z "$MAIN_REPO" ]; then
+    echo "stall-watchdog: the job-surfaces check needs HARNESS_CLI_VERSION, HARNESS_GITHUB_DEFAULT_BRANCH, HARNESS_GITHUB_DEFAULT_COMMIT, HARNESS_DEFAULT_BRANCH_COMMIT and MAIN_REPO set" >&2
+    return 1
+  fi
+  scratch="$(mktemp -d "${TMPDIR:-/tmp}/watcher-job-surfaces.XXXXXX")" || return 1
+  # Never from MAIN_REPO: npm reads a project `.npmrc` there and npx prefers a local
+  # node_modules copy, both of which the session can write. `--cwd` still names the checkout.
+  (cd "$scratch" && npx --yes "autonomous-sdlc-harness@$HARNESS_CLI_VERSION" doctor --cwd "$MAIN_REPO" --job-surfaces="$HARNESS_GITHUB_DEFAULT_BRANCH@$HARNESS_GITHUB_DEFAULT_COMMIT@$HARNESS_DEFAULT_BRANCH_COMMIT") || rc=$?
+  rm -rf "$scratch"
+  return "$rc"
+}
+
 check_stalled_runs() {
   [ "$STALL_CHECK_ENABLED" = "1" ] || return 0
   # Skipped WHOLE while a usage hold is up: the usage gate owns run state for as
@@ -2891,7 +3015,7 @@ check_stalled_runs() {
   # to pause would be two owners writing one record.
   [ -f "$USAGE_HOLD" ] && return 0
 
-  local now b pid log_path stream_path newest m f staleness tree_cpu descendants restarts worktree state_rel why
+  local now b pid log_path stream_path newest m f staleness tree_cpu descendants restarts worktree state_rel why reset_rc note_rel
   now="$(date +%s)"
   while IFS= read -r b; do
     [ -n "$b" ] || continue
@@ -3008,19 +3132,54 @@ check_stalled_runs() {
 
     # Recover: restore the last committed checkpoint — safe by the commit-per-unit
     # invariant, see the header — and resume from the committed ledger or
-    # checklist through spawn_engine's pause-resume path (5th argument). A failed
-    # reset is logged and the resume proceeds: the ledger still names where to
-    # continue, and refusing here would strand a run whose only problem is a
-    # working copy an operator can fix.
-    log "stall-watchdog: '$b' -> reset --hard HEAD and resume (restart #$((restarts + 1)))"
-    git -C "$worktree" reset --hard HEAD >>"$log_path" 2>&1 ||
-      log "stall-watchdog: reset --hard failed for '$b' (see $log_path) — resuming anyway"
-    # Overwrite whatever note was there: the pause-resume clause the engine is
-    # handed points at this file, so it has to describe THIS teardown.
-    mkdir -p "$worktree/$state_rel" 2>/dev/null || true
-    printf 'Auto-recovered by the stall-watchdog at %s.\nThe hung dispatch (last output %s) was killed and its UNCOMMITTED work discarded with `git reset --hard HEAD`.\nResume deterministically from the first `[ ]` entry of the committed ledger or checklist; every `[x]` entry is intact.\n' \
+    # checklist through spawn_engine's pause-resume path (5th argument). The
+    # copy is checked first, so git never reads a record the run rewrote; in job
+    # mode the branch's own commits are checked for job surfaces; and the reset
+    # refuses a tip that changes a protected path, because the resumed session,
+    # and in job mode the post-session steps, would run what it wrote. Each
+    # refusal gives the run up. A reset that fails after its check passed is
+    # logged and the resume proceeds: the ledger still names where to continue,
+    # and refusing there would strand a run whose only problem is a working copy
+    # an operator can fix.
+    if [ -z "$RUN_MAIN" ]; then
+      why="stalled ${staleness}s, $RUN_MAIN_REFUSAL"
+    elif ! hr_run_copy_check_var "$RUN_MAIN" "$worktree"; then
+      why="stalled ${staleness}s, the working copy $worktree is not one this repository lists ($HR_RUN_REFUSAL)"
+    elif [ "$JOB_MODE" = "1" ] && ! stall_job_surfaces_ok >>"$log_path" 2>&1; then
+      why="stalled ${staleness}s, the branch's own commits change a job surface, or that could not be checked (see $log_path)"
+    else
+      log "stall-watchdog: '$b' -> reset to the last commit and resume (restart #$((restarts + 1)))"
+      reset_rc=0
+      hr_run_reset_var >>"$log_path" 2>&1 || reset_rc=$?
+      case "$reset_rc" in
+        0) ;;
+        1) why="stalled ${staleness}s, the reset was refused ($HR_RUN_RESET_REFUSAL)" ;;
+        *) log "stall-watchdog: reset failed for '$b' (see $log_path) — resuming anyway" ;;
+      esac
+    fi
+    note_rel="$state_rel/PAUSE_PROGRESS.md"
+    if [ -z "$why" ] && ! hr_run_path_safe "$worktree" "$note_rel"; then
+      why="stalled ${staleness}s, the state directory in $worktree is not safe to write"
+    fi
+    if [ -z "$why" ]; then
+      # Overwrite whatever note was there: the pause-resume clause the engine is
+      # handed points at this file, so it has to describe THIS teardown. The
+      # path is checked again after the `mkdir -p`, which can only have created
+      # real directories.
+      mkdir -p "$worktree/$state_rel" 2>/dev/null || true
+      hr_run_path_safe "$worktree" "$note_rel" ||
+        why="stalled ${staleness}s, the state directory in $worktree is not safe to write"
+    fi
+    if [ -n "$why" ]; then
+      log "stall-watchdog: '$b' -> failed ($why)"
+      registry_set "$b" status failed
+      notify failed "$b" "$log_path" "(stall-watchdog: $why)"
+      registry_set "$b" stall_killing ""
+      continue
+    fi
+    printf 'Auto-recovered by the stall-watchdog at %s.\nThe hung dispatch (last output %s) was killed and its UNCOMMITTED work discarded by a reset to the last commit.\nResume deterministically from the first `[ ]` entry of the committed ledger or checklist; every `[x]` entry is intact.\n' \
       "$(date '+%Y-%m-%dT%H:%M:%S')" "$(stall_human_time "$newest")" \
-      >"$worktree/$state_rel/PAUSE_PROGRESS.md"
+      >"$worktree/$note_rel"
     registry_set "$b" stall_restarts "$((restarts + 1))"
     registry_set "$b" stall_warned ""
     registry_set "$b" status running
@@ -3067,25 +3226,37 @@ reject_preserving_status() {
   notify failed "$branch" "$LOGS_DIR/$branch.log" "$reason"
 }
 
+# watcher_commit <worktree> <rel> <subject> — the watcher's commit of one placed
+# artifact: `hr_commit_placed` from RUN_MAIN, by plumbing, running no hook and
+# committing nothing else the run staged. Its exit codes are that function's;
+# an empty RUN_MAIN is 1, with RUN_MAIN_REFUSAL on stderr.
+watcher_commit() {
+  if [ -z "$RUN_MAIN" ]; then
+    echo "$self: $RUN_MAIN_REFUSAL — refusing to commit" >&2
+    return 1
+  fi
+  hr_commit_placed "$RUN_MAIN" "$@"
+}
+
 # remote_commit_and_push <branch> <worktree> <log_path> <file> <fname> <dest> <rel> <subject> <what>
 #
 # The remote arm's commit-and-push, BLOCKING (REMOTE DISPATCH in the header):
-# 0 = <rel> is committed and origin/<branch> carries HEAD; 1 = it is not, and
-# fail_before_launch has already run, so the caller dispatches nothing. The
-# library's staging, identical-re-drop skip and landed test (THE ARTIFACT
-# PLACEMENT in lib/harness-run-lib.sh) with the local arm's wrappers; the push
-# stays a separate statement from the commit. <dest> is the caller's.
+# 0 = <rel> is committed and origin/<branch> carries the branch; 1 = it is not,
+# and fail_before_launch has already run, so the caller dispatches nothing. The
+# watcher's commit, the library's identical-re-drop skip and its landed test
+# (THE ARTIFACT PLACEMENT in lib/harness-run-lib.sh) with the push wrapper; the
+# push stays a separate statement from the commit. <dest> is the caller's.
 remote_commit_and_push() {
   local branch="$1" worktree="$2" log_path="$3" file="$4" fname="$5"
   local dest="$6" rel="$7" subject="$8" what="$9" rc=0
 
-  hr_commit_placed "$COMMIT_ON_BRANCH" "$worktree" "$rel" "$subject" >>"$log_path" 2>&1 || rc=$?
+  watcher_commit "$worktree" "$rel" "$subject" >>"$log_path" 2>&1 || rc=$?
   case "$rc" in
     3) log "the $what for '$branch' is already committed (identical re-drop) — skipping the commit, pushing anyway" ;;
     0) log "committed the $what for '$branch' ($subject)" ;;
     *)
-      log "commit-on-branch.sh could not commit the $what for '$branch' — not dispatching (see $log_path)"
-      fail_before_launch "$branch" "$file" "$fname" "(commit-on-branch.sh could not commit the $what — nothing dispatched; see $log_path)"
+      log "the watcher's commit could not commit the $what for '$branch' — not dispatching (see $log_path)"
+      fail_before_launch "$branch" "$file" "$fname" "(the watcher's commit could not commit the $what — nothing dispatched; see $log_path)"
       return 1
       ;;
   esac
@@ -3319,16 +3490,13 @@ process_inbox_file() {
     # honest from its very first step, and what stops the prompt from being left
     # dangling-uncommitted and lost when the branch reaches a pull request.
     #
-    # Only the prompt is staged, by explicit path — never `git add -A` or
-    # `git add .`, matching the no-blanket-add rule every unattended commit point
-    # in this family follows. The nothing-staged pre-check is what makes
-    # an identical re-drop of an already-committed prompt a no-op instead of an
-    # empty commit; when there IS a diff, the WRAPPER does the real staging and
-    # the commit, so this commit point inherits its protected-branch refusal
-    # rather than re-implementing it. The wrapper stages paths RELATIVE TO THE
-    # REPOSITORY TOP, so it is handed the repo-relative path. The placement
-    # itself lives in lib/harness-run-lib.sh (THE ARTIFACT PLACEMENT), shared
-    # with a job that starts a run.
+    # Only the prompt is committed, by its repo-relative path, and nothing else
+    # the run's index holds: the watcher's commit (`watcher_commit`) builds the
+    # commit by plumbing in the main checkout, runs no hook, and refuses a
+    # protected branch from the main checkout's configuration. A placed blob
+    # equal to the one already committed is an identical re-drop and commits
+    # nothing. The placement itself lives in lib/harness-run-lib.sh (THE
+    # ARTIFACT PLACEMENT), shared with a job that starts a run.
     #
     # A FAILURE AT EITHER STEP IS LOGGED AND THE RUN LAUNCHES ANYWAY: a prompt
     # commit that did not land has to be VISIBLE, and it must never be the reason
@@ -3341,7 +3509,7 @@ process_inbox_file() {
       remote_commit_and_push "$branch" "$worktree" "$log_path" "$file" "$fname" \
         "$prompt_dest" "$prompt_rel" "$prompt_subject" "task prompt" || return 0
     else
-      hr_commit_placed "$COMMIT_ON_BRANCH" "$worktree" "$prompt_rel" "$prompt_subject" >>"$log_path" 2>&1 || prompt_rc=$?
+      watcher_commit "$worktree" "$prompt_rel" "$prompt_subject" >>"$log_path" 2>&1 || prompt_rc=$?
       case "$prompt_rc" in
         3) log "the task prompt for '$branch' is already committed (identical re-drop) — skipping the commit" ;;
         0)
@@ -3373,7 +3541,7 @@ process_inbox_file() {
     fi
 
     # (3c) Place, archive, commit and push — the task path's block mirrored: the
-    # same wrapper, the same identical-re-drop skip, the same non-blocking rule on
+    # same commit, the same identical-re-drop skip, the same non-blocking rule on
     # a failed commit or push — and the same blocking rule on the remote arm. Its
     # rationale is stated once, above.
     local docs_rel="$state_rel/docs_catalog/${branch}_docs.md"
@@ -3386,7 +3554,7 @@ process_inbox_file() {
       remote_commit_and_push "$branch" "$worktree" "$log_path" "$file" "$fname" \
         "$docs_dest" "$docs_rel" "$docs_subject" "docs checklist" || return 0
     else
-      hr_commit_placed "$COMMIT_ON_BRANCH" "$worktree" "$docs_rel" "$docs_subject" >>"$log_path" 2>&1 || docs_rc=$?
+      watcher_commit "$worktree" "$docs_rel" "$docs_subject" >>"$log_path" 2>&1 || docs_rc=$?
       case "$docs_rc" in
         3) log "the docs checklist for '$branch' is already committed (identical re-drop) — skipping the commit" ;;
         0)
@@ -3401,19 +3569,23 @@ process_inbox_file() {
     # (2b) Review path: REUSE the branch's existing working copy when it is
     # usable, else recreate it FOR THE EXISTING BRANCH. Never a fresh branch off
     # the default one — the work being reviewed is already on this branch.
+    local reuse_fail=""
     if [ -d "$worktree" ]; then
-      # Sanity-check before building on it: the right branch AND no modified
-      # TRACKED files. Untracked state-tree artifacts left by a previous run are
-      # expected and tolerated — that is the same clean-of-tracked-changes
-      # invariant the pause protocol gives the run itself. The branch is read
-      # through the library's probe, which uses `symbolic-ref` and so needs no
-      # recent-git flag, and prints nothing on a detached HEAD (which fails the
-      # comparison below, as it should).
-      local current_branch reuse_fail=""
-      current_branch="$(hr_current_branch "$worktree")"
-      if [ "$current_branch" != "$branch" ]; then
-        reuse_fail="the working copy $worktree is on branch '${current_branch:-?}', not '$branch' — fix the checkout and drop the review file again"
-      elif [ -n "$(git -C "$worktree" status --short 2>/dev/null | grep -v '^??')" ]; then
+      # Sanity-check before building on it: a copy this repository lists, on the
+      # right branch, AND no modified TRACKED files. Untracked state-tree
+      # artifacts left by a previous run are expected and tolerated — that is
+      # the same clean-of-tracked-changes invariant the pause protocol gives the
+      # run itself. The check reads the copy's records once, without git, and
+      # sets the branch read from the main checkout (empty on a detached HEAD,
+      # which fails the comparison below, as it should); the clean test then
+      # runs git pinned, never through the copy's own `.git`.
+      if [ -z "$RUN_MAIN" ]; then
+        reuse_fail="$RUN_MAIN_REFUSAL"
+      elif ! hr_run_copy_check_var "$RUN_MAIN" "$worktree"; then
+        reuse_fail="the working copy $worktree is not one this repository lists ($HR_RUN_REFUSAL) — remove it and drop the review file again"
+      elif [ "$HR_RUN_COPY_BRANCH" != "$branch" ]; then
+        reuse_fail="the working copy $worktree is on branch '${HR_RUN_COPY_BRANCH:-?}', not '$branch' — fix the checkout and drop the review file again"
+      elif ! hr_run_copy_clean; then
         reuse_fail="the working copy $worktree has uncommitted tracked changes — clean them and drop the review file again"
       fi
       if [ -n "$reuse_fail" ]; then
@@ -3437,21 +3609,54 @@ process_inbox_file() {
         fail_before_launch "$branch" "$file" "$fname" "(working-copy recreation failed)"
         return 0
       fi
+      # The recreated copy is checked as a reused one is, so the fast-forward
+      # and the surface check below have the values they act on.
+      if [ -z "$RUN_MAIN" ]; then
+        reuse_fail="$RUN_MAIN_REFUSAL"
+      elif ! hr_run_copy_check_var "$RUN_MAIN" "$worktree"; then
+        reuse_fail="the recreated working copy $worktree is not one this repository lists ($HR_RUN_REFUSAL)"
+      elif [ "$HR_RUN_COPY_BRANCH" != "$branch" ]; then
+        reuse_fail="the recreated working copy $worktree is on branch '${HR_RUN_COPY_BRANCH:-?}', not '$branch'"
+      fi
+      if [ -n "$reuse_fail" ]; then
+        log "cannot use the recreated working copy for '$branch': $reuse_fail — failing fast (not parking)"
+        fail_before_launch "$branch" "$file" "$fname" "($reuse_fail)"
+        return 0
+      fi
     fi
 
     # Remote arm: bring the copy level with origin/<branch> before touching it —
     # the job, not this copy, is where the branch advanced (REMOTE DISPATCH).
+    # The fetch runs in the main checkout, pinned, and only when the main
+    # `.git/config` names origin's URL; the fast-forward is the library's, which
+    # refuses a target commit that changes a protected path.
     if [ "$remote" = 1 ]; then
-      if ! git -C "$worktree" fetch origin "$branch" >>"$log_path" 2>&1; then
-        log "git fetch origin $branch failed in $worktree — not dispatching (see $log_path)"
-        fail_before_launch "$branch" "$file" "$fname" "(git fetch origin $branch failed in the working copy — nothing dispatched; see $log_path)"
+      if ! hr_remote_url_configured "$HR_RUN_MAIN" origin; then
+        log "git fetch origin $branch not attempted: $HR_RUN_MAIN/.git/config names no URL for origin — not dispatching"
+        fail_before_launch "$branch" "$file" "$fname" "(git fetch origin $branch not attempted: the main checkout's .git/config names no URL for origin — nothing dispatched)"
         return 0
       fi
-      if ! git -C "$worktree" merge --ff-only "origin/$branch" >>"$log_path" 2>&1; then
-        log "git merge --ff-only origin/$branch failed in $worktree — not dispatching (see $log_path)"
-        fail_before_launch "$branch" "$file" "$fname" "(git merge --ff-only origin/$branch failed in the working copy — nothing dispatched; see $log_path)"
+      if ! hr_run_main_git fetch --no-recurse-submodules origin "+refs/heads/$branch:refs/remotes/origin/$branch" >>"$log_path" 2>&1; then
+        log "git fetch origin $branch failed in $HR_RUN_MAIN — not dispatching (see $log_path)"
+        fail_before_launch "$branch" "$file" "$fname" "(git fetch origin $branch failed — nothing dispatched; see $log_path)"
         return 0
       fi
+      local ff_rc=0
+      hr_run_fast_forward_var "refs/remotes/origin/$branch" >>"$log_path" 2>&1 || ff_rc=$?
+      if [ "$ff_rc" -ne 0 ]; then
+        log "the fast-forward of '$branch' to origin/$branch failed in $worktree (exit $ff_rc: $HR_RUN_FF_REFUSAL) — not dispatching (see $log_path)"
+        fail_before_launch "$branch" "$file" "$fname" "(the fast-forward of the working copy to origin/$branch failed: $HR_RUN_FF_REFUSAL — nothing dispatched; see $log_path)"
+        return 0
+      fi
+    fi
+
+    # The branch as it now stands, and the copy's tree, must change no protected
+    # path relative to origin's default branch: the session this drop launches,
+    # and the hooks and settings it loads, would run what the branch wrote.
+    if ! hr_run_surface_check_var "refs/heads/$branch" copy; then
+      log "the branch '$branch' carries changes to files that run outside the sandbox, or they could not be checked ($HR_RUN_SURFACE_REFUSAL) — not launching"
+      fail_before_launch "$branch" "$file" "$fname" "(the branch carries changes to files that run outside the sandbox, or they could not be checked: $HR_RUN_SURFACE_REFUSAL — nothing launched)"
+      return 0
     fi
 
     state_rel="$(run_state_dir "$worktree")" || state_rel=""
@@ -3470,7 +3675,6 @@ process_inbox_file() {
     # pushed before dispatch, below (REMOTE DISPATCH in the header).
     local review_rel="$state_rel/user_reviews/$fname"
     local review_dest="$worktree/$state_rel/user_reviews/$fname"
-    mkdir -p "$worktree/$state_rel/user_reviews"
     if [ -f "$review_dest" ] && ! cmp -s "$file" "$review_dest"; then
       # SAME FILENAME, DIFFERENT CONTENT: that round was already processed and
       # committed, so overwriting it would dirty a tracked file and wedge the
@@ -3482,8 +3686,13 @@ process_inbox_file() {
       return 0
     fi
     # An identical-content re-drop is harmless: the copy below is byte for byte
-    # what is already there, so the tree stays clean.
-    cp "$file" "$review_dest"
+    # what is already there, so the tree stays clean. The placement refuses a
+    # path reached through a symbolic link, which would write outside the copy.
+    if ! hr_place_artifact "$worktree" "$file" "$review_rel"; then
+      log "could not place the review '$fname' at $review_dest (unsafe path or copy failure) — rejecting"
+      fail_before_launch "$branch" "$file" "$fname" "(the review could not be placed at $review_rel in the working copy — nothing launched)"
+      return 0
+    fi
     mv "$file" "$ARCHIVE_DIR/$(date '+%Y%m%d%H%M%S')_$fname" 2>/dev/null || rm -f "$file"
     log "copied the review -> $review_dest; archived the inbox file"
     if [ "$remote" = 1 ]; then

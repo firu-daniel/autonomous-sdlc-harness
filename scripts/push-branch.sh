@@ -166,15 +166,15 @@
 # compares that `core.hooksPath` against, and it is inert: a rewritten copy can
 # only make the check accept a different `core.hooksPath`, which the pin then
 # overrides on every call, while any other key is refused whatever it says.
-# Residual: the watcher's **own** git calls in a worktree a sandboxed session has
-# written to are outside this branch's two wrappers. Examples are its staging
-# and commit of a dropped user review, and its `status`, `fetch` and `merge`
-# there. They still read that worktree's `config.worktree` and its hooks
-# directory.
+# The watcher family's own git calls in a run's copy no longer go through this
+# check: they run no hook, never read the record's `config.worktree`, and refuse
+# a tree that changes a protected path (`lib/harness-run-lib.sh` → the section
+# THE WATCHER FAMILY'S GIT IN A RUN'S COPY; `docs/cli.md` §6).
 #
-# THE INHERITED GIT ENVIRONMENT IS DROPPED. Before anything else this script
-# unsets `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,
-# `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_NAMESPACE`
+# THE INHERITED GIT ENVIRONMENT IS DROPPED. As its first statement after
+# sourcing the library, before any git call, this script drops through
+# `lib/harness-run-lib.sh` → `hr_git_env_drop` the names `GIT_DIR`,
+# `GIT_COMMON_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_NAMESPACE`
 # and `GIT_CEILING_DIRECTORIES`, which would point git's calls at another
 # repository, index, object store or ref namespace than the checked one;
 # `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_GLOBAL`,
@@ -186,7 +186,12 @@
 # an excluded command is the agent runner's, not one a sandboxed command can
 # set — an assignment prefix or a compound is a different command string,
 # which stays sandboxed — and an operator may rely on it for the SSH push this
-# script exists to make outside the sandbox. Residual: the rest of that
+# script exists to make outside the sandbox. Measured on Claude Code 2.1.299,
+# macOS, headless (docs/sandbox-verification.md -> P1a): a sandboxed command carries
+# `GIT_SSH_COMMAND=ssh ... -o ProxyCommand='nc -X 5 -x localhost:<port> %h %p'`,
+# and an excluded call inherits none of the sandbox's proxy variables. A call
+# that does carry that value is running sandboxed, where SSH has no route but
+# that proxy, so dropping it would only stop the push. Residual: the rest of that
 # environment is trusted as it arrives — `PATH`, which chooses the `git` and
 # `jq` run, and `BASH_ENV`, which `bash` sources before this file's first line.
 #
@@ -311,16 +316,6 @@
 
 set -uo pipefail
 
-# THE INHERITED GIT ENVIRONMENT IS DROPPED (header). GIT_SSH_COMMAND is kept.
-# Each name is unset on its own; `${!GIT_TRACE*}` lists every set GIT_TRACE*
-# name, which bash 3.2 supports.
-unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
-  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES \
-  GIT_TEMPLATE_DIR GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_CONFIG_GLOBAL \
-  GIT_CONFIG_SYSTEM GIT_EXEC_PATH
-for hr_trace_var in ${!GIT_TRACE*}; do unset "$hr_trace_var"; done
-unset hr_trace_var
-
 # Attempts in all, and the wait before the second; the third waits three times
 # that (EVERY FAILURE PATH IS NON-FATAL above).
 PUSH_ATTEMPTS=3
@@ -346,6 +341,8 @@ if [ ! -r "$hr_lib" ]; then
 fi
 # shellcheck source=lib/harness-run-lib.sh
 . "$hr_lib"
+# THE INHERITED GIT ENVIRONMENT IS DROPPED (header). GIT_SSH_COMMAND is kept.
+hr_git_env_drop
 
 repo_dir="${1:-$PWD}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
