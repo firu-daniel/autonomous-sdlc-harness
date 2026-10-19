@@ -73,7 +73,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run/task_<K>_
 10. [x] **Task 10** — Add `cli/test/wrapper-clone-arm.test.mjs`: the three wrappers against a clone, with exit contracts and stdout lines unchanged _(layer: cli)_ _(points: 20)_
 11. [x] **Task 11** — Give `setup-worktree.sh --target` its clone arm, and add `cli/test/setup-worktree-clone-target.test.mjs` _(layer: cli)_ _(points: 15)_
 12. [x] **Task 12** — Write-protect the run registry by exact path on both sides, keep it out of the job surfaces, and prove `doctor` grades the entry _(layer: cli)_ _(points: 15)_
-13. [ ] **Task 13** — Restate the profile template's sentence about which targets the excluded wrappers accept _(layer: cli)_ _(points: 5)_
+13. [x] **Task 13** — Restate the profile template's sentence about which targets the excluded wrappers accept _(layer: cli)_ _(points: 5)_
 14. [ ] **Task 14** — Record the 2026-10-19 clone measurement as rows CL1–CL5, and add the owed registry rows RG1 and RG2, in `docs/sandbox-verification.md` _(layer: general)_ _(points: 15)_
 15. [ ] **Task 15** — Describe the wrappers' clone arm, the registry protection and the object-store residual in `docs/cli.md` §6 _(layer: general)_ _(points: 15)_
 16. [ ] **Task 16** — Describe the watcher family's git on both arms in `docs/watcher.md` §2 _(layer: general)_ _(points: 10)_
