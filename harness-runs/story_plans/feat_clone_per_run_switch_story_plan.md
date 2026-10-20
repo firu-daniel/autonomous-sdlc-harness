@@ -89,7 +89,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_switch/ta
 12. [x] **Task 12** — Move `remote-start.test.mjs` and `remote-review-payloads.test.mjs` to the clone layout _(layer: cli)_ _(points: 15)_
 13. [x] **Task 27** — Move `remote-run.test.mjs`'s `review` cases to the clone layout _(layer: cli)_ _(points: 10)_
 14. [x] **Task 13** — Render a per-run profile at every launch, refuse to launch on one that fails the check, and sync in at every run exit, in the watcher _(layer: cli)_ _(points: 20)_
-15. [ ] **Task 14** — Prove the per-run profile, its launch check and its three mirrors in a new `cli/test/watcher-run-profile.test.mjs` _(layer: cli)_ _(points: 15)_
+15. [x] **Task 14** — Prove the per-run profile, its launch check and its three mirrors in a new `cli/test/watcher-run-profile.test.mjs` _(layer: cli)_ _(points: 15)_
 16. [ ] **Task 26** — Hold job mode to the base profile and an untouched lane, and prove its launch check, in `watcher-remote-job.test.mjs` _(layer: cli)_ _(points: 10)_
 17. [ ] **Task 15** — Move `watcher-review-drop-payloads.test.mjs` to the clone layout, keeping each worktree-only plant as a clone equivalent or a migration case _(layer: cli)_ _(points: 15)_
 18. [ ] **Task 16** — Move `watcher-stall-reset-payloads.test.mjs` to the clone layout on the same terms _(layer: cli)_ _(points: 15)_
