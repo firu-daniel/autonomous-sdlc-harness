@@ -100,7 +100,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_switch/ta
 23. [x] **Task 28** — Make the flows' Phase D push-state read hold in a clone, and restate why the wrappers run from the main checkout _(layer: plugin)_ _(points: 15)_
 24. [x] **Task 21** — Restate `docs/watcher.md` §1–§2 for the clone layout: creation, sync order, the per-run profile, cleanup, migration and where the main checkout's ref can lag _(layer: general)_ _(points: 20)_
 25. [x] **Task 22** — Restate `docs/cli.md` §6 and §7: the new write protection, the per-run profile and its launch check, the job settlement, and the residuals closed and opened _(layer: general)_ _(points: 20)_
-26. [ ] **Task 23** — Add the owed clone-layout rows to `docs/sandbox-verification.md` _(layer: general)_ _(points: 15)_
+26. [x] **Task 23** — Add the owed clone-layout rows to `docs/sandbox-verification.md` _(layer: general)_ _(points: 15)_
 27. [ ] **Task 24** — Record the owed re-runs in `docs/outer-loop-verification.md` and `docs/guard-verification.md`, and the per-run `--settings` argument in `ARCHITECTURE.md` _(layer: general)_ _(points: 15)_
 28. [ ] **Task 25** — Re-render the worked example's profile for the new protected set and restate the figures its README gives _(layer: general)_ _(points: 10)_
 

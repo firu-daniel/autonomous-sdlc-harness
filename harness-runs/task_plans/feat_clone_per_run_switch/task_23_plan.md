@@ -41,3 +41,8 @@ The rows taken on earlier dates (CL1–CL6, G1–G7, W0–W5, WR1–WR7, RG1–R
 - `git grep -nE '^\| CS[0-9] \|' -- docs/sandbox-verification.md` lists one row per id this task added. Each row's Observed cell reads `**not run — owed.** Measurement not yet taken.`, and no row claims an observed result.
 - `git diff -U0 docs/sandbox-verification.md` shows no change inside the CL, G, W, WR, RG or AN tables.
 - Each row's exact call is written as one command, a person can run it verbatim, and the commands an adopter is meant to run sit in fenced blocks, one per line.
+
+- **Deviations from plan:**
+  - CS4: the plan asked for "CW1's shape with `--repo <clone>`" for all three wrappers. Only `commit-on-branch.sh` takes `--repo`; `push-branch.sh` and `refresh-branch.sh` take the copy as a positional `<repo-dir>` (their `# Usage:` headers in `cli/templates/scripts/`), so those two rows' calls use the positional form.
+  - CS8: the plan left the wrong-type key open. The row uses `sandbox.failIfUnavailable` set to the string `"true"`, because a wrong-type key the launch check does not grade would pass `run_profile_check` when applied to the base (it only compares the copy to the base, `docs/cli.md` §6 residual 11), so (b)'s "refused before launch" would not hold; the strict-block comparison (`"true" != true`) is what refuses it.
+  - CS1: the watcher's clone is made with `--template=`, so `<clone>/.git/hooks` may not exist; the row probes the directory path itself in that case (WR6's form) rather than a file inside it.
