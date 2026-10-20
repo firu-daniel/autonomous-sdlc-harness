@@ -7,7 +7,8 @@
  * an excluded entry in an earlier release's `Bash(…)` spelling is named as stale under the same
  * grades rather than as an unnamed extra, and a taken opt-out is reported as a `warn` carrying its reason; and a path that runs outside the
  * sandbox but lacks its `denyWrite` entry or a file-tool deny rule is reported by path and side, with
- * the same grades, `denyWrite` going ungraded under a taken opt-out.** Every case is one edit to a
+ * the same grades, `denyWrite` going ungraded under a taken opt-out; and the sibling-glob `.git` entry an
+ * earlier release wrote is reported, still present, by path, side and reason under the same grades.** Every case is one edit to a
  * freshly wired repository, so the edit is what the line is about; each suite's case (a) is the
  * end-to-end proof that the generator and the check agree on a fresh profile. No case reaches the
  * network.
@@ -15,7 +16,7 @@
 
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { it } from 'node:test';
 
 import { concurrentSuite } from './helpers/concurrency.mjs';
@@ -30,6 +31,7 @@ const COMMIT_SCRIPT = 'commit-on-branch.sh';
 const DOCS_SERVER_SCRIPT = 'docs-search-server.sh';
 const DOMAIN = { domain: 'registry.npmjs.org', reason: 'npm install fetches packages from the public registry' };
 const OPT_OUT_REASON = 'the toolchain needs a socket the sandbox blocks';
+const RETIRED_GIT_REASON = "on a clone it closes the whole .git to the run's own sandboxed git";
 
 /** A repository whose stack detection resolves every command, so `init` writes a config `doctor` passes. */
 function nodeProjectFiles() {
@@ -107,6 +109,23 @@ function staleExcludedSpelling(dir) {
     profile.sandbox.excludedCommands = stale;
   });
   return stale;
+}
+
+/**
+ * Put the sibling-glob `.git` entry an earlier release wrote back into the profile — its `denyWrite`
+ * entry and its `Edit` and `Write` rules — returning the path and the two rules. Spelled here rather
+ * than read from the generator, so a change to the retired entry's shape fails this suite.
+ */
+function restoreRetiredGitEntry(dir) {
+  const config = JSON.parse(readFileSync(join(dir, CONFIG_FILE), 'utf8'));
+  const path = join(dirname(dir), `${config.projectName}-*`, '.git');
+  const rules = [`Edit(/${path})`, `Write(/${path})`];
+  editJson(dir, PROFILE_FILE, (profile) => {
+    assert.ok(!profile.sandbox.filesystem.denyWrite.includes(path), `a fresh profile already carries ${path}`);
+    profile.sandbox.filesystem.denyWrite.push(path);
+    profile.permissions.deny.push(...rules);
+  });
+  return { path, rules };
 }
 
 /** Delete `path`'s `Edit` deny rule from the profile, returning the rule. */
@@ -312,5 +331,42 @@ concurrentSuite('doctor profile-write-protection', () => {
     const failed = await doctorLine(dir, 'FAIL', ['--remote-job'], WRITE_CHECK_ID);
     assert.ok(failed.line.includes(`${path} (`), failed.line);
     assert.equal(failed.status, 1, failed.line);
+  });
+
+  it("(i) warns on the earlier release's sibling-glob .git entry, naming the path, both sides and the reason, and fails under --remote-job", async (t) => {
+    const dir = await wiredFixture(t);
+    const { path, rules } = restoreRetiredGitEntry(dir);
+    const { line, status } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
+    assert.ok(line.includes(`${path} (${RETIRED_GIT_REASON})`), line);
+    assert.ok(line.includes('is still a sandbox.filesystem.denyWrite entry'), line);
+    for (const rule of rules) assert.ok(line.includes(rule), line);
+    assert.ok(line.includes('earlier release'), line);
+    assert.ok(line.includes('init --force'), line);
+    assert.ok(!line.includes('writable from inside it'), line);
+    assert.equal(status, 0, line);
+    const failed = await doctorLine(dir, 'FAIL', ['--remote-job'], WRITE_CHECK_ID);
+    assert.ok(failed.line.includes(`${path} (`), failed.line);
+    assert.equal(failed.status, 1, failed.line);
+  });
+
+  it('(j) passes case (i) on the fresh profile, untouched, which carries no sibling-glob .git entry', async (t) => {
+    const dir = await wiredFixture(t);
+    const config = JSON.parse(readFileSync(join(dir, CONFIG_FILE), 'utf8'));
+    const path = join(dirname(dir), `${config.projectName}-*`, '.git');
+    const profile = JSON.parse(readFileSync(join(dir, PROFILE_FILE), 'utf8'));
+    assert.ok(!profile.sandbox.filesystem.denyWrite.includes(path), `a fresh profile carries ${path}`);
+    const { line } = await doctorLine(dir, 'PASS', ['--remote-job'], WRITE_CHECK_ID);
+    assert.ok(!line.includes(path), line);
+  });
+
+  it('(k) under sandbox.optOut, grades only the sibling-glob .git entry\'s file-tool rules', async (t) => {
+    const dir = await wiredFixture(t);
+    await configureSandbox(dir, { optOut: { reason: OPT_OUT_REASON } });
+    const { path, rules } = restoreRetiredGitEntry(dir);
+    const { line } = await doctorLine(dir, 'WARN', [], WRITE_CHECK_ID);
+    for (const rule of rules) assert.ok(line.includes(rule), line);
+    assert.ok(!line.includes('is still a sandbox.filesystem.denyWrite entry'), line);
+    assert.ok(line.includes('not graded because the sandbox is off'), line);
+    assert.ok(line.includes(`${path} (`), line);
   });
 });

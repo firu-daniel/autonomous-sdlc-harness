@@ -221,7 +221,12 @@ import {
   SANDBOX_OPT_OUT_MARKER,
   shippedSandboxSettings,
 } from '../generators/sandboxProfile.js';
-import { fileToolDenyRules, jobSurfacePaths, protectedPaths } from '../generators/writeProtection.js';
+import {
+  fileToolDenyRules,
+  jobSurfacePaths,
+  protectedPaths,
+  retiredProtectedPaths,
+} from '../generators/writeProtection.js';
 import {
   configKeyPath,
   configuredWrapperFile,
@@ -1502,24 +1507,30 @@ const JQ_CHECK: Check = {
 };
 
 /**
- * Can worktree-based runs be prepared here?
+ * Does `git worktree list` answer here, so the checks that read which checkout has a branch checked
+ * out can be made?
  *
- * A `warn` rather than a `fail`: the flow runs in a single checkout, and an adopter whose git cannot
- * list worktrees loses the isolation a parallel run wants rather than the ability to run at all.
+ * A run copy is a clone and is not created through it. What reads it: the one-live-copy rule
+ * (`hr_run_copy_live_var` in the generated `lib/harness-run-lib.sh`) and sync-in, which each refuse a
+ * branch the main checkout or one of its worktrees has checked out; and a legacy worktree run, which
+ * is listed there and nowhere else in git. The id stays `worktrees`.
+ *
+ * A `warn` rather than a `fail`: with no answer, both of those checks refuse rather than guess, so
+ * a run that needs one stops at it, and nothing else in the flow reads this.
  */
 const WORKTREE_CHECK: Check = {
   id: 'worktrees',
-  title: 'git worktree list answers, so worktree-based runs are possible',
+  title: 'git worktree list answers, so the one-live-copy rule and sync-in can see which checkout has a branch checked out',
   run: (ctx) => {
     if (ctx.repoRoot === undefined) return unevaluated('the repository root did not resolve (see the git check)');
     const checkouts = worktreeList(ctx.repoRoot);
     if (checkouts === undefined) {
       return warn(
-        `git worktree list did not answer in ${ctx.repoRoot}, so a run cannot be given a checkout of its own: the flow still runs in this single working copy, and two runs then share it`,
+        `git worktree list did not answer in ${ctx.repoRoot}, so the one-live-copy rule and sync-in cannot see which checkout has a branch checked out and each refuses rather than guess: creating a run copy, and a wrapper syncing a clone's branch in, stop there; a legacy worktree run is not listed either`,
       );
     }
     return pass(
-      `git worktree list answers with ${checkouts.length} checkout${checkouts.length === 1 ? '' : 's'}, so a run can be given one of its own`,
+      `git worktree list answers with ${checkouts.length} checkout${checkouts.length === 1 ? '' : 's'}, so the one-live-copy rule and sync-in can see which of them has a branch checked out, and any legacy worktree run is among them`,
     );
   },
 };
@@ -4880,6 +4891,11 @@ const PROFILE_SANDBOX_CHECK: Check = {
  * rather than unable to proceed, and a profile an earlier release generated is legitimately in that
  * state. **Under `--remote-job`** ({@link CheckContext.remoteJob}) it is a `fail`, as
  * {@link PROFILE_SANDBOX_CHECK}'s findings are. Every non-pass names `init --force` as the remedy.
+ *
+ * Each {@link retiredProtectedPaths} entry still in `denyWrite`, or with a {@link fileToolDenyRules}
+ * rule still in `permissions.deny`, is a finding under the same grades and the same opt-out rule. It
+ * is stale rather than merely extra: the sibling-glob `.git` entry covers every clone's whole `.git`,
+ * which closes a clone to its own run's sandboxed git.
  */
 const PROFILE_WRITE_PROTECTION_CHECK: Check = {
   id: 'profile-write-protection',
@@ -4911,10 +4927,23 @@ const PROFILE_WRITE_PROTECTION_CHECK: Check = {
         findings.push(`${subject} lacks the file-tool deny ${missingRules.length === 1 ? 'rule' : 'rules'} ${nameList(missingRules)}`);
       }
     }
+    const stale: string[] = [];
+    for (const entry of retiredProtectedPaths({ repoRoot: profileRoot, workRoot: workRoot(profileRoot), config: ctx.config })) {
+      const subject = `${entry.path} (${entry.reason})`;
+      if (!optedOut && denyWrite.includes(entry.path)) stale.push(`${subject} is still a ${denyWritePath} entry`);
+      const heldRules = fileToolDenyRules(entry).filter((rule) => denied.includes(rule));
+      if (heldRules.length > 0) {
+        stale.push(`${subject} still has the file-tool deny ${heldRules.length === 1 ? 'rule' : 'rules'} ${nameList(heldRules)}`);
+      }
+    }
 
-    if (findings.length > 0) {
+    if (findings.length > 0 || stale.length > 0) {
+      const parts = [
+        ...(findings.length > 0 ? [`leaves a path that runs outside the sandbox writable from inside it: ${findings.join('; ')}`] : []),
+        ...(stale.length > 0 ? [`still carries an entry an earlier release wrote, which is stale rather than merely extra: ${stale.join('; ')}`] : []),
+      ];
       return (ctx.remoteJob ? fail : warn)(
-        `${PROFILE_PATH} leaves a path that runs outside the sandbox writable from inside it: ${findings.join('; ')}${optedOut ? notGraded : ''}. Regenerate it with \`${CLI} init --force\`, which writes a .bak sibling first`,
+        `${PROFILE_PATH} ${parts.join('; and it ')}${optedOut ? notGraded : ''}. Regenerate it with \`${CLI} init --force\`, which writes a .bak sibling first`,
       );
     }
     return optedOut
