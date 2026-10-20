@@ -29859,7 +29859,9 @@ the other one.
 
 - **held-another** is a data directory that held `Y` first. The second run's refresh deletes `Y`'s keys
   and inserts `X`'s in one store opened over `Y`'s, so the index carries `Y`'s rows as dead rows. Both
-  its rows and the fresh-insert's are newly inserted, so the pair isolates the dead rows.
+  its rows and the fresh-insert's are newly inserted. The launcher reads no memtable count, so whether
+  `X`'s rows sat in the memtable in both states, and so whether this pair isolates the dead rows from
+  mechanism 2, was not measured.
 
   ```
   bash scripts/scratch-run.sh harness-runs/scratch/eval.mjs --corpus self-docs --data-dir harness-runs/scratch/bm25-relevance/held-fixture-catalog --repeat 1
@@ -30142,8 +30144,8 @@ route and decides nothing, and goal 4's conclusion above decides nothing either.
 **Goal 6: ranking quality on `fixture-catalog`, score parity only on `self-docs`.** On `fixture-catalog`
 both mechanisms move recorded relevance figures: mechanism 2 moves arm B's recall@1 from 0.444 to 0.333 and
 arm D's from 0.556 to 0.444, and both arms' MRR by 0.056, through the `q-fc-token-lifetime` near-tie pair;
-the dead rows move arm B's recall@3 (1.000 held-another, 0.889 fresh-insert) and MRR (0.704, 0.657), and arm
-D's MRR (0.778, 0.759). On `self-docs` at `{ files: 71, chunks: 821 }` no recorded figure moves in any arm
+the held-another comparison, which adds the dead rows, moves arm B's recall@3 (1.000 held-another, 0.889
+fresh-insert) and MRR (0.704, 0.657), and arm D's MRR (0.778, 0.759). On `self-docs` at `{ files: 71, chunks: 821 }` no recorded figure moves in any arm
 (`### Whether either mechanism moves relevance`, **The answer.**). The held-another figure is the higher one
 in most moved columns, so on `fixture-catalog` a fix changes the recorded figures rather than raising them.
 For the route's priority: no figure here shows either mechanism moving relevance on a corpus larger than

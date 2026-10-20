@@ -45,7 +45,7 @@
 
 1. [x] **Finding 4** — Drop "Task 2's" from the first **Conclusions, one per lead.** bullet of `### What still differs after REINDEX`. _(layer: general)_
 2. [x] **Finding 3** — Prefix the refresh-level launcher paragraph's heading pointer with `docs/retrieval-eval-results.md` →. _(layer: general)_
-3. [ ] **Finding 1** — Qualify the held-another "isolates the dead rows" sentence and the recommendation's Goal 6 attribution as unmeasured. _(layer: general)_
+3. [x] **Finding 1** — Qualify the held-another "isolates the dead rows" sentence and the recommendation's Goal 6 attribution as unmeasured. _(layer: general)_
 4. [ ] **Finding 2** — Export `scoreLines` and `stamp` from `bm25-history.mjs` and delete their copies in `bm25-refresh-rule.mjs`. _(layer: general)_
 
 ---
