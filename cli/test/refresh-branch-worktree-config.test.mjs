@@ -185,6 +185,10 @@ test('(c) --local with a checkout argument merges the local base and never fetch
 
 test('(d) The worktree’s own copy with no argument still refreshes the worktree, under the main hooks', async (t) => {
   const f = await worktreeFixture(t);
+  // The fixture's push already advanced origin/trunk; put it back one commit so the wrapper's
+  // fetch moves a ref, and its reference-transaction hook shows which hooks directory it ran under.
+  await runGit(f.main, ['update-ref', `refs/remotes/origin/${BASE}`, `${f.baseSha}~1`]);
+  await f.resetMarkers();
   const mainHead = await f.head(f.main);
   const result = await f.refresh(f.wtScript, []);
   assert.equal(result.status, 0, output(result));

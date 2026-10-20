@@ -37,3 +37,5 @@ The wrapper's behaviour is correct. The test's way of proving the pin is what we
   Keep the last assertion exactly as it is: `assert.deepEqual(await f.markers(), ['main-rt']);`. `main-rt` now comes from the fetch, and seeing `main-rt` rather than `wt-rt` proves that the worktree's own copy also runs under the main hooks directory.
 
 Do not change `cli/templates/scripts/refresh-branch.sh`, `cli/templates/scripts/lib/harness-run-lib.sh` or the shared `worktreeFixture`. Case (l) asserts that the markers are empty and would break if the fixture's tracking ref were moved for every case.
+
+**Deviations from plan:** None in the fix itself. The row-`G.4` before-run happened after the edit: the HEAD copy of the test file was put back for one run, `npm test --workspace cli -- test/refresh-branch-worktree-config.test.mjs`, where case (d) failed (`actual []`, `expected ['main-rt']`, 13 pass / 1 fail). The fixed file was then restored, and the same command gave 14 pass / 0 fail.
