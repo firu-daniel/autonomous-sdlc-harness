@@ -33,3 +33,5 @@
 - `grep -n 'first working copy `git worktree list` reports' docs/watcher.md` prints nothing.
 - `grep -n '^### Where the family runs git in a run.s copy, and under what pins$' docs/watcher.md` still matches: the cited heading is unchanged.
 - Every claim in the new subsection names the file or check it rests on. Read each one against Tasks 1, 2, 3 and 7's landed code before committing, and correct the prose where the code differs.
+
+- **Deviations from plan:** The plan's **Not read** paragraph said every script the watcher runs places the main checkout "from their own location". `remote-run.sh`'s setup places it with `hr_main_repo "${PWD-.}"`, and `create-worktree.sh`, `cleanup-merged-worktrees.sh` and `restart-watcher.sh` use `hr_main_repo` of their resolved top. So the paragraph says the excluded wrappers place it from their own location through `hr_wrapper_main_of`, and every other script places it through that or `hr_main_repo`, neither of which reads the variable. The **Set** paragraph also lists the spawn_engine call sites the code actually has (launch, park-resume, pause-resume, job-mode auto-resume) instead of "launch, resume and job-mode run".
