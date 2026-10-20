@@ -24,22 +24,22 @@ ordinary path placeholder, exactly as it uses `<branch>`, `<entry-id>` and `<n>`
 
 | Token | Class | How to resolve it |
 |---|---|---|
-| `<repo_root>` | derived at runtime | The absolute root of the checkout this run is executing in — in an autonomous run, the run's **own worktree**, not the main checkout. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
+| `<repo_root>` | derived at runtime | The absolute root of the checkout this run is executing in — in an autonomous run, the **run copy**, not the main checkout. Obtain it with a **bare** `git rev-parse --show-toplevel` and build every literal path from the result. Never embed the `$(…)` substitution inside another shell command, and never stash it in a shell variable across separate Bash calls — separate calls do not share shell state. |
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to, the ledger and the four pause sentinels included. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the directory the project-command wrapper scripts live in. The three outer-loop scripts this file names (`autonomous-watcher.sh`, `commit-on-branch.sh`, `push-branch.sh`) are written into it by setup as well — copied verbatim rather than rendered from a detected command line, since each reads the configuration at run time — so every `<scripts_dir>/…` invocation below resolves in a wired repository. `commit-on-branch.sh` and `push-branch.sh` are both invoked as the main checkout's copy, `<MAIN_REPO>/<scripts_dir>/…`. The two guard hooks it names (`allow-safe-compounds.sh`, `git-commit-branch-guard.sh`) ship as plugin hooks and are **not** under it either: they are named bare and take no prefix. |
-| `<MAIN_REPO>` | derived at runtime | The main checkout — the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
+| `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv HARNESS_MAIN_REPO` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
 | `<default_branch>` | config value | `defaultBranch` — the branch work starts from and merges back into. Never a remembered branch name. Bound for completeness — no step in this file consumes it. |
 | `<protected_branches>` | config value | `protectedBranches` — the branches the commit wrapper and the `git-commit-branch-guard.sh` hook refuse to commit or push to, and the set the guard quotes back in its refusal message (§1.6). The effective set is these together with `<default_branch>`. |
-| `<worktree_glob>` | derived at runtime | The **parent directory of `<repo_root>`** (the work root) joined to the configured `projectName` stem and a `-*` suffix — the sibling-worktree pattern an autonomous run's per-branch worktrees match, and the pattern the generated permission profile is materialized with. It is **absolute**, so a permission rule written over it takes one leading slash of its own — `Write(/<worktree_glob>/**)`, two slashes in the rendered rule, never three; §2.2 sub-step (a) states that rule where it is used. |
+| `<worktree_glob>` | derived at runtime | The **parent directory of `<repo_root>`** (the work root) joined to the configured `projectName` stem and a `-*` suffix — the sibling pattern an autonomous run's run copies match, and the pattern the generated permission profile is materialized with. It is **absolute**, so a permission rule written over it takes one leading slash of its own — `Write(/<worktree_glob>/**)`, two slashes in the rendered rule, never three; §2.2 sub-step (a) states that rule where it is used. |
 
 ---
 
 ## 1. Flow-progress ledger
 
 ### 1.1 File
-`<state_dir>/flow_progress/<branch>_progress.md`, in the run's own worktree. **Committed & pushed** — it is the
-authoritative durable resume state, so it must survive a worktree recreate (the user-review path can
-recreate a worktree) and reach origin like every other autonomous commit.
+`<state_dir>/flow_progress/<branch>_progress.md`, in the run copy. **Committed & pushed** — it is the
+authoritative durable resume state, so it must survive a run-copy recreate (the user-review path can
+recreate a run copy) and reach origin like every other autonomous commit.
 
 ### 1.2 Two levels — do not conflate
 - **Phase-level ledger** (this file): flow-structural and *fixed* per engine, independent of the branch's
@@ -226,7 +226,7 @@ resume does **not** re-read or reset the ledger (the rule just above), the block
 governs the branch from then on.
 
 **User-review engine — the `fix-plan fork's Setup` creates OR re-seeds the ledger per round.** Each
-user-review round is a fresh `R1–R5` + `RG` fix cycle against the same branch/worktree, and the ledger is committed,
+user-review round is a fresh `R1–R5` + `RG` fix cycle against the same branch/run copy, and the ledger is committed,
 so the *previous* round's all-`[x]` ledger is present at the next round's start. Decide by comparing the
 existing ledger's header round to the **active round** (the latest `<branch>_review[_<n>].md`):
 - exists **and** header round **==** active round → **resume** (read it, do NOT reset — a pause/park resume
@@ -287,10 +287,10 @@ should have been `[-]` and was seeded `[ ]` is corrected by fixing the **seeding
 Each flip (and the initial creation) is: **Edit the ledger file, then commit and push via the wrapper** —
 `bash <MAIN_REPO>/<scripts_dir>/commit-on-branch.sh --repo <repo_root> <path>... -- "<subject>"`, then
 `bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>`. Both name `<MAIN_REPO>`'s copy, because that copy
-is the one the unattended permission profile runs outside the sandbox: the worktree's own copy stays sandboxed,
+is the one the unattended permission profile runs outside the sandbox: the run copy's own scripts stay sandboxed,
 where the commit cannot write a linked worktree's record. Spell both commands literally — `<MAIN_REPO>`,
 `<repo_root>` and `<branch>` (in a path or in the subject) each as the text it resolves to, with no `$` anywhere
-in the command: never `"$REPO_ROOT"`, `${branch}` or any other variable. From a worktree, the script-allowlist
+in the command: never `"$REPO_ROOT"`, `${branch}` or any other variable. From a run copy, the script-allowlist
 guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is each call's only
 grant, and a command carrying a shell expansion does not match it. Fixed subject `chore: Flow progress <entry-id> for <branch>`
 (e.g. `chore: Flow progress A1.5f for <branch>`; for creation, `chore: Add flow-progress ledger for
@@ -335,7 +335,7 @@ unconditional push that follows is a harmless "Everything up-to-date" no-op (the
 see the warning above). This makes every flip safe to re-run on a resumed run.
 
 **One exit 1 is a landed commit.** A stderr line beginning `commit-on-branch.sh: committed <short_sha> on <branch>, but `
-means the commit stands and `refs/heads/<branch>` has moved; only the working copy's index did not take the
+means the commit stands and `refs/heads/<branch>` has moved; only the run copy's index did not take the
 committed paths. Count the write as landed and **never revert it** — the file already matches the new tip, so a
 revert dirties the tree. Issue the identical wrapper call once more, alone and spelled literally, to re-sync the
 index: it is expected to exit 3, and any other status is surfaced. The push that follows is unchanged. Every other
@@ -479,11 +479,11 @@ The safety contract runs **before every Agent dispatch** and already does the pe
    `git -C <worktree-root> status` matches **no** allow entry (the generated permission profile at
    `.claude/settings.autonomous.json` allow-lists `Bash(git status:*)` and carries no `git -C …` entry at all, so
    any `-C` form matches no `allow` or `deny` rule) and is refused. The bare form is correct because the
-   run's cwd is the worktree root (the engine never `cd`s) and `git status` reports the whole worktree's tracked
+   run's cwd is the run-copy root (the engine never `cd`s) and `git status` reports the whole run copy's tracked
    state regardless. Read its lines: if every line begins with `??` (untracked) or there is no output, the
    **tracked** tree is clean; any line NOT beginning with `??` (a staged/modified/renamed/deleted tracked
    path) means dirty-tracked. Untracked `<state_dir>/…` artifacts are tolerated — the same clean-of-tracked-changes
-   invariant the watcher's worktree-reuse check uses (the watcher applies it with a pipe; the engine states it
+   invariant the watcher's run-copy reuse check uses (the watcher applies it with a pipe; the engine states it
    over unfiltered output).
    - **Dirty-tracked** (a unit is mid-commit, between an implementer and its committer): do **NOT** pause
      yet. Let the loop proceed through the next commit that cleans the tree (a bounded committer dispatch),
@@ -625,6 +625,6 @@ can cost.
 - **Not dispatches.** Ledger flips/creation are Bash commits, so they do **not** count against any fork's
   `MAX_TOTAL_DISPATCHES`, whatever value the driving fork's core binds — no numeric change is needed.
 - **Protected-branch boundary unchanged.** Ledger commits and pause-resume reach only the run's own
-  non-protected worktree branch (the wrapper + `pre-push` hook refuse targets in `<protected_branches>`); the
+  non-protected run branch (the wrapper + `pre-push` hook refuse targets in `<protected_branches>`); the
   flow still ends at "branch ready for review," never merges, never opens a PR.
 - **No `rm` in the headless run.** The watcher deletes the pause files; the fork only writes `<state_dir>/…`.

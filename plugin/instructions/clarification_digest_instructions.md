@@ -8,12 +8,12 @@ The tokens below are neither Mode-contract **bindings** (this file declares none
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. The two scripts this file names by path, `commit-on-branch.sh` in `## Commit mechanics` and `push-branch.sh` in `## Push`, are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles it. Both are invoked under `<MAIN_REPO>` rather than repo-relative, because the main checkout's copy is the one the unattended permission profile runs outside the sandbox. |
-| `<MAIN_REPO>` | derived at runtime | The main checkout — the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
-| `<repo_root>` | derived at runtime | The worktree root this run executes in — the value the activating flow's `<repo_root>` binding gives and `$REPO_ROOT` holds. In the commit and push commands, spell it as a literal absolute path, never through a substitution or a variable. |
+| `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv HARNESS_MAIN_REPO` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
+| `<repo_root>` | derived at runtime | The run-copy root this run executes in — the value the activating flow's `<repo_root>` binding gives and `$REPO_ROOT` holds. In the commit and push commands, spell it as a literal absolute path, never through a substitution or a variable. |
 
 ---
 
-The **last of Phase D's artifact writes** — it follows the improvement-observations intake — and best-effort, for the two autonomous flows (the autonomous task flow and the autonomous user-review-fix flow). The park-and-ask clarification channel is machine-local: its question and answer files go with the working copy, so a park's diagnosis and the operator's ruling are destroyed when that copy is removed. This step writes the copy that survives — one committed block per clarification the branch parked on, at `<state_dir>/clarification_digests/<branch>.md`.
+The **last of Phase D's artifact writes** — it follows the improvement-observations intake — and best-effort, for the two autonomous flows (the autonomous task flow and the autonomous user-review-fix flow). The park-and-ask clarification channel is machine-local: its question and answer files go with the run copy, so a park's diagnosis and the operator's ruling are destroyed when that copy is removed. This step writes the copy that survives — one committed block per clarification the branch parked on, at `<state_dir>/clarification_digests/<branch>.md`.
 
 This file is the canonical policy. A flow **activates** it by adding one `Override J` (see `## Activation`); this file is otherwise inert.
 
@@ -70,13 +70,13 @@ Spell `<MAIN_REPO>`, `<repo_root>` and `<branch>` each as the literal text it re
 
 ## Push
 
-The push follows the commit **immediately**, as a **plain, single-statement** Bash command, naming the same worktree root the commit above used, spelled literally:
+The push follows the commit **immediately**, as a **plain, single-statement** Bash command, naming the same run-copy root the commit above used, spelled literally:
 
 ```zsh
 bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>
 ```
 
-Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a worktree, the script-allowlist guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only grant, and a command carrying a shell expansion does not match it.
+Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a run copy, the script-allowlist guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only grant, and a command carrying a shell expansion does not match it.
 
 > ⚠️ **No exit-code gate.** Why an `if …; then … fi` wrapper is refused in a headless run, and why no gate is needed, is canonical in `${CLAUDE_PLUGIN_ROOT}/instructions/improvement_observations_instructions.md` → `## Push` and applies here as written.
 

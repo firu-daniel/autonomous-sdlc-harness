@@ -8,8 +8,8 @@ The tokens below are neither Mode-contract **bindings** (this file declares none
 |---|---|---|
 | `<state_dir>` | config value | `stateDir` — the run-artifact tree every artifact path in this file is relative to. Default `sdlc-harness/`. It is never dot-named: no path segment of it may begin with a dot. |
 | `<scripts_dir>` | config value | `scriptsDir` — the repo-relative directory the generated wrapper scripts live in. The two scripts this file names by path, `commit-on-branch.sh` in `## Commit mechanics` and `push-branch.sh` in `## Push`, are outer-loop scripts rather than generated wrappers — they are named by their destination path, and the item that delivers them settles that. Both are invoked under `<MAIN_REPO>` rather than repo-relative, because the main checkout's copy is the one the unattended permission profile runs outside the sandbox. |
-| `<MAIN_REPO>` | derived at runtime | The main checkout — the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
-| `<repo_root>` | derived at runtime | The worktree root this run executes in — the value the activating flow's `<repo_root>` binding gives and `$REPO_ROOT` holds. In the commit and push commands, spell it as a literal absolute path, never through a substitution or a variable. |
+| `<MAIN_REPO>` | derived at runtime | The main checkout — the path a bare `printenv HARNESS_MAIN_REPO` prints, else the first `worktree ` line of a bare `git worktree list --porcelain`. Spell it as a literal absolute path in the command, never through a substitution or a variable. |
+| `<repo_root>` | derived at runtime | The run-copy root this run executes in — the value the activating flow's `<repo_root>` binding gives and `$REPO_ROOT` holds. In the commit and push commands, spell it as a literal absolute path, never through a substitution or a variable. |
 
 ---
 An orchestrating agent composes every sub-agent prompt itself, and whatever it adds beyond the block its governing instruction defines exists only in the session transcript — gone when the session ends, while the finding, the verdict and the round count that text shaped are committed and read later as the agent's own. **This file is the canonical policy governing that added text.** A flow **activates** it by pointing at it from each site where its orchestrator composes a prompt; it never restates any part of it, per `${CLAUDE_PLUGIN_ROOT}/instructions/mode_contract.md` rule (5) — a copy creates a second owner of the contract. This file is otherwise inert.
@@ -82,7 +82,7 @@ The record is `<state_dir>/dispatch_additions/<branch>.md` — **one file per br
 - **No committer mode fits.** The record is a **non-readiness** artifact: it has no `## Phase 2 Readiness` checkbox for a committer mode to flip, and every mode that would take it is locked to a different fixed subject. It is therefore committed by a direct wrapper call (`## Commit mechanics`), which is the canonical rule for a non-readiness artifact in `${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6.
 - **A review index is not yours to edit.** Every index that would host such a field is written by a reviewer or writer agent, and each orchestrating core carries its own *do NOT edit plan files yourself* rule. A field on one would put the orchestrator inside an artifact it is barred from touching, and would make the record's survival depend on that agent's next rewrite of the file.
 
-**Write mechanics — absolute write, repo-relative commit.** Create or append with the file tool at the **absolute**, `$REPO_ROOT`-anchored path `$REPO_ROOT/<state_dir>/dispatch_additions/<branch>.md`, so the record lands in **this** worktree. Then pass the **repo-relative** path `<state_dir>/dispatch_additions/<branch>.md` to the commit wrapper, which resolves its staging paths against `--repo`. The split is not cosmetic: a bare `<state_dir>/…` write resolves against the main checkout, which would put this run's record on **that checkout's branch** instead of the run's own.
+**Write mechanics — absolute write, repo-relative commit.** Create or append with the file tool at the **absolute**, `$REPO_ROOT`-anchored path `$REPO_ROOT/<state_dir>/dispatch_additions/<branch>.md`, so the record lands in **this** run copy. Then pass the **repo-relative** path `<state_dir>/dispatch_additions/<branch>.md` to the commit wrapper, which resolves its staging paths against `--repo`. The split is not cosmetic: a bare `<state_dir>/…` write resolves against the main checkout, which would put this run's record on **that checkout's branch** instead of the run's own.
 
 ## The entry format
 
@@ -131,13 +131,13 @@ Spell every token literally, with no `$` in the command, per `${CLAUDE_PLUGIN_RO
 
 ## Push
 
-**This commit carries its own push — do not leave it to a later step.** In a flow that pushes its commits at all, the push follows the commit **immediately**, as a **plain, single-statement** Bash command, naming the same worktree root the commit above used, spelled literally:
+**This commit carries its own push — do not leave it to a later step.** In a flow that pushes its commits at all, the push follows the commit **immediately**, as a **plain, single-statement** Bash command, naming the same run-copy root the commit above used, spelled literally:
 
 ```zsh
 bash <MAIN_REPO>/<scripts_dir>/push-branch.sh <repo_root>
 ```
 
-Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a worktree, the script-allowlist guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only grant, and a command carrying a shell expansion does not match it.
+Spell both paths literally — `<MAIN_REPO>` and `<repo_root>` each as the absolute path it resolves to, never `"$REPO_ROOT"` or any other variable. From a run copy, the script-allowlist guard does not vouch for the main checkout's copy, so the profile's literal `allow` entry is this call's only grant, and a command carrying a shell expansion does not match it.
 
 Like the commit, the push names `<MAIN_REPO>`'s copy, spelled as `## Commit mechanics` above requires — and the call is **unconditional**: never gated on the wrapper's exit status, never wrapped in a shell conditional. That is the ⚠️ **no-exit-code-gate** trap `## Commit mechanics` already points at (`${CLAUDE_PLUGIN_ROOT}/instructions/autonomous_pause_and_ledger.md` §1.6, which also states why no gate is needed here) — read it there. A flow that pushes **none** of its own commits — one whose fork deliberately leaves them unpushed for a human merge step — issues none here either: this step pushes exactly where the flow it runs in pushes, which is what keeps it family-neutral. A phase that owes no block skips the step whole (`## Write point — once per phase, never per dispatch`), so it issues neither commit nor push.
 
