@@ -30,3 +30,5 @@
 - `npm test --workspace cli -- test/qa-user-locks.test.mjs`, from the repository root as one plain foreground command. Read the `# tests`, `# pass` and `# fail` counts and the exit status: every case passes, the pre-existing ones included, `# fail 0`.
 - `bash scripts/typecheck.sh` exits 0.
 - `grep -n "HARNESS_MAIN_REPO" cli/test/qa-user-locks.test.mjs` prints nothing: the name arrives through the import.
+
+- **Deviations from plan:** The file's existing cases already carry the labels (a)–(d), so the plan's new cases (a)–(d) are titled (e)–(h) in the file: (e) anchor from a clone, (f) no anchor in a clone, (g) an anchor naming no main checkout, (h) a relative anchor. Case (h) uses the value `../clone` from the linked worktree — a relative path that does resolve to a real main checkout (the fixture's clone) from that working directory — so honouring it would land the lock in the clone's state directory and fail by name; the plan only required a non-absolute value.

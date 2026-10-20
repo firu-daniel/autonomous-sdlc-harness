@@ -8,12 +8,16 @@
  * reserve issued in a linked worktree and a release issued in the main checkout agree on one lock;
  * a reserve prints only the slot it claimed and exits 0, a held slot or a full set exits 3, and a
  * repository with no main checkout (a bare repository's worktree) makes a reserve exit 1 and a
- * release exit 0.**
+ * release exit 0. The main checkout is the one the launcher's anchor names when that is absolute and
+ * a main checkout, else the `git rev-parse --git-common-dir` answer — so a reserve in a clone with the
+ * anchor naming the main checkout lands in the main checkout's lock set, the same reserve with no
+ * anchor lands in the clone's own, and an anchor that is relative or names no main checkout changes
+ * nothing.**
  *
  * The fixture is built by hand rather than by `init`, so the configuration under test is exactly the
- * one written here. The worktree's own `harness.config.json` is rewritten to name a different
- * `stateDir`, so a lock landing in either working copy's own state directory — rather than the main
- * checkout's — fails the location assertion by name.
+ * one written here. The worktree's and the clone's own `harness.config.json` are each rewritten to
+ * name a different `stateDir`, so a lock landing in any working copy's own state directory — rather
+ * than the main checkout's — fails the location assertion by name.
  *
  * Not covered: a submodule and a `--separate-git-dir` layout, the other two shapes the scripts
  * document as "no main checkout". Both reach the same `hc_main_root` refusal arm as the bare case
@@ -27,6 +31,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { MAIN_REPO_ANCHOR_VARIABLE } from '../dist/core/mainRepoAnchor.js';
 import { WORKSPACE_ROOT, runBash, runGit } from './helpers/fixture.mjs';
 
 const SCRIPTS = join(WORKSPACE_ROOT, 'plugin', 'scripts');
@@ -82,8 +87,24 @@ async function lockFixture(t) {
     main,
     wt,
     lockSet: join(main, STATE_DIR, 'qa_user_locks'),
-    run: (cwd, script, args = []) => runBash(cwd, [script, ...args]),
+    run: (cwd, script, args = [], env = {}) => runBash(cwd, [script, ...args], env),
   };
+}
+
+/**
+ * A `git clone --shared` of the fixture's main checkout, under the same torn-down root, whose own
+ * configuration names a third `stateDir`.
+ *
+ * @param {Awaited<ReturnType<typeof lockFixture>>} f
+ */
+async function cloneOf(f) {
+  const clone = join(f.root, 'clone');
+  await runGit(f.root, ['clone', '--quiet', '--shared', f.main, clone]);
+  await writeFile(
+    join(clone, 'harness.config.json'),
+    `${JSON.stringify({ ...CONFIG, stateDir: 'clone-state' })}\n`,
+  );
+  return { clone, cloneLockSet: join(clone, 'clone-state', 'qa_user_locks') };
 }
 
 test('(a) A reserve in a linked worktree parks the slot under the main checkout’s state directory', async (t) => {
@@ -142,4 +163,50 @@ test('(d) A bare repository’s worktree has no main checkout: reserve exits 1, 
   const released = await f.run(bareWt, RELEASE, ['1']);
   assert.equal(released.status, 0, output(released));
   assert.match(released.stderr, /cannot resolve the main checkout/);
+});
+
+test('(e) A reserve in a clone with the anchor naming the main checkout uses the main checkout’s lock set', async (t) => {
+  const f = await lockFixture(t);
+  const { clone, cloneLockSet } = await cloneOf(f);
+  const reserved = await f.run(clone, RESERVE, [], { [MAIN_REPO_ANCHOR_VARIABLE]: f.main });
+  assert.equal(reserved.status, 0, output(reserved));
+  assert.equal(reserved.stdout, '1\n', output(reserved));
+  assert.ok(await exists(join(f.lockSet, 'user_1')), `no lock at ${f.lockSet}/user_1`);
+  assert.equal(await exists(cloneLockSet), false, 'lock set created in the clone’s state dir');
+
+  const released = await f.run(f.main, RELEASE, ['1']);
+  assert.equal(released.status, 0, output(released));
+  assert.equal(await exists(join(f.lockSet, 'user_1')), false, 'lock still present after release');
+});
+
+test('(f) A reserve in a clone with no anchor falls back to the clone’s own lock set', async (t) => {
+  const f = await lockFixture(t);
+  const { clone, cloneLockSet } = await cloneOf(f);
+  const reserved = await f.run(clone, RESERVE, [], { [MAIN_REPO_ANCHOR_VARIABLE]: '' });
+  assert.equal(reserved.status, 0, output(reserved));
+  assert.equal(reserved.stdout, '1\n', output(reserved));
+  assert.ok(await exists(join(cloneLockSet, 'user_1')), `no lock at ${cloneLockSet}/user_1`);
+  assert.equal(await exists(f.lockSet), false, 'lock set created in the main checkout');
+});
+
+test('(g) An anchor naming no main checkout is ignored: a worktree reserve uses the common-dir answer', async (t) => {
+  const f = await lockFixture(t);
+  const plain = join(f.root, 'plain');
+  await mkdir(plain);
+  const reserved = await f.run(f.wt, RESERVE, [], { [MAIN_REPO_ANCHOR_VARIABLE]: plain });
+  assert.equal(reserved.status, 0, output(reserved));
+  assert.equal(reserved.stdout, '1\n', output(reserved));
+  assert.ok(await exists(join(f.lockSet, 'user_1')), `no lock at ${f.lockSet}/user_1`);
+  assert.equal(await exists(join(plain, STATE_DIR)), false, 'lock set created under the anchor');
+  assert.equal(await exists(join(f.wt, 'wt-state')), false, 'lock set created in the worktree’s state dir');
+});
+
+test('(h) A relative anchor is ignored, even one resolving to a main checkout from the working directory', async (t) => {
+  const f = await lockFixture(t);
+  const { cloneLockSet } = await cloneOf(f);
+  const reserved = await f.run(f.wt, RESERVE, [], { [MAIN_REPO_ANCHOR_VARIABLE]: '../clone' });
+  assert.equal(reserved.status, 0, output(reserved));
+  assert.equal(reserved.stdout, '1\n', output(reserved));
+  assert.ok(await exists(join(f.lockSet, 'user_1')), `no lock at ${f.lockSet}/user_1`);
+  assert.equal(await exists(cloneLockSet), false, 'relative anchor honoured: lock set in the clone');
 });
