@@ -72,3 +72,13 @@ This task changes no shipped behaviour and records no figure. Tasks 2, 3 and 4 r
   ```
 - Two captures from the second smoke command, given to `--compare`, print the `captures: 2, values compared: …` line. A hand-made capture line in the old two-value form is refused by name.
 - `performance.now` still appears only inside the `timed` methods, so no step but `--reindex-cost`'s measures time.
+
+- **Deviations from plan:**
+  - `readIndexState(engine, queries, { limit, keys })` also takes three optional options. `repeat` (default 1) drives the repeat mode. `lengthVerdict` (`{ equal, decidedAt }`) carries the sequence's first-step Σ length / `total_len` verdict to later steps; when it is absent, that step's own pair decides, which is what a Task 5 call without it gets. `listInversions` (default: list all) bounds the listing, never the count. The state also carries `repeats` when `repeat > 1`. `diagnostics` is `{ lengths, scores, forced }`, where `lengths` is (e) and `scores` / `forced` are (a)–(d), (f) and (g) for each reading.
+  - The forced re-score is repeated as well, each repetition in its own `run` call. Its captures use step `<step>.forced` and `<step>.forced.r<i>`, and its disagreements are listed as `disagrees <step>.forced r<i> …`. Task 3 reads a forced step's `forced index scan` reading from the captures, so it is written to them.
+  - The repeat block prints the parsed summary before and after, plus every line of `bm25_summarize_index`'s text that differs, verbatim. It does not print one changed/unchanged verdict. A PGlite smoke run showed why: the `DSA total size` line under `Memory Usage:` grows when queries run while the index stays the same (a scratch probe on 900 rows: `1048576 bytes` before one query, `2097152 bytes` after).
+  - When any step was forced, the states sequence prints a second pairwise table, the **index-scan reading**: the forced scores where a step was forced. A step whose default plan is a sequential scan has a `scan` column that is no index-scan score.
+  - (f) and (g) run over every row a query returned, in returned order, not only hits on `keys`. (g)'s inversions are listed under the same limit as (f)'s.
+  - `--reindex-cost` also refuses `--sequence` and `--repeat` by name. Before, the parser would have rejected both as unknown flags.
+  - `openPostgresEngine` refuses a database name that is not a lower-case unquoted identifier, because the name is spliced into `DROP` / `CREATE DATABASE`. With `create: true` it also refuses the maintenance database.
+  - The second smoke command ran twice with `--capture harness-runs/scratch/bm25-history/smoke-<n>.txt` added, because the `--compare` check needs two captures.
