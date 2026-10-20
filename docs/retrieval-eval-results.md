@@ -28535,7 +28535,7 @@ its `operator_exact`, so it shows no difference.
   beyond `real` storage, the largest 6.556510925292969e-7 and 9.5367431640625e-7 (the two
   `fixture-catalog` tables' `s5` rows). The length verdict held, but the remainder is not wholly in the `>
   39` band: 5 (PGlite) and 4 (Postgres) of those hits are 39 tokens or shorter. So the residual is not
-  consistent with mechanism 2. It matches Task 2's `t3` rows for `fixture-catalog` (`### The score each
+  consistent with mechanism 2. It matches the `t3` rows for `fixture-catalog` (`### The score each
   index state ranks by`) in every column on each engine, so the deleted `self-docs` rows leave no trace
   in it.
 - **`self-docs`, 540–563 hits after `REINDEX`: unexplained.** Diagnostic (b) covers 290 (PGlite) and 295
