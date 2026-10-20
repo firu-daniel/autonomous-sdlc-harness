@@ -91,3 +91,6 @@ The next sync-in then finds the clone strictly behind and heals the ref alone. W
      - Assert the clone's `u.txt` still reads `'clone draft\n'`.
 
    This is the one test file the fix edits, so the fix runs only it: `npm test --workspace cli -- test/clone-sync.test.mjs` from the repository root.
+
+- **Deviations from plan:** Fix step 3 (`docs/cli.md` §6 and `docs/watcher.md`'s "clone arm: sync-in at the copy check" row) lies outside the `cli` layer's path and was not applied by the `cli` dispatch; it needs a `general`-layer dispatch. Steps 1, 2 and 4 applied as written. The new case (c2) was also run against `HEAD`'s library: both subtests failed there and pass on the fix.
+  - `general`-layer dispatch: step 3 applied as written to `docs/cli.md` §6 and `docs/watcher.md`'s "clone arm: sync-in at the copy check" row; `bash scripts/typecheck.sh` passed; no test file edited by this dispatch.

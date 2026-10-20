@@ -171,7 +171,7 @@
 #      `hr_copy_sync_in_var`, writes objects into the main repository and
 #      moves the main checkout's `refs/heads/<branch>` by compare-and-swap,
 #      may also heal the clone's `refs/heads/<branch>` by compare-and-swap,
-#      and on `main` and `worktree` writes nothing.
+#      with its index and working tree, and on `main` and `worktree` writes nothing.
 #      `hr_run_main_git`, `hr_run_copy_git` and `hr_copy_git_at` are
 #      general-purpose runners that
 #      write only what their caller's arguments ask, so a caller that drives a
@@ -183,7 +183,8 @@
 #      compare-and-swap `update-ref`, and moves the clone's
 #      `refs/heads/<branch>` when it heals a strictly-behind clone, only by a
 #      compare-and-swap from the tip `ls-remote` read to the main checkout's
-#      tip; sync-out writes the one named ref in a clone's own `.git`; the
+#      tip, together with the clone's index and working tree
+#      (`hr_copy_git_at`'s two-tree `read-tree -m -u`); sync-out writes the one named ref in a clone's own `.git`; the
 #      swap writes a compare-and-swap `update-ref` of the clone's
 #      `refs/heads/<branch>` first, then of the main checkout's, and on a
 #      failed main swap a compare-and-swap rollback of the clone's ref from
@@ -3753,9 +3754,11 @@ hr_copy_sync_main_git() {
 # `refs/heads/<branch>` commit afterwards. <main>'s ref moves only forward, by
 # a compare-and-swap `update-ref`; equal is a no-op. A clone strictly behind
 # <main> (a ref move that stopped after the clone's half was rolled back, or
-# one made by hand) is healed: the clone's ref is fast-forwarded to <main>'s
-# by a compare-and-swap through `hr_clone_git` from the tip `ls-remote` read,
-# and the sync is then a no-op. Refused: an empty or `-`-led branch, a branch
+# one made by hand) is healed: the clone's index and working tree are moved to
+# <main>'s tip by a two-tree `read-tree -m -u` (dry run first, refused with
+# nothing moved when a changed or untracked file is in the way) and its ref by
+# a compare-and-swap through `hr_clone_git` from the tip `ls-remote` read, put
+# back if the real `read-tree` refuses, and the sync is then a no-op. Refused: an empty or `-`-led branch, a branch
 # <main> or any of its worktrees has checked out (the guard git's
 # one-branch-one-checkout rule gives a worktree), a branch <main> lacks, a
 # heal whose compare-and-swap fails, and a diverged clone. 0 synced, healed or
@@ -3851,8 +3854,20 @@ EOF
         status=$?
         case "$status" in
           0)
+            if ! hr_copy_git_at "$cmain" "$gitdir" "$clone" read-tree -n --no-recurse-submodules -m -u "$oid" "$main_old" >/dev/null 2>&1; then
+              HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': the clone is behind the main checkout (${oid:0:12} to ${main_old:0:12}) and its working tree cannot take the main checkout's tip (a changed or untracked file is in the way)"
+              return 1
+            fi
             if ! hr_clone_git "$cmain" "$gitdir" update-ref "$ref" "$main_old" "$oid" >/dev/null 2>&1; then
               HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': healing the clone's $ref, which is behind the main checkout, from ${oid:0:12} to ${main_old:0:12} failed"
+              return 1
+            fi
+            if ! hr_copy_git_at "$cmain" "$gitdir" "$clone" read-tree --no-recurse-submodules -m -u "$oid" "$main_old" >/dev/null 2>&1; then
+              if hr_clone_git "$cmain" "$gitdir" update-ref "$ref" "$oid" "$main_old" >/dev/null 2>&1; then
+                HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': its working tree refused the main checkout's tip ${main_old:0:12}; the clone's $ref was put back to ${oid:0:12}"
+              else
+                HR_SYNC_REFUSAL="cannot sync branch '$branch' in from '$clone': its working tree refused the main checkout's tip ${main_old:0:12}, and putting the clone's $ref back to ${oid:0:12} failed too — inspect the clone by hand"
+              fi
               return 1
             fi
             ;;

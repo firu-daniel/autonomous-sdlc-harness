@@ -35,7 +35,7 @@
 
 Each entry resolves to `harness-runs/skeptic_reviews/feat_clone_per_run_switch_skeptic_review/finding_<K>.md` through its `**Finding K**` reference.
 
-1. [ ] **Finding 1** — Move a healed clone's index and working tree with its ref in `hr_copy_sync_in_var`, refusing with nothing moved when a file is in the way _(layer: cli, general)_
+1. [x] **Finding 1** — Move a healed clone's index and working tree with its ref in `hr_copy_sync_in_var`, refusing with nothing moved when a file is in the way _(layer: cli, general)_
 
 ---
 

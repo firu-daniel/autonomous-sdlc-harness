@@ -4,7 +4,8 @@
  * **The rule these tests exist to enforce: a clone's objects enter the main checkout only through
  * sync-in's fetch, which hashes what it indexes, so a substituted object is rejected and the main
  * checkout's refs are left as they were; sync-in fast-forwards a clone strictly behind the main
- * checkout to the main checkout's tip, and refuses a diverged one with neither ref moved; sync-in
+ * checkout to the main checkout's tip, its index and working tree with its ref, refusing with nothing
+ * moved when a file in the clone is in the way, and refuses a diverged one with neither ref moved; sync-in
  * never moves a branch the main checkout or one of its worktrees has checked out; and both halves are
  * no-ops for a worktree and for the main checkout.**
  *
@@ -219,6 +220,40 @@ test('(c) A clone behind the main checkout is healed to the main checkout’s ti
   assert.deepEqual(await f.syncIn(), { status: '0', tip: commit, refusal: '' });
   assert.equal(await f.mainTip(), commit);
   assert.equal(await f.cloneTip(), commit);
+});
+
+test('(c2) A clone behind a main-checkout commit that changed a file is healed with its working tree, and refused with nothing moved when a changed file is in the way', async (t) => {
+  const commitFromMain = async (f) => {
+    await runGit(f.main, ['checkout', '--quiet', BRANCH]);
+    await writeFile(join(f.main, 'u.txt'), 'user fix\n');
+    await runGit(f.main, ['add', 'u.txt']);
+    await runGit(f.main, [...IDENTITY, 'commit', '--quiet', '-m', 'user: fix']);
+    await runGit(f.main, ['checkout', '--quiet', 'trunk']);
+  };
+
+  await t.test('Heal', async (t) => {
+    const f = await fixture(t);
+    await commitFromMain(f);
+    const ahead = await f.mainTip();
+    assert.deepEqual(await f.syncIn(), { status: '0', tip: ahead, refusal: '' });
+    assert.equal(await f.cloneTip(), ahead);
+    assert.equal(await readFile(join(f.clone, 'u.txt'), 'utf8'), 'user fix\n');
+    assert.equal((await runGit(f.clone, ['status', '--porcelain'])).stdout, '');
+  });
+
+  await t.test('Refused', async (t) => {
+    const f = await fixture(t);
+    await commitFromMain(f);
+    await writeFile(join(f.clone, 'u.txt'), 'clone draft\n');
+    const before = await f.mainSnapshot();
+    const cloneBefore = await f.cloneTip();
+    const g = await f.syncIn();
+    assert.equal(g.status, '1');
+    assert.match(g.refusal, /cannot take the main checkout's tip/);
+    assert.equal(await f.cloneTip(), cloneBefore);
+    assert.deepEqual(await f.mainSnapshot(), before);
+    assert.equal(await readFile(join(f.clone, 'u.txt'), 'utf8'), 'clone draft\n');
+  });
 });
 
 test('(d) Diverged tips are refused, naming both short ids', async (t) => {
