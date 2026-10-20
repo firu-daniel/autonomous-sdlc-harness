@@ -51,7 +51,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_docs_retrieval_bm25_sc
 5. [x] **Task 5** — Add the refresh-level module that measures the candidate end-state rule on both backends _(layer: general)_ _(points: 20)_
 6. [x] **Task 6** — Measure the candidate end-state rule at refresh level on both engines and record the before-fix figures _(layer: general)_ _(points: 15)_
 7. [x] **Task 7** — Measure whether either mechanism moves the relevance eval's deterministic figures _(layer: general)_ _(points: 10)_
-8. [ ] **Task 8** — Write the recommendation for the fix branch _(layer: general)_ _(points: 8)_
+8. [x] **Task 8** — Write the recommendation for the fix branch _(layer: general)_ _(points: 8)_
 
 ## Scope register
 

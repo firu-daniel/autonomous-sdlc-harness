@@ -30032,3 +30032,151 @@ and 20 on `self-docs`. Values below are unrounded where three decimals hide a di
 
 The limit of these figures: one run per state, on two corpora of 41 and 821 chunks, on the TypeScript
 backend only.
+
+### The recommendation for the fix branch
+
+**What this is.** A proposal to the maintainer for the route of the branch that fixes the BM25 scores'
+dependence on the `chunks_bm25` index's state. The fix branch decides. This subsection takes no
+measurement of its own: every figure below is quoted from a subsection above and cited by goal number,
+subsection and row. **The proposed route is route 2, another route: end every refresh that changed
+something, and the first `docs index` build, in the state `REINDEX INDEX chunks_bm25` leaves, in place of
+the candidate rule's `bm25_spill_index` branch.** Goals 5, 1 and 3 decided it, goal 2 qualifies it, and
+goal 6 sets its priority.
+
+**Goal 4's conclusion: explained by mechanism 2.** On both engines the probe's `t0` rows return each
+`fixture-catalog` near-tie pair in `scan`'s order and against `operator`'s, and no spilled state inverts
+either (`### The near-tie ordering on an empty database`, its table's `t0` rows against its `t1`–`t4`
+rows); and the Python store's own fresh build on an empty database is that `t0` state, with 41 memtable
+documents, no segment and both pairs inverted with the same values, neither of which is inverted after the
+spill (`### The candidate end-state rule, at refresh level`, **Observation 2**).
+
+**How the route was chosen.** The three tests, applied in order.
+
+1. **Route 1, the candidate rule: does not hold.** Its test is that goal 5's verdict holds on both
+   backends and both corpora against `reference-reindex`, and that goal 3's stray appears only in a state
+   the rule leaves behind it. Goal 5's verdicts (`### The candidate end-state rule, at refresh level`,
+   **The verdicts**) meet the first part on one of the four:
+   - TypeScript, `fixture-catalog`: holds, 0 hits in every scenario (the first table).
+   - Python, `fixture-catalog`: fails in `other-corpus`, 1 hit after `REINDEX`, 9.5367431640625e-7; and
+     in `unchanged`, decision `none`, 136 hits, the largest 0.1072683334350586, on an index holding the
+     41 memtable documents the shipped prior refresh left (the second table's `other-corpus` and
+     `unchanged` rows).
+   - TypeScript, `self-docs` at `{ files: 71, chunks: 820 }`: fails in `fresh`, `file-added` and
+     `unchanged`, 1 hit each, 4.76837158203125e-7, on an index of 4 or 5 segments against the
+     reference's 1 (the third table's three rows).
+   - Python, `self-docs` at `{ files: 71, chunks: 820 }`: fails in `fresh` after the spill, 10 and 7 hits,
+     and `file-added` after the spill, 3 and 8, the largest 0.0000019073486328125; and in `unchanged`,
+     decision `none`, 109 and 156 hits, the largest 0.2904853820800781 and 0.08703994750976562 (the fourth
+     table's three rows).
+
+   The second part fails through the `none` branch. Goal 3 finds the stray only while the index's
+   memtable is being emptied, and none once the rows are in a segment (`### The stray index-scan score`,
+   **The trace, from the tables above.**, item 1). The rule's spill and `REINDEX` leave no memtable, but
+   `none` leaves whatever the prior refresh left: in the Python `self-docs` `unchanged` scenario, run 1,
+   57 memtable documents beside 3 segments, and the hits differing from the reference fell from 568 to 109
+   with no statement issued between the two readings (**The verdicts**, the Python `self-docs` `unchanged` bullet).
+2. **Route 3, another lexical engine: does not hold.** Its test is that no `pg_textsearch` state scores
+   stably. One state does, the single segment `REINDEX` and `CREATE INDEX` over loaded rows leave:
+   - goal 1: `t3` and `t4` differ on no hit, in either column, in any run, on both engines and both
+     corpora (`### The score each index state ranks by`, **State against state.**, the `t3` / `t4` row;
+     **Which build forms score alike in `scan`.**);
+   - goal 5: every `after` reading that followed `REINDEX` differs from `reference-reindex` on 0 hits in
+     both columns, except Python `fixture-catalog` `other-corpus`'s 1 hit, and the Python `self-docs`
+     pair's `--compare` listed no value in `reference-reindex` of either variant or in any `after`
+     reading that followed `REINDEX` (`### The candidate end-state rule, at refresh level`, the paragraph
+     after the fourth table, and the paragraph after **The verdicts**);
+   - goal 3: the segment states compared 548216 values each at `t1`, `t3` and `t4`, and the history
+     run's `s2`, `s4`, `s5` and `s7` 264656 each, with none disagreeing (`### The stray index-scan score`,
+     **The trace, from the tables above.**, item 1).
+3. **Route 2, another route: holds.** Its test is that the rule fails, which route 1 above records. The
+   figures point at the single-segment state `REINDEX` leaves rather than at the spill:
+   - **The spill does not reach it on a multi-segment index.** Goal 1: on `self-docs` at `{ files: 71,
+     chunks: 813 }`, fresh insert followed by `bm25_spill_index` leaves 4 segments and differs from `t3`
+     and `t4` on 12 hits on each engine, while on `fixture-catalog` it leaves 1 segment and differs on
+     none (`### The score each index state ranks by`, **State against state.**, the `t1` / `t3` and `t1` /
+     `t4` rows). Goal 5: every `after` reading that followed the spill differs from `reference-reindex` on
+     0 hits on `fixture-catalog` and on 1 to 10 on `self-docs` at `{ files: 71, chunks: 820 }`, the
+     largest 0.0000019073486328125, the Python store's spill leaving 5 or 6 segments (the paragraph after
+     **The verdicts**; the paragraph after the fourth table).
+   - **`REINDEX` reaches it** on both backends and both corpora, with the one exception the route 3
+     test's goal 5 bullet names.
+   - **`none` keeps whatever state it finds.** Goal 5's `unchanged` scenarios differ from the reference
+     wherever their `before` reading did, in each run (the paragraph after **The verdicts**).
+
+   **The qualifications the figures name.**
+   - **The end state is not bit-identical across `REINDEX`es.** Goal 5's Python `fixture-catalog`
+     `other-corpus` hit, `q-fc-token-lifetime` → `docs/api-auth.md#rotating-a-key`, reads raw `scan`
+     −8.3079833984375 after `REINDEX` against the reference's −8.307984352111816, a difference of
+     9.5367431640625e-7 (**The verdicts**, its first sub-bullet). Goal 2 records the same size of difference
+     between two `REINDEX`es of the same rows, and leaves it unexplained (the open items below).
+   - **Below the planner's crossover, the `REINDEX` end state changes the store's plan.** Goal 5: on
+     `fixture-catalog`, on both backends, the `REINDEX` the rule issued turned the store's `LIMIT 50` plan
+     to `Seq Scan on public.chunks` in `file-edited` and `file-removed`, and `reference-reindex` reads the
+     same Seq Scan (`### The candidate end-state rule, at refresh level`, **Observation 1**). Goal 1's
+     `fixture-catalog` `t3` and `t4` rows read the same store plan on both engines. On that plan the store
+     ranks by the operator expression, not by `scan`, and `docs/retrieval.md` → `## Still open`, the
+     lexical-arm bullet, records a 63-row crossover below which an index whose statistics describe its rows
+     can return non-matching rows at score `0`. Ending every refresh in the `REINDEX` state puts a corpus
+     below that crossover on this plan, as the `fixture-catalog` readings show.
+   - **A database the shipped code built is not brought to the end state by an unchanged refresh.** The
+     `none` failures above all start from the state a shipped refresh left.
+
+   **What this branch did not measure, and the measurement the fix branch takes first.** At refresh level,
+   goal 5 issued `REINDEX` after a refresh that left a dead row and, as `reference-reindex`, after a
+   refresh into an empty store. It issued none after a refresh that inserted into a non-empty store
+   (`file-added`), nor after an unchanged refresh over an index holding memtable documents or more than one
+   segment. At probe level, `REINDEX` after a fresh insert scores as `CREATE INDEX` over loaded rows on both
+   engines and corpora (goal 1, the `t3` / `t4` row). The first measurement is goal 5's six scenarios, on both
+   backends and both corpora, with `REINDEX` issued wherever the rule issued the spill and in the
+   `unchanged` scenario, each graded against `reference-reindex`, with the store's `LIMIT 50` plan read as
+   goal 5 read it. How a fix detects an index the shipped code left is the fix branch's to decide; this
+   branch measured no detection. The relevance of the lexical arm on the Seq Scan plan is unmeasured too:
+   goal 6 ran no state after `REINDEX`.
+
+**The deciding goals.** Goal 5, through **The verdicts**, the paragraph after them and **Observation 1**
+of `### The candidate end-state rule, at refresh level`. Goal 1, through **State against state.** and
+**Which build forms score alike in `scan`.** of `### The score each index state ranks by`. Goal 3, through
+item 1 of **The trace, from the tables above.** in `### The stray index-scan score`. Goal 2 qualifies the
+route and decides nothing, and goal 4's conclusion above decides nothing either.
+
+**Goal 6: ranking quality on `fixture-catalog`, score parity only on `self-docs`.** On `fixture-catalog`
+both mechanisms move recorded relevance figures: mechanism 2 moves arm B's recall@1 from 0.444 to 0.333 and
+arm D's from 0.556 to 0.444, and both arms' MRR by 0.056, through the `q-fc-token-lifetime` near-tie pair;
+the dead rows move arm B's recall@3 (1.000 held-another, 0.889 fresh-insert) and MRR (0.704, 0.657), and arm
+D's MRR (0.778, 0.759). On `self-docs` at `{ files: 71, chunks: 821 }` no recorded figure moves in any arm
+(`### Whether either mechanism moves relevance`, **The answer.**). The held-another figure is the higher one
+in most moved columns, so on `fixture-catalog` a fix changes the recorded figures rather than raising them.
+For the route's priority: no figure here shows either mechanism moving relevance on a corpus larger than
+41 chunks, so the fix is a score-parity fix, between runs, refresh histories and backends, whose ranking
+effect is measured on a 41-chunk corpus only.
+
+**The open items, still unexplained.**
+
+- **Goal 2, `fixture-catalog` after `REINDEX`:** 14 (PGlite) and 12 (Postgres) hits whose `scan` differs
+  from `operator` beyond `real` storage, the largest 6.556510925292969e-7 and 9.5367431640625e-7; 5 and 4
+  of them are 39 tokens or shorter, so the residual is not consistent with mechanism 2 (`### What still
+  differs after REINDEX`, **Conclusions, one per lead.**, the first bullet).
+- **Goal 2, `self-docs` at `{ files: 71, chunks: 818 }` after `REINDEX`:** 806 (PGlite) and 696 (Postgres)
+  hits differing beyond `real` storage, the largest 0.0000015497207641601562 and 0.000001430511474609375,
+  with the length split withheld, so mechanism 2 is neither supported nor excluded (the same list, the
+  second bullet).
+- **Goal 2, two `REINDEX`es differing:** 1 hit, `q-sd-run-gates` →
+  `.claude/context/cli.md#what-this-layer-owns-and-what-it-is-not`, by 9.5367431640625e-7, on both engines
+  and in both runs, at `self-docs` `{ files: 71, chunks: 818 }` (the same list, the third bullet).
+- **Goal 3, what empties the memtable under a read-only workload:** not identified. With no write and
+  `autovacuum_count` at 0, it moved 278 `scan` values to their segment score in each `t0` run at `self-docs`
+  `{ files: 71, chunks: 819 }`, and the `operator` stray rate was 1 in 548216 values compared in each
+  states-sequence run, and 0 in 264656 (`s0`) and 1 in 269920 (`s1`) in the history run (`### The stray
+  index-scan score`, **The reproducible sequence.** and **Conclusion.**).
+
+**The limits of this recommendation.**
+
+- **Its figures come from fixture-sized corpora:** `fixture-catalog` at 41 chunks, and `self-docs` at its
+  runs' stamps, `{ files: 71 }` with 813, 818, 819, 820 and 821 chunks. They do not on their own justify
+  the fix's design: a fix branch that adopts the route takes the real-shape figure first
+  (`harness-runs/lessons.md` → `## Evidence and measurement`, the first rule).
+- **The rebuild's wall-clock cost was not measured by this branch.** Only an operator's hand run through
+  the probe's `--reindex-cost` seam may supply it (`docs/retrieval-eval.md` → `### The BM25 index-state
+  probe`).
+- **Every `pg_textsearch` source path and issue number cited in this section is a task-prompt lead,** not
+  re-read on this branch.
