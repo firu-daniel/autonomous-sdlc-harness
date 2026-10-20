@@ -19,15 +19,17 @@
 #
 # THE LOCK SET IS THE ONE `reserve-qa-user.sh` DOCUMENTS:
 # `<main>/<stateDir>/qa_user_locks/`, where <main> is the repository's main
-# checkout (`hc_main_root`, from `git rev-parse --git-common-dir`) and <stateDir>
-# is `stateDir` from the main checkout's `harness.config.json` when it has one,
-# else this working copy's, defaulting to `sdlc-harness`. THE TWO HALVES OF THE
+# checkout (`hc_main_root`, from `HARNESS_MAIN_REPO` when the launcher set it,
+# else from `git rev-parse --git-common-dir`, so every run copy names the same
+# one) and <stateDir> is `stateDir` from the main checkout's
+# `harness.config.json` when it has one, else this working copy's, defaulting to
+# `sdlc-harness`. THE TWO HALVES OF THE
 # PAIR MUST AGREE ON THAT DERIVATION: change it in one file alone and every lock
 # the other half is holding is silently retired, because each would then look in
 # a directory the other never writes. The repository is resolved from `$PWD` and
-# the main checkout from its shared git directory, so a reserve and a release
-# issued from different directories inside one repository — or from two working
-# copies of it — agree on the same lock. Read that file's header for why the set
+# the main checkout from the anchor or its shared git directory, so a reserve and
+# a release issued from different directories inside one repository — or from
+# two run copies of it — agree on the same lock. Read that file's header for why the set
 # lives there, why the sandbox can write it, and for the TTL guard.
 #
 # WHAT THIS SCRIPT DELIBERATELY NEVER DOES: it never reads the credentials file,
@@ -45,6 +47,11 @@
 #   run outside any repository -> one stderr line, exit 0 (nothing to release)
 #   a bare repository's worktree, a submodule, a separate git dir
 #                              -> one stderr line, exit 0 (no main checkout)
+#
+#   from a `git clone --shared <main> <clone>`, anchored:
+#     cd <clone> && HARNESS_MAIN_REPO=<main> bash <plugin>/scripts/release-qa-user.sh <slot>
+#                              -> releases <main>/<stateDir>/qa_user_locks/<slot>,
+#                                 not the clone's
 #
 #   see what is still parked:  ls <main>/<stateDir>/qa_user_locks
 

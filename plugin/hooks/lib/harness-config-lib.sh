@@ -119,6 +119,11 @@
 #
 #   from a payload     cmd=$(hc_payload_command "$payload")
 #                      root=$(hc_resolve_repo_root "$cmd" "$(hc_payload_cwd "$payload")")
+#
+#   main checkout      HARNESS_MAIN_REPO=<a main checkout> bash -c '. <lib>; hc_main_root <any checkout>'
+#                      -> the anchor's physical path; with the anchor unset, or set
+#                         to a directory that is not a main checkout, today's
+#                         common-dir answer for <any checkout>
 
 # ---------------------------------------------------------------------------
 # Payload readers. Each takes the raw hook payload as its argument and prints
@@ -655,9 +660,28 @@ hc_repo_root() {
 # Return 1 when <root> is not in a repository or the common directory is not
 # `<dir>/.git` — a bare repository, a submodule, or a `--separate-git-dir`
 # layout, none of which has a main checkout this can name.
+#
+# `HARNESS_MAIN_REPO`, the anchor the launcher sets, is read first, for the
+# QA-lock helpers, which run sandboxed: a run copy made by `git clone` has its
+# own git directory, so the common-dir answer alone would name the clone. No
+# guard calls this function, so no guard's decision depends on the variable. An
+# absent or unusable value — empty, relative, not a directory, or one whose
+# `.git` is not a directory free of `commondir` — falls back to the common-dir
+# answer below.
 hc_main_root() {
-  local root="${1-}" common
+  local root="${1-}" common anchor="${HARNESS_MAIN_REPO-}"
   [ -n "$root" ] || return 1
+  case "$anchor" in
+    /*)
+      if [ -d "$anchor" ] && [ -d "$anchor/.git" ] && [ ! -e "$anchor/.git/commondir" ]; then
+        anchor=$(cd "$anchor" 2>/dev/null && pwd -P) || anchor=""
+        if [ -n "$anchor" ]; then
+          printf '%s\n' "$anchor"
+          return 0
+        fi
+      fi
+      ;;
+  esac
   common=$(git -C "$root" rev-parse --git-common-dir 2>/dev/null) || return 1
   [ -n "$common" ] || return 1
   case "$common" in

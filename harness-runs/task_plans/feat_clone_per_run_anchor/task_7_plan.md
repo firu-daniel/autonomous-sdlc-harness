@@ -38,3 +38,14 @@
 - `bash -n` on each of the three shell files exits 0.
 - Run the library's new REPRO lines against a throwaway `git init` fixture under the system temp directory, carrying a `harness.config.json`, plus a `git clone --shared` of it (`.claude/context/plugin.md` → `## Verifying a change in this layer`). With the anchor set to the fixture, `hc_main_root <clone>` prints the fixture's physical path. With the anchor unset or set to the clone, it prints what it prints today. Record the outputs in the deviation notes.
 - `grep -rn 'worktree list' plugin/hooks plugin/scripts` prints nothing.
+
+- **Deviations from plan:**
+  - The `hc_main_root` header comment carries one sentence beyond the three the plan lists: why the anchor is needed at all (a `git clone` run copy has its own git directory, so the common-dir answer alone names the clone). Without it a maintainer reading "read first" has no reason not to delete the arm.
+  - Verification record — the library's REPRO lines, run with `/bin/bash` 3.2.57 against a throwaway `git init -b main` fixture under `$TMPDIR` carrying `harness.config.json`, a `git clone --shared` of it and a `git worktree add` of it (paths shortened to `<T>`; all printed under `/private/var/folders/…/<T>`):
+    - anchor unset, `hc_main_root <T>/clone` → `<T>/clone` (today's answer);
+    - `HARNESS_MAIN_REPO=<T>/main`, `hc_main_root <T>/clone` → `/private/…/<T>/main` (the fixture's `pwd -P`);
+    - anchor = the clone → `<T>/clone`; anchor = the linked worktree (`.git` a file), a relative `main`, an empty value → `<T>/clone` (each falls through to today's answer);
+    - anchor unset, `hc_main_root <T>/wt` → `<T>/main`; anchor = a missing directory, `hc_main_root <T>/wt` → `<T>/main`;
+    - anchor set, empty `<root>` → exit 1, nothing printed.
+  - QA scripts' new REPRO lines, same fixture with `phases.qa: true`, `stateDir: "st"` and a two-account credentials file in both copies: from `<T>/clone` with `HARNESS_MAIN_REPO=<T>/main`, `reserve-qa-user.sh` printed `1`, exit 0, and created `<T>/main/st/qa_user_locks/user_1` while `<T>/clone/st` did not exist; `release-qa-user.sh 1` printed `release-qa-user: released account slot 1`, exit 0, leaving the lock set empty.
+  - Greps: `grep -rn 'hc_main_root' plugin/hooks` → only `plugin/hooks/lib/harness-config-lib.sh` lines (the REPRO line and the definition); `grep -rn 'HARNESS_MAIN_REPO' plugin/hooks plugin/scripts` → only the function, its comment, the three REPRO blocks and the two scripts' header paragraphs; `grep -rn 'worktree list' plugin/hooks plugin/scripts` → no output, exit 1. `bash -n` on the three shell files → exit 0 each.

@@ -72,19 +72,19 @@
 #
 # WHY THE LOCKS LIVE IN THE MAIN CHECKOUT'S STATE DIRECTORY. The lock set is
 # `<main>/<stateDir>/qa_user_locks/`, where <main> is the repository's MAIN
-# checkout (`hc_main_root`, read from `git rev-parse --git-common-dir`, so every
-# linked worktree names the same one) and <stateDir> is `stateDir` from
-# `harness.config.json` (default `sdlc-harness`), read from the main checkout's
-# configuration when it has one. Parallel runs live in SEPARATE working copies
-# of the same repository, so the set has to be one directory they all reach or
+# checkout (`hc_main_root`, from `HARNESS_MAIN_REPO` when the launcher set it,
+# else from `git rev-parse --git-common-dir`, so every run copy names the same
+# one) and <stateDir> is `stateDir` from `harness.config.json` (default
+# `sdlc-harness`), read from the main checkout's configuration when it has one.
+# Parallel runs live in separate run copies of the same repository, so the set has to be one directory they all reach or
 # it excludes nothing — which rules out the working copy's own state directory.
 # It also has to be writable from inside the command sandbox an unattended run
 # executes every Bash call in, which can write only the working copy, a
 # per-user temporary directory and the profile's `sandbox.filesystem.allowWrite`
 # entries — which rules out a fixed `/tmp` path (refused) and `$TMPDIR` (which
 # differs between an interactive shell and a daemon-started run). The main
-# checkout's state directory meets both: every worktree run loads the main
-# checkout's profile, whose `allowWrite` names that absolute directory, and the
+# checkout's state directory meets both: every run loads the main checkout's
+# profile, whose `allowWrite` names that absolute directory, and the
 # write-protection set never covers the state directory. That `allowWrite`
 # entry names the stateDir as it stood when `init` last wrote the profile, so a
 # `stateDir` changed without `init --force` leaves the sandboxed `mkdir` refused
@@ -134,6 +134,11 @@
 #   `jq` absent from PATH           -> exit 1
 #   <repo> with no harness.config.json, or `phases.qa` false, or
 #   `qa.credentialsPath` unset, or the credentials file absent/empty -> exit 1
+#
+#   from a `git clone --shared <main> <clone>`, anchored:
+#     cd <clone> && HARNESS_MAIN_REPO=<main> bash <plugin>/scripts/reserve-qa-user.sh
+#                                   -> the slot is parked under
+#                                      <main>/<stateDir>/qa_user_locks, not the clone's
 #
 #   inspect or clear the lock set by hand:
 #     ls <main>/<stateDir>/qa_user_locks
