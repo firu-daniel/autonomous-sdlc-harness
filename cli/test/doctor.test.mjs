@@ -5453,7 +5453,7 @@ const PRE_BRANCH_CHECK_IDS = Object.freeze([
   'remote-execution', 'remote-github', 'forge', 'config', 'command-wrappers', 'command-permissions', 'command-resolves',
   'state-dir', 'artifact-tree', 'setup-analysis', 'task-offer-rules', 'layer-profile', 'layer-drift', 'ignore-rules',
   'plugin-wiring', 'permission-profile', 'profile-paths', 'profile-tracked', 'profile-browser-deny',
-  'profile-deny-floor', 'profile-sandbox', 'profile-write-protection', 'plugin-permissions', 'browser-wiring',
+  'profile-deny-floor', 'profile-main-anchor', 'profile-sandbox', 'profile-write-protection', 'plugin-permissions', 'browser-wiring',
   'retrieval-dependencies', 'retrieval-model-cache', 'retrieval-index',
 ]);
 

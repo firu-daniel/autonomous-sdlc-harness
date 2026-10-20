@@ -80,7 +80,7 @@ A block several agents carry stays one wording, copied byte for byte. **The phra
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_anchor/task_<K>_plan.md`. They are ordered bottom-up by ship sequence, with the catch-all layer last. Task 14 sits after the `plugin` tasks because it depends on Task 7.
 
 1. [x] **Task 1** — Own the anchor's name in `cli/src/core/mainRepoAnchor.ts` and allow-list its read in the generated profile _(layer: cli)_ _(points: 15)_
-2. [ ] **Task 2** — Add the `doctor` check `profile-main-anchor`, which grades the profile's allow rule for the anchor read _(layer: cli)_ _(points: 15)_
+2. [x] **Task 2** — Add the `doctor` check `profile-main-anchor`, which grades the profile's allow rule for the anchor read _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Set `HARNESS_MAIN_REPO` in the watcher's engine subshell, and prove no other outer-loop script names it _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Keep the test suite isolated from the anchor: blank it in `ISOLATED_ENV` and at every suite's own environment spread _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Say "run copy" in the `cli/templates/claude/` profile templates' `_README` prose _(layer: cli)_ _(points: 15)_

@@ -143,6 +143,7 @@ import {
 import { internal } from '../core/errors.js';
 import { layerCoverage } from '../core/layerCoverage.js';
 import { layerGapRemedy, recordedVerdictClause } from '../core/layerGapRemedy.js';
+import { MAIN_REPO_ANCHOR_READ, MAIN_REPO_ANCHOR_RULE, MAIN_REPO_ANCHOR_VARIABLE } from '../core/mainRepoAnchor.js';
 import { nameList } from '../core/nameList.js';
 import { ownManifestString, readTemplate, workRoot } from '../core/paths.js';
 import { ANALYZE_COMMAND } from '../core/pluginIdentity.js';
@@ -4713,6 +4714,44 @@ const PROFILE_DENY_FLOOR_CHECK: Check = {
 };
 
 /**
+ * Does the profile let an unattended run read the main checkout's anchor — is
+ * {@link MAIN_REPO_ANCHOR_RULE} in `permissions.allow`, and in neither `ask` nor `deny`?
+ *
+ * Without it every plugin reader's {@link MAIN_REPO_ANCHOR_READ} is refused and the reader falls
+ * back to the first `git worktree list` entry: right in the main checkout and in a linked worktree,
+ * but the copy itself in a clone. `ask` is evaluated before `allow` and refuses under `dontAsk`, and
+ * `deny` cannot be overridden, so the rule in either is as good as absent.
+ *
+ * A `warn` on {@link PROFILE_DENY_FLOOR_CHECK}'s terms — an adopter-owned file a run is
+ * worse-served by rather than stopped by — and, unlike that family's `--remote-job` escalations,
+ * **never a `fail`, `--remote-job` included**: a job's checkout is its own main checkout, so the
+ * fallback answers the same directory there. Every name in its messages is
+ * `core/mainRepoAnchor.ts`'s, imported rather than retyped.
+ */
+const PROFILE_MAIN_ANCHOR_CHECK: Check = {
+  id: 'profile-main-anchor',
+  title: 'the permission profile allow-lists the read of the main-checkout anchor',
+  run: (ctx) => {
+    if (ctx.profile === undefined) return unevaluated(`${PROFILE_PATH} could not be read (see the permission-profile check)`);
+
+    const faults: string[] = [];
+    if (!permissionEntries(ctx.profile, 'allow').includes(MAIN_REPO_ANCHOR_RULE)) faults.push('is missing from its allow list');
+    if (permissionEntries(ctx.profile, 'ask').includes(MAIN_REPO_ANCHOR_RULE)) {
+      faults.push('is in its ask list, which is evaluated before allow and refuses under dontAsk');
+    }
+    if (permissionEntries(ctx.profile, 'deny').includes(MAIN_REPO_ANCHOR_RULE)) {
+      faults.push('is in its deny list, which no allow overrides');
+    }
+    if (faults.length > 0) {
+      return warn(
+        `the rule for reading ${MAIN_REPO_ANCHOR_VARIABLE} ${faults.join(' and ')} in ${PROFILE_PATH}, so each plugin reader's \`${MAIN_REPO_ANCHOR_READ}\` is refused and it falls back to the first \`git worktree list\` entry — right in the main checkout and in a linked worktree, but the copy itself in a clone. Allow it with this permissions.allow entry (and remove it from ask and deny), or regenerate the profile with \`${CLI} init --force\`, which writes a .bak sibling first:\n${MAIN_REPO_ANCHOR_RULE}`,
+      );
+    }
+    return pass(`${PROFILE_PATH} allows ${MAIN_REPO_ANCHOR_RULE}, and neither asks about nor denies it`);
+  },
+};
+
+/**
  * Is the profile's `sandbox` block what the configuration asks for: on, strict, excluding exactly
  * the expected wrapper entries, allowing exactly the expected domains — or, under a taken
  * `sandbox.optOut`, off with the opt-out marker in `_README`?
@@ -5837,6 +5876,7 @@ export const CHECKS: readonly Check[] = Object.freeze([
   PROFILE_TRACKED_CHECK,
   PROFILE_BROWSER_DENY_CHECK,
   PROFILE_DENY_FLOOR_CHECK,
+  PROFILE_MAIN_ANCHOR_CHECK,
   PROFILE_SANDBOX_CHECK,
   PROFILE_WRITE_PROTECTION_CHECK,
   PLUGIN_PERMISSIONS_CHECK,
