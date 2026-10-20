@@ -18,6 +18,14 @@ These are the only shipped assets that mutate a repository — `git commit`, `gi
 
 The other two — `commit-on-branch.sh`, `setup-worktree.sh` — have comment-only diffs since the stamp, so no §1 row's mechanism moved. Any later touch to a template re-stales this count; re-run the recipe rather than editing the number. Since that sentence was written, `fix_sandbox_worktree_record_writes` moved the commit wrapper's mechanism — a target check, a `config.worktree` check and a plumbing commit with no hook — so §1.1 is owed a re-drive; the count above has not been re-derived.
 
+**The recipe cannot be re-run in this tree, and what `feat_clone_per_run_switch` changed instead.** This repository's history begins on 2026-09-09 (`git log --reverse --date=short --format='%h %ad' | head -1` prints `2c01123c 2026-09-09`), so no commit is dated at or before the stamp, and the grading baseline the recipe names does not exist here. The count above therefore stands as last derived, and cannot be re-derived here. This branch's own change was graded by the same rule against its merge base with `dev`, `fb44db76`: `git diff fb44db76 HEAD -U0 -- <path> | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' | grep -vE '^[+-][[:space:]]*#'`, over the eleven files.
+
+- **Executable change:** seven — `autonomous-watcher.sh`, `lib/harness-run-lib.sh`, `create-worktree.sh`, `cleanup-merged-worktrees.sh`, `refresh-branch.sh`, `push-branch.sh` and `commit-on-branch.sh`.
+- **Comment-only:** `setup-worktree.sh`.
+- **Untouched:** `autonomous-notify.sh`, `restart-watcher.sh` and `autonomous-format-stream.sh`.
+
+§1.1, §1.3 and §1.4 each carry their own clone-layout note.
+
 **Not re-confirmed by a run:** §2 in full — except §2.4's machine-lane block, re-driven whole on 2026-09-03 and stamped there — and every §1 row that reads configuration through the run library. §0's write precondition is the exception the §1.8 round closed — its generator, `cli/src/generators/outerLoopScripts.ts`, changed after the stamp too, and that round re-ran the precondition for all eleven files on a real `init` fixture. No row here measures the effort flag at all. Restamping means re-running §0's recipe whole; this note is what the re-run deletes, never what it edits. Three cells — the shim-reach sentence in §1.6, the `hr_main_repo` row of §2.4 and §1.2's deleted-on-origin row — rest on a `node:test` case against an `init`-built fixture rather than a §0 recipe row, and are marked as such where they appear.
 
 ---
@@ -62,6 +70,8 @@ One row per (script, condition, outcome). "Effect" is what was observed in the r
 
 **Owed a re-drive.** These eleven rows were driven against the wrapper as it stood before `fix_sandbox_worktree_record_writes` rebuilt it. They are owed a re-drive against the rebuilt wrapper, with the main checkout and then a linked worktree as the target. Until then, `cli/test/commit-on-branch-target-check.test.mjs` and `cli/test/commit-on-branch-plumbing.test.mjs` assert the same rows automatically.
 
+**Owed a re-drive on the clone layout, too.** `feat_clone_per_run_switch` made every new run copy a clone, so that re-drive also owes a clone as the target, and two mechanisms there are new since any row here was taken. On a clone, `commit-on-branch.sh` syncs in, builds the commit in the main checkout, then moves the clone's `refs/heads/<branch>` first and the main checkout's second (`hr_copy_ref_swap_var`). A commit landing in the clone after sync-in loses the clone's compare-and-swap: exit 1, nothing moved on either side. `push-branch.sh` (§1.2) gains a pre-push check on the same arm: immediately before the push, the clone's ref is verified still at the tip sync-in read. A commit landing after sync-in is a `refusing to push:` line, exit 0, with nothing pushed and no ref moved. Until a §0 round drives them, `cli/test/clone-ref-order.test.mjs` and `cli/test/wrapper-clone-arm.test.mjs` assert both automatically.
+
 | Condition | Exit | Effect | Perturbation |
 |---|---|---|---|
 | ordinary branch, one existing path | **0** | short SHA on stdout; `git log -1 --pretty=%B` shows subject and body as separate paragraphs; `git diff --cached` empty | — (the positive control for every row below) |
@@ -95,6 +105,16 @@ Every row exits **0**. That is the contract: a stale remote is recoverable, a ha
 | a branch with its upstream set, whose ref origin no longer lists (deleted in the bare repository, or deleted with `git push origin --delete`, which also prunes the remote-tracking ref) | no push: the bare repository lists no branch of that name, the `no longer has <branch>` line is printed, and the exit is still 0. A **unit measurement, not a §0 row**: `cli/test/push-branch-deleted-upstream.test.mjs`, its *Deleted on origin* cases, against an `init`-built fixture | the same suite's *Still on origin* case: a tracked branch that origin still lists moves to `HEAD` |
 
 ### 1.3 `create-worktree.sh` and `setup-worktree.sh`
+
+**Owed a re-drive on the clone layout.** Every row in this section was driven on the linked-worktree layout, before `feat_clone_per_run_switch`. Each row's cells are the record of their date; this note states what the shipped script now expects, and a §0 round re-driving these rows replaces it. What moved:
+
+- **The copy is a clone** (`hr_clone_create_var`: `git clone --shared`, recorded in the registry with `copy_kind` `clone`), in all three modes. Every row that observes "the working copy" observes a clone now.
+- **The bootstrap is always the main checkout's** `setup-worktree.sh --target <clone>`, in every bootstrapped mode. The new copy's own script is never run, so the bootstrap-resolution rows below — the first path, the retry and the configuration-drift row — range over a resolution the script no longer makes.
+- **A `[worktree-dir]` override is refused**: exit 1, nothing created. The copy goes only at the derived `<work_root>/<projectName>-<sanitized-branch>`.
+- **Exit 4 now removes what it made.** The bootstrap-resolution table's first row records the un-bootstrapped working copy *left in place*. The shipped script removes the clone, the branch it cut or created, its registry record and a registry directory it made. Nothing is pushed, as before. The watcher leg below it changes the same way: the copy is no longer on disk after the failed tick.
+- **A failed push, or a failed mirror sync-out after the push, is exit 2** with the same rollback. A failed sync-out also deletes the remote branch its own push created, from the main checkout, under a lease on the pushed tip.
+
+Until then, `cli/test/create-worktree.test.mjs` drives these expectations against an `init`-built fixture.
 
 | Condition | Exit | Effect | Perturbation |
 |---|---|---|---|
@@ -141,6 +161,8 @@ Bootstrap, observed on the working copy of the first table's first row (default 
 | this copy already has its own | **0** | left untouched — and **silently**: the log says nothing about it |
 
 ### 1.4 `cleanup-merged-worktrees.sh`
+
+**Owed a re-drive on the clone layout.** These rows were driven on the linked-worktree layout, before `feat_clone_per_run_switch`; their cells are the record of their date. What moved: the sweep finds a gone branch's copy in its run-registry record (`worktree`), never in `git worktree list`, which lists no clone. A record with `copy_kind` `clone` is removed through `hr_clone_remove_var`, and a record with no `copy_kind` — a legacy worktree — through the existing arm. `--dry-run` decides each copy by the same rule, applying `hr_clone_remove_var`'s refusal conditions without calling it. The real-sweep row's "working copy removed" therefore now depends on a registry record naming the copy: a gone branch with no record has its branch deleted and no copy removed. Until a §0 round re-drives them, `cli/test/cleanup-run-copies.test.mjs` asserts both arms and the dry run against an `init`-built fixture.
 
 Fixture: `feat_gone` (pushed, remote ref deleted, so `[gone]` after prune, with a working copy), `feat_live` (pushed, remote intact), `release/1.0` (pushed, remote deleted, protected by pattern).
 

@@ -171,6 +171,15 @@ Three candidates fall out of that table, in descending size:
 
 **2026-10-20: `hc_main_root` changed, and no guard calls it.** `feat_clone_per_run_anchor` changed `hc_main_root` in `plugin/hooks/lib/harness-config-lib.sh` to read `HARNESS_MAIN_REPO` first, and changed nothing else in the library. `grep -n 'hc_main_root' plugin/hooks/*.sh`, run against `dc53f1d0`, printed nothing and exited 1. The per-Bash-call path the §1.2 composite measures is therefore unchanged, and no latency row is re-taken.
 
+**2026-10-20: `feat_clone_per_run_switch` changed no file under `plugin/hooks/`, and the guards now run with their cwd in a clone.** The first command below prints the branch's merge base with `dev`, the `defaultBranch` in `harness.config.json`; `<merge-base>` in the second stands for the hash it printed (`fb44db76ca53b84586ed5be0b3786370a1ac6f02` when this note was written). Run from this repository's root on the branch, the second printed nothing and exited 0:
+
+```sh
+git merge-base HEAD origin/dev
+git diff --stat <merge-base>..HEAD -- plugin/hooks
+```
+
+No guard code moved, so no §1.2 latency row is re-taken. The layout the guards are judged in did move: every new run copy is now a `git clone --shared`, whose `.git` is a directory, where a linked worktree's is a pointer file. A guard's own `git` calls from a session in a run copy now resolve the clone's `.git`, not a worktree's pointer. §2's standing decision matrices were taken with the payload's `cwd` at §0's primary fixture, and §2.1 adds a real sibling **linked worktree** for the `<work_root>/<project_name>-*` arms. None of them was taken from a clone, so they are owed a re-run with the `cwd`, and §2.1's sibling, in a clone. The measured rows below stand as the record of their date until that re-run.
+
 ---
 
 ## 2. Standing decision matrices
