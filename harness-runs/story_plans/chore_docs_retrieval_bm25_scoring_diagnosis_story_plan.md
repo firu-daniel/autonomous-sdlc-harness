@@ -48,7 +48,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/chore_docs_retrieval_bm25_sc
 2. [x] **Task 2** — Measure the four index states on both engines and record the score each state ranks by and the near-tie ordering _(layer: general)_ _(points: 15)_
 3. [x] **Task 3** — Re-take the history sequence and explain, or record as unexplained, what still differs after `REINDEX` _(layer: general)_ _(points: 10)_
 4. [x] **Task 4** — Trace the index scan's stray score with repeated scoring in each index state _(layer: general)_ _(points: 10)_
-5. [ ] **Task 5** — Add the refresh-level module that measures the candidate end-state rule on both backends _(layer: general)_ _(points: 20)_
+5. [x] **Task 5** — Add the refresh-level module that measures the candidate end-state rule on both backends _(layer: general)_ _(points: 20)_
 6. [ ] **Task 6** — Measure the candidate end-state rule at refresh level on both engines and record the before-fix figures _(layer: general)_ _(points: 15)_
 7. [ ] **Task 7** — Measure whether either mechanism moves the relevance eval's deterministic figures _(layer: general)_ _(points: 10)_
 8. [ ] **Task 8** — Write the recommendation for the fix branch _(layer: general)_ _(points: 8)_
