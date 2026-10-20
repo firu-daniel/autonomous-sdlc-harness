@@ -75,7 +75,7 @@
 
 Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_switch/task_<K>_plan.md`. They are ordered bottom-up by ship sequence: the `cli` layer first, then `plugin`, then the catch-all `general` layer last.
 
-1. [ ] **Task 1** — Move every clone ref clone-first, heal a strictly-behind clone at sync-in, and extract the one-live-copy rule, in the run library _(layer: cli)_ _(points: 20)_
+1. [x] **Task 1** — Move every clone ref clone-first, heal a strictly-behind clone at sync-in, and extract the one-live-copy rule, in the run library _(layer: cli)_ _(points: 20)_
 2. [ ] **Task 2** — Prove the clone-first order for the library's commit and fast-forward in a new `cli/test/clone-ref-order.test.mjs`, and move `run-copy-clone-arm.test.mjs` to it _(layer: cli)_ _(points: 15)_
 3. [ ] **Task 3** — Prove sync-in's heal, the clone's ref subset and the one-live-copy refusals in `clone-sync.test.mjs` and `clone-create-remove.test.mjs` _(layer: cli)_ _(points: 15)_
 4. [ ] **Task 4** — Give `refresh-branch.sh` the clone-first swap and `push-branch.sh` a pre-push clone check, map the new statuses in `commit-on-branch.sh`, and prove all three on a clone _(layer: cli)_ _(points: 20)_
