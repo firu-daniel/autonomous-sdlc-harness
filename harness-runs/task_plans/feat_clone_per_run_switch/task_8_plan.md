@@ -39,3 +39,8 @@
 - `npm test --workspace cli -- test/create-worktree.test.mjs` passes.
 - `npm test --workspace cli -- test/push-branch-worktree-config.test.mjs` passes.
 - Every fixture is under the system temp directory. `git -C <repo root> worktree list` and `git -C <repo root> branch` read the same before and after the run, so no case touched this checkout.
+
+- **Deviations from plan:**
+  - The assertion that a branch `create-worktree.sh` cut already tracks its own ref sits at the end of `push-branch-worktree-config.test.mjs` case (l): it runs the shipped `create-worktree.sh --no-bootstrap feat_cut` from that fixture's main checkout and reads `branch.feat_cut.merge` as `refs/heads/feat_cut`. The create-worktree suite asserts the same for its own default and `--no-bootstrap` cuts.
+  - Verification bullet *"`git -C <repo root> worktree list` and `git -C <repo root> branch` read the same before and after"*: `git branch` was identical; `git worktree list` differed in one line only, the HEAD of the separate worktree `autonomous-sdlc-harness-chore_docs_retrieval_bm25_scoring_diagnosis` (`a082806e` → `1ac4e8d2`), a different branch's checkout that no fixture here names (every fixture is `mkdtemp` under `os.tmpdir()`); read as a concurrent session's commit there, not as this unit's.
+  - RED ONCE: the four mutations (R1–R4) were applied to `cli/templates/scripts/create-worktree.sh` one at a time, the suite run, and the file restored byte-for-byte from a copy taken before the first; `git status` afterwards lists only the two test files.

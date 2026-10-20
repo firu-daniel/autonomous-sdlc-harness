@@ -14,9 +14,9 @@
  * is a refusal. The fixture's marker `pre-push` hooks never refuse, so a protected branch that is
  * not pushed was refused by the wrapper, not by the hook.
  *
- * A branch cut from `origin/trunk`, as `create-worktree.sh` cuts every run's branch, starts out with
- * `branch.<branch>.merge` naming the base: its first push must set the upstream to its own ref, and
- * once its remote deletes it, it must stay deleted (cases (l) and (m)).
+ * A branch cut by hand from `origin/trunk` starts out with `branch.<branch>.merge` naming the base:
+ * its first push must set the upstream to its own ref, and once its remote deletes it, it must stay
+ * deleted (cases (l) and (m)).
  *
  * The fixture is built by hand rather than by `init`, so the hooks configuration under test is
  * exactly the one each case sets. Each `pre-push` hook writes a marker file named for its directory.
@@ -54,9 +54,8 @@ const output = (result) => `${result.stdout}\n${result.stderr}`;
  * @param {import('node:test').TestContext} t
  * @param {'githooks' | '.husky' | null} mainHooksPath the main `.git/config`'s `core.hooksPath`;
  *   `null` leaves it unset and installs the marker hook under `.git/hooks` instead.
- * @param {{ fromOrigin?: boolean }} [options] `fromOrigin` cuts the worktree's branch from
- *   `origin/trunk`, exactly as `create-worktree.sh` does, so `branch.feat_w.merge` starts out as
- *   `refs/heads/trunk` rather than unset.
+ * @param {{ fromOrigin?: boolean }} [options] `fromOrigin` cuts the worktree's branch by hand from
+ *   `origin/trunk`, so `branch.feat_w.merge` starts out as `refs/heads/trunk` rather than unset.
  */
 async function worktreeFixture(t, mainHooksPath = 'githooks', { fromOrigin = false } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'push-wt-config-')));
@@ -94,7 +93,6 @@ async function worktreeFixture(t, mainHooksPath = 'githooks', { fromOrigin = fal
   else await runGit(main, ['config', 'core.hooksPath', mainHooksPath]);
 
   if (fromOrigin) {
-    // create-worktree.sh: fetch origin <base>, then `worktree add -b <branch> <dir> origin/<base>`.
     await runGit(main, ['branch', 'trunk']);
     await runGit(main, ['push', '--quiet', '--no-verify', 'origin', 'trunk']);
     await runGit(main, ['fetch', '--quiet', 'origin', 'trunk']);
@@ -259,9 +257,9 @@ test('(k) An unreadable worktree harness.config.json is never read: the main one
 const mergeOf = async (f, branch) =>
   (await runBash(f.main, ['-c', `git config --get branch.${branch}.merge || true`])).stdout.trim();
 
-test('(l) A worktree cut from origin/trunk, as create-worktree.sh does, has its first push set the upstream to its own branch', async (t) => {
+test('(l) A worktree cut by hand from origin/trunk has its first push set the upstream to its own branch', async (t) => {
   const f = await worktreeFixture(t, 'githooks', { fromOrigin: true });
-  assert.equal(await mergeOf(f, BRANCH), 'refs/heads/trunk', 'the fixture does not track the base the way create-worktree.sh leaves it');
+  assert.equal(await mergeOf(f, BRANCH), 'refs/heads/trunk', 'the fixture does not track the base');
   const trunkBefore = await f.originTip('trunk');
   const result = await f.push(f.wt);
   assert.equal(result.status, 0, output(result));
@@ -270,6 +268,12 @@ test('(l) A worktree cut from origin/trunk, as create-worktree.sh does, has its 
   assert.equal(await f.originTip(BRANCH), await f.head(f.wt));
   assert.equal(await f.originTip('trunk'), trunkBefore);
   assert.equal(await mergeOf(f, BRANCH), `refs/heads/${BRANCH}`);
+
+  // A branch `create-worktree.sh` cut never tracks the base: it pushed from the main checkout already.
+  await cp(join(TEMPLATE_SCRIPTS, 'create-worktree.sh'), join(f.main, 'scripts', 'create-worktree.sh'));
+  const cut = await runBash(f.main, [join(f.main, 'scripts', 'create-worktree.sh'), '--no-bootstrap', 'feat_cut']);
+  assert.equal(cut.status, 0, output(cut));
+  assert.equal(await mergeOf(f, 'feat_cut'), 'refs/heads/feat_cut');
 });
 
 test('(m) A worktree cut from origin/trunk whose branch its remote deleted after the first push is not pushed back', async (t) => {
