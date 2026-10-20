@@ -344,7 +344,7 @@ test('every wrapper that was written is allow-listed for this checkout and for a
   const allow = entries(profile, 'allow');
 
   for (const name of written) {
-    // A run executing in a second working copy that matches neither form does not fail loudly: it
+    // A run executing in a run copy that matches neither form does not fail loudly: it
     // silently skips whatever phase needed the path.
     for (const form of [join(dir, INIT_SCRIPTS_DIR, name), join(worktreeGlob, INIT_SCRIPTS_DIR, name)]) {
       assert.ok(
