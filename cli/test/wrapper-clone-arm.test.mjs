@@ -3,9 +3,11 @@
  * the permission profile runs them: the MAIN checkout's copies, with the clone as their target.
  *
  * **The rule these tests exist to enforce: the main checkout's three excluded wrappers act on a
- * registered clone only through the main checkout — sync-in, the unchanged operation, then sync-out;
- * every refusal they make on a worktree still fires on a clone; and their exit statuses and stdout
- * lines are the worktree arm's.** One control per wrapper runs the same operation on a linked
+ * registered clone only through the main checkout — sync-in, the unchanged operation, then the
+ * branch moved clone-first; a commit landing in the clone after sync-in, and a clone diverged from
+ * the main checkout, are refused with nothing moved; the next ordinary call heals a clone left behind
+ * or ahead; every refusal they make on a worktree still fires on a clone; and their exit statuses
+ * and stdout lines are the worktree arm's.** One control per wrapper runs the same operation on a linked
  * worktree in the same fixture and compares the exit status and stdout line, and a worktree whose
  * `config.worktree` sets `core.sshCommand` is still refused by all three, so skipping
  * `hr_worktree_config_check_var` on the clone arm did not reach the worktree arm.
@@ -14,12 +16,16 @@
  * `cli/test/commit-on-branch-target-check.test.mjs` and their neighbours); sync in isolation is
  * `cli/test/clone-sync.test.mjs`'s. The fixture is built by hand, as
  * `cli/test/wrapper-target-check.test.mjs` builds its own, and the clone is the one
- * `hr_clone_create_var` makes. A failed sync-out is staged with a `git` shim first on `PATH` that
- * moves the clone's ref right after the main checkout's own `update-ref -m`, the technique
- * `cli/test/run-copy-clone-arm.test.mjs` uses.
+ * `hr_clone_create_var` makes. Races are staged with a `git` shim first on `PATH`, the technique
+ * `cli/test/run-copy-clone-arm.test.mjs` uses: (r) commits once in the clone after sync-in and before
+ * the wrapper's own ref update; (f), (n) and (s) let the clone's swap land and fail every later
+ * `update-ref` of the branch, so the main checkout's swap and the clone's rollback both fail.
  *
  * RED ONCE — `push-branch.sh`'s `hr_copy_sync_in_var` call removed: case (g) fails, origin's
- * `feat_c` missing the clone's commit, and case (i) pushes instead of refusing.
+ * `feat_c` missing the clone's commit, and case (i) pushes instead of refusing. `push-branch.sh`'s
+ * verify-only `hr_copy_ref_swap_var` call removed: case (r)'s push subtest pushes instead of
+ * refusing. `refresh-branch.sh`'s swap replaced by the main checkout's `update-ref` alone: case (r)'s
+ * refresh subtest fails, and so do (j), (k), (m) and (n).
  */
 
 import assert from 'node:assert/strict';
@@ -128,7 +134,7 @@ async function fixture(t) {
     push: (target, env = {}) => runBash(root, [script('push-branch.sh'), target], { PUSH_RETRY_DELAY_SECS: '0', ...env }),
     refresh: (args, env = {}) => runBash(root, [script('refresh-branch.sh'), ...args], env),
     tip: async (dir, ref = REF) => (await runGit(dir, ['rev-parse', '--verify', ref])).stdout.trim(),
-    parents: async (oid) => (await runGit(main, ['log', '-1', '--format=%P', oid])).stdout.trim().split(' '),
+    parents: async (oid, dir = main) => (await runGit(dir, ['log', '-1', '--format=%P', oid])).stdout.trim().split(' '),
     cloneStatus: async () => (await runGit(clone, ['status', '--porcelain', '--untracked-files=all'])).stdout,
     originTip: async (branch) => {
       const line = (await runGit(main, ['ls-remote', origin, `refs/heads/${branch}`])).stdout.trim();
@@ -184,8 +190,34 @@ async function fixture(t) {
   return f;
 }
 
-/** The shim's `after`: the clone's {@link REF} set to `oid`, so the sync-out's swap is lost. */
-const moveCloneRef = (f, oid) => `"$REAL" --git-dir='${f.gitdir}' update-ref '${REF}' '${oid}'`;
+/**
+ * The shim's `after`: one empty commit on the clone's {@link REF} by plain `git commit`, the first
+ * time only, with every variable the wrappers set for their own call cleared.
+ */
+const raceCommit = (f) =>
+  `[ -e '${join(f.root, 'race-done')}' ] || { env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_COMMON_DIR ` +
+  `-u GIT_OBJECT_DIRECTORY -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_VALUE_0 -u GIT_CONFIG_PARAMETERS ` +
+  `-u GIT_NO_REPLACE_OBJECTS -u GIT_GRAFT_FILE "$REAL" -C '${f.clone}' ${IDENTITY.map((a) => `'${a}'`).join(' ')} ` +
+  `commit --quiet --no-verify --allow-empty -m race; : > '${join(f.root, 'race-done')}'; }`;
+
+/**
+ * A `git` shim first on `PATH` that runs the first `update-ref` of {@link REF} — the clone's half of
+ * the swap — and fails every later one: the main checkout's half and the clone's rollback.
+ */
+async function swapFiveShim(f) {
+  const real = (await runBash(f.root, ['-c', 'command -v git'])).stdout.trim();
+  const bin = join(f.root, 'swap-bin');
+  await mkdir(bin);
+  const first = join(f.root, 'swap-first');
+  const failed = join(f.root, 'swap-failed');
+  await writeFile(
+    join(bin, 'git'),
+    `#!/bin/sh\nREAL='${real}'\ncase " $* " in *' update-ref '*'${REF} '*)\n` +
+      `  if [ -e '${first}' ]; then : > '${failed}'; exit 1; fi\n  : > '${first}' ;;\nesac\nexec "$REAL" "$@"\n`,
+  );
+  await chmod(join(bin, 'git'), 0o755);
+  return { env: { PATH: `${bin}:${process.env.PATH}` }, fired: () => exists(failed) };
+}
 
 /** A result's exit status and stdout with the branch and short commit ids made generic. */
 const shape = (result, branch) => ({
@@ -264,21 +296,22 @@ test('(e) commit-on-branch.sh refuses a clone whose .git/config gains core.fsmon
   assert.equal(await f.tip(f.clone), f.seed);
 });
 
-test('(f) commit-on-branch.sh: a failed sync-out exits 1 and says the commit stands', async (t) => {
+test('(f) commit-on-branch.sh: a main ref that cannot follow the clone’s exits 1, the commit standing in the clone', async (t) => {
   const f = await fixture(t);
-  const other = await f.looseCommit(f.seed, 'fixture: elsewhere');
   await writeFile(join(f.clone, 'notes.txt'), 'edited\n');
-  const shim = await f.shim(' update-ref -m ', moveCloneRef(f, other));
+  const shim = await swapFiveShim(f);
   const result = await f.commit(f.clone, ['notes.txt'], 'chore: edit notes', shim.env);
   assert.ok(await shim.fired(), `the shim never ran\n${output(result)}`);
   assert.equal(result.status, 1, output(result));
-  const m = result.stderr.match(/^commit-on-branch\.sh: committed ([0-9a-f]+) on feat_c, but .* — the commit stands$/m);
+  const m = result.stderr.match(
+    /^commit-on-branch\.sh: committed ([0-9a-f]+) on feat_c, but .* — the commit stands in the clone, and the main checkout's ref follows it on the next wrapper call$/m,
+  );
   assert.ok(m, output(result));
   assert.doesNotMatch(result.stdout, COMMITTED, output(result));
-  const commit = await f.tip(f.main);
+  const commit = await f.tip(f.clone);
   assert.ok(commit.startsWith(m[1]));
   assert.deepEqual(await f.parents(commit), [f.seed]);
-  assert.equal(await f.tip(f.clone), other);
+  assert.equal(await f.tip(f.main), f.seed);
 });
 
 // ---------------------------------------------------------------------------
@@ -315,18 +348,33 @@ test('(h) push-branch.sh refuses an unregistered repository at the derived clone
   assert.deepEqual(await f.markers(), []);
 });
 
-test('(i) push-branch.sh refuses a clone whose tip has diverged from the main checkout’s', async (t) => {
+test('(i) All three wrappers refuse a clone whose tip has diverged from the main checkout’s, moving nothing', async (t) => {
   const f = await fixture(t);
-  await f.commitInClone('a.txt', 'clone work\n');
+  const own = await f.commitInClone('a.txt', 'clone work\n');
   const other = await f.looseCommit(f.seed, 'fixture: main side');
   await runGit(f.main, ['update-ref', REF, other, f.seed]);
+  await f.advanceTrunk('base.txt', 'base\n');
+  await writeFile(join(f.clone, 'notes.txt'), 'edited\n');
   const before = await f.originRefs();
-  const result = await f.push(f.clone);
-  assert.equal(result.status, 0, output(result));
-  assert.match(result.stdout, PUSH_REFUSED, output(result));
-  assert.match(result.stdout, /have diverged/, output(result));
+
+  const committed = await f.commit(f.clone, ['notes.txt'], 'chore: edit notes');
+  assert.equal(committed.status, 1, output(committed));
+  assert.match(committed.stderr, COMMIT_REFUSED, output(committed));
+  assert.match(committed.stderr, /have diverged/, output(committed));
+
+  const pushed = await f.push(f.clone);
+  assert.equal(pushed.status, 0, output(pushed));
+  assert.match(pushed.stdout, PUSH_REFUSED, output(pushed));
+  assert.match(pushed.stdout, /have diverged/, output(pushed));
+
+  const refreshed = await f.refresh([f.clone]);
+  assert.equal(refreshed.status, 1, output(refreshed));
+  assert.match(refreshed.stderr, REFRESH_REFUSED, output(refreshed));
+  assert.match(refreshed.stderr, /have diverged/, output(refreshed));
+
   assert.equal(await f.originRefs(), before);
   assert.equal(await f.tip(f.main), other);
+  assert.equal(await f.tip(f.clone), own);
 });
 
 // ---------------------------------------------------------------------------
@@ -400,18 +448,18 @@ test('(m) refresh-branch.sh --local merges the local trunk into the clone', asyn
   assert.equal(await f.cloneStatus(), '');
 });
 
-test('(n) refresh-branch.sh: a failed sync-out exits 5', async (t) => {
+test('(n) refresh-branch.sh: a main ref that cannot follow the clone’s, with the rollback failing, exits 5 before the tree moves', async (t) => {
   const f = await fixture(t);
   const base = await f.advanceTrunk('base.txt', 'base\n');
-  const other = await f.looseCommit(f.seed, 'fixture: elsewhere');
-  const shim = await f.shim(' update-ref -m refresh-branch.sh: merge ', moveCloneRef(f, other));
+  const shim = await swapFiveShim(f);
   const result = await f.refresh([f.clone], shim.env);
   assert.ok(await shim.fired(), `the shim never ran\n${output(result)}`);
   assert.equal(result.status, 5, output(result));
-  assert.match(result.stderr, /the clone's refs\/heads\/feat_c does not point at the commit the working copy holds/, output(result));
+  assert.match(result.stderr, /^refresh-branch\.sh: could not move 'feat_c' to the merge result: .*rolling the clone back failed/m, output(result));
   assert.doesNotMatch(result.stdout, MERGED, output(result));
-  assert.equal(await f.tip(f.main), base);
-  assert.equal(await f.tip(f.clone), other);
+  assert.equal(await f.tip(f.main), f.seed);
+  assert.equal(await f.tip(f.clone), base);
+  assert.equal(await exists(join(f.clone, 'base.txt')), false);
 });
 
 test('(o) refresh-branch.sh refuses a protected clone branch with exit 2', async (t) => {
@@ -424,6 +472,96 @@ test('(o) refresh-branch.sh refuses a protected clone branch with exit 2', async
   assert.doesNotMatch(result.stderr, REFRESH_REFUSED, output(result));
   assert.equal(await f.tip(f.main), f.seed);
   assert.equal(await f.tip(f.clone), f.seed);
+});
+
+// ---------------------------------------------------------------------------
+// The race, the heal.
+// ---------------------------------------------------------------------------
+
+test('(r) A commit landing in the clone after sync-in is refused by each wrapper with nothing moved', async (t) => {
+  await t.test('commit-on-branch.sh', async (t) => {
+    const f = await fixture(t);
+    await writeFile(join(f.clone, 'notes.txt'), 'edited\n');
+    const shim = await f.shim(' commit-tree ', raceCommit(f));
+    const result = await f.commit(f.clone, ['notes.txt'], 'chore: edit notes', shim.env);
+    assert.ok(await shim.fired(), `the shim never ran\n${output(result)}`);
+    assert.equal(result.status, 1, output(result));
+    assert.match(
+      result.stderr,
+      /^commit-on-branch\.sh: refusing to commit: 'feat_c' moved under this wrapper, or its ref could not be locked — no commit made, and the given paths are left staged$/m,
+      output(result),
+    );
+    const raced = await f.tip(f.clone);
+    assert.deepEqual(await f.parents(raced, f.clone), [f.seed]);
+    assert.equal(await f.tip(f.main), f.seed);
+  });
+
+  await t.test('push-branch.sh', async (t) => {
+    const f = await fixture(t);
+    const shim = await f.shim('branch.feat_c.merge', raceCommit(f));
+    const before = await f.originRefs();
+    const result = await f.push(f.clone, shim.env);
+    assert.ok(await shim.fired(), `the shim never ran\n${output(result)}`);
+    assert.equal(result.status, 0, output(result));
+    assert.match(result.stdout, /^push-branch\.sh: refusing to push: the clone's refs\/heads\/feat_c moved after it was synced in /m, output(result));
+    assert.doesNotMatch(result.stdout, PUSHED, output(result));
+    assert.equal(await f.originTip(BRANCH), '');
+    assert.equal(await f.originRefs(), before);
+    const raced = await f.tip(f.clone);
+    assert.deepEqual(await f.parents(raced, f.clone), [f.seed]);
+    assert.equal(await f.tip(f.main), f.seed);
+  });
+
+  await t.test('refresh-branch.sh', async (t) => {
+    const f = await fixture(t);
+    await f.advanceTrunk('base.txt', 'base\n');
+    const shim = await f.shim(' read-tree -n ', raceCommit(f));
+    const result = await f.refresh([f.clone], shim.env);
+    assert.ok(await shim.fired(), `the shim never ran\n${output(result)}`);
+    assert.equal(result.status, 1, output(result));
+    assert.match(result.stderr, /^refresh-branch\.sh: 'feat_c' moved while it was being refreshed, or its ref could not be locked/m, output(result));
+    assert.doesNotMatch(result.stdout, MERGED, output(result));
+    const raced = await f.tip(f.clone);
+    assert.deepEqual(await f.parents(raced, f.clone), [f.seed]);
+    assert.equal(await f.tip(f.main), f.seed);
+    assert.equal(await exists(join(f.clone, 'base.txt')), false);
+  });
+});
+
+test('(s) The next ordinary commit-on-branch.sh call heals a clone its ref left behind or ahead', async (t) => {
+  await t.test('the clone behind, its ref moved back one commit by hand', async (t) => {
+    const f = await fixture(t);
+    await writeFile(join(f.clone, 'notes.txt'), 'edited\n');
+    const first = await f.commit(f.clone, ['notes.txt'], 'chore: edit notes');
+    assert.equal(first.status, 0, output(first));
+    const c1 = await f.tip(f.main);
+    await runGit(f.clone, ['update-ref', REF, f.seed, c1]);
+    await writeFile(join(f.clone, 'notes.txt'), 'edited again\n');
+    const result = await f.commit(f.clone, ['notes.txt'], 'chore: edit notes again');
+    assert.equal(result.status, 0, output(result));
+    assert.match(result.stdout, COMMITTED, output(result));
+    const c2 = await f.tip(f.main);
+    assert.equal(await f.tip(f.clone), c2);
+    assert.deepEqual(await f.parents(c2), [c1]);
+  });
+
+  await t.test('the clone ahead, after a main ref that could not follow', async (t) => {
+    const f = await fixture(t);
+    await writeFile(join(f.clone, 'notes.txt'), 'edited\n');
+    const shim = await swapFiveShim(f);
+    const first = await f.commit(f.clone, ['notes.txt'], 'chore: edit notes', shim.env);
+    assert.ok(await shim.fired(), `the shim never ran\n${output(first)}`);
+    assert.equal(first.status, 1, output(first));
+    const c1 = await f.tip(f.clone);
+    assert.equal(await f.tip(f.main), f.seed);
+    await writeFile(join(f.clone, 'notes.txt'), 'edited again\n');
+    const result = await f.commit(f.clone, ['notes.txt'], 'chore: edit notes again');
+    assert.equal(result.status, 0, output(result));
+    assert.match(result.stdout, COMMITTED, output(result));
+    const c2 = await f.tip(f.main);
+    assert.equal(await f.tip(f.clone), c2);
+    assert.deepEqual(await f.parents(c2), [c1]);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -92,15 +92,21 @@
 # `hr_clone_target_check_var`). Those conditions already refuse a
 # `config.worktree` and hold `.git/config` to an allow-list, so
 # `hr_worktree_config_check_var` is skipped on that arm alone. The commit goes
-# sync-in, operate, sync-out: after the protected-branch decision the main
-# checkout takes the clone's `refs/heads/<branch>` (`hr_copy_sync_in_var`, a
-# refusal reported as `refusing to commit:`, exit 1); the commit then runs in
-# the main checkout exactly as for a worktree; and `hr_commit_paths_var` sets
-# the clone's ref to match. A clone ref that cannot follow is a second exit 1
-# after which `refs/heads/<branch>` has moved, reported on stderr as
-# `committed <short_sha> on <branch>, but … — the commit stands`. Every refusal
-# in this header holds on that arm too. No shipped script creates such a clone
-# yet.
+# sync-in, operate, swap: after the protected-branch decision the main
+# checkout takes the clone's `refs/heads/<branch>` (`hr_copy_sync_in_var`,
+# which also heals a clone strictly behind it; a refusal reported as
+# `refusing to commit:`, exit 1); the commit is then built in the main
+# checkout exactly as for a worktree; and `hr_commit_paths_var` moves the
+# clone's `refs/heads/<branch>` first and the main checkout's second
+# (`hr_copy_ref_swap_var`). A commit landing in the clone after sync-in loses
+# the clone's compare-and-swap with nothing moved on either side: the exit 1
+# of a branch moved under this script. A main checkout's ref that cannot follow
+# the clone's, with the clone's rollback failing too, is a second exit 1 after
+# which the clone's `refs/heads/<branch>` has moved, reported on stderr as
+# `committed <short_sha> on <branch>, but … — the commit stands`; the main
+# checkout's ref follows on the next wrapper call's sync-in. Every refusal in
+# this header holds on that arm too. `create-worktree.sh` creates such a
+# clone.
 #
 # THE INHERITED GIT ENVIRONMENT IS DROPPED. As its first statement after
 # sourcing the library, before any git call, this script drops through
@@ -149,8 +155,10 @@
 #      through a symbolic link, or that is neither a regular file nor a
 #      symbolic link (a submodule, a special file) / a git failure / the branch
 #      moving under this script / a commit that landed but whose working
-#      copy's index could not take the committed paths — the only exit 1 after
-#      which `refs/heads/<branch>` has moved, reported on stderr as
+#      copy's index could not take the committed paths, or, on a clone, that
+#      landed on the clone's ref while the main checkout's could not follow (A
+#      CLONE IS A TARGET TOO above) — the only exit 1 after which a
+#      `refs/heads/<branch>` has moved, reported on stderr as
 #      `committed <short_sha> on <branch>, but …`. Only the branch moving under
 #      this script leaves the given paths staged, the same residue a failed
 #      `git commit` left
@@ -600,7 +608,7 @@ case "$status" in
     if [ -n "$HR_COMMIT_NEW" ]; then
       sha="$(main_git rev-parse --short "$HR_COMMIT_NEW")" || sha="$HR_COMMIT_NEW"
       if [ "${HR_COMMIT_SYNC_FAILED-}" = 1 ]; then
-        echo "commit-on-branch.sh: committed $sha on $branch, but $HR_COMMIT_REFUSAL — the commit stands" >&2
+        echo "commit-on-branch.sh: committed $sha on $branch, but $HR_COMMIT_REFUSAL — the commit stands in the clone, and the main checkout's ref follows it on the next wrapper call" >&2
       else
         echo "commit-on-branch.sh: committed $sha on $branch, but the index of '$top' could not take the committed paths — the commit stands; the same call again re-syncs the index and exits 3" >&2
       fi

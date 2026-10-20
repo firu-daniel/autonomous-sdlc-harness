@@ -39,10 +39,11 @@
 # merge` would have used, and then applied in an order that catches a branch
 # moved under this script before anything is written: a dry run of the two-tree
 # `git read-tree -m -u` (`-n`, which writes nothing and still refuses an
-# untracked file or an out-of-date path in the way); `git update-ref` on
-# `refs/heads/<branch>` guarded by its old value, a compare-and-swap whose
-# failure means the branch moved; and only then the real `read-tree`, whose
-# failure puts the branch back with a second guarded `update-ref`. The ref
+# untracked file or an out-of-date path in the way); the move of
+# `refs/heads/<branch>` guarded by its old value (`lib/harness-run-lib.sh` →
+# `hr_copy_ref_swap_var`), a compare-and-swap whose failure means the branch
+# moved; and only then the real `read-tree`, whose failure puts the branch back
+# with the reverse swap. The swap runs no hook. The ref
 # update writes `logs/refs/heads/<branch>` and, for a linked worktree, no entry
 # in that worktree's `logs/HEAD`: `git reflog <branch>` shows a refresh, a bare
 # `git reflog` there does not. A branch the base is ahead of
@@ -122,8 +123,7 @@
 # call spelled here (derivation: `lib/harness-run-lib.sh` →
 # `hr_pinned_hooks_path`; the reasoning: `push-branch.sh` → the paragraph of the
 # same name). No merge hook runs (THE MERGE IS BUILT FROM PLUMBING above), but
-# the fetch and the ref updates run `reference-transaction`, so the pin still
-# matters. The clean-tree test passes `--ignore-submodules`, so git never runs
+# the fetch runs `reference-transaction`, so the pin still matters. The clean-tree test passes `--ignore-submodules`, so git never runs
 # inside a nested repository a sandboxed command could have planted, and the
 # fetch and both `read-tree` calls pass `--no-recurse-submodules` for the same
 # reason; every call also carries `-c submodule.recurse=false`. So a
@@ -140,18 +140,21 @@
 # `hr_clone_target_check_var`). Those conditions already refuse a
 # `config.worktree` and hold `.git/config` to an allow-list, so
 # `hr_worktree_config_check_var` is skipped on that arm alone. The refresh goes
-# sync-in, operate, sync-out: after the protected-branch decision, and before
-# the branch's tip is read, the main checkout takes the clone's
-# `refs/heads/<branch>` (`hr_copy_sync_in_var`, a refusal reported as
-# `refusing to refresh:`, exit 1); the merge then runs exactly as for a
-# worktree; and once the ref update and the working tree have both taken the
-# merge result, the clone's `refs/heads/<branch>` is set to match
-# (`hr_copy_sync_out_var`, guarded by the old tip) before the `merged` line.
-# Without `--local`, the fetched `refs/remotes/origin/<base>` is also mirrored
-# into the clone, and a mirror that fails prints one line and changes nothing
-# else. A put-back needs no sync-out: the clone's ref never moved. Every
-# refusal in this header holds on that arm too. No shipped script creates such
-# a clone yet.
+# sync-in, operate, swap: after the protected-branch decision, and before the
+# branch's tip is read, the main checkout takes the clone's
+# `refs/heads/<branch>` (`hr_copy_sync_in_var`, which also heals a clone
+# strictly behind it; a refusal reported as `refusing to refresh:`, exit 1);
+# the merge is then built exactly as for a worktree; and before the real
+# `read-tree` the branch moves through `hr_copy_ref_swap_var`, the clone's
+# `refs/heads/<branch>` first and the main checkout's second. A commit landing
+# in the clone after sync-in loses the clone's compare-and-swap with nothing
+# moved on either side: the exit 1 of a branch moved under this script. The
+# put-back after a refused `read-tree` is the reverse swap. Without `--local`,
+# the fetched `refs/remotes/origin/<base>` is mirrored into the clone after the
+# fetch (`hr_copy_sync_out_var`) — the one ref this script still moves
+# main-first, a remote-tracking ref no run commits to; a mirror that fails
+# prints one line and changes nothing else. Every refusal in this header holds
+# on that arm too. `create-worktree.sh` creates such a clone.
 #
 # THE INHERITED GIT ENVIRONMENT IS DROPPED. As its first statement after
 # sourcing the library, before any git call, this script drops through
@@ -199,10 +202,11 @@
 #      one row of this map on which the "leaves the branch and the working copy
 #      as they were" guarantee does not hold, and the one that needs a human
 #      before anything else runs in this checkout
-#      On a clone (A CLONE IS A TARGET TOO above) exit 5 also covers a failed
-#      sync-out: the merge landed in the main checkout and the working copy,
-#      and the clone's `refs/heads/<branch>` could not follow — the same state,
-#      named in one stderr line
+#      On a clone (A CLONE IS A TARGET TOO above) exit 5 also covers the
+#      swap's own failure: the clone's `refs/heads/<branch>` moved to the merge
+#      result, the main checkout's could not follow, and rolling the clone's
+#      back failed — before the working tree was touched, so the working copy
+#      holds the old tip while the clone's branch does not
 #
 # Conditions outside that list land on 1 as well, for the same reason every
 # other row of it does — the script cannot proceed and changed nothing: the base
@@ -210,8 +214,9 @@
 # than a conflict; the merge commit could not be written (an unset identity, a
 # failed signature); the working tree would not take the merge result (an
 # untracked file in its way), found by the dry run before anything is written;
-# the branch moved after its tip was read, found by the guarded `update-ref`
-# before the working tree is touched; and the working tree refused the merge
+# the branch moved after its tip was read — on a clone, a commit landing in
+# the clone after sync-in — found by the swap before the working tree is
+# touched; and the working tree refused the merge
 # result after the branch moved to it, with the branch put back.
 #
 # REPRO — reproduce every row by hand, against a throwaway fixture:
@@ -244,7 +249,7 @@
 #                     git 2.38 or newer", nothing fetched
 #   put back failed   no fixture row: the tree has to change after the dry run
 #   (5)               and the branch has to move after this script's own
-#                     `update-ref`, both before its `read-tree`, and nothing
+#                     swap, both before its `read-tree`, and nothing
 #                     outside the script runs there (cli/test/
 #                     wrapper-target-check.test.mjs case (p3) stages it with a
 #                     `git` shim, and cases (p) and (p2) the two exit-1 paths)
@@ -624,29 +629,36 @@ if ! wt_git read-tree -n --no-recurse-submodules -m -u "$old_tip" "$new_tip"; th
   echo "refresh-branch.sh: could not update '$top' to the merge result (see output above) — nothing was merged, working copy unchanged" >&2
   exit 1
 fi
-# Then the branch, as a compare-and-swap: it moves `refs/heads/<branch>` and
-# nothing else, and only from the tip the merge was built on.
-if ! main_git update-ref -m "refresh-branch.sh: merge $base_ref" "refs/heads/$branch" "$new_tip" "$old_tip"; then
-  echo "refresh-branch.sh: '$branch' moved while it was being refreshed, or its ref could not be locked (see output above) — nothing was merged, working copy unchanged" >&2
-  exit 1
-fi
+# Then the branch, as a compare-and-swap (`hr_copy_ref_swap_var`): it moves
+# `refs/heads/<branch>` and nothing else, and only from the tip the merge was
+# built on — on a clone, the clone's ref first (A CLONE IS A TARGET TOO,
+# header).
+swap=0
+hr_copy_ref_swap_var "$main_top" "$wt_gitdir" "refs/heads/$branch" "$new_tip" "$old_tip" "refresh-branch.sh: merge $base_ref" || swap=$?
+case "$swap" in
+  0) ;;
+  5)
+    echo "refresh-branch.sh: could not move '$branch' to the merge result: $HR_SYNC_REFUSAL — the working copy still holds the old tip, which the clone's '$branch' no longer points at" >&2
+    echo "  inspect it yourself (git log -1 $branch, git status), then re-run" >&2
+    exit 5
+    ;;
+  *)
+    echo "refresh-branch.sh: '$branch' moved while it was being refreshed, or its ref could not be locked (see output above) — nothing was merged, working copy unchanged" >&2
+    [ -z "$HR_SYNC_REFUSAL" ] || echo "  $HR_SYNC_REFUSAL" >&2
+    exit 1
+    ;;
+esac
 # Then the working tree and index. `read-tree` checks every path before it
 # writes one, so a refusal here — something changed in the tree since the dry
-# run — has written nothing, and the branch is put back.
+# run — has written nothing, and the branch is put back by the reverse swap.
 if wt_git read-tree --no-recurse-submodules -m -u "$old_tip" "$new_tip"; then
-  # A CLONE IS A TARGET TOO (header): sync out; a no-op on the main checkout
-  # and a worktree.
-  if ! hr_copy_sync_out_var "$main_top" "$wt_gitdir" "refs/heads/$branch" "$old_tip"; then
-    echo "refresh-branch.sh: merged $base_ref into $branch in '$main_top' and the working copy, but $HR_SYNC_REFUSAL — the clone's refs/heads/$branch does not point at the commit the working copy holds" >&2
-    exit 5
-  fi
   echo "refresh-branch.sh: merged $base_ref into $branch"
   exit 0
 fi
-if main_git update-ref -m "refresh-branch.sh: undo merge $base_ref" "refs/heads/$branch" "$old_tip" "$new_tip"; then
+if hr_copy_ref_swap_var "$main_top" "$wt_gitdir" "refs/heads/$branch" "$old_tip" "$new_tip" "refresh-branch.sh: undo merge $base_ref"; then
   echo "refresh-branch.sh: could not update '$top' to the merge result (see output above) — '$branch' was put back where it was, nothing was merged" >&2
   exit 1
 fi
-echo "refresh-branch.sh: could not update '$top' to the merge result, and putting '$branch' back failed too — '$branch' does not point at the commit the working copy holds" >&2
+echo "refresh-branch.sh: could not update '$top' to the merge result, and putting '$branch' back failed too ($HR_SYNC_REFUSAL) — '$branch' does not point at the commit the working copy holds" >&2
 echo "  inspect it yourself (git log -1 $branch, git status), then re-run" >&2
 exit 5

@@ -44,8 +44,9 @@
 # when `branch.<branch>.merge` is `refs/heads/<branch>` — its own name — or when
 # `refs/remotes/<remote>/<branch>` resolves; a branch with neither is a first
 # push and is not checked. A `branch.<branch>.merge` naming another ref is not
-# tracking: `create-worktree.sh` cuts a branch from `origin/<base>`, which
-# leaves it pointing at `refs/heads/<base>` until the first push replaces it
+# tracking: a branch `create-worktree.sh` cuts is pushed from the main checkout
+# with `--set-upstream` when it is created, and a branch cut by hand from
+# `origin/<base>` keeps `refs/heads/<base>` until its first push replaces it
 # (`--set-upstream` is passed whenever it does not name the branch itself). The
 # remote asked is the resolved one below, for `refs/heads/<branch>` — never the
 # base — once with `ls-remote --exit-code` before any push attempt. Exit 2 (not
@@ -180,13 +181,19 @@
 # the deleted-on-its-remote check, the main checkout takes the clone's
 # `refs/heads/<branch>` (`hr_copy_sync_in_var`, a refusal reported as
 # `refusing to push:`, exit 0), so it pushes the commits the run made in its
-# clone; the push then runs from the main checkout exactly as for a worktree.
-# After a successful push to `origin` only, the main checkout's
+# clone. Immediately before the push, after the remote checks, the clone's
+# `refs/heads/<branch>` is verified still at the tip sync-in read
+# (`hr_copy_ref_swap_var`'s verify-only form, a locked compare-and-swap of the
+# ref onto itself): a commit landing in the clone after sync-in is a
+# `refusing to push:` line, exit 0, with nothing pushed and no ref moved. The
+# push then runs from the main checkout exactly as for a worktree. After a
+# successful push to `origin` only, the main checkout's
 # `refs/remotes/origin/<branch>` is mirrored into the clone
-# (`hr_copy_sync_out_var`), so `origin/<branch>` means there what it means in a
-# worktree; a mirror that fails prints one line after the success line and
-# still exits 0. Every refusal in this header holds on that arm too. No shipped
-# script creates such a clone yet.
+# (`hr_copy_sync_out_var`, main-first: a remote-tracking ref no run commits
+# to), so `origin/<branch>` means there what it means in a worktree; a mirror
+# that fails prints one line after the success line and still exits 0. Every
+# refusal in this header holds on that arm too. `create-worktree.sh` creates
+# such a clone.
 #
 # THE INHERITED GIT ENVIRONMENT IS DROPPED. As its first statement after
 # sourcing the library, before any git call, this script drops through
@@ -465,8 +472,9 @@ fi
 
 # A BRANCH ITS REMOTE DELETED STAYS DELETED (header). Once, before the retry
 # loop; a branch that does not track its own name is a first push and skips the
-# check. `create-worktree.sh` cuts a branch from `origin/<base>`, so a new
-# branch's `branch.<branch>.merge` is `refs/heads/<base>` until its first push:
+# check. A branch `create-worktree.sh` cuts is pushed from the main checkout with
+# `--set-upstream` when it is created; a branch cut by hand from `origin/<base>`
+# keeps `branch.<branch>.merge` at `refs/heads/<base>` until its first push:
 # that is NOT tracking, and the ref asked about is always the branch's own.
 track_merge="$(git -C "$main_top" -c core.hooksPath="$pinned" config --get "branch.$branch.merge" 2>/dev/null)"
 track_ref="refs/heads/$branch"
@@ -489,7 +497,7 @@ fi
 # Push the branch, by an explicit refspec from the main checkout; the
 # deleted-on-its-remote check above has already run. A branch whose
 # `branch.<branch>.merge` already names its own ref keeps it; any other — none
-# at all, or the base `create-worktree.sh` cut it from — has it set on the fly
+# at all, or the base a branch was cut from by hand — has it set on the fly
 # to `refs/heads/<branch>`, so a first push tracks the branch it published.
 # Fast-forward only. `--no-recurse-submodules`, with `submodule.recurse` off as
 # well, so `push.recurseSubmodules` or `submodule.recurse` in the main
@@ -499,6 +507,14 @@ refspec="refs/heads/$branch:refs/heads/$branch"
 push_cmd=(git -C "$main_top" -c core.hooksPath="$pinned" -c submodule.recurse=false push --no-recurse-submodules)
 [ "$track_merge" = "$track_ref" ] || push_cmd+=(--set-upstream)
 push_cmd+=("$remote" "$refspec")
+
+# A CLONE IS A TARGET TOO (header): the clone still holds the tip sync-in read;
+# skipped on the main checkout and a worktree, where sync-in reads none.
+if [ "$HR_TARGET_KIND" = clone ] &&
+  ! hr_copy_ref_swap_var "$main_top" "$HR_TARGET_GITDIR" "refs/heads/$branch" "$HR_SYNC_TIP" "$HR_SYNC_TIP" ""; then
+  echo "push-branch.sh: refusing to push: the clone's refs/heads/$branch moved after it was synced in ($HR_SYNC_REFUSAL)"
+  exit 0
+fi
 
 # Every failure line keeps the `push failed for <branch>` prefix: logs and
 # Gate 12 records quote it.

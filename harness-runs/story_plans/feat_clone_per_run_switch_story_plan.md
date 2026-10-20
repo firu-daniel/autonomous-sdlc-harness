@@ -78,7 +78,7 @@ Each entry resolves 1:1 to `harness-runs/task_plans/feat_clone_per_run_switch/ta
 1. [x] **Task 1** — Move every clone ref clone-first, heal a strictly-behind clone at sync-in, and extract the one-live-copy rule, in the run library _(layer: cli)_ _(points: 20)_
 2. [x] **Task 2** — Prove the clone-first order for the library's commit and fast-forward in a new `cli/test/clone-ref-order.test.mjs`, and move `run-copy-clone-arm.test.mjs` to it _(layer: cli)_ _(points: 15)_
 3. [x] **Task 3** — Prove sync-in's heal, the clone's ref subset and the one-live-copy refusals in `clone-sync.test.mjs` and `clone-create-remove.test.mjs` _(layer: cli)_ _(points: 15)_
-4. [ ] **Task 4** — Give `refresh-branch.sh` the clone-first swap and `push-branch.sh` a pre-push clone check, map the new statuses in `commit-on-branch.sh`, and prove all three on a clone _(layer: cli)_ _(points: 20)_
+4. [x] **Task 4** — Give `refresh-branch.sh` the clone-first swap and `push-branch.sh` a pre-push clone check, map the new statuses in `commit-on-branch.sh`, and prove all three on a clone _(layer: cli)_ _(points: 20)_
 5. [ ] **Task 5** — Write-deny the main checkout's whole `.git`, narrow the sibling-glob `.git` entry to the six clone paths, and keep the `_README` true _(layer: cli)_ _(points: 20)_
 6. [ ] **Task 6** — Have `doctor` report a profile still carrying the sibling-glob `.git` entry, and say what the `worktrees` check is for now _(layer: cli)_ _(points: 15)_
 7. [ ] **Task 7** — Make `create-worktree.sh` create a clone in all three modes, bootstrap it through the main checkout's `setup-worktree.sh --target`, and roll back everything it created on failure _(layer: cli)_ _(points: 20)_
