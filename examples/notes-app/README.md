@@ -110,10 +110,14 @@ artifacts quote no machine path, so clauses (2) and (3) had nothing left to rewr
 and the home-directory and account-name fallbacks never fired. In that file 28 machine-path
 occurrences became 0. A later re-render of its sandbox, permission-mode and `deny` entries ran the
 same three clauses, and on that pass the home-directory clause fired: the credential `Read` denies
-name the generating machine's home directory, which became `/workspace`. The file now carries 226
-`/workspace`-rooted occurrences across 183 lines: 195 `/workspace/notes-app`, 33 of them the
-sibling worktree glob `/workspace/notes-app-*`; 30 home-directory ones, the
-`Read(//workspace/.ssh)` family; and one bare `/workspace`. Every occurrence was substituted, **prose included** — the two `_comment`
+name the generating machine's home directory, which became `/workspace`. A later re-render of the
+same keys, through the same three clauses, replaced the glob's `.git` pointer entry with the clone's
+six `.git` paths under `/workspace/notes-app-*` and the per-file `.git` entries with the whole
+`/workspace/notes-app/.git`. The file now carries 212 `/workspace`-rooted occurrences across 173
+lines (`grep -o '/workspace' … | wc -l` and `grep -c '/workspace'`): 181 `/workspace/notes-app`,
+59 of them the sibling worktree glob `/workspace/notes-app-*`; 30 home-directory ones
+(`grep -o '/workspace/\.'`), the `Read(//workspace/.ssh)` family; and one bare `/workspace`
+(`grep -o '/workspace\($\|[^/]\)'`). Every occurrence was substituted, **prose included** — the two `_comment`
 sentences that quote the file rules and the sibling-glob relation, every `Read` / `Edit` / `Write`
 file rule, every wrapper `Bash` entry, and the state-directory entry under `additionalDirectories` —
 and the derived relation `init` wrote is preserved: the work root is the repository root's parent
