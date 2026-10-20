@@ -21,7 +21,7 @@ The tokens below are not ordinary **path placeholders** (`<branch>`, `<MAIN_REPO
 
 ## Context
 
-This is the file-drop trigger for a **fresh autonomous task run**. It wraps the "Drop a task prompt" step of `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`: it deduces a convention-correct branch name from your free text, confirms it with you, then writes that text **verbatim** as `<MAIN_REPO>/<state_dir>/autonomous_inbox/<branch>_task_prompt.md`. The watcher (`<scripts_dir>/autonomous-watcher.sh`) picks the file up, creates the sibling run copy `<work_root>/<project_name>-<branch>`, copies the prompt in, archives the inbox file, and launches the run.
+This is the file-drop trigger for a **fresh autonomous task run**. It wraps the "Drop a task prompt" step of `${CLAUDE_PLUGIN_ROOT}/docs/AUTONOMOUS_FLOW.md`: it deduces a convention-correct branch name from your free text, confirms it with you, then writes that text **verbatim** as `<MAIN_REPO>/<state_dir>/autonomous_inbox/<branch>_task_prompt.md`. The watcher (`<scripts_dir>/autonomous-watcher.sh`) picks the file up, creates the sibling run copy `<work_root>/<project_name>-<sanitized_branch>`, copies the prompt in, archives the inbox file, and launches the run.
 
 **Usage:** type `/autonomous-sdlc-harness:branch-prompt` and then **keep typing your task description on the same line** — do NOT hard-select the entry from the slash menu; just continue the line. Everything after the command name is `$ARGUMENTS`. Example:
 `/autonomous-sdlc-harness:branch-prompt Add a search field to the settings screen, with debounced input and an empty state.`
