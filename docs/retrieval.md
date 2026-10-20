@@ -64,7 +64,7 @@ After that, the old `<model id>/<file>` copies are no longer read and may be del
 
 **Loading.** `cli/src/retrieval/runtime.ts`. The retrieval packages are optional peer dependencies, loaded only by `loadRetrievalModule`'s dynamic `import()`, so a verb that does not retrieve loads none of them. `init` installs the peers and this CLI, at its own version, into the runtime directory `${XDG_CACHE_HOME:-$HOME/.cache}/autonomous-sdlc-harness/retrieval/runtime`. The model weights go into the sibling `retrieval/models`. `retrievalRuntimeState` is the one predicate for "is the runtime installed?". `retrievalCliEntry` picks the entry only for the two short-lived children that do not serve: `docs fetch-models` and `doctor`'s index probe.
 
-- **Why the runtime lives in a machine-shared cache, not in the adopter's project.** A CLI run from `npx`'s cache cannot resolve a package installed in the project (measured fact (a) below), so installing the peers into the project would not make them loadable. A shared directory also means the roughly 300 MB runtime and the model weights are installed once per machine, not once per checkout or worktree.
+- **Why the runtime lives in a machine-shared cache, not in the adopter's project.** A CLI run from `npx`'s cache cannot resolve a package installed in the project (measured fact (a) below), so installing the peers into the project would not make them loadable. A shared directory also means the roughly 300 MB runtime and the model weights are installed once per machine, not once per checkout or run copy.
 
 **Setup.** `cli/src/retrieval/setup.ts`, run by `init` after its plan when retrieval applies. It installs the runtime unless `retrievalRuntimeState().installed`, then runs `docs fetch-models`. Every download happens here, while an operator is present, because an unattended run has no network to count on. A failed step is a warning, and `doctor` fails until a re-run completes it.
 
@@ -72,7 +72,7 @@ After that, the old `<model id>/<file>` copies are no longer read and may be del
 
 **Why `setup-worktree.sh` does not warm the index.** The shipped script does not warm it, and the decision below is the standing one rather than a deferral: it should not.
 
-The first `search_docs` call refreshes incrementally, and a fresh worktree's first refresh is its cold build.
+The first `search_docs` call refreshes incrementally, and a fresh run copy's first refresh is its cold build.
 
 The two cold-build figures, the stub's and the models':
 
@@ -85,11 +85,11 @@ The two cold-build figures, the stub's and the models':
 
 **The 60-second rule this paragraph used to state is struck, and no constant replaces it.** It moved a cold build out of the agent's path once its wall time crossed a threshold, on the premise that the agent runner's MCP tool-call timeout defaults to 60 s, and that premise is false. `MCP_TOOL_TIMEOUT` governs MCP tool-call **execution** and defaults to `1e8` ms, about 27.8 hours. `MCP_TIMEOUT`'s 30,000 ms is a **different setting** — MCP server **startup** — and conflating the two is the likeliest origin of the error. What can end a long call is **silence, not duration**: `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT` is 1,800,000 ms for **stdio** servers, which the `harness-docs` server is, and `CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS` moves a long call to a background task rather than failing it. Source: `strings -a` over the installed binary at `~/.local/share/claude/versions/2.1.278` — Claude Code 2.1.278, macOS arm64, 2026-09-22 — with the full reading in `docs/retrieval-eval-results.md` → `## Cold build and index size`. **No number stands in the struck one's place** — not 1,800 s, not `${MCP_TOOL_TIMEOUT}`, not a fresh crossover chunk count — because the premise that wall time causes a failure is false on every path the harness uses, and a rule restated against a new number would carry the same defect in a new coat. What the build owes instead is a property rather than a threshold: **it must not go silent for longer than the idle timeout**, and a build that reports progress cannot trip anything above.
 
-**What the move would have cost, and what it would have wasted.** The index is built **once per worktree** and shared by every dispatch in it, so the question is never *which* agents query but only *whether the worktree queries at all* — and the build is paid either way the moment one agent does. The agents that carry `mcp__harness-docs__search_docs` in their `tools:` allowlist are the roster `plugin/agents/README.txt` → `The docs-retrieval grant — one roster, one wire` holds, which is that set's one home and carries the command to re-derive it. What matters here is that `task-plan-writer` is on it and is dispatched by every code flow's planning phase, so a worktree that reaches planning queries. Two states never query, and they are states rather than a class of agent: a run that stalls before its first planning dispatch, and — the structural one — the docs-catalog engine `/autonomous-sdlc-harness:branch-start-docs-autonomous`, which dispatches only `docs-writer` and `docs-reviewer`, neither of which is on that roster, so its runs never query the index at all.
+**What the move would have cost, and what it would have wasted.** The index is built **once per run copy** and shared by every dispatch in it, so the question is never *which* agents query but only *whether the run copy queries at all* — and the build is paid either way the moment one agent does. The agents that carry `mcp__harness-docs__search_docs` in their `tools:` allowlist are the roster `plugin/agents/README.txt` → `The docs-retrieval grant — one roster, one wire` holds, which is that set's one home and carries the command to re-derive it. What matters here is that `task-plan-writer` is on it and is dispatched by every code flow's planning phase, so a run copy that reaches planning queries. Two states never query, and they are states rather than a class of agent: a run that stalls before its first planning dispatch, and — the structural one — the docs-catalog engine `/autonomous-sdlc-harness:branch-start-docs-autonomous`, which dispatches only `docs-writer` and `docs-reviewer`, neither of which is on that roster, so its runs never query the index at all.
 
-The model load is not the cost either. The measured phase breakdown at 1,960 chunks (`docs/retrieval-eval-results.md` → `## Cold build and index size`) puts the model load at a fraction of a percent of the total and the **refresh** at almost all of it, and the refresh is paid at the first query if it is not paid at setup. So warming would waste one model load on the rare worktree that never queries and would **move** rather than add the refresh everywhere else: the move is close to free rather than a trade. It is cancelled on coverage, not on cost, and saying so keeps this paragraph from overstating a cost the measurement does not support.
+The model load is not the cost either. The measured phase breakdown at 1,960 chunks (`docs/retrieval-eval-results.md` → `## Cold build and index size`) puts the model load at a fraction of a percent of the total and the **refresh** at almost all of it, and the refresh is paid at the first query if it is not paid at setup. So warming would waste one model load on the rare run copy that never queries and would **move** rather than add the refresh everywhere else: the move is close to free rather than a trade. It is cancelled on coverage, not on cost, and saying so keeps this paragraph from overstating a cost the measurement does not support.
 
-**What would reopen the question.** Not a clock, since no clock fails a slow build. A cost argument: evidence that the refresh a worktree pays at its first query costs a run more than a wasted warm costs the worktrees that never query, or an entry point `setup-worktree.sh` covers that the in-line build does not — which would take away the coverage reason the cancellation rests on.
+**What would reopen the question.** Not a clock, since no clock fails a slow build. A cost argument: evidence that the refresh a run copy pays at its first query costs a run more than a wasted warm costs the run copies that never query, or an entry point `setup-worktree.sh` covers that the in-line build does not — which would take away the coverage reason the cancellation rests on.
 
 ---
 
@@ -226,7 +226,7 @@ A re-run on this branch (same date, macOS, Node v20.19.5; `@electric-sql/pglite`
 "env": { "HARNESS_DOCS_RETRIEVAL_DATABASE_URL": "postgresql://harness@127.0.0.1:5432/docs_retrieval" }
 ```
 
-**One database per repository, shared by its checkouts and worktrees.** Every checkout of a repository carries the same committed `.mcp.json`, so all of them name one database. A second repository on the same machine needs its own database, named in its own `.mcp.json`. Create it in the same container, from the clone's `docs-retrieval-service/`, with a name of your choosing:
+**One database per repository, shared by its checkouts and run copies.** Every checkout of a repository carries the same committed `.mcp.json`, so all of them name one database. A second repository on the same machine needs its own database, named in its own `.mcp.json`. Create it in the same container, from the clone's `docs-retrieval-service/`, with a name of your choosing:
 
 ```bash
 docker compose exec postgres createdb -U harness <name>
@@ -235,7 +235,7 @@ docker compose exec postgres createdb -U harness <name>
 **What sharing costs.** This cost is accepted, not measured:
 
 - Every `search_docs` call's refresh reconciles the shared index to the corpus of the checkout that made the call.
-- Worktrees on different branches re-embed the chunks that differ between them whenever they take turns refreshing.
+- Run copies on different branches re-embed the chunks that differ between them whenever they take turns refreshing.
 - Two servers refreshing at once can interleave, so a hit may name a section that only another branch has.
 - Two repositories left on one database delete each other's chunks on every refresh, and `doctor` cannot detect it.
 

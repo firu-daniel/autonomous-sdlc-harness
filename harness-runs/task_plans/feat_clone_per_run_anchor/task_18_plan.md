@@ -42,3 +42,17 @@ Keep:
 - `grep -n 'HARNESS_MAIN_REPO' ARCHITECTURE.md` shows the `spawn_engine` row and `## 7.`'s **1. Launch a session.** item.
 - `grep -rn "Where the family runs git in a run's copy, and under what pins" docs/remote-execution.md docs/watcher.md` still matches in both files.
 - `grep -c '\*\*\[shipped\]\*\*\|\*\*\[designed\]\*\*' ARCHITECTURE.md` gives the same output before and after the edit.
+
+**Deviations from plan:**
+
+- **Kept hits** of `grep -n -i -E "worktree|working cop(y|ies)" ARCHITECTURE.md ROADMAP.md docs/config.md docs/retrieval.md docs/remote-execution.md`, run after the edit, each and why:
+  - `ARCHITECTURE.md` `## 3.` *"Spawn the headless engine in an ALREADY-PREPARED working copy"* — a quotation of the watcher's header block.
+  - `ARCHITECTURE.md` `## 6.` `cleanup-merged-worktrees.sh` — a script name.
+  - `docs/retrieval.md` **Why `setup-worktree.sh` does not warm the index.** (bold lead-in), its two later citations of that lead-in, and the `setup-worktree.sh` mention in the cold-build paragraph — a script name.
+  - `docs/retrieval.md` `## What this buys you`, *"a per-checkout cache that its worktree owns"* — the working tree of any checkout, the main one included, not the run's copy.
+  - `docs/config.md` the `<worktree_glob>` row and `projectName`'s *"worktree directory names"* — names, kept per the plan.
+  - `docs/config.md` `qa.credentialsPath`'s *"across every working copy of the repository"* — any checkout, the main one included.
+  - `docs/remote-execution.md` the job-setup step's and the interactive-test decision's `setup-worktree.sh` — a script name; the cited heading `### Where the family runs git in a run's copy, and under what pins` — kept byte for byte.
+- `docs/remote-execution.md`'s *"the run's mirror working copy"* became *"the mirror run copy"*, not *"the run's mirror run copy"*, to avoid the doubled "run".
+- `## 5.`'s covering-property command, re-run after the edit, reaches `cli/src/generators/profileEntries.ts` and `cli/src/generators/writeProtection.ts` (one `--settings` mention each, in a doc comment and a protection reason) that no row or disposition sentence names, and `cli/src/generators/permissionProfile.ts` now carries one `--settings` mention where the disposition sentence says two. This divergence predates this task (this task's edit changes none of the sites the command reaches) and is left for a follow-up rather than widened into this unit.
+- `bash scripts/typecheck.sh` ran from the checkout root: `PASS: typecheck`. This unit wrote no test file.
